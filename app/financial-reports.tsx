@@ -1,0 +1,588 @@
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, TextInput, Platform } from 'react-native';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import financeService, { Expense } from './services/financeService';
+import revenueService, { Revenue } from './services/revenueService';
+import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportService';
+import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExportService';
+import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
+
+type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
+const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
+
+export default function FinancialReportsPage() {
+  const router = useRouter();
+  const { user, company } = useAuth();
+  const { t } = useLanguage();
+
+  const REPORT_TYPES: ReportType[] = [
+    { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
+    { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', icon: 'calculator', color: '#27AE60' },
+    { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', icon: 'cash', color: '#9B59B6' },
+    { id: 'expense-report', name: t.financialReports?.expenseReport || 'Expense Report', icon: 'receipt', color: '#E74C3C', disabled: true },
+  ];
+
+  const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
+    const translations: Record<string, string> = {
+      'Today': t.financialReports?.today || 'Today',
+      'This Week': t.financialReports?.thisWeek || 'This Week',
+      'This Month': t.financialReports?.thisMonth || 'This Month',
+      'This Year': t.financialReports?.thisYear || 'This Year',
+      'Custom': t.financialReports?.custom || 'Custom',
+      'All Time': t.financialReports?.allTime || 'All Time',
+    };
+    return translations[period] || period;
+  };
+
+  const [selectedReportType, setSelectedReportType] = useState<string>('profit-loss');
+  const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('This Month');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [revenues, setRevenues] = useState<Revenue[]>([]);
+  const [openingInventory, setOpeningInventory] = useState(0);
+  const [closingInventory, setClosingInventory] = useState(0);
+
+  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+
+  useEffect(() => {
+    if (!hasFinanceAccess) {
+      Alert.alert(t.financialReports?.accessDenied || 'Access Denied', t.financialReports?.noPermissionReports || 'You do not have permission to view financial reports.');
+      router.back();
+      return;
+    }
+    if (!company?.id) {
+      Alert.alert('Error', t.financialReports?.noCompanyFound || 'No company found. Please set up your company first.');
+      router.back();
+      return;
+    }
+    loadData();
+  }, [company?.id]);
+
+  const loadData = async () => {
+    if (!company?.id) return;
+    setLoading(true);
+    try {
+      const [fetchedExpenses, fetchedRevenues] = await Promise.all([
+        financeService.getExpenses(company.id),
+        revenueService.getRevenues(company.id),
+      ]);
+      setExpenses(fetchedExpenses);
+      setRevenues(fetchedRevenues);
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDateRange = () => {
+    const now = new Date();
+    let startDate: Date, endDate: Date = now;
+
+    if (selectedPeriod === 'Today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (selectedPeriod === 'This Week') {
+      startDate = new Date(now);
+      startDate.setDate(startDate.getDate() - 7);
+    } else if (selectedPeriod === 'This Month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (selectedPeriod === 'This Year') {
+      startDate = new Date(now.getFullYear(), 0, 1);
+    } else if (selectedPeriod === 'Custom') {
+      startDate = customStartDate ? new Date(customStartDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+      endDate = customEndDate ? new Date(customEndDate) : now;
+    } else {
+      const allDates = [...expenses.map(e => new Date(e.date)), ...revenues.map(r => new Date(r.date))];
+      startDate = allDates.length > 0 ? new Date(Math.min(...allDates.map(d => d.getTime()))) : now;
+    }
+    return { startDate, endDate };
+  };
+
+  const getFilteredData = () => {
+    const { startDate, endDate } = getDateRange();
+    return {
+      filteredExpenses: expenses.filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
+      filteredRevenues: revenues.filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
+    };
+  };
+
+  const { filteredExpenses, filteredRevenues } = getFilteredData();
+
+  const calculateTotals = (data: Expense[] | Revenue[], service: typeof financeService | typeof revenueService) => ({
+    total: service.calculateTotal(data),
+    byCategory: service.getCategoryBreakdown(data),
+    top: service === financeService ? (service as typeof financeService).getTopExpenses(data as Expense[], 3) : (service as typeof revenueService).getTopRevenues(data as Revenue[], 3)
+  });
+
+  const expenseTotals = calculateTotals(filteredExpenses, financeService);
+  const revenueTotals = calculateTotals(filteredRevenues, revenueService);
+  const profit = revenueTotals.total - expenseTotals.total;
+
+  const COGS_CATEGORIES = ['Feed', 'Pond Additives', 'Labor'];
+  const cogsExpenses = filteredExpenses.filter(e => COGS_CATEGORIES.includes(e.category));
+  const purchases = cogsExpenses.filter(e => e.category === 'Feed').reduce((sum, e) => sum + e.amount, 0);
+  const directMaterials = cogsExpenses.filter(e => e.category === 'Pond Additives').reduce((sum, e) => sum + e.amount, 0);
+  const directLabor = cogsExpenses.filter(e => e.category === 'Labor').reduce((sum, e) => sum + e.amount, 0);
+  const totalCOGS = openingInventory + purchases + directLabor + directMaterials - closingInventory;
+  const grossProfit = revenueTotals.total - totalCOGS;
+  const grossProfitMargin = revenueTotals.total > 0 ? (grossProfit / revenueTotals.total) * 100 : 0;
+
+  const cogsCategoryBreakdown: { [key: string]: number } = {};
+  cogsExpenses.forEach(exp => { cogsCategoryBreakdown[exp.category] = (cogsCategoryBreakdown[exp.category] || 0) + exp.amount; });
+
+  const getOpeningBalance = () => {
+    const { startDate } = getDateRange();
+    const previousRevenues = revenues.filter(r => new Date(r.date) < startDate);
+    const previousExpenses = expenses.filter(e => new Date(e.date) < startDate);
+    return revenueService.calculateTotal(previousRevenues) - financeService.calculateTotal(previousExpenses);
+  };
+
+  const OPERATING_CATEGORIES = ['Feed', 'Pond Additives', 'Labor', 'Utilities', 'Miscellaneous'];
+  const INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
+  const FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
+
+  const categorizeCashFlow = () => {
+    const operating = { cashFromSales: 0, cashFromCustomers: 0, paymentToSuppliers: 0, paymentForExpenses: 0, otherOperatingCash: 0 };
+    const investing = { purchaseOfAssets: 0, saleOfAssets: 0, purchaseOfInvestments: 0, saleOfInvestments: 0 };
+    const financing = { loansReceived: 0, loanRepayments: 0, capitalContributed: 0, dividendsPaid: 0, ownerWithdrawals: 0 };
+
+    filteredRevenues.forEach(rev => {
+      if (rev.category === 'Shrimp Sales') operating.cashFromSales += rev.amount;
+      else operating.cashFromCustomers += rev.amount;
+    });
+
+    filteredExpenses.forEach(exp => {
+      if (OPERATING_CATEGORIES.includes(exp.category)) {
+        if (exp.category === 'Feed' || exp.category === 'Pond Additives') operating.paymentToSuppliers += exp.amount;
+        else operating.paymentForExpenses += exp.amount;
+      } else if (INVESTING_CATEGORIES.includes(exp.category)) {
+        investing.purchaseOfAssets += exp.amount;
+      } else if (FINANCING_CATEGORIES.includes(exp.category)) {
+        if (exp.category === 'Loan Payment') financing.loanRepayments += exp.amount;
+        else financing.ownerWithdrawals += exp.amount;
+      } else {
+        operating.otherOperatingCash -= exp.amount;
+      }
+    });
+    return { operating, investing, financing };
+  };
+
+  const { operating, investing, financing } = categorizeCashFlow();
+  const openingBalance = getOpeningBalance();
+  
+  const netOperatingCash = operating.cashFromSales + operating.cashFromCustomers - operating.paymentToSuppliers - operating.paymentForExpenses + operating.otherOperatingCash;
+  const netInvestingCash = investing.saleOfAssets + investing.saleOfInvestments - investing.purchaseOfAssets - investing.purchaseOfInvestments;
+  const netFinancingCash = financing.loansReceived + financing.capitalContributed - financing.loanRepayments - financing.dividendsPaid - financing.ownerWithdrawals;
+  const netCashFlow = netOperatingCash + netInvestingCash + netFinancingCash;
+  const closingBalance = openingBalance + netCashFlow;
+
+  const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
+  const formatDateRange = () => {
+    const { startDate, endDate } = getDateRange();
+    return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  };
+
+  const handleGenerateReport = async () => {
+    setGenerating(true);
+    try {
+      const { startDate, endDate } = getDateRange();
+      if (selectedReportType === 'profit-loss') {
+        await exportFinancialPDF(prepareFinancialData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
+          company?.companyName || company?.id || 'Company', revenueTotals.total, expenseTotals.total, profit,
+          expenseTotals.byCategory, revenueTotals.byCategory, expenseTotals.top));
+      } else if (selectedReportType === 'cash-flow') {
+        await exportCashFlowPDF(prepareCashFlowData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
+          company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing));
+      } else if (selectedReportType === 'cogs') {
+        await exportCOGSPDF(prepareCOGSData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
+          company?.companyName || company?.id || 'Company', openingInventory, purchases, directLabor,
+          directMaterials, closingInventory, revenueTotals.total, cogsCategoryBreakdown));
+      }
+      Alert.alert('Success', t.financialReports?.reportGenerated || 'Financial report generated and ready to share!');
+    } catch (error) {
+      console.error('Export error:', error);
+      Alert.alert('Error', t.financialReports?.generateError || 'Failed to generate financial report');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3498DB" />
+        <Text style={styles.loadingText}>{t.financialReports?.loadingFinancialData || 'Loading financial data...'}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+            <Ionicons name="arrow-back" size={24} color="#2C3E50" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.financialReports?.title || 'Financial Reports'}</Text>
+          <View style={styles.headerButton} />
+        </View>
+      </SafeAreaView>
+
+      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.financialReports?.reportType || 'Report Type'}</Text>
+          <View style={styles.reportTypeGrid}>
+            {REPORT_TYPES.map((type) => (
+              <TouchableOpacity key={type.id}
+                style={[styles.reportTypeCard, selectedReportType === type.id && styles.reportTypeCardActive, type.disabled && styles.reportTypeCardDisabled]}
+                onPress={() => !type.disabled && setSelectedReportType(type.id)} disabled={type.disabled}>
+                <View style={[styles.reportTypeIcon, { backgroundColor: type.color + '20' }]}>
+                  <Ionicons name={type.icon as any} size={28} color={type.color} />
+                </View>
+                <Text style={[styles.reportTypeName, type.disabled && styles.reportTypeNameDisabled]}>{type.name}</Text>
+                {type.disabled && (
+                  <View style={styles.comingSoonBadge}>
+                    <Text style={styles.comingSoonText}>{t.financialReports?.comingSoon || 'Soon'}</Text>
+                  </View>
+                )}
+                {selectedReportType === type.id && !type.disabled && (
+                  <View style={styles.selectedCheck}>
+                    <Ionicons name="checkmark-circle" size={24} color={type.color} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.financialReports?.reportPeriod || 'Report Period'}</Text>
+          <View style={styles.periodContainer}>
+            {PERIOD_OPTIONS.map(period => (
+              <TouchableOpacity key={period}
+                style={[styles.periodTab, selectedPeriod === period && styles.periodTabActive]}
+                onPress={() => setSelectedPeriod(period)}>
+                <Text style={[styles.periodTabText, selectedPeriod === period && styles.periodTabTextActive]}>
+                  {getTranslatedPeriod(period)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {selectedPeriod === 'Custom' && (
+            <View style={styles.customDateContainer}>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateLabel}>{t.financialReports?.startDate || 'Start Date'}</Text>
+                <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
+                  placeholderTextColor="#95A5A6" value={customStartDate} onChangeText={setCustomStartDate} />
+              </View>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateLabel}>{t.financialReports?.endDate || 'End Date'}</Text>
+                <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
+                  placeholderTextColor="#95A5A6" value={customEndDate} onChangeText={setCustomEndDate} />
+              </View>
+            </View>
+          )}
+        </View>
+
+        {selectedReportType === 'cogs' && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{t.financialReports?.inventoryValues || 'Inventory Values'}</Text>
+            <View style={styles.inventoryInputs}>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateLabel}>{t.financialReports?.openingInventory || 'Opening Inventory (Rp)'}</Text>
+                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#95A5A6" keyboardType="numeric"
+                  value={openingInventory.toString()} onChangeText={(text) => setOpeningInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
+              </View>
+              <View style={styles.dateInputGroup}>
+                <Text style={styles.dateLabel}>{t.financialReports?.closingInventory || 'Closing Inventory (Rp)'}</Text>
+                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#95A5A6" keyboardType="numeric"
+                  value={closingInventory.toString()} onChangeText={(text) => setClosingInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>{t.financialReports?.reportPreview || 'Report Preview'}</Text>
+          
+          {selectedReportType === 'profit-loss' ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewHeader}>
+                <Ionicons name="document-text" size={24} color="#3498DB" />
+                <View style={styles.previewHeaderText}>
+                  <Text style={styles.previewTitle}>{t.financialReports?.profitLossStatement || 'Profit & Loss Statement'}</Text>
+                  <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
+                </View>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.totalRevenue || 'Total Revenue'}</Text>
+                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatRupiah(revenueTotals.total)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.totalExpenses || 'Total Expenses'}</Text>
+                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatRupiah(expenseTotals.total)}</Text>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{profit >= 0 ? t.financialReports?.netProfit || 'Net Profit' : t.financialReports?.netLoss || 'Net Loss'}</Text>
+                <Text style={[styles.summaryValueBold, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(profit))}</Text>
+              </View>
+              <View style={styles.breakdownPreview}>
+                <Text style={styles.breakdownTitle}>{t.financialReports?.revenueBreakdown || 'Revenue Breakdown'}</Text>
+                {Object.entries(revenueTotals.byCategory).slice(0, 3).map(([category, amount]) => (
+                  <View key={category} style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>{category}</Text>
+                    <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.breakdownPreview}>
+                <Text style={styles.breakdownTitle}>{t.financialReports?.expenseBreakdown || 'Expense Breakdown'}</Text>
+                {Object.entries(expenseTotals.byCategory).slice(0, 3).map(([category, amount]) => (
+                  <View key={category} style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>{category}</Text>
+                    <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ) : selectedReportType === 'cogs' ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewHeader}>
+                <Ionicons name="calculator" size={24} color="#27AE60" />
+                <View style={styles.previewHeaderText}>
+                  <Text style={styles.previewTitle}>{t.financialReports?.cogsStatement || 'Cost of Goods Sold Statement'}</Text>
+                  <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
+                </View>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.openingInventory || 'Opening Inventory'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(openingInventory)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.purchases || 'Add: Purchases (Feed)'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(purchases)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.directLabor || 'Add: Direct Labor'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(directLabor)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.directMaterials || 'Add: Direct Materials'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(directMaterials)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.closingInventory || 'Less: Closing Inventory'}</Text>
+                <Text style={styles.summaryValue}>({formatRupiah(closingInventory)})</Text>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{t.financialReports?.totalCOGS || 'Total COGS'}</Text>
+                <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatRupiah(totalCOGS)}</Text>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.revenue || 'Revenue'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(revenueTotals.total)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.lessCOGS || 'Less: COGS'}</Text>
+                <Text style={styles.summaryValue}>({formatRupiah(totalCOGS)})</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{t.financialReports?.grossProfit || 'Gross Profit'}</Text>
+                <Text style={[styles.summaryValueBold, grossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(grossProfit))}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.grossProfitMargin || 'Gross Profit Margin'}</Text>
+                <Text style={[styles.summaryValue, grossProfitMargin >= 0 ? styles.revenueColor : styles.expenseColor]}>{grossProfitMargin.toFixed(2)}%</Text>
+              </View>
+              {Object.keys(cogsCategoryBreakdown).length > 0 && (
+                <View style={styles.breakdownPreview}>
+                  <Text style={styles.breakdownTitle}>{t.financialReports?.cogsBreakdown || 'COGS Breakdown'}</Text>
+                  {Object.entries(cogsCategoryBreakdown).map(([category, amount]) => (
+                    <View key={category} style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{category}</Text>
+                      <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={styles.previewCard}>
+              <View style={styles.previewHeader}>
+                <Ionicons name="cash" size={24} color="#9B59B6" />
+                <View style={styles.previewHeaderText}>
+                  <Text style={styles.previewTitle}>{t.financialReports?.cashFlowStatement || 'Cash Flow Statement'}</Text>
+                  <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
+                </View>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.openingBalance || 'Opening Balance'}</Text>
+                <Text style={styles.summaryValue}>{formatRupiah(openingBalance)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.operatingCashFlow || 'Operating Cash Flow'}</Text>
+                <Text style={[styles.summaryValue, netOperatingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netOperatingCash))}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.investingCashFlow || 'Investing Cash Flow'}</Text>
+                <Text style={[styles.summaryValue, netInvestingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netInvestingCash))}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.financingCashFlow || 'Financing Cash Flow'}</Text>
+                <Text style={[styles.summaryValue, netFinancingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netFinancingCash))}</Text>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{t.financialReports?.netCashFlow || 'Net Cash Flow'}</Text>
+                <Text style={[styles.summaryValueBold, netCashFlow >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netCashFlow))}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{t.financialReports?.closingBalance || 'Closing Balance'}</Text>
+                <Text style={[styles.summaryValueBold, closingBalance >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(closingBalance))}</Text>
+              </View>
+              <View style={styles.breakdownPreview}>
+                <Text style={styles.breakdownTitle}>{t.financialReports?.operatingActivities || 'Operating Activities'}</Text>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>{t.financialReports?.paymentToSuppliers || 'Payment to Suppliers'}</Text>
+                  <Text style={styles.breakdownValue}>({formatRupiah(operating.paymentToSuppliers)})</Text>
+                </View>
+                <View style={styles.breakdownRow}>
+                  <Text style={styles.breakdownLabel}>{t.financialReports?.operatingExpenses || 'Operating Expenses'}</Text>
+                  <Text style={styles.breakdownValue}>({formatRupiah(operating.paymentForExpenses)})</Text>
+                </View>
+              </View>
+              {(investing.purchaseOfAssets > 0 || investing.saleOfAssets > 0) && (
+                <View style={styles.breakdownPreview}>
+                  <Text style={styles.breakdownTitle}>{t.financialReports?.investingActivities || 'Investing Activities'}</Text>
+                  {investing.purchaseOfAssets > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{t.financialReports?.purchaseOfAssets || 'Purchase of Assets'}</Text>
+                      <Text style={styles.breakdownValue}>({formatRupiah(investing.purchaseOfAssets)})</Text>
+                    </View>
+                  )}
+                  {investing.saleOfAssets > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{t.financialReports?.saleOfAssets || 'Sale of Assets'}</Text>
+                      <Text style={styles.breakdownValue}>{formatRupiah(investing.saleOfAssets)}</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+              {(financing.loansReceived > 0 || financing.loanRepayments > 0 || financing.ownerWithdrawals > 0) && (
+                <View style={styles.breakdownPreview}>
+                  <Text style={styles.breakdownTitle}>{t.financialReports?.financingActivities || 'Financing Activities'}</Text>
+                  {financing.loansReceived > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{t.financialReports?.loansReceived || 'Loans Received'}</Text>
+                      <Text style={styles.breakdownValue}>{formatRupiah(financing.loansReceived)}</Text>
+                    </View>
+                  )}
+                  {financing.loanRepayments > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{t.financialReports?.loanRepayments || 'Loan Repayments'}</Text>
+                      <Text style={styles.breakdownValue}>({formatRupiah(financing.loanRepayments)})</Text>
+                    </View>
+                  )}
+                  {financing.ownerWithdrawals > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={styles.breakdownLabel}>{t.financialReports?.ownerWithdrawals || 'Owner Withdrawals'}</Text>
+                      <Text style={styles.breakdownValue}>({formatRupiah(financing.ownerWithdrawals)})</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity style={[styles.generateButton, generating && styles.generateButtonDisabled]}
+          onPress={handleGenerateReport} disabled={generating}>
+          {generating ? (
+            <ActivityIndicator size="small" color="#FFFFFF" />
+          ) : (
+            <>
+              <Ionicons name="download" size={20} color="#FFFFFF" />
+              <Text style={styles.generateButtonText}>{t.financialReports?.generateExportPDF || 'Generate & Export PDF'}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.infoCard}>
+          <Ionicons name="information-circle" size={20} color="#3498DB" />
+          <Text style={styles.infoText}>
+            {t.financialReports?.pdfInfoText || 'The PDF report will include detailed breakdowns, transaction history, and can be shared or saved for your records.'}
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F5F7FA' },
+  safeArea: { backgroundColor: '#BBE1FA' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
+  loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingVertical: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
+  headerButton: { padding: 8, width: 40 },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center' },
+  content: { flex: 1 },
+  section: { marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: 8 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
+  reportTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12 },
+  reportTypeCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
+  reportTypeCardActive: { borderColor: '#3498DB', backgroundColor: '#EBF5FB' },
+  reportTypeCardDisabled: { opacity: 0.5 },
+  reportTypeIcon: { width: Platform.OS === 'android' ? 52 : 56, height: Platform.OS === 'android' ? 52 : 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  reportTypeName: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#2C3E50', textAlign: 'center' },
+  reportTypeNameDisabled: { color: '#95A5A6' },
+  comingSoonBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: '#F39C12', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: 8 },
+  comingSoonText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase' },
+  selectedCheck: { position: 'absolute', top: 8, right: 8 },
+  periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  periodTab: { flex: 1, minWidth: '30%', paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#F8FAFB' },
+  periodTabActive: { backgroundColor: '#3498DB' },
+  periodTabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
+  periodTabTextActive: { color: '#FFFFFF' },
+  customDateContainer: { marginTop: Platform.OS === 'android' ? 14 : 16, gap: Platform.OS === 'android' ? 10 : 12 },
+  dateInputGroup: { gap: 8 },
+  dateLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#34495E' },
+  dateInput: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#ECF0F1', borderRadius: 10, padding: Platform.OS === 'android' ? 12 : 14, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#2C3E50' },
+  inventoryInputs: { gap: Platform.OS === 'android' ? 10 : 12 },
+  previewCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  previewHeader: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12 },
+  previewHeaderText: { flex: 1 },
+  previewTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: 4 },
+  previewSubtitle: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#7F8C8D' },
+  previewDivider: { height: 1, backgroundColor: '#ECF0F1', marginVertical: Platform.OS === 'android' ? 14 : 16 },
+  summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 7 : 8 },
+  summaryLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#7F8C8D', fontWeight: '500' },
+  summaryValue: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  summaryLabelBold: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', textTransform: 'uppercase', letterSpacing: 0.5 },
+  summaryValueBold: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: '700' },
+  revenueColor: { color: '#27AE60' },
+  expenseColor: { color: '#E74C3C' },
+  breakdownPreview: { marginTop: Platform.OS === 'android' ? 14 : 16, paddingTop: Platform.OS === 'android' ? 14 : 16, borderTopWidth: 1, borderTopColor: '#F8FAFB' },
+  breakdownTitle: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '700', color: '#34495E', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Platform.OS === 'android' ? 5 : 6 },
+  breakdownLabel: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#7F8C8D' },
+  breakdownValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#2C3E50' },
+  generateButton: { flexDirection: 'row', backgroundColor: '#3498DB', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 20 : 24, padding: Platform.OS === 'android' ? 16 : 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#3498DB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  generateButtonDisabled: { opacity: 0.6 },
+  generateButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700' },
+  infoCard: { flexDirection: 'row', backgroundColor: '#EBF5FB', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 28 : 32, padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, gap: Platform.OS === 'android' ? 10 : 12, borderLeftWidth: 4, borderLeftColor: '#3498DB' },
+  infoText: { flex: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#34495E', lineHeight: Platform.OS === 'android' ? 18 : 20 },
+});

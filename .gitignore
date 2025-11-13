@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# iOS
+ios/Pods/
+ios/build/
+ios/**/*.xcworkspace
+!ios/**/*.xcworkspace/contents.xcworkspacedata
+!ios/**/*.xcworkspace/xcshareddata/
+
+# Android
+android/build/
+android/app/build/
+android/.gradle/
+
+# Build artifacts
+dist/
+build/
+
+# Expo
+.expo/
+.expo-shared/
+
+# Environment
+.env
+.env.local
+
+# Misc
+.DS_Store
+*.log
