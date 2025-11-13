@@ -28,3 +28,5 @@ build/
 # Misc
 .DS_Store
 *.log
+assets/images/iShrimpLogo.png
+assets/images/*.png
