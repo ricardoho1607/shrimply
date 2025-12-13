@@ -3,6 +3,8 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, useAuth } from '../context/AuthContext';
 import { LanguageProvider, useLanguage } from '../context/LanguageContext';
+import { CurrencyProvider } from '../context/CurrencyContext';
+import { LanguageCurrencySync } from '../context/LanguageCurrencySync';
 import { SidebarProvider } from '../context/sidebarContext';
 import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
@@ -170,11 +172,15 @@ function RootLayoutNav() {
 export default function RootLayout() {
   return (
     <LanguageProvider>
-      <AuthProvider>
-        <SidebarProvider>
-          <RootLayoutNav />
-        </SidebarProvider>
-      </AuthProvider>
+      <CurrencyProvider>
+        <LanguageCurrencySync>
+          <AuthProvider>
+            <SidebarProvider>
+              <RootLayoutNav />
+            </SidebarProvider>
+          </AuthProvider>
+        </LanguageCurrencySync>
+      </CurrencyProvider>
     </LanguageProvider>
   );
 }

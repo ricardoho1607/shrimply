@@ -824,8 +824,7 @@ export default function AssetInventoryScreen() {
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   topSafeArea: { backgroundColor: '#BBE1FA' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#BBE1FA' },
-  backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#BBE1FA' },  backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { flex: 1, fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#1B262C', marginLeft: Platform.OS === 'android' ? 7 : 8 },
   headerActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12 },
   scanButton: { padding: Platform.OS === 'android' ? 7 : 8 },

@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Ale
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
+import { useCurrency, CURRENCIES, Currency } from '../context/CurrencyContext';
 import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
 
@@ -18,11 +19,14 @@ const AVAILABLE_LANGUAGES = [
 export default function Settings() {
   const router = useRouter();
   const { currentLanguage, setLanguage, t } = useLanguage();
+  const { currentCurrency, currencyConfig, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
   const { company } = useAuth();
   const [showLanguageOptions, setShowLanguageOptions] = useState(false);
+  const [showCurrencyOptions, setShowCurrencyOptions] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
+  const [isChangingCurrency, setIsChangingCurrency] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
 
   const handleLanguageSelect = async (languageCode: string) => {
@@ -37,6 +41,34 @@ export default function Settings() {
       setShowLanguageOptions(true);
     } finally {
       setIsChangingLanguage(false);
+    }
+  };
+
+  const handleCurrencySelect = async (currencyCode: Currency) => {
+    try {
+      setIsChangingCurrency(true);
+      setShowCurrencyOptions(false);
+      await setCurrency(currencyCode);
+      Alert.alert(
+        t.messages.success || 'Success',
+        `Currency changed to ${CURRENCIES[currencyCode].name}.\n\n⚠️ Note: Only the currency symbol is changed. Your numeric values remain unchanged.`
+      );
+    } catch (error) {
+      console.error('Failed to change currency:', error);
+      Alert.alert(t.messages.error || 'Error', 'Failed to change currency. Please try again.');
+      setShowCurrencyOptions(true);
+    } finally {
+      setIsChangingCurrency(false);
+    }
+  };
+
+  const handleAutoSyncToggle = async (enabled: boolean) => {
+    await setAutoSyncEnabled(enabled);
+    if (enabled) {
+      Alert.alert(
+        'Auto-sync Enabled',
+        'Currency will now automatically change when you select a different language.'
+      );
     }
   };
 
@@ -143,6 +175,30 @@ export default function Settings() {
     </View>
   );
 
+  const CurrencySelector = () => (
+    <View style={styles.languageSection}>
+      <Text style={styles.sectionTitle}>{'Select Currency'}</Text>
+      {Object.values(CURRENCIES).map((curr) => (
+        <TouchableOpacity
+          key={curr.code}
+          style={[styles.languageOption, currentCurrency === curr.code && styles.selectedLanguageOption]}
+          onPress={() => handleCurrencySelect(curr.code)}
+          disabled={isChangingCurrency}
+        >
+          <Text style={styles.languageFlag}>{curr.flag}</Text>
+          <View style={styles.languageTextContainer}>
+            <Text style={[styles.languageText, currentCurrency === curr.code && styles.selectedLanguageText]}>
+              {curr.name}
+            </Text>
+            <Text style={styles.languageSubtext}>{curr.symbol} ({curr.code})</Text>
+          </View>
+          {currentCurrency === curr.code && <Ionicons name="checkmark-circle" size={24} color="#3282B8" />}
+          {isChangingCurrency && currentCurrency !== curr.code && <ActivityIndicator size="small" color="#3282B8" />}
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
@@ -173,6 +229,45 @@ export default function Settings() {
               }
             />
             {showLanguageOptions && <LanguageSelector />}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionHeader}>{'CURRENCY & FORMAT'}</Text>
+            <SettingItem
+              icon="cash-outline"
+              title={'Currency'}
+              subtitle={currencyConfig.name}
+              onPress={() => setShowCurrencyOptions(!showCurrencyOptions)}
+              rightComponent={
+                <View style={styles.languageRightContainer}>
+                  {isChangingCurrency && <ActivityIndicator size="small" color="#3282B8" style={{ marginRight: 8 }} />}
+                  <Text style={styles.currentValue}>{currencyConfig.symbol} {currencyConfig.code}</Text>
+                </View>
+              }
+            />
+            {showCurrencyOptions && <CurrencySelector />}
+            
+            <SettingItem
+              icon="sync-outline"
+              title={'Auto-sync with Language'}
+              subtitle={'Currency changes when language changes'}
+              showArrow={false}
+              rightComponent={
+                <Switch 
+                  value={autoSyncEnabled} 
+                  onValueChange={handleAutoSyncToggle}
+                  trackColor={{ false: '#BBE1FA', true: '#3282B8' }} 
+                  thumbColor={autoSyncEnabled ? '#FFFFFF' : '#F8FAFC'} 
+                />
+              }
+            />
+            
+            <View style={styles.currencyNote}>
+              <Ionicons name="information-circle-outline" size={16} color="#95A5A6" />
+              <Text style={styles.currencyNoteText}>
+                ⚠️ Changing currency only updates the symbol. Your numeric values remain unchanged.
+              </Text>
+            </View>
           </View>
 
           <View style={styles.section}>
@@ -275,15 +370,16 @@ const styles = StyleSheet.create({
   topSafeArea: { backgroundColor: '#BBE1FA' },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
-    paddingVertical: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#BBE1FA', 
-    borderBottomWidth: 0, 
-    borderBottomColor: '#3282B8' 
-  },
+  flexDirection: 'row', 
+  alignItems: 'center', 
+  justifyContent: 'space-between', 
+  paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
+  paddingTop: Platform.OS === 'android' ? 14 : 16, 
+  paddingBottom: Platform.OS === 'android' ? 7 : 8, 
+  backgroundColor: '#BBE1FA', 
+  borderBottomWidth: 0, 
+  borderBottomColor: '#3282B8' 
+},
   backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { 
     color: '#1B262C', 
@@ -440,5 +536,23 @@ const styles = StyleSheet.create({
     color: '#0F4C75', 
     fontSize: Platform.OS === 'android' ? 11 : 12, 
     marginTop: 4 
+  },
+  currencyNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FFF9E6',
+    padding: Platform.OS === 'android' ? 12 : 14,
+    marginHorizontal: Platform.OS === 'android' ? 14 : 16,
+    marginTop: Platform.OS === 'android' ? 10 : 12,
+    borderRadius: Platform.OS === 'android' ? 9 : 10,
+    borderWidth: 1,
+    borderColor: '#FFE066',
+    gap: Platform.OS === 'android' ? 9 : 10,
+  },
+  currencyNoteText: {
+    flex: 1,
+    fontSize: Platform.OS === 'android' ? 12 : 13,
+    color: '#856404',
+    lineHeight: Platform.OS === 'android' ? 16 : 18,
   },
 });

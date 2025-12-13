@@ -2,7 +2,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLocales } from 'expo-localization';
-import { translations, Language, Translations } from '@/translations';
+import { translations, Language, Translations } from '../app/translations';
 
 // Context type
 type DeepPartial<T> = {
@@ -35,12 +35,12 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
         const storedLang = await AsyncStorage.getItem('@language');
         if (storedLang && translations[storedLang as Language]) {
           setCurrentLanguage(storedLang as Language);
-          setT(translations[storedLang as Language]);
+          setT(translations[storedLang as Language] as Translations);
         } else {
           const deviceLocale = getLocales()[0]?.languageCode as Language;
           if (translations[deviceLocale]) {
             setCurrentLanguage(deviceLocale);
-            setT(translations[deviceLocale]);
+            setT(translations[deviceLocale] as Translations);
           }
         }
       } catch (error) {
@@ -52,7 +52,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const setLanguage = async (lang: Language) => {
     if (!translations[lang]) return;
     setCurrentLanguage(lang);
-    setT(translations[lang]);
+    setT(translations[lang] as Translations);
     try {
       await AsyncStorage.setItem('@language', lang);
     } catch (error) {

@@ -9,6 +9,7 @@ export default {
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
     runtimeVersion: { policy: 'appVersion' },
+    assetBundlePatterns: ['**/*'],
 
     ios: {
       supportsTablet: true,

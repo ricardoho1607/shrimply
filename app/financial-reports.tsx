@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, TextInput, Platform } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense } from './services/financeService';
 import revenueService, { Revenue } from './services/revenueService';
 import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportService';
@@ -17,6 +18,7 @@ export default function FinancialReportsPage() {
   const router = useRouter();
   const { user, company } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
 
   const REPORT_TYPES: ReportType[] = [
     { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
@@ -182,7 +184,6 @@ export default function FinancialReportsPage() {
   const netCashFlow = netOperatingCash + netInvestingCash + netFinancingCash;
   const closingBalance = openingBalance + netCashFlow;
 
-  const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
   const formatDateRange = () => {
     const { startDate, endDate } = getDateRange();
     return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -324,23 +325,23 @@ export default function FinancialReportsPage() {
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.totalRevenue || 'Total Revenue'}</Text>
-                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatRupiah(revenueTotals.total)}</Text>
+                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatCurrency(revenueTotals.total)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.totalExpenses || 'Total Expenses'}</Text>
-                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatRupiah(expenseTotals.total)}</Text>
+                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatCurrency(expenseTotals.total)}</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{profit >= 0 ? t.financialReports?.netProfit || 'Net Profit' : t.financialReports?.netLoss || 'Net Loss'}</Text>
-                <Text style={[styles.summaryValueBold, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(profit))}</Text>
+                <Text style={[styles.summaryValueBold, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(profit))}</Text>
               </View>
               <View style={styles.breakdownPreview}>
                 <Text style={styles.breakdownTitle}>{t.financialReports?.revenueBreakdown || 'Revenue Breakdown'}</Text>
                 {Object.entries(revenueTotals.byCategory).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>{category}</Text>
-                    <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                    <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                   </View>
                 ))}
               </View>
@@ -349,7 +350,7 @@ export default function FinancialReportsPage() {
                 {Object.entries(expenseTotals.byCategory).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>{category}</Text>
-                    <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                    <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                   </View>
                 ))}
               </View>
@@ -366,41 +367,41 @@ export default function FinancialReportsPage() {
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.openingInventory || 'Opening Inventory'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(openingInventory)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(openingInventory)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.purchases || 'Add: Purchases (Feed)'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(purchases)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(purchases)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.directLabor || 'Add: Direct Labor'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(directLabor)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(directLabor)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.directMaterials || 'Add: Direct Materials'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(directMaterials)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(directMaterials)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.closingInventory || 'Less: Closing Inventory'}</Text>
-                <Text style={styles.summaryValue}>({formatRupiah(closingInventory)})</Text>
+                <Text style={styles.summaryValue}>({formatCurrency(closingInventory)})</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.totalCOGS || 'Total COGS'}</Text>
-                <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatRupiah(totalCOGS)}</Text>
+                <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatCurrency(totalCOGS)}</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.revenue || 'Revenue'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(revenueTotals.total)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(revenueTotals.total)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.lessCOGS || 'Less: COGS'}</Text>
-                <Text style={styles.summaryValue}>({formatRupiah(totalCOGS)})</Text>
+                <Text style={styles.summaryValue}>({formatCurrency(totalCOGS)})</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.grossProfit || 'Gross Profit'}</Text>
-                <Text style={[styles.summaryValueBold, grossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(grossProfit))}</Text>
+                <Text style={[styles.summaryValueBold, grossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(grossProfit))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.grossProfitMargin || 'Gross Profit Margin'}</Text>
@@ -412,7 +413,7 @@ export default function FinancialReportsPage() {
                   {Object.entries(cogsCategoryBreakdown).map(([category, amount]) => (
                     <View key={category} style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{category}</Text>
-                      <Text style={styles.breakdownValue}>{formatRupiah(amount)}</Text>
+                      <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
                     </View>
                   ))}
                 </View>
@@ -430,38 +431,38 @@ export default function FinancialReportsPage() {
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.openingBalance || 'Opening Balance'}</Text>
-                <Text style={styles.summaryValue}>{formatRupiah(openingBalance)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(openingBalance)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.operatingCashFlow || 'Operating Cash Flow'}</Text>
-                <Text style={[styles.summaryValue, netOperatingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netOperatingCash))}</Text>
+                <Text style={[styles.summaryValue, netOperatingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(netOperatingCash))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.investingCashFlow || 'Investing Cash Flow'}</Text>
-                <Text style={[styles.summaryValue, netInvestingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netInvestingCash))}</Text>
+                <Text style={[styles.summaryValue, netInvestingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(netInvestingCash))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.financingCashFlow || 'Financing Cash Flow'}</Text>
-                <Text style={[styles.summaryValue, netFinancingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netFinancingCash))}</Text>
+                <Text style={[styles.summaryValue, netFinancingCash >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(netFinancingCash))}</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.netCashFlow || 'Net Cash Flow'}</Text>
-                <Text style={[styles.summaryValueBold, netCashFlow >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(netCashFlow))}</Text>
+                <Text style={[styles.summaryValueBold, netCashFlow >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(netCashFlow))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.closingBalance || 'Closing Balance'}</Text>
-                <Text style={[styles.summaryValueBold, closingBalance >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatRupiah(Math.abs(closingBalance))}</Text>
+                <Text style={[styles.summaryValueBold, closingBalance >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(closingBalance))}</Text>
               </View>
               <View style={styles.breakdownPreview}>
                 <Text style={styles.breakdownTitle}>{t.financialReports?.operatingActivities || 'Operating Activities'}</Text>
                 <View style={styles.breakdownRow}>
                   <Text style={styles.breakdownLabel}>{t.financialReports?.paymentToSuppliers || 'Payment to Suppliers'}</Text>
-                  <Text style={styles.breakdownValue}>({formatRupiah(operating.paymentToSuppliers)})</Text>
+                  <Text style={styles.breakdownValue}>({formatCurrency(operating.paymentToSuppliers)})</Text>
                 </View>
                 <View style={styles.breakdownRow}>
                   <Text style={styles.breakdownLabel}>{t.financialReports?.operatingExpenses || 'Operating Expenses'}</Text>
-                  <Text style={styles.breakdownValue}>({formatRupiah(operating.paymentForExpenses)})</Text>
+                  <Text style={styles.breakdownValue}>({formatCurrency(operating.paymentForExpenses)})</Text>
                 </View>
               </View>
               {(investing.purchaseOfAssets > 0 || investing.saleOfAssets > 0) && (
@@ -470,13 +471,13 @@ export default function FinancialReportsPage() {
                   {investing.purchaseOfAssets > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{t.financialReports?.purchaseOfAssets || 'Purchase of Assets'}</Text>
-                      <Text style={styles.breakdownValue}>({formatRupiah(investing.purchaseOfAssets)})</Text>
+                      <Text style={styles.breakdownValue}>({formatCurrency(investing.purchaseOfAssets)})</Text>
                     </View>
                   )}
                   {investing.saleOfAssets > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{t.financialReports?.saleOfAssets || 'Sale of Assets'}</Text>
-                      <Text style={styles.breakdownValue}>{formatRupiah(investing.saleOfAssets)}</Text>
+                      <Text style={styles.breakdownValue}>{formatCurrency(investing.saleOfAssets)}</Text>
                     </View>
                   )}
                 </View>
@@ -487,19 +488,19 @@ export default function FinancialReportsPage() {
                   {financing.loansReceived > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{t.financialReports?.loansReceived || 'Loans Received'}</Text>
-                      <Text style={styles.breakdownValue}>{formatRupiah(financing.loansReceived)}</Text>
+                      <Text style={styles.breakdownValue}>{formatCurrency(financing.loansReceived)}</Text>
                     </View>
                   )}
                   {financing.loanRepayments > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{t.financialReports?.loanRepayments || 'Loan Repayments'}</Text>
-                      <Text style={styles.breakdownValue}>({formatRupiah(financing.loanRepayments)})</Text>
+                      <Text style={styles.breakdownValue}>({formatCurrency(financing.loanRepayments)})</Text>
                     </View>
                   )}
                   {financing.ownerWithdrawals > 0 && (
                     <View style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{t.financialReports?.ownerWithdrawals || 'Owner Withdrawals'}</Text>
-                      <Text style={styles.breakdownValue}>({formatRupiah(financing.ownerWithdrawals)})</Text>
+                      <Text style={styles.breakdownValue}>({formatCurrency(financing.ownerWithdrawals)})</Text>
                     </View>
                   )}
                 </View>
@@ -536,8 +537,7 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: '#BBE1FA' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
   loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingVertical: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
-  headerButton: { padding: 8, width: 40 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },   headerButton: { padding: 8, width: 40 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center' },
   content: { flex: 1 },
   section: { marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: 8 },

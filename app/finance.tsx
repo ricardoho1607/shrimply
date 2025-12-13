@@ -9,6 +9,7 @@ import {
 import { PieChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense, ExpenseInput } from './services/financeService';
 import revenueService, { Revenue, RevenueInput } from './services/revenueService';
 import { usePondStore } from './store/pondStore';
@@ -35,6 +36,7 @@ export default function FinancePage() {
   const router = useRouter();
   const { user, company } = useAuth();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const { harvestRecords } = usePondStore();
   const feedAdditiveStore = useFeedAdditiveStore();
 
@@ -478,8 +480,6 @@ export default function FinancePage() {
     return months;
   }, [expenses, revenues]);
 
-  const formatRupiah = (amount: number) => `Rp ${amount.toLocaleString('id-ID')}`;
-
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
       name, population, color: COLORS[name] || '#BBE1FA',
@@ -509,7 +509,7 @@ export default function FinancePage() {
             <Text style={styles.ledgerItemName}>{item.item}</Text>
           </View>
           <Text style={[styles.ledgerAmount, type === 'revenue' ? styles.revenueColor : styles.expenseColor]}>
-            {formatRupiah(item.amount)}
+            {formatCurrency(item.amount)}
           </Text>
         </View>
         <View style={styles.ledgerMeta}>
@@ -593,18 +593,18 @@ export default function FinancePage() {
         <View style={styles.summaryContainer}>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryRowLabel}>{t.finance?.revenue || 'Revenue'}</Text>
-            <Text style={[styles.summaryRowAmount, styles.revenueColor]}>{formatRupiah(revenueTotals.total)}</Text>
+            <Text style={[styles.summaryRowAmount, styles.revenueColor]}>{formatCurrency(revenueTotals.total)}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryRowLabel}>{t.finance?.expenses || 'Expenses'}</Text>
-            <Text style={[styles.summaryRowAmount, styles.expenseColor]}>{formatRupiah(expenseTotals.total)}</Text>
+            <Text style={[styles.summaryRowAmount, styles.expenseColor]}>{formatCurrency(expenseTotals.total)}</Text>
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
             <Text style={styles.summaryRowLabel}>{t.finance?.profitLoss || 'Profit & Loss'}</Text>
             <Text style={[styles.summaryRowAmount, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>
-              {formatRupiah(Math.abs(profit))}
+              {formatCurrency(Math.abs(profit))}
             </Text>
           </View>
         </View>
@@ -652,7 +652,7 @@ export default function FinancePage() {
                                   <View style={[styles.amountDot, { backgroundColor: '#27AE60' }]} />
                                   <Text style={styles.amountLabelText}>{t.finance?.revenue || 'Revenue'}</Text>
                                 </View>
-                                <Text style={styles.amountValue}>{formatRupiah(data.revenue)}</Text>
+                                <Text style={styles.amountValue}>{formatCurrency(data.revenue)}</Text>
                               </View>
                               
                               <View style={styles.amountRow}>
@@ -660,7 +660,7 @@ export default function FinancePage() {
                                   <View style={[styles.amountDot, { backgroundColor: '#E74C3C' }]} />
                                   <Text style={styles.amountLabelText}>{t.finance?.expenses || 'Expenses'}</Text>
                                 </View>
-                                <Text style={styles.amountValue}>{formatRupiah(data.expense)}</Text>
+                                <Text style={styles.amountValue}>{formatCurrency(data.expense)}</Text>
                               </View>
                               
                               <View style={styles.dividerLine} />
@@ -668,7 +668,7 @@ export default function FinancePage() {
                               <View style={styles.profitRow}>
                                 <Text style={styles.profitLabel}>{isProfit ? t.finance?.netProfit || 'Net Profit' : t.finance?.netLoss || 'Net Loss'}</Text>
                                 <Text style={[styles.profitValue, isProfit ? styles.profitPositive : styles.profitNegative]}>
-                                  {formatRupiah(Math.abs(data.profit))}
+                                  {formatCurrency(Math.abs(data.profit))}
                                 </Text>
                               </View>
                             </View>
@@ -703,7 +703,7 @@ export default function FinancePage() {
                       <Ionicons name="bar-chart-outline" size={20} color="#3498DB" />
                       <Text style={styles.summaryMetricLabel}>{t.finance?.avgProfit || 'Avg Profit'}</Text>
                       <Text style={styles.summaryMetricValue}>
-                        {formatRupiah(profitLossData.reduce((sum, d) => sum + d.profit, 0) / profitLossData.length)}
+                        {formatCurrency(profitLossData.reduce((sum, d) => sum + d.profit, 0) / profitLossData.length)}
                       </Text>
                     </View>
                   </View>
@@ -753,7 +753,7 @@ export default function FinancePage() {
                       <Text style={styles.topName}>{expense.item}</Text>
                       <Text style={styles.topCategory}>{expense.category}</Text>
                     </View>
-                    <Text style={styles.topAmount}>{formatRupiah(expense.amount)}</Text>
+                    <Text style={styles.topAmount}>{formatCurrency(expense.amount)}</Text>
                   </View>
                 ))}
               </View>
@@ -772,7 +772,7 @@ export default function FinancePage() {
                           backgroundColor: COLORS[category] 
                         }]} />
                       </View>
-                      <Text style={styles.breakdownAmount}>{formatRupiah(expenseTotals.byCategory[category])}</Text>
+                      <Text style={styles.breakdownAmount}>{formatCurrency(expenseTotals.byCategory[category])}</Text>
                     </View>
                   </View>
                 ))}
@@ -961,7 +961,7 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: '#BBE1FA' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
   loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingVertical: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
   headerButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center', marginHorizontal: Platform.OS === 'android' ? 14 : 16 },
   headerActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12 },

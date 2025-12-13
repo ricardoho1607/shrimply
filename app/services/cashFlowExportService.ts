@@ -35,13 +35,26 @@ interface CashFlowData {
     dividendsPaid: number;
     ownerWithdrawals: number;
   };
+  currencyCode?: string;
+  currencySymbol?: string;
 }
 
-const formatRupiah = (amount: number): string => {
-  return new Intl.NumberFormat('id-ID', {
+const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
+  const localeMap: Record<string, string> = {
+    'USD': 'en-US',
+    'IDR': 'id-ID',
+    'THB': 'th-TH',
+    'VND': 'vi-VN',
+    'CNY': 'zh-CN'
+  };
+  
+  const locale = localeMap[currencyCode] || 'id-ID';
+  const formatted = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+  
+  return `${currencySymbol} ${formatted}`;
 };
 
 const formatDate = (dateStr: string): string => {
@@ -146,7 +159,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         <div class="line-item balance">
           <span>Cash at Beginning of Period</span>
           <div>
-            <span class="amount neutral">${formatRupiah(openingBalance)}</span>
+            <span class="amount neutral">${formatCurrency(openingBalance)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -162,32 +175,32 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         ${operatingActivities.cashFromSales > 0 ? `
         <div class="line-item main">
           <span>Cash Received from Sales</span>
-          <span class="amount positive">${formatRupiah(operatingActivities.cashFromSales)}</span>
+          <span class="amount positive">${formatCurrency(operatingActivities.cashFromSales)}</span>
         </div>` : ''}
         
         ${operatingActivities.cashFromCustomers > 0 ? `
         <div class="line-item main">
           <span>Cash Received from Customers</span>
-          <span class="amount positive">${formatRupiah(operatingActivities.cashFromCustomers)}</span>
+          <span class="amount positive">${formatCurrency(operatingActivities.cashFromCustomers)}</span>
         </div>` : ''}
         
         ${operatingActivities.paymentToSuppliers > 0 ? `
         <div class="line-item main">
           <span>Cash Paid to Suppliers</span>
-          <span class="amount negative">(${formatRupiah(operatingActivities.paymentToSuppliers)})</span>
+          <span class="amount negative">(${formatCurrency(operatingActivities.paymentToSuppliers)})</span>
         </div>` : ''}
         
         ${operatingActivities.paymentForExpenses > 0 ? `
         <div class="line-item main">
           <span>Cash Paid for Operating Expenses</span>
-          <span class="amount negative">(${formatRupiah(operatingActivities.paymentForExpenses)})</span>
+          <span class="amount negative">(${formatCurrency(operatingActivities.paymentForExpenses)})</span>
         </div>` : ''}
         
         ${operatingActivities.otherOperatingCash !== 0 ? `
         <div class="line-item main">
           <span>Other Operating Cash ${operatingActivities.otherOperatingCash > 0 ? 'Receipts' : 'Payments'}</span>
           <span class="amount ${operatingActivities.otherOperatingCash > 0 ? 'positive' : 'negative'}">
-            ${operatingActivities.otherOperatingCash > 0 ? formatRupiah(operatingActivities.otherOperatingCash) : `(${formatRupiah(Math.abs(operatingActivities.otherOperatingCash))})`}
+            ${operatingActivities.otherOperatingCash > 0 ? formatCurrency(operatingActivities.otherOperatingCash) : `(${formatCurrency(Math.abs(operatingActivities.otherOperatingCash))})`}
           </span>
         </div>` : ''}
         
@@ -195,7 +208,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           <span>Net Cash from Operating Activities</span>
           <div>
             <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">
-              ${netOperatingCash >= 0 ? formatRupiah(netOperatingCash) : `(${formatRupiah(Math.abs(netOperatingCash))})`}
+              ${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}
             </span>
             <span class="currency">IDR</span>
           </div>
@@ -212,25 +225,25 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         ${investingActivities.saleOfAssets > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Sale of Assets</span>
-          <span class="amount positive">${formatRupiah(investingActivities.saleOfAssets)}</span>
+          <span class="amount positive">${formatCurrency(investingActivities.saleOfAssets)}</span>
         </div>` : ''}
         
         ${investingActivities.saleOfInvestments > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Sale of Investments</span>
-          <span class="amount positive">${formatRupiah(investingActivities.saleOfInvestments)}</span>
+          <span class="amount positive">${formatCurrency(investingActivities.saleOfInvestments)}</span>
         </div>` : ''}
         
         ${investingActivities.purchaseOfAssets > 0 ? `
         <div class="line-item main">
           <span>Purchase of Property & Equipment</span>
-          <span class="amount negative">(${formatRupiah(investingActivities.purchaseOfAssets)})</span>
+          <span class="amount negative">(${formatCurrency(investingActivities.purchaseOfAssets)})</span>
         </div>` : ''}
         
         ${investingActivities.purchaseOfInvestments > 0 ? `
         <div class="line-item main">
           <span>Purchase of Investments</span>
-          <span class="amount negative">(${formatRupiah(investingActivities.purchaseOfInvestments)})</span>
+          <span class="amount negative">(${formatCurrency(investingActivities.purchaseOfInvestments)})</span>
         </div>` : ''}
         
         ${netInvestingCash === 0 ? `
@@ -243,7 +256,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           <span>Net Cash from Investing Activities</span>
           <div>
             <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">
-              ${netInvestingCash >= 0 ? formatRupiah(netInvestingCash) : `(${formatRupiah(Math.abs(netInvestingCash))})`}
+              ${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}
             </span>
             <span class="currency">IDR</span>
           </div>
@@ -260,31 +273,31 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         ${financingActivities.loansReceived > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Loans</span>
-          <span class="amount positive">${formatRupiah(financingActivities.loansReceived)}</span>
+          <span class="amount positive">${formatCurrency(financingActivities.loansReceived)}</span>
         </div>` : ''}
         
         ${financingActivities.capitalContributed > 0 ? `
         <div class="line-item main">
           <span>Capital Contributed by Owners</span>
-          <span class="amount positive">${formatRupiah(financingActivities.capitalContributed)}</span>
+          <span class="amount positive">${formatCurrency(financingActivities.capitalContributed)}</span>
         </div>` : ''}
         
         ${financingActivities.loanRepayments > 0 ? `
         <div class="line-item main">
           <span>Repayment of Loans</span>
-          <span class="amount negative">(${formatRupiah(financingActivities.loanRepayments)})</span>
+          <span class="amount negative">(${formatCurrency(financingActivities.loanRepayments)})</span>
         </div>` : ''}
         
         ${financingActivities.dividendsPaid > 0 ? `
         <div class="line-item main">
           <span>Dividends Paid</span>
-          <span class="amount negative">(${formatRupiah(financingActivities.dividendsPaid)})</span>
+          <span class="amount negative">(${formatCurrency(financingActivities.dividendsPaid)})</span>
         </div>` : ''}
         
         ${financingActivities.ownerWithdrawals > 0 ? `
         <div class="line-item main">
           <span>Owner Withdrawals</span>
-          <span class="amount negative">(${formatRupiah(financingActivities.ownerWithdrawals)})</span>
+          <span class="amount negative">(${formatCurrency(financingActivities.ownerWithdrawals)})</span>
         </div>` : ''}
         
         ${netFinancingCash === 0 ? `
@@ -297,7 +310,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           <span>Net Cash from Financing Activities</span>
           <div>
             <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">
-              ${netFinancingCash >= 0 ? formatRupiah(netFinancingCash) : `(${formatRupiah(Math.abs(netFinancingCash))})`}
+              ${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}
             </span>
             <span class="currency">IDR</span>
           </div>
@@ -310,7 +323,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           <span>Net Increase/(Decrease) in Cash</span>
           <div>
             <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">
-              ${netCashChange >= 0 ? formatRupiah(netCashChange) : `(${formatRupiah(Math.abs(netCashChange))})`}
+              ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}
             </span>
             <span class="currency">IDR</span>
           </div>
@@ -322,7 +335,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         <div class="line-item closing ${closingBalance < 0 ? 'negative' : ''}">
           <span>Cash at End of Period</span>
           <div>
-            <span class="amount ${closingBalance >= 0 ? 'positive' : 'negative'}">${formatRupiah(Math.abs(closingBalance))}</span>
+            <span class="amount ${closingBalance >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(closingBalance))}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -332,19 +345,19 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
       <div class="summary-box">
         <div class="summary-item">
           <span>Operating Activities:</span>
-          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">Rp ${netOperatingCash >= 0 ? formatRupiah(netOperatingCash) : `(${formatRupiah(Math.abs(netOperatingCash))})`}</span>
+          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">Rp ${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Investing Activities:</span>
-          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">Rp ${netInvestingCash >= 0 ? formatRupiah(netInvestingCash) : `(${formatRupiah(Math.abs(netInvestingCash))})`}</span>
+          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">Rp ${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Financing Activities:</span>
-          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">Rp ${netFinancingCash >= 0 ? formatRupiah(netFinancingCash) : `(${formatRupiah(Math.abs(netFinancingCash))})`}</span>
+          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">Rp ${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}</span>
         </div>
         <div class="summary-item highlight">
           <span>Net Change in Cash:</span>
-          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">Rp ${netCashChange >= 0 ? formatRupiah(netCashChange) : `(${formatRupiah(Math.abs(netCashChange))})`}</span>
+          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">Rp ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}</span>
         </div>
       </div>
       

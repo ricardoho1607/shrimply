@@ -64,7 +64,11 @@ export default function DiseaseReportScreen() {
     { id: 'other', name: t?.diseaseReport?.otherDisease || 'Other', severity: 'medium', icon: 'help-circle', color: '#f1c40f' },
   ];
   
-  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  // SET DEFAULT LOCATION IMMEDIATELY - Don't leave it null!
+  const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number }>({
+    latitude: -6.2088,  // Jakarta default
+    longitude: 106.8456,
+  });
   const [reports, setReports] = useState<DiseaseReport[]>([]);
   const [selectedReport, setSelectedReport] = useState<DiseaseReport | null>(null);
   const [loading, setLoading] = useState(false);
@@ -129,17 +133,27 @@ export default function DiseaseReportScreen() {
   };
 
   const setFallbackLocation = () => {
+    console.log('🔄 Setting fallback location...');
+    console.log('Company data:', company);
+    
+    let fallbackLat = -6.2088;  // Jakarta default
+    let fallbackLng = 106.8456;
+    
+    // Try to use company location if available
     if (company?.primaryLocation && typeof company.primaryLocation !== 'string') {
-      setCurrentLocation({
-        latitude: company.primaryLocation.latitude,
-        longitude: company.primaryLocation.longitude,
-      });
-    } else {
-      setCurrentLocation({
-        latitude: -6.2088,
-        longitude: 106.8456,
-      });
+      if (company.primaryLocation.latitude && company.primaryLocation.longitude) {
+        fallbackLat = company.primaryLocation.latitude;
+        fallbackLng = company.primaryLocation.longitude;
+        console.log('✅ Using company location:', fallbackLat, fallbackLng);
+      }
     }
+    
+    // ALWAYS set a location - never leave it null
+    setCurrentLocation({
+      latitude: fallbackLat,
+      longitude: fallbackLng,
+    });
+    console.log('✅ Fallback location set:', fallbackLat, fallbackLng);
   };
 
   const getCurrentLocation = async () => {
@@ -154,10 +168,7 @@ export default function DiseaseReportScreen() {
       console.log('📍 Location permission status:', status);
       
       if (status !== 'granted') {
-        Alert.alert(
-          t?.diseaseReport?.permissionDenied || 'Permission Denied',
-          t?.diseaseReport?.locationPermissionRequired || 'Location permission is required'
-        );
+        console.log('❌ Location permission not granted:', status);
         setFallbackLocation();
         return;
       }
@@ -172,9 +183,16 @@ export default function DiseaseReportScreen() {
       }
 
       console.log('🔄 Getting current position...');
-      const location = await Location.getCurrentPositionAsync({
+      
+      const locationPromise = Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
+      
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Location timeout')), 10000)
+      );
+      
+      const location = await Promise.race([locationPromise, timeoutPromise]) as any;
       
       const userLocation = { 
         latitude: location.coords.latitude, 
@@ -206,8 +224,7 @@ export default function DiseaseReportScreen() {
     setLoading(true);
     try {
       const q = query(
-        collection(db, 'diseaseReports'), 
-        where('status', 'in', ['active', 'contained']),
+        collection(db, 'diseaseReports'),
         orderBy('reportDate', 'desc')
       );
       
@@ -507,6 +524,7 @@ export default function DiseaseReportScreen() {
         onMapReady={() => {
           console.log('✅ Map is ready');
           setMapReady(true);
+          setError(null);
         }}
         onMapLoaded={() => {
           console.log('✅ Map loaded');

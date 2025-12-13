@@ -1,11 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Share, Platform } from 'react-native';
-import { useFeedAdditiveStore, type Feed, type Additive } from './../store/feedAdditiveStore';
-import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Modal, Platform, SafeAreaView, ScrollView, Share, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useAuth } from '../../context/AuthContext';
+import { useCurrency } from '../../context/CurrencyContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { NotificationService } from '../services/notificationService';
+import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedAdditiveStore';
 
 type FormData = {
   itemName: string;
@@ -45,6 +46,7 @@ export default function FeedAdditivesScreen() {
   const { company } = useAuth();
   const store = useFeedAdditiveStore();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | ItemType>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -309,12 +311,12 @@ export default function FeedAdditivesScreen() {
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statLabel}>{t.inventory.avgPrice}</Text>
-            <Text style={styles.statValue} numberOfLines={1}>Rp{formatNumber(Math.round(avgPrice))}</Text>
+            <Text style={styles.statValue} numberOfLines={1}>{formatCurrency(Math.round(avgPrice))}</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.stat}>
             <Text style={styles.statLabel}>{t.inventory.value}</Text>
-            <Text style={styles.statValue} numberOfLines={1}>Rp{formatNumber(Math.round((item.totalStock || 0) * avgPrice))}</Text>
+            <Text style={styles.statValue} numberOfLines={1}>{formatCurrency(Math.round((item.totalStock || 0) * avgPrice))}</Text>
           </View>
         </View>
 
@@ -329,7 +331,7 @@ export default function FeedAdditivesScreen() {
           </View>
           <View style={styles.flowItem}>
             <Ionicons name="pricetag" size={16} color="#3282B8" />
-            <Text style={styles.flowText}>{t.inventory.cost}: Rp{(item.totalCost || 0).toFixed(0)}</Text>
+            <Text style={styles.flowText}>{t.inventory.cost}: {formatCurrency((item.totalCost || 0))}</Text>
           </View>
         </View>
 
@@ -483,9 +485,9 @@ export default function FeedAdditivesScreen() {
               <View style={styles.metricsGrid}>
                 {[
                   { icon: 'nutrition', label: t.inventory.feedStock, value: `${formatNumber(Math.round(metrics.totalFeedStock))} kg`, color: '#3282B8' },
-                  { icon: 'flask', label: t.inventory.additiveValue, value: `Rp${formatNumber(Math.round(metrics.totalAdditiveValue))}`, color: '#f39c12' },
-                  { icon: 'cash', label: t.inventory.feedCost, value: `Rp${formatNumber(Math.round(metrics.totalFeedCost))}`, color: '#27ae60' },
-                  { icon: 'wallet', label: t.inventory.feedStockValue, value: `Rp${formatNumber(Math.round(metrics.feedStockValue))}`, color: '#0F4C75' },
+                  { icon: 'flask', label: t.inventory.additiveValue, value: formatCurrency(Math.round(metrics.totalAdditiveValue)), color: '#f39c12' },
+                  { icon: 'cash', label: t.inventory.feedCost, value: formatCurrency(Math.round(metrics.totalFeedCost)), color: '#27ae60' },
+                  { icon: 'wallet', label: t.inventory.feedStockValue, value: formatCurrency(Math.round(metrics.feedStockValue)), color: '#0F4C75' },
                 ].map((m, i) => (
                   <View key={i} style={styles.metricCard}>
                     <View style={[styles.metricIcon, { backgroundColor: m.color + '20' }]}>
@@ -731,15 +733,16 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { fontSize: 16, color: '#0F4C75', fontWeight: '500' },
   header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
-    paddingVertical: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#BBE1FA', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
-  },
+  flexDirection: 'row', 
+  alignItems: 'center', 
+  justifyContent: 'space-between', 
+  paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
+  paddingTop: Platform.OS === 'android' ? 14 : 16, 
+  paddingBottom: Platform.OS === 'android' ? 7 : 8, 
+  backgroundColor: '#BBE1FA', 
+  borderBottomWidth: 1, 
+  borderBottomColor: '#BBE1FA' 
+},
   backButton: { padding: 8, marginLeft: -4 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#1B262C' },
   addButton: { padding: 8, marginRight: -4 },

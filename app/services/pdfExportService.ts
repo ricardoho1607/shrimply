@@ -17,13 +17,26 @@ interface FinancialData {
   expenseBreakdown: ExpenseBreakdown;
   revenueBreakdown: RevenueBreakdown;
   topExpenses: Array<{ item: string; category: string; amount: number }>;
+  currencyCode?: string;
+  currencySymbol?: string;
 }
 
-const formatRupiah = (amount: number): string => {
-  return new Intl.NumberFormat('id-ID', {
+const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
+  const localeMap: Record<string, string> = {
+    'USD': 'en-US',
+    'IDR': 'id-ID',
+    'THB': 'th-TH',
+    'VND': 'vi-VN',
+    'CNY': 'zh-CN'
+  };
+  
+  const locale = localeMap[currencyCode] || 'id-ID';
+  const formatted = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+  
+  return `${currencySymbol} ${formatted}`;
 };
 
 const formatDate = (dateStr: string): string => {
@@ -101,13 +114,13 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         ${Object.entries(revenueBreakdown).map(([category, amount]) => `
           <div class="line-item category">
             <span>${category}</span>
-            <span class="amount">${formatRupiah(amount)}</span>
+            <span class="amount">${formatCurrency(amount)}</span>
           </div>
         `).join('')}
         <div class="line-item total">
           <span>Total Income</span>
           <div>
-            <span class="amount positive">${formatRupiah(totalRevenue)}</span>
+            <span class="amount positive">${formatCurrency(totalRevenue)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -117,7 +130,7 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         <div class="line-item total">
           <span>Gross Profit</span>
           <div>
-            <span class="amount">${formatRupiah(grossProfit)}</span>
+            <span class="amount">${formatCurrency(grossProfit)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -128,13 +141,13 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         ${Object.entries(expenseBreakdown).map(([category, amount]) => `
           <div class="line-item category">
             <span>${category}</span>
-            <span class="amount">${formatRupiah(amount)}</span>
+            <span class="amount">${formatCurrency(amount)}</span>
           </div>
         `).join('')}
         <div class="line-item total">
           <span>Total Expenses</span>
           <div>
-            <span class="amount negative">${formatRupiah(totalExpenses)}</span>
+            <span class="amount negative">${formatCurrency(totalExpenses)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -144,7 +157,7 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         <div class="line-item ${netProfit >= 0 ? 'net-profit' : 'net-loss'}">
           <span>Net ${netProfit >= 0 ? 'Profit' : 'Loss'}</span>
           <div>
-            <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatRupiah(Math.abs(netProfit))}</span>
+            <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(netProfit))}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -153,15 +166,15 @@ const generateProfitLossHTML = (data: FinancialData): string => {
       <div class="summary-box">
         <div class="summary-item">
           <span>Total Revenue:</span>
-          <span class="amount positive">Rp ${formatRupiah(totalRevenue)}</span>
+          <span class="amount positive">Rp ${formatCurrency(totalRevenue)}</span>
         </div>
         <div class="summary-item">
           <span>Total Expenses:</span>
-          <span class="amount negative">Rp ${formatRupiah(totalExpenses)}</span>
+          <span class="amount negative">Rp ${formatCurrency(totalExpenses)}</span>
         </div>
         <div class="summary-item highlight">
           <span>${netProfit >= 0 ? 'Net Profit:' : 'Net Loss:'}</span>
-          <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">Rp ${formatRupiah(Math.abs(netProfit))}</span>
+          <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">Rp ${formatCurrency(Math.abs(netProfit))}</span>
         </div>
       </div>
       

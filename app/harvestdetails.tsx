@@ -4,11 +4,13 @@ import React from "react";
 import { ScrollView, StatusBar, StyleSheet, Text, View, Platform } from "react-native";
 import { usePondStore } from "./store/pondStore";
 import { useLanguage } from "../context/LanguageContext";
+import { useCurrency } from "../context/CurrencyContext";
 
 export default function HarvestDetailsScreen() {
   const { harvestId } = useLocalSearchParams();
   const { harvestRecords } = usePondStore();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
 
   const getHarvestRecord = () => {
     const targetId = Array.isArray(harvestId) ? harvestId[0] : harvestId;
@@ -93,7 +95,7 @@ export default function HarvestDetailsScreen() {
 
         <View style={styles.pondTotal}>
           <Text style={styles.pondTotalLabel}>{t.harvestDetails.salePrice}</Text>
-          <Text style={styles.pondTotalValue}>Rp {formatNumber(totalPondPrice.toFixed(0))}</Text>
+          <Text style={styles.pondTotalValue}>{formatCurrency(totalPondPrice)}</Text>
         </View>
       </View>
     );
@@ -163,7 +165,7 @@ export default function HarvestDetailsScreen() {
               <View style={styles.totalItemFull}>
                 <Text style={styles.totalLabel}>{t.harvestDetails.totalSalePrice}</Text>
                 <Text style={[styles.totalValue, styles.priceHighlight]}>
-                  Rp {formatNumber(totals.totalSalePrice)}
+                  {formatCurrency(parseFloat(totals.totalSalePrice))}
                 </Text>
               </View>
             </View>

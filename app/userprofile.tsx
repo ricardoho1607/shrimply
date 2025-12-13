@@ -1,6 +1,6 @@
 // app/userprofile.tsx - User Profile with Firebase Storage Upload
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, StatusBar } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -275,34 +275,187 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
   topSafeArea: { backgroundColor: '#BBE1FA' },
   container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#3282B8' },
-  backButton: { padding: 8 },
-  headerTitle: { color: '#1B262C', fontSize: 18, fontWeight: '600' },
-  headerRight: { width: 40 },
+  header: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
+    paddingTop: Platform.OS === 'android' ? 14 : 16, 
+    paddingBottom: Platform.OS === 'android' ? 7 : 8, 
+    backgroundColor: '#BBE1FA', 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#3282B8' 
+  },
+  backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
+  headerTitle: { 
+    color: '#1B262C', 
+    fontSize: Platform.OS === 'android' ? 17 : 18, 
+    fontWeight: '600' 
+  },
+  headerRight: { width: Platform.OS === 'android' ? 36 : 40 },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
-  profileImageSection: { alignItems: 'center', marginBottom: 30 },
-  profileImageContainer: { position: 'relative', marginBottom: 12 },
-  profileImage: { width: 120, height: 120, borderRadius: 60, borderWidth: 4, borderColor: '#BBE1FA' },
-  profileImagePlaceholder: { width: 120, height: 120, borderRadius: 60, backgroundColor: '#F0F7FF', justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#BBE1FA' },
-  editIconContainer: { position: 'absolute', bottom: 0, right: 0, backgroundColor: '#0F4C75', width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFFFFF' },
-  profileImageHint: { fontSize: 14, color: '#3282B8', textAlign: 'center' },
-  uploadingText: { fontSize: 12, color: '#f39c12', marginTop: 4, fontStyle: 'italic' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, marginBottom: 20, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B262C', marginLeft: 10 },
-  inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#0F4C75', marginBottom: 8 },
-  input: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#BBE1FA', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, color: '#1B262C' },
-  disabledInput: { backgroundColor: '#F0F7FF', borderWidth: 1, borderColor: '#BBE1FA', borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  disabledText: { fontSize: 16, color: '#3282B8' },
-  hint: { fontSize: 12, color: '#BBE1FA', marginTop: 6, fontStyle: 'italic' },
-  infoRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F0F7FF' },
-  infoLabel: { fontSize: 14, fontWeight: '600', color: '#3282B8' },
-  infoValue: { fontSize: 14, color: '#1B262C', fontWeight: '500' },
-  roleBadge: { backgroundColor: '#0F4C75', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 },
-  roleText: { fontSize: 12, color: '#FFFFFF', fontWeight: '600' },
-  saveButton: { backgroundColor: '#0F4C75', borderRadius: 12, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10 },
+  scrollContent: { 
+    padding: Platform.OS === 'android' ? 18 : 20, 
+    paddingBottom: Platform.OS === 'android' ? 36 : 40 
+  },
+  profileImageSection: { 
+    alignItems: 'center', 
+    marginBottom: Platform.OS === 'android' ? 28 : 30 
+  },
+  profileImageContainer: { 
+    position: 'relative', 
+    marginBottom: Platform.OS === 'android' ? 10 : 12 
+  },
+  profileImage: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60, 
+    borderWidth: 4, 
+    borderColor: '#BBE1FA' 
+  },
+  profileImagePlaceholder: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 60, 
+    backgroundColor: '#F0F7FF', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderWidth: 4, 
+    borderColor: '#BBE1FA' 
+  },
+  editIconContainer: { 
+    position: 'absolute', 
+    bottom: 0, 
+    right: 0, 
+    backgroundColor: '#0F4C75', 
+    width: 40, 
+    height: 40, 
+    borderRadius: 20, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderWidth: 3, 
+    borderColor: '#FFFFFF' 
+  },
+  profileImageHint: { 
+    fontSize: Platform.OS === 'android' ? 13 : 14, 
+    color: '#3282B8', 
+    textAlign: 'center' 
+  },
+  uploadingText: { 
+    fontSize: Platform.OS === 'android' ? 11 : 12, 
+    color: '#f39c12', 
+    marginTop: 4, 
+    fontStyle: 'italic' 
+  },
+  card: { 
+    backgroundColor: '#FFFFFF', 
+    borderRadius: Platform.OS === 'android' ? 14 : 16, 
+    padding: Platform.OS === 'android' ? 18 : 20, 
+    marginBottom: Platform.OS === 'android' ? 18 : 20, 
+    borderWidth: 1, 
+    borderColor: '#BBE1FA', 
+    shadowColor: '#0F4C75', 
+    shadowOffset: { width: 0, height: 2 }, 
+    shadowOpacity: 0.1, 
+    shadowRadius: 4, 
+    elevation: 3 
+  },
+  cardHeader: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    marginBottom: Platform.OS === 'android' ? 18 : 20, 
+    paddingBottom: Platform.OS === 'android' ? 14 : 16, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#BBE1FA' 
+  },
+  cardTitle: { 
+    fontSize: Platform.OS === 'android' ? 17 : 18, 
+    fontWeight: 'bold', 
+    color: '#1B262C', 
+    marginLeft: Platform.OS === 'android' ? 9 : 10 
+  },
+  inputGroup: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  label: { 
+    fontSize: Platform.OS === 'android' ? 13 : 14, 
+    fontWeight: '600', 
+    color: '#0F4C75', 
+    marginBottom: Platform.OS === 'android' ? 7 : 8 
+  },
+  input: { 
+    backgroundColor: '#F8FAFC', 
+    borderWidth: 1, 
+    borderColor: '#BBE1FA', 
+    borderRadius: Platform.OS === 'android' ? 10 : 12, 
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
+    paddingVertical: Platform.OS === 'android' ? 12 : 14, 
+    fontSize: Platform.OS === 'android' ? 15 : 16, 
+    color: '#1B262C' 
+  },
+  disabledInput: { 
+    backgroundColor: '#F0F7FF', 
+    borderWidth: 1, 
+    borderColor: '#BBE1FA', 
+    borderRadius: Platform.OS === 'android' ? 10 : 12, 
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
+    paddingVertical: Platform.OS === 'android' ? 12 : 14, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between' 
+  },
+  disabledText: { 
+    fontSize: Platform.OS === 'android' ? 15 : 16, 
+    color: '#3282B8' 
+  },
+  hint: { 
+    fontSize: Platform.OS === 'android' ? 11 : 12, 
+    color: '#BBE1FA', 
+    marginTop: Platform.OS === 'android' ? 5 : 6, 
+    fontStyle: 'italic' 
+  },
+  infoRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
+    borderBottomWidth: 1, 
+    borderBottomColor: '#F0F7FF' 
+  },
+  infoLabel: { 
+    fontSize: Platform.OS === 'android' ? 13 : 14, 
+    fontWeight: '600', 
+    color: '#3282B8' 
+  },
+  infoValue: { 
+    fontSize: Platform.OS === 'android' ? 13 : 14, 
+    color: '#1B262C', 
+    fontWeight: '500' 
+  },
+  roleBadge: { 
+    backgroundColor: '#0F4C75', 
+    paddingHorizontal: Platform.OS === 'android' ? 10 : 12, 
+    paddingVertical: Platform.OS === 'android' ? 5 : 6, 
+    borderRadius: Platform.OS === 'android' ? 7 : 8 
+  },
+  roleText: { 
+    fontSize: Platform.OS === 'android' ? 11 : 12, 
+    color: '#FFFFFF', 
+    fontWeight: '600' 
+  },
+  saveButton: { 
+    backgroundColor: '#0F4C75', 
+    borderRadius: Platform.OS === 'android' ? 10 : 12, 
+    paddingVertical: Platform.OS === 'android' ? 14 : 16, 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'center', 
+    gap: Platform.OS === 'android' ? 7 : 8, 
+    marginTop: Platform.OS === 'android' ? 9 : 10 
+  },
   saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF', marginLeft: 8 },
+  saveButtonText: { 
+    fontSize: Platform.OS === 'android' ? 15 : 16, 
+    fontWeight: '600', 
+    color: '#FFFFFF', 
+    marginLeft: Platform.OS === 'android' ? 7 : 8 
+  },
 });

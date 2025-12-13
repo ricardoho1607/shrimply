@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Platform, KeyboardAvoidingView } from "react-native";
 import { usePondStore, HarvestRecord } from "../store/pondStore";
 import { useLanguage } from '../../context/LanguageContext';
+import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
 
 interface HarvestData extends HarvestRecord {}
@@ -27,6 +28,7 @@ const SummaryItem = React.memo(({ iconName, label, value, unit = "" }: any) => (
 export default function HarvestScreen() {
   const router = useRouter();
   const { t } = useLanguage();
+  const { formatCurrency } = useCurrency();
   const { user } = useAuth();
   const { ponds, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact } = usePondStore();
   
@@ -192,7 +194,7 @@ export default function HarvestScreen() {
                       </View>
                       <View style={styles.parameterRow}>
                         <SummaryItem iconName="cash-outline" label={t.harvest.totalPrice} 
-                          value={`Rp ${totals.totalPrice}`} />
+                          value={formatCurrency(parseFloat(totals.totalPrice.replace(/,/g, '')))} />
                       </View>
                     </View>
                   </TouchableOpacity>

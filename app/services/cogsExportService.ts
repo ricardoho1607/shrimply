@@ -18,13 +18,26 @@ export interface COGSData {
   grossProfit: number;
   grossProfitMargin: number;
   categoryBreakdown: { [category: string]: number };
+  currencyCode?: string;
+  currencySymbol?: string;
 }
 
-const formatRupiah = (amount: number): string => {
-  return new Intl.NumberFormat('id-ID', {
+const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
+  const localeMap: Record<string, string> = {
+    'USD': 'en-US',
+    'IDR': 'id-ID',
+    'THB': 'th-TH',
+    'VND': 'vi-VN',
+    'CNY': 'zh-CN'
+  };
+  
+  const locale = localeMap[currencyCode] || 'id-ID';
+  const formatted = new Intl.NumberFormat(locale, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(amount);
+  
+  return `${currencySymbol} ${formatted}`;
 };
 
 const formatDate = (dateStr: string): string => {
@@ -151,40 +164,40 @@ const generateCOGSHTML = (data: COGSData): string => {
         <div class="line-item category">
           <span>Opening Inventory</span>
           <div>
-            <span class="amount">${formatRupiah(openingInventory)}</span>
+            <span class="amount">${formatCurrency(openingInventory)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
         <div class="line-item subcategory">
           <span>Add: Purchases (Feed & Materials)</span>
-          <span class="amount">${formatRupiah(purchases)}</span>
+          <span class="amount">${formatCurrency(purchases)}</span>
         </div>
         <div class="line-item subcategory">
           <span>Add: Direct Labor</span>
-          <span class="amount">${formatRupiah(directLabor)}</span>
+          <span class="amount">${formatCurrency(directLabor)}</span>
         </div>
         <div class="line-item subcategory">
           <span>Add: Direct Materials (Pond Additives)</span>
-          <span class="amount">${formatRupiah(directMaterials)}</span>
+          <span class="amount">${formatCurrency(directMaterials)}</span>
         </div>
         <div class="line-item subtotal">
           <span>Goods Available for Sale</span>
           <div>
-            <span class="amount">${formatRupiah(goodsAvailable)}</span>
+            <span class="amount">${formatCurrency(goodsAvailable)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
         <div class="line-item category">
           <span>Less: Closing Inventory</span>
           <div>
-            <span class="amount negative">(${formatRupiah(closingInventory)})</span>
+            <span class="amount negative">(${formatCurrency(closingInventory)})</span>
             <span class="currency">IDR</span>
           </div>
         </div>
         <div class="line-item total">
           <span>Total Cost of Goods Sold</span>
           <div>
-            <span class="amount negative">${formatRupiah(totalCOGS)}</span>
+            <span class="amount negative">${formatCurrency(totalCOGS)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -195,21 +208,21 @@ const generateCOGSHTML = (data: COGSData): string => {
         <div class="line-item category">
           <span>Total Revenue</span>
           <div>
-            <span class="amount positive">${formatRupiah(revenue)}</span>
+            <span class="amount positive">${formatCurrency(revenue)}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
         <div class="line-item category">
           <span>Less: Cost of Goods Sold</span>
           <div>
-            <span class="amount negative">(${formatRupiah(totalCOGS)})</span>
+            <span class="amount negative">(${formatCurrency(totalCOGS)})</span>
             <span class="currency">IDR</span>
           </div>
         </div>
         <div class="line-item ${grossProfit >= 0 ? 'gross-profit' : 'gross-loss'}">
           <span>Gross ${grossProfit >= 0 ? 'Profit' : 'Loss'}</span>
           <div>
-            <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${formatRupiah(Math.abs(grossProfit))}</span>
+            <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(grossProfit))}</span>
             <span class="currency">IDR</span>
           </div>
         </div>
@@ -230,7 +243,7 @@ const generateCOGSHTML = (data: COGSData): string => {
                 <div class="breakdown-item">
                   <span>${category}</span>
                   <span>
-                    ${formatRupiah(amount)}
+                    ${formatCurrency(amount)}
                     <span class="percentage">(${percentage}%)</span>
                   </span>
                 </div>
@@ -243,15 +256,15 @@ const generateCOGSHTML = (data: COGSData): string => {
       <div class="summary-box">
         <div class="summary-item">
           <span>Total Revenue:</span>
-          <span class="amount positive">Rp ${formatRupiah(revenue)}</span>
+          <span class="amount positive">Rp ${formatCurrency(revenue)}</span>
         </div>
         <div class="summary-item">
           <span>Cost of Goods Sold:</span>
-          <span class="amount negative">Rp ${formatRupiah(totalCOGS)}</span>
+          <span class="amount negative">Rp ${formatCurrency(totalCOGS)}</span>
         </div>
         <div class="summary-item highlight">
           <span>${grossProfit >= 0 ? 'Gross Profit:' : 'Gross Loss:'}</span>
-          <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">Rp ${formatRupiah(Math.abs(grossProfit))}</span>
+          <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">Rp ${formatCurrency(Math.abs(grossProfit))}</span>
         </div>
         <div class="summary-item">
           <span>Gross Profit Margin:</span>

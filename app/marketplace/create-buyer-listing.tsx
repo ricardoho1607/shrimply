@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
+import { useCurrency } from '../../context/CurrencyContext';
 import { useMarketplaceStore } from '../store/marketplaceStore';
 
 const { width } = Dimensions.get('window');
@@ -65,6 +66,7 @@ const CreateBuyerListingScreen = () => {
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
+  const { currencyConfig } = useCurrency();
   const { addBuyerListing } = useMarketplaceStore();
 
   const [formData, setFormData] = useState<FormData>({
@@ -279,7 +281,7 @@ const CreateBuyerListingScreen = () => {
                 <View style={styles.priceCell}>
                   <Text style={styles.sizeLabel}>{SHRIMP_SIZES[rowIndex * 2].label}</Text>
                   <View style={styles.priceInputContainer}>
-                    <Text style={styles.currencySymbol}>$</Text>
+                    <Text style={styles.currencySymbol}>{currencyConfig.symbol}</Text>
                     <TextInput
                       style={styles.priceInput}
                       value={formData.priceList[SHRIMP_SIZES[rowIndex * 2].key as keyof PriceList]}
@@ -294,7 +296,7 @@ const CreateBuyerListingScreen = () => {
                 <View style={styles.priceCell}>
                   <Text style={styles.sizeLabel}>{SHRIMP_SIZES[rowIndex * 2 + 1].label}</Text>
                   <View style={styles.priceInputContainer}>
-                    <Text style={styles.currencySymbol}>$</Text>
+                    <Text style={styles.currencySymbol}>{currencyConfig.symbol}</Text>
                     <TextInput
                       style={styles.priceInput}
                       value={formData.priceList[SHRIMP_SIZES[rowIndex * 2 + 1].key as keyof PriceList]}
