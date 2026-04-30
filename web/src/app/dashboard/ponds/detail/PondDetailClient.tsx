@@ -1,0 +1,786 @@
+"use client";
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { 
+  ArrowLeft,
+  Waves,
+  Scale,
+  TrendingUp,
+  Activity,
+  Wind,
+  Droplets,
+  Thermometer,
+  Calendar,
+  Settings,
+  Plus,
+  X,
+  Loader2,
+  Trash2,
+  ChevronRight,
+  Info,
+  LineChart as LineChartIcon,
+  ShoppingBag,
+  Users,
+  Target,
+  Database,
+  Layers
+} from 'lucide-react';
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { onAuthStateChanged } from 'firebase/auth';
+import { 
+  doc, 
+  onSnapshot, 
+  updateDoc, 
+  deleteDoc, 
+  query, 
+  collection, 
+  orderBy, 
+  serverTimestamp, 
+  runTransaction, 
+  arrayUnion, 
+  Timestamp 
+} from 'firebase/firestore';
+import { auth, db } from '@/lib/firebase';
+
+/* ─── Types ─────────────────────────────────────────────────── */
+interface FeedData {
+  ancoPercentage: string;
+  totalDailyFeed: string | number;
+  inventoryFeedId?: string | null;
+  anco1?: string; anco2?: string; anco3?: string; anco4?: string;
+}
+
+interface Sampling {
+  id: string; 
+  date: string; 
+  mbw: number; 
+  mortality: number; 
+  feed: number;
+  phMorning?: string;
+  phEvening?: string;
+  doMorning?: string;
+  doEvening?: string;
+  transparency?: string;
+  salinity?: string;
+  temp?: string;
+  feedData?: FeedData;
+}
+
+interface Pond {
+  id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
+  docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
+}
+
+/* ─── Custom SVG Chart ─────────────────────────────────────── */
+const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
+  const [hoveredPoint, setHoveredPoint] = useState<any>(null);
+
+  if (!data || data.length < 2) {
+    return (
+      <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: '13px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
+        Not enough sampling data to generate growth trends.
+      </div>
+    );
+  }
+
+  const padding = 40;
+  const width = 600;
+  const height = 240;
+
+  const minX = Math.min(...data.map(d => d.x));
+  const maxX = Math.max(...data.map(d => d.x));
+  const minY = 0;
+  const maxY = Math.max(...data.map(d => d.y)) * 1.2;
+
+  const getX = (x: number) => padding + ((x - minX) / (maxX - minX || 1)) * (width - padding * 2);
+  const getY = (y: number) => height - padding - ((y - minY) / (maxY - minY || 1)) * (height - padding * 2);
+
+  const points = data.map(d => `${getX(d.x)},${getY(d.y)}`).join(' ');
+  
+  return (
+    <div style={{ width: '100%', overflow: 'hidden', position: 'relative' }}>
+      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
+        {/* Grids */}
+        {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
+          <line key={i} x1={padding} y1={getY(maxY * p)} x2={width - padding} y2={getY(maxY * p)} stroke="var(--border)" strokeDasharray="4 4" />
+        ))}
+        
+        {/* Gradient Fill */}
+        <defs>
+          <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.2" />
+            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path 
+          d={`M ${getX(data[0].x)} ${height - padding} L ${points} L ${getX(data[data.length-1].x)} ${height - padding} Z`} 
+          fill="url(#growthGradient)" 
+        />
+
+        {/* Line */}
+        <polyline points={points} fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        
+        {/* Data Points */}
+        {data.map((d, i) => (
+          <g key={i} onMouseEnter={() => setHoveredPoint(d)} onMouseLeave={() => setHoveredPoint(null)}>
+            <circle 
+              cx={getX(d.x)} 
+              cy={getY(d.y)} 
+              r={hoveredPoint === d ? "6" : "4"} 
+              fill={hoveredPoint === d ? "var(--primary)" : "#FFF"} 
+              stroke="var(--primary)" 
+              strokeWidth="2" 
+              style={{ transition: 'all 0.2s', cursor: 'pointer' }}
+            />
+            {/* Larger invisible hit area */}
+            <circle 
+              cx={getX(d.x)} 
+              cy={getY(d.y)} 
+              r="20" 
+              fill="transparent" 
+              style={{ cursor: 'pointer' }}
+            />
+          </g>
+        ))}
+
+        {/* Labels */}
+        <text x={padding} y={height - 10} fontSize="10" fill="var(--text-faint)" fontWeight="700">DOC {minX}</text>
+        <text x={width - padding} y={height - 10} textAnchor="end" fontSize="10" fill="var(--text-faint)" fontWeight="700">DOC {maxX}</text>
+      </svg>
+
+      {/* Tooltip */}
+      {hoveredPoint && (
+        <div style={{
+          position: 'absolute',
+          left: `${(getX(hoveredPoint.x) / width) * 100}%`,
+          top: `${(getY(hoveredPoint.y) / height) * 100}%`,
+          transform: 'translate(-50%, -120%)',
+          background: 'rgba(15, 23, 42, 0.9)',
+          color: '#FFF',
+          padding: '8px 12px',
+          borderRadius: '8px',
+          fontSize: '12px',
+          pointerEvents: 'none',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+          zIndex: 10,
+          whiteSpace: 'nowrap',
+          transition: 'all 0.1s ease-out'
+        }}>
+          <div style={{ fontWeight: 800, marginBottom: '2px' }}>DOC {hoveredPoint.x}</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>MBW: <span style={{ color: '#FFF', fontWeight: 700 }}>{hoveredPoint.y}g</span></div>
+          <div style={{ position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: '8px', height: '8px', background: 'rgba(15, 23, 42, 0.9)' }} />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default function PondDetailClient() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get('id');
+  const router = useRouter();
+  const [pond, setPond] = useState<Pond | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [companyId, setCompanyId] = useState<string | null>(null);
+  const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
+  const [samplingForm, setSamplingForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    mbw: '',
+    feed: '',
+    mortality: '0',
+    inventoryFeedId: ''
+  });
+
+  useEffect(() => {
+    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
+          const cid = uDoc.data()?.companyId;
+          setCompanyId(cid);
+          if (cid) {
+            // Listen to Pond
+            const unsubPond = onSnapshot(doc(db, 'companies', cid, 'ponds', id as string), (snapshot) => {
+              if (snapshot.exists()) {
+                setPond({ id: snapshot.id, ...snapshot.data() } as Pond);
+              }
+              setLoading(false);
+            });
+
+            // Fetch Inventory Feeds
+            const qFeeds = query(collection(db, 'companies', cid, 'feeds'), orderBy('feedName', 'asc'));
+            const unsubFeeds = onSnapshot(qFeeds, (snapshot: any) => {
+              setInventoryFeeds(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+            });
+
+            return () => {
+              unsubPond();
+              unsubFeeds();
+            };
+          }
+        });
+      }
+    });
+    return () => unsubAuth();
+  }, [id]);
+
+  const handleAddSampling = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId || !pond) return;
+    setIsSubmitting(true);
+
+    try {
+      const pondRef = doc(db, 'companies', companyId, 'ponds', pond.id);
+      const newSampling: any = {
+        id: `s-${Date.now()}`,
+        date: samplingForm.date,
+        mbw: parseFloat(samplingForm.mbw) || 0,
+        mortality: parseInt(samplingForm.mortality) || 0,
+        feed: parseFloat(samplingForm.feed) || 0,
+      };
+
+      if (samplingForm.inventoryFeedId) {
+        newSampling.feedData = {
+          inventoryFeedId: samplingForm.inventoryFeedId, 
+          totalDailyFeed: samplingForm.feed,
+          ancoPercentage: '0' 
+        };
+      }
+
+      // 1. Update Pond
+      await updateDoc(pondRef, {
+        samplings: arrayUnion(newSampling),
+        updatedAt: serverTimestamp()
+      });
+
+      setSamplingModalOpen(false);
+      setSamplingForm({
+        date: new Date().toISOString().split('T')[0],
+        mbw: '',
+        mortality: '0',
+        feed: '',
+        inventoryFeedId: ''
+      });
+    } catch (error) {
+      console.error("Error adding sampling:", error);
+      alert("Failed to save sampling record.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  /* ─── Biological Projection Utility ────────────────────────── */
+  const getFRFromMBW = (mbw: number): number | null => {
+    const frTable = [
+      { mbw: 0.01, fr: null }, { mbw: 0.65, fr: null }, { mbw: 1.65, fr: 6.50 }, { mbw: 3.00, fr: 6.50 }, { mbw: 5.00, fr: 5.50 },
+      { mbw: 7.50, fr: 4.20 }, { mbw: 10.50, fr: 3.60 }, { mbw: 14.00, fr: 3.30 }, { mbw: 17.50, fr: 3.10 }, { mbw: 21.00, fr: 2.90 },
+      { mbw: 25.00, fr: 2.70 }, { mbw: 29.00, fr: 2.50 }, { mbw: 33.00, fr: 2.30 }
+    ];
+    if (mbw > 33.00) return 2.10;
+    for (let i = 0; i < frTable.length - 1; i++) {
+      const current = frTable[i];
+      const next = frTable[i + 1];
+      if (current.fr === null) continue;
+      if (mbw <= current.mbw) return current.fr;
+      if (mbw >= current.mbw && mbw <= next.mbw && next.fr !== null) {
+        const ratio = (mbw - current.mbw) / (next.mbw - current.mbw);
+        return current.fr + ratio * (next.fr - current.fr);
+      }
+    }
+    return frTable[frTable.length - 1].fr;
+  };
+
+  const metrics = useMemo(() => {
+    if (!pond) return null;
+    const samplings = (pond.samplings || []).filter(s => Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0);
+    const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const latest = sorted[sorted.length - 1] || { mbw: 0, mortality: 0, feed: 0 };
+    const latestValid = sorted.filter(s => {
+      const feedVal = s.feed || parseFloat(String(s.feedData?.totalDailyFeed || '0'));
+      return s.mbw > 0 && feedVal > 0;
+    }).reverse()[0];
+    
+    const docStart = new Date(pond.docStart);
+    const docDays = Math.floor((Date.now() - docStart.getTime()) / (1000 * 60 * 60 * 24));
+    
+    let population = pond.initialPopulation;
+    if (latestValid) {
+      const fr = getFRFromMBW(latestValid.mbw);
+      const feedVal = latestValid.feed || parseFloat(String(latestValid.feedData?.totalDailyFeed || '0'));
+      if (fr && feedVal > 0) {
+        population = Math.round(((feedVal / fr) / latestValid.mbw) * 100000);
+      }
+    } else {
+      const totalMortality = sorted.reduce((sum, s) => sum + (s.mortality || 0), 0);
+      population = Math.max(0, pond.initialPopulation - totalMortality);
+    }
+
+    const lastRecordedMBW = [...sorted].reverse().find(s => s.mbw > 0)?.mbw || pond.initialWeight || 0.5;
+    const biomass = (population * lastRecordedMBW) / 1000;
+    const sr = (population / pond.initialPopulation) * 100;
+
+    const chartData = sorted
+      .filter(s => s.mbw > 0)
+      .map(s => ({
+        x: Math.floor((new Date(s.date).getTime() - docStart.getTime()) / (1000 * 60 * 60 * 24)),
+        y: s.mbw
+      }));
+
+    const adg = (() => {
+      const validForADG = sorted.filter(s => s.mbw > 0);
+      if (validForADG.length >= 2) {
+        const s2 = validForADG[validForADG.length - 1];
+        const s1 = validForADG[validForADG.length - 2];
+        const days = Math.max(1, (new Date(s2.date).getTime() - new Date(s1.date).getTime()) / (1000 * 60 * 60 * 24));
+        return (s2.mbw - s1.mbw) / days;
+      } else if (validForADG.length === 1) {
+        const s1 = validForADG[0];
+        const days = Math.max(1, (new Date(s1.date).getTime() - docStart.getTime()) / (1000 * 60 * 60 * 24));
+        return (s1.mbw - (pond.initialWeight || 0.5)) / days;
+      }
+      return 0;
+    })();
+
+    const size = lastRecordedMBW > 0 ? Math.round(1000 / lastRecordedMBW) : 0;
+    
+    // Additional Comprehensive Metrics
+    const totalMortality = sorted.reduce((sum, s) => sum + (s.mortality || 0), 0);
+    const totalMortalityWeight = sorted.reduce((sum, s) => sum + ((s.mortality || 0) * (s.mbw || 0)) / 1000, 0);
+    const totalFeed = sorted.reduce((sum, s) => {
+      const f = s.feed || parseFloat(String(s.feedData?.totalDailyFeed || '0'));
+      return sum + (f > 0 ? f : 0);
+    }, 0);
+    
+    // FCR Calculation (Total Feed / Total Biomass Gain)
+    const initialBiomass = (pond.initialPopulation * (pond.initialWeight || 0.5)) / 1000;
+    const biomassGain = biomass - initialBiomass;
+    const fcr = biomassGain > 0 ? totalFeed / biomassGain : 0;
+
+    return { 
+      doc: docDays, 
+      population, 
+      biomass, 
+      sr, 
+      latest, 
+      chartData, 
+      adg, 
+      lastRecordedMBW, 
+      size,
+      totalMortality,
+      totalMortalityWeight,
+      totalFeed,
+      fcr
+    };
+  }, [pond]);
+
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
+  if (!pond) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
+      
+      {/* Breadcrumbs & Actions */}
+      <div className="glass-card animate-fade-up" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+          <Link href="/dashboard/ponds" style={{ 
+            width: '42px', height: '42px', borderRadius: '12px', background: 'var(--glass-bg)', 
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', 
+            border: '1px solid var(--border)', textDecoration: 'none', transition: 'all 0.2s',
+            boxShadow: 'var(--shadow-card)'
+          }} onMouseEnter={e => e.currentTarget.style.transform = 'translateX(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}>
+            <ArrowLeft size={20} />
+          </Link>
+          <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {pond.pondName}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                  DOC {metrics?.doc ?? 0}
+                </span>
+              </div>
+            </div>
+          </div>
+        <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
+          <button className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
+            <Settings size={18} strokeWidth={2.5} />
+          </button>
+          <button 
+            onClick={() => setSamplingModalOpen(true)}
+            className="dashboard-action dashboard-action-primary"
+          >
+            <Plus size={20} strokeWidth={3} />
+            <span>New Sampling</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Hero Stats */}
+      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '18px' }}>
+        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Age (DOC)</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+              <Calendar size={16} />
+            </div>
+          </div>
+          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            {metrics?.doc} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>DAYS</span>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Est. Biomass</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(22, 163, 74, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
+              <Scale size={16} />
+            </div>
+          </div>
+          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            {metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>KG</span>
+          </div>
+        </div>
+
+        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Avg Daily Growth</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(50, 130, 184, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
+              <TrendingUp size={16} />
+            </div>
+          </div>
+          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            {metrics?.adg.toFixed(2)} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>G/DAY</span>
+          </div>
+        </div>
+
+        <div style={{ background: 'var(--gradient)', borderRadius: 'var(--radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: 'var(--shadow-glow)', color: '#FFF' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>Survival Rate</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Activity size={16} />
+            </div>
+          </div>
+          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+            {metrics?.sr.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '28px' }}>
+        
+        {/* Left Content */}
+        <div className="animate-fade-up animate-delay-2" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+          
+          {/* Growth Chart Section */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
+              <div>
+                <h3 style={{ fontSize: '1.08rem', fontWeight: 800, marginBottom: '4px' }}>Biological Growth Curve</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mean Body Weight (MBW) trajectory over production cycle.</p>
+              </div>
+              <div style={{ 
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', 
+                background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '0.75rem', 
+                fontWeight: 800, color: 'var(--primary)', border: '1px solid var(--border)' 
+              }}>
+                <LineChartIcon size={16} />
+                LIVE TRACKING
+              </div>
+            </div>
+            <GrowthChart data={metrics?.chartData || []} />
+          </div>
+
+          {/* Sampling History Table */}
+          <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
+              <h3 style={{ fontSize: '1.08rem', fontWeight: 800 }}>Sampling History</h3>
+              <button style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View Audit Log</button>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
+                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Date</th>
+                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>MBW (g)</th>
+                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Size (pcs/kg)</th>
+                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Feed (kg)</th>
+                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mortality</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(pond.samplings || [])
+                    .filter((s: any) => Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
+                    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .slice(0, 8)
+                    .map((s: any, i: number) => (
+                      <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 700 }}>
+                          {new Date(s.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--primary)' }}>{s.mbw || '-'}g</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.mbw > 0 ? Math.round(1000 / s.mbw) : '-'}</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.feed || '-'} kg</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 800, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                          {s.mortality > 0 ? `+${s.mortality}` : '0'}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+        {/* Right Sidebar */}
+        <div className="animate-fade-up animate-delay-3" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="glass-card" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
+              <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                <Info size={18} />
+              </div>
+              <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Detailed Metrics</h4>
+            </div>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Biological Specs */}
+              <div>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Biological & Feed</h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[
+                    { label: 'Current Population', value: `${metrics?.population.toLocaleString()} pcs`, icon: Users },
+                    { label: 'Total Mortality', value: `${metrics?.totalMortality.toLocaleString()} pcs`, icon: Activity },
+                    { label: 'Total Mort. Weight', value: `${metrics?.totalMortalityWeight.toFixed(2)} kg`, icon: Wind },
+                    { label: 'Total Feed Used', value: `${metrics?.totalFeed.toFixed(1)} kg`, icon: ShoppingBag },
+                    { label: 'FCR (Est.)', value: metrics?.fcr.toFixed(2), icon: Target },
+                    { label: 'Current Size', value: `${metrics?.size} pcs/kg`, icon: Scale },
+                  ].map((spec, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <spec.icon size={14} style={{ opacity: 0.5 }} /> {spec.label}
+                      </span>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>{spec.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Pond Specifications */}
+              <div>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Pond Specifications</h5>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {[
+                    { label: 'Total Area', value: `${pond.pondArea} m²`, icon: Layers },
+                    { label: 'Target Density', value: `${pond.density} PL/m²`, icon: Database },
+                    { label: 'PL Supplier', value: pond.supplier, icon: Target },
+                    { label: 'Initial Weight', value: `${pond.initialWeight} g`, icon: Wind },
+                  ].map((spec, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <spec.icon size={14} style={{ opacity: 0.5 }} /> {spec.label}
+                      </span>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>{spec.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <div className="glass-card" style={{ padding: '20px' }}>
+            <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '18px' }}>Quick Actions</h4>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <Link href="/dashboard/water" style={{ textDecoration: 'none' }}>
+                <button className="action-button-modern">
+                  <div className="icon-box" style={{ background: 'rgba(50, 130, 184, 0.1)', color: 'var(--accent)' }}>
+                    <Droplets size={20} />
+                  </div>
+                  <span>Water Quality</span>
+                </button>
+              </Link>
+              <Link href="/dashboard/feed" style={{ textDecoration: 'none' }}>
+                <button className="action-button-modern">
+                  <div className="icon-box" style={{ background: 'rgba(5, 150, 105, 0.1)', color: '#059669' }}>
+                    <ShoppingBag size={20} />
+                  </div>
+                  <span>Feed Logs</span>
+                </button>
+              </Link>
+            </div>
+          </div>
+
+          <div style={{ 
+            background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', 
+            borderRadius: 'var(--radius-lg)', padding: '20px', color: '#ef4444' 
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <Trash2 size={20} />
+              <span style={{ fontSize: '1rem', fontWeight: 800 }}>Danger Zone</span>
+            </div>
+            <p style={{ fontSize: '0.8rem', marginBottom: '24px', opacity: 0.8, lineHeight: 1.6 }}>
+              Deleting this pond will permanently remove all associated sampling and water records from the Orson AI ecosystem.
+            </p>
+            <button className="btn-secondary" style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', background: 'transparent' }}>
+              Delete Asset
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <SamplingModal 
+        isOpen={isSamplingModalOpen} 
+        onClose={() => setSamplingModalOpen(false)}
+        onSubmit={handleAddSampling}
+        form={samplingForm}
+        setForm={setSamplingForm}
+        isSubmitting={isSubmitting}
+        inventoryFeeds={inventoryFeeds}
+      />
+
+      <style jsx>{`
+        .hover-row:hover {
+          background: var(--primary-dim) !important;
+        }
+        .action-button-modern {
+          width: 100%;
+          padding: 14px 10px;
+          border-radius: 14px;
+          border: 1px solid var(--border);
+          background: var(--bg-mid);
+          color: var(--text-primary);
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 8px;
+          transition: all 0.2s;
+        }
+        .action-button-modern:hover {
+          transform: translateY(-4px);
+          border-color: var(--primary);
+          box-shadow: var(--shadow-card);
+          background: #FFF;
+        }
+        .action-button-modern .icon-box {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .action-button-modern span {
+          font-size: 0.68rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.04em;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, inventoryFeeds }: any) {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{ 
+      position: 'fixed', inset: 0, zIndex: 1000, 
+      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+      background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px' 
+    }}>
+      <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800 }}>New Sampling</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Log biological and feeding data.</p>
+          </div>
+          <button 
+            onClick={onClose} 
+            style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}
+          >
+            <X size={24} />
+          </button>
+        </div>
+        
+        <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sampling Date</label>
+            <input 
+              type="date" 
+              required 
+              value={form.date} 
+              onChange={e => setForm({...form, date: e.target.value})}
+              style={{ 
+                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
+                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
+              }} 
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MBW (grams)</label>
+              <input 
+                type="number" 
+                step="0.01" 
+                required 
+                placeholder="0.00"
+                value={form.mbw} 
+                onChange={e => setForm({...form, mbw: e.target.value})}
+                style={{ 
+                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
+                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
+                }} 
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feed (kg)</label>
+              <input 
+                type="number" 
+                step="0.1" 
+                required 
+                placeholder="0.0"
+                value={form.feed} 
+                onChange={e => setForm({...form, feed: e.target.value})}
+                style={{ 
+                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
+                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
+                }} 
+              />
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mortality (pcs)</label>
+            <input 
+              type="number" 
+              placeholder="0"
+              value={form.mortality} 
+              onChange={e => setForm({...form, mortality: e.target.value})}
+              style={{ 
+                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
+                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
+              }} 
+            />
+          </div>
+
+          <div style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
+            <button type="button" onClick={onClose} style={{ 
+              flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', 
+              background: 'transparent', fontWeight: 700, cursor: 'pointer' 
+            }}>Cancel</button>
+            <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
