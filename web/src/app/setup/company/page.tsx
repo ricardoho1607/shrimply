@@ -4,27 +4,23 @@ import React, { useState } from 'react';
 import { Building2, Rocket, ArrowRight, ShieldCheck, Phone, MapPin, Info } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
+import { BUSINESS_SIZES, DEFAULT_COMPANY_SETUP, type BusinessSize } from '@/config/business';
+import { ROUTES } from '@/config/routes';
 
 export default function CompanySetupPage() {
+  const isReady = useOnboardingGuard('setup');
   const { completeCompanySetup, loading } = useAuth();
   const router = useRouter();
-  const [formData, setFormData] = useState({
-    companyName: '',
-    primaryLocation: '',
-    farmType: '',
-    businessSize: 'medium',
-    description: '',
-    contactPhone: '',
-    isPublicProfile: true,
-  });
+  const [formData, setFormData] = useState(DEFAULT_COMPANY_SETUP);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       await completeCompanySetup(formData);
-      router.push('/dashboard');
-    } catch (error: any) {
-      alert(error.message || 'Failed to set up company');
+      router.push(ROUTES.dashboard);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to set up company');
     }
   };
 
@@ -51,6 +47,8 @@ export default function CompanySetupPage() {
     display: 'block',
     marginBottom: '8px'
   };
+
+  if (!isReady) return <OnboardingLoading />;
 
   return (
     <main style={{
@@ -91,8 +89,9 @@ export default function CompanySetupPage() {
         gap: '32px'
       }}>
         <div>
-          <label style={labelStyle}>Company / Farm Name *</label>
+          <label htmlFor="company-name" style={labelStyle}>Company / Farm Name *</label>
           <input 
+            id="company-name"
             style={inputStyle}
             placeholder="e.g. Blue Ocean Shrimp Farm"
             value={formData.companyName}
@@ -103,10 +102,11 @@ export default function CompanySetupPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
-            <label style={labelStyle}>Location *</label>
+            <label htmlFor="company-location" style={labelStyle}>Location *</label>
             <div style={{ position: 'relative' }}>
               <MapPin size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
               <input 
+                id="company-location"
                 style={{ ...inputStyle, paddingLeft: '44px' }}
                 placeholder="e.g. Jakarta, ID"
                 value={formData.primaryLocation}
@@ -116,8 +116,9 @@ export default function CompanySetupPage() {
             </div>
           </div>
           <div>
-            <label style={labelStyle}>Farm Type</label>
+            <label htmlFor="company-farm-type" style={labelStyle}>Farm Type</label>
             <input 
+              id="company-farm-type"
               style={inputStyle}
               placeholder="e.g. Vannamei"
               value={formData.farmType}
@@ -129,11 +130,11 @@ export default function CompanySetupPage() {
         <div>
           <label style={labelStyle}>Business Size</label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-            {['small', 'medium', 'large'].map(size => (
+            {BUSINESS_SIZES.map(size => (
               <button
                 key={size}
                 type="button"
-                onClick={() => setFormData({...formData, businessSize: size as any})}
+                onClick={() => setFormData({...formData, businessSize: size as BusinessSize})}
                 style={{
                   padding: '12px',
                   borderRadius: '12px',
@@ -154,10 +155,11 @@ export default function CompanySetupPage() {
         </div>
 
         <div>
-          <label style={labelStyle}>Contact Phone</label>
+          <label htmlFor="company-phone" style={labelStyle}>Contact Phone</label>
           <div style={{ position: 'relative' }}>
             <Phone size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
             <input 
+              id="company-phone"
               style={{ ...inputStyle, paddingLeft: '44px' }}
               placeholder="+62 812..."
               value={formData.contactPhone}
@@ -167,8 +169,9 @@ export default function CompanySetupPage() {
         </div>
 
         <div>
-          <label style={labelStyle}>Farm Description</label>
+          <label htmlFor="company-description" style={labelStyle}>Farm Description</label>
           <textarea 
+            id="company-description"
             style={{ ...inputStyle, minHeight: '100px', resize: 'none' }}
             placeholder="Tell us a bit about your operation..."
             value={formData.description}
@@ -186,13 +189,14 @@ export default function CompanySetupPage() {
           border: '1px solid var(--border)'
         }}>
           <input 
+            id="company-public-profile"
             type="checkbox" 
             checked={formData.isPublicProfile}
             onChange={e => setFormData({...formData, isPublicProfile: e.target.checked})}
             style={{ width: '20px', height: '20px' }}
           />
           <div>
-            <div style={{ fontSize: '14px', fontWeight: 700 }}>Public Profile</div>
+            <label htmlFor="company-public-profile" style={{ fontSize: '14px', fontWeight: 700, display: 'block' }}>Public Profile</label>
             <div style={{ fontSize: '12px', color: 'var(--text-faint)' }}>Allow buyers to find your farm in the marketplace</div>
           </div>
         </div>

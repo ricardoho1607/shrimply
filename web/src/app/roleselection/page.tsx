@@ -14,15 +14,30 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
+import { ROUTES } from '@/config/routes';
+
+type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+
+type RoleOption = {
+  id: UserRole;
+  title: string;
+  description: string;
+  icon: React.ComponentType<{ size?: number }>;
+  color: string;
+  features: string[];
+  requiresCompany: boolean;
+};
 
 export default function RoleSelectionPage() {
-  const { completeRoleSelection, user } = useAuth();
+  const isReady = useOnboardingGuard('role');
+  const { completeRoleSelection } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
-  const roles = [
+  const roles: RoleOption[] = [
     {
       id: 'owner',
       title: t.roleSelection.farmOwner || 'Farm Owner',
@@ -81,21 +96,23 @@ export default function RoleSelectionPage() {
     }
   ];
 
-  const handleRoleSelect = async (role: any) => {
+  const handleRoleSelect = async (role: RoleOption) => {
     if (loading) return;
     setSelectedRole(role.id);
     setLoading(true);
 
     try {
       await completeRoleSelection(role.id);
-      router.push('/setup/choice');
-    } catch (error: any) {
+      router.push(ROUTES.setupChoice);
+    } catch (error: unknown) {
       console.error('Role selection failed:', error);
-      alert(error.message || 'Failed to set up role');
+      alert(error instanceof Error ? error.message : 'Failed to set up role');
       setSelectedRole(null);
       setLoading(false);
     }
   };
+
+  if (!isReady) return <OnboardingLoading />;
 
   return (
     <main style={{

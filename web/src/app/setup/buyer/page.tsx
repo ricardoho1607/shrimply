@@ -6,8 +6,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
+import { BUYER_INTEREST_OPTIONS } from '@/config/business';
+import { ROUTES } from '@/config/routes';
 
 export default function BuyerSetupPage() {
+  const isReady = useOnboardingGuard('setup');
   const { user } = useAuth();
   const router = useRouter();
   const [formData, setFormData] = useState({
@@ -17,15 +21,6 @@ export default function BuyerSetupPage() {
     interests: [] as string[],
   });
   const [loading, setLoading] = useState(false);
-
-  const interestOptions = [
-    'Vannamei Shrimp',
-    'Black Tiger Shrimp',
-    'Freshwater Prawn',
-    'Organic Certified',
-    'Bulk Procurement',
-    'High Survival Rate'
-  ];
 
   const toggleInterest = (interest: string) => {
     setFormData(prev => ({
@@ -66,9 +61,9 @@ export default function BuyerSetupPage() {
         lastActive: serverTimestamp(),
       });
       
-      router.push('/dashboard');
-    } catch (error: any) {
-      alert(error.message || 'Failed to complete setup');
+      router.push(ROUTES.dashboard);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to complete setup');
     } finally {
       setLoading(false);
     }
@@ -97,6 +92,8 @@ export default function BuyerSetupPage() {
     display: 'block',
     marginBottom: '8px'
   };
+
+  if (!isReady) return <OnboardingLoading />;
 
   return (
     <main style={{
@@ -137,8 +134,9 @@ export default function BuyerSetupPage() {
         gap: '24px'
       }}>
         <div>
-          <label style={labelStyle}>Business/Company Name</label>
+          <label htmlFor="buyer-business-name" style={labelStyle}>Business/Company Name</label>
           <input 
+            id="buyer-business-name"
             style={inputStyle}
             placeholder="e.g. Seafood International"
             value={formData.businessName}
@@ -148,10 +146,11 @@ export default function BuyerSetupPage() {
         </div>
 
         <div>
-          <label style={labelStyle}>Contact Phone</label>
+          <label htmlFor="buyer-phone" style={labelStyle}>Contact Phone</label>
           <div style={{ position: 'relative' }}>
             <Phone size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
             <input 
+              id="buyer-phone"
               style={{ ...inputStyle, paddingLeft: '44px' }}
               placeholder="+62 812..."
               value={formData.phone}
@@ -162,8 +161,9 @@ export default function BuyerSetupPage() {
         </div>
 
         <div>
-          <label style={labelStyle}>Primary Sourcing Region</label>
+          <label htmlFor="buyer-region" style={labelStyle}>Primary Sourcing Region</label>
           <input 
+            id="buyer-region"
             style={inputStyle}
             placeholder="e.g. Southeast Asia / Indonesia"
             value={formData.region}
@@ -175,7 +175,7 @@ export default function BuyerSetupPage() {
         <div>
           <label style={labelStyle}>Sourcing Interests</label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            {interestOptions.map(option => (
+            {BUYER_INTEREST_OPTIONS.map(option => (
               <button
                 key={option}
                 type="button"

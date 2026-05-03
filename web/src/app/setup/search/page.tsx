@@ -6,12 +6,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
+import { ROUTES } from '@/config/routes';
 
 export default function CompanySearchPage() {
+  const isReady = useOnboardingGuard('setup');
   const { user } = useAuth();
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState<any[]>([]);
+  const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }>>([]);
   const [searching, setSearching] = useState(false);
   const [requesting, setRequesting] = useState<string | null>(null);
 
@@ -23,11 +26,11 @@ export default function CompanySearchPage() {
     try {
       const q = query(collection(db, 'companies'), where('isSearchable', '==', true));
       const snapshot = await getDocs(q);
-      const farms: any[] = [];
+      const farms: Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }> = [];
       snapshot.forEach(doc => {
-        const data = doc.data();
-        if (data.companyName.toLowerCase().includes(searchTerm.toLowerCase())) {
-          farms.push({ id: doc.id, ...data });
+        const data = doc.data() as { companyName?: string; primaryLocation?: { address?: string } | string };
+        if (data.companyName?.toLowerCase().includes(searchTerm.toLowerCase())) {
+          farms.push({ id: doc.id, companyName: data.companyName, primaryLocation: data.primaryLocation });
         }
       });
       setResults(farms);
@@ -38,7 +41,7 @@ export default function CompanySearchPage() {
     }
   };
 
-  const handleJoinRequest = async (company: any) => {
+  const handleJoinRequest = async (company: { id: string; companyName: string }) => {
     if (!user) return;
     setRequesting(company.id);
     try {
@@ -52,13 +55,15 @@ export default function CompanySearchPage() {
         status: 'pending',
       });
       alert(`Request sent to ${company.companyName}! You'll be notified once approved.`);
-      router.push('/dashboard');
-    } catch (error: any) {
-      alert(error.message || 'Failed to send request');
+      router.push(ROUTES.dashboard);
+    } catch (error: unknown) {
+      alert(error instanceof Error ? error.message : 'Failed to send request');
     } finally {
       setRequesting(null);
     }
   };
+
+  if (!isReady) return <OnboardingLoading />;
 
   return (
     <main style={{
@@ -92,6 +97,8 @@ export default function CompanySearchPage() {
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
             <input 
+              id="company-search"
+              aria-label="Search by farm name"
               style={{
                 width: '100%',
                 background: '#FFFFFF',
@@ -145,7 +152,7 @@ export default function CompanySearchPage() {
                 </div>
                 <div>
                   <h4 style={{ fontSize: '18px', fontWeight: 700 }}>{company.companyName}</h4>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{company.primaryLocation?.address || company.primaryLocation || 'Location unknown'}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{typeof company.primaryLocation === 'string' ? company.primaryLocation : company.primaryLocation?.address || 'Location unknown'}</p>
                 </div>
               </div>
               <button 

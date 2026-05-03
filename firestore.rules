@@ -1,0 +1,145 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function userCompanyId() {
+      return signedIn() && userDoc().data.companyId != null ? userDoc().data.companyId : '';
+    }
+
+    function companyDoc(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId));
+    }
+
+    function isCompanyMember(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && (
+          companyDoc(companyId).data.ownerId == request.auth.uid
+          || companyDoc(companyId).data.teamMembers.hasAny([request.auth.uid])
+        );
+    }
+
+    function isCompanyOwner(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && companyDoc(companyId).data.ownerId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow read: if signedIn() && (
+        request.auth.uid == userId
+        || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
+      );
+      allow update: if signedIn() && (
+        request.auth.uid == userId
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.companyId != null
+          && isCompanyOwner(request.resource.data.companyId)
+        )
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          && resource.data.companyId != null
+          && isCompanyOwner(resource.data.companyId)
+        )
+      );
+      allow delete: if false;
+
+      match /monitoredCompanies/{companyId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /companies/{companyId} {
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.teamMembers.hasAny([request.auth.uid]);
+      allow read: if signedIn() && (
+        resource.data.isSearchable == true
+        || resource.data.isPublicProfile == true
+        || resource.data.ownerId == request.auth.uid
+        || resource.data.teamMembers.hasAny([request.auth.uid])
+      );
+      allow update: if isCompanyMember(companyId);
+      allow delete: if isCompanyOwner(companyId);
+
+      match /ponds/{pondId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /harvestRecords/{harvestId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /feeds/{feedId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /additives/{additiveId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /revenues/{revenueId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+    }
+
+    match /joinRequests/{requestId} {
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if signedIn() && (
+        resource.data.userId == request.auth.uid
+        || isCompanyOwner(resource.data.companyId)
+      );
+      allow update: if signedIn() && isCompanyOwner(resource.data.companyId);
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow read, update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /diseaseReports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /marketplace_listings/{listingId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /marketplace_responses/{responseId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCompanyMember(request.resource.data.sellerId);
+      allow update, delete: if signedIn() && (
+        isCompanyMember(resource.data.sellerId)
+        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+      );
+    }
+
+    match /assets/{assetId} {
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow read, update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

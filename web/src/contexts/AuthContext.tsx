@@ -13,6 +13,7 @@ import {
   browserSessionPersistence,
   GoogleAuthProvider,
   signInWithPopup,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
@@ -56,6 +57,7 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string, keepMeSignedIn?: boolean) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
   completeCompanySetup: (companyData: any) => Promise<void>;
@@ -175,6 +177,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const resetPassword = async (email: string) => {
+    await sendPasswordResetEmail(auth, email);
+  };
+
   const signOut = async () => {
     await firebaseSignOut(auth);
     setUser(null);
@@ -218,6 +224,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     signIn,
     signUp,
+    resetPassword,
     signOut,
     completeRoleSelection,
     completeCompanySetup,

@@ -48,24 +48,30 @@ export default function HowItWorksPage() {
       </section>
 
       {/* Challenge Section */}
-      <section className="section dark-section">
+      <section
+        className="section dark-section"
+        style={{
+          background: 'linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%)',
+          overflow: 'hidden'
+        }}
+      >
         <div className="dark-glow"></div>
-        <div className="container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center', position: 'relative', zIndex: 2 }}>
+        <div className="container orson-challenge-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center', position: 'relative', zIndex: 2 }}>
           <div>
             <div className="eyebrow r" style={{ marginBottom: '16px' }}>The Challenge</div>
-            <h2 className="section-title r d1" style={{ marginBottom: '24px' }}>
+            <h2 className="section-title r d1" style={{ marginBottom: '24px', color: 'var(--white)' }}>
               The numbers aren't telling you the <em>whole story.</em>
             </h2>
-            <p className="r d2" style={{ marginBottom: '32px' }}>
+            <p className="r d2" style={{ marginBottom: '32px', color: 'rgba(255,255,255,0.72)' }}>
               Traditional farming relies on morning snapshots. But a single data point is not a biological reality. While you see a normal pH level, Orson sees a 3-day downward trend correlating with your rising feeding logs.
             </p>
           </div>
           <div className="r d3">
-            <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(26,184,232,0.09)', borderRadius: '12px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ padding: '12px 16px', borderRadius: '8px', fontSize: '0.88rem', maxWidth: '80%', background: 'rgba(26,184,232,0.1)', color: 'var(--white)', alignSelf: 'flex-end', borderBottomRightRadius: '2px' }}>
+            <div className="orson-chat-panel" style={{ background: 'rgba(244,248,252,0.96)', border: '1px solid rgba(26,184,232,0.26)', borderRadius: '16px', padding: '28px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 26px 80px rgba(0,0,0,0.32)' }}>
+              <div className="orson-chat-bubble-user" style={{ padding: '14px 18px', borderRadius: '10px', fontSize: '0.9rem', maxWidth: '82%', background: 'linear-gradient(135deg, var(--blue) 0%, var(--sky) 100%)', color: 'var(--white)', alignSelf: 'flex-end', borderBottomRightRadius: '2px', lineHeight: 1.6, boxShadow: '0 10px 24px rgba(26,184,232,0.22)' }}>
                 "I check my ponds every morning. I have stacks of notebooks filled with pH and Temp. But last month, a sudden algae crash took out 10% of my stock. Why didn't I see it coming?"
               </div>
-              <div style={{ padding: '12px 16px', borderRadius: '8px', fontSize: '0.88rem', maxWidth: '80%', background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.8)', alignSelf: 'flex-start', borderBottomLeftRadius: '2px' }}>
+              <div className="orson-chat-bubble-orson" style={{ padding: '14px 18px', borderRadius: '10px', fontSize: '0.9rem', maxWidth: '82%', background: 'var(--white)', color: 'var(--ink)', alignSelf: 'flex-start', borderBottomLeftRadius: '2px', border: '1px solid var(--slate)', lineHeight: 1.6 }}>
                 "Because a single number is just a snapshot. I look at the Biological Story. Your pond's carrying capacity was at a breaking point, but the visual signs hadn't surfaced yet. I could have warned you 48 hours earlier."
               </div>
             </div>
@@ -135,6 +141,11 @@ export default function HowItWorksPage() {
           <div className="stat-lbl">Harvest Forecasts</div>
           <p style={{ fontSize: '0.88rem', marginTop: '8px' }}>Knowing your market size and weight weeks in advance.</p>
         </div>
+        <div className="stat-box r d4">
+          <div className="stat-num">04</div>
+          <div className="stat-lbl">Stress Detection</div>
+          <p style={{ fontSize: '0.88rem', marginTop: '8px' }}>Spotting appetite drops and hidden stress before mortality starts.</p>
+        </div>
       </section>
 
       {/* CTA Section */}
@@ -155,6 +166,24 @@ export default function HowItWorksPage() {
       </section>
 
       <Footer />
+
+      <style jsx>{`
+        @media (max-width: 900px) {
+          .orson-challenge-grid {
+            grid-template-columns: 1fr !important;
+            gap: 40px !important;
+          }
+
+          .orson-chat-panel {
+            padding: 22px !important;
+          }
+
+          .orson-chat-bubble-user,
+          .orson-chat-bubble-orson {
+            max-width: 100% !important;
+          }
+        }
+      `}</style>
     </main>
   );
 }

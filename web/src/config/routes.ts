@@ -1,0 +1,20 @@
+export const ROUTES = {
+  home: "/",
+  auth: "/auth",
+  join: "/auth/join",
+  dashboard: "/dashboard",
+  roleSelection: "/roleselection",
+  setupChoice: "/setup/choice",
+  setupCompany: "/setup/company",
+  setupBuyer: "/setup/buyer",
+  setupSearch: "/setup/search",
+  dashboardCompany: "/dashboard/company",
+  dashboardSettings: "/dashboard/settings",
+  dashboardPonds: "/dashboard/ponds",
+  dashboardWater: "/dashboard/water",
+  dashboardFeed: "/dashboard/feed",
+  publicPages: ["/", "/about", "/how-it-works", "/orson", "/auth", "/auth/join"],
+  privatePrefixes: ["/dashboard", "/roleselection", "/setup"],
+} as const;
+
+export type AppRoute = typeof ROUTES[keyof typeof ROUTES];

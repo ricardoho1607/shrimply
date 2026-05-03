@@ -1,35 +1,75 @@
 "use client";
 
-import React, { useState } from 'react';
-import { LogIn, ArrowLeft, ShieldCheck } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ROUTES } from '@/config/routes';
 
 export default function AuthPage() {
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
+  const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
 
-  const { signIn, user, needsRoleSelection, needsSetup } = useAuth();
+  const { signIn, resetPassword, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    if (needsRoleSelection) {
+      router.replace(ROUTES.roleSelection);
+      return;
+    }
+
+    if (needsSetup) {
+      router.replace(ROUTES.setupChoice);
+      return;
+    }
+
+    router.replace(ROUTES.dashboard);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, router]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
     
     try {
       await signIn(email, password);
       // Let the layouts handle redirection based on user state
-      router.push('/dashboard');
-    } catch (err: any) {
-      setError(err.message || t.messages.error || 'Failed to login');
+      router.push(ROUTES.dashboard);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : t.messages.error || 'Failed to login');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setError('');
+    setSuccess('');
+
+    if (!email.trim()) {
+      setError('Enter your email address first, then request a password reset.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      await resetPassword(email.trim());
+      setSuccess('Password reset email sent. Check your inbox to continue.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Could not send password reset email.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -106,11 +146,13 @@ export default function AuthPage() {
 
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)', marginLeft: '4px' }}>
+              <label htmlFor="login-email" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)', marginLeft: '4px' }}>
                 {t.auth.email || 'Email Address'}
               </label>
               <input 
+                id="login-email"
                 type="email" 
+                autoComplete="email"
                 style={{
                   width: '100%',
                   background: '#F8FAFC',
@@ -142,15 +184,22 @@ export default function AuthPage() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 4px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                <label htmlFor="login-password" style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
                   {t.auth.password || 'Password'}
                 </label>
-                <a href="#" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' }}>
-                  {t.auth.forgotPassword || 'Forgot password?'}
-                </a>
+                <button
+                  type="button"
+                  onClick={handlePasswordReset}
+                  disabled={resetLoading}
+                  style={{ fontSize: '11px', fontWeight: 600, color: 'var(--accent)', textDecoration: 'none', cursor: resetLoading ? 'wait' : 'pointer' }}
+                >
+                  {resetLoading ? 'Sending...' : t.auth.forgotPassword || 'Forgot password?'}
+                </button>
               </div>
               <input 
+                id="login-password"
                 type="password" 
+                autoComplete="current-password"
                 style={{
                   width: '100%',
                   background: '#F8FAFC',
@@ -195,6 +244,21 @@ export default function AuthPage() {
               </div>
             )}
 
+            {success && (
+              <div style={{
+                padding: '12px',
+                borderRadius: '10px',
+                background: 'rgba(34, 197, 94, 0.08)',
+                border: '1px solid rgba(34, 197, 94, 0.16)',
+                color: '#15803d',
+                fontSize: '12px',
+                textAlign: 'center',
+                fontWeight: 600
+              }}>
+                {success}
+              </div>
+            )}
+
             <button 
               type="submit" 
               disabled={loading}
@@ -230,7 +294,7 @@ export default function AuthPage() {
 
           <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             {t.auth.noAccount || "Don't have an account?"}{' '}
-            <Link href="/auth/join" style={{ font: 'inherit', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href={ROUTES.join} style={{ font: 'inherit', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
               {t.auth.joinUs || 'Join Us'}
             </Link>
           </div>

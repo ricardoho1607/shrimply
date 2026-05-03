@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
-import { UserPlus, ArrowLeft, ShieldCheck, Mail, Lock, User, Building2, ArrowRight } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ROUTES } from '@/config/routes';
 
 export default function JoinPage() {
   const [name, setName] = useState('');
@@ -13,8 +14,24 @@ export default function JoinPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signUp } = useAuth();
+  const { signUp, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    if (needsRoleSelection) {
+      router.replace(ROUTES.roleSelection);
+      return;
+    }
+
+    if (needsSetup) {
+      router.replace(ROUTES.setupChoice);
+      return;
+    }
+
+    router.replace(ROUTES.dashboard);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, router]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,9 +46,9 @@ export default function JoinPage() {
     
     try {
       await signUp(email, password, name);
-      router.push('/roleselection');
-    } catch (err: any) {
-      setError(err.message || 'Failed to create account');
+      router.push(ROUTES.roleSelection);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
       setLoading(false);
     }
@@ -89,7 +106,7 @@ export default function JoinPage() {
 
       <div style={{ zIndex: 10, width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
         
-        <Link href="/auth" style={{
+        <Link href={ROUTES.auth} style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '8px',
@@ -129,9 +146,11 @@ export default function JoinPage() {
           <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>Full Name</label>
+              <label htmlFor="join-name" style={labelStyle}>Full Name</label>
               <input 
+                id="join-name"
                 type="text" 
+                autoComplete="name"
                 style={inputStyle}
                 onFocus={e => {
                   e.currentTarget.style.borderColor = 'var(--accent)';
@@ -151,9 +170,11 @@ export default function JoinPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>Email Address</label>
+              <label htmlFor="join-email" style={labelStyle}>Email Address</label>
               <input 
+                id="join-email"
                 type="email" 
+                autoComplete="email"
                 style={inputStyle}
                 onFocus={e => {
                   e.currentTarget.style.borderColor = 'var(--accent)';
@@ -173,9 +194,11 @@ export default function JoinPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>Password</label>
+              <label htmlFor="join-password" style={labelStyle}>Password</label>
               <input 
+                id="join-password"
                 type="password" 
+                autoComplete="new-password"
                 style={inputStyle}
                 onFocus={e => {
                   e.currentTarget.style.borderColor = 'var(--accent)';
@@ -195,9 +218,11 @@ export default function JoinPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={labelStyle}>Confirm Password</label>
+              <label htmlFor="join-confirm-password" style={labelStyle}>Confirm Password</label>
               <input 
+                id="join-confirm-password"
                 type="password" 
+                autoComplete="new-password"
                 style={inputStyle}
                 onFocus={e => {
                   e.currentTarget.style.borderColor = 'var(--accent)';
@@ -248,7 +273,7 @@ export default function JoinPage() {
 
           <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             Already have an account?{' '}
-            <Link href="/auth" style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href={ROUTES.auth} style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
               Log in
             </Link>
           </div>

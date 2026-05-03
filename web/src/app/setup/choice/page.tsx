@@ -4,8 +4,11 @@ import React from 'react';
 import { Building2, Search, ArrowRight, Rocket, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
+import { ROUTES } from '@/config/routes';
 
 export default function SetupChoicePage() {
+  const isReady = useOnboardingGuard('setup');
   const { user } = useAuth();
   const router = useRouter();
 
@@ -20,7 +23,7 @@ export default function SetupChoicePage() {
         : 'Set up a new digital profile for your farm and ponds.',
       icon: isBuyer ? Rocket : Building2,
       color: isBuyer ? '#27AE60' : '#0F4C75',
-      href: isBuyer ? '/setup/buyer' : '/setup/company',
+      href: isBuyer ? ROUTES.setupBuyer : ROUTES.setupCompany,
       action: 'Get Started'
     },
     {
@@ -31,10 +34,12 @@ export default function SetupChoicePage() {
         : 'Join your team by searching for your farm profile.',
       icon: isBuyer ? UserPlus : Search,
       color: '#3282B8',
-      href: '/setup/search',
+      href: ROUTES.setupSearch,
       action: 'Find Company'
     }
   ];
+
+  if (!isReady) return <OnboardingLoading />;
 
   return (
     <main style={{
