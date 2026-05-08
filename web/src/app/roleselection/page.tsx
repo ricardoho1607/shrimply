@@ -124,7 +124,7 @@ export default function RoleSelectionPage() {
       alignItems: 'center'
     }}>
       <div style={{ maxWidth: '1000px', width: '100%', textAlign: 'center', marginBottom: '60px' }}>
-        <img src="/assets/logo.png" alt="Shrimply" style={{ height: '64px', margin: '0 auto 24px' }} />
+        <img src="/assets/logo.webp" width="500" height="500" alt="Shrimply" style={{ height: '64px', width: '64px', margin: '0 auto 24px' }} />
         <h1 style={{ fontSize: '42px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '16px' }}>
           Choose Your Path
         </h1>

@@ -150,7 +150,9 @@ export default function HowItWorksPage() {
           <div className="r d1">
             <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: '24px', overflow: 'hidden', border: '1px solid var(--slate)', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }}>
                <img 
-                 src="/assets/disease-map-clean.png" 
+                 src="/assets/disease-map-clean.webp"
+                 width="1024"
+                 height="1024"
                  alt="Disease Outbreak Map" 
                  style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                />
@@ -214,7 +216,7 @@ export default function HowItWorksPage() {
       </section>
 
       {/* TRANSITION TO ORSON */}
-      <section className="section" style={{ background: 'var(--navy)', color: 'white', textAlign: 'center', padding: '120px 0' }}>
+      <section className="section dark-section" style={{ color: 'white', textAlign: 'center', padding: '120px 0' }}>
         <div className="dark-glow"></div>
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
            <h2 className="section-title r d1" style={{ color: 'white', marginBottom: '32px' }}>

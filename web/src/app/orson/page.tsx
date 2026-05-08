@@ -42,7 +42,7 @@ export default function HowItWorksPage() {
             Beyond Data.<br /><em>Biological Intelligence.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.7s', maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>
-            Learn how Orson turns messy pond data into a 72-hour forecast and why he is the 24/7 consultant your farm deserves.
+            Learn how Orson turns messy pond data into biological risk detection, feed intelligence, and a practical 72-hour outlook.
           </p>
         </div>
       </section>
@@ -72,7 +72,7 @@ export default function HowItWorksPage() {
                 "I check my ponds every morning. I have stacks of notebooks filled with pH and Temp. But last month, a sudden algae crash took out 10% of my stock. Why didn't I see it coming?"
               </div>
               <div className="orson-chat-bubble-orson" style={{ padding: '14px 18px', borderRadius: '10px', fontSize: '0.9rem', maxWidth: '82%', background: 'var(--white)', color: 'var(--ink)', alignSelf: 'flex-start', borderBottomLeftRadius: '2px', border: '1px solid var(--slate)', lineHeight: 1.6 }}>
-                "Because a single number is just a snapshot. I look at the Biological Story. Your pond's carrying capacity was at a breaking point, but the visual signs hadn't surfaced yet. I could have warned you 48 hours earlier."
+                "Because a single number is just a snapshot. I look at the biological pattern: feed pressure, DO movement, pH swing, and growth trend. That combination would have raised a warning before the visual signs were obvious."
               </div>
             </div>
           </div>
@@ -95,7 +95,7 @@ export default function HowItWorksPage() {
             <div className="feature-card r d3" style={{ gridColumn: 'span 2' }}>
               <div style={{ color: 'var(--sky)', marginBottom: '24px' }}><Cpu size={26} strokeWidth={1.5} /></div>
               <h3 className="feature-title" style={{ marginBottom: '16px' }}>Orson's Statistical Smoothing</h3>
-              <p>Orson doesn't just "connect the dots." He uses biological trend-lines to filter out sampling errors. He looks at the 7-day trajectory and compares it against thousands of successful Vannamei growth models to find the truth, giving you a smooth, highly accurate growth curve.</p>
+              <p>Orson doesn't just "connect the dots." He uses recent biological trend-lines to reduce sampling noise, highlight outliers, and estimate growth confidence from the data your farm actually records.</p>
             </div>
           </div>
         </div>
@@ -108,7 +108,7 @@ export default function HowItWorksPage() {
             <div style={{ background: 'var(--white)', border: '1px solid var(--slate)', boxShadow: '0 20px 60px rgba(0,0,0,0.05)', padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ color: 'var(--ink)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Real-Time Diagnosis</div>
               <div style={{ background: 'var(--ice)', color: 'var(--ink)', fontStyle: 'italic', fontSize: '1rem', padding: '12px 16px', borderRadius: '8px', alignSelf: 'flex-start', borderBottomLeftRadius: '2px' }}>
-                "Water parameters are currently in range, but the 40% Tray clearance indicates a hidden stressor. Check for early signs of disease or Vibrio before mortality begins."
+                "Water parameters are currently in range, but 40% tray clearance suggests stress or overfeeding risk. Hold the next feed increase and recheck DO, pH swing, and appetite trend."
               </div>
             </div>
           </div>
@@ -118,7 +118,7 @@ export default function HowItWorksPage() {
               The Feed <em>Intelligence System.</em>
             </h2>
             <p className="r d4" style={{ marginBottom: '32px' }}>
-              Shrimp stop eating 24-48 hours before they start dying. Orson uses your feed tray checks as the ultimate early warning indicator.
+              Appetite often changes before mortality is visible. Orson uses feed tray checks, biomass estimates, and water quality together as an early stress signal.
             </p>
           </div>
         </div>
@@ -129,7 +129,7 @@ export default function HowItWorksPage() {
         <div className="stat-box r d1">
           <div className="stat-num">01</div>
           <div className="stat-lbl">Biosecurity First</div>
-          <p style={{ fontSize: '0.88rem', marginTop: '8px' }}>Predicting outbreaks before they manifest visually.</p>
+          <p style={{ fontSize: '0.88rem', marginTop: '8px' }}>Flagging biological risk patterns before they become obvious visually.</p>
         </div>
         <div className="stat-box r d2">
           <div className="stat-num">02</div>

@@ -30,14 +30,11 @@ export default function DiseaseReportPage() {
         }}>
           <ShieldAlert size={40} />
         </div>
-        <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '12px' }}>Disease Report System</h1>
-          <p style={{ color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto', fontSize: '16px', lineHeight: 1.6 }}>
-            Our AI-powered disease detection and reporting system is currently being optimized for the Orson AI web portal. 
-            <br />
-            <strong style={{ color: 'var(--primary)' }}>Please use the mobile app for real-time diagnostic reporting.</strong>
-          </p>
-        </div>
+        <p style={{ color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto', fontSize: '16px', lineHeight: 1.6 }}>
+          Our AI-powered disease detection and reporting system is currently being optimized for the Orson AI web portal. 
+          <br />
+          <strong style={{ color: 'var(--primary)' }}>Please use the mobile app for real-time diagnostic reporting.</strong>
+        </p>
         <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
           <Link href="/dashboard" style={{ textDecoration: 'none' }}>
             <button className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px' }}>

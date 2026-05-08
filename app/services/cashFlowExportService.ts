@@ -1,6 +1,7 @@
 // services/cashFlowExportService.ts
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
 
 interface CashFlowData {
@@ -148,7 +149,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
       <div class="header">
         <div class="title">Statement of Cash Flows</div>
         <div class="company-name">${companyName}</div>
-        <div class="subtitle">Cash Flow Statement (Indirect Method)</div>
+        <div class="subtitle">Cash Flow Statement (Direct Method)</div>
         <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
       </div>
       
@@ -386,10 +387,21 @@ export const exportCashFlowPDF = async (data: CashFlowData) => {
       base64: false,
     });
     
+    // Create Custom Filename
+    const cleanDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '');
+    const safeCompanyName = data.companyName.replace(/[^a-zA-Z0-9]/g, '');
+    const filename = `CashFlow_${safeCompanyName}_${cleanDate}.pdf`;
+    
+    const newUri = `${FileSystem.documentDirectory}${filename}`;
+    await FileSystem.copyAsync({
+      from: uri,
+      to: newUri
+    });
+    
     const canShare = await Sharing.isAvailableAsync();
     
     if (canShare) {
-      await Sharing.shareAsync(uri, {
+      await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
         dialogTitle: 'Share Cash Flow Statement',
         UTI: 'com.adobe.pdf',
@@ -397,12 +409,12 @@ export const exportCashFlowPDF = async (data: CashFlowData) => {
     } else {
       Alert.alert(
         'PDF Generated',
-        `Your cash flow statement has been saved to: ${uri}`,
+        `Your cash flow statement has been saved to: ${newUri}`,
         [{ text: 'OK' }]
       );
     }
     
-    return uri;
+    return newUri;
   } catch (error) {
     console.error('Error generating PDF:', error);
     Alert.alert('Error', 'Failed to generate PDF report');

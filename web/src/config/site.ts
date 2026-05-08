@@ -5,7 +5,7 @@ export const SITE_CONFIG = {
   description: "Manage your shrimp farm with AI-powered insights and real-time data.",
   keywords: ["shrimp farming", "aquaculture", "farm management", "pond monitoring", "Orson AI"],
   ogImage: {
-    path: "/assets/hero.png",
+    path: "/assets/og-image.jpg",
     width: 1200,
     height: 630,
     alt: "Shrimply aquaculture intelligence platform",

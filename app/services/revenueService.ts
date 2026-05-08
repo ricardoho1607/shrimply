@@ -1,4 +1,5 @@
 // services/revenueService.ts
+import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
   collection, 
   doc, 
@@ -203,11 +204,8 @@ class RevenueService {
     const breakdown: Record<string, number> = {};
     
     revenues.forEach(revenue => {
-      if (breakdown[revenue.category]) {
-        breakdown[revenue.category] += revenue.amount;
-      } else {
-        breakdown[revenue.category] = revenue.amount;
-      }
+      const key = normalizeCategory(revenue.category);
+      breakdown[key] = (breakdown[key] || 0) + revenue.amount;
     });
     
     return breakdown;

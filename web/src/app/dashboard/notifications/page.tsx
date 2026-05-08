@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo, useState, useTransition } from 'react';
 import { 
   Bell, 
   CheckCircle2, 
@@ -18,13 +18,10 @@ import {
   Loader2,
   BrainCircuit
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   query, 
   where, 
-  orderBy, 
-  onSnapshot, 
   doc, 
   updateDoc, 
   deleteDoc, 
@@ -32,8 +29,9 @@ import {
   getDocs,
   Timestamp 
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCompanyNotifications } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -96,53 +94,9 @@ const NotificationIcon = ({ type, priority, data }: { type: string, priority: st
 
 export default function NotificationsPage() {
   const { t } = useLanguage();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const { data: notifications, loading, companyId } = useCompanyNotifications<Notification>();
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
-
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        onSnapshot(doc(db, 'users', user.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const cid = uDoc.data().companyId;
-            setCompanyId(cid);
-            
-            if (cid) {
-              const q = query(
-                collection(db, 'notifications'),
-                where('companyId', '==', cid),
-                orderBy('timestamp', 'desc')
-              );
-              
-              const unsubNotifs = onSnapshot(q, (snapshot) => {
-                const notifData = snapshot.docs.map(doc => ({ 
-                  id: doc.id, 
-                  ...doc.data() 
-                } as Notification));
-                setNotifications(notifData);
-                setLoading(false);
-              }, (error) => {
-                console.error("Error fetching notifications:", error);
-                setLoading(false);
-              });
-              
-              return () => unsubNotifs();
-            } else {
-              setLoading(false);
-            }
-          }
-        });
-      } else {
-        setLoading(false);
-      }
-    });
-    return () => unsubAuth();
-  }, []);
+  const [, startTransition] = useTransition();
 
   const filteredNotifications = useMemo(() => {
     if (filter === 'unread') {
@@ -150,6 +104,10 @@ export default function NotificationsPage() {
     }
     return notifications;
   }, [notifications, filter]);
+
+  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+  const orsonCount = useMemo(() => notifications.filter(n => n.data?.isOrson).length, [notifications]);
+  const highPriorityCount = useMemo(() => notifications.filter(n => n.priority === 'high').length, [notifications]);
 
   const markAsRead = async (id: string) => {
     try {
@@ -216,25 +174,12 @@ export default function NotificationsPage() {
     return `${Math.floor(diffInSeconds / 86400)}${t.notifications.daysAgo || 'd ago'}`;
   };
 
-  if (!mounted) return null;
-
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', marginBottom: '8px', letterSpacing: '-0.03em' }}>
-            {t.notifications.title || 'Notifications'}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>
-            {notifications.filter(n => !n.read).length} {t.notifications.unread?.toLowerCase() || 'unread'} alerts requiring your attention.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+    <div className="dashboard-page" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div className="dashboard-action-row">
           <button 
             onClick={markAllAsRead}
-            disabled={notifications.filter(n => !n.read).length === 0}
+            disabled={unreadCount === 0}
             className="btn-secondary" 
             style={{ 
               padding: '12px 20px', 
@@ -242,8 +187,8 @@ export default function NotificationsPage() {
               display: 'flex', 
               alignItems: 'center', 
               gap: '8px',
-              opacity: notifications.filter(n => !n.read).length === 0 ? 0.5 : 1,
-              cursor: notifications.filter(n => !n.read).length === 0 ? 'default' : 'pointer'
+              opacity: unreadCount === 0 ? 0.5 : 1,
+              cursor: unreadCount === 0 ? 'default' : 'pointer'
             }}
           >
             <CheckCircle2 size={18} />
@@ -267,20 +212,38 @@ export default function NotificationsPage() {
             <Trash2 size={18} />
             {t.notifications.clearAllTitle || 'Clear all'}
           </button>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
+        <div className="glass-card" style={{ background: 'var(--gradient)', color: '#FFF', padding: '22px', border: 'none' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.85, textTransform: 'uppercase' }}>Total alerts</div>
+          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px' }}>{notifications.length}</div>
+        </div>
+        <div className="glass-card" style={{ background: '#FFFFFF', padding: '22px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Unread</div>
+          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: 'var(--text-primary)' }}>{unreadCount}</div>
+        </div>
+        <div className="glass-card" style={{ background: '#FFFFFF', padding: '22px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Orson AI</div>
+          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: 'var(--text-primary)' }}>{orsonCount}</div>
+        </div>
+        <div className="glass-card" style={{ background: '#FFFFFF', padding: '22px' }}>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>High priority</div>
+          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: '#ef4444' }}>{highPriorityCount}</div>
         </div>
       </div>
 
       {/* Filters & Tabs */}
-      <div style={{ 
+      <div className="glass-card" style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
-        borderBottom: '1px solid var(--border)',
-        paddingBottom: '2px'
+        background: '#FFFFFF',
+        padding: '16px 22px'
       }}>
         <div style={{ display: 'flex', gap: '32px' }}>
           <button 
-            onClick={() => setFilter('all')}
+                onClick={() => startTransition(() => setFilter('all'))}
             style={{
               padding: '12px 4px',
               background: 'none',
@@ -296,7 +259,7 @@ export default function NotificationsPage() {
             {t.notifications.all || 'All'}
           </button>
           <button 
-            onClick={() => setFilter('unread')}
+                onClick={() => startTransition(() => setFilter('unread'))}
             style={{
               padding: '12px 4px',
               background: 'none',
@@ -313,7 +276,7 @@ export default function NotificationsPage() {
             }}
           >
             {t.notifications.unread || 'Unread'}
-            {notifications.filter(n => !n.read).length > 0 && (
+            {unreadCount > 0 && (
               <span style={{ 
                 background: 'var(--primary)', 
                 color: '#FFF', 
@@ -323,7 +286,7 @@ export default function NotificationsPage() {
                 minWidth: '18px',
                 textAlign: 'center'
               }}>
-                {notifications.filter(n => !n.read).length}
+                {unreadCount}
               </span>
             )}
           </button>

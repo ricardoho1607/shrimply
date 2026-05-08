@@ -11,7 +11,8 @@ export const LanguageCurrencySync = ({ children }: { children: React.ReactNode }
   useEffect(() => {
     // Sync currency when language changes
     syncCurrencyWithLanguage(currentLanguage);
-  }, [currentLanguage, syncCurrencyWithLanguage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLanguage]);
 
   return <>{children}</>;
 };

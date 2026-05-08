@@ -12,13 +12,39 @@ import {
   query,
   orderBy,
   getDoc,
-  addDoc
+  addDoc,
+  increment,
+  arrayUnion
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { usePondStore } from './../store/pondStore';
 import { Pond, HarvestRecord, Sampling } from './../store/pondStore';
-import NetInfo from '@react-native-community/netinfo';
+import { Platform } from 'react-native';
+
+// NetInfo crashes on web (window is not defined during SSR/init).
+// Use a simple online-check mock for web instead.
+const NetInfo = Platform.OS === 'web'
+  ? {
+      addEventListener: (callback: (state: { isConnected: boolean }) => void) => {
+        // On web, assume online and use the browser's online event
+        if (typeof window !== 'undefined') {
+          const handler = () => callback({ isConnected: navigator.onLine });
+          window.addEventListener('online', handler);
+          window.addEventListener('offline', handler);
+          // Call immediately
+          callback({ isConnected: navigator.onLine });
+          return () => {
+            window.removeEventListener('online', handler);
+            window.removeEventListener('offline', handler);
+          };
+        }
+        callback({ isConnected: true });
+        return () => {};
+      }
+    }
+  : require('@react-native-community/netinfo').default;
+
 
 interface SyncStatus {
   isOnline: boolean;
@@ -58,7 +84,7 @@ export const useFirebaseSync = () => {
 
   // Monitor network status
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener(state => {
+    const unsubscribe = NetInfo.addEventListener((state: any) => {
       const isOnline = state.isConnected === true;
       setSyncStatus(prev => ({ ...prev, isOnline }));
       
@@ -174,7 +200,7 @@ export const useFirebaseSync = () => {
         },
         (error) => {
           console.error('Error listening to ponds:', error);
-          setSyncStatus(prev => ({ ...prev, error: error.message }));
+          setSyncStatus(prev => ({ ...prev, error: 'Unable to sync pond data' }));
         }
       );
       newUnsubscribeCallbacks.push(unsubscribePonds);
@@ -208,7 +234,7 @@ export const useFirebaseSync = () => {
         },
         (error) => {
           console.error('Error listening to harvest records:', error);
-          setSyncStatus(prev => ({ ...prev, error: error.message }));
+          setSyncStatus(prev => ({ ...prev, error: 'Unable to sync harvest data' }));
         }
       );
       newUnsubscribeCallbacks.push(unsubscribeHarvest);
@@ -292,6 +318,26 @@ export const useFirebaseSync = () => {
               
               if (change.action === 'create') {
                 samplings.push(change.data);
+                
+                // Inventory Deduction Logic
+                const feedAmount = change.data.feed || parseFloat(change.data.feedData?.totalDailyFeed || '0');
+                const inventoryFeedId = change.data.feedData?.inventoryFeedId;
+                
+                if (inventoryFeedId && feedAmount > 0) {
+                  const feedRef = doc(db, 'companies', company.id, 'feeds', inventoryFeedId);
+                  batch.update(feedRef, {
+                    totalStock: increment(-feedAmount),
+                    usageHistory: arrayUnion({
+                      id: `usage-m-${Date.now()}`,
+                      date: change.data.date,
+                      quantity: feedAmount,
+                      pondId: change.pondId,
+                      notes: `Mobile Sampling record`,
+                      createdAt: serverTimestamp()
+                    }),
+                    lastUpdated: serverTimestamp()
+                  });
+                }
               } else if (change.action === 'update' && change.samplingId) {
                 const index = samplings.findIndex(s => s.id === change.samplingId);
                 if (index >= 0) {
@@ -331,7 +377,7 @@ export const useFirebaseSync = () => {
       console.error('Error syncing changes:', error);
       setSyncStatus(prev => ({ 
         ...prev, 
-        error: error instanceof Error ? error.message : 'Sync failed' 
+        error: 'Sync failed. Please try again.' 
       }));
     } finally {
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));

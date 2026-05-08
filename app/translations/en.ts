@@ -338,7 +338,7 @@ companySetup: {
     exportData: 'Export Data',
     exportDataSubtitle: 'Download your pond data as CSV',
     app: 'APP',
-    about: 'About investaShrimp',
+    about: 'About Shrimply',
     help: 'Help & Support',
     privacy: 'Privacy Policy',
     madeWith: 'Made with',
@@ -351,7 +351,7 @@ companySetup: {
     restoring: 'Restoring...',
     backupToCloud: 'Backup to Cloud',
     restoreFromCloud: 'Restore from Cloud',
-    aiAssistant: 'iShrimp AI',
+    aiAssistant: 'Orson AI',
     helpSupport: 'Help & Support',
     signOut: 'Sign Out'
   },
@@ -478,9 +478,11 @@ MarketplaceScreen: {
   buyingRequest: 'Create Buying Request',
   showNearbyOnly: 'Show nearby buyers only',
   withinRadius: 'Within radius:',
+  searchByCity: 'Search by City',
   sortBy: 'Sort by',
   newest: 'Newest',
   price: 'Price',
+  distance: 'Distance',
   activeListings: 'active listings',
   nearbyListings: 'nearby listings',
   noListingsAvailable: 'No listings available',
@@ -647,6 +649,7 @@ financialReports: {
   profitLoss: 'Profit & Loss',
   balanceSheet: 'Balance Sheet',
   cashFlow: 'Cash Flow',
+  harvestProjection: 'Harvest Projections',
   expenseReport: 'Expense Report',
   comingSoon: 'Soon',
   
@@ -737,6 +740,7 @@ FinancialReportsPage: {
   profitLoss: 'Profit & Loss',
   balanceSheet: 'Balance Sheet',
   cashFlow: 'Cash Flow',
+  harvestProjection: 'Harvest Projections',
   expenseReport: 'Expense Report',
   comingSoon: 'Soon',
   
@@ -1055,7 +1059,7 @@ asset: {
   descriptionPlaceholder: 'Details about the asset',
   serialNumber: 'Serial Number',
   serialNumberPlaceholder: 'SN123456',
-  purchaseCost: 'Purchase Cost ($)',
+  purchaseCost: 'Purchase Cost (Rp)',
   purchaseCostPlaceholder: '5000',
   manufacturer: 'Manufacturer',
   manufacturerPlaceholder: 'Brand name',
@@ -1189,11 +1193,20 @@ notifications: {
   hoursAgo: 'h ago',
   daysAgo: 'd ago',
   fromYou: 'from you',
+  clearAllTitle: "Clear All Notifications",
+  clearAllMessage: "Are you sure you want to clear all notifications? This action cannot be undone.",
+},
+common: {
+  cancel: "Cancel",
+  confirm: "Confirm",
+  delete: "Delete",
+  yes: "Yes",
+  no: "No",
 },
 
 roleSelection: {
   // Welcome
-  welcomeTitle: 'Welcome to investaShrimp',
+  welcomeTitle: 'Welcome to Shrimply',
   welcomeSubtitle: 'Choose your role to get started',
   
   // Roles
@@ -1257,8 +1270,25 @@ roleSelection: {
   helpTechDesc: 'Search and join an existing company',
   helpBuyerDesc: 'Connect with shrimp suppliers',
   helpFooter: 'You can always contact support to change your role later.',
-}
-
+  },
+  harvestProjectionScreen: {
+    title: 'Harvest Projections',
+    step1: '1. Select Pond',
+    step2: '2. Manual Assumptions',
+    daysUntilHarvest: 'Days Until Harvest',
+    expectedPrice: 'Expected Market Price',
+    dailyFeedCost: 'Estimated Daily Feed Cost',
+    step3: '3. Projected Outcomes',
+    harvestDOC: 'Harvest DOC',
+    projSize: 'Proj. Size (MBW)',
+    projBiomass: 'Proj. Biomass',
+    projectedRevenue: 'Projected Revenue',
+    projectedProfit: 'Projected Profit (Minus feed)',
+    orsonTitle: 'Orson AI Risk Analysis',
+    orsonAnalyzing: 'Orson is analyzing the projection...',
+    orsonAnalyzeBtn: 'Analyze this Projection',
+    orsonUnavailable: 'Orson is currently unavailable to provide an analysis.',
+  },
 };
 
 export type Translations = typeof en;

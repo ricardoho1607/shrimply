@@ -1,84 +1,115 @@
-// hooks/useGemini.ts
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import NotificationService from '../services/notificationService';
+import { buildOrsonAnalysis } from '../../orson/pipeline';
+import {
+  cleanOrsonResponse,
+  ORSON_FALLBACK_RESPONSE,
+  ORSON_MODEL_TIMEOUT_MS,
+  ORSON_RESPONSE_TIMEOUT_MS,
+  withOrsonTimeout,
+} from '../../orson/promptBuilder';
+
+// Types for the chat history
+interface Message {
+  role: 'user' | 'model';
+  parts: { text: string }[];
+}
 
 export const useGemini = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  
+  const chatSessionRef = useRef<any>(null);
 
-  const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  const API_KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY || '';
 
-  if (!API_KEY) {
-    console.warn('Gemini API key not found. Please add EXPO_PUBLIC_GEMINI_API_KEY to your .env file');
-  }
+  const createRiskNotifications = async (companyId: string | undefined, analysis: ReturnType<typeof buildOrsonAnalysis>) => {
+    if (!companyId) return;
 
-  // Send a prompt to the AI
-  const generateContent = async (prompt: string): Promise<string> => {
+    await Promise.all(
+      analysis.reports.flatMap((report) => {
+        return report.findings
+          .filter((finding) => finding.severity === 'warning' || finding.severity === 'critical')
+          .slice(0, 2)
+          .map((finding) => NotificationService.createOrsonRiskNotification(companyId, {
+            pondId: report.pondId,
+            pondName: report.pondName,
+            riskId: finding.id,
+            severity: finding.severity,
+            title: finding.title,
+            message: `${finding.summary} ${finding.recommendation}`,
+            confidence: finding.confidence,
+          }));
+      })
+    );
+  };
+
+  const sendMessage = async (userMessage: string, allPonds: any[], options: { companyId?: string } = {}) => {
     setLoading(true);
     setError(null);
 
     try {
-      if (!API_KEY) {
-        throw new Error('Gemini API key not found. Please add EXPO_PUBLIC_GEMINI_API_KEY to your .env file');
+      if (!allPonds || allPonds.length === 0) {
+        setLoading(false);
+        return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
 
-      const genAI = new GoogleGenerativeAI(API_KEY);
-      const model = genAI.getGenerativeModel({ model: 'gemini-flash-latest' });
+      const analysis = buildOrsonAnalysis(allPonds, userMessage);
+      void createRiskNotifications(options.companyId, analysis);
 
-      const result = await model.generateContent(prompt);
-      const text = result.response.text();
+      const genAI = new GoogleGenerativeAI(API_KEY);
+
+      const model = genAI.getGenerativeModel({
+        model: "gemini-3.1-flash-lite-preview", 
+        tools: [
+          {
+            googleSearch: {}, 
+          } as any, 
+        ],
+        systemInstruction: analysis.promptPackage.systemInstruction,
+        generationConfig: {
+          temperature: 0.5,
+          maxOutputTokens: 512,
+        },
+      });
+
+      const result = await withOrsonTimeout(
+        model.generateContent(`${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`),
+        ORSON_MODEL_TIMEOUT_MS,
+      );
+      const response = result.response;
+      const text = cleanOrsonResponse(response.text());
+
+      setChatHistory(prev => [
+        ...prev,
+        { role: 'user', parts: [{ text: userMessage }] },
+        { role: 'model', parts: [{ text: text }] }
+      ]);
 
       setLoading(false);
       return text;
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
-      console.error('Gemini API generateContent error:', err);
-      setError(errorMessage);
+
+    } catch (err: any) {
+      console.error("Orson Error:", err);
       setLoading(false);
-      throw new Error(errorMessage);
+
+      // Handle Rate Limiting (Free Tier 429)
+      if (err.message?.includes("429")) {
+        setError("Daily limit reached.");
+        return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
+      }
+
+      setError(ORSON_FALLBACK_RESPONSE);
+      return ORSON_FALLBACK_RESPONSE;
     }
   };
 
-  // Pond-specific advice with Orson persona
-  const generateAquacultureAdvice = async (pondData: {
-    waterQuality?: string;
-    feedingSchedule?: string;
-    shrimpCount?: number;
-    pondSize?: string;
-    issues?: string;
-  }): Promise<string> => {
-    const prompt = `
-You are **Orson**, a world-class shrimp aquaculture consultant for the investaShrimp app.  
-
-Analyze this shrimp pond data:
-
-Water Quality: ${pondData.waterQuality || 'Not specified'}
-Feeding Schedule: ${pondData.feedingSchedule || 'Not specified'}
-Shrimp Count: ${pondData.shrimpCount || 'Not specified'}
-Pond Size: ${pondData.pondSize || 'Not specified'}
-Current Issues: ${pondData.issues || 'None reported'}
-
-Provide **clear, actionable recommendations** for:
-1. Water quality optimization
-2. Feeding improvements
-3. Disease prevention
-4. Growth optimization
-5. Harvest timing
-
-Use specific numbers when possible (e.g., DO > 5 mg/L, pH 7.8–8.2, salinity 15–25 ppt).  
-Be structured, concise, and farmer-friendly.
-`;
-
-    return await generateContent(prompt);
+  const clearChat = () => {
+    setChatHistory([]);
+    chatSessionRef.current = null;
   };
 
-  const clearError = () => setError(null);
-
-  return {
-    generateContent,
-    generateAquacultureAdvice,
-    loading,
-    error,
-    clearError,
-  };
+  return { sendMessage, clearChat, chatHistory, loading, error };
 };

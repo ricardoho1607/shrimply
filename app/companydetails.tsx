@@ -15,7 +15,7 @@ interface TeamMember {
   id: string;
   email: string;
   name: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin';
+  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
   status: 'active' | 'pending' | 'inactive';
   joinedDate: string;
   lastActive?: string;
@@ -32,7 +32,7 @@ interface JoinRequest {
   status: 'pending' | 'approved' | 'rejected';
 }
 
-type RoleKey = 'owner' | 'manager' | 'technician' | 'admin';
+type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
 
 export default function CompanyDetailsScreen() {
   const router = useRouter();
@@ -54,7 +54,7 @@ export default function CompanyDetailsScreen() {
       title: t.companyDetails.farmOwner,
       description: t.companyDetails.fullAccess,
       permissions: [t.companyDetails.allPermissions, t.companyDetails.inviteMembers, t.companyDetails.manageFinances, t.companyDetails.exportData],
-      color: '#0F4C75',
+      color: '#0d2137',
       icon: 'business' as const,
       maxCount: 1
     },
@@ -62,7 +62,7 @@ export default function CompanyDetailsScreen() {
       title: t.companyDetails.farmManager,
       description: t.companyDetails.overseeOperations,
       permissions: [t.companyDetails.managePonds, t.companyDetails.viewReports, t.companyDetails.manageHarvest, t.companyDetails.superviseTeam],
-      color: '#3282B8',
+      color: '#315f57',
       icon: 'people' as const,
       maxCount: 3
     },
@@ -70,7 +70,7 @@ export default function CompanyDetailsScreen() {
       title: t.companyDetails.aquacultureTechnician,
       description: t.companyDetails.handsOnManagement,
       permissions: [t.companyDetails.addSamplingData, t.companyDetails.monitorWaterQuality, t.companyDetails.recordFeeding, t.companyDetails.basicReports],
-      color: '#3282B8',
+      color: '#315f57',
       icon: 'flask' as const,
       maxCount: 10
     },
@@ -78,9 +78,17 @@ export default function CompanyDetailsScreen() {
       title: t.companyDetails.systemAdministrator,
       description: t.companyDetails.technicalSupport,
       permissions: [t.companyDetails.userManagement, t.companyDetails.systemSettings, t.companyDetails.troubleshoot, t.companyDetails.dataBackup],
-      color: '#3282B8',
+      color: '#315f57',
       icon: 'settings' as const,
       maxCount: 2
+    },
+    buyer: {
+      title: 'Buyer',
+      description: 'Purchasing and procurement',
+      permissions: ['View harvests'],
+      color: '#27ae60',
+      icon: 'cart' as const,
+      maxCount: 5
     }
   }), [t]);
 
@@ -177,7 +185,7 @@ export default function CompanyDetailsScreen() {
               setShowRequestModal(false);
             } catch (error: any) {
               console.error('Failed to approve request:', error);
-              Alert.alert(t.messages.error, error.message || 'Failed to approve request');
+              Alert.alert(t.messages.error, 'Failed to approve request. Please try again.');
             } finally {
               setLoading(false);
             }
@@ -208,7 +216,7 @@ export default function CompanyDetailsScreen() {
               setShowRequestModal(false);
             } catch (error: any) {
               console.error('Failed to reject request:', error);
-              Alert.alert(t.messages.error, error.message || 'Failed to reject request');
+              Alert.alert(t.messages.error, 'Failed to reject request. Please try again.');
             } finally {
               setLoading(false);
             }
@@ -246,7 +254,7 @@ export default function CompanyDetailsScreen() {
               Alert.alert(t.messages.success, `${member.name} ${t.companyDetails.removed}`);
             } catch (error: any) {
               console.error('Failed to remove member:', error);
-              Alert.alert(t.messages.error, error.message || 'Failed to remove member');
+              Alert.alert(t.messages.error, 'Failed to remove member. Please try again.');
             } finally {
               setLoading(false);
             }
@@ -268,18 +276,24 @@ export default function CompanyDetailsScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
       <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#1B262C" />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t.companyDetails.title}</Text>
         <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} disabled={refreshing}>
           {refreshing ? (
-            <ActivityIndicator size="small" color="#0F4C75" />
+            <ActivityIndicator size="small" color="#0d2137" />
           ) : (
-            <Ionicons name="refresh" size={Platform.OS === 'android' ? 22 : 24} color="#0F4C75" />
+            <Ionicons name="refresh" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
           )}
         </TouchableOpacity>
       </View>
@@ -289,16 +303,16 @@ export default function CompanyDetailsScreen() {
         contentContainerStyle={styles.scrollContent} 
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0F4C75']} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0d2137']} />
         }
       >
         {/* Company Info Card */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="business" size={Platform.OS === 'android' ? 20 : 24} color="#0F4C75" />
+            <Ionicons name="business" size={Platform.OS === 'android' ? 20 : 24} color="#0d2137" />
             <Text style={styles.cardTitle}>{t.companyDetails.companyInformation}</Text>
             <TouchableOpacity style={styles.editButton} onPress={() => router.push('/company-setup2?edit=true' as any)}>
-              <Ionicons name="pencil-outline" size={Platform.OS === 'android' ? 16 : 18} color="#3282B8" />
+              <Ionicons name="pencil-outline" size={Platform.OS === 'android' ? 16 : 18} color="#315f57" />
             </TouchableOpacity>
           </View>
           
@@ -322,13 +336,13 @@ export default function CompanyDetailsScreen() {
           <View style={styles.requestsSection}>
             <TouchableOpacity style={styles.requestsHeader} onPress={() => setShowRequestsTab(!showRequestsTab)}>
               <View style={styles.requestsHeaderLeft}>
-                <Ionicons name="mail" size={Platform.OS === 'android' ? 18 : 20} color="#0F4C75" />
+                <Ionicons name="mail" size={Platform.OS === 'android' ? 18 : 20} color="#0d2137" />
                 <Text style={styles.requestsHeaderText}>{t.companyDetails.joinRequests} ({joinRequests.length})</Text>
               </View>
               <View style={styles.requestsBadge}>
                 <Text style={styles.requestsBadgeText}>{joinRequests.length}</Text>
               </View>
-              <Ionicons name={showRequestsTab ? 'chevron-up' : 'chevron-down'} size={Platform.OS === 'android' ? 18 : 20} color="#3282B8" />
+              <Ionicons name={showRequestsTab ? 'chevron-up' : 'chevron-down'} size={Platform.OS === 'android' ? 18 : 20} color="#315f57" />
             </TouchableOpacity>
 
             {showRequestsTab && (
@@ -363,7 +377,7 @@ export default function CompanyDetailsScreen() {
         {/* Organization Chart */}
         <View style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="people" size={Platform.OS === 'android' ? 20 : 24} color="#0F4C75" />
+            <Ionicons name="people" size={Platform.OS === 'android' ? 20 : 24} color="#0d2137" />
             <Text style={styles.cardTitle}>{t.companyDetails.organizationStructure}</Text>
             <View style={styles.teamStats}>
               <Text style={styles.teamCount}>{teamMembers.length} {t.companyDetails.members}</Text>
@@ -372,7 +386,7 @@ export default function CompanyDetailsScreen() {
 
           {loading && teamMembers.length === 0 ? (
             <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#0F4C75" />
+              <ActivityIndicator size="large" color="#0d2137" />
               <Text style={styles.loadingText}>{t.companyDetails.loadingTeam}</Text>
             </View>
           ) : (
@@ -407,7 +421,7 @@ export default function CompanyDetailsScreen() {
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{t.companyDetails.joinRequestDetails}</Text>
                 <TouchableOpacity onPress={() => setShowRequestModal(false)}>
-                  <Ionicons name="close" size={Platform.OS === 'android' ? 22 : 24} color="#BBE1FA" />
+                  <Ionicons name="close" size={Platform.OS === 'android' ? 22 : 24} color="#dce8f2" />
                 </TouchableOpacity>
               </View>
 
@@ -581,92 +595,92 @@ const RoleCard = React.memo(({ roleKey, role, filled, members, onRemoveMember, i
 ));
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingBottom: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#BBE1FA', 
+    backgroundColor: '#dce8f2', 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   backButton: { padding: Platform.OS === 'android' ? 6 : 8 },
   refreshButton: { padding: Platform.OS === 'android' ? 6 : 8 },
-  headerTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#1B262C' },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
   scrollView: { flex: 1 },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingBottom: Platform.OS === 'android' ? 32 : 40 },
   loadingContainer: { padding: Platform.OS === 'android' ? 32 : 40, alignItems: 'center', justifyContent: 'center' },
-  loadingText: { marginTop: Platform.OS === 'android' ? 10 : 12, fontSize: Platform.OS === 'android' ? 13 : 14, color: '#3282B8' },
-  card: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 16 : 20, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  loadingText: { marginTop: Platform.OS === 'android' ? 10 : 12, fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 16 : 20, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 16 : 20 },
-  cardTitle: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#1B262C', marginLeft: Platform.OS === 'android' ? 8 : 10, flex: 1 },
+  cardTitle: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 8 : 10, flex: 1 },
   editButton: { padding: Platform.OS === 'android' ? 6 : 8, backgroundColor: 'rgba(50, 130, 184, 0.1)', borderRadius: Platform.OS === 'android' ? 6 : 8 },
   infoGrid: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
   infoItem: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
-  infoLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#3282B8', marginBottom: 4, textTransform: 'uppercase' },
-  infoValue: { fontSize: Platform.OS === 'android' ? 14 : 16, color: '#1B262C', fontWeight: '500' },
-  descriptionContainer: { marginTop: Platform.OS === 'android' ? 6 : 8, paddingTop: Platform.OS === 'android' ? 14 : 16, borderTopWidth: 1, borderTopColor: '#BBE1FA' },
-  description: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#0F4C75', lineHeight: Platform.OS === 'android' ? 18 : 20 },
+  infoLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#315f57', marginBottom: 4, textTransform: 'uppercase' },
+  infoValue: { fontSize: Platform.OS === 'android' ? 14 : 16, color: '#0d2137', fontWeight: '500' },
+  descriptionContainer: { marginTop: Platform.OS === 'android' ? 6 : 8, paddingTop: Platform.OS === 'android' ? 14 : 16, borderTopWidth: 1, borderTopColor: '#dce8f2' },
+  description: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#0d2137', lineHeight: Platform.OS === 'android' ? 18 : 20 },
   teamStats: { backgroundColor: '#F0F7FF', paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: Platform.OS === 'android' ? 10 : 12 },
-  teamCount: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#0F4C75' },
+  teamCount: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#0d2137' },
   requestsSection: { backgroundColor: '#FFF9E6', borderRadius: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 2, borderColor: '#f39c12', overflow: 'hidden' },
   requestsHeader: { flexDirection: 'row', alignItems: 'center', padding: Platform.OS === 'android' ? 14 : 16 },
   requestsHeaderLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  requestsHeaderText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#0F4C75', marginLeft: Platform.OS === 'android' ? 6 : 8 },
+  requestsHeaderText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 6 : 8 },
   requestsBadge: { backgroundColor: '#f39c12', borderRadius: Platform.OS === 'android' ? 10 : 12, paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, marginRight: Platform.OS === 'android' ? 6 : 8 },
   requestsBadgeText: { color: '#fff', fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: 'bold' },
   requestsList: { padding: Platform.OS === 'android' ? 14 : 16, paddingTop: 0 },
-  requestCard: { backgroundColor: '#fff', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#BBE1FA' },
+  requestCard: { backgroundColor: '#fff', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#e8f2f9' },
   requestHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Platform.OS === 'android' ? 6 : 8 },
   requestUserInfo: { flex: 1 },
-  requestUserName: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#1B262C', marginBottom: 2 },
-  requestUserEmail: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#3282B8' },
+  requestUserName: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: 2 },
+  requestUserEmail: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#315f57' },
   requestRoleBadge: { paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: Platform.OS === 'android' ? 6 : 8 },
   requestRoleBadgeText: { color: '#fff', fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600' },
-  requestMessage: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0F4C75', marginTop: Platform.OS === 'android' ? 6 : 8, fontStyle: 'italic' },
-  requestTime: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#3282B8', marginTop: Platform.OS === 'android' ? 6 : 8 },
-  roleCard: { backgroundColor: '#F8FAFC', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  requestMessage: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', marginTop: Platform.OS === 'android' ? 6 : 8, fontStyle: 'italic' },
+  requestTime: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', marginTop: Platform.OS === 'android' ? 6 : 8 },
+  roleCard: { backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#E2E8F0' },
   roleHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  roleIconContainer: { width: Platform.OS === 'android' ? 32 : 36, height: Platform.OS === 'android' ? 32 : 36, borderRadius: Platform.OS === 'android' ? 16 : 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#BBE1FA' },
+  roleIconContainer: { width: Platform.OS === 'android' ? 32 : 36, height: Platform.OS === 'android' ? 32 : 36, borderRadius: Platform.OS === 'android' ? 16 : 18, backgroundColor: '#FFFFFF', justifyContent: 'center', alignItems: 'center', marginRight: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#e8f2f9' },
   roleInfo: { flex: 1 },
-  roleTitle: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#1B262C', marginBottom: 2 },
-  roleDescription: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#3282B8' },
+  roleTitle: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: 2 },
+  roleDescription: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57' },
   roleStatus: { alignItems: 'center' },
   roleCount: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold' },
   emptyRole: { padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 6 : 8, marginBottom: Platform.OS === 'android' ? 6 : 8, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderStyle: 'dashed' },
-  emptyRoleText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#BBE1FA', fontStyle: 'italic' },
-  memberItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 6 : 8, marginBottom: Platform.OS === 'android' ? 6 : 8, borderWidth: 1, borderColor: '#BBE1FA' },
+  emptyRoleText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#dce8f2', fontStyle: 'italic' },
+  memberItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 6 : 8, marginBottom: Platform.OS === 'android' ? 6 : 8, borderWidth: 1, borderColor: '#e8f2f9' },
   memberInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   memberStatus: { width: Platform.OS === 'android' ? 7 : 8, height: Platform.OS === 'android' ? 7 : 8, borderRadius: 4, marginRight: Platform.OS === 'android' ? 10 : 12 },
   memberDetails: { flex: 1 },
-  memberName: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#1B262C', fontWeight: '600', marginBottom: 2 },
-  memberEmail: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#3282B8' },
+  memberName: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#0d2137', fontWeight: '600', marginBottom: 2 },
+  memberEmail: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57' },
   memberActions: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12 },
-  memberJoinDate: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#3282B8' },
+  memberJoinDate: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57' },
   removeMemberButton: { padding: Platform.OS === 'android' ? 5 : 6, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: Platform.OS === 'android' ? 5 : 6 },
   permissionsContainer: { marginTop: Platform.OS === 'android' ? 6 : 8, paddingTop: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
-  permissionsTitle: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#3282B8', marginBottom: Platform.OS === 'android' ? 5 : 6, textTransform: 'uppercase' },
+  permissionsTitle: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#315f57', marginBottom: Platform.OS === 'android' ? 5 : 6, textTransform: 'uppercase' },
   permissionsList: { marginLeft: Platform.OS === 'android' ? 6 : 8 },
-  permissionItem: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0F4C75', marginBottom: 2 },
+  permissionItem: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0d2137', marginBottom: 2 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.8)', justifyContent: 'center', padding: Platform.OS === 'android' ? 16 : 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 18 : 20, maxHeight: '90%', overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Platform.OS === 'android' ? 16 : 20, borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  modalTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#1B262C' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Platform.OS === 'android' ? 16 : 20, borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
+  modalTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
   modalBody: { maxHeight: Platform.OS === 'android' ? 450 : 500, padding: Platform.OS === 'android' ? 16 : 20 },
-  requestDetailCard: { marginBottom: Platform.OS === 'android' ? 16 : 20, padding: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#F8FAFC', borderRadius: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#BBE1FA' },
-  requestDetailLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#3282B8', marginBottom: Platform.OS === 'android' ? 6 : 8, textTransform: 'uppercase' },
-  requestDetailName: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#1B262C', marginBottom: 4 },
-  requestDetailEmail: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#3282B8' },
+  requestDetailCard: { marginBottom: Platform.OS === 'android' ? 16 : 20, padding: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#e8f2f9' },
+  requestDetailLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#315f57', marginBottom: Platform.OS === 'android' ? 6 : 8, textTransform: 'uppercase' },
+  requestDetailName: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
+  requestDetailEmail: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#315f57' },
   requestDetailRole: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 6 : 8 },
-  requestDetailRoleText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#1B262C', marginLeft: Platform.OS === 'android' ? 6 : 8 },
-  requestDetailDescription: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#3282B8' },
-  requestDetailMessage: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0F4C75', lineHeight: Platform.OS === 'android' ? 18 : 20 },
-  teamStatusText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: '600', color: '#1B262C' },
+  requestDetailRoleText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 6 : 8 },
+  requestDetailDescription: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#315f57' },
+  requestDetailMessage: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', lineHeight: Platform.OS === 'android' ? 18 : 20 },
+  teamStatusText: { fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: '600', color: '#0d2137' },
   permissionItemModal: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 6 : 8 },
-  permissionText: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0F4C75', marginLeft: Platform.OS === 'android' ? 6 : 8, flex: 1 },
-  modalFooter: { flexDirection: 'row', padding: Platform.OS === 'android' ? 16 : 20, borderTopWidth: 1, borderTopColor: '#BBE1FA', gap: Platform.OS === 'android' ? 10 : 12 },
+  permissionText: { fontSize: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', marginLeft: Platform.OS === 'android' ? 6 : 8, flex: 1 },
+  modalFooter: { flexDirection: 'row', padding: Platform.OS === 'android' ? 16 : 20, borderTopWidth: 1, borderTopColor: '#dce8f2', gap: Platform.OS === 'android' ? 10 : 12 },
   rejectButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 12 : 14, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: 'transparent', borderWidth: 2, borderColor: '#e74c3c', gap: Platform.OS === 'android' ? 5 : 6 },
   rejectButtonText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: '600' },
   approveButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 12 : 14, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#27ae60', gap: Platform.OS === 'android' ? 5 : 6 },

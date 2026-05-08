@@ -37,6 +37,9 @@ export interface BuyerListing {
   contactPhone: string;
   contactEmail: string;
   deliveryLocation: string;
+  city: string; // NEW: City field
+  latitude: number; // NEW: Latitude
+  longitude: number; // NEW: Longitude
   country: string; // NEW: Country field
   priceList: PriceList;
   paymentMethod: PaymentMethod;
@@ -46,6 +49,8 @@ export interface BuyerListing {
   expiryDate: string;
   viewCount: number;
   status: 'active' | 'expired';
+  userId?: string; // Add userId to track the creator
+  createdBy?: string;
 }
 
 export interface SellerResponse {
@@ -113,6 +118,8 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
       status: 'active',
       companyId: listing.companyId || '',
       country: listing.country, // Ensure country is included
+      userId: listing.userId, // Store the creator's UID
+      createdBy: listing.userId,
       createdAt: serverTimestamp(),
     };
 
@@ -134,6 +141,9 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
         contactPhone: listing.contactPhone,
         contactEmail: listing.contactEmail,
         deliveryLocation: listing.deliveryLocation,
+        city: listing.city || '',
+        latitude: listing.latitude || 0,
+        longitude: listing.longitude || 0,
         country: listing.country,
         priceList: listing.priceList,
         paymentMethod: listing.paymentMethod,
@@ -143,6 +153,8 @@ export const useMarketplaceStore = create<MarketplaceState>((set, get) => ({
         postedDate: cleanedListing.postedDate,
         viewCount: 0,
         status: 'active',
+        userId: listing.userId,
+        createdBy: listing.userId,
       };
 
       // Only add topDays if it exists

@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { StyleSheet, Text, View, ScrollView, StatusBar, Platform } from "react-native";
+import { FlatList, StyleSheet, Text, View, StatusBar, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { usePondStore, Sampling } from "./store/pondStore";
@@ -9,7 +9,7 @@ type IconName = "sunny-outline" | "moon-outline" | "eye-outline" | "water-outlin
 
 const ParameterItem = React.memo(({ iconName, label, value, color }: any) => (
   <View style={styles.parameterItem}>
-    <Ionicons name={iconName} size={16} color="#BBE1FA" />
+    <Ionicons name={iconName} size={16} color="#dce8f2" />
     <Text style={styles.parameterLabel}>{label}</Text>
     <Text style={[styles.parameterValue, { color }]}>{value || "N/A"}</Text>
   </View>
@@ -24,8 +24,8 @@ export default function WaterQualityHistoryScreen() {
   useEffect(() => {
     navigation.setOptions({
       title: `${pondName} ${t.waterQuality.historyTitle}`,
-      headerStyle: { backgroundColor: '#BBE1FA' },
-      headerTintColor: '#1B262C',
+      headerStyle: { backgroundColor: '#dce8f2' },
+      headerTintColor: '#0d2137',
       headerTitleStyle: { fontWeight: 'bold', fontSize: Platform.OS === 'android' ? 17 : 18 },
       headerBackTitle: " WQ ",
     });
@@ -50,7 +50,7 @@ export default function WaterQualityHistoryScreen() {
 
   const getColor = (type: string, value: string) => {
     const num = parseFloat(value);
-    if (isNaN(num)) return "#0F4C75";
+    if (isNaN(num)) return "#0d2137";
     
     switch (type) {
       case "do":
@@ -66,7 +66,7 @@ export default function WaterQualityHistoryScreen() {
         if (num <= 40) return "#27ae60";
         return "#e74c3c";
       default:
-        return "#1B262C";
+        return "#0d2137";
     }
   };
 
@@ -83,18 +83,22 @@ export default function WaterQualityHistoryScreen() {
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#0F4C75" />
+      <StatusBar barStyle="light-content" backgroundColor="#0d2137" />
       <View style={styles.container}>
-        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {waterQualityHistory.length === 0 ? (
+        <FlatList
+          data={waterQualityHistory}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="time-outline" size={80} color="#3282B8" />
+              <Ionicons name="time-outline" size={80} color="#315f57" />
               <Text style={styles.emptyTitle}>{t.waterQuality.noHistoryYet}</Text>
               <Text style={styles.emptySubtitle}>{t.waterQuality.recordsWillAppear}</Text>
             </View>
-          ) : (
-            waterQualityHistory.map((record: Sampling) => (
-              <View key={record.id} style={styles.recordCard}>
+          }
+          renderItem={({ item: record }) => (
+              <View style={styles.recordCard}>
                 <View style={styles.cardHeader}>
                   <View style={styles.dateInfo}>
                     <Text style={styles.recordDate}>
@@ -122,33 +126,32 @@ export default function WaterQualityHistoryScreen() {
                       value={`${record.transparency || "N/A"} cm`} 
                       color={getColor("transparency", record.transparency ?? "")} />
                     <ParameterItem iconName="water-outline" label={t.waterQuality.salinity} 
-                      value={`${record.salinity || "N/A"} ppt`} color="#1B262C" />
+                      value={`${record.salinity || "N/A"} ppt`} color="#0d2137" />
                   </View>
                 </View>
               </View>
-            ))
           )}
-        </ScrollView>
+        />
       </View>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  container: { flex: 1, backgroundColor: "#f4f8fc" },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingBottom: 40 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
-  emptyTitle: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
-  emptySubtitle: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', lineHeight: Platform.OS === 'android' ? 20 : 22 },
+  emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
+  emptySubtitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', lineHeight: Platform.OS === 'android' ? 20 : 22 },
   errorText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 17 : 18, textAlign: 'center', marginTop: 100 },
-  recordCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 12 : 16, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  recordCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 12 : 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 12 : 16 },
   dateInfo: { flex: 1 },
-  recordDate: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#1B262C' },
-  daysAgo: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0F4C75', marginTop: 2 },
+  recordDate: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137' },
+  daysAgo: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0d2137', marginTop: 2 },
   parametersContainer: { gap: Platform.OS === 'android' ? 10 : 12 },
   parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
   parameterItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
-  parameterLabel: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: 80, flexShrink: 0 },
+  parameterLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: 80, flexShrink: 0 },
   parameterValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'right', flex: 1 },
 });

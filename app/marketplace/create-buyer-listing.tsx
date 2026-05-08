@@ -12,12 +12,14 @@ import {
   TextInput, TouchableOpacity,
   View,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useMarketplaceStore } from '../store/marketplaceStore';
+import * as Location from 'expo-location';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -41,6 +43,9 @@ interface FormData {
   contactPhone: string;
   contactEmail: string;
   deliveryLocation: string;
+  city: string;
+  latitude: number;
+  longitude: number;
   priceList: PriceList;
   paymentMethod: 'cash' | 'top';
   topDays: 7 | 14 | 21;
@@ -75,6 +80,9 @@ const CreateBuyerListingScreen = () => {
     contactPhone: '',
     contactEmail: user?.email || '',
     deliveryLocation: '',
+    city: '',
+    latitude: 0,
+    longitude: 0,
     priceList: {
       size20: '', size30: '', size40: '', size50: '', size60: '',
       size70: '', size80: '', size90: '', size100: '', size100Plus: '',
@@ -84,6 +92,8 @@ const CreateBuyerListingScreen = () => {
     additionalNotes: '',
     expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
   });
+
+  const [gettingLocation, setGettingLocation] = useState(false);
 
   const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -98,6 +108,63 @@ const CreateBuyerListingScreen = () => {
       priceList: { ...prev.priceList, [sizeKey]: value }
     }));
   }, []);
+
+  const useCompanyLocation = useCallback(() => {
+    const loc = company?.primaryLocation;
+    if (loc && typeof loc !== 'string') {
+      setFormData(prev => ({
+        ...prev,
+        deliveryLocation: loc.address,
+        city: (loc as any).city || '',
+        latitude: (loc as any).latitude || 0,
+        longitude: (loc as any).longitude || 0,
+      }));
+      Alert.alert(t.messages.success, t.companySetup.locationDetected);
+    } else {
+      Alert.alert(t.messages.error, t.companySetup.locationRequired);
+    }
+  }, [company, t]);
+
+  const detectCurrentLocation = async () => {
+    try {
+      setGettingLocation(true);
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(t.messages.error, t.companySetup.locationPermissionDenied);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({});
+      const addresses = await Location.reverseGeocodeAsync({
+        latitude: location.coords.latitude,
+        longitude: location.coords.longitude,
+      });
+
+      if (addresses && addresses.length > 0) {
+        const address = addresses[0];
+        const addressString = [
+          address.street,
+          address.city,
+          address.region,
+          address.country
+        ].filter(Boolean).join(', ');
+
+        setFormData(prev => ({
+          ...prev,
+          deliveryLocation: addressString,
+          city: address.city || '',
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        }));
+        Alert.alert(t.messages.success, t.companySetup.locationDetected);
+      }
+    } catch (error) {
+      console.error('Error detecting location:', error);
+      Alert.alert(t.messages.error, t.companySetup.locationError);
+    } finally {
+      setGettingLocation(false);
+    }
+  };
 
   const validateForm = useCallback((): boolean => {
     if (!formData.buyerName.trim() || !formData.companyName.trim() || 
@@ -170,12 +237,16 @@ const CreateBuyerListingScreen = () => {
         contactPhone: formData.contactPhone.trim(),
         contactEmail: formData.contactEmail.trim(),
         deliveryLocation: formData.deliveryLocation.trim(),
+        city: formData.city.trim(),
+        latitude: formData.latitude,
+        longitude: formData.longitude,
         country: country || '',
         priceList: priceListData,
         paymentMethod: formData.paymentMethod,
         topDays: formData.paymentMethod === 'top' ? formData.topDays : undefined,
         additionalNotes: formData.additionalNotes.trim(),
         expiryDate: formData.expiryDate.toISOString(),
+        userId: user?.uid,
       });
 
       Alert.alert(
@@ -198,8 +269,14 @@ const CreateBuyerListingScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0F4C75" />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t.CreateBuyerListingScreen.createBuyingRequest}</Text>
         <View style={styles.placeholder} />
@@ -254,12 +331,43 @@ const CreateBuyerListingScreen = () => {
             required 
             t={t}
           />
+          <View style={styles.locationActionButtons}>
+            <TouchableOpacity 
+              style={styles.locationActionBtn} 
+              onPress={useCompanyLocation}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="business" size={16} color="#0d2137" />
+              <Text style={styles.locationActionText}>{t.companySetup.useCurrent}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={styles.locationActionBtn} 
+              onPress={detectCurrentLocation}
+              disabled={gettingLocation}
+              activeOpacity={0.7}
+            >
+              {gettingLocation ? (
+                <ActivityIndicator size="small" color="#0d2137" />
+              ) : (
+                <>
+                  <Ionicons name="location" size={16} color="#0d2137" />
+                  <Text style={styles.locationActionText}>Detect</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </View>
+          {formData.city ? (
+            <View style={styles.cityBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#27ae60" />
+              <Text style={styles.cityBadgeText}>City detected: {formData.city}</Text>
+            </View>
+          ) : null}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>
               Country <Text style={styles.required}>*</Text>
             </Text>
             <View style={styles.countryDisplay}>
-              <Ionicons name="flag-outline" size={Platform.OS === 'android' ? 14 : 16} color="#3282B8" />
+              <Ionicons name="flag-outline" size={Platform.OS === 'android' ? 14 : 16} color="#315f57" />
               <Text style={styles.countryText}>
                 {company?.country || 
                  (typeof company?.primaryLocation === 'object' ? company.primaryLocation.country : 'Not set')}
@@ -287,7 +395,7 @@ const CreateBuyerListingScreen = () => {
                       value={formData.priceList[SHRIMP_SIZES[rowIndex * 2].key as keyof PriceList]}
                       onChangeText={(v) => updatePriceList(SHRIMP_SIZES[rowIndex * 2].key as keyof PriceList, v)}
                       placeholder="0.00"
-                      placeholderTextColor="#BBE1FA"
+                      placeholderTextColor="#6b8aa0"
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -302,7 +410,7 @@ const CreateBuyerListingScreen = () => {
                       value={formData.priceList[SHRIMP_SIZES[rowIndex * 2 + 1].key as keyof PriceList]}
                       onChangeText={(v) => updatePriceList(SHRIMP_SIZES[rowIndex * 2 + 1].key as keyof PriceList, v)}
                       placeholder="0.00"
-                      placeholderTextColor="#BBE1FA"
+                      placeholderTextColor="#6b8aa0"
                       keyboardType="decimal-pad"
                     />
                   </View>
@@ -324,7 +432,7 @@ const CreateBuyerListingScreen = () => {
                 style={[styles.paymentButton, formData.paymentMethod === 'cash' && styles.paymentButtonActive]}
                 onPress={() => updateForm('paymentMethod', 'cash')}
               >
-                <Ionicons name="cash-outline" size={Platform.OS === 'android' ? 18 : 20} color={formData.paymentMethod === 'cash' ? '#FFFFFF' : '#0F4C75'} />
+                <Ionicons name="cash-outline" size={Platform.OS === 'android' ? 18 : 20} color={formData.paymentMethod === 'cash' ? '#FFFFFF' : '#0d2137'} />
                 <Text style={[styles.paymentText, formData.paymentMethod === 'cash' && styles.paymentTextActive]}>
                   {t.CreateBuyerListingScreen.cashOnDelivery}
                 </Text>
@@ -334,7 +442,7 @@ const CreateBuyerListingScreen = () => {
                 style={[styles.paymentButton, formData.paymentMethod === 'top' && styles.paymentButtonActive]}
                 onPress={() => updateForm('paymentMethod', 'top')}
               >
-                <Ionicons name="calendar-outline" size={Platform.OS === 'android' ? 18 : 20} color={formData.paymentMethod === 'top' ? '#FFFFFF' : '#0F4C75'} />
+                <Ionicons name="calendar-outline" size={Platform.OS === 'android' ? 18 : 20} color={formData.paymentMethod === 'top' ? '#FFFFFF' : '#0d2137'} />
                 <Text style={[styles.paymentText, formData.paymentMethod === 'top' && styles.paymentTextActive]}>
                   {t.CreateBuyerListingScreen.termsOfPayment}
                 </Text>
@@ -378,7 +486,7 @@ const CreateBuyerListingScreen = () => {
             <Text style={styles.inputHint}>{t.CreateBuyerListingScreen.maximum30Days}</Text>
             <TouchableOpacity style={styles.dateButton} onPress={() => setShowExpiryDatePicker(true)}>
               <Text style={styles.dateText}>{formData.expiryDate.toLocaleDateString()}</Text>
-              <Ionicons name="calendar-outline" size={Platform.OS === 'android' ? 18 : 20} color="#3282B8" />
+              <Ionicons name="calendar-outline" size={Platform.OS === 'android' ? 18 : 20} color="#315f57" />
             </TouchableOpacity>
           </View>
         </View>
@@ -404,7 +512,7 @@ const CreateBuyerListingScreen = () => {
           value={formData.expiryDate} 
           mode="date" 
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          textColor="#1B262C"
+          textColor="#0d2137"
           onChange={(_, date) => { 
             setShowExpiryDatePicker(false); 
             if (date) {
@@ -433,7 +541,7 @@ const Input = ({ label, value, onChangeText, placeholder, keyboardType = 'defaul
       value={value} 
       onChangeText={onChangeText}
       placeholder={placeholder} 
-      placeholderTextColor="#BBE1FA" 
+      placeholderTextColor="#6b8aa0" 
       keyboardType={keyboardType} 
       multiline={multiline} 
       numberOfLines={multiline ? 3 : 1}
@@ -444,7 +552,7 @@ const Input = ({ label, value, onChangeText, placeholder, keyboardType = 'defaul
 );
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -453,13 +561,13 @@ const styles = StyleSheet.create({
     paddingBottom: Platform.OS === 'android' ? 7 : 8, 
     backgroundColor: '#FFFFFF', 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   backButton: { padding: Platform.OS === 'android' ? 6 : 8 },
   headerTitle: { 
     fontSize: Platform.OS === 'android' ? 18 : 20, 
     fontWeight: 'bold', 
-    color: '#1B262C',
+    color: '#0d2137',
     flex: 1,
     textAlign: 'center',
     marginHorizontal: 8
@@ -475,17 +583,17 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 16 : 20, 
     marginTop: Platform.OS === 'android' ? 16 : 20, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
   sectionTitle: { 
     fontSize: Platform.OS === 'android' ? 16 : 18, 
     fontWeight: 'bold', 
-    color: '#1B262C', 
+    color: '#0d2137', 
     marginBottom: Platform.OS === 'android' ? 6 : 8 
   },
   sectionDescription: { 
     fontSize: Platform.OS === 'android' ? 12 : 14, 
-    color: '#3282B8', 
+    color: '#315f57', 
     marginBottom: Platform.OS === 'android' ? 14 : 16 
   },
   inputContainer: { 
@@ -494,17 +602,17 @@ const styles = StyleSheet.create({
   inputLabel: { 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     fontWeight: '600', 
-    color: '#1B262C', 
+    color: '#0d2137', 
     marginBottom: Platform.OS === 'android' ? 6 : 8 
   },
   required: { color: '#e74c3c' },
   input: { 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     padding: Platform.OS === 'android' ? 14 : 16, 
     fontSize: Platform.OS === 'android' ? 14 : 16, 
-    color: '#1B262C', 
+    color: '#0d2137', 
     backgroundColor: '#FFFFFF',
     includeFontPadding: false 
   },
@@ -515,7 +623,7 @@ const styles = StyleSheet.create({
   },
   inputHint: { 
     fontSize: Platform.OS === 'android' ? 11 : 12, 
-    color: '#3282B8', 
+    color: '#315f57', 
     marginTop: 4, 
     fontStyle: 'italic' 
   },
@@ -523,15 +631,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Platform.OS === 'android' ? 6 : 8,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f4f8fc',
     padding: Platform.OS === 'android' ? 12 : 14,
     borderRadius: Platform.OS === 'android' ? 10 : 12,
     borderWidth: 1,
-    borderColor: '#BBE1FA',
+    borderColor: '#e8f2f9',
   },
   countryText: {
     fontSize: Platform.OS === 'android' ? 13 : 15,
-    color: '#0F4C75',
+    color: '#0d2137',
     fontWeight: '600',
   },
   priceTable: { marginTop: Platform.OS === 'android' ? 6 : 8 },
@@ -544,29 +652,29 @@ const styles = StyleSheet.create({
     flex: 1, 
     flexDirection: 'row', 
     alignItems: 'center', 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     padding: Platform.OS === 'android' ? 10 : 12, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
   sizeLabel: { 
     fontSize: Platform.OS === 'android' ? 14 : 16, 
     fontWeight: 'bold', 
-    color: '#0F4C75', 
+    color: '#0d2137', 
     width: Platform.OS === 'android' ? 40 : 45 
   },
   priceInputContainer: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   currencySymbol: { 
     fontSize: Platform.OS === 'android' ? 14 : 16, 
     fontWeight: '600', 
-    color: '#3282B8', 
+    color: '#315f57', 
     marginRight: 4 
   },
   priceInput: { 
     flex: 1, 
     fontSize: Platform.OS === 'android' ? 14 : 16, 
-    color: '#1B262C', 
+    color: '#0d2137', 
     padding: 0,
     includeFontPadding: false 
   },
@@ -581,17 +689,17 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'center', 
     padding: Platform.OS === 'android' ? 12 : 14, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     borderWidth: 2, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     gap: Platform.OS === 'android' ? 6 : 8 
   },
-  paymentButtonActive: { backgroundColor: '#0F4C75', borderColor: '#0F4C75' },
+  paymentButtonActive: { backgroundColor: '#0d2137', borderColor: '#0d2137' },
   paymentText: { 
     fontSize: Platform.OS === 'android' ? 12 : 14, 
     fontWeight: '600', 
-    color: '#0F4C75' 
+    color: '#0d2137' 
   },
   paymentTextActive: { color: '#FFFFFF' },
   
@@ -602,17 +710,17 @@ const styles = StyleSheet.create({
   topDayButton: { 
     flex: 1, 
     paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     alignItems: 'center' 
   },
-  topDayButtonActive: { backgroundColor: '#3282B8', borderColor: '#3282B8' },
+  topDayButtonActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
   topDayText: { 
     fontSize: Platform.OS === 'android' ? 12 : 14, 
     fontWeight: '600', 
-    color: '#3282B8' 
+    color: '#315f57' 
   },
   topDayTextActive: { color: '#FFFFFF' },
   
@@ -621,14 +729,14 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'space-between', 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     padding: Platform.OS === 'android' ? 14 : 16, 
     backgroundColor: '#FFFFFF' 
   },
   dateText: { 
     fontSize: Platform.OS === 'android' ? 14 : 16, 
-    color: '#1B262C' 
+    color: '#0d2137' 
   },
   
   buttonContainer: { 
@@ -654,7 +762,7 @@ const styles = StyleSheet.create({
     flex: 1, 
     paddingVertical: Platform.OS === 'android' ? 14 : 16, 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#3282B8', 
+    backgroundColor: '#315f57', 
     alignItems: 'center', 
     shadowOffset: { width: 0, height: 4 }, 
     shadowOpacity: 0.3, 
@@ -662,7 +770,7 @@ const styles = StyleSheet.create({
     elevation: 6 
   },
   submitButtonDisabled: { 
-    backgroundColor: '#BBE1FA', 
+    backgroundColor: '#dce8f2', 
     shadowOpacity: 0, 
     elevation: 0 
   },
@@ -670,6 +778,44 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'android' ? 14 : 16, 
     fontWeight: 'bold', 
     color: '#FFFFFF' 
+  },
+  locationActionButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 10,
+  },
+  locationActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0F7FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+  },
+  locationActionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0d2137',
+  },
+  cityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#f0fdf4',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#bcf0da',
+  },
+  cityBadgeText: {
+    fontSize: 12,
+    color: '#15803d',
+    fontWeight: '500',
   },
 });
 

@@ -330,7 +330,7 @@ companySetup: {
     exportData: 'ส่งออกข้อมูล',
     exportDataSubtitle: 'ดาวน์โหลดข้อมูลเป็น CSV',
     app: 'แอป',
-    about: 'เกี่ยวกับ investaShrimp',
+    about: 'เกี่ยวกับ Shrimply',
     help: 'ช่วยเหลือและสนับสนุน',
     privacy: 'นโยบายความเป็นส่วนตัว',
     madeWith: 'สร้างด้วย',
@@ -343,7 +343,7 @@ companySetup: {
     restoring: 'กำลังกู้คืน...',
     backupToCloud: 'สำรองไปคลาวด์',
     restoreFromCloud: 'กู้คืนจากคลาวด์',
-    aiAssistant: 'iShrimp AI',
+    aiAssistant: 'Orson AI',
     helpSupport: 'ช่วยเหลือและสนับสนุน',
     signOut: 'ออกจากระบบ'
   },
@@ -470,9 +470,11 @@ companySetup: {
     buyingRequest: 'สร้างคำขอซื้อ',
     showNearbyOnly: 'แสดงผู้ซื้อใกล้เคียง',
     withinRadius: 'ในรัศมี:',
+    searchByCity: 'ค้นหาตามเมือง',
     sortBy: 'เรียงตาม',
     newest: 'ใหม่สุด',
     price: 'ราคา',
+    distance: 'ระยะทาง',
     activeListings: 'ประกาศที่ใช้งาน',
     nearbyListings: 'ประกาศใกล้เคียง',
     noListingsAvailable: 'ไม่มีประกาศ',
@@ -615,6 +617,7 @@ companySetup: {
     profitLoss: 'กำไรขาดทุน',
     balanceSheet: 'งบดุล',
     cashFlow: 'กระแสเงินสด',
+    harvestProjection: 'การคาดการณ์การเก็บเกี่ยว',
     expenseReport: 'รายงานค่าใช้จ่าย',
     comingSoon: 'เร็วๆ นี้',
     today: 'วันนี้',
@@ -685,6 +688,7 @@ companySetup: {
     profitLoss: 'กำไรขาดทุน',
     balanceSheet: 'งบดุล',
     cashFlow: 'กระแสเงินสด',
+    harvestProjection: 'การคาดการณ์การเก็บเกี่ยว',
     expenseReport: 'รายงานค่าใช้จ่าย',
     comingSoon: 'เร็วๆ นี้',
     today: 'วันนี้',
@@ -1041,7 +1045,7 @@ companySetup: {
 },
 
   roleSelection: {
-  welcomeTitle: 'ยินดีต้อนรับสู่ investaShrimp',
+  welcomeTitle: 'ยินดีต้อนรับสู่ Shrimply',
   welcomeSubtitle: 'เลือกบทบาทของคุณเพื่อเริ่มต้น',
   
   farmOwner: 'เจ้าของฟาร์ม',
@@ -1096,7 +1100,25 @@ companySetup: {
   helpTechDesc: 'ค้นหาและเข้าร่วมบริษัทที่มีอยู่',
   helpBuyerDesc: 'เชื่อมต่อกับซัพพลายเออร์กุ้ง',
   helpFooter: 'คุณสามารถติดต่อฝ่ายสนับสนุนเพื่อเปลี่ยนบทบาทของคุณได้ในภายหลัง',
-}
+  },
+  harvestProjectionScreen: {
+    title: 'การคาดการณ์การเก็บเกี่ยว',
+    step1: '1. เลือกบ่อ',
+    step2: '2. ข้อสมมติฐานแบบกำหนดเอง',
+    daysUntilHarvest: 'วันจนถึงการเก็บเกี่ยว',
+    expectedPrice: 'ราคาตลาดที่คาดหวัง',
+    dailyFeedCost: 'ค่าอาหารรายวันโดยประมาณ',
+    step3: '3. ผลลัพธ์ที่คาดการณ์',
+    harvestDOC: 'DOC การเก็บเกี่ยว',
+    projSize: 'ขนาดที่คาดการณ์ (MBW)',
+    projBiomass: 'ชีวมวลที่คาดการณ์',
+    projectedRevenue: 'รายได้ที่คาดการณ์',
+    projectedProfit: 'กำไรที่คาดการณ์ (หักค่าอาหาร)',
+    orsonTitle: 'การวิเคราะห์ความเสี่ยง Orson AI',
+    orsonAnalyzing: 'Orson กำลังวิเคราะห์การคาดการณ์...',
+    orsonAnalyzeBtn: 'วิเคราะห์การคาดการณ์นี้',
+    orsonUnavailable: 'Orson ไม่สามารถให้การวิเคราะห์ได้ในขณะนี้',
+  },
 };
 
 export type Translations = typeof th;

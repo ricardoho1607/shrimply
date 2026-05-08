@@ -1,8 +1,8 @@
-// app/help-support.tsx - Optimized with consistent Android styles
+// app/help-support.tsx - Optimized with Compact Header
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import { Alert, Linking, View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
 
 interface Feature {
   id: string;
@@ -18,7 +18,7 @@ const FEATURES: Feature[] = [
     id: 'dashboard',
     icon: 'home',
     title: 'Smart Dashboard',
-    color: '#0F4C75',
+    color: '#0d2137',
     description: 'Get a comprehensive overview of your farm operations at a glance',
     details: [
       'View summarized data for all ponds on your home screen',
@@ -31,7 +31,7 @@ const FEATURES: Feature[] = [
     id: 'roles',
     icon: 'people',
     title: 'Role-Based Access Control',
-    color: '#3282B8',
+    color: '#315f57',
     description: 'Ensure team accountability with customized access levels',
     details: [
       'Assign specific roles to team members (Owner, Manager, Admin, Technician)',
@@ -114,7 +114,7 @@ const FEATURES: Feature[] = [
     id: 'feed-inventory',
     icon: 'fish-outline',
     title: 'Feed & Additives Inventory',
-    color: '#3282B8',
+    color: '#315f57',
     description: 'Smart inventory management for your feed supplies',
     details: [
       'Track stock levels, prices, and total values',
@@ -128,7 +128,7 @@ const FEATURES: Feature[] = [
     id: 'asset-inventory',
     icon: 'construct-outline',
     title: 'Asset Management System',
-    color: '#3282B8',
+    color: '#315f57',
     description: 'Complete tracking and management of farm equipment',
     details: [
       'Generate QR codes for each asset',
@@ -177,6 +177,18 @@ export default function HelpSupportPage() {
     setExpandedSection(expandedSection === id ? null : id);
   };
 
+  const contactSupport = async () => {
+    const emailUrl = 'mailto:shrimply.tech@gmail.com?subject=Shrimply%20Support%20Request';
+    const canOpen = await Linking.canOpenURL(emailUrl);
+
+    if (canOpen) {
+      await Linking.openURL(emailUrl);
+      return;
+    }
+
+    Alert.alert('Contact Support', 'Email us at shrimply.tech@gmail.com');
+  };
+
   const FeatureCard = ({ feature }: { feature: Feature }) => {
     const isExpanded = expandedSection === feature.id;
 
@@ -184,13 +196,13 @@ export default function HelpSupportPage() {
       <TouchableOpacity style={styles.featureCard} onPress={() => toggleSection(feature.id)} activeOpacity={0.7}>
         <View style={styles.cardHeader}>
           <View style={[styles.iconContainer, { backgroundColor: feature.color + '15' }]}>
-            <Ionicons name={feature.icon} size={Platform.OS === 'android' ? 26 : 28} color={feature.color} />
+            <Ionicons name={feature.icon} size={Platform.OS === 'android' ? 24 : 26} color={feature.color} />
           </View>
           <View style={styles.cardTitleContainer}>
             <Text style={styles.cardTitle}>{feature.title}</Text>
-            <Text style={styles.cardDescription}>{feature.description}</Text>
+            <Text style={styles.cardDescription} numberOfLines={1}>{feature.description}</Text>
           </View>
-          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={24} color="#3282B8" />
+          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color="#315f57" />
         </View>
 
         {isExpanded && (
@@ -210,11 +222,17 @@ export default function HelpSupportPage() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#0F4C75" />
-        </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Ionicons name="help-circle" size={Platform.OS === 'android' ? 30 : 32} color="#0F4C75" />
+        <View style={styles.headerTopRow}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Ionicons name="help-circle" size={24} color="#0d2137" style={styles.headerIcon} />
           <Text style={styles.headerTitle}>Help & Support</Text>
         </View>
         <Text style={styles.headerSubtitle}>
@@ -224,7 +242,7 @@ export default function HelpSupportPage() {
 
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.welcomeCard}>
-          <Ionicons name="information-circle" size={24} color="#0F4C75" />
+          <Ionicons name="information-circle" size={20} color="#0d2137" />
           <Text style={styles.welcomeText}>
             Tap on any feature below to learn more about how it can help you manage your aquaculture operations more efficiently.
           </Text>
@@ -237,12 +255,17 @@ export default function HelpSupportPage() {
         ))}
 
         <View style={styles.supportCard}>
-          <Ionicons name="mail-outline" size={24} color="#0F4C75" />
+          <Ionicons name="mail-outline" size={24} color="#0d2137" />
           <Text style={styles.supportTitle}>Need More Help?</Text>
           <Text style={styles.supportText}>
-            Can't find what you're looking for? Our support team is here to help you.
+            Cannot find what you are looking for? Our support team is here to help you.
           </Text>
-          <TouchableOpacity style={styles.contactButton}>
+          <TouchableOpacity
+            style={styles.contactButton}
+            onPress={contactSupport}
+            accessibilityRole="button"
+            accessibilityLabel="Contact support"
+          >
             <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFFFFF" />
             <Text style={styles.contactButtonText}>Contact Support</Text>
           </TouchableOpacity>
@@ -258,63 +281,75 @@ export default function HelpSupportPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
-    backgroundColor: '#F8FAFC', 
-    paddingHorizontal: Platform.OS === 'android' ? 20 : 24, 
-    paddingVertical: Platform.OS === 'android' ? 16 : 20, 
+    backgroundColor: '#f4f8fc', 
+    paddingHorizontal: 16, 
+    paddingTop: Platform.OS === 'android' ? 10 : 12,
+    paddingBottom: 12, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
-  backButton: { marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  headerContent: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  headerTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backButton: {
+    padding: 4,
+    marginRight: 8,
+  },
+  headerIcon: {
+    marginRight: 8,
+  },
   headerTitle: { 
-    fontSize: Platform.OS === 'android' ? 26 : 28, 
+    fontSize: 20, 
     fontWeight: 'bold', 
-    color: '#1B262C', 
-    marginLeft: Platform.OS === 'android' ? 10 : 12 
+    color: '#0d2137', 
+    flex: 1,
   },
   headerSubtitle: { 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    color: '#3282B8', 
-    marginTop: 4 
+    fontSize: 12, 
+    color: '#315f57', 
+    marginTop: 4,
+    marginLeft: 40, 
   },
   scrollView: { flex: 1 },
   scrollContent: { 
-    padding: Platform.OS === 'android' ? 14 : 16, 
-    paddingBottom: Platform.OS === 'android' ? 28 : 32 
+    padding: 16, 
+    paddingBottom: 32 
   },
   welcomeCard: {
     flexDirection: 'row',
     backgroundColor: '#E3F2FD',
-    borderRadius: Platform.OS === 'android' ? 10 : 12,
-    padding: Platform.OS === 'android' ? 14 : 16,
-    marginBottom: Platform.OS === 'android' ? 20 : 24,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
     borderLeftWidth: 4,
-    borderLeftColor: '#0F4C75',
+    borderLeftColor: '#0d2137',
+    alignItems: 'center'
   },
   welcomeText: {
     flex: 1,
-    marginLeft: Platform.OS === 'android' ? 10 : 12,
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    color: '#1B262C',
-    lineHeight: Platform.OS === 'android' ? 18 : 20,
+    marginLeft: 10,
+    fontSize: 13,
+    color: '#0d2137',
+    lineHeight: 18,
   },
   sectionTitle: {
-    fontSize: Platform.OS === 'android' ? 18 : 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginBottom: Platform.OS === 'android' ? 14 : 16,
+    color: '#0d2137',
+    marginBottom: 12,
     paddingHorizontal: 4,
   },
   featureCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Platform.OS === 'android' ? 10 : 12,
-    padding: Platform.OS === 'android' ? 14 : 16,
-    marginBottom: Platform.OS === 'android' ? 10 : 12,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#BBE1FA',
-    shadowColor: '#0F4C75',
+    borderColor: '#e8f2f9',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -322,107 +357,105 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center' },
   iconContainer: {
-    width: Platform.OS === 'android' ? 52 : 56,
-    height: Platform.OS === 'android' ? 52 : 56,
-    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: Platform.OS === 'android' ? 10 : 12,
+    marginRight: 12,
   },
   cardTitleContainer: { flex: 1 },
   cardTitle: {
-    fontSize: Platform.OS === 'android' ? 15 : 16,
+    fontSize: 15,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginBottom: 4,
+    color: '#0d2137',
   },
   cardDescription: {
-    fontSize: Platform.OS === 'android' ? 12 : 13,
-    color: '#3282B8',
-    lineHeight: Platform.OS === 'android' ? 16 : 18,
+    fontSize: 12,
+    color: '#315f57',
   },
   detailsContainer: {
-    marginTop: Platform.OS === 'android' ? 14 : 16,
-    paddingTop: Platform.OS === 'android' ? 14 : 16,
+    marginTop: 12,
+    paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#BBE1FA',
+    borderTopColor: '#dce8f2',
   },
   detailItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: Platform.OS === 'android' ? 10 : 12,
+    marginBottom: 8,
   },
   bullet: {
-    width: Platform.OS === 'android' ? 5 : 6,
-    height: Platform.OS === 'android' ? 5 : 6,
+    width: 6,
+    height: 6,
     borderRadius: 3,
-    marginTop: Platform.OS === 'android' ? 5 : 6,
-    marginRight: Platform.OS === 'android' ? 10 : 12,
+    marginTop: 6,
+    marginRight: 10,
   },
   detailText: {
     flex: 1,
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    color: '#1B262C',
-    lineHeight: Platform.OS === 'android' ? 18 : 20,
+    fontSize: 13,
+    color: '#0d2137',
+    lineHeight: 18,
   },
   supportCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: Platform.OS === 'android' ? 10 : 12,
-    padding: Platform.OS === 'android' ? 20 : 24,
-    marginTop: Platform.OS === 'android' ? 20 : 24,
-    marginBottom: Platform.OS === 'android' ? 14 : 16,
+    borderRadius: 12,
+    padding: 20,
+    marginTop: 20,
+    marginBottom: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#BBE1FA',
-    shadowColor: '#0F4C75',
+    borderColor: '#e8f2f9',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 2,
   },
   supportTitle: {
-    fontSize: Platform.OS === 'android' ? 16 : 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginTop: Platform.OS === 'android' ? 10 : 12,
-    marginBottom: Platform.OS === 'android' ? 7 : 8,
+    color: '#0d2137',
+    marginTop: 10,
+    marginBottom: 8,
   },
   supportText: {
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    color: '#3282B8',
+    fontSize: 13,
+    color: '#315f57',
     textAlign: 'center',
-    marginBottom: Platform.OS === 'android' ? 14 : 16,
-    lineHeight: Platform.OS === 'android' ? 18 : 20,
+    marginBottom: 16,
+    lineHeight: 18,
   },
   contactButton: {
     flexDirection: 'row',
-    backgroundColor: '#0F4C75',
-    paddingHorizontal: Platform.OS === 'android' ? 20 : 24,
-    paddingVertical: Platform.OS === 'android' ? 10 : 12,
-    borderRadius: Platform.OS === 'android' ? 7 : 8,
+    backgroundColor: '#0d2137',
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 8,
     alignItems: 'center',
   },
   contactButtonText: {
     color: '#FFFFFF',
-    fontSize: Platform.OS === 'android' ? 15 : 16,
+    fontSize: 15,
     fontWeight: '600',
-    marginLeft: Platform.OS === 'android' ? 7 : 8,
+    marginLeft: 8,
   },
   footer: {
     alignItems: 'center',
-    marginTop: Platform.OS === 'android' ? 14 : 16,
-    paddingTop: Platform.OS === 'android' ? 14 : 16,
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#BBE1FA',
+    borderTopColor: '#dce8f2',
   },
   footerText: {
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    color: '#3282B8',
+    fontSize: 13,
+    color: '#315f57',
     fontWeight: '600',
   },
   versionText: {
-    fontSize: Platform.OS === 'android' ? 11 : 12,
-    color: '#BBE1FA',
+    fontSize: 11,
+    color: '#dce8f2',
     marginTop: 4,
   },
 });

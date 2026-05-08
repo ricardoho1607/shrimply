@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Plus, 
   Search, 
@@ -23,12 +23,8 @@ import {
   LayoutDashboard,
   ShoppingBag
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
-  query, 
-  where, 
-  onSnapshot, 
   doc, 
   addDoc, 
   updateDoc, 
@@ -36,12 +32,12 @@ import {
   serverTimestamp, 
   runTransaction,
   arrayUnion,
-  Timestamp,
-  orderBy
+  Timestamp
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 
@@ -91,14 +87,10 @@ export default function InventoryFeedsPage() {
   const { formatCurrency } = useCurrency();
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
-  const [loading, setLoading] = useState(true);
-  const [companyId, setCompanyId] = useState<string | null>(null);
-  const [ponds, setPonds] = useState<any[]>([]);
-  
-  const [feeds, setFeeds] = useState<InventoryItem[]>([]);
-  const [additives, setAdditives] = useState<InventoryItem[]>([]);
+  const { feeds, additives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
   
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
 
@@ -135,56 +127,6 @@ export default function InventoryFeedsPage() {
     expiry: '',
     reorderLevel: ''
   });
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
-          setCompanyId(cid);
-          if (cid) {
-            // Listen to Feeds
-            const qFeeds = query(collection(db, 'companies', cid, 'feeds'));
-            const unsubFeeds = onSnapshot(qFeeds, (snapshot) => {
-              const data = snapshot.docs.map(d => ({ 
-                id: d.id, 
-                ...d.data(),
-                itemName: d.data().feedName // Re-map for consistent use
-              } as InventoryItem));
-              setFeeds(data);
-            });
-
-            // Listen to Additives
-            const qAdditives = query(collection(db, 'companies', cid, 'additives'));
-            const unsubAdditives = onSnapshot(qAdditives, (snapshot) => {
-              const data = snapshot.docs.map(d => ({ 
-                id: d.id, 
-                ...d.data(),
-                itemName: d.data().additiveName // Re-map for consistent use
-              } as InventoryItem));
-              setAdditives(data);
-              setLoading(false);
-            });
-
-            // Listen to Ponds (for usage pond selection)
-            const qPonds = query(collection(db, 'companies', cid, 'ponds'), orderBy('pondName', 'asc'));
-            const unsubPonds = onSnapshot(qPonds, (snapshot) => {
-              setPonds(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-            });
-
-            return () => {
-              unsubFeeds();
-              unsubAdditives();
-              unsubPonds();
-            };
-          } else {
-            setLoading(false);
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
 
   const metrics = useMemo(() => {
     const totalFeedStock = feeds.reduce((s, f) => s + (f.totalStock || 0), 0);
@@ -250,13 +192,15 @@ export default function InventoryFeedsPage() {
 
   const filteredItems = useMemo(() => {
     const items = activeTab === 'feed' ? feeds : additives;
+    const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
     return items.filter(item => {
-      const matchesSearch = item.itemName.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                            (item.brand || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = !normalizedSearch ||
+                            item.itemName.toLowerCase().includes(normalizedSearch) || 
+                            (item.brand || '').toLowerCase().includes(normalizedSearch);
       const matchesCategory = !categoryFilter || (activeTab === 'feed' ? (item as any).feedType : (item as any).category) === categoryFilter;
       return matchesSearch && matchesCategory;
     });
-  }, [feeds, additives, activeTab, searchTerm, categoryFilter]);
+  }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter]);
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
     setModalType(type);
@@ -425,63 +369,33 @@ export default function InventoryFeedsPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', paddingBottom: '40px' }}>
+    <div className="dashboard-page-relaxed" style={{ paddingBottom: '40px' }}>
       
-      {/* Header Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: '20px' }}>
-        <div className="animate-fade-up">
-          <h1 style={{ fontSize: '42px', fontWeight: 900, letterSpacing: '-0.03em', color: 'var(--text-primary)', marginBottom: '8px' }}>
-            {t.inventory.title}
-          </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Box size={18} className="text-primary" />
-            Manage your feed stocks and additives with Orson AI intelligence.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '16px' }} className="animate-fade-up">
+      <div className="dashboard-action-row animate-fade-up">
           <button 
             className="btn-secondary" 
             onClick={() => { setItemType('feed'); handleOpenModal('add'); }}
             style={{ 
-              padding: '16px 28px', 
-              borderRadius: '20px', 
-              fontSize: '15px', 
-              fontWeight: 800,
               background: 'white',
               border: '1px solid var(--border)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
               boxShadow: 'var(--shadow-card)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-              <Plus size={18} />
-            </div>
+            <Plus size={18} />
             {t.inventory.addFeed}
           </button>
           <button 
             className="btn-primary" 
             onClick={() => { setItemType('additive'); handleOpenModal('add'); }}
             style={{ 
-              padding: '16px 28px', 
-              borderRadius: '20px', 
-              fontSize: '15px', 
-              fontWeight: 800,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
               boxShadow: 'var(--shadow-glow)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
           >
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
-              <FlaskConical size={18} />
-            </div>
+            <FlaskConical size={18} />
             {t.inventory.addAdditive}
           </button>
-        </div>
       </div>
 
       {/* Modern Tabs Navigation */}

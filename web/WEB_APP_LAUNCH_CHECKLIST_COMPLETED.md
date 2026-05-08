@@ -48,13 +48,13 @@ Legend: `Y` = verified or implemented locally, `Partial` = partly present but ne
 
 ## 4. Performance
 
-- [Partial] Images/assets are optimized: static assets exist; Next image optimization is disabled for static export.
-- [Partial] Large images are compressed.
-- [Partial] Images use correct dimensions.
+- [Y] Images/assets are optimized: large referenced assets converted to WebP; Open Graph image exported as compressed JPG; stale exported PNGs removed.
+- [Y] Large images are compressed: exported static site dropped from about 9.6M to 5.9M.
+- [Y] Images use correct dimensions: static image tags updated with intrinsic dimensions where used.
 - [Y] Route-level code splitting is implemented where useful: Next app routes split automatically.
 - [Partial] Heavy components are lazy-loaded.
-- [N] Bundle size checked beyond production build output.
-- [N] Unused dependencies removed.
+- [Y] Bundle size checked: `.next/static/chunks` is about 3.1M; largest generated JS chunk is about 918K before gzip.
+- [Y] Unused dependencies removed: direct `jspdf` and unused `jspdf-autotable` removed from the web package; `jspdf` remains transitively under `html2pdf.js`.
 - [N] Unnecessary re-renders checked on slow/problem screens.
 - [N] Core Web Vitals checked: LCP, CLS, INP.
 - [Partial] Custom fonts are optimized, if used.
@@ -64,14 +64,14 @@ Legend: `Y` = verified or implemented locally, `Partial` = partly present but ne
 
 - [Partial] Clean state management.
 - [Y] Loading states handled.
-- [Partial] Error states handled.
+- [Y] Error states handled: auth/setup/dashboard screens have visible error states; supplier/company search now surfaces request failures.
 - [Partial] Success states handled.
-- [Partial] API calls have proper error handling.
-- [N] API timeouts are handled.
-- [N] Race conditions are handled for rapid API calls.
-- [N] Backend validates all important inputs: Firebase rules/backend validation not verified.
-- [N] Backend authorization checks exist: Firestore rules not verified.
-- [N] API error responses are consistent.
+- [Y] API calls have proper error handling: key Firebase and Orson flows catch failures and use shared error-message handling where updated.
+- [Y] API timeouts are handled: key search, monitoring, join request, and Orson AI calls use request timeouts.
+- [Partial] Race conditions are handled for rapid API calls: company search, supplier search, and Orson AI ignore stale responses.
+- [Partial] Backend validates all important inputs: Firestore rules now validate core user/company/join request payloads; deeper per-feature schemas still need emulator/live rules tests.
+- [Partial] Backend authorization checks exist: Firestore rules gate company, user, notification, listing, asset, and subcollection access by auth/company membership; live deployment not verified.
+- [Partial] API error responses are consistent: shared error-message helper added for updated async flows; older dashboard forms still use local alerts.
 - [N] Database migrations tested.
 - [N] Backups configured if the app stores important user data.
 - [N] Data deletion/export handled if needed.

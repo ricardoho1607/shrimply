@@ -340,7 +340,7 @@ companySetup: {
     exportData: '导出数据',
     exportDataSubtitle: '将池塘数据下载为CSV文件',
     app: '应用',
-    about: '关于 investaShrimp',
+    about: '关于 Shrimply',
     help: '帮助与支持',
     privacy: '隐私政策',
     madeWith: '用',
@@ -353,7 +353,7 @@ companySetup: {
     restoring: '恢复中...',
     backupToCloud: '备份到云端',
     restoreFromCloud: '从云端恢复',
-    aiAssistant: 'iShrimp AI',
+    aiAssistant: 'Orson AI',
     helpSupport: '帮助与支持',
     signOut: '退出登录'
   },
@@ -480,9 +480,11 @@ companySetup: {
     buyingRequest: '创建采购请求',
     showNearbyOnly: '仅显示附近买家',
     withinRadius: '范围内：',
+    searchByCity: '按城市搜索',
     sortBy: '排序方式',
     newest: '最新',
     price: '价格',
+    distance: '距离',
     activeListings: '活跃列表',
     nearbyListings: '附近列表',
     noListingsAvailable: '暂无可用列表',
@@ -647,6 +649,7 @@ companySetup: {
     profitLoss: '损益表',
     balanceSheet: '资产负债表',
     cashFlow: '现金流量表',
+    harvestProjection: '收获预测',
     expenseReport: '支出报告',
     comingSoon: '即将推出',
     
@@ -737,6 +740,7 @@ companySetup: {
     profitLoss: '损益表',
     balanceSheet: '资产负债表',
     cashFlow: '现金流量表',
+    harvestProjection: '收获预测',
     expenseReport: '支出报告',
     comingSoon: '即将推出',
     
@@ -1183,7 +1187,7 @@ companySetup: {
   fromYou: '距离您',
 },
   roleSelection: {
-  welcomeTitle: '欢迎来到 investaShrimp',
+  welcomeTitle: '欢迎来到 Shrimply',
   welcomeSubtitle: '选择您的角色开始使用',
   
   farmOwner: '养殖场主',
@@ -1238,7 +1242,25 @@ companySetup: {
   helpTechDesc: '搜索并加入现有公司',
   helpBuyerDesc: '与虾类供应商联系',
   helpFooter: '您随时可以联系支持人员更改您的角色。',
-}
+  },
+  harvestProjectionScreen: {
+    title: '收获预测',
+    step1: '1. 选择池塘',
+    step2: '2. 手动假设',
+    daysUntilHarvest: '距离收获天数',
+    expectedPrice: '预期市场价格',
+    dailyFeedCost: '预计每日饲料成本',
+    step3: '3. 预测结果',
+    harvestDOC: '收获养殖天数',
+    projSize: '预测规格 (MBW)',
+    projBiomass: '预测生物量',
+    projectedRevenue: '预测收入',
+    projectedProfit: '预测利润 (减去饲料)',
+    orsonTitle: 'Orson AI 风险分析',
+    orsonAnalyzing: 'Orson 正在分析预测...',
+    orsonAnalyzeBtn: '分析此预测',
+    orsonUnavailable: 'Orson 目前无法提供分析。',
+  },
 };
 
 export type Translations = typeof zh;

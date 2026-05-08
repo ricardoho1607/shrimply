@@ -112,6 +112,14 @@ export default function MarketplacePage() {
     });
   }, [listings, searchQuery, activeFilter, company, user]);
 
+  const myListingsCount = useMemo(() => {
+    return listings.filter(l => l.companyId === company?.id || l.userId === user?.uid).length;
+  }, [listings, company, user]);
+
+  const totalViews = useMemo(() => {
+    return filteredListings.reduce((sum, listing) => sum + (listing.viewCount || 0), 0);
+  }, [filteredListings]);
+
   const handleDeleteListing = async (listingId: string) => {
     setDeleteConfirm({ isOpen: true, id: listingId });
   };
@@ -239,14 +247,8 @@ export default function MarketplacePage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', marginBottom: '8px', letterSpacing: '-0.03em' }}>{t.MarketplaceScreen.title}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>{t.MarketplaceScreen.marketplaceSubtitle || 'Connect with buyers and check real-time shrimp price lists.'}</p>
-        </div>
+    <div className="dashboard-page">
+      <div className="dashboard-action-row">
         <button 
           onClick={() => {
             setEditingId(null);
@@ -257,14 +259,13 @@ export default function MarketplacePage() {
             setPostModalOpen(true);
           }}
           className="btn-primary" 
-          style={{ padding: '12px 24px', borderRadius: '12px' }}
         >
           <Plus size={20} /> {t.MarketplaceScreen.createListing}
         </button>
       </div>
 
       {/* Stats Bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
         <div className="glass-card" style={{ padding: '24px', background: 'var(--gradient)', color: '#FFF', border: 'none' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
@@ -277,8 +278,8 @@ export default function MarketplacePage() {
         <div className="glass-card" style={{ padding: '24px', background: '#FFF' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Market Activity</div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: '#059669' }}>+12% <span style={{ fontSize: '14px', color: 'var(--text-faint)' }}>this week</span></div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Visible Results</div>
+              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)' }}>{filteredListings.length}</div>
             </div>
             <TrendingUp size={24} color="#059669" />
           </div>
@@ -287,20 +288,21 @@ export default function MarketplacePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>My Offers</div>
-              <div style={{ fontSize: '28px', fontWeight: 800 }}>0</div>
+              <div style={{ fontSize: '28px', fontWeight: 800 }}>{myListingsCount}</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{totalViews} total views in current feed</div>
             </div>
             <CheckCircle2 size={24} color="var(--primary)" />
           </div>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 340px', gap: '32px' }}>
         
         {/* Main Feed */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           {/* Filters & Search */}
-          <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+          <div className="glass-card" style={{ padding: '18px', background: '#FFFFFF', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
               <input 
@@ -323,8 +325,16 @@ export default function MarketplacePage() {
           </div>
 
           {/* Listings Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            {filteredListings.map((listing) => (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+            {filteredListings.length === 0 ? (
+              <div className="glass-card" style={{ background: '#FFFFFF', padding: '48px 36px', textAlign: 'center', gridColumn: '1 / -1' }}>
+                <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--bg-mid)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
+                  <Store size={32} />
+                </div>
+                <h3 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>No matching listings</h3>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto' }}>Try a different city or switch back to all listings to broaden the feed.</p>
+              </div>
+            ) : filteredListings.map((listing) => (
               <div 
                 key={listing.id} 
                 className="glass-card" 
@@ -332,7 +342,7 @@ export default function MarketplacePage() {
                 style={{ background: '#FFFFFF', cursor: 'pointer', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}
               >
                 <div style={{ padding: '24px', flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                         <Store size={22} />

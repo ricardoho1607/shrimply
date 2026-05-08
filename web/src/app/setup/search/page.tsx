@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Search, Building2, ArrowRight, UserPlus, Info, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -8,6 +8,7 @@ import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'fire
 import { db } from '@/lib/firebase';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { ROUTES } from '@/config/routes';
+import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 
 export default function CompanySearchPage() {
   const isReady = useOnboardingGuard('setup');
@@ -16,16 +17,22 @@ export default function CompanySearchPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }>>([]);
   const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState<string | null>(null);
+  const latestSearchId = useRef(0);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchTerm.trim()) return;
-    
+
+    const requestId = latestSearchId.current + 1;
+    latestSearchId.current = requestId;
     setSearching(true);
+    setSearchError(null);
     try {
       const q = query(collection(db, 'companies'), where('isSearchable', '==', true));
-      const snapshot = await getDocs(q);
+      const snapshot = await withTimeout(getDocs(q), 12000, 'Farm search is taking too long. Please try again.');
+      if (latestSearchId.current !== requestId) return;
       const farms: Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }> = [];
       snapshot.forEach(doc => {
         const data = doc.data() as { companyName?: string; primaryLocation?: { address?: string } | string };
@@ -34,10 +41,17 @@ export default function CompanySearchPage() {
         }
       });
       setResults(farms);
-    } catch (error) {
-      console.error(error);
+    } catch (error: unknown) {
+      if (latestSearchId.current === requestId) {
+        const message = getErrorMessage(error, 'Unable to search farms right now.');
+        console.error(error);
+        setSearchError(message);
+        setResults([]);
+      }
     } finally {
-      setSearching(false);
+      if (latestSearchId.current === requestId) {
+        setSearching(false);
+      }
     }
   };
 
@@ -45,19 +59,19 @@ export default function CompanySearchPage() {
     if (!user) return;
     setRequesting(company.id);
     try {
-      await addDoc(collection(db, 'joinRequests'), {
+      await withTimeout(addDoc(collection(db, 'joinRequests'), {
         companyId: company.id,
         userId: user.uid,
         userName: user.name || user.email.split('@')[0],
         userEmail: user.email,
         requestedRole: user.role,
-        requestedAt: new Date().toISOString(),
+        requestedAt: serverTimestamp(),
         status: 'pending',
-      });
+      }), 12000, 'Sending your request is taking too long. Please try again.');
       alert(`Request sent to ${company.companyName}! You'll be notified once approved.`);
       router.push(ROUTES.dashboard);
     } catch (error: unknown) {
-      alert(error instanceof Error ? error.message : 'Failed to send request');
+      alert(getErrorMessage(error, 'Failed to send request'));
     } finally {
       setRequesting(null);
     }
@@ -130,6 +144,12 @@ export default function CompanySearchPage() {
             {searching ? '...' : 'Search'}
           </button>
         </form>
+
+        {searchError && (
+          <div role="alert" style={{ color: '#B42318', background: '#FEF3F2', border: '1px solid #FECDCA', borderRadius: '12px', padding: '12px 16px', fontSize: '14px', fontWeight: 600 }}>
+            {searchError}
+          </div>
+        )}
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {results.length > 0 ? results.map(company => (

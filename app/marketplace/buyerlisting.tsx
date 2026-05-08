@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Alert, Platform } from 'react-native';
+import { FlatList, View, Text, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,7 +44,7 @@ const MyListingCard = React.memo(({ listing, onViewDetails, onDelete, getSellerR
         </View>
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.iconButton} onPress={() => onViewDetails(listing)}>
-            <Ionicons name="eye-outline" size={20} color="#3282B8" />
+            <Ionicons name="eye-outline" size={20} color="#315f57" />
           </TouchableOpacity>
           <TouchableOpacity style={[styles.iconButton, styles.deleteButton]} onPress={() => onDelete(listing)}>
             <Ionicons name="trash-outline" size={20} color="#e74c3c" />
@@ -72,14 +72,14 @@ const MyListingCard = React.memo(({ listing, onViewDetails, onDelete, getSellerR
       </View>
 
       <View style={styles.locationSection}>
-        <Ionicons name="location-outline" size={14} color="#3282B8" />
+        <Ionicons name="location-outline" size={14} color="#315f57" />
         <Text style={styles.locationText}>{listing.deliveryLocation}</Text>
       </View>
 
       <View style={styles.footer}>
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Ionicons name="eye-outline" size={14} color="#3282B8" />
+            <Ionicons name="eye-outline" size={14} color="#315f57" />
             <Text style={styles.statText}>{listing.viewCount} views</Text>
           </View>
           {responseCount > 0 && (
@@ -170,15 +170,27 @@ const MyListingsScreen = () => {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
       <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color="#1B262C" />
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={() => router.back()}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={24} color="#0d2137" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>My Listings</Text>
-        <TouchableOpacity style={styles.addButton} onPress={() => router.push('/marketplace/create-buyer-listing')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="add" size={24} color="#1B262C" />
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={() => router.push('/marketplace/create-buyer-listing')}
+          accessibilityRole="button"
+          accessibilityLabel="Create buyer listing"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="add" size={24} color="#0d2137" />
         </TouchableOpacity>
       </View>
 
@@ -209,93 +221,98 @@ const MyListingsScreen = () => {
           </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false} 
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-          <Text style={styles.resultsCount}>{myListings.length} total listings</Text>
-
-          {myListings.length === 0 ? (
+        <FlatList
+          style={styles.content}
+          data={myListings}
+          keyExtractor={(item) => item.id}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+          ListHeaderComponent={<Text style={styles.resultsCount}>{myListings.length} total listings</Text>}
+          ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="document-text-outline" size={80} color="#BBE1FA" />
+              <Ionicons name="document-text-outline" size={80} color="#dce8f2" />
               <Text style={styles.emptyTitle}>No listings yet</Text>
               <Text style={styles.emptySubtitle}>Create your first listing to start receiving offers from suppliers</Text>
               <TouchableOpacity style={styles.createFirstButton} onPress={() => router.push('/marketplace/create-buyer-listing')}>
                 <Text style={styles.createFirstButtonText}>Create Listing</Text>
               </TouchableOpacity>
             </View>
-          ) : (
-            myListings.map((listing) => (
-              <MyListingCard key={listing.id} listing={listing} 
-                onViewDetails={handleViewDetails} onDelete={handleDeleteListing}
-                getSellerResponsesForListing={getSellerResponsesForListing} />
-            ))
+          }
+          renderItem={({ item }) => (
+            <MyListingCard
+              listing={item}
+              onViewDetails={handleViewDetails}
+              onDelete={handleDeleteListing}
+              getSellerResponsesForListing={getSellerResponsesForListing}
+            />
           )}
-        </ScrollView>
+        />
       </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingBottom: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#BBE1FA', 
+    backgroundColor: '#dce8f2', 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   backButton: { padding: 8, marginLeft: -4 },
-  headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#1B262C' },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#0d2137' },
   addButton: { padding: 8, marginRight: -4 },
-  summaryBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingVertical: Platform.OS === 'android' ? 10 : 12, paddingHorizontal: Platform.OS === 'android' ? 16 : 20, borderBottomWidth: 1, borderBottomColor: '#BBE1FA', justifyContent: 'space-around', alignItems: 'center' },
+  summaryBar: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingVertical: Platform.OS === 'android' ? 10 : 12, paddingHorizontal: Platform.OS === 'android' ? 16 : 20, borderBottomWidth: 1, borderBottomColor: '#dce8f2', justifyContent: 'space-around', alignItems: 'center' },
   summaryItem: { alignItems: 'center', flex: 1 },
-  summaryDivider: { width: 1, height: 30, backgroundColor: '#BBE1FA' },
+  summaryDivider: { width: 1, height: 30, backgroundColor: '#dce8f2' },
   summaryNumber: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#27ae60', marginBottom: 2 },
-  summaryLabel: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#3282B8', textTransform: 'uppercase', fontWeight: '600' },
-  sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  sortTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#1B262C' },
+  summaryLabel: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#315f57', textTransform: 'uppercase', fontWeight: '600' },
+  sortContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
+  sortTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137' },
   sortButtons: { flexDirection: 'row', gap: 8 },
-  sortButton: { paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 5 : 6, backgroundColor: '#F8FAFC', borderRadius: 16, borderWidth: 1, borderColor: '#BBE1FA' },
-  sortButtonActive: { backgroundColor: '#3282B8', borderColor: '#3282B8' },
-  sortText: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600' },
+  sortButton: { paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 5 : 6, backgroundColor: '#f4f8fc', borderRadius: 16, borderWidth: 1, borderColor: '#e8f2f9' },
+  sortButtonActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
+  sortText: { color: '#315f57', fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600' },
   sortTextActive: { color: '#FFFFFF' },
   content: { flex: 1, paddingHorizontal: Platform.OS === 'android' ? 16 : 20 },
-  resultsCount: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', color: '#1B262C', paddingVertical: Platform.OS === 'android' ? 14 : 16 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  expiredCard: { opacity: 0.7, borderColor: '#95a5a6', backgroundColor: '#F8FAFC' },
+  resultsCount: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', color: '#0d2137', paddingVertical: Platform.OS === 'android' ? 14 : 16 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  expiredCard: { opacity: 0.7, borderColor: '#95a5a6', backgroundColor: '#f4f8fc' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   listingTitleSection: { flex: 1 },
-  listingTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#1B262C', marginBottom: 6 },
+  listingTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137', marginBottom: 6 },
   expiredText: { color: '#95a5a6' },
   statusBadge: { alignSelf: 'flex-start', paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: 4, borderRadius: 12 },
   statusText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: 'bold' },
   actionButtons: { flexDirection: 'row', gap: 8 },
-  iconButton: { padding: 8, backgroundColor: '#F8FAFC', borderRadius: 8, borderWidth: 1, borderColor: '#BBE1FA' },
+  iconButton: { padding: 8, backgroundColor: '#f4f8fc', borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9' },
   deleteButton: { backgroundColor: '#fee', borderColor: '#fcc' },
   paymentSection: { marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  paymentBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: 12, backgroundColor: '#0F4C75', gap: 4 },
+  paymentBadge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: 12, backgroundColor: '#0d2137', gap: 4 },
   paymentBadgeText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: 'bold' },
   priceListContainer: { marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  priceListTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0F4C75', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  priceListTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 7 : 8 },
   priceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  priceItem: { backgroundColor: '#F8FAFC', paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderRadius: 8, borderWidth: 1, borderColor: '#BBE1FA', width: '48%' },
-  priceSize: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#3282B8', fontWeight: '600' },
+  priceItem: { backgroundColor: '#f4f8fc', paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9', width: '48%' },
+  priceSize: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#315f57', fontWeight: '600' },
   priceValue: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#27ae60', fontWeight: 'bold', marginTop: 2 },
-  locationSection: { flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'android' ? 10 : 12, paddingBottom: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#BBE1FA' },
-  locationText: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 4, flex: 1 },
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#BBE1FA' },
+  locationSection: { flexDirection: 'row', alignItems: 'center', paddingTop: Platform.OS === 'android' ? 10 : 12, paddingBottom: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#dce8f2' },
+  locationText: { color: '#315f57', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 4, flex: 1 },
+  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#dce8f2' },
   statsRow: { flexDirection: 'row', gap: 16 },
   stat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#3282B8', fontWeight: '600' },
-  postedDate: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 10 : 11 },
+  statText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', fontWeight: '600' },
+  postedDate: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 10 : 11 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
-  emptyTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#1B262C', marginTop: Platform.OS === 'android' ? 14 : 16 },
-  emptySubtitle: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#3282B8', textAlign: 'center', marginTop: 8, paddingHorizontal: 40, lineHeight: Platform.OS === 'android' ? 19 : 20 },
-  createFirstButton: { marginTop: Platform.OS === 'android' ? 20 : 24, paddingHorizontal: Platform.OS === 'android' ? 28 : 32, paddingVertical: Platform.OS === 'android' ? 12 : 14, backgroundColor: '#3282B8', borderRadius: 12 },
+  emptyTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#0d2137', marginTop: Platform.OS === 'android' ? 14 : 16 },
+  emptySubtitle: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', textAlign: 'center', marginTop: 8, paddingHorizontal: 40, lineHeight: Platform.OS === 'android' ? 19 : 20 },
+  createFirstButton: { marginTop: Platform.OS === 'android' ? 20 : 24, paddingHorizontal: Platform.OS === 'android' ? 28 : 32, paddingVertical: Platform.OS === 'android' ? 12 : 14, backgroundColor: '#315f57', borderRadius: 12 },
   createFirstButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
 });
 

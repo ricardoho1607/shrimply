@@ -1,6 +1,4 @@
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Function to get FR percentage based on MBW value
 const getFRFromMBW = (mbw: number): number | null => {
@@ -37,7 +35,14 @@ const calculatePopulationFromSampling = (sampling: Sampling): number => {
   return Math.round(((feedAmount / frPercentage) / mbw) * 100000);
 };
 
-export interface FeedData { ancoPercentage: string; feed1: string; anco1: string; anco2: string; feed2: string; feed3: string; feed4: string; feed5: string; totalDailyFeed: string; }
+export interface FeedData { 
+  ancoPercentage: string; 
+  totalDailyFeed: string; 
+  inventoryFeedId?: string | null;
+  feed1?: string; feed2?: string; feed3?: string; feed4?: string; feed5?: string; 
+  anco1?: string; anco2?: string; anco3?: string; anco4?: string; anco5?: string;
+  anco6?: string; anco7?: string; anco8?: string; anco9?: string; anco10?: string;
+}
 export interface HarvestData { biomass: string; size: string; pricePerKg: string; subBiomass: string; subSize: string; subPricePerKg: string; }
 export interface HarvestRecord { id: string; date: string; ponds: { pondId: string; pondName: string; biomass: string; size: string; price: string; subBiomass: string; subSize: string; subPrice: string; }[]; }
 
@@ -71,31 +76,7 @@ interface PondStore {
   backupToFirebase: (userId: string) => Promise<void>; restoreFromFirebase: (userId: string) => Promise<void>;
 }
 
-// Create account-specific storage key
-const getStorageKey = (companyId?: string) => companyId ? `pond-storage-${companyId}` : 'pond-storage-default';
-
-// Custom storage that handles account switching
-const createAccountSpecificStorage = () => {
-  let currentStorageKey = 'pond-storage-default';
-  
-  return {
-    getItem: async (name: string): Promise<string | null> => {
-      try { return await AsyncStorage.getItem(currentStorageKey); } catch (error) { console.error('Error getting item from storage:', error); return null; }
-    },
-    setItem: async (name: string, value: string): Promise<void> => {
-      try { await AsyncStorage.setItem(currentStorageKey, value); } catch (error) { console.error('Error setting item in storage:', error); }
-    },
-    removeItem: async (name: string): Promise<void> => {
-      try { await AsyncStorage.removeItem(currentStorageKey); } catch (error) { console.error('Error removing item from storage:', error); }
-    },
-    setStorageKey: (key: string) => { currentStorageKey = key; }
-  };
-};
-
-const accountStorage = createAccountSpecificStorage();
-
 export const usePondStore = create<PondStore>()(
-  persist(
     (set, get) => ({
       ponds: [], harvestRecords: [], currentCompanyId: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
       
@@ -105,8 +86,6 @@ export const usePondStore = create<PondStore>()(
         const state = get();
         if (state.currentCompanyId !== companyId) {
           console.log(`Switching account from ${state.currentCompanyId} to ${companyId}`);
-          const newStorageKey = getStorageKey(companyId);
-          accountStorage.setStorageKey(newStorageKey);
           set({ ponds: [], harvestRecords: [], currentCompanyId: companyId });
         }
       },
@@ -327,11 +306,15 @@ export const usePondStore = create<PondStore>()(
           ponds: state.ponds.map((p) => {
             if (p.id !== pondId) return p;
             
-            const todayFeedIndex = p.samplings.findIndex(s => s.feedData && s.date === today);
+            const existingIndex = p.samplings.findIndex(s => s.date === today);
             
             let updatedSamplings;
-            if (todayFeedIndex >= 0) {
-              updatedSamplings = p.samplings.map((s, index) => index === todayFeedIndex ? { ...s, feedData: { ...s.feedData, ...record } } : s);
+            if (existingIndex >= 0) {
+              updatedSamplings = p.samplings.map((s, index) => 
+                index === existingIndex 
+                  ? { ...s, feedData: { ...(s.feedData || {}), ...record } } 
+                  : s
+              );
             } else {
               updatedSamplings = [...p.samplings, { id: `feed-${Date.now()}`, date: today, mbw: 0, mortality: 0, feed: 0, feedData: record }];
             }
@@ -373,11 +356,5 @@ export const usePondStore = create<PondStore>()(
       getPondById: (pondId) => get().ponds.find((p) => p.id === pondId),
       getPondSamplingData: (pondName) => { const pond = get().ponds.find((p) => p.pondName === pondName); return pond ? pond.samplings : []; },
       getSamplingDataFlat: () => get().ponds.flatMap((pond) => pond.samplings.map((sampling) => ({ ...sampling, pondName: pond.pondName }))),
-    }),
-    {
-      name: "pond-storage",
-      storage: createJSONStorage(() => accountStorage),
-      partialize: (state) => ({ ponds: state.ponds, harvestRecords: state.harvestRecords, currentCompanyId: state.currentCompanyId }),
-    }
-  )
+    })
 );

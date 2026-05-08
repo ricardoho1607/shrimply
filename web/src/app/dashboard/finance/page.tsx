@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Wallet, 
   TrendingUp, 
@@ -17,20 +17,18 @@ import {
   BarChart3,
   TrendingDown
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
-  query, 
-  orderBy, 
-  onSnapshot, 
   doc, 
   addDoc, 
   deleteDoc, 
   serverTimestamp 
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { db } from '@/lib/firebase';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useDebouncedValue, useFinanceRecords } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Transaction {
@@ -50,18 +48,16 @@ interface Transaction {
 export default function FinancePage() {
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
+  const { user, company } = useAuth();
 
   const EXPENSE_CATEGORIES = [t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, 'Feed', 'Chemicals', 'Probiotics'];
   const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome];
   const PAYMENT_TYPES = [t.finance.cash, t.finance.bankTransfer, t.finance.mobilePayment];
 
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'income'>('overview');
-  const [expenses, setExpenses] = useState<Transaction[]>([]);
-  const [income, setIncome] = useState<Transaction[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [company, setCompany] = useState<any>(null);
+  const { expenses, revenues: income, loading } = useFinanceRecords<Transaction, Transaction>();
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
@@ -77,55 +73,6 @@ export default function FinancePage() {
     notes: ''
   });
 
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const userData = uDoc.data();
-            setUser({ ...userData, uid: firebaseUser.uid });
-            if (userData.companyId) {
-              onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
-                if (cDoc.exists()) {
-                  setCompany({ id: cDoc.id, ...cDoc.data() });
-                }
-              }, (error) => {
-                console.error("Error fetching company in finance:", error);
-              });
-            }
-          }
-        }, (error) => {
-          console.error("Error fetching user in finance:", error);
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!company?.id) return;
-
-    // Load Expenses
-    const qExp = query(collection(db, 'companies', company.id, 'expenses'), orderBy('timestamp', 'desc'));
-    const unsubExp = onSnapshot(qExp, (snapshot) => {
-      setExpenses(snapshot.docs.map(d => ({ id: d.id, type: 'expense', ...d.data() } as Transaction)));
-    }, (error) => {
-      console.error("Error fetching expenses in finance:", error);
-    });
-
-    // Load Income
-    const qInc = query(collection(db, 'companies', company.id, 'revenues'), orderBy('timestamp', 'desc'));
-    const unsubInc = onSnapshot(qInc, (snapshot) => {
-      setIncome(snapshot.docs.map(d => ({ id: d.id, type: 'income', ...d.data() } as Transaction)));
-      setLoading(false);
-    }, (error) => {
-      console.error("Error fetching revenues in finance:", error);
-      setLoading(false);
-    });
-
-    return () => { unsubExp(); unsubInc(); };
-  }, [company?.id]);
-
   const stats = useMemo(() => {
     const totalExpense = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
     const totalIncome = income.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
@@ -136,11 +83,13 @@ export default function FinancePage() {
 
   const filteredTransactions = useMemo(() => {
     const target = activeTab === 'expenses' ? expenses : income;
+    const normalizedSearch = debouncedSearchQuery.trim().toLowerCase();
+    if (!normalizedSearch) return target;
     return target.filter(t => 
-      t.item.toLowerCase().includes(searchQuery.toLowerCase()) || 
-      t.category.toLowerCase().includes(searchQuery.toLowerCase())
+      t.item.toLowerCase().includes(normalizedSearch) || 
+      t.category.toLowerCase().includes(normalizedSearch)
     );
-  }, [expenses, income, activeTab, searchQuery]);
+  }, [expenses, income, activeTab, debouncedSearchQuery]);
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,6 +127,7 @@ export default function FinancePage() {
   };
 
   const handleDelete = async (id: string, type: 'expense' | 'income') => {
+    if (!company?.id) return;
     if (!window.confirm(t.messages.deleteConfirm)) return;
     const collectionName = type === 'expense' ? 'expenses' : 'revenues';
     try {
@@ -201,30 +151,22 @@ export default function FinancePage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', fontWeight: 800, marginBottom: '8px' }}>{t.finance.title}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px', fontWeight: 600 }}>{t.finance.overview}</p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
+    <div className="dashboard-page">
+      <div className="dashboard-action-row">
           <button 
             onClick={() => { setFormType('income'); setFormData({...formData, category: INCOME_CATEGORIES[0]}); setIsModalOpen(true); }}
             className="btn-secondary" 
-            style={{ padding: '12px 20px', borderRadius: '12px', border: '1px solid #27AE60', color: '#27AE60', fontWeight: 800, background: 'rgba(39, 174, 96, 0.05)' }}
+            style={{ border: '1px solid #27AE60', color: '#27AE60', background: 'rgba(39, 174, 96, 0.05)' }}
           >
             <ArrowUpRight size={18} /> {t.finance.addRevenue}
           </button>
           <button 
             onClick={() => { setFormType('expense'); setFormData({...formData, category: EXPENSE_CATEGORIES[0]}); setIsModalOpen(true); }}
             className="btn-primary" 
-            style={{ padding: '12px 24px', borderRadius: '12px', background: '#ef4444', border: 'none', fontWeight: 800 }}
+            style={{ background: '#ef4444', border: 'none' }}
           >
             <ArrowDownRight size={20} /> {t.finance.addExpense}
           </button>
-        </div>
       </div>
 
       {/* Summary Cards */}

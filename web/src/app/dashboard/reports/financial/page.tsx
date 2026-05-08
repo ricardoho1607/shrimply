@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { 
+import React, { useState } from 'react';
+import {
   TrendingUp, 
   Calculator, 
   CircleDollarSign, 
@@ -17,12 +17,11 @@ import {
   AlertCircle,
   FileText
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, doc, onSnapshot, query, orderBy, where, getDocs } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
 import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { useRouter } from 'next/navigation';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompanyPonds, useFinanceRecords } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────── */
 interface Expense {
@@ -378,15 +377,13 @@ const generateProjectionHTML = (data: any, formatCurrency: (v: number) => string
 export default function FinancialReportsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
   const router = useRouter();
+  const { company, loading: authLoading } = useAuth();
   const [selectedReport, setSelectedReport] = useState('profit-loss');
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
-  const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [revenues, setRevenues] = useState<Revenue[]>([]);
-  const [user, setUser] = useState<any>(null);
-  const [company, setCompany] = useState<any>(null);
-  const [ponds, setPonds] = useState<any[]>([]);
+  const { expenses, revenues, loading: financeLoading } = useFinanceRecords<Expense, Revenue>();
+  const { data: ponds, loading: pondsLoading } = useCompanyPonds<any>('asc');
+  const loading = authLoading || financeLoading || pondsLoading;
 
   // COGS Inventory State
   const [openingInventory, setOpeningInventory] = useState(0);
@@ -400,50 +397,6 @@ export default function FinancialReportsPage() {
     { id: 'cash-flow', name: 'Cash Flow', icon: CircleDollarSign, color: '#9B59B6', desc: 'Liquidity Analysis' },
     { id: 'harvest-projections', name: 'Harvest Projections', icon: BarChart3, color: '#E74C3C', desc: 'Future Estimates' },
   ];
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const userData = uDoc.data();
-            setUser({ ...userData, uid: firebaseUser.uid });
-            if (userData.companyId) {
-              onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
-                if (cDoc.exists()) setCompany({ id: cDoc.id, ...cDoc.data() });
-              }, (error) => {
-                console.error("Error fetching company in financial reports:", error);
-              });
-            }
-          }
-        }, (error) => {
-          console.error("Error fetching user in financial reports:", error);
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    if (!company?.id) return;
-    const unsubExp = onSnapshot(collection(db, 'companies', company.id, 'expenses'), (snapshot) => {
-      setExpenses(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Expense)));
-    }, (error) => {
-      console.error("Error fetching expenses:", error);
-    });
-    const unsubRev = onSnapshot(collection(db, 'companies', company.id, 'revenues'), (snapshot) => {
-      setRevenues(snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Revenue)));
-    }, (error) => {
-      console.error("Error fetching revenues:", error);
-    });
-    const unsubPonds = onSnapshot(collection(db, 'companies', company.id, 'ponds'), (snapshot) => {
-      setPonds(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (error) => {
-      console.error("Error fetching ponds in financial reports:", error);
-    });
-    setLoading(false);
-    return () => { unsubExp(); unsubRev(); unsubPonds(); };
-  }, [company?.id]);
 
   const getDateRange = () => {
     const now = new Date();
@@ -584,14 +537,7 @@ export default function FinancialReportsPage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>Financial Reports</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Analyze your farm performance and generate professional statements.</p>
-      </div>
-
+    <div className="dashboard-page">
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '32px' }}>
         
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>

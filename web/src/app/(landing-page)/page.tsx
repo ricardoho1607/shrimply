@@ -54,7 +54,7 @@ export default function LandingPage() {
             <em>Under Control.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.76s', maxWidth: '420px', marginBottom: '40px', fontWeight: 500 }}>
-            Harness the power of Orson AI to predict diseases, optimize feeding, and maximize your pond's yield.
+            Harness Orson AI to detect biological risk patterns, optimize feeding, and protect your pond's yield.
           </p>
           <div className="animate-hero" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
             <Link href="/how-it-works" className="btn-primary">See the Platform</Link>
@@ -212,7 +212,7 @@ export default function LandingPage() {
         <div className="stat-box r d2">
           <div className="stat-num">72<span style={{ color: 'var(--sky)' }}>h</span></div>
           <div className="stat-lbl">Advance warning</div>
-          <div className="stat-desc" style={{ fontWeight: 500 }}>Predict disease before they occur.</div>
+          <div className="stat-desc" style={{ fontWeight: 500 }}>Spot biological risk before it becomes expensive.</div>
         </div>
         <div className="stat-box r d3">
           <div className="stat-num">90<span style={{ color: 'var(--sky)' }}>%</span></div>
@@ -247,7 +247,7 @@ export default function LandingPage() {
               
               <div style={{ color: 'var(--sky)', marginBottom: '24px' }}><Cpu size={26} /></div>
               <h3 className="feature-title" style={{ marginBottom: '16px' }}>Orson AI Core</h3>
-              <p style={{ marginBottom: '24px', fontWeight: 500 }}>Our proprietary AI model, Orson, analyzes your pond data to predict diseases before they happen.</p>
+              <p style={{ marginBottom: '24px', fontWeight: 500 }}>Orson analyzes pond records, feed response, and water-quality trends to flag biological risk early.</p>
              
             </div>
             <div className="feature-card r d3">
@@ -276,7 +276,7 @@ export default function LandingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)' }}>
                 <div style={{ color: 'var(--sky)', display: 'flex', alignItems: 'center' }}><Activity size={18} strokeWidth={1.5} /></div>
-                <div>Disease prediction up to 72 hours in advance</div>
+                <div>72-hour biological risk outlooks</div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.9rem', color: 'rgba(255,255,255,0.85)' }}>
                 <div style={{ color: 'var(--sky)', display: 'flex', alignItems: 'center' }}><TrendingUp size={18} strokeWidth={1.5} /></div>
@@ -293,8 +293,8 @@ export default function LandingPage() {
           <div className="r d3 chat-container" style={{ maxWidth: '100%' }}>
             <div className="chat-bubble bubble-user" style={{ animationDelay: '1.5s' }}>How's Pond A1 looking today?</div>
             <div className="chat-bubble bubble-orson" style={{ animationDelay: '3s' }}>Pond A1 is stable. However, DO levels dipped slightly at 4 AM. Increase aeration by 15% for the next 2 hours.</div>
-            <div className="chat-bubble bubble-user" style={{ animationDelay: '6s' }}>What about the vibrio count in B2?</div>
-            <div className="chat-bubble bubble-orson" style={{ animationDelay: '7.5s' }}>Vibrio count is at 1.2x10^3. Trajectory is normal, but keep an eye on feed tray waste.</div>
+            <div className="chat-bubble bubble-user" style={{ animationDelay: '6s' }}>Is B2 overfeeding?</div>
+            <div className="chat-bubble bubble-orson" style={{ animationDelay: '7.5s' }}>Feed pressure is above the biomass estimate. Hold the next increase and verify tray clearance before feeding up.</div>
             <div className="chat-typing">Orson is thinking...</div>
           </div>
         </div>

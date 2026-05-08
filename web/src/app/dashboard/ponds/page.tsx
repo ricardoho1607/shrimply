@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Waves, 
@@ -16,11 +16,11 @@ import {
   ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { collection, doc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
@@ -60,13 +60,11 @@ const formatSyncStatus = (date: Date | null): string => {
 
 export default function PondsPage() {
   const { t } = useLanguage();
-  const [ponds, setPonds] = useState<Pond[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
-  const [companyId, setCompanyId] = useState<string | null>(null);
+  const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   
   const [isModalOpen, setModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearchTerm = useDebouncedValue(searchTerm);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -83,30 +81,6 @@ export default function PondsPage() {
     id: null
   });
   const [isDeleting, setIsDeleting] = useState(false);
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser(firebaseUser);
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
-          setCompanyId(cid);
-          if (cid) {
-            const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
-            const unsubPonds = onSnapshot(q, (snapshot) => {
-              const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pond));
-              setPonds(data);
-              setLoading(false);
-            });
-            return () => unsubPonds();
-          } else {
-            setLoading(false);
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
 
   const handleAddPond = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,14 +141,16 @@ export default function PondsPage() {
   };
 
   const filteredPonds = useMemo(() => {
-    return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [ponds, searchTerm]);
+    const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
+    if (!normalizedSearch) return ponds;
+    return ponds.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
+  }, [ponds, debouncedSearchTerm]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '48px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       
       {/* Toolbar */}
-      <div className="glass-card animate-fade-up animate-delay-1" style={{ padding: '18px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+      <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input 

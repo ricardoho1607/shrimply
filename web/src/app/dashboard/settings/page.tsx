@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   User, 
   Building2, 
   ShieldCheck, 
@@ -11,29 +11,81 @@ import {
   Save,
   Loader2,
   CheckCircle2,
-  Trash2,
   Mail,
-  Briefcase,
   Users,
   Globe,
   Languages,
-  RefreshCw,
-  Info
+  Info,
+  ArrowUpRight
 } from 'lucide-react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, updateDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import Link from 'next/link';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useCompanyMembers } from '@/hooks/useDashboardData';
+
+const settingsShellStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '24px',
+  maxWidth: '1120px',
+  margin: '0 auto',
+  fontFamily: 'var(--jakarta), sans-serif',
+};
+
+const categoryRailStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '6px',
+  padding: '8px',
+  borderRadius: '18px',
+  background: '#fff',
+  border: '1px solid var(--shell-border)',
+  boxShadow: '0 10px 30px rgba(15, 76, 117, 0.04)',
+};
+
+const fieldStyle: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '8px',
+};
+
+const labelStyle: React.CSSProperties = {
+  fontSize: '0.72rem',
+  fontWeight: 800,
+  letterSpacing: '0.08em',
+  textTransform: 'uppercase',
+  color: 'var(--text-muted)',
+  fontFamily: 'var(--jakarta)',
+};
+
+const controlStyle: React.CSSProperties = {
+  padding: '12px 14px',
+  borderRadius: '12px',
+  border: '1px solid var(--border)',
+  background: 'var(--bg-mid)',
+  outline: 'none',
+  color: 'var(--text-primary)',
+  fontWeight: 650,
+  fontSize: '14px',
+  fontFamily: 'var(--jakarta)',
+  width: '100%',
+};
+
+const getLocationValue = (company: any) => {
+  const primaryLocation = company?.primaryLocation;
+  if (typeof primaryLocation === 'string') return primaryLocation;
+  return company?.location || primaryLocation?.address || '';
+};
 
 export default function SettingsPage() {
-  const [user, setUser] = useState<any>(null);
-  const [company, setCompany] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { user, company } = useAuth();
+  const { data: members } = useCompanyMembers<any>();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
-  const [members, setMembers] = useState<any[]>([]);
 
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
@@ -48,49 +100,34 @@ export default function SettingsPage() {
 
   // Form States
   const [userForm, setUserForm] = useState({ name: '', phone: '' });
-  const [companyForm, setCompanyForm] = useState({ companyName: '', farmType: '', location: '' });
+  const [companyForm, setCompanyForm] = useState({
+    companyName: '',
+    farmType: '',
+    location: '',
+    businessSize: 'medium',
+    description: '',
+    contactPhone: '',
+    isPublicProfile: true,
+  });
 
   useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const userData = uDoc.data();
-            setUser({ ...userData, uid: firebaseUser.uid });
-            setUserForm({ name: userData.name || '', phone: userData.phone || '' });
-            
-            if (userData.companyId) {
-              onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
-                if (cDoc.exists()) {
-                  const cData = cDoc.data();
-                  setCompany({ ...cData, id: cDoc.id });
-                  setCompanyForm({ 
-                    companyName: cData.companyName || '', 
-                    farmType: cData.farmType || '', 
-                    location: cData.location || '' 
-                  });
-                }
-                setLoading(false);
-              });
-            } else {
-              setLoading(false);
-            }
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
-
-  useEffect(() => {
-    if (company?.id) {
-      const q = query(collection(db, 'users'), where('companyId', '==', company.id));
-      const unsub = onSnapshot(q, (snapshot) => {
-        setMembers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-      return () => unsub();
+    if (user) {
+      setUserForm({ name: user.name || '', phone: user.phone || '' });
     }
-  }, [company?.id]);
+  }, [user?.name, user?.phone]);
+
+  useEffect(() => {
+    if (!company) return;
+    setCompanyForm({ 
+      companyName: company.companyName || '', 
+      farmType: company.farmType || '', 
+      location: getLocationValue(company),
+      businessSize: company.businessSize || 'medium',
+      description: company.description || '',
+      contactPhone: company.contactPhone || '',
+      isPublicProfile: company.isPublicProfile ?? true,
+    });
+  }, [company]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,6 +148,11 @@ export default function SettingsPage() {
           companyName: companyForm.companyName,
           farmType: companyForm.farmType || (user.role === 'buyer' ? 'Shrimp Buyer' : 'Shrimp Farm'),
           location: companyForm.location,
+          primaryLocation: companyForm.location,
+          businessSize: companyForm.businessSize,
+          description: companyForm.description,
+          contactPhone: companyForm.contactPhone,
+          isPublicProfile: companyForm.isPublicProfile,
           ownerId: user.uid,
           updatedAt: new Date().toISOString()
         };
@@ -120,7 +162,9 @@ export default function SettingsPage() {
           const { setDoc } = await import('firebase/firestore');
           await setDoc(doc(db, 'companies', targetCompanyId), {
             ...companyData,
-            createdAt: new Date().toISOString(),
+            id: targetCompanyId,
+            teamMembers: [user.uid],
+            createdAt: serverTimestamp(),
           });
           
           // Link it to the user
@@ -142,21 +186,17 @@ export default function SettingsPage() {
     }
   };
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="settings-shell" style={settingsShellStyle}>
       
-      {/* Header */}
-      <div>
-        <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>{t.nav.settings || 'Settings'}</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>{t.settings.manageProfile || 'Manage your personal profile and farm configurations.'}</p>
-      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: '15px', margin: 0 }}>
+        {t.settings.manageProfile || 'Manage your personal profile and farm configurations.'}
+      </p>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: '48px', alignItems: 'flex-start' }}>
+      <div className="settings-layout" style={{ display: 'grid', gridTemplateColumns: '248px 1fr', gap: '32px', alignItems: 'flex-start' }}>
         
         {/* Sidebar Tabs */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={categoryRailStyle}>
           {[
             { id: 'profile', label: t.settings.personalProfile || 'Personal Profile', icon: User },
             { id: 'company', label: t.companyDetails.title || 'Company Profile', icon: Building2 },
@@ -169,10 +209,11 @@ export default function SettingsPage() {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               style={{
-                display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderRadius: '12px',
+                display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px',
                 border: 'none', background: activeTab === tab.id ? 'var(--primary-dim)' : 'transparent',
                 color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-                fontWeight: activeTab === tab.id ? 700 : 500, fontSize: '14px', cursor: 'pointer', textAlign: 'left',
+                fontWeight: activeTab === tab.id ? 800 : 650, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
+                fontFamily: 'var(--jakarta)',
                 transition: 'all 0.2s'
               }}
             >
@@ -183,7 +224,7 @@ export default function SettingsPage() {
         </div>
 
         {/* Content Area */}
-        <div className="glass-card" style={{ padding: '32px' }}>
+        <div className="glass-card settings-panel" style={{ padding: '32px', borderRadius: '18px' }}>
           
           {activeTab === 'profile' && (
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
@@ -203,31 +244,31 @@ export default function SettingsPage() {
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.settings.fullName || 'Full Name'}</label>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>{t.settings.fullName || 'Full Name'}</label>
                   <div style={{ position: 'relative' }}>
                     <User size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
                     <input 
                       value={userForm.name} 
                       onChange={e => setUserForm({...userForm, name: e.target.value})}
-                      style={{ padding: '12px 12px 12px 40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
+                      style={{ ...controlStyle, paddingLeft: '40px' }}
                     />
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.settings.phoneNumber || 'Phone Number'}</label>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>{t.settings.phoneNumber || 'Phone Number'}</label>
                   <input 
                     value={userForm.phone} 
                     onChange={e => setUserForm({...userForm, phone: e.target.value})}
                     placeholder="+62 812..."
-                    style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
+                    style={controlStyle}
                   />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.auth.email || 'Email Address'}</label>
+                <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>{t.auth.email || 'Email Address'}</label>
                   <div style={{ position: 'relative' }}>
                     <Mail size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-                    <input disabled value={user?.email} style={{ padding: '12px 12px 12px 40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', cursor: 'not-allowed', opacity: 0.6, color: 'var(--text-primary)', fontWeight: 600 }} />
+                    <input disabled value={user?.email} style={{ ...controlStyle, paddingLeft: '40px', cursor: 'not-allowed', opacity: 0.6 }} />
                   </div>
                   <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{t.settings.emailHelp || 'Email cannot be changed manually. Contact support for assistance.'}</span>
                 </div>
@@ -245,7 +286,8 @@ export default function SettingsPage() {
 
           {activeTab === 'company' && (
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '20px', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                 <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
                   <Building2 size={32} />
                 </div>
@@ -253,23 +295,28 @@ export default function SettingsPage() {
                   <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{companyForm.companyName || t.companyDetails.title || 'Company Profile'}</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.settings.orgSettings || 'Organization and farm-wide settings.'}</p>
                 </div>
+                </div>
+                <Link href="/dashboard/company" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', fontSize: '13px', fontWeight: 800, background: '#fff' }}>
+                  View profile
+                  <ArrowUpRight size={16} />
+                </Link>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: '1 / -1' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.companyDetails.companyName || 'Company Name'}</label>
+                <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>{t.companyDetails.companyName || 'Company Name'}</label>
                   <input 
                     value={companyForm.companyName} 
                     onChange={e => setCompanyForm({...companyForm, companyName: e.target.value})}
-                    style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
+                    style={controlStyle}
                   />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.settings.farmType || 'Farm Type'}</label>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>{t.settings.farmType || 'Farm Type'}</label>
                   <select 
                     value={companyForm.farmType} 
                     onChange={e => setCompanyForm({...companyForm, farmType: e.target.value})}
-                    style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
+                    style={controlStyle}
                   >
                     <option value="Shrimp Farm">Shrimp Farm</option>
                     <option value="Hatchery">Hatchery</option>
@@ -279,15 +326,57 @@ export default function SettingsPage() {
                     <option value="Individual Buyer">Individual Buyer</option>
                   </select>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.companyDetails.location || 'Location (Region)'}</label>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>{t.companyDetails.location || 'Location (Region)'}</label>
                   <input 
                     value={companyForm.location} 
                     onChange={e => setCompanyForm({...companyForm, location: e.target.value})}
                     placeholder={t.companySetup.locationPlaceholder || "e.g. Banyuwangi, East Java"}
-                    style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
+                    style={controlStyle}
                   />
                 </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>{t.companyDetails.businessSize || 'Business Size'}</label>
+                  <select
+                    value={companyForm.businessSize}
+                    onChange={e => setCompanyForm({...companyForm, businessSize: e.target.value})}
+                    style={controlStyle}
+                  >
+                    <option value="small">{t.companyDetails.small || 'Small'} operation</option>
+                    <option value="medium">{t.companyDetails.medium || 'Medium'} operation</option>
+                    <option value="large">{t.companyDetails.large || 'Large'} operation</option>
+                  </select>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Contact Phone</label>
+                  <input
+                    value={companyForm.contactPhone}
+                    onChange={e => setCompanyForm({...companyForm, contactPhone: e.target.value})}
+                    placeholder="+62 812..."
+                    style={controlStyle}
+                  />
+                </div>
+                <div style={{ ...fieldStyle, gridColumn: '1 / -1' }}>
+                  <label style={labelStyle}>{t.companyDetails.description || 'Description'}</label>
+                  <textarea
+                    value={companyForm.description}
+                    onChange={e => setCompanyForm({...companyForm, description: e.target.value})}
+                    placeholder="Tell buyers and team members about this operation."
+                    style={{ ...controlStyle, minHeight: '110px', resize: 'vertical', lineHeight: 1.55 }}
+                  />
+                </div>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)', gridColumn: '1 / -1', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={companyForm.isPublicProfile}
+                    onChange={e => setCompanyForm({...companyForm, isPublicProfile: e.target.checked})}
+                    style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
+                  />
+                  <span>
+                    <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-primary)', fontSize: '14px' }}>{t.companySetup.publicProfile || 'Public Profile'}</span>
+                    <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{t.companySetup.publicProfileDescription || 'Allow shrimp buyers to discover and contact your farm'}</span>
+                  </span>
+                </label>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
@@ -444,6 +533,50 @@ export default function SettingsPage() {
 
         </div>
       </div>
+      <style jsx>{`
+        .settings-shell,
+        .settings-shell :global(input),
+        .settings-shell :global(select),
+        .settings-shell :global(textarea),
+        .settings-shell :global(button),
+        .settings-shell :global(a),
+        .settings-shell :global(label),
+        .settings-shell :global(p),
+        .settings-shell :global(span),
+        .settings-shell :global(div),
+        .settings-shell :global(h1),
+        .settings-shell :global(h2),
+        .settings-shell :global(h3),
+        .settings-shell :global(h4) {
+          font-family: var(--jakarta), sans-serif !important;
+        }
+
+        .settings-shell :global(h1),
+        .settings-shell :global(h2),
+        .settings-shell :global(h3) {
+          letter-spacing: -0.02em;
+          color: var(--text-primary);
+        }
+
+        .settings-shell :global(.btn-primary) {
+          font-family: var(--jakarta), sans-serif !important;
+          letter-spacing: 0;
+          text-transform: none;
+          font-size: 13px;
+          font-weight: 850;
+        }
+
+        @media (max-width: 900px) {
+          .settings-layout {
+            grid-template-columns: 1fr !important;
+            gap: 20px !important;
+          }
+
+          .settings-panel {
+            padding: 22px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

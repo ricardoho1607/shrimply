@@ -151,7 +151,7 @@ export default function AboutPage() {
 
 
       {/* CTA Section */}
-      <section className="section dark-section" style={{ textAlign: 'center' }}>
+      <section className="section dark-section" style={{ textAlign: 'center', background: 'linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%)' }}>
         <div className="dark-glow"></div>
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
           <div className="eyebrow r d1" style={{ marginBottom: '20px' }}>The Bottom Line</div>

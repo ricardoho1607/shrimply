@@ -269,10 +269,10 @@ export default function FeedRecordsPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       
       {/* Toolbar */}
-      <div className="glass-card animate-fade-up" style={{ padding: '18px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+      <div className="glass-card dashboard-toolbar-card animate-fade-up">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input 

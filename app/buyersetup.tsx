@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
-  ScrollView, Alert, ActivityIndicator,
+  ScrollView, Alert, ActivityIndicator, Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -254,7 +254,7 @@ export default function BuyerSetupScreen() {
       );
     } catch (error) {
       console.error('Error setting up buyer profile:', error);
-      Alert.alert('Setup Failed', error instanceof Error ? error.message : 'Failed to set up buyer profile. Please try again.');
+      Alert.alert('Setup Failed', 'Failed to set up buyer profile. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -279,7 +279,7 @@ export default function BuyerSetupScreen() {
             disabled={gettingLocation}
           >
             {gettingLocation ? (
-              <ActivityIndicator size="small" color="#0F4C75" />
+              <ActivityIndicator size="small" color="#0d2137" />
             ) : (
               <>
                 <Ionicons name="location" size={16} color="#27AE60" />
@@ -300,7 +300,7 @@ export default function BuyerSetupScreen() {
             setLocationCoordinates(null);
           }
         }}
-        placeholderTextColor="#BBE1FA"
+        placeholderTextColor="#6b8aa0"
         keyboardType={keyboardType}
         autoCapitalize={key === 'contactPhone' ? 'none' : 'words'}
       />
@@ -327,7 +327,7 @@ export default function BuyerSetupScreen() {
           onPress={() => router.back()} 
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="arrow-back" size={24} color="#3282B8" />
+          <Ionicons name="arrow-back" size={24} color="#315f57" />
           <Text style={styles.backButtonText}>Back</Text>
         </TouchableOpacity>
 
@@ -349,7 +349,7 @@ export default function BuyerSetupScreen() {
         </View>
 
         <View style={styles.infoBox}>
-          <Ionicons name="information-circle-outline" size={24} color="#3282B8" />
+          <Ionicons name="information-circle-outline" size={24} color="#315f57" />
           <View style={styles.infoTextContainer}>
             <Text style={styles.infoTitle}>About Buyer Accounts</Text>
             <Text style={styles.infoText}>
@@ -381,19 +381,19 @@ export default function BuyerSetupScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { padding: 20, paddingTop: 20, paddingBottom: 40 },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingVertical: 8 },
-  backButtonText: { fontSize: 16, color: '#3282B8', marginLeft: 8, fontWeight: '600' },
-  header: { alignItems: 'center', marginBottom: 40 },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
+  scrollContent: { padding: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 18 : 20, paddingBottom: Platform.OS === 'android' ? 36 : 40 },
+  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 18 : 20, paddingVertical: Platform.OS === 'android' ? 7 : 8 },
+  backButtonText: { fontSize: Platform.OS === 'android' ? 15 : 16, color: '#315f57', marginLeft: Platform.OS === 'android' ? 7 : 8, fontWeight: '600' },
+  header: { alignItems: 'center', marginBottom: Platform.OS === 'android' ? 36 : 40 },
   headerIcon: { 
-    width: 80, 
-    height: 80, 
-    borderRadius: 40, 
+    width: Platform.OS === 'android' ? 76 : 80, 
+    height: Platform.OS === 'android' ? 76 : 80, 
+    borderRadius: Platform.OS === 'android' ? 38 : 40, 
     backgroundColor: '#FFFFFF', 
     justifyContent: 'center', 
     alignItems: 'center', 
-    marginBottom: 20, 
+    marginBottom: Platform.OS === 'android' ? 18 : 20, 
     borderWidth: 2, 
     borderColor: '#27AE60', 
     shadowColor: '#27AE60', 
@@ -402,76 +402,76 @@ const styles = StyleSheet.create({
     shadowRadius: 4, 
     elevation: 3 
   },
-  title: { fontSize: 28, fontWeight: 'bold', color: '#1B262C', marginBottom: 8, textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#3282B8', textAlign: 'center', marginHorizontal: 20 },
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#1B262C', marginBottom: 8 },
-  sectionDescription: { fontSize: 14, color: '#3282B8', marginBottom: 16, lineHeight: 20 },
-  inputContainer: { marginBottom: 20 },
+  title: { fontSize: Platform.OS === 'android' ? 26 : 28, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 7 : 8, textAlign: 'center' },
+  subtitle: { fontSize: Platform.OS === 'android' ? 15 : 16, color: '#315f57', textAlign: 'center', marginHorizontal: Platform.OS === 'android' ? 18 : 20, lineHeight: Platform.OS === 'android' ? 20 : 22 },
+  section: { marginBottom: Platform.OS === 'android' ? 22 : 24 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  sectionDescription: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginBottom: Platform.OS === 'android' ? 14 : 16, lineHeight: Platform.OS === 'android' ? 18 : 20 },
+  inputContainer: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
   inputLabelRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
   },
-  inputLabel: { fontSize: 14, fontWeight: '600', color: '#1B262C' },
+  inputLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137' },
   required: { color: '#e74c3c', fontWeight: 'bold' },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: Platform.OS === 'android' ? 7 : 8,
     paddingVertical: 4,
     backgroundColor: '#E8F5E9',
-    borderRadius: 8,
+    borderRadius: Platform.OS === 'android' ? 7 : 8,
   },
   locationButtonText: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     color: '#27AE60',
     fontWeight: '600',
   },
   input: { 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    padding: 16, 
-    borderRadius: 12, 
+    borderColor: '#e8f2f9', 
+    padding: Platform.OS === 'android' ? 14 : 16, 
+    borderRadius: Platform.OS === 'android' ? 10 : 12, 
     backgroundColor: '#FFFFFF', 
-    color: '#1B262C', 
-    fontSize: 16 
+    color: '#0d2137', 
+    fontSize: Platform.OS === 'android' ? 15 : 16 
   },
   coordinatesInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    paddingHorizontal: 8,
+    marginTop: Platform.OS === 'android' ? 7 : 8,
+    paddingHorizontal: Platform.OS === 'android' ? 7 : 8,
   },
   coordinatesText: {
-    fontSize: 11,
+    fontSize: Platform.OS === 'android' ? 10 : 11,
     color: '#27ae60',
     marginLeft: 4,
     fontWeight: '600',
   },
   infoBox: { 
     flexDirection: 'row', 
-    padding: 16, 
+    padding: Platform.OS === 'android' ? 14 : 16, 
     backgroundColor: '#E3F2FD', 
-    borderRadius: 12, 
-    marginBottom: 24, 
+    borderRadius: Platform.OS === 'android' ? 10 : 12, 
+    marginBottom: Platform.OS === 'android' ? 22 : 24, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
-  infoTextContainer: { flex: 1, marginLeft: 12 },
-  infoTitle: { fontSize: 14, fontWeight: '600', color: '#1B262C', marginBottom: 4 },
-  infoText: { fontSize: 13, color: '#3282B8', lineHeight: 18 },
+  infoTextContainer: { flex: 1, marginLeft: Platform.OS === 'android' ? 10 : 12 },
+  infoTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137', marginBottom: 4 },
+  infoText: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#315f57', lineHeight: Platform.OS === 'android' ? 16 : 18 },
   setupButton: { 
     backgroundColor: '#27AE60', 
-    paddingVertical: 18, 
-    paddingHorizontal: 32, 
-    borderRadius: 14, 
+    paddingVertical: Platform.OS === 'android' ? 16 : 18, 
+    paddingHorizontal: Platform.OS === 'android' ? 28 : 32, 
+    borderRadius: Platform.OS === 'android' ? 12 : 14, 
     alignItems: 'center', 
     flexDirection: 'row', 
     justifyContent: 'center', 
-    marginBottom: 16, 
+    marginBottom: Platform.OS === 'android' ? 14 : 16, 
     shadowColor: '#27AE60', 
     shadowOffset: { width: 0, height: 4 }, 
     shadowOpacity: 0.3, 
@@ -479,6 +479,6 @@ const styles = StyleSheet.create({
     elevation: 4 
   },
   setupButtonDisabled: { opacity: 0.6, shadowOpacity: 0, elevation: 0 },
-  setupButtonText: { color: '#FFFFFF', fontSize: 16, fontWeight: '600', marginLeft: 8 },
-  disclaimer: { fontSize: 12, color: '#3282B8', textAlign: 'center', marginTop: 12, fontStyle: 'italic' },
+  setupButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', marginLeft: Platform.OS === 'android' ? 7 : 8 },
+  disclaimer: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', textAlign: 'center', marginTop: Platform.OS === 'android' ? 10 : 12, fontStyle: 'italic' },
 });

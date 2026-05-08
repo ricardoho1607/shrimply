@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Waves, 
@@ -28,11 +28,16 @@ import {
   FileText
 } from 'lucide-react';
 import Link from 'next/link';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, getDocs, deleteDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { doc, deleteDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  useCompanyPonds,
+  useMarketplaceListings,
+  useMonitoredCompanies,
+} from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface FeedData {
@@ -386,91 +391,32 @@ function PondCard({ pond, calculateMetrics, t }: any) {
 
 function BuyerDashboard({ t, user }: any) {
   const { formatCurrency } = useCurrency();
-  const [marketPrices, setMarketPrices] = useState<any>({ size30: 0, size50: 0, size100: 0 });
-  const [monitoredCompanies, setMonitoredCompanies] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: listings } = useMarketplaceListings<any>();
+  const { data: monitoredCompanies, loading } = useMonitoredCompanies<any>();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  useEffect(() => {
-    // Fetch real market prices from listings
-    const q = query(collection(db, 'marketplace_listings'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const prices: any = { size30: [], size50: [], size100: [] };
-      snapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.status === 'active' && data.priceList) {
-          if (data.priceList.size30) prices.size30.push(Number(data.priceList.size30));
-          if (data.priceList.size50) prices.size50.push(Number(data.priceList.size50));
-          if (data.priceList.size100) prices.size100.push(Number(data.priceList.size100));
-        }
-      });
-      
-      const avg = (arr: number[]) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 0;
-      setMarketPrices({
-        size30: avg(prices.size30),
-        size50: avg(prices.size50),
-        size100: avg(prices.size100)
-      });
+  const marketPrices = useMemo(() => {
+    const prices: Record<'size30' | 'size50' | 'size100', number[]> = {
+      size30: [],
+      size50: [],
+      size100: [],
+    };
+
+    listings.forEach((listing: any) => {
+      if (listing.status !== 'active' || !listing.priceList) return;
+      if (listing.priceList.size30) prices.size30.push(Number(listing.priceList.size30));
+      if (listing.priceList.size50) prices.size50.push(Number(listing.priceList.size50));
+      if (listing.priceList.size100) prices.size100.push(Number(listing.priceList.size100));
     });
-    return () => unsubscribe();
-  }, []);
 
-  useEffect(() => {
-    if (user?.uid) {
-      const q = query(collection(db, 'users', user.uid, 'monitoredCompanies'));
-      const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const companiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        
-        const detailedCompanies = await Promise.all(companiesData.map(async (company: any) => {
-          try {
-            const pondsRef = collection(db, 'companies', company.id, 'ponds');
-            const pondsSnap = await getDocs(pondsRef);
-            
-            let totalDOC = 0;
-            let totalSize = 0;
-            let totalBiomass = 0;
-            let validPondsForDOC = 0;
-            let validPondsForSize = 0;
-            let validPondsForBiomass = 0;
-
-            pondsSnap.forEach((pondDoc: any) => {
-              const pond = pondDoc.data();
-              if (pond.docStart) {
-                const docVal = Math.floor((Date.now() - new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24));
-                if (docVal >= 0) { totalDOC += docVal; validPondsForDOC++; }
-              }
-              if (pond.samplings?.length > 0) {
-                const validSamplings = pond.samplings.filter((s: any) => s.mbw > 0).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                if (validSamplings.length > 0) {
-                  const latest = validSamplings[0];
-                  totalSize += (1000 / latest.mbw);
-                  validPondsForSize++;
-                  const pop = (pond.initialPopulation || 0) - (pond.totalHarvestedPopulation || 0) - (pond.samplings.reduce((sum: number, s: any) => sum + (s.mortality || 0), 0));
-                  const biomass = (Math.max(0, pop) * latest.mbw) / 1000;
-                  if (biomass > 0) { totalBiomass += biomass; validPondsForBiomass++; }
-                }
-              }
-            });
-
-            return {
-              ...company,
-              avgDOC: validPondsForDOC > 0 ? Math.round(totalDOC / validPondsForDOC) : 0,
-              avgSize: validPondsForSize > 0 ? Math.round(totalSize / validPondsForSize) : 0,
-              totalBiomass: totalBiomass,
-              pondCount: pondsSnap.size
-            };
-          } catch (err) {
-            return company;
-          }
-        }));
-
-        setMonitoredCompanies(detailedCompanies);
-        setLoading(false);
-      });
-      return () => unsubscribe();
-    }
-  }, [user?.uid]);
+    const avg = (values: number[]) => values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0;
+    return {
+      size30: avg(prices.size30),
+      size50: avg(prices.size50),
+      size100: avg(prices.size100),
+    };
+  }, [listings]);
 
   const handleRemoveMonitor = async (e: React.MouseEvent, companyId: string) => {
     e.preventDefault();
@@ -659,36 +605,11 @@ function BuyerDashboard({ t, user }: any) {
 
 export default function DashboardPage() {
   const { t } = useLanguage();
+  const { user, loading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [ponds, setPonds] = useState<Pond[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [userData, setUserData] = useState<any>(null);
-
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        onSnapshot(doc(db, 'users', user.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const data = uDoc.data();
-            setUserData({ ...data, uid: user.uid });
-            if (data.role !== 'buyer') {
-              const companyId = data.companyId;
-              if (companyId) {
-                const q = query(collection(db, 'companies', companyId, 'ponds'), orderBy('createdAt', 'asc'));
-                const unsubPonds = onSnapshot(q, (snapshot) => {
-                  const pondData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pond));
-                  setPonds(pondData);
-                  setLoading(false);
-                });
-                return () => unsubPonds();
-              } else { setLoading(false); }
-            } else { setLoading(false); }
-          }
-        });
-      }
-    });
-    return () => unsubAuth();
-  }, []);
+  const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
+  const userData = user;
+  const loading = authLoading || !userData || (userData.role !== 'buyer' && pondsLoading);
 
   const totalMetrics = useMemo(() => {
     let currentBiomass = 0; let currentSR = 0; let currentPop = 0;
@@ -762,19 +683,15 @@ export default function DashboardPage() {
   if (userData?.role === 'buyer') return <BuyerDashboard t={t} user={userData} />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+    <div className="dashboard-page">
       
       {/* Header */}
       <div className="dashboard-hero animate-fade-up">
         <div className="dashboard-hero-copy">
-          <span className="dashboard-hero-eyebrow">Dashboard overview</span>
           <div className="dashboard-hero-title-row">
             <h1 className="dashboard-hero-title">Welcome back, {firstName}</h1>
             <span className="dashboard-hero-date">{dashboardDateLabel}</span>
           </div>
-          <p className="dashboard-hero-subtitle">
-            {lastSyncedLabel}
-          </p>
         </div>
         <div className="dashboard-hero-actions">
           <Link href="/dashboard/reports/shrimp">

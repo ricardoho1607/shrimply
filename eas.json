@@ -7,15 +7,24 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "channel": "development"
+      "channel": "development",
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "https://be7b659e9ffbb1b2fae81acdc2189aac@o4511320080187392.ingest.us.sentry.io/4511320117018624"
+      }
     },
     "preview": {
       "distribution": "internal",
-      "channel": "preview"
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "https://be7b659e9ffbb1b2fae81acdc2189aac@o4511320080187392.ingest.us.sentry.io/4511320117018624"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "channel": "production"
+      "channel": "production",
+      "env": {
+        "EXPO_PUBLIC_SENTRY_DSN": "https://be7b659e9ffbb1b2fae81acdc2189aac@o4511320080187392.ingest.us.sentry.io/4511320117018624"
+      }
     }
   },
   "submit": {

@@ -3,12 +3,115 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
-  Modal, ScrollView, StatusBar, StyleSheet, Text, 
-  TextInput, TouchableOpacity, View, Alert, Platform 
+  FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, 
+  TextInput, TouchableOpacity, View, Alert, Platform, ActivityIndicator,
+  Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
 import { usePondStore, type Pond, type Sampling } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
+import { 
+  collection, 
+  query, 
+  orderBy, 
+  onSnapshot 
+} from 'firebase/firestore';
+import { db } from '@/config/firebase';
+
+const InputField = React.memo(({ 
+  label, 
+  value, 
+  onChangeText, 
+  placeholder, 
+  keyboardType = 'default', 
+  hint 
+}: {
+  label: string; 
+  value: string; 
+  onChangeText: (text: string) => void; 
+  placeholder: string;
+  keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad'; 
+  hint?: string;
+}) => (
+  <View style={styles.inputContainer}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TextInput 
+      placeholder={placeholder} 
+      value={value} 
+      onChangeText={onChangeText} 
+      keyboardType={keyboardType}
+      style={styles.input} 
+      placeholderTextColor="#6b8aa0" 
+    />
+    {hint && <Text style={styles.inputHint}>{hint}</Text>}
+  </View>
+));
+InputField.displayName = 'InputField';
+
+const DateInput = React.memo(({ 
+  label, 
+  date, 
+  onPress 
+}: { 
+  label: string; 
+  date: Date; 
+  onPress: () => void 
+}) => (
+  <View style={styles.inputContainer}>
+    <Text style={styles.inputLabel}>{label}</Text>
+    <TouchableOpacity style={styles.dateInput} onPress={onPress}>
+      <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
+      <Ionicons name="calendar-outline" size={20} color="#dce8f2" />
+    </TouchableOpacity>
+  </View>
+));
+DateInput.displayName = 'DateInput';
+
+const DataRow = React.memo(({ 
+  label, 
+  value, 
+  unit = '' 
+}: { 
+  label: string; 
+  value: string | number; 
+  unit?: string 
+}) => (
+  <View style={styles.dataRow}>
+    <Text style={styles.dataLabel}>{label}:</Text>
+    <Text style={styles.dataValue}>
+      {value} <Text style={styles.dataUnit}>{unit}</Text>
+    </Text>
+  </View>
+));
+DataRow.displayName = 'DataRow';
+
+const EditInputField = React.memo(({ 
+  label, 
+  value, 
+  onChangeText, 
+  keyboardType = "default" 
+}: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  keyboardType?: "default" | "numeric";
+}) => (
+  <View style={styles.editInputContainer}>
+    <Text style={styles.editInputLabel}>{label}</Text>
+    <TextInput
+      style={styles.editInput}
+      value={value}
+      onChangeText={onChangeText}
+      keyboardType={keyboardType}
+      placeholderTextColor="#6b8aa0"
+      blurOnSubmit={false}
+      returnKeyType="next"
+      autoCorrect={false}
+      autoCapitalize="none"
+    />
+  </View>
+));
+EditInputField.displayName = 'EditInputField';
 
 const EditSamplingModal = ({ 
   visible, 
@@ -33,9 +136,9 @@ const EditSamplingModal = ({
 
   useEffect(() => {
     if (sample && visible) {
-      setMbw(sample.mbw.toString());
-      setMortality(sample.mortality.toString());
-      setFeed(sample.feed.toString());
+      setMbw(sample.mbw ? sample.mbw.toString() : '0');
+      setMortality(sample.mortality ? sample.mortality.toString() : '0');
+      setFeed(sample.feed ? sample.feed.toString() : '0');
     }
   }, [sample, visible]);
 
@@ -59,43 +162,27 @@ const EditSamplingModal = ({
     onClose();
   };
 
-  const InputField = ({ 
-    label, 
-    value, 
-    onChangeText, 
-    keyboardType = "default" 
-  }: {
-    label: string;
-    value: string;
-    onChangeText: (text: string) => void;
-    keyboardType?: "default" | "numeric";
-  }) => (
-    <View style={styles.editInputContainer}>
-      <Text style={styles.editInputLabel}>{label}</Text>
-      <TextInput
-        style={styles.editInput}
-        value={value}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        placeholderTextColor="#3282B8"
-        blurOnSubmit={false}
-        returnKeyType="next"
-        autoCorrect={false}
-        autoCapitalize="none"
-      />
-    </View>
-  );
-
   return (
     <Modal visible={visible} animationType="none" transparent>
-      <View style={styles.editModalContainer}>
-        <View style={styles.editModalContent}>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.editModalContainer}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.editModalContent}>
           <View style={styles.editModalHeader}>
             <Text style={styles.editModalTitle}>
               {t.actions.edit} {t.home.samplingData}
             </Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#3282B8" />
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="close" size={24} color="#315f57" />
             </TouchableOpacity>
           </View>
           
@@ -104,19 +191,19 @@ const EditSamplingModal = ({
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
           >
-            <InputField
+            <EditInputField
               label={t.shrimp.meanBodyWeight}
               value={mbw}
               onChangeText={setMbw}
               keyboardType="numeric"
             />
-            <InputField
+            <EditInputField
               label={t.shrimp.mortality}
               value={mortality}
               onChangeText={setMortality}
               keyboardType="numeric"
             />
-            <InputField
+            <EditInputField
               label={t.shrimp.feedAmount}
               value={feed}
               onChangeText={setFeed}
@@ -124,35 +211,37 @@ const EditSamplingModal = ({
             />
           </ScrollView>
           
-          <View style={styles.editButtonContainer}>
-            <TouchableOpacity 
-              style={styles.editCancelButton} 
-              onPress={onClose}
-            >
-              <Text style={styles.editCancelText}>
-                {t.actions.cancel}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.editSaveButton} 
-              onPress={handleSave}
-            >
-              <Text style={styles.editSaveText}>
-                {t.actions.save}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.editButtonContainer}>
+              <TouchableOpacity 
+                style={styles.editCancelButton} 
+                onPress={onClose}
+              >
+                <Text style={styles.editCancelText}>
+                  {t.actions.cancel}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={styles.editSaveButton} 
+                onPress={handleSave}
+              >
+                <Text style={styles.editSaveText}>
+                  {t.actions.save}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </View>
-    </Modal>
-  );
+    </TouchableWithoutFeedback>
+  </Modal>
+);
 };
 
 export default function PondDetails() {
   const router = useRouter();
   const { pondId } = useLocalSearchParams();
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, company } = useAuth();
   const insets = useSafeAreaInsets();
   
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
@@ -160,13 +249,15 @@ export default function PondDetails() {
   const { 
     getPondById, 
     updateSampling, 
-    calculatePondMetricsWithHarvest 
+    calculatePondMetricsWithHarvest,
+    ponds
   } = usePondStore();
   
   const [pond, setPond] = useState<Pond | null>(null);
   const [showMore, setShowMore] = useState(false);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSample, setSelectedSample] = useState<Sampling | null>(null);
+  const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
 
   useEffect(() => {
     if (pondId) {
@@ -176,6 +267,22 @@ export default function PondDetails() {
       }
     }
   }, [pondId]);
+
+  useEffect(() => {
+    if (company?.id) {
+      const q = query(collection(db, 'companies', company.id, 'feeds'), orderBy('feedName', 'asc'));
+      const unsub = onSnapshot(q, (snapshot) => {
+        setInventoryFeeds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      });
+      return unsub;
+    }
+  }, [company?.id]);
+
+  const getFeedName = (feedId?: string) => {
+    if (!feedId) return null;
+    const feed = inventoryFeeds.find(f => f.id === feedId);
+    return feed ? `${feed.feedName} (${feed.brand || ''})` : 'Unknown Feed';
+  };
 
   const calculations = useMemo(() => {
     if (!pond) return null;
@@ -191,7 +298,7 @@ export default function PondDetails() {
     const getLatestSamplingData = () => 
       getPondSamplingData()
         .filter((s: Sampling) => 
-          !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .sort((a: Sampling, b: Sampling) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -200,7 +307,7 @@ export default function PondDetails() {
     const getTotalMortality = () =>
       getPondSamplingData()
         .filter((s: Sampling) => 
-          !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .reduce((total: number, sample: Sampling) => 
           total + sample.mortality, 0
@@ -221,7 +328,7 @@ export default function PondDetails() {
     const getADGData = () => {
       const pondSampling = getPondSamplingData()
         .filter((s: Sampling) => 
-          !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .sort((a: Sampling, b: Sampling) => 
           new Date(a.date).getTime() - new Date(b.date).getTime()
@@ -279,7 +386,7 @@ export default function PondDetails() {
     const getTotalFeedData = () => {
       const samplingFeed = getPondSamplingData()
         .filter((s: Sampling) => 
-          !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .reduce((total: number, s: Sampling) => 
           total + (s.feed || 0), 0
@@ -320,7 +427,7 @@ export default function PondDetails() {
       
     const totalMortalityWeight = getPondSamplingData()
       .filter((s: Sampling) => 
-        !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+        (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
       )
       .reduce((total: number, s: Sampling) => 
         total + (s.mortality * s.mbw) / 1000, 0
@@ -328,7 +435,7 @@ export default function PondDetails() {
 
     const pondSamplingData = getPondSamplingData()
       .filter((s: Sampling) => 
-        !(s.mbw === 0 && s.mortality === 0 && s.feed === 0)
+        (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
       )
       .sort((a: Sampling, b: Sampling) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -385,35 +492,21 @@ export default function PondDetails() {
       setPond(updatedPond);
     }
     
-    router.push('/');
+    router.push('/(tabs)' as any);
   }, [pond, updateSampling, getPondById, router]);
-
-  const DataRow = React.memo(({ 
-    label, 
-    value, 
-    unit = '' 
-  }: { 
-    label: string; 
-    value: string | number; 
-    unit?: string 
-  }) => (
-    <View style={styles.dataRow}>
-      <Text style={styles.dataLabel}>{label}:</Text>
-      <Text style={styles.dataValue}>
-        {value} <Text style={styles.dataUnit}>{unit}</Text>
-      </Text>
-    </View>
-  ));
 
   if (!pond || !calculations) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => router.back()} 
-            style={styles.backButton}
-          >
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
+            <TouchableOpacity 
+              onPress={() => router.back()} 
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
           <Text style={styles.pondName}>{t.actions.loading}</Text>
         </View>
@@ -425,7 +518,6 @@ export default function PondDetails() {
   }
 
   const {
-    latestSampling,
     doc,
     totalMortality,
     currentPopulation,
@@ -448,13 +540,13 @@ export default function PondDetails() {
         options={{
           title: pond.pondName,
           headerBackTitle: t.nav.ponds,
-          headerStyle: { backgroundColor: '#BBE1FA' },
-          headerTintColor: '#1B262C',
+          headerStyle: { backgroundColor: '#dce8f2' },
+          headerTintColor: '#0d2137',
           headerTitleStyle: { fontWeight: 'bold', fontSize: 18 },
           headerShadowVisible: false,
         }}
       />
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <View style={styles.container}>
         <ScrollView 
           style={styles.scrollView} 
@@ -579,38 +671,42 @@ export default function PondDetails() {
               <Text style={styles.sectionTitle}>
                 {t.home.samplingHistory}
               </Text>
-              <View style={styles.samplingContainer}>
-                {pondSamplingData.map((sample) => (
-                  <View key={sample.id} style={styles.samplingRow}>
-                    <View style={styles.samplingData}>
-                      <Text style={styles.samplingDate}>
-                        {new Date(sample.date).toLocaleDateString()}
-                      </Text>
-                      <Text style={styles.samplingValue}>
-                        MBW: {sample.mbw}g
-                      </Text>
-                      <Text style={styles.samplingValue}>
-                        {t.shrimp.mortality}: {sample.mortality}
-                      </Text>
-                      <Text style={styles.samplingValue}>
-                        {t.nav.feed}: {sample.feed}kg
-                      </Text>
+              <FlatList
+                data={pondSamplingData}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                contentContainerStyle={styles.samplingContainer}
+                renderItem={({ item: sample }) => (
+                    <View style={styles.samplingRow}>
+                      <View style={styles.samplingData}>
+                        <Text style={styles.samplingDate}>
+                          {new Date(sample.date).toLocaleDateString()}
+                        </Text>
+                        <Text style={styles.samplingValue}>
+                          MBW: {sample.mbw}g
+                        </Text>
+                        <Text style={styles.samplingValue}>
+                          {t.shrimp.mortality}: {sample.mortality}
+                        </Text>
+                        <Text style={styles.samplingValue}>
+                          {t.nav.feed}: {sample.feed}kg {sample.feedData?.inventoryFeedId && `• ${getFeedName(sample.feedData.inventoryFeedId)}`}
+                        </Text>
+                      </View>
+                      {canEditPonds && (
+                        <TouchableOpacity 
+                          style={styles.editButton} 
+                          onPress={() => openEditModal(sample)}
+                        >
+                          <Ionicons 
+                            name="pencil-outline" 
+                            size={16} 
+                            color="#315f57" 
+                          />
+                        </TouchableOpacity>
+                      )}
                     </View>
-                    {canEditPonds && (
-                      <TouchableOpacity 
-                        style={styles.editButton} 
-                        onPress={() => openEditModal(sample)}
-                      >
-                        <Ionicons 
-                          name="pencil-outline" 
-                          size={16} 
-                          color="#3282B8" 
-                        />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
-              </View>
+                )}
+              />
             </>
           )}
         </ScrollView>
@@ -627,263 +723,49 @@ export default function PondDetails() {
 }
 
 const styles = StyleSheet.create({
-  backButton: { 
-    marginRight: Platform.OS === 'android' ? 12 : 16 
-  },
+  backButton: { marginRight: Platform.OS === 'android' ? 12 : 16 },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: Platform.OS === 'android' ? 12 : 16 },
+  pondName: { fontSize: Platform.OS === 'android' ? 17 : 18, color: '#0d2137', fontWeight: 'bold' },
+  scrollView: { flex: 1, padding: Platform.OS === 'android' ? 16 : 20 },
+  title: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 20 : 24 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 12 : 16, marginTop: Platform.OS === 'android' ? 20 : 24 },
+  detailsBubble: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#e8f2f9', marginBottom: 12, elevation: 3 },
+  columnContainer: { flexDirection: 'row', gap: 20 },
+  column: { flex: 1 },
+  dataRow: { marginBottom: 16 },
+  dataLabel: { fontSize: 13, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
+  dataValue: { fontSize: 17, color: '#0d2137', fontWeight: '600' },
+  dataUnit: { fontSize: 13, color: '#315f57' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { color: '#315f57', fontSize: 16 },
+  moreButton: { padding: 12, backgroundColor: '#dce8f2', borderRadius: 12, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#315f57' },
+  moreButtonText: { fontWeight: '600', color: '#0d2137' },
+  samplingContainer: { marginBottom: 20 },
+  samplingRow: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: '#FFFFFF', borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e8f2f9' },
+  samplingData: { flex: 1 },
+  samplingDate: { fontWeight: 'bold', color: '#0d2137' },
+  samplingValue: { color: '#315f57', fontSize: 12 },
+  editButton: { padding: 8, backgroundColor: '#f4f8fc', borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9' },
   
-  container: { 
-    flex: 1, 
-    backgroundColor: '#F8FAFC' 
-  },
-  
-  header: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    padding: Platform.OS === 'android' ? 12 : 16 
-  },
-  
-  pondName: { 
-    fontSize: Platform.OS === 'android' ? 17 : 18, 
-    color: '#1B262C', 
-    fontWeight: 'bold' 
-  },
-  
-  scrollView: { 
-    flex: 1, 
-    padding: Platform.OS === 'android' ? 16 : 20 
-  },
-  
-  title: { 
-    fontSize: Platform.OS === 'android' ? 22 : 24, 
-    fontWeight: 'bold', 
-    color: '#1B262C', 
-    marginBottom: Platform.OS === 'android' ? 20 : 24 
-  },
-  
-  sectionTitle: { 
-    fontSize: Platform.OS === 'android' ? 18 : 20, 
-    fontWeight: 'bold', 
-    color: '#1B262C', 
-    marginBottom: Platform.OS === 'android' ? 12 : 16, 
-    marginTop: Platform.OS === 'android' ? 20 : 24 
-  },
-  
-  detailsBubble: { 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 16, 
-    padding: Platform.OS === 'android' ? 20 : 24, 
-    borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    marginBottom: Platform.OS === 'android' ? 12 : 16,
-    shadowColor: '#0F4C75',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  
-  columnContainer: { 
-    flexDirection: 'row', 
-    gap: Platform.OS === 'android' ? 20 : 24 
-  },
-  
-  column: { 
-    flex: 1 
-  },
-  
-  dataRow: { 
-    marginBottom: Platform.OS === 'android' ? 16 : 20 
-  },
-  
-  dataLabel: { 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    color: '#0F4C75', 
-    marginBottom: 4, 
-    fontWeight: '500',
-    lineHeight: Platform.OS === 'android' ? 18 : 20
-  },
-  
-  dataValue: { 
-    fontSize: Platform.OS === 'android' ? 17 : 18, 
-    color: '#1B262C', 
-    fontWeight: '600' 
-  },
-  
-  dataUnit: { 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    color: '#3282B8', 
-    fontWeight: '400' 
-  },
-  
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  
-  loadingText: { 
-    color: '#3282B8', 
-    fontSize: Platform.OS === 'android' ? 15 : 16 
-  },
-  
-  moreButton: { 
-    padding: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#BBE1FA', 
-    borderRadius: 12, 
-    alignItems: 'center', 
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#3282B8',
-  },
-  
-  moreButtonText: { 
-    fontSize: Platform.OS === 'android' ? 15 : 16, 
-    fontWeight: '600', 
-    color: '#0F4C75' 
-  },
-  
-  samplingContainer: { 
-    marginBottom: 20 
-  },
-  
-  samplingRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 12, 
-    marginBottom: Platform.OS === 'android' ? 6 : 8, 
-    borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    shadowColor: '#0F4C75',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
-  },
-  
-  samplingData: { 
-    flex: 1 
-  },
-  
-  samplingDate: { 
-    color: '#1B262C', 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    fontWeight: 'bold', 
-    marginBottom: 4 
-  },
-  
-  samplingValue: { 
-    color: '#3282B8', 
-    fontSize: Platform.OS === 'android' ? 11 : 12, 
-    marginBottom: 2,
-    lineHeight: Platform.OS === 'android' ? 16 : 18
-  },
-  
-  editButton: { 
-    padding: Platform.OS === 'android' ? 6 : 8, 
-    backgroundColor: '#F8FAFC', 
-    borderRadius: 8, 
-    borderWidth: 1, 
-    borderColor: '#BBE1FA' 
-  },
-  
-  editModalContainer: { 
-    flex: 1, 
-    backgroundColor: 'rgba(15, 76, 117, 0.7)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 20 
-  },
-  
-  editModalContent: { 
-    backgroundColor: '#FFFFFF', 
-    borderRadius: 20, 
-    width: '100%', 
-    maxWidth: 400, 
-    borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    padding: Platform.OS === 'android' ? 20 : 24 
-  },
-  
-  editModalHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: Platform.OS === 'android' ? 20 : 24 
-  },
-  
-  editModalTitle: { 
-    fontSize: Platform.OS === 'android' ? 18 : 20, 
-    fontWeight: 'bold', 
-    color: '#1B262C' 
-  },
-  
-  closeButton: { 
-    padding: 4 
-  },
-  
-  editInputContainer: { 
-    marginBottom: Platform.OS === 'android' ? 14 : 16 
-  },
-  
-  editInputLabel: { 
-    color: '#1B262C', 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    fontWeight: '600', 
-    marginBottom: 8 
-  },
-  
-  editInput: { 
-    borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    padding: Platform.OS === 'android' ? 10 : 12, 
-    borderRadius: 8, 
-    backgroundColor: '#F8FAFC', 
-    color: '#1B262C', 
-    fontSize: Platform.OS === 'android' ? 15 : 16,
-    includeFontPadding: false,
-    textAlignVertical: 'center'
-  },
-  
-  editButtonContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    gap: 12, 
-    marginTop: 8 
-  },
-  
-  editCancelButton: { 
-    backgroundColor: 'transparent', 
-    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    paddingHorizontal: Platform.OS === 'android' ? 16 : 20, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    borderWidth: 1, 
-    borderColor: '#e74c3c', 
-    flex: 1 
-  },
-  
-  editCancelText: { 
-    color: '#e74c3c', 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    fontWeight: 'bold' 
-  },
-  
-  editSaveButton: { 
-    backgroundColor: '#0F4C75', 
-    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    paddingHorizontal: Platform.OS === 'android' ? 16 : 20, 
-    borderRadius: 8, 
-    alignItems: 'center', 
-    flex: 1 
-  },
-  
-  editSaveText: { 
-    color: '#FFFFFF', 
-    fontSize: Platform.OS === 'android' ? 13 : 14, 
-    fontWeight: 'bold' 
-  },
+  // MODAL STYLES
+  editModalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  editModalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxWidth: 400, padding: 24 },
+  editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
+  editModalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0d2137' },
+  closeButton: { padding: 4 },
+  editInputContainer: { marginBottom: 16 },
+  editInputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  editInput: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', color: '#0d2137' },
+  editButtonContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
+  editCancelButton: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e74c3c', alignItems: 'center' },
+  editCancelText: { color: '#e74c3c', fontWeight: 'bold' },
+  editSaveButton: { flex: 1, padding: 12, borderRadius: 8, backgroundColor: '#0d2137', alignItems: 'center' },
+  editSaveText: { color: '#FFFFFF', fontWeight: 'bold' },
+  inputContainer: { marginBottom: 16 },
+  inputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', color: '#0d2137' },
+  inputHint: { color: '#0d2137', fontSize: 12, marginTop: 4, fontStyle: 'italic' },
+  dateInput: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  dateText: { color: '#0d2137', fontSize: 16 },
 });

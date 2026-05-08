@@ -9,13 +9,13 @@ Status legend:
 
 ## Approval Gate
 
-- [ ] Product owner approves this checklist before implementation starts.
-- [ ] Confirm final wording for Orson's promise: "biological risk detection and 72-hour outlook" instead of unsupported disease certainty.
-- [ ] Confirm whether the first implementation should target web only, mobile only, or shared web + mobile.
+- [x] Product owner approves this checklist before implementation starts.
+- [x] Confirm final wording for Orson's promise: "biological risk detection and 72-hour outlook" instead of unsupported disease certainty.
+- [x] Confirm whether the first implementation should target web only, mobile only, or shared web + mobile.
 
 ## Phase 1: Orson Source Of Truth
 
-- [ ] Define Orson's supported capabilities in code and docs:
+- [x] Define Orson's supported capabilities in code and docs:
   - Pond health analysis
   - Water-quality risk detection
   - Growth and ADG analysis
@@ -24,11 +24,11 @@ Status legend:
   - Harvest projection risk analysis
   - 72-hour biological outlook
   - Proactive notifications after new records
-- [ ] Define what Orson should not claim yet:
+- [x] Define what Orson should not claim yet:
   - No guaranteed disease prediction
   - No lab-confirmed Vibrio analysis unless Vibrio data exists
   - No "trained on thousands of farms" claim unless backed by real dataset/model
-- [ ] Decide Orson response style:
+- [x] Decide Orson response style:
   - Concise
   - Evidence-first
   - Actionable
@@ -37,8 +37,8 @@ Status legend:
 
 ## Phase 2: Shared Data Normalization
 
-- [ ] Create a normalized pond data shape for Orson.
-- [ ] Normalize pond identity fields:
+- [x] Create a normalized pond data shape for Orson.
+- [x] Normalize pond identity fields:
   - Pond ID
   - Pond name
   - DOC start date
@@ -46,7 +46,7 @@ Status legend:
   - Density
   - Initial population
   - Initial weight
-- [ ] Normalize sampling and water records:
+- [x] Normalize sampling and water records:
   - Date
   - MBW
   - Feed kg
@@ -56,149 +56,159 @@ Status legend:
   - Salinity
   - Temperature, if available
   - Feed tray/appetite fields, if available
-- [ ] Handle missing values consistently.
-- [ ] Handle different mobile/web data shapes consistently.
-- [ ] Add tests for normalization with realistic pond records.
+- [x] Handle missing values consistently.
+- [x] Handle different mobile/web data shapes consistently.
+- [x] Add tests for normalization with realistic pond records.
 
 ## Phase 3: Calculator Metrics
 
 These calculations should use zero AI tokens.
 
-- [ ] Calculate DOC.
-- [ ] Calculate latest MBW.
-- [ ] Calculate ADG between valid sampling records.
-- [ ] Calculate smoothed ADG across recent records.
-- [ ] Detect MBW outliers from noisy manual sampling.
-- [ ] Calculate total feed.
-- [ ] Calculate estimated biomass.
-- [ ] Calculate estimated survival.
-- [ ] Calculate FCR where biomass gain is available.
-- [ ] Calculate pH morning/evening swing.
-- [ ] Calculate DO minimum and DO trend.
-- [ ] Calculate salinity trend.
-- [ ] Calculate appetite/tray clearance trend.
-- [ ] Calculate mortality trend.
-- [ ] Calculate data completeness score.
-- [ ] Add tests for each metric.
+- [x] Calculate DOC.
+- [x] Calculate latest MBW.
+- [x] Calculate ADG between valid sampling records.
+- [x] Calculate smoothed ADG across recent records.
+- [x] Detect MBW outliers from noisy manual sampling.
+- [x] Calculate total feed.
+- [x] Calculate estimated biomass.
+- [x] Calculate estimated survival.
+- [x] Calculate survival confidence and population range.
+- [x] Calculate biomass range from survival assumptions.
+- [x] Calculate feed-rate percentage from MBW.
+- [x] Calculate expected feed from biomass and feed-rate table.
+- [x] Calculate feed pressure ratio.
+- [x] Backsolve feed-based population and biomass.
+- [x] Flag feed/biomass disagreement for overfeeding risk.
+- [x] Calculate FCR where biomass gain is available.
+- [x] Calculate pH morning/evening swing.
+- [x] Calculate DO minimum and DO trend.
+- [x] Calculate salinity trend.
+- [x] Calculate appetite/tray clearance trend.
+- [x] Calculate mortality trend.
+- [x] Calculate data completeness score.
+- [x] Add tests for each metric.
 
 ## Phase 4: Rule-Based Risk Engine
 
 These rules should also use zero AI tokens.
 
-- [ ] Add low DO risk rule.
-- [ ] Add unsafe pH risk rule.
-- [ ] Add large pH swing risk rule.
-- [ ] Add downward DO trend warning.
-- [ ] Add appetite drop warning.
-- [ ] Add slow growth warning.
-- [ ] Add high FCR + slow growth warning.
-- [ ] Add mortality spike warning.
-- [ ] Add salinity shock warning.
-- [ ] Add missing-data warning.
-- [ ] Assign severity:
+- [x] Add low DO risk rule.
+- [x] Add unsafe pH risk rule.
+- [x] Add large pH swing risk rule.
+- [x] Add downward DO trend warning.
+- [x] Add appetite drop warning.
+- [x] Add slow growth warning.
+- [x] Add high FCR + slow growth warning.
+- [x] Add mortality spike warning.
+- [x] Add salinity shock warning.
+- [x] Add missing-data warning.
+- [x] Assign severity:
   - Info
   - Watch
   - Warning
   - Critical
-- [ ] Assign confidence score based on evidence and data completeness.
-- [ ] Generate evidence strings for every risk.
-- [ ] Generate deterministic recommended actions for every risk.
-- [ ] Add tests for rule combinations.
+- [x] Assign confidence score based on evidence and data completeness.
+- [x] Generate evidence strings for every risk.
+- [x] Generate deterministic recommended actions for every risk.
+- [x] Add tests for rule combinations.
 
 ## Phase 5: 72-Hour Outlook
 
-- [ ] Build deterministic 72-hour outlook from current risks and trends.
-- [ ] Include expected risk direction:
+- [x] Build deterministic 72-hour outlook from current risks and trends.
+- [x] Include expected risk direction:
   - Improving
   - Stable
   - Watch
   - Deteriorating
   - Critical
-- [ ] Include top reason for outlook.
-- [ ] Include top next action.
-- [ ] Add confidence level.
-- [ ] Add tests for stable, watch, and critical scenarios.
+- [x] Include top reason for outlook.
+- [x] Include top next action.
+- [x] Add confidence level.
+- [x] Add tests for stable, watch, and critical scenarios.
 
 ## Phase 6: Gemini Prompt Layer
 
 Gemini should explain Orson's calculated report, not invent the report.
 
-- [ ] Build a compact Orson risk report payload.
-- [ ] Build a prompt that says:
+- [x] Build a compact Orson risk report payload.
+- [x] Build a prompt that says:
   - Use the risk report as source of truth
   - Do not invent missing measurements
   - Mention missing data clearly
   - Prioritize critical risks first
   - Keep responses concise
-- [ ] Send structured risk summaries instead of raw messy pond history.
-- [ ] Avoid caching farm-specific answers without a data-version key.
-- [ ] Keep general aquaculture questions cacheable.
-- [ ] Add timeout and fallback behavior.
-- [ ] Add response cleanup only where needed.
+- [x] Send structured risk summaries instead of raw messy pond history.
+- [x] Avoid caching farm-specific answers without a data-version key.
+- [x] Keep general aquaculture questions cacheable.
+- [x] Add timeout and fallback behavior.
+- [x] Add response cleanup only where needed.
 
 ## Phase 7: Web Dashboard Integration
 
-- [ ] Update web Orson chat to use the risk engine.
-- [ ] Show top risks in the Orson sidebar.
-- [ ] Show data completeness/confidence.
-- [ ] Add suggested prompts that map to real capabilities.
-- [ ] Ensure Orson refreshes context when pond data changes.
-- [ ] Prevent stale cached answers for farm-specific questions.
-- [ ] Add empty-state guidance when pond data is missing.
+- [x] Update web Orson chat to use the risk engine.
+- [x] Skip top-risk sidebar UI by product choice.
+- [x] Show data completeness/confidence through Orson's generated answer, not sidebar UI.
+- [x] Add suggested prompts that map to real capabilities.
+- [x] Ensure Orson refreshes context when pond data changes.
+- [x] Prevent stale cached answers for farm-specific questions.
+- [x] Add empty-state guidance when pond data is missing.
+- [x] Create Orson notifications for warning/critical web risk reports using the existing notifications collection.
 
 ## Phase 8: Mobile App Integration
 
-- [ ] Update mobile Orson chat to use the same risk engine.
-- [ ] Bring mobile context up to parity with web:
+- [x] Update mobile Orson chat to use the same risk engine.
+- [x] Bring mobile context up to parity with web:
   - 3-record trends
   - Appetite status
   - Risk report
   - 72-hour outlook
-- [ ] Ensure chat context refreshes when pond data changes.
-- [ ] Support concise multilingual responses where practical.
-- [ ] Keep mobile UI lightweight and field-friendly.
+- [x] Ensure chat context refreshes when pond data changes.
+- [x] Support concise multilingual responses where practical.
+- [x] Keep mobile UI lightweight and field-friendly.
+- [x] Create Orson notifications for warning/critical mobile risk reports using the existing notification service.
 
 ## Phase 9: Harvest Projection Upgrade
 
-- [ ] Replace mock mobile population assumptions with real pond data where available.
-- [ ] Use historical ADG as default projection input where available.
-- [ ] Make survival assumption visible and adjustable.
-- [ ] Include FCR/feed cost risk.
-- [ ] Include market-size risk.
-- [ ] Include confidence score based on data quality.
-- [ ] Export Orson's structured projection risk in web PDF.
+- [x] Replace mock mobile population assumptions with real pond data where available.
+- [x] Use historical ADG as default projection input where available.
+- [x] Make survival assumption visible and adjustable.
+- [x] Include FCR/feed cost risk.
+- [x] Include market-size risk.
+- [x] Include confidence score based on data quality.
+- [x] Export Orson's structured projection risk in web PDF.
 
 ## Phase 10: Proactive Orson Notifications
 
-- [ ] Update Firebase Function to use the same Orson risk report shape.
-- [ ] Trigger on new sampling records.
-- [ ] Trigger on new water-quality records.
-- [ ] Trigger on feed/appetite records where available.
-- [ ] Only send notifications when severity crosses a threshold.
-- [ ] Avoid notification spam for repeated unchanged risks.
-- [ ] Store notification evidence and confidence.
+- [x] Update Firebase Function to use the same Orson risk report shape.
+- [x] Trigger on new sampling records.
+- [x] Trigger on new water-quality records.
+- [x] Trigger on feed/appetite records where available.
+- [x] Only send notifications when severity crosses a threshold.
+- [x] Avoid notification spam for repeated unchanged risks.
+- [x] Store notification evidence and confidence.
 - [ ] Consider daily scheduled checks for active ponds.
+  - Deferred for now; event-driven checks cover new records without creating scheduled background noise.
 
 ## Phase 11: Marketing Alignment
 
-- [ ] Audit landing page Orson claims.
-- [ ] Audit `/orson` page claims.
-- [ ] Replace unsupported claims with accurate language.
-- [ ] Keep strong but defensible positioning:
+- [x] Audit landing page Orson claims.
+- [x] Audit `/orson` page claims.
+- [x] Replace unsupported claims with accurate language.
+- [x] Keep strong but defensible positioning:
   - Biological risk detection
   - 72-hour outlook
   - Feed and appetite intelligence
   - Water-quality trend monitoring
   - Harvest risk support
-- [ ] Avoid disease certainty unless disease-specific inputs/model exist.
+- [x] Avoid disease certainty unless disease-specific inputs/model exist.
 
 ## Phase 12: Validation
 
-- [ ] Add unit tests for normalization.
-- [ ] Add unit tests for metrics.
-- [ ] Add unit tests for risk rules.
-- [ ] Add snapshot-style tests for generated risk reports.
-- [ ] Test with:
+- [x] Add unit tests for normalization.
+- [x] Add unit tests for metrics.
+- [x] Add unit tests for risk rules.
+- [x] Add snapshot-style tests for generated risk reports.
+- [x] Test with:
   - No ponds
   - One pond with sparse data
   - Healthy pond
@@ -219,4 +229,3 @@ Gemini should explain Orson's calculated report, not invent the report.
 - The deterministic risk report should be usable without Gemini.
 - Shared logic should be kept as framework-neutral TypeScript where possible.
 - Avoid putting API keys in client code long term; prefer server-side calls for production Orson responses.
-

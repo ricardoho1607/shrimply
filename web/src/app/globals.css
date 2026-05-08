@@ -160,6 +160,25 @@ h3.feature-title { font-family: var(--serif); font-size: 1.5rem; font-weight: 40
 .section { padding: 140px 52px; position: relative; }
 .container { max-width: 1200px; margin: 0 auto; }
 
+.dark-section {
+  background: linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%);
+  color: rgba(255,255,255,0.72);
+  overflow: hidden;
+}
+
+.dark-section h2.section-title {
+  color: var(--white);
+}
+
+.dark-section .dark-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 78% 22%, rgba(26,184,232,0.16), transparent 34%),
+    radial-gradient(circle at 12% 82%, rgba(30,111,168,0.16), transparent 32%);
+}
+
 nav {
   position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
   padding: 22px 52px; display: flex; justify-content: space-between; align-items: center;
@@ -174,7 +193,7 @@ nav.scrolled {
 /* Hero */
 .hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 100vh; background: var(--off-white); }
 .hero-left { padding: 180px 52px 100px 52px; position: relative; display: flex; flex-direction: column; justify-content: center; }
-.hero-right { background: linear-gradient(160deg, var(--navy) 0%, var(--ocean) 60%, var(--navy) 100%); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.hero-right { background: linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%); position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .hero-glow { position: absolute; inset: 0; background: radial-gradient(circle at 60% 40%, rgba(26,184,232,0.15), transparent 70%); }
 
 /* App Mockup */
@@ -229,12 +248,12 @@ nav.scrolled {
 .feature-card:hover { transform: translateY(-5px); }
 .feature-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(140deg, var(--sky-light), transparent); opacity: 0; transition: opacity 0.4s; }
 .feature-card:hover::before { opacity: 1; }
-.feature-accent { background: linear-gradient(160deg, var(--navy), var(--ocean)); color: var(--white); }
+.feature-accent { background: linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%); color: var(--white); }
 .feature-accent .feature-title { color: var(--white); }
 .feature-accent p { color: rgba(255,255,255,0.7); }
 
 /* Highlight (Orson AI) */
-.highlight { padding: 140px 52px; background: var(--navy); position: relative; overflow: hidden; }
+.highlight { padding: 140px 52px; background: linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%); position: relative; overflow: hidden; }
 .highlight-grid { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 80px; align-items: center; position: relative; z-index: 2; }
 .highlight::before { content: ''; position: absolute; top: 0; right: 0; width: 60%; height: 100%; background: radial-gradient(ellipse 70% 70% at 70% 40%, rgba(26,184,232,0.12) 0%, transparent 65%); pointer-events: none; }
 

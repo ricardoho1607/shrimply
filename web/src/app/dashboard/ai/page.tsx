@@ -27,14 +27,15 @@ interface ChatMessage {
 }
 
 const SUGGESTED_PROMPTS = [
-  "Analyze health of all ponds",
-  "Any signs of slow growth?",
-  "Check water quality safety",
-  "FCR analysis for active ponds"
+  "Analyze today's 72-hour outlook",
+  "Check overfeeding and biomass risk",
+  "Review water-quality risk",
+  "Explain FCR and growth confidence"
 ];
 
 export default function OrsonAIPage() {
   const [ponds, setPonds] = useState<any[]>([]);
+  const [companyId, setCompanyId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -47,6 +48,7 @@ export default function OrsonAIPage() {
       if (firebaseUser) {
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const cid = uDoc.data()?.companyId;
+          setCompanyId(cid);
           if (cid) {
             onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
               setPonds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -98,7 +100,7 @@ export default function OrsonAIPage() {
     setInputText('');
 
     try {
-      const aiResponse = await sendMessage(text.trim(), ponds);
+      const aiResponse = await sendMessage(text.trim(), ponds, { companyId });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -124,21 +126,20 @@ export default function OrsonAIPage() {
     }
   };
 
+  const aiMessageCount = messages.filter(message => message.type === 'ai').length;
+
   return (
-    <div style={{ height: 'calc(100vh - 140px)', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+    <div className="dashboard-page" style={{ height: 'calc(100vh - 140px)' }}>
       
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'var(--gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFF', boxShadow: '0 8px 20px rgba(15, 76, 117, 0.2)' }}>
-            <BrainCircuit size={28} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+          <div style={{ padding: '10px 14px', borderRadius: '14px', background: 'var(--bg-mid)' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-faint)', textTransform: 'uppercase', fontWeight: 700 }}>Synced ponds</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>{ponds.length}</div>
           </div>
-          <div>
-            <h1 style={{ fontSize: '28px', fontWeight: 800 }}>Orson AI Advisor</h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'var(--text-muted)' }}>
-              <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22c55e' }} />
-              Live Context: {ponds.length} Ponds Synced
-            </div>
+          <div style={{ padding: '10px 14px', borderRadius: '14px', background: 'var(--bg-mid)' }}>
+            <div style={{ fontSize: '11px', color: 'var(--text-faint)', textTransform: 'uppercase', fontWeight: 700 }}>AI replies</div>
+            <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>{aiMessageCount}</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: '12px' }}>
@@ -151,7 +152,7 @@ export default function OrsonAIPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 300px', gap: '24px', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 300px', gap: '24px', minHeight: 0 }}>
         
         {/* Chat Interface */}
         <div className="glass-card" style={{ background: '#FFFFFF', display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0' }}>
@@ -278,18 +279,22 @@ export default function OrsonAIPage() {
             <h4 style={{ fontSize: '15px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TrendingUp size={16} color="#059669" /> Analyzed Ponds
             </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {ponds.slice(0, 5).map(p => (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
-                    <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.pondName}</span>
+            {ponds.length === 0 ? (
+              <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>Connect pond records to give Orson live biological context before asking for analysis.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                {ponds.slice(0, 5).map(p => (
+                  <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.pondName}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{p.supplier}</span>
                   </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{p.supplier}</span>
-                </div>
-              ))}
-              {ponds.length > 5 && <div style={{ fontSize: '11px', color: 'var(--text-faint)', textAlign: 'center', marginTop: '4px' }}>+ {ponds.length - 5} more ponds synced</div>}
-            </div>
+                ))}
+                {ponds.length > 5 && <div style={{ fontSize: '11px', color: 'var(--text-faint)', textAlign: 'center', marginTop: '4px' }}>+ {ponds.length - 5} more ponds synced</div>}
+              </div>
+            )}
           </div>
         </div>
 

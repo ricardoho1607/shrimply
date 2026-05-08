@@ -235,10 +235,10 @@ export default function WaterQualityPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '48px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       
       {/* Toolbar */}
-      <div className="glass-card animate-fade-up animate-delay-1" style={{ padding: '18px', display: 'flex', gap: '16px', alignItems: 'center' }}>
+      <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input 

@@ -6,14 +6,26 @@ import {
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
   onAuthStateChanged,
-  User as FirebaseUser
+  User as FirebaseUser,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence,
+  inMemoryPersistence,
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithCredential
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
   arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc
 } from 'firebase/firestore';
+import { Platform } from 'react-native';
 import { auth, db } from '../config/firebase';
-import { LocationData } from '../../Investashrimp/app/services/googlePlacesService'
+import { LocationData } from '../app/services/googlePlacesService'
+import { useBuyerStore } from '../app/store/buyerStore';
+import { usePondStore } from '../app/store/pondStore';
+import * as WebBrowser from 'expo-web-browser';
+import * as Google from 'expo-auth-session/providers/google';
 
 interface User {
   id: string;
@@ -115,8 +127,9 @@ interface AuthContextType {
   user: User | null;
   company: Company | null;
   loading: boolean;
-  signIn: (email: string, password: string, inviteToken?: string) => Promise<void>;
-  signUp: (email: string, password: string, inviteToken?: string) => Promise<void>;
+  signIn: (email: string, password: string, inviteToken?: string, keepMeSignedIn?: boolean) => Promise<void>;
+  signUp: (email: string, password: string, inviteToken?: string, keepMeSignedIn?: boolean) => Promise<void>;
+  signInWithGoogle: (inviteToken?: string, idToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
   completeCompanySetup: (companyData: CompanySetupData) => Promise<void>;
@@ -132,10 +145,10 @@ interface AuthContextType {
   acceptInvite: (inviteToken: string) => Promise<void>;
   checkInviteToken: (token: string) => Promise<PendingInvite | null>;
   refreshUserData: () => Promise<void>;
-  refreshCompanyData: () => Promise<void>;
+  refreshCompanyData: (overrideCompanyId?: string) => Promise<void>;
   isAuthenticated: boolean;
   needsRoleSelection: boolean;
-  needsCompanySetup: boolean;
+  needsSetup: boolean;
   isBuyer: boolean;
   getCompanyLocationData: () => LocationData | null;
   getCompanyLocationString: () => string;
@@ -166,8 +179,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
-  const router = useRouter();
   const previousCompanyRef = useRef<Company | null>(null);
+  const clearPondData = usePondStore((state) => state.clearData);
+  const clearBuyerData = useBuyerStore((state) => state.clearData);
+
+  useEffect(() => {
+    // Only need this on web to complete the redirect flow
+    if (Platform.OS === 'web') {
+      WebBrowser.maybeCompleteAuthSession();
+    }
+  }, []);
 
   const setupCompanyListener = useCallback((companyId: string) => {
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
@@ -249,10 +270,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [setupCompanyListener]);
 
-  const refreshCompanyData = useCallback(async () => {
-    if (!user?.companyId) return;
+  const refreshCompanyData = useCallback(async (overrideCompanyId?: string) => {
+    const targetCompanyId = overrideCompanyId || user?.companyId;
+    if (!targetCompanyId) return;
     try {
-      const companyDoc = await getDoc(doc(db, 'companies', user.companyId));
+      const companyDoc = await getDoc(doc(db, 'companies', targetCompanyId));
       if (companyDoc.exists()) {
         const newCompanyData = companyDoc.data() as Company;
         if (JSON.stringify(previousCompanyRef.current) !== JSON.stringify(newCompanyData)) {
@@ -290,9 +312,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [refreshCompanyData]);
 
-  const signIn = async (email: string, password: string, inviteToken?: string) => {
+  const signIn = async (email: string, password: string, inviteToken?: string, keepMeSignedIn: boolean = true) => {
     setLoading(true);
     try {
+      try {
+        let persistence;
+        if (Platform.OS === 'web') {
+          persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
+        } else {
+          persistence = keepMeSignedIn ? undefined : inMemoryPersistence;
+        }
+        if (persistence) await setPersistence(auth, persistence);
+      } catch (pError) {
+        console.error('Error setting persistence:', pError);
+      }
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       if (inviteToken) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
     } finally {
@@ -300,9 +333,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signUp = async (email: string, password: string, inviteToken?: string) => {
+  const signUp = async (email: string, password: string, inviteToken?: string, keepMeSignedIn: boolean = true) => {
     setLoading(true);
     try {
+      try {
+        let persistence;
+        if (Platform.OS === 'web') {
+          persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
+        } else {
+          persistence = keepMeSignedIn ? undefined : inMemoryPersistence;
+        }
+        if (persistence) await setPersistence(auth, persistence);
+      } catch (pError) {
+        console.error('Error setting persistence:', pError);
+      }
       let inviteData: (PendingInvite & { companyId: string }) | null = null;
       if (inviteToken) {
         const invite = await checkInviteToken(inviteToken);
@@ -357,13 +401,46 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const signInWithGoogle = async (inviteToken?: string, idToken?: string) => {
+    setLoading(true);
+    try {
+      if (Platform.OS === 'web') {
+        const provider = new GoogleAuthProvider();
+        const result = await signInWithPopup(auth, provider);
+        if (inviteToken) await processInviteAfterAuth(result.user.uid, inviteToken);
+        await refreshUserData();
+      } else if (idToken) {
+        // Native flow using the token provided by the component
+        const credential = GoogleAuthProvider.credential(idToken);
+        const userCredential = await signInWithCredential(auth, credential);
+        if (inviteToken) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
+        await refreshUserData();
+      } else {
+        throw new Error('Google Sign-In: Missing ID Token for Native platform');
+      }
+    } catch (error: any) {
+      console.error('Google Sign-In Error:', error);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const signOut = async () => {
-    if (user) await updateDoc(doc(db, 'users', user.uid), { lastActive: serverTimestamp() });
+    if (user) {
+      try {
+        await updateDoc(doc(db, 'users', user.uid), { lastActive: serverTimestamp() });
+      } catch (error) {
+        console.error('Error updating last active during sign out:', error);
+      }
+    }
     await firebaseSignOut(auth);
+    clearPondData();
+    clearBuyerData();
     setUser(null);
     previousCompanyRef.current = null;
     setCompany(null);
-    router.replace('/auth');
+    // Redirection is handled automatically by RootLayoutNav based on auth state
   };
 
   const completeRoleSelection = async (role: User['role']) => {
@@ -442,7 +519,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ ...user, hasCompletedSetup: true, companyId: newCompany.id });
     
     // Trigger company data refresh
-    await refreshCompanyData();
+    await refreshCompanyData(newCompany.id);
   } catch (error) {
     console.error('Error in completeCompanySetup:', error);
     throw error;
@@ -602,29 +679,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       status: 'pending', companyId: company.id
     };
     await updateDoc(doc(db, 'companies', company.id), { pendingInvites: arrayUnion(newInvite) });
-    console.log(`Invite link: myapp://invite?token=${inviteToken}`);
+    console.log(`Invite link: shrimply://invite?token=${inviteToken}`);
   }, [user, company]);
 
   const getTeamMembers = useCallback(async (): Promise<TeamMember[]> => {
     if (!company) return [];
     const members: TeamMember[] = [];
 
+    // Use a Set to avoid duplicates
+    const allMemberIds = new Set<string>();
+    
+    // Always include the owner
+    if (company.ownerId) {
+      allMemberIds.add(company.ownerId);
+    }
+    
+    // Add all other team members
     if (company.teamMembers && Array.isArray(company.teamMembers)) {
-      for (const memberId of company.teamMembers) {
-        try {
-          const memberDoc = await getDoc(doc(db, 'users', memberId));
-          if (memberDoc.exists()) {
-            const memberData = memberDoc.data() as User;
-            members.push({
-              id: memberData.id, email: memberData.email,
-              name: memberData.name || memberData.email.split('@')[0],
-              role: memberData.role!, status: 'active',
-              joinedDate: memberData.joinedDate || '', lastActive: memberData.lastActive
-            });
+      company.teamMembers.forEach(id => allMemberIds.add(id));
+    }
+
+    for (const memberId of allMemberIds) {
+      try {
+        const memberDoc = await getDoc(doc(db, 'users', memberId));
+        if (memberDoc.exists()) {
+          const memberData = memberDoc.data() as User;
+          
+          // Ensure owner role is correctly set even if missing in user doc
+          let role = memberData.role;
+          if (memberId === company.ownerId) {
+            role = 'owner';
           }
-        } catch (error) {
-          console.error(`Error loading member ${memberId}:`, error);
+          
+          members.push({
+            id: memberData.id,
+            email: memberData.email,
+            name: memberData.name || memberData.email.split('@')[0],
+            role: (role || 'technician') as TeamMember['role'], // Default to technician if role is missing and not owner
+            status: 'active',
+            joinedDate: memberData.joinedDate || '',
+            lastActive: memberData.lastActive
+          });
         }
+      } catch (error) {
+        console.error(`Error loading member ${memberId}:`, error);
       }
     }
 
@@ -632,9 +730,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       for (const invite of company.pendingInvites) {
         if (invite.status === 'pending') {
           members.push({
-            id: `invite_${invite.inviteToken}`, email: invite.email,
-            name: invite.email.split('@')[0], role: invite.role,
-            status: 'pending', joinedDate: invite.inviteDate,
+            id: `invite_${invite.inviteToken}`,
+            email: invite.email,
+            name: invite.email.split('@')[0],
+            role: invite.role,
+            status: 'pending',
+            joinedDate: invite.inviteDate,
           });
         }
       }
@@ -680,20 +781,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [company]);
 
   // All hooks must be called before the conditional return
-  const value: AuthContextType = useMemo(() => ({
-    user, company, loading, signIn, signUp, signOut, completeRoleSelection, completeCompanySetup,
-    updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies, getJoinRequests,
-    approveJoinRequest, rejectJoinRequest, removeMember, getTeamMembers, acceptInvite,
-    checkInviteToken, refreshUserData, refreshCompanyData,
-    isAuthenticated: !!user, needsRoleSelection: !!user && !user.role,
-    needsCompanySetup: !!user && user.role === 'owner' && !user.hasCompletedSetup,
-    isBuyer: !!user && user.role === 'buyer',
-    getCompanyLocationData, getCompanyLocationString,
-  }), [user, company, loading, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies, 
+  // All hooks must be called before any conditional return
+  const value: AuthContextType = useMemo(() => {
+    // Ensure owner role is correctly identified even if missing in user document
+    const effectiveUser = user ? {
+      ...user,
+      role: user.role || (company && company.ownerId === user.uid ? 'owner' : undefined) as User['role']
+    } : null;
+
+    return {
+      user: effectiveUser,
+      company,
+      loading: loading || initializing,
+      signIn,
+      signUp,
+      signInWithGoogle,
+      signOut,
+      completeRoleSelection,
+      completeCompanySetup,
+      updateUserProfile,
+      inviteTeamMember,
+      requestToJoinCompany,
+      searchCompanies,
+      getJoinRequests,
+      approveJoinRequest,
+      rejectJoinRequest,
+      removeMember,
+      getTeamMembers,
+      acceptInvite,
+      checkInviteToken,
+      refreshUserData,
+      refreshCompanyData,
+      isAuthenticated: !!user,
+      needsRoleSelection: !!user && !user.role && !(company && company.ownerId === user.uid),
+      needsSetup: !!user && (!!user.role || !!(company && company.ownerId === user.uid)) && !user.hasCompletedSetup,
+      isBuyer: !!user && user.role === 'buyer',
+      getCompanyLocationData,
+      getCompanyLocationString,
+    };
+  }, [user, company, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies, 
        getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, getTeamMembers, acceptInvite,
        checkInviteToken, refreshUserData, refreshCompanyData, getCompanyLocationData, getCompanyLocationString]);
-
-  if (initializing) return null;
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

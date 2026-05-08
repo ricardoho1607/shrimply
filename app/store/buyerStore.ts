@@ -1,7 +1,5 @@
 // store/buyerStore.ts - Fixed version with proper initialization
 import { create } from "zustand";
-import { persist, createJSONStorage } from "zustand/middleware";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { collection, doc, setDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
@@ -28,7 +26,6 @@ interface BuyerStore {
 }
 
 export const useBuyerStore = create<BuyerStore>()(
-  persist(
     (set, get) => ({
       monitoredCompanies: [],
       currentUserId: undefined,
@@ -135,14 +132,5 @@ export const useBuyerStore = create<BuyerStore>()(
           set({ isInitialized: true });
         }
       },
-    }),
-    {
-      name: "buyer-storage",
-      storage: createJSONStorage(() => AsyncStorage),
-      partialize: (state) => ({
-        monitoredCompanies: state.monitoredCompanies,
-        currentUserId: state.currentUserId
-      }),
-    }
-  )
+    })
 );

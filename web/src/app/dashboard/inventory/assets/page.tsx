@@ -350,14 +350,8 @@ export default function AssetInventoryPage() {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>{t.asset.title}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Track and manage your farm equipment and infrastructure.</p>
-        </div>
+    <div className="dashboard-page">
+      <div className="dashboard-action-row">
         <button className="btn-primary" onClick={() => handleOpenModal('add')}>
           <Plus size={20} />
           {t.asset.addAsset}

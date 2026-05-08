@@ -154,6 +154,88 @@ export class NotificationService {
     }
   }
 
+  static async createOrsonRiskNotification(
+    companyId: string,
+    risk: {
+      pondId: string | null;
+      pondName: string;
+      riskId: string;
+      severity: 'info' | 'watch' | 'warning' | 'critical';
+      title: string;
+      message: string;
+      confidence: number;
+    }
+  ) {
+    try {
+      if (risk.severity !== 'warning' && risk.severity !== 'critical') return;
+
+      const shouldCreate = await this.shouldCreateOrsonNotification(
+        companyId,
+        risk.pondId,
+        risk.riskId
+      );
+
+      if (!shouldCreate) return;
+
+      const notificationsRef = collection(db, 'notifications');
+      await addDoc(notificationsRef, {
+        companyId,
+        type: 'orson_risk',
+        title: `Orson: ${risk.pondName} ${risk.title}`,
+        message: risk.message,
+        timestamp: Timestamp.now(),
+        read: false,
+        priority: risk.severity === 'critical' ? 'high' : 'medium',
+        isOrson: true,
+        icon: 'brain-circuit',
+        data: {
+          isOrson: true,
+          pondId: risk.pondId,
+          pondName: risk.pondName,
+          riskId: risk.riskId,
+          severity: risk.severity,
+          confidence: risk.confidence,
+        },
+      });
+    } catch (error) {
+      console.error('Error creating Orson risk notification:', error);
+    }
+  }
+
+  private static async shouldCreateOrsonNotification(
+    companyId: string,
+    pondId: string | null,
+    riskId: string
+  ): Promise<boolean> {
+    try {
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+
+      const notificationsRef = collection(db, 'notifications');
+      const q = query(
+        notificationsRef,
+        where('companyId', '==', companyId),
+        where('type', '==', 'orson_risk'),
+        where('read', '==', false)
+      );
+
+      const snapshot = await getDocs(q);
+      const hasRecent = snapshot.docs.some((doc) => {
+        const data = doc.data();
+        const timestamp = data.timestamp?.toDate?.();
+        return data.data?.pondId === pondId
+          && data.data?.riskId === riskId
+          && timestamp
+          && timestamp > oneDayAgo;
+      });
+
+      return !hasRecent;
+    } catch (error) {
+      console.error('Error checking Orson notification duplicate:', error);
+      return true;
+    }
+  }
+
   private static getPriorityByDistanceAndSeverity(distance: number, severity: string): 'high' | 'medium' | 'low' {
     if (severity === 'critical' || distance < 10) return 'high';
     if (severity === 'high' || distance < 25) return 'medium';

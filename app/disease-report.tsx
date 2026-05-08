@@ -2,10 +2,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  TextInput, Alert, ActivityIndicator, Modal, ScrollView,
+  TextInput, Alert, ActivityIndicator, FlatList, Modal, ScrollView,
   Dimensions, Platform, PermissionsAndroid,
 } from 'react-native';
-import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
+import MapView, { Marker, Circle, PROVIDER_GOOGLE } from '../components/MapWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -44,25 +44,76 @@ interface DiseaseReport {
 
 const NOTIFICATION_RADIUS = [10, 25, 50, 100];
 
+const DISEASE_TYPES_CONFIG = [
+  { id: 'wssv', translationKey: 'wssv', defaultName: 'WSSV', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
+  { id: 'ems', translationKey: 'ems', defaultName: 'EMS', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
+  { id: 'vibrio', translationKey: 'vibrio', defaultName: 'Vibrio', severity: 'high', icon: 'warning', color: '#f39c12' },
+  { id: 'ihhnv', translationKey: 'ihhnv', defaultName: 'IHHNV', severity: 'high', icon: 'warning', color: '#f39c12' },
+  { id: 'yellowhead', translationKey: 'yellowhead', defaultName: 'Yellowhead', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
+  { id: 'taura', translationKey: 'taura', defaultName: 'Taura', severity: 'high', icon: 'warning', color: '#f39c12' },
+  { id: 'bacterial', translationKey: 'bacterial', defaultName: 'Bacterial', severity: 'medium', icon: 'medical', color: '#f1c40f' },
+  { id: 'fungal', translationKey: 'fungal', defaultName: 'Fungal', severity: 'medium', icon: 'medical', color: '#f1c40f' },
+  { id: 'parasitic', translationKey: 'parasitic', defaultName: 'Parasitic', severity: 'medium', icon: 'bug', color: '#f1c40f' },
+  { id: 'other', translationKey: 'otherDisease', defaultName: 'Other', severity: 'medium', icon: 'help-circle', color: '#f1c40f' },
+];
+
 export default function DiseaseReportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const mapRef = useRef<MapView>(null);
-  
-  const DISEASE_TYPES = [
-    { id: 'wssv', name: t?.diseaseReport?.wssv || 'WSSV', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
-    { id: 'ems', name: t?.diseaseReport?.ems || 'EMS', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
-    { id: 'vibrio', name: t?.diseaseReport?.vibrio || 'Vibrio', severity: 'high', icon: 'warning', color: '#f39c12' },
-    { id: 'ihhnv', name: t?.diseaseReport?.ihhnv || 'IHHNV', severity: 'high', icon: 'warning', color: '#f39c12' },
-    { id: 'yellowhead', name: t?.diseaseReport?.yellowhead || 'Yellowhead', severity: 'critical', icon: 'alert-circle', color: '#e74c3c' },
-    { id: 'taura', name: t?.diseaseReport?.taura || 'Taura', severity: 'high', icon: 'warning', color: '#f39c12' },
-    { id: 'bacterial', name: t?.diseaseReport?.bacterial || 'Bacterial', severity: 'medium', icon: 'medical', color: '#f1c40f' },
-    { id: 'fungal', name: t?.diseaseReport?.fungal || 'Fungal', severity: 'medium', icon: 'medical', color: '#f1c40f' },
-    { id: 'parasitic', name: t?.diseaseReport?.parasitic || 'Parasitic', severity: 'medium', icon: 'bug', color: '#f1c40f' },
-    { id: 'other', name: t?.diseaseReport?.otherDisease || 'Other', severity: 'medium', icon: 'help-circle', color: '#f1c40f' },
-  ];
+
+  const labels = React.useMemo(() => ({
+    title: t?.diseaseReport?.title || 'Disease Reports',
+    legend: t?.diseaseReport?.legend || 'Legend',
+    legendContent: t?.diseaseReport?.legendContent || 'Map legend information',
+    yourLocation: t?.diseaseReport?.yourLocation || 'Your Location',
+    myFarm: t?.diseaseReport?.myFarm || 'My Farm',
+    submitError: t?.diseaseReport?.submitError || 'Error',
+    failedToLoad: t?.diseaseReport?.failedToLoad || 'Failed to load reports',
+    selectDiseaseType: t?.diseaseReport?.selectDiseaseType || 'Please select a disease type',
+    describeSymptomsError: t?.diseaseReport?.describeSymptomsError || 'Please describe the symptoms',
+    locationError: t?.diseaseReport?.locationError || 'Location not available',
+    confirmReport: t?.diseaseReport?.confirmReport || 'Confirm Report',
+    confirmReportMessage: t?.diseaseReport?.confirmReportMessage || 'This will alert farms within {radius} km',
+    cancel: t?.CreateBuyerListingScreen?.cancel || 'Cancel',
+    reportSubmitted: t?.diseaseReport?.reportSubmitted || 'Report Submitted',
+    reportError: t?.diseaseReport?.reportError || 'Failed to submit report',
+    reportDisease: t?.diseaseReport?.reportDisease || 'Report Disease',
+    farm: t?.diseaseReport?.farm || 'Farm',
+    location: t?.diseaseReport?.location || 'Location',
+    distanceFromYou: t?.diseaseReport?.distanceFromYou || '{distance} km from you',
+    impact: t?.diseaseReport?.impact || 'Impact',
+    pondsAffected: t?.diseaseReport?.pondsAffected || '{count} ponds affected',
+    estimatedLossValue: t?.diseaseReport?.estimatedLossValue || 'Loss: {loss}',
+    symptoms: t?.diseaseReport?.symptoms || 'Symptoms',
+    actionsTaken: t?.diseaseReport?.actionsTaken || 'Actions Taken',
+    reported: t?.diseaseReport?.reported || 'Reported',
+    today: t?.diseaseReport?.today || 'Today',
+    daysAgo: t?.diseaseReport?.daysAgo || '{days} days ago',
+    shareAlert: t?.diseaseReport?.shareAlert || 'Share Alert',
+    getDirections: t?.diseaseReport?.getDirections || 'Get Directions',
+    reportOutbreak: t?.diseaseReport?.reportOutbreak || 'Report Outbreak',
+    formDescription: t?.diseaseReport?.formDescription || 'Report a disease outbreak in your farm',
+    diseaseType: t?.diseaseReport?.diseaseType || 'Disease Type',
+    affectedPonds: t?.diseaseReport?.affectedPonds || 'Affected Ponds',
+    affectedPondsPlaceholder: t?.diseaseReport?.affectedPondsPlaceholder || 'e.g., 3',
+    estimatedLoss: t?.diseaseReport?.estimatedLoss || 'Estimated Loss',
+    estimatedLossPlaceholder: t?.diseaseReport?.estimatedLossPlaceholder || 'e.g., 10-20%',
+    symptomsObserved: t?.diseaseReport?.symptomsObserved || 'Symptoms Observed',
+    describeSymptomsPlaceholder: t?.diseaseReport?.describeSymptomsPlaceholder || 'Describe the symptoms...',
+    containmentActionsPlaceholder: t?.diseaseReport?.containmentActionsPlaceholder || 'Describe containment actions...',
+    alertRadius: t?.diseaseReport?.alertRadius || 'Alert Radius',
+    submitReport: t?.diseaseReport?.submitReport || 'Submit Report',
+  }), [t]);
+
+  const DISEASE_TYPES = React.useMemo(() => 
+    DISEASE_TYPES_CONFIG.map(d => ({
+      ...d,
+      name: (t?.diseaseReport as any)?.[d.translationKey] || d.defaultName
+    })), [t]);
+
   
   // SET DEFAULT LOCATION IMMEDIATELY - Don't leave it null!
   const [currentLocation, setCurrentLocation] = useState<{ latitude: number; longitude: number }>({
@@ -84,6 +135,8 @@ export default function DiseaseReportScreen() {
     actionsTaken: '',
     notificationRadius: 50,
   });
+  const [showStatsModal, setShowStatsModal] = useState(false);
+  const [selectedSeverity, setSelectedSeverity] = useState<'critical' | 'high' | 'medium' | null>(null);
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
@@ -169,6 +222,7 @@ export default function DiseaseReportScreen() {
       
       if (status !== 'granted') {
         console.log('❌ Location permission not granted:', status);
+        Alert.alert(labels.permissionDenied, labels.locationPermissionRequired);
         setFallbackLocation();
         return;
       }
@@ -177,6 +231,7 @@ export default function DiseaseReportScreen() {
         const hasPermission = await requestAndroidLocationPermission();
         if (!hasPermission) {
           console.log('❌ Android location permission denied');
+          Alert.alert(labels.permissionDenied, labels.locationPermissionRequired);
           setFallbackLocation();
           return;
         }
@@ -251,8 +306,8 @@ export default function DiseaseReportScreen() {
         (error) => {
           console.error('Error loading reports:', error);
           Alert.alert(
-            t?.diseaseReport?.submitError || 'Error',
-            t?.diseaseReport?.failedToLoad || 'Failed to load reports'
+          labels.submitError,
+          labels.failedToLoad
           );
           setLoading(false);
         }
@@ -262,8 +317,8 @@ export default function DiseaseReportScreen() {
     } catch (error: any) {
       console.error('Error setting up reports listener:', error);
       Alert.alert(
-        t?.diseaseReport?.submitError || 'Error',
-        error.message || t?.diseaseReport?.failedToLoad || 'Failed to load reports'
+        labels.submitError,
+        labels.failedToLoad
       );
       setLoading(false);
       return () => {};
@@ -275,32 +330,32 @@ export default function DiseaseReportScreen() {
     
     if (!selectedDisease) {
       Alert.alert(
-        t?.diseaseReport?.submitError || 'Error',
-        t?.diseaseReport?.selectDiseaseType || 'Please select a disease type'
+        labels.submitError,
+        labels.selectDiseaseType
       );
       return;
     }
     if (!symptoms.trim()) {
       Alert.alert(
-        t?.diseaseReport?.submitError || 'Error',
-        t?.diseaseReport?.describeSymptomsError || 'Please describe the symptoms'
+        labels.submitError,
+        labels.describeSymptomsError
       );
       return;
     }
     if (!currentLocation) {
       Alert.alert(
-        t?.diseaseReport?.submitError || 'Error',
-        t?.diseaseReport?.locationError || 'Location not available'
+      labels.submitError,
+      labels.locationError
       );
       return;
     }
 
     Alert.alert(
-      t?.diseaseReport?.confirmReport || 'Confirm Report',
-      (t?.diseaseReport?.confirmReportMessage || 'This will alert farms within {radius} km')
+      labels.confirmReport,
+      labels.confirmReportMessage
         .replace('{radius}', notificationRadius.toString()),
       [
-        { text: t?.CreateBuyerListingScreen?.cancel || 'Cancel', style: 'cancel' },
+        { text: labels.cancel, style: 'cancel' },
         {
           text: 'Report',
           style: 'destructive',
@@ -316,7 +371,7 @@ export default function DiseaseReportScreen() {
       const diseaseInfo = DISEASE_TYPES.find(d => d.id === formData.selectedDisease);
       const locationAddress = company?.primaryLocation && typeof company.primaryLocation !== 'string'
         ? company.primaryLocation.address
-        : t?.diseaseReport?.yourLocation || 'Your Location';
+        : labels.yourLocation;
       
       const reportData = {
         companyId: company?.id || '',
@@ -344,16 +399,16 @@ export default function DiseaseReportScreen() {
       try {
         const notificationCount = await NotificationService.createDiseaseAlertNotifications(reportData, docRef.id);
         Alert.alert(
-          t?.diseaseReport?.reportSubmitted || 'Report Submitted',
+          labels.reportSubmitted,
           notificationCount > 0 
-            ? `${t?.diseaseReport?.reportSubmitted || 'Report submitted'}\n\nNotifications sent to ${notificationCount} nearby farms within ${formData.notificationRadius} km.`
-            : t?.diseaseReport?.reportSubmitted || 'Report submitted'
+            ? `${labels.reportSubmitted}\n\nNotifications sent to ${notificationCount} nearby farms within ${formData.notificationRadius} km.`
+            : labels.reportSubmitted
         );
       } catch (notificationError) {
         console.error('Error sending notifications:', notificationError);
         Alert.alert(
-          t?.diseaseReport?.reportSubmitted || 'Report Submitted',
-          `${t?.diseaseReport?.reportSubmitted || 'Report submitted'}\n\nWarning: Some notifications may not have been sent.`
+          labels.reportSubmitted,
+          `${labels.reportSubmitted}\n\nWarning: Some notifications may not have been sent.`
         );
       }
       
@@ -375,8 +430,8 @@ export default function DiseaseReportScreen() {
     } catch (error: any) {
       console.error('Error submitting report:', error);
       Alert.alert(
-        t?.diseaseReport?.submitError || 'Error',
-        error.message || t?.diseaseReport?.reportError || 'Failed to submit report'
+        labels.submitError,
+        labels.reportError
       );
     } finally {
       setLoading(false);
@@ -466,371 +521,105 @@ export default function DiseaseReportScreen() {
   };
 
   const renderHeader = () => (
-    <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-        <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#1B262C" />
-      </TouchableOpacity>
-      <Text style={styles.headerTitle}>{t?.diseaseReport?.title || 'Disease Reports'}</Text>
-      <TouchableOpacity 
-        style={styles.legendButton} 
-        onPress={() => Alert.alert(
-          t?.diseaseReport?.legend || 'Legend',
-          t?.diseaseReport?.legendContent || 'Map legend information'
-        )}
-      >
-        <Ionicons name="information-circle-outline" size={Platform.OS === 'android' ? 22 : 24} color="#1B262C" />
-      </TouchableOpacity>
-    </View>
+    <Header 
+      insets={insets} 
+      title={labels.title} 
+      onBack={() => router.back()} 
+      onReport={() => setShowReportModal(true)}
+    />
   );
+
+  const stats = React.useMemo(() => ({
+    critical: reports.filter(r => r.severity === 'critical').length,
+    high: reports.filter(r => r.severity === 'high').length,
+    medium: reports.filter(r => r.severity === 'medium').length,
+  }), [reports]);
 
   const renderStatsBar = () => (
     <View style={styles.statsBar}>
-      {['critical', 'high', 'medium'].map((severity, idx) => (
-        <View key={severity} style={styles.statItem}>
+      {[
+        { severity: 'critical' as const, count: stats.critical, color: '#e74c3c' },
+        { severity: 'high' as const, count: stats.high, color: '#f39c12' },
+        { severity: 'medium' as const, count: stats.medium, color: '#f1c40f' },
+      ].map((item, idx) => (
+        <TouchableOpacity 
+          key={item.severity} 
+          style={styles.statItem}
+          onPress={() => {
+            setSelectedSeverity(item.severity);
+            setShowStatsModal(true);
+          }}
+        >
           <Ionicons 
             name={idx === 0 ? "warning" : "alert-circle"} 
             size={Platform.OS === 'android' ? 18 : 20} 
-            color={idx === 0 ? '#e74c3c' : idx === 1 ? '#f39c12' : '#f1c40f'} 
+            color={item.color} 
           />
-          <Text style={styles.statNumber}>{reports.filter(r => r.severity === severity).length}</Text>
-        </View>
+          <Text style={styles.statNumber}>{item.count}</Text>
+        </TouchableOpacity>
       ))}
     </View>
   );
 
-  const renderMap = () => {
-    if (!currentLocation) {
-      return (
-        <View style={[styles.map, { justifyContent: 'center', alignItems: 'center' }]}>
-          <ActivityIndicator size="large" color="#0F4C75" />
-          <Text style={{ marginTop: 10, color: '#666' }}>Loading map...</Text>
-        </View>
-      );
-    }
-
-    return (
-      <MapView
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={styles.map}
-        initialRegion={{
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          latitudeDelta: 0.5,
-          longitudeDelta: 0.5,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        onMapReady={() => {
-          console.log('✅ Map is ready');
-          setMapReady(true);
-          setError(null);
-        }}
-        onMapLoaded={() => {
-          console.log('✅ Map loaded');
-        }}
-        loadingEnabled={true}
-        loadingIndicatorColor="#0F4C75"
-        loadingBackgroundColor="#F5F5F5"
-        showsCompass={true}
-        showsScale={true}
-        rotateEnabled={true}
-        scrollEnabled={true}
-        zoomEnabled={true}
-      >
-        {currentLocation && (
-          <Marker
-            coordinate={currentLocation}
-            title={t?.diseaseReport?.yourLocation || 'Your Location'}
-            description={company?.companyName || t?.diseaseReport?.myFarm || 'My Farm'}
-          >
-            <View style={styles.userMarker}>
-              <Ionicons name="home" size={Platform.OS === 'android' ? 20 : 24} color="#0F4C75" />
-            </View>
-          </Marker>
-        )}
-
-        {reports.map((report) => {
-          if (!report?.location?.latitude || !report?.location?.longitude) {
-            console.warn('Invalid report location:', report);
-            return null;
-          }
-          
-          return (
-            <React.Fragment key={report.id}>
-              <Marker
-                coordinate={{ 
-                  latitude: report.location.latitude, 
-                  longitude: report.location.longitude 
-                }}
-                onPress={() => handleMarkerPress(report)}
-              >
-                <View style={[styles.diseaseMarker, { backgroundColor: report.color }]}>
-                  <Ionicons 
-                    name={DISEASE_TYPES.find(d => d.id === report.diseaseType)?.icon as any || 'alert-circle'} 
-                    size={Platform.OS === 'android' ? 18 : 20} 
-                    color="#FFFFFF" 
-                  />
-                </View>
-              </Marker>
-              <Circle
-                center={{ 
-                  latitude: report.location.latitude, 
-                  longitude: report.location.longitude 
-                }}
-                radius={report.notificationRadius * 1000}
-                fillColor={`${report.color}20`}
-                strokeColor={report.color}
-                strokeWidth={2}
-              />
-            </React.Fragment>
-          );
-        })}
-      </MapView>
-    );
-  };
+  const renderMap = () => (
+    <MapSection
+      mapRef={mapRef}
+      currentLocation={currentLocation}
+      reports={reports}
+      onMapReady={() => {
+        console.log('✅ Map is ready');
+        setMapReady(true);
+        setError(null);
+      }}
+      onMarkerPress={handleMarkerPress}
+      userMarkerTitle={labels.yourLocation}
+      userMarkerDescription={company?.companyName || labels.myFarm}
+      diseaseTypes={DISEASE_TYPES}
+    />
+  );
 
   const renderDetailsModal = () => (
-    <Modal visible={showDetailsModal} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.detailsModal, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <View style={styles.modalHeader}>
-            <View style={styles.modalHeaderLeft}>
-              <View style={[styles.severityIndicator, { backgroundColor: selectedReport?.color }]} />
-              <Text style={styles.modalTitle} numberOfLines={1}>{selectedReport?.diseaseName}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setShowDetailsModal(false)}>
-              <Ionicons name="close" size={Platform.OS === 'android' ? 24 : 28} color="#1B262C" />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView 
-            style={styles.detailsContent} 
-            contentContainerStyle={{ paddingBottom: 20 }}
-            showsVerticalScrollIndicator={false}
-          >
-            <DetailCard label={t?.diseaseReport?.farm || 'Farm'} value={selectedReport?.companyName} />
-            <DetailCard 
-              label={t?.diseaseReport?.location || 'Location'} 
-              value={selectedReport?.location.address}
-              extra={currentLocation && selectedReport && (
-                <Text style={styles.distanceText}>
-                  {(t?.diseaseReport?.distanceFromYou || '{distance} km from you')
-                    .replace('{distance}', getDistanceFromUser(selectedReport).toFixed(1))}
-                </Text>
-              )}
-            />
-            <DetailCard 
-              label={t?.diseaseReport?.impact || 'Impact'} 
-              value={`${(t?.diseaseReport?.pondsAffected || '{count} ponds affected')
-                .replace('{count}', selectedReport?.affectedPonds.toString() || '0')} • ${(t?.diseaseReport?.estimatedLossValue || 'Loss: {loss}')
-                .replace('{loss}', selectedReport?.estimatedLoss || '')}`}
-            />
-            <DetailCard label={t?.diseaseReport?.symptoms || 'Symptoms'} value={selectedReport?.symptoms} />
-            {selectedReport?.actionsTaken && (
-              <DetailCard label={t?.diseaseReport?.actionsTaken || 'Actions Taken'} value={selectedReport.actionsTaken} />
-            )}
-            <DetailCard 
-              label={t?.diseaseReport?.reported || 'Reported'} 
-              value={selectedReport && getDaysAgo(selectedReport.reportDate) === 0 
-                ? t?.diseaseReport?.today || 'Today'
-                : (t?.diseaseReport?.daysAgo || '{days} days ago')
-                  .replace('{days}', getDaysAgo(selectedReport?.reportDate || '').toString())}
-            />
-
-            {selectedReport?.companyId === company?.id && selectedReport?.status === 'active' && (
-              <View style={styles.statusUpdateCard}>
-                <Text style={styles.statusLabel}>Update Status</Text>
-                <View style={styles.statusButtons}>
-                  <TouchableOpacity 
-                    style={[styles.statusButton, { backgroundColor: '#f39c12' }]}
-                    onPress={() => handleUpdateStatus('contained')}
-                  >
-                    <Ionicons name="shield-checkmark" size={Platform.OS === 'android' ? 16 : 18} color="#FFFFFF" />
-                    <Text style={styles.statusButtonText}>Mark as Contained</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.statusButton, { backgroundColor: '#27ae60' }]}
-                    onPress={() => handleUpdateStatus('resolved')}
-                  >
-                    <Ionicons name="checkmark-circle" size={Platform.OS === 'android' ? 16 : 18} color="#FFFFFF" />
-                    <Text style={styles.statusButtonText}>Mark as Resolved</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            )}
-
-            {selectedReport?.status !== 'active' && (
-              <View style={styles.statusBadge}>
-                <Ionicons 
-                  name={selectedReport?.status === 'contained' ? 'shield-checkmark' : 'checkmark-circle'} 
-                  size={Platform.OS === 'android' ? 18 : 20} 
-                  color={selectedReport?.status === 'contained' ? '#f39c12' : '#27ae60'} 
-                />
-                <Text style={[styles.statusBadgeText, { 
-                  color: selectedReport?.status === 'contained' ? '#f39c12' : '#27ae60' 
-                }]}>
-                  {selectedReport?.status === 'contained' ? 'Contained' : 'Resolved'}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.actionButtons}>
-              <TouchableOpacity style={styles.shareButton}>
-                <Ionicons name="share-social-outline" size={Platform.OS === 'android' ? 18 : 20} color="#3282B8" />
-                <Text style={styles.shareButtonText}>{t?.diseaseReport?.shareAlert || 'Share Alert'}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.directionsButton}>
-                <Ionicons name="navigate-outline" size={Platform.OS === 'android' ? 18 : 20} color="#FFFFFF" />
-                <Text style={styles.directionsButtonText}>{t?.diseaseReport?.getDirections || 'Get Directions'}</Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    <DetailsModal
+      visible={showDetailsModal}
+      onClose={() => setShowDetailsModal(false)}
+      selectedReport={selectedReport}
+      currentLocation={currentLocation}
+      companyId={company?.id}
+      labels={labels}
+      insets={insets}
+      onUpdateStatus={handleUpdateStatus}
+      getDistanceFromUser={getDistanceFromUser}
+      getDaysAgo={getDaysAgo}
+    />
   );
 
   const renderReportModal = () => (
-    <Modal visible={showReportModal} animationType="slide" transparent>
-      <View style={styles.modalOverlay}>
-        <View style={[styles.reportModal, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t?.diseaseReport?.reportOutbreak || 'Report Outbreak'}</Text>
-            <TouchableOpacity onPress={() => setShowReportModal(false)}>
-              <Ionicons name="close" size={Platform.OS === 'android' ? 24 : 28} color="#1B262C" />
-            </TouchableOpacity>
-          </View>
+    <ReportModal
+      visible={showReportModal}
+      onClose={() => setShowReportModal(false)}
+      formData={formData}
+      loading={loading}
+      labels={labels}
+      insets={insets}
+      diseaseTypes={DISEASE_TYPES}
+      onUpdateFormData={updateFormData}
+      onSubmit={handleSubmitReport}
+    />
+  );
 
-          <ScrollView 
-            style={styles.formContent} 
-            contentContainerStyle={{ paddingBottom: 20 }}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <Text style={styles.formDescription}>{t?.diseaseReport?.formDescription || 'Report a disease outbreak in your farm'}</Text>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t?.diseaseReport?.diseaseType || 'Disease Type'} *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.diseaseScroll}>
-                {DISEASE_TYPES.map(disease => (
-                  <TouchableOpacity
-                    key={disease.id}
-                    style={[
-                      styles.diseaseChip,
-                      formData.selectedDisease === disease.id && { backgroundColor: disease.color }
-                    ]}
-                    onPress={() => updateFormData('selectedDisease', disease.id)}
-                  >
-                    <Ionicons 
-                      name={disease.icon as any} 
-                      size={Platform.OS === 'android' ? 16 : 18} 
-                      color={formData.selectedDisease === disease.id ? '#FFFFFF' : disease.color} 
-                    />
-                    <Text style={[
-                      styles.diseaseChipText,
-                      formData.selectedDisease === disease.id && styles.diseaseChipTextActive
-                    ]}>
-                      {disease.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
-
-            <View style={styles.formRow}>
-              <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
-                <Text style={styles.formLabel}>{t?.diseaseReport?.affectedPonds || 'Affected Ponds'}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t?.diseaseReport?.affectedPondsPlaceholder || 'e.g., 3'}
-                  placeholderTextColor="#999"
-                  keyboardType="numeric"
-                  value={formData.affectedPonds}
-                  onChangeText={(val) => updateFormData('affectedPonds', val)}
-                />
-              </View>
-              <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
-                <Text style={styles.formLabel}>{t?.diseaseReport?.estimatedLoss || 'Estimated Loss'}</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={t?.diseaseReport?.estimatedLossPlaceholder || 'e.g., 10-20%'}
-                  placeholderTextColor="#999"
-                  value={formData.estimatedLoss}
-                  onChangeText={(val) => updateFormData('estimatedLoss', val)}
-                />
-              </View>
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t?.diseaseReport?.symptomsObserved || 'Symptoms Observed'} *</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder={t?.diseaseReport?.describeSymptomsPlaceholder || 'Describe the symptoms...'}
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={4}
-                value={formData.symptoms}
-                onChangeText={(val) => updateFormData('symptoms', val)}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t?.diseaseReport?.actionsTaken || 'Actions Taken'}</Text>
-              <TextInput
-                style={[styles.input, styles.textArea]}
-                placeholder={t?.diseaseReport?.containmentActionsPlaceholder || 'Describe containment actions...'}
-                placeholderTextColor="#999"
-                multiline
-                numberOfLines={3}
-                value={formData.actionsTaken}
-                onChangeText={(val) => updateFormData('actionsTaken', val)}
-                textAlignVertical="top"
-              />
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>{t?.diseaseReport?.alertRadius || 'Alert Radius'}</Text>
-              <View style={styles.radiusButtons}>
-                {NOTIFICATION_RADIUS.map(radius => (
-                  <TouchableOpacity
-                    key={radius}
-                    style={[
-                      styles.radiusButton,
-                      formData.notificationRadius === radius && styles.radiusButtonActive
-                    ]}
-                    onPress={() => updateFormData('notificationRadius', radius)}
-                  >
-                    <Text style={[
-                      styles.radiusButtonText,
-                      formData.notificationRadius === radius && styles.radiusButtonTextActive
-                    ]}>
-                      {radius} km
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity 
-              style={styles.submitButton} 
-              onPress={handleSubmitReport}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" size="small" />
-              ) : (
-                <>
-                  <Ionicons name="warning" size={Platform.OS === 'android' ? 18 : 20} color="#FFFFFF" />
-                  <Text style={styles.submitButtonText}>{t?.diseaseReport?.submitReport || 'Submit Report'}</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-      </View>
-    </Modal>
+  const renderStatsModal = () => (
+    <StatsModal
+      visible={showStatsModal}
+      onClose={() => setShowStatsModal(false)}
+      severity={selectedSeverity}
+      reports={reports.filter(r => r.severity === selectedSeverity)}
+      labels={labels}
+      insets={insets}
+      onReportPress={(report: DiseaseReport) => {
+        setShowStatsModal(false);
+        handleMarkerPress(report);
+      }}
+    />
   );
 
   if (error) {
@@ -841,7 +630,7 @@ export default function DiseaseReportScreen() {
           {error}
         </Text>
         <TouchableOpacity 
-          style={{ marginTop: 24, backgroundColor: '#0F4C75', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          style={{ marginTop: 24, backgroundColor: '#0d2137', paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
           onPress={() => {
             setError(null);
             getCurrentLocation();
@@ -855,19 +644,12 @@ export default function DiseaseReportScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       {renderHeader()}
       {renderMap()}
       {renderStatsBar()}
+      {renderStatsModal()}
 
-      <TouchableOpacity 
-        style={styles.reportButton} 
-        onPress={() => setShowReportModal(true)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="add" size={Platform.OS === 'android' ? 24 : 28} color="#FFFFFF" />
-        <Text style={styles.reportButtonText}>{t?.diseaseReport?.reportDisease || 'Report Disease'}</Text>
-      </TouchableOpacity>
 
       {renderDetailsModal()}
       {renderReportModal()}
@@ -875,13 +657,425 @@ export default function DiseaseReportScreen() {
   );
 }
 
-const DetailCard = ({ label, value, extra }: { label: string; value?: string; extra?: React.ReactNode }) => (
+// --- Sub-components ---
+
+const Header = React.memo(({ insets, title, onBack, onReport }: any) => (
+  <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
+    <TouchableOpacity
+      style={styles.backButton}
+      onPress={onBack}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
+    </TouchableOpacity>
+    <Text style={styles.headerTitle}>{title}</Text>
+    <TouchableOpacity
+      style={styles.legendButton}
+      onPress={onReport}
+      accessibilityRole="button"
+      accessibilityLabel="Report disease outbreak"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="add-circle" size={Platform.OS === 'android' ? 28 : 32} color="#e74c3c" />
+    </TouchableOpacity>
+  </View>
+));
+Header.displayName = 'Header';
+
+const MapSection = React.memo(({ 
+  mapRef, currentLocation, reports, onMapReady, onMarkerPress, 
+  userMarkerTitle, userMarkerDescription, diseaseTypes 
+}: any) => {
+  if (!currentLocation) {
+    return (
+      <View style={[styles.map, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color="#0d2137" />
+        <Text style={{ marginTop: 10, color: '#666' }}>Loading map...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <MapView
+      ref={mapRef}
+      provider={PROVIDER_GOOGLE}
+      style={styles.map}
+      initialRegion={{
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        latitudeDelta: 0.5,
+        longitudeDelta: 0.5,
+      }}
+      showsUserLocation={true}
+      showsMyLocationButton={true}
+      onMapReady={onMapReady}
+      loadingEnabled={true}
+      loadingIndicatorColor="#0d2137"
+      loadingBackgroundColor="#F5F5F5"
+      showsCompass={true}
+      showsScale={true}
+      rotateEnabled={true}
+      scrollEnabled={true}
+      zoomEnabled={true}
+    >
+      <Marker
+        coordinate={currentLocation}
+        title={userMarkerTitle}
+        description={userMarkerDescription}
+      >
+        <View style={styles.userMarker}>
+          <Ionicons name="home" size={Platform.OS === 'android' ? 20 : 24} color="#0d2137" />
+        </View>
+      </Marker>
+
+      {reports.map((report: any) => (
+        <ReportMarker 
+          key={report.id} 
+          report={report} 
+          onPress={() => onMarkerPress(report)}
+          iconName={diseaseTypes.find((d: any) => d.id === report.diseaseType)?.icon || 'alert-circle'}
+        />
+      ))}
+    </MapView>
+  );
+});
+MapSection.displayName = 'MapSection';
+
+const ReportMarker = React.memo(({ report, onPress, iconName }: any) => {
+  if (!report?.location?.latitude || !report?.location?.longitude) return null;
+  
+  return (
+    <React.Fragment>
+      <Marker
+        coordinate={{ 
+          latitude: report.location.latitude, 
+          longitude: report.location.longitude 
+        }}
+        onPress={onPress}
+      >
+        <View style={[styles.diseaseMarker, { backgroundColor: report.color }]}>
+          <Ionicons 
+            name={iconName as any} 
+            size={Platform.OS === 'android' ? 18 : 20} 
+            color="#FFFFFF" 
+          />
+        </View>
+      </Marker>
+      <Circle
+        center={{ 
+          latitude: report.location.latitude, 
+          longitude: report.location.longitude 
+        }}
+        radius={report.notificationRadius * 1000}
+        fillColor={`${report.color}20`}
+        strokeColor={report.color}
+        strokeWidth={2}
+      />
+    </React.Fragment>
+  );
+});
+ReportMarker.displayName = 'ReportMarker';
+
+const DetailsModal = React.memo(({ 
+  visible, onClose, selectedReport, currentLocation, companyId, 
+  labels, insets, onUpdateStatus, getDistanceFromUser, getDaysAgo 
+}: any) => (
+  <Modal visible={visible} animationType="slide" transparent>
+    <View style={styles.modalOverlay}>
+      <View style={[styles.detailsModal, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={styles.modalHeader}>
+          <View style={styles.modalHeaderLeft}>
+            <View style={[styles.severityIndicator, { backgroundColor: selectedReport?.color }]} />
+            <Text style={styles.modalTitle} numberOfLines={1}>{selectedReport?.diseaseName}</Text>
+          </View>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={Platform.OS === 'android' ? 24 : 28} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView 
+          style={styles.detailsContent} 
+          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <DetailCard label={labels.farm} value={selectedReport?.companyName} />
+          <DetailCard 
+            label={labels.location} 
+            value={selectedReport?.location.address}
+            extra={currentLocation && selectedReport && (
+              <Text style={styles.distanceText}>
+                {labels.distanceFromYou.replace('{distance}', getDistanceFromUser(selectedReport).toFixed(1))}
+              </Text>
+            )}
+          />
+          <DetailCard 
+            label={labels.impact} 
+            value={`${labels.pondsAffected.replace('{count}', selectedReport?.affectedPonds.toString() || '0')} • ${labels.estimatedLossValue.replace('{loss}', selectedReport?.estimatedLoss || '')}`}
+          />
+          <DetailCard label={labels.symptoms} value={selectedReport?.symptoms} />
+          {selectedReport?.actionsTaken && (
+            <DetailCard label={labels.actionsTaken} value={selectedReport.actionsTaken} />
+          )}
+          <DetailCard 
+            label={labels.reported} 
+            value={selectedReport && getDaysAgo(selectedReport.reportDate) === 0 
+              ? labels.today
+              : labels.daysAgo.replace('{days}', getDaysAgo(selectedReport?.reportDate || '').toString())}
+          />
+
+          {selectedReport?.companyId === companyId && selectedReport?.status === 'active' && (
+            <View style={styles.statusUpdateCard}>
+              <Text style={styles.statusLabel}>Update Status</Text>
+              <View style={styles.statusButtons}>
+                <TouchableOpacity 
+                  style={[styles.statusButton, { backgroundColor: '#f39c12' }]}
+                  onPress={() => onUpdateStatus('contained')}
+                >
+                  <Ionicons name="shield-checkmark" size={Platform.OS === 'android' ? 16 : 18} color="#FFFFFF" />
+                  <Text style={styles.statusButtonText}>Mark as Contained</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={[styles.statusButton, { backgroundColor: '#27ae60' }]}
+                  onPress={() => onUpdateStatus('resolved')}
+                >
+                  <Ionicons name="checkmark-circle" size={Platform.OS === 'android' ? 16 : 18} color="#FFFFFF" />
+                  <Text style={styles.statusButtonText}>Mark as Resolved</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {selectedReport?.status !== 'active' && (
+            <View style={styles.statusBadge}>
+              <Ionicons 
+                name={selectedReport?.status === 'contained' ? 'shield-checkmark' : 'checkmark-circle'} 
+                size={Platform.OS === 'android' ? 18 : 20} 
+                color={selectedReport?.status === 'contained' ? '#f39c12' : '#27ae60'} 
+              />
+              <Text style={[styles.statusBadgeText, { 
+                color: selectedReport?.status === 'contained' ? '#f39c12' : '#27ae60' 
+              }]}>
+                {selectedReport?.status === 'contained' ? 'Contained' : 'Resolved'}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.actionButtons}>
+            <TouchableOpacity style={styles.shareButton}>
+              <Ionicons name="share-social-outline" size={Platform.OS === 'android' ? 18 : 20} color="#315f57" />
+              <Text style={styles.shareButtonText}>{labels.shareAlert}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.directionsButton}>
+              <Ionicons name="navigate-outline" size={Platform.OS === 'android' ? 18 : 20} color="#FFFFFF" />
+              <Text style={styles.directionsButtonText}>{labels.getDirections}</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+));
+DetailsModal.displayName = 'DetailsModal';
+
+const ReportModal = React.memo(({ 
+  visible, onClose, formData, loading, labels, insets, 
+  diseaseTypes, onUpdateFormData, onSubmit 
+}: any) => (
+  <Modal visible={visible} animationType="slide" transparent>
+    <View style={styles.modalOverlay}>
+      <View style={[styles.reportModal, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{labels.reportOutbreak}</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={Platform.OS === 'android' ? 24 : 28} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+
+        <ScrollView 
+          style={styles.formContent} 
+          contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.formDescription}>{labels.formDescription}</Text>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{labels.diseaseType} *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.diseaseScroll}>
+              {diseaseTypes.map((disease: any) => (
+                <TouchableOpacity
+                  key={disease.id}
+                  style={[
+                    styles.diseaseChip,
+                    formData.selectedDisease === disease.id && { backgroundColor: disease.color }
+                  ]}
+                  onPress={() => onUpdateFormData('selectedDisease', disease.id)}
+                >
+                  <Ionicons 
+                    name={disease.icon as any} 
+                    size={Platform.OS === 'android' ? 16 : 18} 
+                    color={formData.selectedDisease === disease.id ? '#FFFFFF' : disease.color} 
+                  />
+                  <Text style={[
+                    styles.diseaseChipText,
+                    formData.selectedDisease === disease.id && styles.diseaseChipTextActive
+                  ]}>
+                    {disease.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+
+          <View style={styles.formRow}>
+            <View style={[styles.formGroup, { flex: 1, marginRight: 8 }]}>
+              <Text style={styles.formLabel}>{labels.affectedPonds}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={labels.affectedPondsPlaceholder}
+                placeholderTextColor="#6b8aa0"
+                keyboardType="numeric"
+                value={formData.affectedPonds}
+                onChangeText={(val) => onUpdateFormData('affectedPonds', val)}
+              />
+            </View>
+            <View style={[styles.formGroup, { flex: 1, marginLeft: 8 }]}>
+              <Text style={styles.formLabel}>{labels.estimatedLoss}</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={labels.estimatedLossPlaceholder}
+                placeholderTextColor="#6b8aa0"
+                value={formData.estimatedLoss}
+                onChangeText={(val) => onUpdateFormData('estimatedLoss', val)}
+              />
+            </View>
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{labels.symptomsObserved} *</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder={labels.describeSymptomsPlaceholder}
+              placeholderTextColor="#6b8aa0"
+              multiline
+              numberOfLines={4}
+              value={formData.symptoms}
+              onChangeText={(val) => onUpdateFormData('symptoms', val)}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{labels.actionsTaken}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              placeholder={labels.containmentActionsPlaceholder}
+              placeholderTextColor="#6b8aa0"
+              multiline
+              numberOfLines={3}
+              value={formData.actionsTaken}
+              onChangeText={(val) => onUpdateFormData('actionsTaken', val)}
+              textAlignVertical="top"
+            />
+          </View>
+
+          <View style={styles.formGroup}>
+            <Text style={styles.formLabel}>{labels.alertRadius}</Text>
+            <View style={styles.radiusButtons}>
+              {NOTIFICATION_RADIUS.map(radius => (
+                <TouchableOpacity
+                  key={radius}
+                  style={[
+                    styles.radiusButton,
+                    formData.notificationRadius === radius && styles.radiusButtonActive
+                  ]}
+                  onPress={() => onUpdateFormData('notificationRadius', radius)}
+                >
+                  <Text style={[
+                    styles.radiusButtonText,
+                    formData.notificationRadius === radius && styles.radiusButtonTextActive
+                  ]}>
+                    {radius} km
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.submitButton} 
+            onPress={onSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <>
+                <Ionicons name="warning" size={Platform.OS === 'android' ? 18 : 20} color="#FFFFFF" />
+                <Text style={styles.submitButtonText}>{labels.submitReport}</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
+));
+ReportModal.displayName = 'ReportModal';
+
+const DetailCard = React.memo(({ label, value, extra }: { label: string; value?: string; extra?: React.ReactNode }) => (
   <View style={styles.detailCard}>
     <Text style={styles.detailLabel}>{label}</Text>
-    <Text style={styles.detailValue}>{value}</Text>
+    <Text style={styles.detailValue}>{value || 'Not specified'}</Text>
     {extra}
   </View>
-);
+));
+DetailCard.displayName = 'DetailCard';
+
+const StatsModal = React.memo(({ 
+  visible, onClose, severity, reports, labels, insets, onReportPress 
+}: any) => (
+  <Modal visible={visible} animationType="slide" transparent>
+    <View style={styles.modalOverlay}>
+      <View style={[styles.detailsModal, { paddingBottom: Math.max(insets.bottom, 20), minHeight: height * 0.4 }]}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>{severity?.toUpperCase()} Reports</Text>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={28} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+        <FlatList 
+          style={styles.detailsContent}
+          data={reports}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item: report }) => (
+            <TouchableOpacity 
+              style={styles.reportListItem}
+              onPress={() => onReportPress(report)}
+            >
+              <View style={[styles.severityDot, { backgroundColor: report.color }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reportListTitle}>{report.diseaseName}</Text>
+                <Text style={styles.reportListSubtitle}>{report.companyName}</Text>
+                <Text style={styles.reportListTime}>
+                  {new Date(report.reportDate).toLocaleString()}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#315f57" />
+            </TouchableOpacity>
+          )}
+          contentContainerStyle={{ paddingBottom: 20, flexGrow: 1 }}
+          ListEmptyComponent={
+            <Text style={{ textAlign: 'center', marginTop: 40, color: '#666' }}>No recent reports for this level.</Text>
+          }
+        />
+      </View>
+    </View>
+  </Modal>
+));
+StatsModal.displayName = 'StatsModal';
 
 const styles = StyleSheet.create({
   container: {
@@ -892,12 +1086,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#BBE1FA',
+    backgroundColor: '#dce8f2',
     paddingHorizontal: Platform.OS === 'android' ? 12 : 16,
     paddingBottom: Platform.OS === 'android' ? 10 : 12,
     borderBottomLeftRadius: Platform.OS === 'android' ? 16 : 20,
     borderBottomRightRadius: Platform.OS === 'android' ? 16 : 20,
-    shadowColor: '#000',
+    shadowColor: '#dce8f2',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
@@ -911,7 +1105,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Platform.OS === 'android' ? 18 : 20,
     fontWeight: '700',
-    color: '#1B262C',
+    color: '#0d2137',
     flex: 1,
     textAlign: 'center',
     marginHorizontal: 8,
@@ -934,7 +1128,7 @@ const styles = StyleSheet.create({
     borderRadius: Platform.OS === 'android' ? 12 : 16,
     padding: Platform.OS === 'android' ? 10 : 12,
     justifyContent: 'space-around',
-    shadowColor: '#000',
+    shadowColor: '#dce8f2',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 8,
@@ -948,15 +1142,15 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: Platform.OS === 'android' ? 14 : 16,
     fontWeight: '700',
-    color: '#1B262C',
+    color: '#0d2137',
   },
   userMarker: {
     backgroundColor: '#FFFFFF',
     padding: Platform.OS === 'android' ? 6 : 8,
     borderRadius: Platform.OS === 'android' ? 18 : 20,
     borderWidth: 3,
-    borderColor: '#0F4C75',
-    shadowColor: '#000',
+    borderColor: '#0d2137',
+    shadowColor: '#dce8f2',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -970,7 +1164,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 3,
     borderColor: '#FFFFFF',
-    shadowColor: '#000',
+    shadowColor: '#dce8f2',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.4,
     shadowRadius: 4,
@@ -986,7 +1180,7 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'android' ? 12 : 14,
     paddingHorizontal: Platform.OS === 'android' ? 16 : 20,
     borderRadius: Platform.OS === 'android' ? 25 : 30,
-    shadowColor: '#000',
+    shadowColor: '#dce8f2',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -1008,12 +1202,14 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: Platform.OS === 'android' ? 20 : 24,
     borderTopRightRadius: Platform.OS === 'android' ? 20 : 24,
     maxHeight: height * 0.85,
+    minHeight: height * 0.5, // Added minHeight to prevent content from being hidden
   },
   reportModal: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: Platform.OS === 'android' ? 20 : 24,
     borderTopRightRadius: Platform.OS === 'android' ? 20 : 24,
     maxHeight: height * 0.9,
+    minHeight: height * 0.7, // Added minHeight
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1037,7 +1233,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: Platform.OS === 'android' ? 18 : 20,
     fontWeight: '700',
-    color: '#1B262C',
+    color: '#0d2137',
     flex: 1,
   },
   detailsContent: {
@@ -1060,12 +1256,12 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     fontSize: Platform.OS === 'android' ? 14 : 15,
-    color: '#1B262C',
+    color: '#0d2137',
     lineHeight: Platform.OS === 'android' ? 20 : 22,
   },
   distanceText: {
     fontSize: Platform.OS === 'android' ? 12 : 13,
-    color: '#3282B8',
+    color: '#315f57',
     marginTop: 4,
     fontWeight: '600',
   },
@@ -1128,7 +1324,7 @@ const styles = StyleSheet.create({
     gap: Platform.OS === 'android' ? 6 : 8,
   },
   shareButtonText: {
-    color: '#3282B8',
+    color: '#315f57',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     fontWeight: '600',
   },
@@ -1137,7 +1333,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0F4C75',
+    backgroundColor: '#0d2137',
     padding: Platform.OS === 'android' ? 10 : 12,
     borderRadius: Platform.OS === 'android' ? 8 : 10,
     gap: Platform.OS === 'android' ? 6 : 8,
@@ -1163,7 +1359,7 @@ const styles = StyleSheet.create({
   formLabel: {
     fontSize: Platform.OS === 'android' ? 13 : 14,
     fontWeight: '600',
-    color: '#1B262C',
+    color: '#0d2137',
     marginBottom: Platform.OS === 'android' ? 6 : 8,
   },
   formRow: {
@@ -1175,7 +1371,7 @@ const styles = StyleSheet.create({
     borderRadius: Platform.OS === 'android' ? 8 : 10,
     padding: Platform.OS === 'android' ? 10 : 12,
     fontSize: Platform.OS === 'android' ? 14 : 15,
-    color: '#1B262C',
+    color: '#0d2137',
     borderWidth: 1,
     borderColor: '#E8E8E8',
   },
@@ -1202,7 +1398,7 @@ const styles = StyleSheet.create({
   diseaseChipText: {
     fontSize: Platform.OS === 'android' ? 12 : 13,
     fontWeight: '600',
-    color: '#1B262C',
+    color: '#0d2137',
   },
   diseaseChipTextActive: {
     color: '#FFFFFF',
@@ -1223,8 +1419,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   radiusButtonActive: {
-    backgroundColor: '#0F4C75',
-    borderColor: '#0F4C75',
+    backgroundColor: '#0d2137',
+    borderColor: '#0d2137',
   },
   radiusButtonText: {
     fontSize: Platform.OS === 'android' ? 12 : 13,
@@ -1249,5 +1445,34 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: Platform.OS === 'android' ? 14 : 16,
     fontWeight: '700',
+  },
+  reportListItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 12,
+    marginTop: 12,
+    gap: 12,
+  },
+  severityDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+  },
+  reportListTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0d2137',
+  },
+  reportListSubtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  reportListTime: {
+    fontSize: 11,
+    color: '#315f57',
+    marginTop: 4,
   },
 });

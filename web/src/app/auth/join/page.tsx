@@ -135,7 +135,9 @@ export default function JoinPage() {
         }}>
           <div style={{ textAlign: 'center' }}>
             <img 
-              src="/assets/shrimplylogoweb.png" 
+              src="/assets/shrimplylogoweb.webp"
+              width="500"
+              height="160"
               alt="Shrimply" 
               style={{ height: '64px', width: 'auto', margin: '0 auto 20px', filter: 'drop-shadow(0 10px 20px rgba(15,76,117,0.1))' }} 
             />

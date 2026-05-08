@@ -33,14 +33,74 @@ service cloud.firestore {
         && companyDoc(companyId).data.ownerId == request.auth.uid;
     }
 
+    function validNonEmptyString(value) {
+      return value is string && value.size() > 0 && value.size() <= 200;
+    }
+
+    function validOptionalString(data, key, maxLength) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLength);
+    }
+
+    function validOptionalBoolean(data, key) {
+      return !(key in data) || data[key] is bool;
+    }
+
+    function validUserPayload(data) {
+      return (!('uid' in data) || data.uid == request.auth.uid)
+        && (!('id' in data) || data.id == request.auth.uid)
+        && validNonEmptyString(data.email)
+        && validOptionalString(data, 'name', 120)
+        && validOptionalString(data, 'phone', 40)
+        && validOptionalString(data, 'companyId', 160)
+        && validOptionalString(data, 'role', 40)
+        && validOptionalBoolean(data, 'hasCompletedSetup');
+    }
+
+    function validCompanyPayload(data) {
+      return data.ownerId is string
+        && data.teamMembers is list
+        && data.teamMembers.hasAny([data.ownerId])
+        && (!('companyName' in data) || validNonEmptyString(data.companyName))
+        && validOptionalString(data, 'businessType', 120)
+        && validOptionalString(data, 'farmType', 120)
+        && validOptionalString(data, 'businessSize', 120)
+        && validOptionalString(data, 'description', 2000)
+        && validOptionalString(data, 'contactPhone', 40)
+        && validOptionalBoolean(data, 'isSearchable')
+        && validOptionalBoolean(data, 'isPublicProfile')
+        && validOptionalBoolean(data, 'isVerified');
+    }
+
+    function validJoinRequestCreate(data) {
+      return validNonEmptyString(data.companyId)
+        && data.userId == request.auth.uid
+        && validOptionalString(data, 'userName', 120)
+        && validOptionalString(data, 'userEmail', 200)
+        && validOptionalString(data, 'requestedRole', 40)
+        && data.status == 'pending';
+    }
+
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId;
+      allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
       allow read: if signedIn() && (
         request.auth.uid == userId
         || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
       );
-      allow update: if signedIn() && (
-        request.auth.uid == userId
+      allow update: if signedIn() && validUserPayload(request.resource.data) && (
+        (
+          request.auth.uid == userId
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'name',
+            'phone',
+            'role',
+            'companyId',
+            'hasCompletedSetup',
+            'lastActive',
+            'businessName',
+            'region',
+            'interests'
+          ])
+        )
         || (
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
@@ -61,6 +121,7 @@ service cloud.firestore {
 
     match /companies/{companyId} {
       allow create: if signedIn()
+        && validCompanyPayload(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.teamMembers.hasAny([request.auth.uid]);
       allow read: if signedIn() && (
@@ -69,7 +130,10 @@ service cloud.firestore {
         || resource.data.ownerId == request.auth.uid
         || resource.data.teamMembers.hasAny([request.auth.uid])
       );
-      allow update: if isCompanyMember(companyId);
+      allow update: if isCompanyMember(companyId)
+        && validCompanyPayload(request.resource.data)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.teamMembers.hasAll(resource.data.teamMembers);
       allow delete: if isCompanyOwner(companyId);
 
       match /ponds/{pondId} {
@@ -98,7 +162,7 @@ service cloud.firestore {
     }
 
     match /joinRequests/{requestId} {
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow create: if signedIn() && validJoinRequestCreate(request.resource.data);
       allow read: if signedIn() && (
         resource.data.userId == request.auth.uid
         || isCompanyOwner(resource.data.companyId)

@@ -337,7 +337,7 @@ companySetup: {
     exportData: 'Ekspor Data',
     exportDataSubtitle: 'Unduh data kolam Anda sebagai CSV',
     app: 'APLIKASI',
-    about: 'Tentang investaShrimp',
+    about: 'Tentang Shrimply',
     help: 'Bantuan & Dukungan',
     privacy: 'Kebijakan Privasi',
     madeWith: 'Dibuat dengan',
@@ -350,7 +350,7 @@ companySetup: {
     restoring: 'Memulihkan...',
     backupToCloud: 'Cadangkan ke Cloud',
     restoreFromCloud: 'Pulihkan dari Cloud',
-    aiAssistant: 'iShrimp AI',
+    aiAssistant: 'Orson AI',
     helpSupport: 'Bantuan & Dukungan',
     signOut: 'Keluar'
   },
@@ -477,9 +477,11 @@ companySetup: {
     buyingRequest: 'Buat Permintaan Beli',
     showNearbyOnly: 'Tampilkan pembeli terdekat saja',
     withinRadius: 'Dalam radius:',
+    searchByCity: 'Cari berdasarkan Kota',
     sortBy: 'Urutkan berdasarkan',
     newest: 'Terbaru',
     price: 'Harga',
+    distance: 'Jarak',
     activeListings: 'listing aktif',
     nearbyListings: 'listing terdekat',
     noListingsAvailable: 'Tidak ada listing tersedia',
@@ -644,6 +646,7 @@ companySetup: {
     profitLoss: 'Laba & Rugi',
     balanceSheet: 'Neraca',
     cashFlow: 'Arus Kas',
+    harvestProjection: 'Proyeksi Panen',
     expenseReport: 'Laporan Pengeluaran',
     comingSoon: 'Segera',
     
@@ -734,6 +737,7 @@ companySetup: {
     profitLoss: 'Laba & Rugi',
     balanceSheet: 'Neraca',
     cashFlow: 'Arus Kas',
+    harvestProjection: 'Proyeksi Panen',
     expenseReport: 'Laporan Pengeluaran',
     comingSoon: 'Segera',
     
@@ -1039,12 +1043,12 @@ companySetup: {
     
     // Form Fields
     assetName: 'Nama Aset',
-    assetNamePlaceholder: 'contoh: Aerator #1',
+    assetNamePlaceholder: 'misal, Kincir Air #1',
     description: 'Deskripsi',
     descriptionPlaceholder: 'Detail tentang aset',
     serialNumber: 'Nomor Seri',
     serialNumberPlaceholder: 'SN123456',
-    purchaseCost: 'Biaya Pembelian ($)',
+    purchaseCost: 'Biaya Pembelian (Rp)',
     purchaseCostPlaceholder: '5000',
     manufacturer: 'Produsen',
     manufacturerPlaceholder: 'Nama merek',
@@ -1179,9 +1183,18 @@ companySetup: {
   hoursAgo: 'j lalu',
   daysAgo: 'h lalu',
   fromYou: 'dari Anda',
+  clearAllTitle: "Hapus Semua Notifikasi",
+  clearAllMessage: "Apakah Anda yakin ingin menghapus semua notifikasi? Tindakan ini tidak dapat dibatalkan.",
+},
+common: {
+  cancel: "Batal",
+  confirm: "Konfirmasi",
+  delete: "Hapus",
+  yes: "Ya",
+  no: "Tidak",
 },
   roleSelection: {
-  welcomeTitle: 'Selamat Datang di investaShrimp',
+  welcomeTitle: 'Selamat Datang di Shrimply',
   welcomeSubtitle: 'Pilih peran Anda untuk memulai',
   
   farmOwner: 'Pemilik Tambak',
@@ -1236,7 +1249,25 @@ companySetup: {
   helpTechDesc: 'Cari dan bergabung dengan perusahaan yang ada',
   helpBuyerDesc: 'Terhubung dengan pemasok udang',
   helpFooter: 'Anda selalu dapat menghubungi dukungan untuk mengubah peran Anda nanti.',
-}
+  },
+  harvestProjectionScreen: {
+    title: 'Proyeksi Panen',
+    step1: '1. Pilih Kolam',
+    step2: '2. Asumsi Manual',
+    daysUntilHarvest: 'Hari Hingga Panen',
+    expectedPrice: 'Perkiraan Harga Pasar',
+    dailyFeedCost: 'Perkiraan Biaya Pakan Harian',
+    step3: '3. Hasil Proyeksi',
+    harvestDOC: 'DOC Panen',
+    projSize: 'Proy. Ukuran (MBW)',
+    projBiomass: 'Proy. Biomassa',
+    projectedRevenue: 'Proyeksi Pendapatan',
+    projectedProfit: 'Proyeksi Laba (Kurangi pakan)',
+    orsonTitle: 'Analisis Risiko Orson AI',
+    orsonAnalyzing: 'Orson sedang menganalisis proyeksi...',
+    orsonAnalyzeBtn: 'Analisis Proyeksi Ini',
+    orsonUnavailable: 'Orson saat ini tidak tersedia untuk memberikan analisis.',
+  },
 };
 
 export type Translations = typeof id;

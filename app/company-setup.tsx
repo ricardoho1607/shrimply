@@ -11,6 +11,7 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -47,8 +48,8 @@ export default function CompanySetupScreen() {
 
   if (isEditMode && !company) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F8FAFC' }}>
-        <ActivityIndicator size="large" color="#0F4C75" />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
+        <ActivityIndicator size="large" color="#0d2137" />
       </View>
     );
   }
@@ -251,7 +252,8 @@ export default function CompanySetupScreen() {
 
       await saveCompanyData(locationData);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to set up your company. Please try again.');
+      console.error('Company setup failed:', error);
+      Alert.alert('Error', 'Failed to set up your company. Please try again.');
     }
   }, [completeCompanySetup, formData, validateForm, isEditMode, company, router, locationCoordinates]);
 
@@ -333,10 +335,10 @@ export default function CompanySetupScreen() {
               disabled={gettingLocation}
             >
               {gettingLocation ? (
-                <ActivityIndicator size="small" color="#0F4C75" />
+                <ActivityIndicator size="small" color="#0d2137" />
               ) : (
                 <>
-                  <Ionicons name="location" size={16} color="#0F4C75" />
+                  <Ionicons name="location" size={16} color="#0d2137" />
                   <Text style={styles.locationButtonText}>Use Current</Text>
                 </>
               )}
@@ -354,7 +356,7 @@ export default function CompanySetupScreen() {
               setLocationCoordinates(null);
             }
           }}
-          placeholderTextColor="#BBE1FA"
+          placeholderTextColor="#6b8aa0"
           multiline={multiline}
           numberOfLines={multiline ? 3 : 1}
           keyboardType={keyboardType}
@@ -399,10 +401,10 @@ export default function CompanySetupScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <View style={styles.headerIcon}>
-            <Ionicons name="business-outline" size={32} color="#0F4C75" />
+            <Ionicons name="business-outline" size={32} color="#0d2137" />
           </View>
           <Text style={styles.title}>{isEditMode ? 'Edit Company Information' : 'Set Up Your Company'}</Text>
           <Text style={styles.subtitle}>
@@ -442,8 +444,8 @@ export default function CompanySetupScreen() {
               <Switch
                 value={formData.isPublicProfile}
                 onValueChange={value => updateForm('isPublicProfile', value)}
-                trackColor={{ false: '#BBE1FA', true: '#3282B8' }}
-                thumbColor={formData.isPublicProfile ? '#0F4C75' : '#f4f3f4'}
+                trackColor={{ false: '#dbe7df', true: '#315f57' }}
+                thumbColor={formData.isPublicProfile ? '#0d2137' : '#f4f3f4'}
               />
             </View>
           </View>
@@ -477,56 +479,58 @@ export default function CompanySetupScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f4f8fc',
   },
   scrollContent: {
-    padding: 20,
+    padding: Platform.OS === 'android' ? 18 : 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: Platform.OS === 'android' ? 28 : 32,
   },
   headerIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#BBE1FA',
+    width: Platform.OS === 'android' ? 76 : 80,
+    height: Platform.OS === 'android' ? 76 : 80,
+    borderRadius: Platform.OS === 'android' ? 38 : 40,
+    backgroundColor: '#dce8f2',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
   },
   title: {
-    fontSize: 28,
+    fontSize: Platform.OS === 'android' ? 26 : 28,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginBottom: 8,
+    color: '#0d2137',
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
     textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
-    color: '#3282B8',
+    fontSize: Platform.OS === 'android' ? 15 : 16,
+    color: '#315f57',
     textAlign: 'center',
-    paddingHorizontal: 20,
+    paddingHorizontal: Platform.OS === 'android' ? 18 : 20,
+    lineHeight: Platform.OS === 'android' ? 20 : 22,
   },
   form: {
-    gap: 24,
+    gap: Platform.OS === 'android' ? 22 : 24,
   },
   section: {
-    gap: 16,
+    gap: Platform.OS === 'android' ? 14 : 16,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: Platform.OS === 'android' ? 18 : 20,
     fontWeight: '600',
-    color: '#1B262C',
+    color: '#0d2137',
     marginBottom: 4,
   },
   sectionDescription: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     color: '#64748b',
-    marginBottom: 8,
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   inputContainer: {
-    gap: 8,
+    gap: Platform.OS === 'android' ? 7 : 8,
   },
   inputLabelRow: {
     flexDirection: 'row',
@@ -534,7 +538,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   inputLabel: {
-    fontSize: 15,
+    fontSize: Platform.OS === 'android' ? 14 : 15,
     fontWeight: '500',
     color: '#334155',
   },
@@ -542,40 +546,40 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#BBE1FA',
-    borderRadius: 12,
+    paddingHorizontal: Platform.OS === 'android' ? 10 : 12,
+    paddingVertical: Platform.OS === 'android' ? 5 : 6,
+    backgroundColor: '#dce8f2',
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
   },
   locationButtonText: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     fontWeight: '600',
-    color: '#0F4C75',
+    color: '#0d2137',
   },
   input: {
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1B262C',
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    padding: Platform.OS === 'android' ? 14 : 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
+    color: '#0d2137',
   },
   multilineInput: {
-    height: 100,
+    height: Platform.OS === 'android' ? 90 : 100,
     textAlignVertical: 'top',
   },
   coordinatesInfo: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: Platform.OS === 'android' ? 5 : 6,
+    paddingHorizontal: Platform.OS === 'android' ? 10 : 12,
+    paddingVertical: Platform.OS === 'android' ? 7 : 8,
     backgroundColor: '#f0fdf4',
-    borderRadius: 8,
+    borderRadius: Platform.OS === 'android' ? 7 : 8,
   },
   coordinatesText: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     color: '#15803d',
     fontWeight: '500',
   },
@@ -583,93 +587,94 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    padding: 16,
+    padding: Platform.OS === 'android' ? 14 : 16,
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: '#e2e8f0',
-    borderRadius: 12,
-    marginBottom: 12,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    marginBottom: Platform.OS === 'android' ? 10 : 12,
   },
   sizeOptionSelected: {
-    borderColor: '#0F4C75',
+    borderColor: '#0d2137',
     backgroundColor: '#EBF5FB',
   },
   sizeOptionContent: {
     flex: 1,
   },
   sizeOptionTitle: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '600',
-    color: '#1B262C',
+    color: '#0d2137',
     marginBottom: 4,
   },
   sizeOptionTitleSelected: {
-    color: '#0F4C75',
+    color: '#0d2137',
   },
   sizeOptionDescription: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     color: '#64748b',
   },
   sizeOptionDescriptionSelected: {
-    color: '#3282B8',
+    color: '#315f57',
   },
   radioButton: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: Platform.OS === 'android' ? 22 : 24,
+    height: Platform.OS === 'android' ? 22 : 24,
+    borderRadius: Platform.OS === 'android' ? 11 : 12,
     borderWidth: 2,
     borderColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   radioButtonSelected: {
-    backgroundColor: '#0F4C75',
-    borderColor: '#0F4C75',
+    backgroundColor: '#0d2137',
+    borderColor: '#0d2137',
   },
   switchContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: Platform.OS === 'android' ? 14 : 16,
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
     borderWidth: 1,
     borderColor: '#e2e8f0',
   },
   switchInfo: {
     flex: 1,
-    marginRight: 16,
+    marginRight: Platform.OS === 'android' ? 14 : 16,
   },
   switchLabel: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '500',
-    color: '#1B262C',
+    color: '#0d2137',
     marginBottom: 4,
   },
   switchDescription: {
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     color: '#64748b',
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   setupButton: {
-    backgroundColor: '#0F4C75',
+    backgroundColor: '#0d2137',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    padding: 18,
-    borderRadius: 12,
-    marginTop: 8,
+    gap: Platform.OS === 'android' ? 7 : 8,
+    padding: Platform.OS === 'android' ? 16 : 18,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    marginTop: Platform.OS === 'android' ? 7 : 8,
   },
   setupButtonDisabled: {
     opacity: 0.6,
   },
   setupButtonText: {
     color: '#fff',
-    fontSize: 18,
+    fontSize: Platform.OS === 'android' ? 17 : 18,
     fontWeight: '600',
   },
   disclaimer: {
-    fontSize: 13,
+    fontSize: Platform.OS === 'android' ? 12 : 13,
     color: '#94a3b8',
     textAlign: 'center',
     fontStyle: 'italic',

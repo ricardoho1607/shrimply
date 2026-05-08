@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   Search, 
   MapPin, 
@@ -21,6 +21,7 @@ import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 
 export default function SuppliersPage() {
   const { user } = useAuth();
@@ -30,6 +31,8 @@ export default function SuppliersPage() {
   const [monitoredIds, setMonitoredIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const latestSearchId = useRef(0);
 
   const [pondCounts, setPondCounts] = useState<Record<string, number>>({});
 
@@ -77,12 +80,16 @@ export default function SuppliersPage() {
   }, [companies]);
 
   const fetchCompanies = async (search: string = '') => {
+    const requestId = latestSearchId.current + 1;
+    latestSearchId.current = requestId;
     setSearching(true);
+    setError(null);
     try {
       let q = query(collection(db, 'companies'), where('isPublicProfile', '==', true));
       // Firestore doesn't support complex text search well without Algolia, 
       // so we'll fetch public ones and filter in memory for now if search term exists.
-      const snapshot = await getDocs(q);
+      const snapshot = await withTimeout(getDocs(q), 12000, 'Supplier search is taking too long. Please try again.');
+      if (latestSearchId.current !== requestId) return;
       let data: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
       if (search) {
@@ -93,11 +100,18 @@ export default function SuppliersPage() {
       }
       
       setCompanies(data);
-    } catch (error) {
-      console.error('Error fetching companies:', error);
+    } catch (error: unknown) {
+      if (latestSearchId.current === requestId) {
+        const message = getErrorMessage(error, 'Unable to load suppliers right now.');
+        console.error('Error fetching companies:', error);
+        setError(message);
+        setCompanies([]);
+      }
     } finally {
-      setLoading(false);
-      setSearching(false);
+      if (latestSearchId.current === requestId) {
+        setLoading(false);
+        setSearching(false);
+      }
     }
   };
 
@@ -111,13 +125,13 @@ export default function SuppliersPage() {
     }
 
     try {
-      await setDoc(doc(db, 'users', user.uid, 'monitoredCompanies', company.id), {
+      await withTimeout(setDoc(doc(db, 'users', user.uid, 'monitoredCompanies', company.id), {
         companyName: company.companyName,
         location: company.location || company.primaryLocation?.address || t.buyer.unknownLocation || 'Unknown Location',
         monitoredAt: new Date().toISOString(),
-      });
-    } catch (error) {
-      alert(t.buyer.monitorError || 'Failed to update monitoring status');
+      }), 12000, 'Updating monitoring status is taking too long. Please try again.');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, t.buyer.monitorError || 'Failed to update monitoring status'));
     }
   };
 
@@ -125,10 +139,10 @@ export default function SuppliersPage() {
     if (!user || !monitorConfirm.company) return;
     setIsUpdating(true);
     try {
-      await deleteDoc(doc(db, 'users', user.uid, 'monitoredCompanies', monitorConfirm.company.id));
+      await withTimeout(deleteDoc(doc(db, 'users', user.uid, 'monitoredCompanies', monitorConfirm.company.id)), 12000, 'Stopping monitoring is taking too long. Please try again.');
       setMonitorConfirm({ isOpen: false, company: null });
-    } catch (error) {
-      alert(t.buyer.stopMonitoringError || 'Failed to stop monitoring');
+    } catch (error: unknown) {
+      alert(getErrorMessage(error, t.buyer.stopMonitoringError || 'Failed to stop monitoring'));
     } finally {
       setIsUpdating(false);
     }
@@ -142,6 +156,12 @@ export default function SuppliersPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>{t.buyer.marketplaceSubtitle}</p>
         </div>
       </div>
+
+      {error && (
+        <div role="alert" style={{ color: '#B42318', background: '#FEF3F2', border: '1px solid #FECDCA', borderRadius: '16px', padding: '14px 18px', fontSize: '14px', fontWeight: 700 }}>
+          {error}
+        </div>
+      )}
 
       <div style={{ position: 'relative', maxWidth: '600px' }}>
         <Search style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} size={20} />

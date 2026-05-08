@@ -7,7 +7,8 @@
     },
     "android": {
       "package": "com.shrimply.tech.investashrimp",
-      "runtimeVersion": "1.0.0"
+      "runtimeVersion": "1.0.0",
+      "googleServicesFile": "./google-services.json"
     },
     "ios": {
       "bundleIdentifier": "com.shrimply.tech.investashrimp"
@@ -15,6 +16,11 @@
     "updates": {
       "url": "https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db"
     },
-    "runtimeVersion": "1.0.0"
+    "runtimeVersion": "1.0.0",
+    "scheme": "shrimply",
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/images/favicon.png"
+    }
   }
 }

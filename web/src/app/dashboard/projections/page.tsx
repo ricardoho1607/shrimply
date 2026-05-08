@@ -21,6 +21,7 @@ import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { calculateOrsonHarvestProjection } from '../../../../../orson/harvestProjection';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Pond {
@@ -46,7 +47,9 @@ export default function HarvestProjectionsPage() {
   const [daysToHarvest, setDaysToHarvest] = useState('14');
   const [expectedPrice, setExpectedPrice] = useState('5.50');
   const [dailyFeedCost, setDailyFeedCost] = useState('50');
-  const [targetADG, setTargetADG] = useState('0.20');
+  const [targetADG, setTargetADG] = useState('');
+  const [assumedSurvival, setAssumedSurvival] = useState('');
+  const [targetMarketSize, setTargetMarketSize] = useState('20');
   
   // AI State
   const { sendMessage, loading: aiLoading } = useGemini();
@@ -95,62 +98,39 @@ export default function HarvestProjectionsPage() {
   const projection = useMemo(() => {
     if (!selectedPond) return null;
 
-    const samplings = (selectedPond.samplings || []).filter(s => s.mbw > 0).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const latestSample = samplings[0];
-    const currentMBW = latestSample?.mbw || selectedPond.initialWeight || 0.5;
-    
-    const docStart = new Date(selectedPond.docStart).getTime();
-    const currentDOC = Math.floor((new Date().getTime() - docStart) / (1000 * 60 * 60 * 24));
-    
-    // Calculate Historical ADG
-    let historicalADG = 0;
-    const validSamplings = [...samplings].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    if (validSamplings.length >= 2) {
-      const s2 = validSamplings[validSamplings.length - 1];
-      const s1 = validSamplings[validSamplings.length - 2];
-      const days = (new Date(s2.date).getTime() - new Date(s1.date).getTime()) / (1000 * 60 * 60 * 24);
-      if (days > 0) historicalADG = (s2.mbw - s1.mbw) / days;
-    } else if (validSamplings.length === 1) {
-      const s1 = validSamplings[0];
-      const days = (new Date(s1.date).getTime() - docStart) / (1000 * 60 * 60 * 24);
-      const initialW = selectedPond.initialWeight || 0.5;
-      if (days > 0) historicalADG = (s1.mbw - initialW) / days;
-    }
+    return calculateOrsonHarvestProjection({
+      pond: selectedPond,
+      daysToHarvest: Number(daysToHarvest) || 0,
+      expectedPricePerKg: Number(expectedPrice) || 0,
+      dailyFeedCost: Number(dailyFeedCost) || 0,
+      targetAdgGPerDay: targetADG ? Number(targetADG) : null,
+      assumedSurvivalPercent: assumedSurvival ? Number(assumedSurvival) : null,
+      targetMarketSizeG: targetMarketSize ? Number(targetMarketSize) : null,
+    });
+  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize]);
 
-    const ADG = Number(targetADG) || 0.2; 
-    const days = Number(daysToHarvest) || 0;
-    const price = Number(expectedPrice) || 0;
-    const feed = Number(dailyFeedCost) || 0;
-    
-    const population = selectedPond.initialPopulation * 0.8; // 80% survival estimate
-    const projectedMBW = currentMBW + (ADG * days);
-    const projectedBiomass = (population * projectedMBW) / 1000;
-    const projectedRevenue = projectedBiomass * price;
-    const projectedProfit = projectedRevenue - (feed * days);
-
-    return {
-      currentMBW,
-      currentDOC,
-      futureDOC: currentDOC + days,
-      historicalADG,
-      projectedMBW,
-      projectedBiomass,
-      projectedRevenue,
-      projectedProfit
-    };
-  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG]);
+  useEffect(() => {
+    if (!projection) return;
+    if (!targetADG && projection.assumedAdgGPerDay !== null) setTargetADG(String(projection.assumedAdgGPerDay));
+    if (!assumedSurvival && projection.assumedSurvivalPercent !== null) setAssumedSurvival(String(projection.assumedSurvivalPercent));
+  }, [projection, targetADG, assumedSurvival]);
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
     const prompt = `Please provide a risk analysis for this harvest projection:
 Pond: ${selectedPond.pondName}
-Current DOC: ${projection.currentDOC} | Projected DOC: ${projection.futureDOC}
-Current MBW: ${projection.currentMBW}g | Projected MBW: ${projection.projectedMBW.toFixed(2)}g
+Current DOC: ${projection.currentDoc} | Projected DOC: ${projection.futureDoc}
+Current MBW: ${projection.currentMbwG ?? 'unknown'}g | Projected MBW: ${projection.projectedMbwG?.toFixed(2) ?? 'unknown'}g
+Historical ADG: ${projection.historicalAdgGPerDay ?? 'unknown'}g/day | Assumed ADG: ${projection.assumedAdgGPerDay ?? 'unknown'}g/day
+Assumed survival: ${projection.assumedSurvivalPercent ?? 'unknown'}% (${projection.survivalConfidence} confidence)
+Projected FCR: ${projection.projectedFcr ?? 'unknown'} | Market size status: ${projection.marketSizeRisk}
 Expected Price: ${currencyConfig.symbol}${expectedPrice}/kg | Daily Feed Cost: ${currencyConfig.symbol}${dailyFeedCost}
 Projected Revenue: ${currencyConfig.symbol}${projection.projectedRevenue.toFixed(2)}
 Projected Profit (Gross - Future Feed): ${currencyConfig.symbol}${projection.projectedProfit.toFixed(2)}
+Projection confidence: ${(projection.confidenceScore * 100).toFixed(0)}%
+Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.summary}`).join('; ') || 'none'}
 
-Give a 2-3 sentence recommendation based on these financials and standard Litopenaeus vannamei biology.`;
+Give a concise recommendation based on Orson's structured projection risk.`;
 
     try {
       const response = await sendMessage(prompt, ponds);
@@ -162,7 +142,7 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
 
 
   const generateProjectionHTML = (data: any): string => {
-    const { pondName, currentDOC, futureDOC, currentMBW, projectedMBW, projectedBiomass, projectedRevenue, projectedProfit, insight, companyName } = data;
+    const { pondName, futureDoc, projectedMbwG, projectedBiomassKg, projectedRevenue, projectedProfit, insight, companyName, confidenceScore, assumedSurvivalPercent, survivalConfidence, projectedFcr, marketSizeRisk, risks = [] } = data;
     return `
       <!DOCTYPE html>
       <html>
@@ -193,9 +173,12 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
         </div>
         <div class="divider"></div>
         <div class="grid">
-          <div class="card"><div class="label">Harvest DOC</div><div class="value">${futureDOC}</div></div>
-          <div class="card"><div class="label">Projected MBW</div><div class="value">${projectedMBW.toFixed(1)}g</div></div>
-          <div class="card"><div class="label">Projected Biomass</div><div class="value">${projectedBiomass.toFixed(0)} kg</div></div>
+          <div class="card"><div class="label">Harvest DOC</div><div class="value">${futureDoc ?? '-'}</div></div>
+          <div class="card"><div class="label">Projected MBW</div><div class="value">${projectedMbwG?.toFixed(1) ?? '-'}g</div></div>
+          <div class="card"><div class="label">Projected Biomass</div><div class="value">${projectedBiomassKg?.toFixed(0) ?? '-'} kg</div></div>
+          <div class="card"><div class="label">Survival</div><div class="value">${assumedSurvivalPercent ?? '-'}%</div></div>
+          <div class="card"><div class="label">Projection FCR</div><div class="value">${projectedFcr ?? '-'}</div></div>
+          <div class="card"><div class="label">Confidence</div><div class="value">${confidenceScore ? `${Math.round(confidenceScore * 100)}%` : '-'}</div></div>
         </div>
         <div class="financial-card">
           <div class="label">Projected Gross Revenue</div>
@@ -206,8 +189,13 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
         <div class="orson-box">
           <div style="font-weight: 800; color: #92400E; margin-bottom: 8px;">Orson AI Risk Analysis:</div>
           <div style="font-style: italic; color: #451a03;">"${insight || 'No AI analysis performed for this projection.'}"</div>
+          <div style="margin-top: 10px; color: #451a03;">Survival confidence: ${survivalConfidence}. Market size status: ${marketSizeRisk}.</div>
+          <div style="margin-top: 14px; font-weight: 800; color: #92400E;">Structured Projection Risks</div>
+          <ul style="margin-top: 8px; padding-left: 18px; color: #451a03;">
+            ${risks.length > 0 ? risks.map((risk: any) => `<li><strong>${risk.severity}:</strong> ${risk.summary}</li>`).join('') : '<li>No projection-specific risks were detected from the available data.</li>'}
+          </ul>
         </div>
-        <div class="footer">This is a biological projection based on current growth rates (ADG 0.2g). Actual results may vary. Generated by Shrimply.</div>
+        <div class="footer">This is a biological projection based on current Orson metrics, survival assumptions, feed cost, and market-size inputs. Actual results may vary. Generated by Shrimply.</div>
       </body>
       </html>
     `;
@@ -252,25 +240,17 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-      
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>{t.financialReports.harvestProjection}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '15px' }}>Estimate your future yield and profitability using historical data and AI risk analysis.</p>
-        </div>
+    <div className="dashboard-page">
+      <div className="dashboard-action-row">
         <button 
           className="btn-primary" 
           onClick={handleExport}
           disabled={exportLoading || !projection}
-          style={{ padding: '12px 24px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
           {exportLoading ? 'Generating...' : t.actions.export + ' Audit PDF'}
         </button>
       </div>
-
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '32px', alignItems: 'start' }}>
         
         {/* Settings Card */}
@@ -322,11 +302,24 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>GROWTH RATE (ADG g/DAY)</label>
-                  {projection?.historicalADG && projection.historicalADG > 0 && (
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)' }}>HISTORICAL: {projection.historicalADG.toFixed(2)}g</span>
+                  {projection?.historicalAdgGPerDay && projection.historicalAdgGPerDay > 0 && (
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)' }}>HISTORICAL: {projection.historicalAdgGPerDay.toFixed(2)}g</span>
                   )}
                 </div>
                 <input type="number" step="0.01" value={targetADG} onChange={e => { setTargetADG(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>ASSUMED SURVIVAL (%)</label>
+                  {projection && (
+                    <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)' }}>CONFIDENCE: {projection.survivalConfidence.toUpperCase()}</span>
+                  )}
+                </div>
+                <input type="number" step="0.1" value={assumedSurvival} onChange={e => { setAssumedSurvival(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>TARGET MARKET SIZE (G)</label>
+                <input type="number" step="0.1" value={targetMarketSize} onChange={e => { setTargetMarketSize(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
               </div>
             </div>
           </div>
@@ -345,19 +338,27 @@ Give a 2-3 sentence recommendation based on these financials and standard Litope
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                   <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>HARVEST DOC</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.futureDOC}</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.futureDoc ?? '-'}</div>
                   </div>
                   <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>PROJ. MBW</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedMBW.toFixed(1)}g</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedMbwG?.toFixed(1) ?? '-'}g</div>
                   </div>
                   <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>PROJ. BIOMASS</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedBiomass.toFixed(0)} kg</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedBiomassKg?.toFixed(0) ?? '-'} kg</div>
                   </div>
                   <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
                     <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>ASSUMED ADG</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{targetADG}g</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.assumedAdgGPerDay?.toFixed(2) ?? '-'}g</div>
+                  </div>
+                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>ASSUMED SURVIVAL</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.assumedSurvivalPercent ?? '-'}%</div>
+                  </div>
+                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>CONFIDENCE</div>
+                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{Math.round(projection.confidenceScore * 100)}%</div>
                   </div>
                 </div>
 

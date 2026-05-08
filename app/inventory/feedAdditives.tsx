@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Modal, Platform, SafeAreaView, ScrollView, Share, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, SafeAreaView, ScrollView, Share, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -43,6 +44,7 @@ const formatDateTime = (date: any): string => {
 
 export default function FeedAdditivesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const store = useFeedAdditiveStore();
   const { t } = useLanguage();
@@ -164,7 +166,8 @@ export default function FeedAdditivesScreen() {
       closeModal();
       if (modalType === 'add') setActiveTab(itemType);
     } catch (err) {
-      Alert.alert(t.inventory.error, err instanceof Error ? err.message : t.inventory.unknownError);
+      console.error('Inventory action failed:', err);
+      Alert.alert(t.inventory.error, t.inventory.unknownError);
     }
   }, [closeModal, modalType, itemType, t]);
 
@@ -272,7 +275,8 @@ export default function FeedAdditivesScreen() {
       });
       await Share.share({ message: rows.join('\n'), title: `inventory_${company?.id || 'export'}` });
     } catch (e) {
-      Alert.alert(t.inventory.exportFailed, e instanceof Error ? e.message : t.inventory.unknownError);
+      console.error('Inventory export failed:', e);
+      Alert.alert(t.inventory.exportFailed, t.inventory.unknownError);
     }
   }, [store.feeds, store.additives, company?.id, t]);
 
@@ -290,7 +294,7 @@ export default function FeedAdditivesScreen() {
         <TouchableOpacity onPress={() => openModal('history', item as any, type)} style={styles.cardHeader}>
           <View style={styles.cardTitle}>
             <View style={[styles.iconBox, { backgroundColor: type === 'feed' ? '#E8F4F8' : '#FFF4E6' }]}>
-              <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#3282B8' : '#f39c12'} />
+              <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#315f57' : '#f39c12'} />
             </View>
             <View style={styles.cardInfo}>
               <Text style={styles.cardName}>{name}</Text>
@@ -330,7 +334,7 @@ export default function FeedAdditivesScreen() {
             <Text style={styles.flowText}>{t.inventory.out}: {totalOut.toFixed(1)}</Text>
           </View>
           <View style={styles.flowItem}>
-            <Ionicons name="pricetag" size={16} color="#3282B8" />
+            <Ionicons name="pricetag" size={16} color="#315f57" />
             <Text style={styles.flowText}>{t.inventory.cost}: {formatCurrency((item.totalCost || 0))}</Text>
           </View>
         </View>
@@ -341,7 +345,7 @@ export default function FeedAdditivesScreen() {
             <Text style={styles.actionText}>{t.inventory.stockIn}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSec]} onPress={() => openModal('usage', item as any, type)}>
-            <Ionicons name="remove-circle" size={18} color="#3282B8" />
+            <Ionicons name="remove-circle" size={18} color="#315f57" />
             <Text style={[styles.actionText, styles.actionTextSec]}>{t.inventory.use}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E8F4F8' }]} onPress={() => { 
@@ -410,7 +414,7 @@ export default function FeedAdditivesScreen() {
         value={value} 
         onChangeText={onChange} 
         style={[styles.textInput, options?.multiline && styles.textArea]} 
-        placeholderTextColor="#BBE1FA" 
+        placeholderTextColor="#6b8aa0" 
         keyboardType={options?.keyboardType}
         multiline={options?.multiline}
         numberOfLines={options?.multiline ? 3 : 1}
@@ -433,16 +437,28 @@ export default function FeedAdditivesScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.inventory.title}</Text>
-          <TouchableOpacity style={styles.addButton} onPress={() => setMenuModalVisible(true)}>
-            <Ionicons name="add" size={24} color="#1B262C" />
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => setMenuModalVisible(true)}
+            accessibilityRole="button"
+            accessibilityLabel="Open feed additives actions"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="add" size={24} color="#0d2137" />
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -463,10 +479,10 @@ export default function FeedAdditivesScreen() {
             <View style={styles.searchRow}>
               <TextInput placeholder={t.inventory.searchPlaceholder} value={searchQuery} onChangeText={setSearchQuery} style={[styles.textInput, { flex: 1 }]} />
               <TouchableOpacity onPress={() => { setCategoryFilter(null); setSearchQuery(''); }} style={{ padding: 12 }}>
-                <Ionicons name="close-circle" size={20} color="#BBE1FA" />
+                <Ionicons name="close-circle" size={20} color="#dce8f2" />
               </TouchableOpacity>
               <TouchableOpacity onPress={exportCSV} style={{ padding: 12 }}>
-                <Ionicons name="download-outline" size={20} color="#0F4C75" />
+                <Ionicons name="download-outline" size={20} color="#0d2137" />
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
@@ -484,10 +500,10 @@ export default function FeedAdditivesScreen() {
             <>
               <View style={styles.metricsGrid}>
                 {[
-                  { icon: 'nutrition', label: t.inventory.feedStock, value: `${formatNumber(Math.round(metrics.totalFeedStock))} kg`, color: '#3282B8' },
+                  { icon: 'nutrition', label: t.inventory.feedStock, value: `${formatNumber(Math.round(metrics.totalFeedStock))} kg`, color: '#315f57' },
                   { icon: 'flask', label: t.inventory.additiveValue, value: formatCurrency(Math.round(metrics.totalAdditiveValue)), color: '#f39c12' },
                   { icon: 'cash', label: t.inventory.feedCost, value: formatCurrency(Math.round(metrics.totalFeedCost)), color: '#27ae60' },
-                  { icon: 'wallet', label: t.inventory.feedStockValue, value: formatCurrency(Math.round(metrics.feedStockValue)), color: '#0F4C75' },
+                  { icon: 'wallet', label: t.inventory.feedStockValue, value: formatCurrency(Math.round(metrics.feedStockValue)), color: '#0d2137' },
                 ].map((m, i) => (
                   <View key={i} style={styles.metricCard}>
                     <View style={[styles.metricIcon, { backgroundColor: m.color + '20' }]}>
@@ -519,7 +535,7 @@ export default function FeedAdditivesScreen() {
 
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="time" size={20} color="#0F4C75" />
+                  <Ionicons name="time" size={20} color="#0d2137" />
                   <Text style={styles.sectionTitle}>{t.inventory.recentActivity}</Text>
                   <View style={styles.activityToggle}>
                     {(['all', 'stockIn', 'usage'] as const).map(filter => (
@@ -531,23 +547,28 @@ export default function FeedAdditivesScreen() {
                     ))}
                   </View>
                 </View>
-                {recentTransactions.filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage')).map((tx) => (
-                  <View key={tx.id} style={styles.txCard}>
-                    <View style={[styles.txIcon, { backgroundColor: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c' }]}>
-                      <Ionicons name={tx.type === 'Stock In' ? 'arrow-down' : 'arrow-up'} size={16} color="#fff" />
+                <FlatList
+                  data={recentTransactions.filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))}
+                  keyExtractor={(item) => item.id}
+                  scrollEnabled={false}
+                  renderItem={({ item: tx }) => (
+                    <View style={styles.txCard}>
+                      <View style={[styles.txIcon, { backgroundColor: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c' }]}>
+                        <Ionicons name={tx.type === 'Stock In' ? 'arrow-down' : 'arrow-up'} size={16} color="#fff" />
+                      </View>
+                      <View style={styles.txContent}>
+                        <Text style={styles.txName}>{tx.item}</Text>
+                        <Text style={styles.txMeta}>{tx.type} • {formatDate(tx.date)}</Text>
+                      </View>
+                      <Text style={styles.txQty} numberOfLines={1}>{formatNumber(Math.round(tx.quantity))} kg</Text>
                     </View>
-                    <View style={styles.txContent}>
-                      <Text style={styles.txName}>{tx.item}</Text>
-                      <Text style={styles.txMeta}>{tx.type} • {formatDate(tx.date)}</Text>
-                    </View>
-                    <Text style={styles.txQty} numberOfLines={1}>{formatNumber(Math.round(tx.quantity))} kg</Text>
-                  </View>
-                ))}
+                  )}
+                />
               </View>
 
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="water" size={20} color="#0F4C75" />
+                  <Ionicons name="water" size={20} color="#0d2137" />
                   <Text style={styles.sectionTitle}>{t.inventory.pondUsageSummary}</Text>
                 </View>
                 {Object.keys(pondUsageSummary).length === 0 ? (
@@ -555,7 +576,7 @@ export default function FeedAdditivesScreen() {
                 ) : (
                   Object.entries(pondUsageSummary).map(([pondId, qty]) => (
                     <View key={pondId} style={styles.txCard}>
-                      <View style={[styles.txIcon, { backgroundColor: '#0F4C75' }]}>
+                      <View style={[styles.txIcon, { backgroundColor: '#0d2137' }]}>
                         <Ionicons name="water" size={16} color="#fff" />
                       </View>
                       <View style={styles.txContent}>
@@ -573,21 +594,35 @@ export default function FeedAdditivesScreen() {
           {activeTab === 'feed' && (
             filteredFeeds.length === 0 ? (
               <View style={styles.empty}>
-                <Ionicons name="nutrition-outline" size={64} color="#BBE1FA" />
+                <Ionicons name="nutrition-outline" size={64} color="#dce8f2" />
                 <Text style={styles.emptyTitle}>{t.inventory.noFeedItems}</Text>
                 <Text style={styles.emptySub}>{t.inventory.addFeedToStart}</Text>
               </View>
-            ) : filteredFeeds.map((feed) => <ItemCard key={feed.id} item={feed} type="feed" />)
+            ) : (
+              <FlatList
+                data={filteredFeeds}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => <ItemCard item={item} type="feed" />}
+              />
+            )
           )}
 
           {activeTab === 'additive' && (
             filteredAdditives.length === 0 ? (
               <View style={styles.empty}>
-                <Ionicons name="flask-outline" size={64} color="#BBE1FA" />
+                <Ionicons name="flask-outline" size={64} color="#dce8f2" />
                 <Text style={styles.emptyTitle}>{t.inventory.noAdditives}</Text>
                 <Text style={styles.emptySub}>{t.inventory.addAdditivesToStart}</Text>
               </View>
-            ) : filteredAdditives.map((additive) => <ItemCard key={additive.id} item={additive} type="additive" />)
+            ) : (
+              <FlatList
+                data={filteredAdditives}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => <ItemCard item={item} type="additive" />}
+              />
+            )
           )}
         </ScrollView>
       </View>
@@ -599,10 +634,10 @@ export default function FeedAdditivesScreen() {
             {(['feed', 'additive'] as const).map((type) => (
               <TouchableOpacity key={type} style={styles.menuOption} onPress={() => { setItemType(type); openModal('add'); }}>
                 <View style={[styles.menuIcon, { backgroundColor: type === 'feed' ? '#E8F4F8' : '#FFF4E6' }]}>
-                  <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#3282B8' : '#f39c12'} />
+                  <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#315f57' : '#f39c12'} />
                 </View>
                 <Text style={styles.menuText}>{type === 'feed' ? t.inventory.addFeed : t.inventory.addAdditive}</Text>
-                <Ionicons name="chevron-forward" size={20} color="#BBE1FA" />
+                <Ionicons name="chevron-forward" size={20} color="#dce8f2" />
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={styles.menuCancel} onPress={() => setMenuModalVisible(false)}>
@@ -623,14 +658,14 @@ export default function FeedAdditivesScreen() {
                       modalType === 'history' ? t.inventory.transactionHistory : t.inventory.editReorderLevel}
               </Text>
               <TouchableOpacity onPress={closeModal}>
-                <Ionicons name="close-circle" size={28} color="#BBE1FA" />
+                <Ionicons name="close-circle" size={28} color="#dce8f2" />
               </TouchableOpacity>
             </View>
 
             {modalType === 'history' ? (
               <HistoryModal />
             ) : (
-              <ScrollView style={styles.form}>
+              <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
                 {modalType === 'add' && (
                   <>
                     {renderFormInput(t.inventory.itemName, itemType === 'feed' ? t.inventory.itemNamePlaceholder : t.inventory.additivePlaceholder, formData.itemName, (v) => setFormData(prev => ({ ...prev, itemName: v })), { required: true })}
@@ -649,7 +684,7 @@ export default function FeedAdditivesScreen() {
                 {(modalType === 'stockIn' || modalType === 'usage' || modalType === 'editReorder') && selectedItem && (
                   <>
                     <View style={styles.banner}>
-                      <Ionicons name={itemType === 'feed' ? 'nutrition' : 'flask'} size={20} color="#3282B8" />
+                      <Ionicons name={itemType === 'feed' ? 'nutrition' : 'flask'} size={20} color="#315f57" />
                       <Text style={styles.bannerText}>{itemType === 'feed' ? (selectedItem as Feed).feedName : (selectedItem as Additive).additiveName}</Text>
                     </View>
 
@@ -690,7 +725,7 @@ export default function FeedAdditivesScreen() {
                               closeModal();
                             } catch (e) {
                               console.error('Update reorder error:', e);
-                              Alert.alert(t.inventory.error, e instanceof Error ? e.message : t.inventory.unknownError);
+                              Alert.alert(t.inventory.error, t.inventory.unknownError);
                             }
                           }}>
                             <Text style={styles.btnSubmitText}>Save</Text>
@@ -727,30 +762,20 @@ export default function FeedAdditivesScreen() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  topSafeArea: { backgroundColor: '#BBE1FA' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { fontSize: 16, color: '#0F4C75', fontWeight: '500' },
-  header: { 
-  flexDirection: 'row', 
-  alignItems: 'center', 
-  justifyContent: 'space-between', 
-  paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
-  paddingTop: Platform.OS === 'android' ? 14 : 16, 
-  paddingBottom: Platform.OS === 'android' ? 7 : 8, 
-  backgroundColor: '#BBE1FA', 
-  borderBottomWidth: 1, 
-  borderBottomColor: '#BBE1FA' 
-},
+  loadingText: { fontSize: 16, color: '#0d2137', fontWeight: '500' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingTop: Platform.OS === 'android' ? 8 : 10, paddingBottom: Platform.OS === 'android' ? 8 : 10, backgroundColor: '#dce8f2' },
   backButton: { padding: 8, marginLeft: -4 },
-  headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#1B262C' },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#0d2137' },
   addButton: { padding: 8, marginRight: -4 },
   tabs: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8F4F8' },
   tab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: '#3282B8' },
-  tabText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#BBE1FA' },
-  tabTextActive: { color: '#3282B8' },
+  tabActive: { borderBottomColor: '#315f57' },
+  tabText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#dce8f2' },
+  tabTextActive: { color: '#315f57' },
   searchContainer: { padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFF', borderBottomColor: '#E8F4F8', borderBottomWidth: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   scroll: { padding: Platform.OS === 'android' ? 14 : 16, paddingBottom: 140 },
@@ -761,18 +786,18 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     flex: 1, 
     minWidth: '47%', 
-    shadowColor: '#0F4C75', 
+    shadowColor: '#315f57', 
     shadowOffset: { width: 0, height: 2 }, 
     shadowOpacity: 0.08, 
     shadowRadius: 8, 
     elevation: 3 
   },
   metricIcon: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  metricLabel: { fontSize: 12, color: '#0F4C75', marginBottom: 4, fontWeight: '500' },
-  metricValue: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold', color: '#1B262C' },
+  metricLabel: { fontSize: 12, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
+  metricValue: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold', color: '#0d2137' },
   section: { marginBottom: Platform.OS === 'android' ? 20 : 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#1B262C', marginLeft: 8, flex: 1 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginLeft: 8, flex: 1 },
   alertCard: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -789,7 +814,7 @@ const styles = StyleSheet.create({
     elevation: 2 
   },
   alertContent: { marginLeft: 12, flex: 1 },
-  alertText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#1B262C' },
+  alertText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137' },
   alertSub: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#e74c3c' },
   txCard: { 
     flexDirection: 'row', 
@@ -798,7 +823,7 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 12 : 14, 
     borderRadius: 12, 
     marginBottom: 8, 
-    shadowColor: '#0F4C75', 
+    shadowColor: '#315f57', 
     shadowOffset: { width: 0, height: 1 }, 
     shadowOpacity: 0.05, 
     shadowRadius: 4, 
@@ -806,17 +831,17 @@ const styles = StyleSheet.create({
   },
   txIcon: { width: Platform.OS === 'android' ? 32 : 36, height: Platform.OS === 'android' ? 32 : 36, borderRadius: Platform.OS === 'android' ? 16 : 18, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
   txContent: { flex: 1 },
-  txName: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#1B262C' },
-  txMeta: { fontSize: 12, color: '#3282B8', marginTop: 2 },
-  txQty: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0F4C75' },
+  txName: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137' },
+  txMeta: { fontSize: 12, color: '#315f57', marginTop: 2 },
+  txQty: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0d2137' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 70 : 80 },
-  emptyTitle: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: 8 },
-  emptySub: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 13 : 14 },
+  emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: 8 },
+  emptySub: { color: '#315f57', fontSize: Platform.OS === 'android' ? 13 : 14 },
   card: { 
     backgroundColor: '#FFF', 
     borderRadius: 16, 
     marginBottom: Platform.OS === 'android' ? 14 : 16, 
-    shadowColor: '#0F4C75', 
+    shadowColor: '#315f57', 
     shadowOffset: { width: 0, height: 2 }, 
     shadowOpacity: 0.08, 
     shadowRadius: 8, 
@@ -829,24 +854,24 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     padding: Platform.OS === 'android' ? 14 : 16, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#F8FAFC' 
+    borderBottomColor: '#f4f8fc' 
   },
   cardTitle: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconBox: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
   cardInfo: { flex: 1 },
-  cardName: { fontSize: Platform.OS === 'android' ? 16 : 17, fontWeight: 'bold', color: '#1B262C', marginBottom: 2 },
-  cardMeta: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#3282B8' },
+  cardName: { fontSize: Platform.OS === 'android' ? 16 : 17, fontWeight: 'bold', color: '#0d2137', marginBottom: 2 },
+  cardMeta: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#315f57' },
   deleteBtn: { padding: 8, borderRadius: 8 },
   statsGrid: { 
     flexDirection: 'row', 
     paddingVertical: Platform.OS === 'android' ? 14 : 16, 
     paddingHorizontal: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#F8FAFC' 
+    backgroundColor: '#f4f8fc' 
   },
   stat: { flex: 1, alignItems: 'center' },
   statDivider: { width: 1, backgroundColor: '#E8F4F8', marginHorizontal: 8 },
-  statLabel: { fontSize: 12, color: '#0F4C75', marginBottom: 4, fontWeight: '500' },
-  statValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#1B262C' },
+  statLabel: { fontSize: 12, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
+  statValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0d2137' },
   flowStats: { 
     flexDirection: 'row', 
     justifyContent: 'space-around', 
@@ -854,24 +879,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     backgroundColor: '#FFF', 
     borderTopWidth: 1, 
-    borderTopColor: '#F8FAFC' 
+    borderTopColor: '#f4f8fc' 
   },
   flowItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  flowText: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0F4C75', fontWeight: '500' },
+  flowText: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', fontWeight: '500' },
   actions: { flexDirection: 'row', padding: Platform.OS === 'android' ? 10 : 12, gap: 8 },
   actionBtn: { 
     flex: 1, 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    backgroundColor: '#3282B8', 
+    backgroundColor: '#315f57', 
     paddingVertical: Platform.OS === 'android' ? 10 : 12, 
     borderRadius: 10, 
     gap: 6 
   },
-  actionBtnSec: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#3282B8' },
+  actionBtnSec: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#315f57' },
   actionText: { color: '#FFF', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
-  actionTextSec: { color: '#3282B8' },
+  actionTextSec: { color: '#315f57' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   menuModal: { 
     backgroundColor: '#FFF', 
@@ -879,32 +904,32 @@ const styles = StyleSheet.create({
     borderRadius: 20, 
     width: '90%', 
     maxWidth: 400, 
-    shadowColor: '#000', 
+    shadowColor: '#dce8f2', 
     shadowOffset: { width: 0, height: 4 }, 
     shadowOpacity: 0.3, 
     shadowRadius: 12, 
     elevation: 8 
   },
-  menuTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#1B262C', textAlign: 'center', marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  menuTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#0d2137', textAlign: 'center', marginBottom: Platform.OS === 'android' ? 18 : 20 },
   menuOption: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     padding: Platform.OS === 'android' ? 14 : 16, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderRadius: 12, 
     marginBottom: Platform.OS === 'android' ? 10 : 12 
   },
   menuIcon: { width: Platform.OS === 'android' ? 40 : 44, height: Platform.OS === 'android' ? 40 : 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
-  menuText: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', flex: 1 },
+  menuText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', flex: 1 },
   menuCancel: { padding: Platform.OS === 'android' ? 14 : 16, alignItems: 'center', marginTop: 8 },
-  menuCancelText: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  menuCancelText: { color: '#315f57', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
   modalContainer: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'flex-end' },
   modalContent: { 
     backgroundColor: '#FFF', 
     borderTopLeftRadius: 24, 
     borderTopRightRadius: 24, 
     maxHeight: '90%', 
-    shadowColor: '#000', 
+    shadowColor: '#dce8f2', 
     shadowOffset: { width: 0, height: -4 }, 
     shadowOpacity: 0.2, 
     shadowRadius: 12, 
@@ -916,9 +941,9 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     padding: Platform.OS === 'android' ? 18 : 20, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#F8FAFC' 
+    borderBottomColor: '#f4f8fc' 
   },
-  modalTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#1B262C' },
+  modalTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#0d2137' },
   form: { padding: Platform.OS === 'android' ? 18 : 20 },
   banner: { 
     flexDirection: 'row', 
@@ -928,27 +953,27 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     marginBottom: Platform.OS === 'android' ? 18 : 20 
   },
-  bannerText: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', color: '#0F4C75', marginLeft: 12 },
+  bannerText: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', color: '#0d2137', marginLeft: 12 },
   stockBanner: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     padding: Platform.OS === 'android' ? 12 : 14, 
     borderRadius: 12, 
     marginBottom: Platform.OS === 'android' ? 18 : 20 
   },
-  stockLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, color: '#0F4C75', fontWeight: '500' },
-  stockValue: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#1B262C' },
+  stockLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, color: '#0d2137', fontWeight: '500' },
+  stockValue: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137' },
   input: { marginBottom: Platform.OS === 'android' ? 16 : 18 },
-  label: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
+  label: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
   textInput: { 
     borderWidth: 1, 
     borderColor: '#E8F4F8', 
     padding: Platform.OS === 'android' ? 12 : 14, 
     borderRadius: 12, 
     backgroundColor: '#FFF', 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 14 : 15 
   },
   textArea: { minHeight: Platform.OS === 'android' ? 80 : 90, textAlignVertical: 'top', paddingTop: Platform.OS === 'android' ? 12 : 14 },
@@ -956,32 +981,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 16 : 18, 
     paddingVertical: Platform.OS === 'android' ? 8 : 10, 
     marginRight: 8, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderRadius: 20, 
     borderWidth: 1, 
     borderColor: '#E8F4F8' 
   },
-  chipActive: { backgroundColor: '#3282B8', borderColor: '#3282B8' },
-  chipText: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
+  chipActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
+  chipText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
   chipTextActive: { color: '#FFF' },
   buttons: { flexDirection: 'row', gap: 12, marginTop: Platform.OS === 'android' ? 20 : 24, marginBottom: Platform.OS === 'android' ? 18 : 20 },
   btnCancel: { 
     flex: 1, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     paddingVertical: Platform.OS === 'android' ? 14 : 16, 
     borderRadius: 12, 
     alignItems: 'center', 
     borderWidth: 1, 
     borderColor: '#E8F4F8' 
   },
-  btnCancelText: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  btnCancelText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
   btnSubmit: { 
     flex: 1, 
-    backgroundColor: '#3282B8', 
+    backgroundColor: '#315f57', 
     paddingVertical: Platform.OS === 'android' ? 14 : 16, 
     borderRadius: 12, 
     alignItems: 'center', 
-    shadowColor: '#3282B8', 
+    shadowColor: '#315f57', 
     shadowOffset: { width: 0, height: 4 }, 
     shadowOpacity: 0.3, 
     shadowRadius: 8, 
@@ -993,25 +1018,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 8 : 10, 
     paddingVertical: Platform.OS === 'android' ? 5 : 6, 
     borderRadius: 16, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderWidth: 1, 
     borderColor: '#E8F4F8' 
   },
-  toggleBtnActive: { backgroundColor: '#3282B8', borderColor: '#3282B8' },
-  toggleText: { fontSize: 12, fontWeight: '600', color: '#0F4C75' },
+  toggleBtnActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
+  toggleText: { fontSize: 12, fontWeight: '600', color: '#0d2137' },
   toggleTextActive: { color: '#FFF' },
   historyScroll: { padding: Platform.OS === 'android' ? 18 : 20 },
-  historyTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#1B262C', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  historyTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   historyItem: { 
     flexDirection: 'row', 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     padding: Platform.OS === 'android' ? 10 : 12, 
     borderRadius: 12, 
     marginBottom: 8 
   },
   historyIcon: { width: Platform.OS === 'android' ? 32 : 36, height: Platform.OS === 'android' ? 32 : 36, borderRadius: Platform.OS === 'android' ? 16 : 18, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
   historyContent: { flex: 1 },
-  historyQty: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#1B262C', marginBottom: 2 },
-  historyDate: { fontSize: 12, color: '#3282B8' },
-  historyNotes: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0F4C75', marginTop: 4, fontStyle: 'italic' },
+  historyQty: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137', marginBottom: 2 },
+  historyDate: { fontSize: 12, color: '#315f57' },
+  historyNotes: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', marginTop: 4, fontStyle: 'italic' },
 });
