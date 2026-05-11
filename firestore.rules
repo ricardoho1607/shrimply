@@ -80,6 +80,19 @@ service cloud.firestore {
         && data.status == 'pending';
     }
 
+    function validOptionalUsageCount(data, key, max) {
+      return !(key in data) || (data[key] is int && data[key] >= 0 && data[key] <= max);
+    }
+
+    function validAiUsagePayload(data, usageDateId) {
+      return data.dateKey == usageDateId
+        && data.updatedAt is timestamp
+        && data.functions is map
+        && data.functions.keys().hasOnly(['chat', 'projection'])
+        && validOptionalUsageCount(data.functions, 'chat', 20)
+        && validOptionalUsageCount(data.functions, 'projection', 5);
+    }
+
     match /users/{userId} {
       allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
       allow read: if signedIn() && (
@@ -158,6 +171,13 @@ service cloud.firestore {
 
       match /revenues/{revenueId} {
         allow read, write: if isCompanyMember(companyId);
+      }
+
+      match /aiUsage/{usageDateId} {
+        allow read: if isCompanyMember(companyId);
+        allow create, update: if isCompanyMember(companyId)
+          && validAiUsagePayload(request.resource.data, usageDateId);
+        allow delete: if false;
       }
     }
 

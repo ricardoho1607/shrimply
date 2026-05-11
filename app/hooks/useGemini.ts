@@ -1,12 +1,18 @@
 import { useState, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { db } from '@/config/firebase';
 import NotificationService from '../services/notificationService';
 import { buildOrsonAnalysis } from '../../orson/pipeline';
+import {
+  ORSON_GEMINI_MODEL,
+  type OrsonAiFunction,
+  isOrsonDailyLimitError,
+  reserveOrsonRequest,
+} from '../../orson/aiUsage';
 import {
   cleanOrsonResponse,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
-  ORSON_RESPONSE_TIMEOUT_MS,
   withOrsonTimeout,
 } from '../../orson/promptBuilder';
 
@@ -46,7 +52,11 @@ export const useGemini = () => {
     );
   };
 
-  const sendMessage = async (userMessage: string, allPonds: any[], options: { companyId?: string } = {}) => {
+  const sendMessage = async (
+    userMessage: string,
+    allPonds: any[],
+    options: { companyId?: string; aiFunction?: OrsonAiFunction } = {},
+  ) => {
     setLoading(true);
     setError(null);
 
@@ -59,15 +69,12 @@ export const useGemini = () => {
       const analysis = buildOrsonAnalysis(allPonds, userMessage);
       void createRiskNotifications(options.companyId, analysis);
 
+      await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat');
+
       const genAI = new GoogleGenerativeAI(API_KEY);
 
       const model = genAI.getGenerativeModel({
-        model: "gemini-3.1-flash-lite-preview", 
-        tools: [
-          {
-            googleSearch: {}, 
-          } as any, 
-        ],
+        model: ORSON_GEMINI_MODEL,
         systemInstruction: analysis.promptPackage.systemInstruction,
         generationConfig: {
           temperature: 0.5,
@@ -99,6 +106,12 @@ export const useGemini = () => {
       if (err.message?.includes("429")) {
         setError("Daily limit reached.");
         return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
+      }
+
+      if (isOrsonDailyLimitError(err)) {
+        const label = err.aiFunction === 'projection' ? 'projection analysis' : 'chat';
+        setError("Daily limit reached.");
+        return `Today's Orson ${label} limit is full (${err.used}/${err.limit}). This keeps Shrimply inside the Gemini free tier while there are no paying customers yet. Please try again after the daily reset.`;
       }
 
       setError(ORSON_FALLBACK_RESPONSE);

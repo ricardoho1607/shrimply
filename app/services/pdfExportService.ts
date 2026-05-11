@@ -54,9 +54,85 @@ const formatDate = (dateStr: string): string => {
   });
 };
 
+const getLargestBreakdownItem = (breakdown: ExpenseBreakdown | RevenueBreakdown): { category: string; amount: number } | null => {
+  const entries = Object.entries(breakdown).filter(([, amount]) => amount > 0);
+  if (entries.length === 0) return null;
+
+  const [category, amount] = entries.sort(([, a], [, b]) => b - a)[0];
+  return { category, amount };
+};
+
+const getProfitLossAnalysis = (data: FinancialData) => {
+  const {
+    totalRevenue,
+    revenueBreakdown,
+    totalCOGS,
+    cogsBreakdown,
+    grossProfit,
+    totalOPEX,
+    opexBreakdown,
+    operatingIncome,
+    totalOtherExpenses,
+    netProfit,
+  } = data;
+
+  const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : null;
+  const operatingMargin = totalRevenue > 0 ? (operatingIncome / totalRevenue) * 100 : null;
+  const netMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : null;
+  const cogsShare = totalRevenue > 0 ? (totalCOGS / totalRevenue) * 100 : null;
+  const opexShare = totalRevenue > 0 ? (totalOPEX / totalRevenue) * 100 : null;
+  const largestRevenue = getLargestBreakdownItem(revenueBreakdown);
+  const largestCOGS = getLargestBreakdownItem(cogsBreakdown);
+  const largestOPEX = getLargestBreakdownItem(opexBreakdown);
+
+  const executiveSummary = [
+    totalRevenue > 0
+      ? `Total revenue for the period was ${formatCurrency(totalRevenue)}. Gross profit was ${formatCurrency(grossProfit)} and net ${netProfit >= 0 ? 'income' : 'loss'} was ${formatCurrency(Math.abs(netProfit))}.`
+      : 'No revenue was recorded for this period, so profitability cannot be fully assessed from the available data.',
+    grossMargin !== null
+      ? `Gross margin was ${grossMargin.toFixed(2)}% and net margin was ${netMargin?.toFixed(2) ?? '0.00'}%. This result should be interpreted alongside COGS and operating expenses to judge sustainability.`
+      : 'Gross and net margins were not calculated because revenue was not available for the selected period.',
+  ];
+
+  if (largestRevenue) {
+    executiveSummary.push(`${largestRevenue.category} was the largest revenue source recorded in this period.`);
+  }
+
+  if (largestCOGS) {
+    executiveSummary.push(`${largestCOGS.category} was the largest direct production cost category and should be monitored against production volume and harvest yield.`);
+  }
+
+  const riskAssessment = [
+    netProfit < 0
+      ? 'The company recorded a net loss for the selected period. Direct costs and operating expenses should be reviewed before the next cycle decision.'
+      : netMargin !== null && netMargin < 10
+        ? 'The company was profitable, but net margin is narrow. Small increases in feed, labor, or overhead costs could materially reduce profitability.'
+        : 'No immediate net loss risk was detected from the selected period.',
+    cogsShare !== null && cogsShare > 65
+      ? `COGS represented ${cogsShare.toFixed(2)}% of revenue, indicating pressure on gross margin and production efficiency.`
+      : 'COGS did not exceed the high-risk threshold based on the selected period revenue.',
+    opexShare !== null && opexShare > 35
+      ? `Operating expenses represented ${opexShare.toFixed(2)}% of revenue. Overhead should be reviewed if this pattern continues.`
+      : 'Operating expenses did not exceed the high-risk threshold based on selected period revenue.',
+  ];
+
+  if (largestOPEX) {
+    riskAssessment.push(`${largestOPEX.category} was the largest operating expense category and should be reviewed for budget control.`);
+  }
+
+  if (totalOtherExpenses > 0) {
+    riskAssessment.push(`Non-operating or other expenses totaled ${formatCurrency(totalOtherExpenses)} and reduced the final net result.`);
+  }
+
+  if (operatingMargin !== null && operatingMargin < 0) {
+    riskAssessment.push('Operating income was negative before non-operating expenses, indicating the core operation did not cover its operating cost base.');
+  }
+
+  return { executiveSummary, riskAssessment };
+};
+
 const generateProfitLossHTML = (data: FinancialData): string => {
   const { 
-    period, 
     startDate, 
     endDate, 
     companyName, 
@@ -72,6 +148,7 @@ const generateProfitLossHTML = (data: FinancialData): string => {
     otherExpenseBreakdown,
     netProfit
   } = data;
+  const reportAnalysis = getProfitLossAnalysis(data);
 
   return `
     <!DOCTYPE html>
@@ -103,6 +180,49 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         .summary-box { background: #F8FAFB; border-left: 4px solid #0066CC; padding: 12px; margin-top: 25px; border-radius: 4px; }
         .summary-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
         .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 8px; padding-top: 8px; }
+        .analysis-section {
+          page-break-before: always;
+          break-before: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-top: 0;
+        }
+        .analysis-box {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          min-height: 180px;
+          padding: 16px;
+          background: #F8FAFB;
+          border: 1px solid #DDEAF3;
+          border-left: 4px solid #0066CC;
+          border-radius: 6px;
+        }
+        .analysis-box.risk {
+          background: #FFFBEA;
+          border-color: #F5D08A;
+          border-left-color: #F39C12;
+        }
+        .analysis-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: #0066CC;
+          margin-bottom: 8px;
+        }
+        .analysis-box.risk .analysis-title {
+          color: #B45309;
+        }
+        .analysis-list {
+          margin-left: 18px;
+          font-size: 12px;
+          color: #2C3E50;
+          line-height: 1.45;
+        }
+        .analysis-list li {
+          margin-bottom: 8px;
+        }
         .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ECF0F1; font-size: 11px; color: #4A5568; text-align: center; }
       </style>
     </head>
@@ -215,6 +335,21 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         <div class="summary-item highlight">
           <span>Net Profit Margin:</span>
           <span class="${netProfit >= 0 ? 'positive' : 'negative'}">${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
+        </div>
+      </div>
+
+      <div class="analysis-section">
+        <div class="analysis-box">
+          <div class="analysis-title">Executive Summary</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box risk">
+          <div class="analysis-title">Risk Assessment</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
         </div>
       </div>
       

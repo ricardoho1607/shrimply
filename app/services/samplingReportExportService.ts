@@ -91,6 +91,84 @@ const getPreviousABW = (pond: PondData): number => {
   return pond.samplingHistory[pond.samplingHistory.length - 2].abw;
 };
 
+const getLatestSampling = (pond: PondData): SamplingData | undefined => {
+  return pond.samplingHistory[pond.samplingHistory.length - 1];
+};
+
+const getReportAnalysis = (ponds: PondData[]) => {
+  const latestSamplings = ponds
+    .map((pond) => ({ pond, sampling: getLatestSampling(pond), previousABW: getPreviousABW(pond) }))
+    .filter((item): item is { pond: PondData; sampling: SamplingData; previousABW: number } => Boolean(item.sampling));
+
+  if (latestSamplings.length === 0) {
+    return {
+      executiveSummary: [
+        'No valid sampling records were available for the selected ponds. Growth performance cannot be assessed until ABW/MBW, mortality, feed, and sampling date records are entered.',
+      ],
+      riskAssessment: [
+        'Missing sampling history is the primary report risk. Record at least one valid sampling entry per selected pond before using this report for production decisions.',
+      ],
+    };
+  }
+
+  const avgABW = latestSamplings.reduce((sum, item) => sum + item.sampling.abw, 0) / latestSamplings.length;
+  const avgADG = latestSamplings.reduce((sum, item) => sum + item.sampling.adg, 0) / latestSamplings.length;
+  const avgSR = latestSamplings.reduce((sum, item) => sum + item.sampling.sr, 0) / latestSamplings.length;
+  const avgFCR = latestSamplings.reduce((sum, item) => sum + item.sampling.fcr, 0) / latestSamplings.length;
+  const highRiskPonds = latestSamplings.filter(({ pond, sampling }) => {
+    const totalMortality = pond.samplingHistory.reduce((sum, s) => sum + s.mortality, 0);
+    const mortalityPct = pond.initialStock > 0 ? (totalMortality / pond.initialStock) * 100 : 0;
+    return sampling.abw <= 0 || sampling.adg <= 0 || sampling.sr < 80 || sampling.fcr > 1.8 || mortalityPct > 15;
+  });
+  const moderateRiskPonds = latestSamplings.filter(({ sampling }) => {
+    return sampling.adg < 0.15 || sampling.sr < 90 || sampling.fcr > 1.5;
+  });
+
+  const bestPond = [...latestSamplings].sort((a, b) => {
+    const score = (item: { sampling: SamplingData }) => (item.sampling.adg * 4) + (item.sampling.sr / 20) - item.sampling.fcr;
+    return score(b) - score(a);
+  })[0];
+
+  const weakestPond = [...latestSamplings].sort((a, b) => {
+    const score = (item: { sampling: SamplingData }) => {
+      const lowGrowthPenalty = item.sampling.adg < 0.15 ? 2 : 0;
+      const survivalPenalty = item.sampling.sr < 90 ? 2 : 0;
+      const fcrPenalty = item.sampling.fcr > 1.5 ? 2 : 0;
+      return lowGrowthPenalty + survivalPenalty + fcrPenalty;
+    };
+    return score(b) - score(a);
+  })[0];
+
+  const executiveSummary = [
+    `The report covers ${latestSamplings.length} sampled pond${latestSamplings.length === 1 ? '' : 's'} out of ${ponds.length} selected pond${ponds.length === 1 ? '' : 's'}. Average ABW/MBW is ${formatNumber(avgABW)} g, average ADG is ${formatNumber(avgADG, 2)} g/day, average survival is ${formatNumber(avgSR, 0)}%, and average FCR is ${formatNumber(avgFCR, 2)}.`,
+    avgADG >= 0.25
+      ? 'Growth performance is currently strong based on the latest sampled records.'
+      : avgADG >= 0.15
+        ? 'Growth performance is within a normal operating range, but should be checked against the next sampling round.'
+        : 'Growth performance requires attention because average daily growth is below the expected operating range.',
+  ];
+
+  if (bestPond) {
+    executiveSummary.push(`${bestPond.pond.pondNumber} is currently the strongest pond based on latest ADG, survival rate, and FCR balance.`);
+  }
+
+  if (weakestPond && (highRiskPonds.length > 0 || moderateRiskPonds.length > 0)) {
+    executiveSummary.push(`${weakestPond.pond.pondNumber} should be reviewed first because its latest growth, survival, or FCR indicators are weaker than the rest of the selected ponds.`);
+  }
+
+  const riskAssessment = [
+    highRiskPonds.length > 0
+      ? `${highRiskPonds.length} pond${highRiskPonds.length === 1 ? '' : 's'} show high-risk indicators such as low survival, elevated FCR, flat growth, or high mortality.`
+      : 'No high-risk pond indicators were detected from the latest sampling records.',
+    moderateRiskPonds.length > 0
+      ? `${moderateRiskPonds.length} pond${moderateRiskPonds.length === 1 ? '' : 's'} should remain under watch because one or more indicators are outside the preferred range.`
+      : 'No moderate-risk growth or feed-efficiency warnings were detected from the latest sampling records.',
+    'Biomass, FCR, and survival values should be treated as operational estimates until confirmed by consistent sampling and harvest records.',
+  ];
+
+  return { executiveSummary, riskAssessment };
+};
+
 const generateChartUrl = (ponds: PondData[]): string => {
   const colors = ['#0066CC', '#27AE60', '#E74C3C', '#F39C12', '#9B59B6', '#34495E', '#16A085', '#D35400'];
   
@@ -143,6 +221,7 @@ const generateSamplingReportHTML = (data: SamplingReportData): string => {
   } = data;
 
   const averages = calculateAverages(ponds);
+  const reportAnalysis = getReportAnalysis(ponds);
 
   // Generate pond rows
   const pondRows = ponds.map((pond, index) => {
@@ -347,6 +426,48 @@ const generateSamplingReportHTML = (data: SamplingReportData): string => {
           margin-bottom: 3px;
           color: #B45309;
         }
+        .analysis-section {
+          page-break-before: always;
+          break-before: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          margin-top: 0;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 10px;
+        }
+        .analysis-box {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          min-height: 128px;
+          padding: 9px 10px;
+          background: #F8FAFB;
+          border-radius: 5px;
+          border: 1px solid #dbe7df;
+          border-left: 3px solid #0066CC;
+        }
+        .analysis-box.risk {
+          background: #FFFBEA;
+          border-left-color: #F59E0B;
+        }
+        .analysis-title {
+          font-size: 10px;
+          font-weight: 700;
+          color: #0066CC;
+          margin-bottom: 4px;
+        }
+        .analysis-box.risk .analysis-title {
+          color: #B45309;
+        }
+        .analysis-list {
+          margin-left: 10px;
+          font-size: 6.5px;
+          color: #2C3E50;
+          line-height: 1.25;
+        }
+        .analysis-list li {
+          margin-bottom: 3px;
+        }
         
         .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ECF0F1; }
         .line-item.category { font-weight: 600; color: #34495E; padding-left: 0; }
@@ -473,6 +594,21 @@ const generateSamplingReportHTML = (data: SamplingReportData): string => {
         DOC = Days of Culture | ABW = Average Body Weight | Prev ABW = Previous Average Body Weight | ADG = Average Daily Growth | SR = Survival Rate | FCR = Feed Conversion Ratio
         <br/>
         <strong>Color Coding:</strong> Green = Excellent Performance | Orange = Moderate Performance | Red = Needs Attention
+      </div>
+
+      <div class="analysis-section">
+        <div class="analysis-box">
+          <div class="analysis-title">Executive Summary</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box risk">
+          <div class="analysis-title">Risk Assessment</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
       </div>
       
       <div class="footer">

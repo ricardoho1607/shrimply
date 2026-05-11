@@ -67,9 +67,126 @@ const formatDate = (dateStr: string): string => {
   });
 };
 
+const calculateCashFlowTotals = (data: CashFlowData) => {
+  const { openingBalance, operatingActivities, investingActivities, financingActivities } = data;
+  const totalInflows =
+    operatingActivities.cashFromSales +
+    operatingActivities.cashFromCustomers +
+    Math.max(operatingActivities.otherOperatingCash, 0) +
+    investingActivities.saleOfAssets +
+    investingActivities.saleOfInvestments +
+    financingActivities.loansReceived +
+    financingActivities.capitalContributed;
+
+  const totalOutflows =
+    operatingActivities.paymentToSuppliers +
+    operatingActivities.paymentForExpenses +
+    Math.max(-operatingActivities.otherOperatingCash, 0) +
+    investingActivities.purchaseOfAssets +
+    investingActivities.purchaseOfInvestments +
+    financingActivities.loanRepayments +
+    financingActivities.dividendsPaid +
+    financingActivities.ownerWithdrawals;
+
+  const netOperatingCash =
+    operatingActivities.cashFromSales +
+    operatingActivities.cashFromCustomers -
+    operatingActivities.paymentToSuppliers -
+    operatingActivities.paymentForExpenses +
+    operatingActivities.otherOperatingCash;
+
+  const netInvestingCash =
+    investingActivities.saleOfAssets +
+    investingActivities.saleOfInvestments -
+    investingActivities.purchaseOfAssets -
+    investingActivities.purchaseOfInvestments;
+
+  const netFinancingCash =
+    financingActivities.loansReceived +
+    financingActivities.capitalContributed -
+    financingActivities.loanRepayments -
+    financingActivities.dividendsPaid -
+    financingActivities.ownerWithdrawals;
+
+  const netCashChange = netOperatingCash + netInvestingCash + netFinancingCash;
+  const closingBalance = openingBalance + netCashChange;
+
+  return {
+    totalInflows,
+    totalOutflows,
+    netOperatingCash,
+    netInvestingCash,
+    netFinancingCash,
+    netCashChange,
+    closingBalance,
+  };
+};
+
+const getCashFlowAnalysis = (data: CashFlowData) => {
+  const {
+    openingBalance,
+    operatingActivities,
+    investingActivities,
+    financingActivities,
+  } = data;
+  const {
+    totalInflows,
+    totalOutflows,
+    netOperatingCash,
+    netInvestingCash,
+    netFinancingCash,
+    netCashChange,
+    closingBalance,
+  } = calculateCashFlowTotals(data);
+
+  const operatingOutflows = operatingActivities.paymentToSuppliers + operatingActivities.paymentForExpenses + Math.max(-operatingActivities.otherOperatingCash, 0);
+  const ownerFunding = financingActivities.capitalContributed + financingActivities.loansReceived;
+  const ownerFundingShare = totalInflows > 0 ? (ownerFunding / totalInflows) * 100 : 0;
+  const liquidityStatus = closingBalance < 0
+    ? 'negative'
+    : closingBalance < Math.max(totalOutflows * 0.1, 1)
+      ? 'tight'
+      : 'stable';
+
+  const mainDriver = [
+    { label: 'operating activities', amount: Math.abs(netOperatingCash), value: netOperatingCash },
+    { label: 'investing activities', amount: Math.abs(netInvestingCash), value: netInvestingCash },
+    { label: 'financing activities', amount: Math.abs(netFinancingCash), value: netFinancingCash },
+  ].sort((a, b) => b.amount - a.amount)[0];
+
+  const executiveSummary = [
+    `Opening cash was ${formatCurrency(openingBalance)}. Cash inflows totaled ${formatCurrency(totalInflows)}, cash outflows totaled ${formatCurrency(totalOutflows)}, and net cash movement was ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}.`,
+    `Closing cash was ${closingBalance >= 0 ? formatCurrency(closingBalance) : `(${formatCurrency(Math.abs(closingBalance))})`}. Liquidity status is ${liquidityStatus}, based on the ending cash position and recorded outflows for the period.`,
+    `The largest cash movement driver was ${mainDriver.label}, which ${mainDriver.value >= 0 ? 'increased' : 'reduced'} cash by ${formatCurrency(Math.abs(mainDriver.value))}.`,
+  ];
+
+  const riskAssessment = [
+    netOperatingCash < 0
+      ? 'Operating activities consumed cash this period. Supplier payments, operating expenses, and other operating payments should be reviewed before the next operating cycle.'
+      : 'Operating activities generated positive cash flow for the selected period.',
+    closingBalance < 0
+      ? 'Closing cash is negative, indicating immediate liquidity pressure if the recorded balances are complete.'
+      : liquidityStatus === 'tight'
+        ? 'Closing cash appears tight relative to recorded outflows. A minimum cash buffer should be maintained before new commitments are made.'
+        : 'Closing cash appears adequate against the selected period outflow profile.',
+    ownerFundingShare > 40
+      ? `Owner funding or loan proceeds represented ${ownerFundingShare.toFixed(2)}% of recorded inflows. The farm may be dependent on external funding rather than operating receipts.`
+      : 'No high dependency on owner funding or loans was detected from the recorded inflow mix.',
+  ];
+
+  if (operatingOutflows > 0 && totalInflows > 0 && operatingOutflows / totalInflows > 0.7) {
+    riskAssessment.push('Operating outflows are high relative to inflows. Review payment timing and upcoming production-cycle cash needs.');
+  }
+
+  if (investingActivities.purchaseOfAssets + investingActivities.purchaseOfInvestments > 0) {
+    riskAssessment.push('Investing cash outflows were recorded. Confirm that asset or investment purchases do not reduce the cash buffer needed for pond operations.');
+  }
+
+  return { executiveSummary, riskAssessment };
+};
+
 const generateCashFlowHTML = (data: CashFlowData): string => {
   const { 
-    period, 
     startDate, 
     endDate, 
     companyName, 
@@ -79,29 +196,14 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
     financingActivities
   } = data;
 
-  // Calculate totals for each section
-  const netOperatingCash = 
-    operatingActivities.cashFromSales +
-    operatingActivities.cashFromCustomers -
-    operatingActivities.paymentToSuppliers -
-    operatingActivities.paymentForExpenses +
-    operatingActivities.otherOperatingCash;
-
-  const netInvestingCash = 
-    investingActivities.saleOfAssets +
-    investingActivities.saleOfInvestments -
-    investingActivities.purchaseOfAssets -
-    investingActivities.purchaseOfInvestments;
-
-  const netFinancingCash = 
-    financingActivities.loansReceived +
-    financingActivities.capitalContributed -
-    financingActivities.loanRepayments -
-    financingActivities.dividendsPaid -
-    financingActivities.ownerWithdrawals;
-
-  const netCashChange = netOperatingCash + netInvestingCash + netFinancingCash;
-  const closingBalance = openingBalance + netCashChange;
+  const {
+    netOperatingCash,
+    netInvestingCash,
+    netFinancingCash,
+    netCashChange,
+    closingBalance,
+  } = calculateCashFlowTotals(data);
+  const reportAnalysis = getCashFlowAnalysis(data);
 
   return `
     <!DOCTYPE html>
@@ -143,6 +245,49 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
         .badge-operating { background: #D5F4E6; color: #27AE60; }
         .badge-investing { background: #FFF3CD; color: #F39C12; }
         .badge-financing { background: #D6EAF8; color: #3498DB; }
+        .analysis-section {
+          page-break-before: always;
+          break-before: page;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+          margin-top: 0;
+        }
+        .analysis-box {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          min-height: 180px;
+          padding: 16px;
+          background: #F8FAFB;
+          border: 1px solid #DDEAF3;
+          border-left: 4px solid #27AE60;
+          border-radius: 6px;
+        }
+        .analysis-box.risk {
+          background: #FFFBEA;
+          border-color: #F5D08A;
+          border-left-color: #F39C12;
+        }
+        .analysis-title {
+          font-size: 15px;
+          font-weight: 700;
+          color: #27AE60;
+          margin-bottom: 8px;
+        }
+        .analysis-box.risk .analysis-title {
+          color: #B45309;
+        }
+        .analysis-list {
+          margin-left: 18px;
+          font-size: 12px;
+          color: #2C3E50;
+          line-height: 1.45;
+        }
+        .analysis-list li {
+          margin-bottom: 8px;
+        }
       </style>
     </head>
     <body>
@@ -346,24 +491,39 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
       <div class="summary-box">
         <div class="summary-item">
           <span>Operating Activities:</span>
-          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">Rp ${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}</span>
+          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Investing Activities:</span>
-          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">Rp ${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}</span>
+          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Financing Activities:</span>
-          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">Rp ${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}</span>
+          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}</span>
         </div>
         <div class="summary-item highlight">
           <span>Net Change in Cash:</span>
-          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">Rp ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}</span>
+          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}</span>
         </div>
       </div>
       
       <div class="note">
-        <strong>Note:</strong> This statement shows the cash inflows and outflows categorized by operating, investing, and financing activities in accordance with accounting standards.
+        <strong>Note:</strong> This statement focuses on cash movement and liquidity. It should not be interpreted as a Profit and Loss report.
+      </div>
+
+      <div class="analysis-section">
+        <div class="analysis-box">
+          <div class="analysis-title">Executive Summary</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box risk">
+          <div class="analysis-title">Risk Assessment</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
       </div>
       
       <div class="footer">

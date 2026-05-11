@@ -1,8 +1,15 @@
 import { useState, useRef } from 'react';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { db } from '@/lib/firebase';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import NotificationService from '@/lib/notificationService';
 import { buildOrsonAnalysis } from '../../../orson/pipeline';
+import {
+  ORSON_GEMINI_MODEL,
+  type OrsonAiFunction,
+  isOrsonDailyLimitError,
+  reserveOrsonRequest,
+} from '../../../orson/aiUsage';
 import {
   cleanOrsonResponse,
   ORSON_FALLBACK_RESPONSE,
@@ -71,7 +78,11 @@ export const useGemini = () => {
     );
   };
 
-  const sendMessage = async (userMessage: string, allPonds: any[], options: { companyId?: string } = {}) => {
+  const sendMessage = async (
+    userMessage: string,
+    allPonds: any[],
+    options: { companyId?: string; aiFunction?: OrsonAiFunction } = {},
+  ) => {
     const requestId = latestRequestId.current + 1;
     latestRequestId.current = requestId;
     setLoading(true);
@@ -92,14 +103,11 @@ export const useGemini = () => {
         return cachedText;
       }
 
+      await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat');
+
       const genAI = new GoogleGenerativeAI(API_KEY);
       const model = genAI.getGenerativeModel({
-        model: "gemini-3.1-flash-lite-preview", 
-        tools: [
-          {
-            googleSearch: {}, 
-          } as any, 
-        ],
+        model: ORSON_GEMINI_MODEL,
         systemInstruction: analysis.promptPackage.systemInstruction,
         generationConfig: {
           temperature: 0.5,
@@ -120,7 +128,7 @@ export const useGemini = () => {
         'Orson received your question but the response took too long. Please try again.'
       );
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
-      let text = cleanOrsonResponse(response.text());
+      const text = cleanOrsonResponse(response.text());
 
       saveToCache(analysis.promptPackage.cacheKey, text);
 
@@ -147,6 +155,15 @@ export const useGemini = () => {
       if (err.message?.includes("429")) {
         setError("Daily limit reached.");
         return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
+      }
+
+      if (isOrsonDailyLimitError(err)) {
+        const label = err.aiFunction === 'projection' ? 'projection analysis' : 'chat';
+        const limitMessage = `Today's Orson ${label} limit is full (${err.used}/${err.limit}). This keeps Shrimply inside the Gemini free tier while there are no paying customers yet. Please try again after the daily reset.`;
+        if (latestRequestId.current === requestId) {
+          setError("Daily limit reached.");
+        }
+        return limitMessage;
       }
 
       const message = getErrorMessage(err, ORSON_FALLBACK_RESPONSE);
