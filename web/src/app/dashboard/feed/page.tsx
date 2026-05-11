@@ -50,6 +50,7 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; samplings: Sampling[];
+  cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -109,7 +110,9 @@ export default function FeedRecordsPage() {
           if (cid) {
             const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
             const unsubPonds = onSnapshot(q, (snapshot) => {
-              const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Pond));
+              const data = snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as Pond))
+                .filter(pond => pond.cycleStatus !== 'ended');
               setPonds(data);
               setLoading(false);
             });

@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePondStore } from './store/pondStore';
+import { usePondStore, isPondCycleActive } from './store/pondStore';
 import { useGemini } from './hooks/useGemini';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -24,11 +24,12 @@ export default function HarvestProjectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { ponds } = usePondStore();
+  const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { sendMessage, loading: aiLoading } = useGemini();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
 
-  const [selectedPondId, setSelectedPondId] = useState<string | null>(ponds.length > 0 ? ponds[0].id : null);
+  const [selectedPondId, setSelectedPondId] = useState<string | null>(activePonds.length > 0 ? activePonds[0].id : null);
   const [daysToHarvest, setDaysToHarvest] = useState('14');
   const [expectedPrice, setExpectedPrice] = useState('5.50');
   const [dailyFeedCost, setDailyFeedCost] = useState('50');
@@ -41,7 +42,13 @@ export default function HarvestProjectionScreen() {
   // Projections state
   const [projection, setProjection] = useState<OrsonHarvestProjection | null>(null);
 
-  const selectedPond = ponds.find(p => p.id === selectedPondId);
+  const selectedPond = activePonds.find(p => p.id === selectedPondId);
+
+  useEffect(() => {
+    if (!selectedPondId && activePonds.length > 0) {
+      setSelectedPondId(activePonds[0].id);
+    }
+  }, [activePonds, selectedPondId]);
 
   useEffect(() => {
     if (!selectedPond) return;
@@ -87,7 +94,7 @@ Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.sum
 Give a concise recommendation based on Orson's structured projection risk.`;
 
     try {
-      const response = await sendMessage(prompt, ponds);
+      const response = await sendMessage(prompt, activePonds);
       setInsight(response);
     } catch (err) {
       setInsight(t.harvestProjectionScreen?.orsonUnavailable || "Orson is currently unavailable to provide an analysis.");
@@ -110,7 +117,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>{t.harvestProjectionScreen?.step1 || '1. Select Pond'}</Text>
             <View style={styles.pondTabs}>
-              {ponds.map(pond => (
+              {activePonds.map(pond => (
                 <TouchableOpacity 
                   key={pond.id} 
                   style={[styles.pondTab, selectedPondId === pond.id && styles.pondTabActive]}

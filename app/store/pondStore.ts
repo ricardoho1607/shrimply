@@ -46,6 +46,9 @@ export interface FeedData {
 export interface HarvestData { biomass: string; size: string; pricePerKg: string; subBiomass: string; subSize: string; subPricePerKg: string; }
 export interface HarvestRecord { id: string; date: string; ponds: { pondId: string; pondName: string; biomass: string; size: string; price: string; subBiomass: string; subSize: string; subPrice: string; }[]; }
 
+export type PondCycleStatus = 'active' | 'ended';
+export type PondCycleEndReason = 'harvested' | 'disease' | 'reset' | 'other';
+
 export interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
@@ -53,15 +56,27 @@ export interface Sampling {
 }
 
 export interface Pond {
-  id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
+  id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
+  cycleStatus?: PondCycleStatus; cycleStartedAt?: string; cycleEndedAt?: string; cycleEndedBy?: string; cycleEndReason?: PondCycleEndReason; previousCyclePondId?: string;
 }
+
+export const getPondCycleStatus = (pond: Pick<Pond, 'cycleStatus'>): PondCycleStatus => pond.cycleStatus === 'ended' ? 'ended' : 'active';
+export const isPondCycleActive = (pond: Pick<Pond, 'cycleStatus'>): boolean => getPondCycleStatus(pond) === 'active';
+export const getPondPlSupplier = (pond: Pick<Pond, 'plSupplier' | 'supplier'>): string => pond.plSupplier || pond.supplier || 'N/A';
+export const normalizePondLifecycle = (pond: Pond): Pond => ({
+  ...pond,
+  supplier: pond.supplier || pond.plSupplier || '',
+  plSupplier: pond.plSupplier || pond.supplier || '',
+  cycleStatus: getPondCycleStatus(pond),
+  cycleStartedAt: pond.cycleStartedAt || pond.docStart,
+});
 
 interface PondStore {
   ponds: Pond[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
   firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; };
   
-  addPond: (pond: Pond) => void; deletePond: (pondId: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
+  addPond: (pond: Pond) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; }) => void;
@@ -96,7 +111,19 @@ export const usePondStore = create<PondStore>()(
       restoreFromFirebase: async (userId: string) => { console.log('Legacy restoreFromFirebase called - real-time sync handles this now'); return Promise.resolve(); },
       
       addPond: (pond) => {
-        const newPond = { ...pond, totalHarvestedBiomass: 0, totalHarvestedPopulation: 0, totalHarvestedFeed: 0 };
+        const newPond = normalizePondLifecycle({
+          ...pond,
+          supplier: pond.plSupplier || pond.supplier,
+          plSupplier: pond.plSupplier || pond.supplier,
+          totalHarvestedBiomass: 0,
+          totalHarvestedPopulation: 0,
+          totalHarvestedFeed: 0,
+          cycleStatus: 'active',
+          cycleStartedAt: pond.cycleStartedAt || pond.docStart,
+          cycleEndedAt: undefined,
+          cycleEndedBy: undefined,
+          cycleEndReason: undefined,
+        });
         set((state) => ({ ponds: [...state.ponds, newPond] }));
         get().firebaseSync?.syncPond('create', newPond);
       },
@@ -106,6 +133,25 @@ export const usePondStore = create<PondStore>()(
         const pondToDelete = state.ponds.find(p => p.id === pondId);
         set((state) => ({ ponds: state.ponds.filter((pond) => pond.id !== pondId) }));
         if (pondToDelete) state.firebaseSync?.syncPond('delete', pondToDelete);
+      },
+
+      endPondCycle: (pondId, endedAt, reason, endedBy) => {
+        const state = get();
+        const pondToEnd = state.ponds.find(p => p.id === pondId);
+        if (!pondToEnd) return;
+
+        const endedPond = normalizePondLifecycle({
+          ...pondToEnd,
+          cycleStatus: 'ended',
+          cycleEndedAt: endedAt,
+          cycleEndedBy: endedBy,
+          cycleEndReason: reason,
+        });
+
+        set((state) => ({
+          ponds: state.ponds.map((pond) => pond.id === pondId ? endedPond : pond)
+        }));
+        state.firebaseSync?.syncPond('update', endedPond);
       },
 
       addHarvestRecord: (record) => {

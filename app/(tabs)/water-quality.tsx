@@ -3,7 +3,7 @@ import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, S
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePondStore } from "../store/pondStore";
+import { usePondStore, isPondCycleActive } from "../store/pondStore";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -29,6 +29,7 @@ export default function WaterQualityScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
   
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -57,7 +58,7 @@ export default function WaterQualityScreen() {
 
   const allWaterRecords = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return ponds.map((p) => {
+    return activePonds.map((p) => {
       const todayWQRecord = p.samplings.find(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
       return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
         id: `temp-${p.id}`, date: today, mbw: 0, mortality: 0, feed: 0,
@@ -65,7 +66,7 @@ export default function WaterQualityScreen() {
         doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName
       };
     });
-  }, [ponds]);
+  }, [activePonds]);
 
   const handleSave = useCallback(() => {
     if (submitLockRef.current) return;
@@ -83,7 +84,7 @@ export default function WaterQualityScreen() {
       setIsSubmitting(false);
       return;
     }
-    const pond = ponds.find((p) => p.pondName === selectedPond);
+    const pond = activePonds.find((p) => p.pondName === selectedPond);
     if (!pond) {
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -98,7 +99,7 @@ export default function WaterQualityScreen() {
     setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
     setSelectedPond(null);
     setIsModalVisible(false);
-  }, [canEditPonds, selectedPond, ponds, values, addWaterQuality, t]);
+  }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t]);
 
   const handlePondSelection = useCallback((pondName: string) => {
     setSelectedPond(pondName);
@@ -216,7 +217,7 @@ export default function WaterQualityScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>{t.waterQuality.selectPond}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
-                    {ponds.map((p) => (
+                    {activePonds.map((p) => (
                       <TouchableOpacity key={p.id}
                         style={[styles.pondOption, selectedPond === p.pondName && styles.pondOptionSelected]}
                         onPress={() => handlePondSelection(p.pondName)}>

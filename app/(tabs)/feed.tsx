@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { usePondStore } from "../store/pondStore";
+import { usePondStore, isPondCycleActive } from "../store/pondStore";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   collection, 
@@ -113,6 +113,7 @@ export default function FeedManagementScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const { ponds, addFeedData } = usePondStore();
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
 
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -160,13 +161,13 @@ export default function FeedManagementScreen() {
 
   const allFeedRecords = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return ponds.map(pond => {
+    return activePonds.map(pond => {
       const todayRecord = getTodayFeedRecord(pond);
       return todayRecord?.feedData 
         ? { ...todayRecord.feedData, pondName: pond.pondName, date: today }
         : { pondName: pond.pondName, date: today };
     });
-  }, [ponds]);
+  }, [activePonds]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -185,7 +186,7 @@ export default function FeedManagementScreen() {
       return;
     }
     
-    const pond = ponds.find((p) => p.pondName === selectedPond);
+    const pond = activePonds.find((p) => p.pondName === selectedPond);
     if (!pond) {
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -326,7 +327,7 @@ export default function FeedManagementScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>{t.forms.selectPond}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
-                    {ponds.map((p: any) => (
+                    {activePonds.map((p: any) => (
                       <TouchableOpacity key={p.id}
                         style={[styles.pondOption, selectedPond === p.pondName && styles.pondOptionSelected]}
                         onPress={() => handlePondSelection(p.pondName)}>

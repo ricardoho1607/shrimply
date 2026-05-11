@@ -45,6 +45,7 @@ export interface OrsonNormalizedPond {
   totalHarvestedPopulation: OrsonNumber;
   totalHarvestedFeedKg: OrsonNumber;
   supplier: string | null;
+  cycleStatus: 'active' | 'ended';
   records: OrsonNormalizedRecord[];
   missingFields: string[];
 }

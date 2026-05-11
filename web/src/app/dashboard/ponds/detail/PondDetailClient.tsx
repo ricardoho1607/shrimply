@@ -13,6 +13,8 @@ import {
   Calendar,
   Settings,
   Plus,
+  Archive,
+  RotateCcw,
   X,
   Loader2,
   Trash2,
@@ -39,7 +41,8 @@ import {
   serverTimestamp, 
   runTransaction, 
   arrayUnion, 
-  Timestamp 
+  Timestamp,
+  addDoc
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
@@ -69,8 +72,18 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
-  docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
+  docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  cycleStatus?: 'active' | 'ended';
+  cycleStartedAt?: string;
+  cycleEndedAt?: string;
+  cycleEndedBy?: string;
+  cycleEndReason?: 'harvested' | 'disease' | 'reset' | 'other';
+  previousCyclePondId?: string;
 }
+
+const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
+const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
+const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 
 /* ─── Custom SVG Chart ─────────────────────────────────────── */
 const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
@@ -186,6 +199,18 @@ export default function PondDetailClient() {
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
+  const [isEndCycleOpen, setEndCycleOpen] = useState(false);
+  const [endCycleForm, setEndCycleForm] = useState({
+    cycleEndedAt: new Date().toISOString().split('T')[0],
+    cycleEndReason: 'harvested' as 'harvested' | 'disease' | 'reset' | 'other',
+  });
+  const [isStartCycleOpen, setStartCycleOpen] = useState(false);
+  const [startCycleForm, setStartCycleForm] = useState({
+    density: '',
+    docStart: new Date().toISOString().split('T')[0],
+    plValue: '0.5',
+    plSupplier: '',
+  });
   const [samplingForm, setSamplingForm] = useState({
     date: new Date().toISOString().split('T')[0],
     mbw: '',
@@ -229,6 +254,10 @@ export default function PondDetailClient() {
   const handleAddSampling = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
+    if (!isActiveCycle(pond)) {
+      alert('Ended cycles are read-only. Start a new cycle before adding sampling data.');
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -268,6 +297,57 @@ export default function PondDetailClient() {
       alert("Failed to save sampling record.");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleEndCycle = async () => {
+    if (!companyId || !pond) return;
+    try {
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        cycleStatus: 'ended',
+        cycleEndedAt: endCycleForm.cycleEndedAt,
+        cycleEndReason: endCycleForm.cycleEndReason,
+        cycleEndedBy: auth.currentUser?.uid || '',
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.uid || '',
+      });
+      setEndCycleOpen(false);
+    } catch (error) {
+      console.error('Error ending cycle:', error);
+      alert('Failed to end cycle.');
+    }
+  };
+
+  const handleStartCycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId || !pond) return;
+    try {
+      const initialPopulation = Number(pond.pondArea) * Number(startCycleForm.density);
+      const initialWeight = parseFloat(startCycleForm.plValue) / 10;
+      const newDoc = await addDoc(collection(db, 'companies', companyId, 'ponds'), {
+        pondName: pond.pondName,
+        pondArea: Number(pond.pondArea),
+        density: Number(startCycleForm.density),
+        initialPopulation,
+        docStart: startCycleForm.docStart,
+        supplier: startCycleForm.plSupplier,
+        plSupplier: startCycleForm.plSupplier,
+        initialWeight,
+        samplings: [],
+        totalHarvestedBiomass: 0,
+        totalHarvestedPopulation: 0,
+        totalHarvestedFeed: 0,
+        cycleStatus: 'active',
+        cycleStartedAt: startCycleForm.docStart,
+        previousCyclePondId: pond.id,
+        createdAt: serverTimestamp(),
+        createdBy: auth.currentUser?.uid || '',
+      });
+      setStartCycleOpen(false);
+      router.push(`/dashboard/ponds/detail?id=${newDoc.id}`);
+    } catch (error) {
+      console.error('Error starting cycle:', error);
+      alert('Failed to start new cycle.');
     }
   };
 
@@ -400,16 +480,40 @@ export default function PondDetailClient() {
                 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>
                   DOC {metrics?.doc ?? 0}
                 </span>
+                <span style={{
+                  fontSize: '0.68rem',
+                  color: getCycleStatus(pond) === 'ended' ? '#64748b' : 'var(--primary)',
+                  background: getCycleStatus(pond) === 'ended' ? '#f1f5f9' : 'var(--primary-dim)',
+                  border: '1px solid var(--border)',
+                  borderRadius: '999px',
+                  padding: '3px 8px',
+                  fontWeight: 800,
+                }}>
+                  {getCycleStatus(pond) === 'ended' ? 'ENDED' : 'ACTIVE'}
+                </span>
               </div>
             </div>
           </div>
         <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
+          {isActiveCycle(pond) ? (
+            <button onClick={() => setEndCycleOpen(true)} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
+              <Archive size={18} strokeWidth={2.5} />
+              <span>End Cycle</span>
+            </button>
+          ) : (
+            <button onClick={() => setStartCycleOpen(true)} className="dashboard-action dashboard-action-primary">
+              <RotateCcw size={18} strokeWidth={2.5} />
+              <span>Start New Cycle</span>
+            </button>
+          )}
           <button className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
             <Settings size={18} strokeWidth={2.5} />
           </button>
           <button 
             onClick={() => setSamplingModalOpen(true)}
             className="dashboard-action dashboard-action-primary"
+            disabled={!isActiveCycle(pond)}
+            style={{ opacity: isActiveCycle(pond) ? 1 : 0.45, cursor: isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
           >
             <Plus size={20} strokeWidth={3} />
             <span>New Sampling</span>
@@ -575,7 +679,7 @@ export default function PondDetailClient() {
                   {[
                     { label: 'Total Area', value: `${pond.pondArea} m²`, icon: Layers },
                     { label: 'Target Density', value: `${pond.density} PL/m²`, icon: Database },
-                    { label: 'PL Supplier', value: pond.supplier, icon: Target },
+                    { label: 'PL Supplier', value: getPlSupplier(pond), icon: Target },
                     { label: 'Initial Weight', value: `${pond.initialWeight} g`, icon: Wind },
                   ].map((spec, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -631,6 +735,79 @@ export default function PondDetailClient() {
         </div>
 
       </div>
+
+      {isEndCycleOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>End Cycle</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} history will remain available.</p>
+              </div>
+              <button onClick={() => setEndCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                End Date
+                <input type="date" value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Reason
+                <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
+                  <option value="harvested">Harvested</option>
+                  <option value="disease">Disease</option>
+                  <option value="reset">Reset</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>End Cycle</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {isStartCycleOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Start New Cycle</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} and {pond.pondArea} m² will be reused. Supplier is cycle-specific.</p>
+              </div>
+              <button onClick={() => setStartCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Density (PL/m²)
+                <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Stocking Date
+                <input required type="date" value={startCycleForm.docStart} onChange={e => setStartCycleForm(prev => ({ ...prev, docStart: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                PL Value (g)
+                <input required type="number" step="0.1" value={startCycleForm.plValue} onChange={e => setStartCycleForm(prev => ({ ...prev, plValue: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                PL Supplier
+                <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Start Cycle</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <SamplingModal 
         isOpen={isSamplingModalOpen} 

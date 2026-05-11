@@ -216,7 +216,8 @@ export const normalizePondData = (
     totalHarvestedBiomassKg: firstNumber(pond.totalHarvestedBiomass, pond.harvestedBiomass),
     totalHarvestedPopulation: firstNumber(pond.totalHarvestedPopulation, pond.harvestedPopulation),
     totalHarvestedFeedKg: firstNumber(pond.totalHarvestedFeed, pond.harvestedFeed),
-    supplier: firstString(pond.supplier, pond.hatchery),
+    supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
+    cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
     records,
     missingFields: [],
   };

@@ -18,8 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
-import { usePondStore } from './../store/pondStore';
-import { Pond, HarvestRecord, Sampling } from './../store/pondStore';
+import { usePondStore, Pond, HarvestRecord, Sampling, normalizePondLifecycle } from './../store/pondStore';
 import { Platform } from 'react-native';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
@@ -64,10 +63,20 @@ interface PendingChange {
   samplingId?: string;
 }
 
+const removeUndefinedFields = (value: any): any => {
+  if (Array.isArray(value)) return value.map(removeUndefinedFields);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.entries(value).reduce((cleaned, [key, entry]) => {
+    if (entry !== undefined) {
+      cleaned[key] = removeUndefinedFields(entry);
+    }
+    return cleaned;
+  }, {} as Record<string, any>);
+};
+
 export const useFirebaseSync = () => {
   const { user, company } = useAuth();
-  const pondStore = usePondStore();
-  
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: false,
     isSyncing: false,
@@ -165,7 +174,7 @@ export const useFirebaseSync = () => {
             
             snapshot.forEach(doc => {
               const data = doc.data();
-              serverPonds.push({
+              serverPonds.push(normalizePondLifecycle({
                 id: doc.id,
                 pondName: data.pondName || '',
                 pondArea: data.pondArea || 0,
@@ -173,12 +182,19 @@ export const useFirebaseSync = () => {
                 initialPopulation: data.initialPopulation || 0,
                 docStart: data.docStart || '',
                 supplier: data.supplier || '',
+                plSupplier: data.plSupplier || data.supplier || '',
                 initialWeight: data.initialWeight || 0,
                 samplings: data.samplings || [],
                 totalHarvestedBiomass: data.totalHarvestedBiomass || 0,
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,
-              });
+                cycleStatus: data.cycleStatus === 'ended' ? 'ended' : 'active',
+                cycleStartedAt: data.cycleStartedAt || data.docStart || '',
+                cycleEndedAt: data.cycleEndedAt,
+                cycleEndedBy: data.cycleEndedBy,
+                cycleEndReason: data.cycleEndReason,
+                previousCyclePondId: data.previousCyclePondId,
+              }));
             });
 
             // Only update if this is the initial load or if we have actual changes
@@ -278,7 +294,7 @@ export const useFirebaseSync = () => {
             
             if (change.action === 'create' || change.action === 'update') {
               const pondData = {
-                ...change.data,
+                ...removeUndefinedFields(change.data),
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid,
                 ...(change.action === 'create' && { 

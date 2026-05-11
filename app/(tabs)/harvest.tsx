@@ -1,8 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Platform, KeyboardAvoidingView } from "react-native";
-import { usePondStore, HarvestRecord } from "../store/pondStore";
+import { usePondStore, HarvestRecord, isPondCycleActive } from "../store/pondStore";
 import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
@@ -33,6 +33,7 @@ export default function HarvestScreen() {
   const { formatCurrency } = useCurrency();
   const { user } = useAuth();
   const { ponds, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact } = usePondStore();
+  const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   
   const canEditHarvest = user?.role === 'technician' || user?.role === 'owner';
 
@@ -40,10 +41,10 @@ export default function HarvestScreen() {
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [harvestToDelete, setHarvestToDelete] = useState<string | null>(null);
 
-  const initializePondData = () => ponds.map(pond => ({
+  const initializePondData = useCallback(() => activePonds.map(pond => ({
     pondId: pond.id, pondName: pond.pondName,
     biomass: "", size: "", price: "", subBiomass: "", subSize: "", subPrice: "",
-  }));
+  })), [activePonds]);
 
   const [pondData, setPondData] = useState(initializePondData());
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,7 +57,7 @@ export default function HarvestScreen() {
     }
   }, [isModalVisible]);
 
-  React.useEffect(() => { setPondData(initializePondData()); }, [ponds]);
+  React.useEffect(() => { setPondData(initializePondData()); }, [initializePondData]);
 
   const updatePondField = (pondId: string, field: string, value: string) => {
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
@@ -263,7 +264,7 @@ export default function HarvestScreen() {
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled={true}
               >
-                {ponds.map((pond) => {
+                {activePonds.map((pond) => {
                   const currentPondData = pondData.find(p => p.pondId === pond.id);
                   if (!currentPondData) return null;
 

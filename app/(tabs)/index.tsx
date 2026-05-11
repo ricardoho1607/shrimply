@@ -8,7 +8,7 @@ import {
   Text, TextInput, TouchableOpacity, View, Alert, KeyboardAvoidingView, SafeAreaView,
   Keyboard, TouchableWithoutFeedback
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling } from '.././store/pondStore';
+import { usePondStore, type Pond, type Sampling, type PondCycleEndReason, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from '.././store/pondStore';
 import { useFirebaseSync } from '.././hooks/useFirebaseSync';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -136,7 +136,7 @@ export default function PondManagementScreen() {
     ponds, 
     addPond, 
     addSampling, 
-    deletePond, 
+    endPondCycle, 
     calculatePondMetricsWithHarvest, 
     switchAccount, 
     setFirebaseSync 
@@ -146,8 +146,7 @@ export default function PondManagementScreen() {
   
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
-  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
-  const [pondToDelete, setPondToDelete] = useState<Pond | null>(null);
+  const [cycleFilter, setCycleFilter] = useState<'active' | 'ended'>('active');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
@@ -220,6 +219,12 @@ export default function PondManagementScreen() {
     const days = diff / (1000 * 60 * 60 * 24);
     return Math.max(0, Math.floor(days));
   }, []);
+
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
+  const visiblePonds = useMemo(
+    () => ponds.filter((pond) => getPondCycleStatus(pond) === cycleFilter),
+    [ponds, cycleFilter]
+  );
 
   const getPondSamplingData = useCallback((pondName: string): Sampling[] => {
     const pond = ponds.find(p => p.pondName === pondName);
@@ -323,6 +328,7 @@ export default function PondManagementScreen() {
       id: Date.now().toString(), 
       pondName, 
       supplier, 
+      plSupplier: supplier,
       pondArea: Number(pondArea), 
       density: Number(density),
       initialPopulation: Number(pondArea) * Number(density), 
@@ -331,7 +337,9 @@ export default function PondManagementScreen() {
       samplings: [],
       totalHarvestedBiomass: 0, 
       totalHarvestedPopulation: 0, 
-      totalHarvestedFeed: 0
+      totalHarvestedFeed: 0,
+      cycleStatus: 'active',
+      cycleStartedAt: docStart.toISOString().split('T')[0],
     });
     
     closeModal();
@@ -358,7 +366,7 @@ export default function PondManagementScreen() {
       return;
     }
     
-    const selectedPondData = ponds.find(p => p.pondName === selectedPond);
+    const selectedPondData = activePonds.find(p => p.pondName === selectedPond);
     if (!selectedPondData) {
       Alert.alert(t.messages.error, t.home.pondNotFound);
       submitLockRef.current = false;
@@ -377,14 +385,14 @@ export default function PondManagementScreen() {
     
     closeModal();
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
-  }, [canEditPonds, formData, ponds, addSampling, t]);
+  }, [canEditPonds, formData, activePonds, addSampling, t]);
 
   const closeModal = useCallback(() => { 
     resetForm(); 
     setModalVisible(false); 
   }, [resetForm]);
   
-  const handleDeletePond = useCallback((pond: Pond) => {
+  const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canEditPonds) {
       Alert.alert(
         t.home.permissionDenied, 
@@ -393,23 +401,28 @@ export default function PondManagementScreen() {
       );
       return;
     }
-    setPondToDelete(pond); 
-    setDeleteModalVisible(true); 
-  }, [canEditPonds, t]);
-  
-  const confirmDeletePond = useCallback(() => {
-    if (pondToDelete) { 
-      deletePond(pondToDelete.id); 
-      setDeleteModalVisible(false); 
-      setPondToDelete(null); 
-      Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
+
+    if (!isPondCycleActive(pond)) {
+      Alert.alert('Cycle already ended', `${pond.pondName} is already in cycle history.`);
+      return;
     }
-  }, [pondToDelete, deletePond, t]);
-  
-  const cancelDeletePond = useCallback(() => { 
-    setDeleteModalVisible(false); 
-    setPondToDelete(null); 
-  }, []);
+
+    const endCycle = (reason: PondCycleEndReason) => {
+      const today = new Date().toISOString().split('T')[0];
+      endPondCycle(pond.id, today, reason, user?.uid);
+      Alert.alert(t.messages.success, `${pond.pondName} cycle ended and moved to history.`);
+    };
+
+    Alert.alert(
+      'End Cycle',
+      `End the current cycle for "${pond.pondName}"? Sampling, water, feed, and harvest history will stay saved.`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        { text: 'Harvested', onPress: () => endCycle('harvested') },
+        { text: 'Reset/Other', onPress: () => endCycle('other') },
+      ]
+    );
+  }, [canEditPonds, endPondCycle, t, user?.uid]);
 
   const handleDateChange = useCallback((
     confirmed: boolean, 
@@ -463,10 +476,10 @@ export default function PondManagementScreen() {
                 style={styles.editButton} 
                 onPress={(e) => { 
                   e.stopPropagation(); 
-                  handleDeletePond(pond); 
+                  handleEndPondCycle(pond); 
                 }}
               >
-                <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                <Ionicons name={isPondCycleActive(pond) ? "archive-outline" : "time-outline"} size={18} color={isPondCycleActive(pond) ? "#315f57" : "#6b8aa0"} />
               </TouchableOpacity>
             )}
           </View>
@@ -520,7 +533,7 @@ export default function PondManagementScreen() {
             <DetailItem 
               iconName="business-outline" 
               label={t.forms.supplier} 
-              value={pond.supplier} 
+              value={getPondPlSupplier(pond)} 
             />
             {(pond.totalHarvestedBiomass || 0) === 0 && <DetailItem />}
           </View>
@@ -541,7 +554,7 @@ export default function PondManagementScreen() {
     calculateMetrics, 
     getLastADG, 
     getDOCColor, 
-    handleDeletePond, 
+    handleEndPondCycle, 
     router, 
     canEditPonds, 
     t
@@ -600,7 +613,7 @@ export default function PondManagementScreen() {
           showsHorizontalScrollIndicator={false} 
           style={styles.pondSelector}
         >
-          {ponds.map(pond => (
+          {activePonds.map(pond => (
             <TouchableOpacity 
               key={pond.id} 
               style={[
@@ -648,7 +661,7 @@ export default function PondManagementScreen() {
         onPress={openDatePicker} 
       />
     </>
-  ), [formData, ponds, updateForm, openDatePicker, t]);
+  ), [formData, activePonds, updateForm, openDatePicker, t]);
 
 
 
@@ -656,8 +669,22 @@ export default function PondManagementScreen() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
+        <View style={styles.cycleFilterContainer}>
+          <TouchableOpacity
+            style={[styles.cycleFilterButton, cycleFilter === 'active' && styles.cycleFilterButtonActive]}
+            onPress={() => setCycleFilter('active')}
+          >
+            <Text style={[styles.cycleFilterText, cycleFilter === 'active' && styles.cycleFilterTextActive]}>Active</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cycleFilterButton, cycleFilter === 'ended' && styles.cycleFilterButtonActive]}
+            onPress={() => setCycleFilter('ended')}
+          >
+            <Text style={[styles.cycleFilterText, cycleFilter === 'ended' && styles.cycleFilterTextActive]}>Ended</Text>
+          </TouchableOpacity>
+        </View>
         <FlatList 
-          data={ponds}
+          data={visiblePonds}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <PondCard pond={item} />}
           contentContainerStyle={styles.scrollContent} 
@@ -684,43 +711,6 @@ export default function PondManagementScreen() {
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}
-
-        <Modal visible={deleteModalVisible} animationType="fade" transparent>
-          <View style={styles.deleteModalContainer}>
-            <View style={styles.deleteModalContent}>
-              <View style={styles.deleteModalIcon}>
-                <Ionicons name="warning-outline" size={48} color="#e74c3c" />
-              </View>
-              <Text style={styles.deleteModalTitle}>
-                {t.home.deletePond}
-              </Text>
-              <Text style={styles.deleteModalMessage}>
-                {t.messages.deletePondConfirm} "{pondToDelete?.pondName}"?
-              </Text>
-              <Text style={styles.deleteModalWarning}>
-                {t.messages.deletePondWarning}
-              </Text>
-              <View style={styles.deleteModalButtons}>
-                <TouchableOpacity 
-                  style={styles.deleteModalCancelButton} 
-                  onPress={cancelDeletePond}
-                >
-                  <Text style={styles.deleteModalCancelText}>
-                    {t.actions.cancel}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={styles.deleteModalConfirmButton} 
-                  onPress={confirmDeletePond}
-                >
-                  <Text style={styles.deleteModalConfirmText}>
-                    {t.actions.delete}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
 
         <Modal visible={menuModalVisible} animationType="fade" transparent>
           <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
@@ -861,8 +851,35 @@ const styles = StyleSheet.create({
   
   scrollContent: { 
     padding: Platform.OS === 'android' ? 16 : 20, 
-    paddingTop: Platform.OS === 'android' ? 16 : 20, 
+    paddingTop: Platform.OS === 'android' ? 8 : 12, 
     paddingBottom: 100 
+  },
+
+  cycleFilterContainer: {
+    flexDirection: 'row',
+    marginHorizontal: Platform.OS === 'android' ? 16 : 20,
+    marginTop: Platform.OS === 'android' ? 12 : 16,
+    padding: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+  },
+  cycleFilterButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  cycleFilterButtonActive: {
+    backgroundColor: '#0d2137',
+  },
+  cycleFilterText: {
+    color: '#315f57',
+    fontWeight: '700',
+  },
+  cycleFilterTextActive: {
+    color: '#FFFFFF',
   },
   
   emptyState: { 

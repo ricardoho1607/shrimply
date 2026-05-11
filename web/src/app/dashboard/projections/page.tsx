@@ -31,6 +31,7 @@ interface Pond {
   initialPopulation: number;
   initialWeight?: number;
   samplings: any[];
+  cycleStatus?: 'active' | 'ended';
 }
 
 export default function HarvestProjectionsPage() {
@@ -82,7 +83,9 @@ export default function HarvestProjectionsPage() {
     if (!company?.id) return;
     const q = query(collection(db, 'companies', company.id, 'ponds'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
-      const pondData = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Pond));
+      const pondData = snapshot.docs
+        .map(d => ({ id: d.id, ...d.data() } as Pond))
+        .filter(pond => pond.cycleStatus !== 'ended');
       setPonds(pondData);
       if (pondData.length > 0 && !selectedPondId) setSelectedPondId(pondData[0].id);
       setLoading(false);
@@ -133,7 +136,10 @@ Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.sum
 Give a concise recommendation based on Orson's structured projection risk.`;
 
     try {
-      const response = await sendMessage(prompt, ponds);
+      const response = await sendMessage(prompt, ponds, {
+        companyId: company?.id,
+        aiFunction: 'projection',
+      });
       setInsight(response);
     } catch (err) {
       setInsight("Orson is currently unavailable to provide an analysis.");

@@ -7,7 +7,7 @@ import {
   TextInput, TouchableOpacity, View, Alert, Platform, ActivityIndicator,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling } from './store/pondStore';
+import { usePondStore, type Pond, type Sampling, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
 import { 
@@ -248,6 +248,7 @@ export default function PondDetails() {
   
   const { 
     getPondById, 
+    addPond,
     updateSampling, 
     calculatePondMetricsWithHarvest,
     ponds
@@ -258,6 +259,13 @@ export default function PondDetails() {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSample, setSelectedSample] = useState<Sampling | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
+  const [startCycleVisible, setStartCycleVisible] = useState(false);
+  const [newCycleForm, setNewCycleForm] = useState({
+    density: '',
+    docStart: new Date().toISOString().split('T')[0],
+    plValue: '',
+    plSupplier: '',
+  });
 
   useEffect(() => {
     if (pondId) {
@@ -266,7 +274,7 @@ export default function PondDetails() {
         setPond(pondData);
       }
     }
-  }, [pondId]);
+  }, [pondId, ponds, getPondById]);
 
   useEffect(() => {
     if (company?.id) {
@@ -461,10 +469,10 @@ export default function PondDetails() {
   }, [pond, calculatePondMetricsWithHarvest]);
 
   const openEditModal = useCallback((sample: Sampling) => {
-    if (!canEditPonds) {
+    if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
       Alert.alert(
         t.home.permissionDenied,
-        t.home.onlyTechniciansCanEdit,
+        !pond || !isPondCycleActive(pond) ? 'Ended cycles are read-only. Start a new cycle before adding or editing sampling data.' : t.home.onlyTechniciansCanEdit,
         [{ text: t.actions.confirm }]
       );
       return;
@@ -472,7 +480,49 @@ export default function PondDetails() {
     
     setSelectedSample(sample);
     setEditModalVisible(true);
-  }, [canEditPonds, t]);
+  }, [canEditPonds, pond, t]);
+
+  const handleStartNewCycle = useCallback(() => {
+    if (!pond || !canEditPonds) return;
+    const { density, docStart, plValue, plSupplier } = newCycleForm;
+
+    if (!density || !docStart || !plValue || !plSupplier) {
+      Alert.alert(t.messages.error, t.home.fillAllFields);
+      return;
+    }
+
+    const initialPopulation = pond.pondArea * Number(density);
+    const initialWeight = (parseFloat(plValue) || 0) / 10;
+
+    addPond({
+      id: Date.now().toString(),
+      pondName: pond.pondName,
+      pondArea: pond.pondArea,
+      density: Number(density),
+      initialPopulation,
+      docStart,
+      supplier: plSupplier,
+      plSupplier,
+      initialWeight,
+      samplings: [],
+      totalHarvestedBiomass: 0,
+      totalHarvestedPopulation: 0,
+      totalHarvestedFeed: 0,
+      cycleStatus: 'active',
+      cycleStartedAt: docStart,
+      previousCyclePondId: pond.id,
+    });
+
+    setStartCycleVisible(false);
+    setNewCycleForm({
+      density: '',
+      docStart: new Date().toISOString().split('T')[0],
+      plValue: '',
+      plSupplier: '',
+    });
+    router.push('/(tabs)' as any);
+    Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
+  }, [addPond, canEditPonds, newCycleForm, pond, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);
@@ -558,6 +608,16 @@ export default function PondDetails() {
         }}
         >
           <Text style={styles.title}>{t.shrimp.pondDetails}</Text>
+          <View style={styles.statusRow}>
+            <View style={[styles.statusBadge, getPondCycleStatus(pond) === 'ended' && styles.statusBadgeEnded]}>
+              <Text style={styles.statusBadgeText}>{getPondCycleStatus(pond) === 'ended' ? 'Ended Cycle' : 'Active Cycle'}</Text>
+            </View>
+            {getPondCycleStatus(pond) === 'ended' && canEditPonds && (
+              <TouchableOpacity style={styles.startCycleButton} onPress={() => setStartCycleVisible(true)}>
+                <Text style={styles.startCycleButtonText}>Start New Cycle</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
           <View style={styles.detailsBubble}>
             <View style={styles.columnContainer}>
@@ -661,6 +721,10 @@ export default function PondDetails() {
                     value={totalFeed.toFixed(1)} 
                     unit="kg" 
                   />
+                  <DataRow
+                    label={t.forms.supplier}
+                    value={getPondPlSupplier(pond)}
+                  />
                 </View>
               </View>
             </View>
@@ -692,7 +756,7 @@ export default function PondDetails() {
                           {t.nav.feed}: {sample.feed}kg {sample.feedData?.inventoryFeedId && `• ${getFeedName(sample.feedData.inventoryFeedId)}`}
                         </Text>
                       </View>
-                      {canEditPonds && (
+                      {canEditPonds && isPondCycleActive(pond) && (
                         <TouchableOpacity 
                           style={styles.editButton} 
                           onPress={() => openEditModal(sample)}
@@ -717,6 +781,34 @@ export default function PondDetails() {
           onClose={closeEditModal}
           onSave={handleSaveEdit}
         />
+        <Modal visible={startCycleVisible} animationType="slide" transparent>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={styles.editModalContainer}
+          >
+            <View style={styles.editModalContent}>
+              <View style={styles.editModalHeader}>
+                <Text style={styles.editModalTitle}>Start New Cycle</Text>
+                <TouchableOpacity onPress={() => setStartCycleVisible(false)} style={styles.closeButton}>
+                  <Ionicons name="close" size={24} color="#315f57" />
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.cycleHint}>{pond.pondName} and {pond.pondArea.toLocaleString()} m² will be reused. Enter new stocking details for this cycle.</Text>
+              <EditInputField label={t.forms.density} value={newCycleForm.density} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, density: value }))} keyboardType="numeric" />
+              <EditInputField label={t.forms.startDate} value={newCycleForm.docStart} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, docStart: value }))} />
+              <EditInputField label={t.forms.plValue} value={newCycleForm.plValue} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plValue: value }))} keyboardType="numeric" />
+              <EditInputField label="PL Supplier" value={newCycleForm.plSupplier} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plSupplier: value }))} />
+              <View style={styles.editButtonContainer}>
+                <TouchableOpacity style={styles.editCancelButton} onPress={() => setStartCycleVisible(false)}>
+                  <Text style={styles.editCancelText}>{t.actions.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editSaveButton} onPress={handleStartNewCycle}>
+                  <Text style={styles.editSaveText}>Start Cycle</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
       </View>
     </>
   );
@@ -729,6 +821,12 @@ const styles = StyleSheet.create({
   pondName: { fontSize: Platform.OS === 'android' ? 17 : 18, color: '#0d2137', fontWeight: 'bold' },
   scrollView: { flex: 1, padding: Platform.OS === 'android' ? 16 : 20 },
   title: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 20 : 24 },
+  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 16 },
+  statusBadge: { backgroundColor: '#315f57', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  statusBadgeEnded: { backgroundColor: '#6b8aa0' },
+  statusBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  startCycleButton: { backgroundColor: '#0d2137', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14 },
+  startCycleButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 12 : 16, marginTop: Platform.OS === 'android' ? 20 : 24 },
   detailsBubble: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#e8f2f9', marginBottom: 12, elevation: 3 },
   columnContainer: { flexDirection: 'row', gap: 20 },
@@ -757,6 +855,7 @@ const styles = StyleSheet.create({
   editInputContainer: { marginBottom: 16 },
   editInputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
   editInput: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', color: '#0d2137' },
+  cycleHint: { color: '#315f57', fontSize: 13, lineHeight: 18, marginBottom: 16 },
   editButtonContainer: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, marginTop: 8 },
   editCancelButton: { flex: 1, padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e74c3c', alignItems: 'center' },
   editCancelText: { color: '#e74c3c', fontWeight: 'bold' },

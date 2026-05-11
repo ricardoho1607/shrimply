@@ -7,6 +7,8 @@ import {
   Search, 
   MoreHorizontal, 
   Trash2, 
+  Archive,
+  RotateCcw,
   Calendar, 
   Scale, 
   Users, 
@@ -16,7 +18,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, doc, addDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -29,11 +31,21 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
-  docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
+  docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
+  cycleStatus?: 'active' | 'ended';
+  cycleStartedAt?: string;
+  cycleEndedAt?: string;
+  cycleEndedBy?: string;
+  cycleEndReason?: 'harvested' | 'disease' | 'reset' | 'other';
+  previousCyclePondId?: string;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
+
+const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
+const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
+const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
   if (!value) return null;
@@ -63,6 +75,7 @@ export default function PondsPage() {
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   
   const [isModalOpen, setModalOpen] = useState(false);
+  const [cycleFilter, setCycleFilter] = useState<'active' | 'ended'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   
@@ -79,6 +92,18 @@ export default function PondsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
     isOpen: false,
     id: null
+  });
+  const [endCyclePond, setEndCyclePond] = useState<Pond | null>(null);
+  const [endCycleForm, setEndCycleForm] = useState({
+    cycleEndedAt: new Date().toISOString().split('T')[0],
+    cycleEndReason: 'harvested' as 'harvested' | 'disease' | 'reset' | 'other',
+  });
+  const [startCyclePond, setStartCyclePond] = useState<Pond | null>(null);
+  const [startCycleForm, setStartCycleForm] = useState({
+    density: '',
+    docStart: new Date().toISOString().split('T')[0],
+    plValue: '0.5',
+    plSupplier: '',
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -97,11 +122,14 @@ export default function PondsPage() {
         initialPopulation,
         docStart: formData.docStart,
         supplier: formData.supplier,
+        plSupplier: formData.supplier,
         initialWeight,
         samplings: [],
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
         totalHarvestedFeed: 0,
+        cycleStatus: 'active',
+        cycleStartedAt: formData.docStart,
         createdAt: serverTimestamp(),
         createdBy: user.uid
       };
@@ -119,6 +147,74 @@ export default function PondsPage() {
     } catch (error) {
       console.error('Error adding pond:', error);
       alert(t.messages.error || 'Failed to add pond. Please check your connection.');
+    }
+  };
+
+  const handleEndCycle = async () => {
+    if (!companyId || !user || !endCyclePond) return;
+    try {
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', endCyclePond.id), {
+        cycleStatus: 'ended',
+        cycleEndedAt: endCycleForm.cycleEndedAt,
+        cycleEndReason: endCycleForm.cycleEndReason,
+        cycleEndedBy: user.uid,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      });
+      setEndCyclePond(null);
+      setEndCycleForm({
+        cycleEndedAt: new Date().toISOString().split('T')[0],
+        cycleEndReason: 'harvested',
+      });
+      setCycleFilter('ended');
+    } catch (error) {
+      console.error('Error ending cycle:', error);
+      alert(t.messages.error || 'Failed to end cycle.');
+    }
+  };
+
+  const openStartCycle = (pond: Pond) => {
+    setStartCyclePond(pond);
+    setStartCycleForm({
+      density: '',
+      docStart: new Date().toISOString().split('T')[0],
+      plValue: '0.5',
+      plSupplier: '',
+    });
+  };
+
+  const handleStartCycle = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId || !user || !startCyclePond) return;
+
+    try {
+      const initialPopulation = Number(startCyclePond.pondArea) * Number(startCycleForm.density);
+      const initialWeight = parseFloat(startCycleForm.plValue) / 10;
+
+      await addDoc(collection(db, 'companies', companyId, 'ponds'), {
+        pondName: startCyclePond.pondName,
+        pondArea: Number(startCyclePond.pondArea),
+        density: Number(startCycleForm.density),
+        initialPopulation,
+        docStart: startCycleForm.docStart,
+        supplier: startCycleForm.plSupplier,
+        plSupplier: startCycleForm.plSupplier,
+        initialWeight,
+        samplings: [],
+        totalHarvestedBiomass: 0,
+        totalHarvestedPopulation: 0,
+        totalHarvestedFeed: 0,
+        cycleStatus: 'active',
+        cycleStartedAt: startCycleForm.docStart,
+        previousCyclePondId: startCyclePond.id,
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+      });
+      setStartCyclePond(null);
+      setCycleFilter('active');
+    } catch (error) {
+      console.error('Error starting new cycle:', error);
+      alert(t.messages.error || 'Failed to start new cycle.');
     }
   };
 
@@ -142,9 +238,10 @@ export default function PondsPage() {
 
   const filteredPonds = useMemo(() => {
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
-    if (!normalizedSearch) return ponds;
-    return ponds.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
-  }, [ponds, debouncedSearchTerm]);
+    const statusFiltered = ponds.filter(p => getCycleStatus(p) === cycleFilter);
+    if (!normalizedSearch) return statusFiltered;
+    return statusFiltered.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
+  }, [ponds, debouncedSearchTerm, cycleFilter]);
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -167,18 +264,24 @@ export default function PondsPage() {
           />
         </div>
         <div style={{ display: 'flex', gap: '10px', background: 'var(--bg-mid)', padding: '6px', borderRadius: '14px', border: '1px solid var(--border)' }}>
-          <button style={{ 
+          <button onClick={() => setCycleFilter('active')} style={{ 
             padding: '8px 20px', borderRadius: '10px', background: 'var(--glass-bg)', 
-            border: '1px solid var(--border)', fontSize: '13px', fontWeight: 700, 
-            color: 'var(--primary)', boxShadow: 'var(--shadow-card)' 
+            border: '1px solid var(--border)', fontSize: '13px', fontWeight: 700,
+            color: cycleFilter === 'active' ? 'var(--primary)' : 'var(--text-muted)',
+            boxShadow: cycleFilter === 'active' ? 'var(--shadow-card)' : 'none',
+            opacity: cycleFilter === 'active' ? 1 : 0.75,
           }}>
             {t.ponds.active || 'Active'}
           </button>
-          <button style={{ 
-            padding: '8px 20px', borderRadius: '10px', background: 'transparent', 
-            border: 'none', fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' 
+          <button onClick={() => setCycleFilter('ended')} style={{ 
+            padding: '8px 20px', borderRadius: '10px',
+            background: cycleFilter === 'ended' ? 'var(--glass-bg)' : 'transparent',
+            border: cycleFilter === 'ended' ? '1px solid var(--border)' : 'none',
+            fontSize: '13px', fontWeight: 700,
+            color: cycleFilter === 'ended' ? 'var(--primary)' : 'var(--text-muted)',
+            boxShadow: cycleFilter === 'ended' ? 'var(--shadow-card)' : 'none',
           }}>
-            {t.ponds.harvested || 'Harvested'}
+            Ended
           </button>
         </div>
         <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
@@ -224,18 +327,19 @@ export default function PondsPage() {
                   </div>
                   <div>
                     <h3 style={{ fontSize: '1.12rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{pond.supplier}</p>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{getPlSupplier(pond)}</p>
                   </div>
                 </Link>
-                <button 
-                  onClick={() => handleDeletePond(pond.id)}
+                <button
+                  onClick={() => isActiveCycle(pond) ? setEndCyclePond(pond) : openStartCycle(pond)}
+                  title={isActiveCycle(pond) ? 'End cycle' : 'Start new cycle'}
                   style={{ 
-                    background: 'var(--bg-mid)', border: 'none', color: '#ef4444', 
+                    background: 'var(--bg-mid)', border: 'none', color: isActiveCycle(pond) ? 'var(--primary)' : '#3282B8',
                     cursor: 'pointer', padding: '8px', borderRadius: '10px',
                     transition: 'all 0.2s'
                   }}
                   onMouseEnter={e => {
-                    e.currentTarget.style.background = '#ef444414';
+                    e.currentTarget.style.background = 'var(--primary-dim)';
                     e.currentTarget.style.transform = 'scale(1.05)';
                   }}
                   onMouseLeave={e => {
@@ -243,7 +347,7 @@ export default function PondsPage() {
                     e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >
-                  <Trash2 size={18} />
+                  {isActiveCycle(pond) ? <Archive size={18} /> : <RotateCcw size={18} />}
                 </button>
               </div>
               
@@ -430,6 +534,87 @@ export default function PondsPage() {
                 <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px' }}>
                   {t.ponds.addNew || 'Add Pond'}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {endCyclePond && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+        }}>
+          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>End Cycle</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} history will stay saved.</p>
+              </div>
+              <button onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                End Date
+                <input type="date" required value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Reason
+                <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }}>
+                  <option value="harvested">Harvested</option>
+                  <option value="disease">Disease</option>
+                  <option value="reset">Reset</option>
+                  <option value="other">Other</option>
+                </select>
+              </label>
+              <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>End Cycle</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {startCyclePond && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+        }}>
+          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Start New Cycle</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{startCyclePond.pondName} and {startCyclePond.pondArea} m² will be reused. Supplier must be entered for this cycle.</p>
+              </div>
+              <button onClick={() => setStartCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Density (PL/m²)
+                <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Stocking Date
+                <input required type="date" value={startCycleForm.docStart} onChange={e => setStartCycleForm(prev => ({ ...prev, docStart: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                PL Value (g)
+                <input required type="number" step="0.1" value={startCycleForm.plValue} onChange={e => setStartCycleForm(prev => ({ ...prev, plValue: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                PL Supplier
+                <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setStartCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>Start Cycle</button>
               </div>
             </form>
           </div>

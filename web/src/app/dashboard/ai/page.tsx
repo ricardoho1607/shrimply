@@ -26,6 +26,15 @@ interface ChatMessage {
   timestamp: Date;
 }
 
+type PondContext = {
+  id: string;
+  pondName?: string;
+  supplier?: string;
+  plSupplier?: string;
+  cycleStatus?: 'active' | 'ended';
+  [key: string]: unknown;
+};
+
 const SUGGESTED_PROMPTS = [
   "Analyze today's 72-hour outlook",
   "Check overfeeding and biomass risk",
@@ -34,7 +43,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 export default function OrsonAIPage() {
-  const [ponds, setPonds] = useState<any[]>([]);
+  const [ponds, setPonds] = useState<PondContext[]>([]);
   const [companyId, setCompanyId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -51,7 +60,9 @@ export default function OrsonAIPage() {
           setCompanyId(cid);
           if (cid) {
             onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
-              setPonds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+              setPonds(snapshot.docs
+                .map(doc => ({ id: doc.id, ...doc.data() } as PondContext))
+                .filter((pond) => pond.cycleStatus !== 'ended'));
             });
           }
         });
@@ -287,9 +298,9 @@ export default function OrsonAIPage() {
                   <div key={p.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22c55e' }} />
-                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.pondName}</span>
+                      <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.pondName || 'Unnamed pond'}</span>
                     </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{p.supplier}</span>
+                    <span style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{p.plSupplier || p.supplier || 'N/A'}</span>
                   </div>
                 ))}
                 {ponds.length > 5 && <div style={{ fontSize: '11px', color: 'var(--text-faint)', textAlign: 'center', marginTop: '4px' }}>+ {ponds.length - 5} more ponds synced</div>}

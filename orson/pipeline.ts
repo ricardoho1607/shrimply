@@ -5,7 +5,7 @@ import { buildOrsonPromptPackage } from './promptBuilder';
 import { analyzePondsRisks } from './riskEngine';
 
 export const buildOrsonAnalysis = (ponds: Record<string, any>[], userMessage: string, now = new Date()) => {
-  const normalizedPonds = normalizePondsData(ponds, { now });
+  const normalizedPonds = normalizePondsData(ponds, { now }).filter((pond) => pond.cycleStatus !== 'ended');
   const metrics = calculatePondsMetrics(normalizedPonds);
   const reports = analyzePondsRisks(metrics, now);
   const outlooks = build72HourOutlooks(reports, now);
@@ -24,4 +24,3 @@ export const buildOrsonAnalysis = (ponds: Record<string, any>[], userMessage: st
     promptPackage,
   };
 };
-

@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { usePondStore, type Pond } from './store/pondStore';
+import { usePondStore, type Pond, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
 
 const isAndroid = Platform.OS === 'android';
@@ -21,7 +21,7 @@ export default function ShrimpReportsScreen() {
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const activePonds = ponds.filter(pond => calculateDOC(pond.docStart) >= 0);
+    const activePonds = ponds.filter(pond => isPondCycleActive(pond) && calculateDOC(pond.docStart) >= 0);
     setSelectedPonds(new Set(activePonds.map(p => p.id)));
   }, [ponds]);
 

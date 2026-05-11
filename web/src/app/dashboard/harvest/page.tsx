@@ -43,6 +43,7 @@ interface HarvestRecord {
 interface Pond {
   id: string;
   pondName: string;
+  cycleStatus?: 'active' | 'ended';
 }
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
@@ -99,7 +100,9 @@ export default function HarvestPage() {
           if (cid) {
             // Load Ponds
             onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
-              setPonds(snapshot.docs.map(doc => ({ id: doc.id, pondName: doc.data().pondName })));
+              setPonds(snapshot.docs
+                .map(doc => ({ id: doc.id, pondName: doc.data().pondName, cycleStatus: doc.data().cycleStatus } as Pond))
+                .filter(pond => pond.cycleStatus !== 'ended'));
             });
             // Load Harvest Records
             const q = query(collection(db, 'companies', cid, 'harvestRecords'), orderBy('date', 'desc'));
