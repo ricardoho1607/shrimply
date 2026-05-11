@@ -32,6 +32,8 @@ Any Firebase-related change must check:
 - missing field handling
 - timestamp handling
 - privacy impact
+- listener restore behavior after app refresh/reopen
+- fallback behavior when optional documents are missing but related documents still exist
 
 ## Company Ownership Rules
 
@@ -43,6 +45,14 @@ Always verify:
 - updates cannot target another company's document
 - buyer-facing data does not expose private company fields
 - users cannot access data before company approval unless intentionally allowed
+
+## Lifecycle Data Rules
+
+For pond/cycle/harvest/inventory flows:
+- Do not assume one collection is the only source of truth if the app has legacy or fallback fields.
+- Check whether UI state is reconstructed from Firestore after refresh, not only from local store state.
+- If adding a new parent document such as a cycle, confirm child documents still contain enough IDs/names to recover gracefully.
+- Closing or ending a lifecycle must update both the parent status and any active child records that should no longer be active.
 
 ## Buyer Privacy Rules
 

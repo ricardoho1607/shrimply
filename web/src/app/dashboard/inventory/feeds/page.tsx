@@ -58,6 +58,9 @@ interface UsageHistory {
   date: string;
   quantity: number;
   pondId?: string;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   notes?: string;
   createdAt: any;
 }
@@ -93,6 +96,10 @@ export default function InventoryFeedsPage() {
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
+  const activePonds = useMemo(
+    () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
+    [ponds]
+  );
 
   const formatDate = (date: any) => {
     if (!date) return '';
@@ -312,6 +319,7 @@ export default function InventoryFeedsPage() {
         }
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
+        const selectedPond = activePonds.find((pond: any) => pond.id === formData.pondId);
         
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
@@ -327,6 +335,9 @@ export default function InventoryFeedsPage() {
               date: new Date().toISOString().split('T')[0],
               quantity: qty,
               pondId: formData.pondId || null,
+              cycleId: selectedPond?.cycleId || null,
+              cycleName: selectedPond?.cycleName || null,
+              pondCycleId: selectedPond?.pondCycleId || selectedPond?.id || null,
               notes: formData.notes,
               createdAt: Timestamp.now()
             }),
@@ -1075,7 +1086,7 @@ export default function InventoryFeedsPage() {
                                 border: '1px solid var(--border)', transition: 'all 0.3s'
                               }}
                             >General Use</button>
-                            {ponds.map(p => (
+                            {activePonds.map((p: any) => (
                               <button 
                                 key={p.id}
                                 type="button"

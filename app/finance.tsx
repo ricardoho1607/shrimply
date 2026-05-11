@@ -13,7 +13,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense, ExpenseInput } from './services/financeService';
 import revenueService, { Revenue, RevenueInput } from './services/revenueService';
-import { usePondStore } from './store/pondStore';
+import { getActiveFarmCycle, usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
@@ -39,7 +39,8 @@ export default function FinancePage() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { harvestRecords } = usePondStore();
+  const { harvestRecords, cycles } = usePondStore();
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
   const CATEGORIES = [
@@ -70,6 +71,7 @@ export default function FinancePage() {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<'expense' | 'revenue'>('expense');
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('Today');
+  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
   const [filterCategory, setFilterCategory] = useState(t.finance?.all || 'All');
   const [submitting, setSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -265,6 +267,8 @@ export default function FinancePage() {
           category: REVENUE_CATEGORIES[0],
           item: `${t.harvest?.title || 'Harvest'} (${new Date(harvest.date).toLocaleDateString()}) - ${totalBiomass.toFixed(1)} kg`,
           amount: totalPrice,
+          cycleId: harvest.cycleId,
+          cycleName: harvest.cycleName,
           paymentType: 'Cash',
           reference: `HARVEST-${harvest.id}`,
           notes: `${t.finance?.autoSynced || 'Auto-synced from'} harvest`,
@@ -324,6 +328,8 @@ export default function FinancePage() {
       const baseData = {
         date: formData.date, category: formData.category, item: formData.item, amount,
         paymentType: formData.paymentType, reference: formData.reference, notes: formData.notes,
+        cycleId: activeFarmCycle?.id,
+        cycleName: activeFarmCycle?.cycleName,
       };
 
       if (formType === 'expense') {
@@ -422,11 +428,16 @@ export default function FinancePage() {
     setEditingRevenue(null);
   };
 
-  const getFilteredData = <T extends { date: string; category?: string }>(data: T[], useCategory = true) => {
+  const getCycleScopedData = <T extends { cycleId?: string }>(data: T[]) => {
+    if (cycleScope === 'all' || !activeFarmCycle) return data;
+    return data.filter((item) => item.cycleId === activeFarmCycle.id);
+  };
+
+  const getFilteredData = <T extends { date: string; category?: string; cycleId?: string }>(data: T[], useCategory = true) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    let filtered = data.filter(item => {
+    let filtered = getCycleScopedData(data).filter(item => {
       const itemDate = new Date(item.date);
       if (selectedPeriod === 'All Time') return true;
       if (selectedPeriod === 'Today') return itemDate >= today;
@@ -462,9 +473,11 @@ export default function FinancePage() {
   const profit = revenueTotals.total - expenseTotals.total;
 
   const profitLossData = useMemo(() => {
-    if (expenses.length === 0 && revenues.length === 0) return null;
+    const scopedExpenses = getCycleScopedData(expenses);
+    const scopedRevenues = getCycleScopedData(revenues);
+    if (scopedExpenses.length === 0 && scopedRevenues.length === 0) return null;
 
-    const allDates = [...expenses.map(e => e.date), ...revenues.map(r => r.date)];
+    const allDates = [...scopedExpenses.map(e => e.date), ...scopedRevenues.map(r => r.date)];
     if (allDates.length === 0) return null;
 
     const earliestDate = new Date(Math.min(...allDates.map(d => new Date(d).getTime())));
@@ -476,14 +489,14 @@ export default function FinancePage() {
       const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
       const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 
-      const monthRevenue = revenues.filter(r => r.date.startsWith(monthKey)).reduce((sum, r) => sum + r.amount, 0);
-      const monthExpense = expenses.filter(e => e.date.startsWith(monthKey)).reduce((sum, e) => sum + e.amount, 0);
+      const monthRevenue = scopedRevenues.filter(r => r.date.startsWith(monthKey)).reduce((sum, r) => sum + r.amount, 0);
+      const monthExpense = scopedExpenses.filter(e => e.date.startsWith(monthKey)).reduce((sum, e) => sum + e.amount, 0);
 
       months.push({ month: monthLabel, revenue: monthRevenue, expense: monthExpense, profit: monthRevenue - monthExpense });
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
     return months;
-  }, [expenses, revenues]);
+  }, [expenses, revenues, activeFarmCycle?.id, cycleScope]);
 
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
@@ -597,6 +610,23 @@ export default function FinancePage() {
               onPress={() => setSelectedPeriod(period)}>
               <Text style={[styles.periodTabText, selectedPeriod === period && styles.periodTabTextActive]}>
                 {getTranslatedPeriod(period)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.periodContainer}>
+          {[
+            { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
+            { key: 'all', label: 'All History' },
+          ].map((scope) => (
+            <TouchableOpacity
+              key={scope.key}
+              style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
+              onPress={() => setCycleScope(scope.key as 'current' | 'all')}
+            >
+              <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
+                {scope.label}
               </Text>
             </TouchableOpacity>
           ))}

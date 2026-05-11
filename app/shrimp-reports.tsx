@@ -1,7 +1,7 @@
 // app/shrimp-reports.tsx - Optimized with Android Consistency
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -20,13 +20,17 @@ export default function ShrimpReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    const activePonds = ponds.filter(pond => isPondCycleActive(pond) && calculateDOC(pond.docStart) >= 0);
-    setSelectedPonds(new Set(activePonds.map(p => p.id)));
-  }, [ponds]);
-
   const calculateDOC = (docStart: string): number => 
     Math.max(0, Math.floor((Date.now() - new Date(docStart).getTime()) / (1000 * 60 * 60 * 24)));
+
+  const activePonds = useMemo(
+    () => ponds.filter(pond => isPondCycleActive(pond) && calculateDOC(pond.docStart) >= 0),
+    [ponds]
+  );
+
+  useEffect(() => {
+    setSelectedPonds(new Set(activePonds.map(p => p.id)));
+  }, [activePonds]);
 
   const togglePondSelection = (pondId: string) => {
     setSelectedPonds(prev => {
@@ -74,7 +78,7 @@ export default function ShrimpReportsScreen() {
     }
     setLoading(true);
     try {
-      const selectedPondData = ponds.filter(p => selectedPonds.has(p.id));
+      const selectedPondData = activePonds.filter(p => selectedPonds.has(p.id));
       const pondDataForPDF = selectedPondData.map(pond => {
         const pondMetrics = calculatePondMetricsWithHarvest(pond);
         return {
@@ -179,8 +183,8 @@ export default function ShrimpReportsScreen() {
           <Text style={s.sectionSubtitle}>
             {t.shrimpReports?.selectSubtitle || 'Choose which ponds to include in the report'}
           </Text>
-          <View style={s.pondList}>{ponds.map(renderPondCard)}</View>
-          {ponds.length === 0 && renderEmptyState()}
+          <View style={s.pondList}>{activePonds.map(renderPondCard)}</View>
+          {activePonds.length === 0 && renderEmptyState()}
         </View>
 
         <View style={s.section}>

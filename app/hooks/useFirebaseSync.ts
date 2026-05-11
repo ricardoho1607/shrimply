@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
-import { usePondStore, Pond, HarvestRecord, Sampling, normalizePondLifecycle } from './../store/pondStore';
+import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, normalizePondLifecycle } from './../store/pondStore';
 import { Platform } from 'react-native';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
@@ -55,7 +55,7 @@ interface SyncStatus {
 
 interface PendingChange {
   id: string;
-  type: 'pond' | 'sampling' | 'harvest';
+  type: 'pond' | 'sampling' | 'harvest' | 'cycle';
   action: 'create' | 'update' | 'delete';
   data: any;
   timestamp: number;
@@ -126,7 +126,7 @@ export const useFirebaseSync = () => {
       initialLoadComplete.current = false;
       
       // Clear local data for account switch
-      usePondStore.setState({ ponds: [], harvestRecords: [] });
+      usePondStore.setState({ ponds: [], cycles: [], harvestRecords: [] });
     }
     
     currentCompanyRef.current = companyId || null;
@@ -162,6 +162,44 @@ export const useFirebaseSync = () => {
       const newUnsubscribeCallbacks: (() => void)[] = [];
 
       // Listen to ponds collection
+      const cyclesQuery = query(
+        collection(db, 'companies', company.id, 'cycles'),
+        orderBy('createdAt', 'asc')
+      );
+
+      const unsubscribeCycles = onSnapshot(cyclesQuery,
+        (snapshot) => {
+          try {
+            const serverCycles: FarmCycle[] = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              serverCycles.push({
+                id: doc.id,
+                cycleName: data.cycleName || `Cycle ${serverCycles.length + 1}`,
+                status: ['planning', 'stocking', 'active', 'closing', 'closed'].includes(data.status) ? data.status : 'active',
+                plannedStartDate: data.plannedStartDate,
+                stockingStartDate: data.stockingStartDate,
+                stockingEndDate: data.stockingEndDate,
+                closedAt: data.closedAt,
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+                createdBy: data.createdBy,
+                updatedBy: data.updatedBy,
+              });
+            });
+            usePondStore.setState({ cycles: serverCycles });
+          } catch (error) {
+            console.error('Error processing cycles snapshot:', error);
+            setSyncStatus(prev => ({ ...prev, error: 'Error processing cycle data' }));
+          }
+        },
+        (error) => {
+          console.error('Error listening to cycles:', error);
+          setSyncStatus(prev => ({ ...prev, error: 'Unable to sync cycle data' }));
+        }
+      );
+      newUnsubscribeCallbacks.push(unsubscribeCycles);
+
       const pondsQuery = query(
         collection(db, 'companies', company.id, 'ponds'),
         orderBy('createdAt', 'asc')
@@ -188,6 +226,9 @@ export const useFirebaseSync = () => {
                 totalHarvestedBiomass: data.totalHarvestedBiomass || 0,
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,
+                cycleId: data.cycleId,
+                cycleName: data.cycleName,
+                pondCycleId: data.pondCycleId || doc.id,
                 cycleStatus: data.cycleStatus === 'ended' ? 'ended' : 'active',
                 cycleStartedAt: data.cycleStartedAt || data.docStart || '',
                 cycleEndedAt: data.cycleEndedAt,
@@ -307,6 +348,23 @@ export const useFirebaseSync = () => {
               batch.delete(pondRef);
             }
           } 
+          else if (change.type === 'cycle') {
+            const cycleRef = doc(db, 'companies', company.id, 'cycles', change.data.id);
+            if (change.action === 'create' || change.action === 'update') {
+              const cycleData = {
+                ...removeUndefinedFields(change.data),
+                updatedAt: serverTimestamp(),
+                updatedBy: user.uid,
+                ...(change.action === 'create' && {
+                  createdAt: serverTimestamp(),
+                  createdBy: user.uid,
+                }),
+              };
+              batch.set(cycleRef, cycleData, { merge: change.action === 'update' });
+            } else if (change.action === 'delete') {
+              batch.delete(cycleRef);
+            }
+          }
           else if (change.type === 'harvest') {
             const harvestRef = change.data.id ? 
               doc(db, 'companies', company.id, 'harvestRecords', change.data.id) :
@@ -348,6 +406,9 @@ export const useFirebaseSync = () => {
                       date: change.data.date,
                       quantity: feedAmount,
                       pondId: change.pondId,
+                      cycleId: change.data.cycleId || pondData.cycleId,
+                      cycleName: change.data.cycleName || pondData.cycleName,
+                      pondCycleId: change.data.pondCycleId || pondData.pondCycleId || change.pondId,
                       notes: `Mobile Sampling record`,
                       createdAt: serverTimestamp()
                     }),
@@ -430,6 +491,15 @@ export const useFirebaseSync = () => {
     });
   }, [addPendingChange]);
 
+  const syncCycle = useCallback((action: 'create' | 'update' | 'delete', cycle: FarmCycle) => {
+    addPendingChange({
+      id: `cycle-${cycle.id}-${Date.now()}`,
+      type: 'cycle',
+      action,
+      data: cycle
+    });
+  }, [addPendingChange]);
+
   const triggerManualSync = useCallback(() => {
     if (syncStatus.isOnline && !syncStatus.isSyncing && pendingChanges.length > 0) {
       syncPendingChanges();
@@ -441,6 +511,7 @@ export const useFirebaseSync = () => {
     syncPond,
     syncSampling,
     syncHarvestRecord,
+    syncCycle,
     triggerManualSync,
     hasPendingChanges: pendingChanges.length > 0
   };

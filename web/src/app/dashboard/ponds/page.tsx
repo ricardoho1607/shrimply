@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { 
   Plus, 
   Waves, 
   Search, 
-  MoreHorizontal, 
-  Trash2, 
   Archive,
   RotateCcw,
   Calendar, 
@@ -14,15 +12,16 @@ import {
   Users, 
   X,
   Loader2,
-  ChevronRight,
-  ArrowRight
+  ArrowRight,
+  Lock,
+  Save
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import { useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
+import { useCompanyCycles, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
@@ -33,6 +32,9 @@ interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   cycleStartedAt?: string;
   cycleEndedAt?: string;
@@ -43,9 +45,21 @@ interface Pond {
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
 
+interface FarmCycle {
+  id: string;
+  cycleName: string;
+  status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+  plannedStartDate?: string;
+  stockingStartDate?: string;
+  stockingEndDate?: string;
+  closedAt?: string;
+}
+
 const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
+const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
+const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
   if (!value) return null;
@@ -73,11 +87,13 @@ const formatSyncStatus = (date: Date | null): string => {
 export default function PondsPage() {
   const { t } = useLanguage();
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
+  const { data: cycles } = useCompanyCycles<FarmCycle>();
   
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'ended'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
+  const [cycleNameDraft, setCycleNameDraft] = useState('');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -107,13 +123,115 @@ export default function PondsPage() {
   });
   const [isDeleting, setIsDeleting] = useState(false);
 
+  const activeFarmCycle = useMemo(() => cycles.find(isOpenFarmCycle), [cycles]);
+  const activeCyclePonds = useMemo(
+    () => activeFarmCycle
+      ? ponds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || !pond.cycleId))
+      : [],
+    [activeFarmCycle, ponds]
+  );
+
+  useEffect(() => {
+    setCycleNameDraft(activeFarmCycle?.cycleName || '');
+  }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
+
+  const ensureActiveCycle = async (stockingDate: string) => {
+    if (!companyId || !user) return null;
+    const activeCycle = cycles.find(isOpenFarmCycle);
+    if (activeCycle) return activeCycle;
+
+    const cycleName = `Cycle ${cycles.length + 1}`;
+    const docRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
+      cycleName,
+      status: 'stocking',
+      plannedStartDate: stockingDate,
+      stockingStartDate: stockingDate,
+      createdAt: serverTimestamp(),
+      createdBy: user.uid,
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid,
+    });
+    return { id: docRef.id, cycleName, status: 'stocking' as const, plannedStartDate: stockingDate, stockingStartDate: stockingDate };
+  };
+
+  const handleRenameCycle = async () => {
+    if (!companyId || !user || !activeFarmCycle) return;
+    const nextName = cycleNameDraft.trim();
+    if (!nextName) {
+      alert('Cycle name cannot be empty.');
+      return;
+    }
+
+    try {
+      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+        cycleName: nextName,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      });
+
+      await Promise.all(activeCyclePonds.map((pond) =>
+        updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+          cycleName: nextName,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        })
+      ));
+    } catch (error) {
+      console.error('Error renaming cycle:', error);
+      alert(t.messages.error || 'Failed to rename cycle.');
+    }
+  };
+
+  const handleCloseFarmCycle = async () => {
+    if (!companyId || !user || !activeFarmCycle) return;
+    const today = new Date().toISOString().split('T')[0];
+    if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
+
+    try {
+      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+        status: 'closed',
+        closedAt: today,
+        stockingEndDate: activeFarmCycle.stockingEndDate || today,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      });
+
+      await Promise.all(activeCyclePonds.filter(isActiveCycle).map((pond) =>
+        updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+          cycleStatus: 'ended',
+          cycleEndedAt: today,
+          cycleEndReason: 'harvested',
+          cycleEndedBy: user.uid,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        })
+      ));
+
+      setCycleFilter('ended');
+    } catch (error) {
+      console.error('Error ending cycle:', error);
+      alert(t.messages.error || 'Failed to end cycle.');
+    }
+  };
+
   const handleAddPond = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !user) return;
 
     try {
+      const hasActiveCycleForPond = ponds.some((pond) =>
+        isActiveCycle(pond) &&
+        getPhysicalPondKey(pond.pondName) === getPhysicalPondKey(formData.pondName)
+      );
+
+      if (hasActiveCycleForPond) {
+        alert(`${formData.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+        return;
+      }
+
       const initialPopulation = Number(formData.pondArea) * Number(formData.density);
       const initialWeight = parseFloat(formData.plValue) / 10; // Simple conversion logic from mobile app
+      const activeCycle = await ensureActiveCycle(formData.docStart);
 
       const pondData = {
         pondName: formData.pondName,
@@ -128,6 +246,8 @@ export default function PondsPage() {
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
         totalHarvestedFeed: 0,
+        cycleId: activeCycle?.id,
+        cycleName: activeCycle?.cycleName,
         cycleStatus: 'active',
         cycleStartedAt: formData.docStart,
         createdAt: serverTimestamp(),
@@ -188,8 +308,20 @@ export default function PondsPage() {
     if (!companyId || !user || !startCyclePond) return;
 
     try {
+      const hasActiveCycleForPond = ponds.some((pond) =>
+        pond.id !== startCyclePond.id &&
+        isActiveCycle(pond) &&
+        getPhysicalPondKey(pond.pondName) === getPhysicalPondKey(startCyclePond.pondName)
+      );
+
+      if (hasActiveCycleForPond) {
+        alert(`${startCyclePond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+        return;
+      }
+
       const initialPopulation = Number(startCyclePond.pondArea) * Number(startCycleForm.density);
       const initialWeight = parseFloat(startCycleForm.plValue) / 10;
+      const activeCycle = await ensureActiveCycle(startCycleForm.docStart);
 
       await addDoc(collection(db, 'companies', companyId, 'ponds'), {
         pondName: startCyclePond.pondName,
@@ -204,6 +336,8 @@ export default function PondsPage() {
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
         totalHarvestedFeed: 0,
+        cycleId: activeCycle?.id,
+        cycleName: activeCycle?.cycleName,
         cycleStatus: 'active',
         cycleStartedAt: startCycleForm.docStart,
         previousCyclePondId: startCyclePond.id,
@@ -245,6 +379,87 @@ export default function PondsPage() {
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="glass-card animate-fade-up" style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
+              Current Cycle
+            </div>
+            <h2 style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
+              {activeFarmCycle?.cycleName || 'No active cycle'}
+            </h2>
+            <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '14px', fontWeight: 600 }}>
+              {activeFarmCycle
+                ? 'New ponds are added to this cycle until it is ended.'
+                : `Add a pond to create Cycle ${cycles.length + 1}.`}
+            </p>
+          </div>
+          <div style={{
+            padding: '8px 14px',
+            borderRadius: '10px',
+            background: activeFarmCycle ? 'var(--primary-dim)' : 'var(--bg-mid)',
+            color: activeFarmCycle ? 'var(--primary)' : 'var(--text-muted)',
+            fontSize: '12px',
+            fontWeight: 900,
+            textTransform: 'uppercase',
+          }}>
+            {activeFarmCycle?.status || 'waiting'}
+          </div>
+        </div>
+
+        {activeFarmCycle ? (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
+              <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>Included ponds</div>
+                <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{activeCyclePonds.length}</div>
+              </div>
+              <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>Stocking start</div>
+                <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>{activeFarmCycle.stockingStartDate || activeFarmCycle.plannedStartDate || '-'}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              {activeCyclePonds.length === 0 ? (
+                <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>No ponds attached yet.</span>
+              ) : activeCyclePonds.map((pond) => (
+                <span key={pond.id} style={{ padding: '7px 11px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '12px', fontWeight: 800 }}>
+                  {pond.pondName}
+                </span>
+              ))}
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <input
+                value={cycleNameDraft}
+                onChange={(event) => setCycleNameDraft(event.target.value)}
+                placeholder="Cycle name"
+                style={{
+                  flex: '1 1 260px',
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-mid)',
+                  color: 'var(--text-primary)',
+                  fontWeight: 700,
+                  outline: 'none',
+                }}
+              />
+              <button type="button" className="btn-secondary" onClick={handleRenameCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
+                <Save size={17} /> Rename
+              </button>
+              <button type="button" className="btn-primary" onClick={handleCloseFarmCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
+                <Lock size={17} /> End Cycle
+              </button>
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: '18px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>
+            Cycle management will appear here after the first pond is added.
+          </div>
+        )}
+      </div>
       
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">

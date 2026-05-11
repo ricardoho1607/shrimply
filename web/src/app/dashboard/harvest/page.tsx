@@ -25,6 +25,9 @@ import { auth, db } from '@/lib/firebase';
 interface HarvestPond {
   pondId: string;
   pondName: string;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   biomass: string;
   size: string;
   price: string;
@@ -36,6 +39,8 @@ interface HarvestPond {
 interface HarvestRecord {
   id: string;
   date: string;
+  cycleId?: string;
+  cycleName?: string;
   ponds: HarvestPond[];
   createdAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -43,8 +48,26 @@ interface HarvestRecord {
 interface Pond {
   id: string;
   pondName: string;
+  initialPopulation?: number;
+  totalHarvestedBiomass?: number;
+  totalHarvestedPopulation?: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
 }
+
+const getHarvestRemoval = (harvestPond: Pick<HarvestPond, 'biomass' | 'size' | 'subBiomass' | 'subSize'>) => {
+  const mainBiomass = parseFloat(harvestPond.biomass) || 0;
+  const subBiomass = parseFloat(harvestPond.subBiomass) || 0;
+  const mainSize = parseFloat(harvestPond.size) || 0;
+  const subSize = parseFloat(harvestPond.subSize) || 0;
+
+  return {
+    biomass: mainBiomass + subBiomass,
+    population: (mainSize > 0 ? mainBiomass * mainSize : 0) + (subSize > 0 ? subBiomass * subSize : 0),
+  };
+};
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
   if (!value) return null;
@@ -101,7 +124,17 @@ export default function HarvestPage() {
             // Load Ponds
             onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
               setPonds(snapshot.docs
-                .map(doc => ({ id: doc.id, pondName: doc.data().pondName, cycleStatus: doc.data().cycleStatus } as Pond))
+                .map(doc => ({
+                  id: doc.id,
+                  pondName: doc.data().pondName,
+                  initialPopulation: doc.data().initialPopulation || 0,
+                  totalHarvestedBiomass: doc.data().totalHarvestedBiomass || 0,
+                  totalHarvestedPopulation: doc.data().totalHarvestedPopulation || 0,
+                  cycleId: doc.data().cycleId,
+                  cycleName: doc.data().cycleName,
+                  pondCycleId: doc.data().pondCycleId || doc.id,
+                  cycleStatus: doc.data().cycleStatus
+                } as Pond))
                 .filter(pond => pond.cycleStatus !== 'ended'));
             });
             // Load Harvest Records
@@ -130,9 +163,14 @@ export default function HarvestPage() {
 
       const newRecord = {
         date: formData.date,
+        cycleId: selectedPond.cycleId,
+        cycleName: selectedPond.cycleName,
         ponds: [{
           pondId: formData.pondId,
           pondName: selectedPond.pondName,
+          cycleId: selectedPond.cycleId,
+          cycleName: selectedPond.cycleName,
+          pondCycleId: selectedPond.pondCycleId || selectedPond.id,
           biomass: formData.biomass,
           size: formData.size,
           price: formData.price,
@@ -145,9 +183,17 @@ export default function HarvestPage() {
       };
 
       await addDoc(collection(db, 'companies', companyId, 'harvestRecords'), newRecord);
-      
-      // Note: In a full implementation, we'd also update the pond's totalHarvestedBiomass here
-      // But we'll stick to the record logging for now to match the user's focus on UI
+
+      const removal = getHarvestRemoval(newRecord.ponds[0]);
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', selectedPond.id), {
+        totalHarvestedBiomass: (selectedPond.totalHarvestedBiomass || 0) + removal.biomass,
+        totalHarvestedPopulation: Math.min(
+          selectedPond.initialPopulation || Number.MAX_SAFE_INTEGER,
+          (selectedPond.totalHarvestedPopulation || 0) + removal.population
+        ),
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid
+      });
       
       setModalOpen(false);
       setFormData({
@@ -169,6 +215,23 @@ export default function HarvestPage() {
   const handleDeleteRecord = async (recordId: string) => {
     if (!companyId || !window.confirm('Delete this harvest record?')) return;
     try {
+      const record = harvestRecords.find((item) => item.id === recordId);
+      if (record) {
+        await Promise.all(record.ponds.map(async (harvestPond) => {
+          const pondRef = doc(db, 'companies', companyId, 'ponds', harvestPond.pondId);
+          const pondSnap = await getDoc(pondRef);
+          if (!pondSnap.exists()) return;
+          const pondData = pondSnap.data();
+          const removal = getHarvestRemoval(harvestPond);
+
+          await updateDoc(pondRef, {
+            totalHarvestedBiomass: Math.max(0, (pondData.totalHarvestedBiomass || 0) - removal.biomass),
+            totalHarvestedPopulation: Math.max(0, (pondData.totalHarvestedPopulation || 0) - removal.population),
+            updatedAt: serverTimestamp(),
+            updatedBy: user?.uid || ''
+          });
+        }));
+      }
       await deleteDoc(doc(db, 'companies', companyId, 'harvestRecords', recordId));
     } catch (error) {
       console.error('Error deleting record:', error);

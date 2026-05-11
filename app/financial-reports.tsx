@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, TextInput, Platform, StatusBar } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
@@ -12,6 +12,7 @@ import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportSe
 import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExportService';
 import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
 import { normalizeCategory } from './utils/categoryNormalizer';
+import { getActiveFarmCycle, usePondStore } from './store/pondStore';
 
 type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
@@ -22,6 +23,8 @@ export default function FinancialReportsPage() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+  const { cycles } = usePondStore();
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
 
   const REPORT_TYPES: ReportType[] = [
     { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
@@ -46,6 +49,7 @@ export default function FinancialReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('This Month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -112,9 +116,14 @@ export default function FinancialReportsPage() {
 
   const getFilteredData = () => {
     const { startDate, endDate } = getDateRange();
+    const scopeFinance = <T extends { cycleId?: string }>(items: T[]) =>
+      cycleScope === 'current' && activeFarmCycle
+        ? items.filter((item) => item.cycleId === activeFarmCycle.id)
+        : items;
+
     return {
-      filteredExpenses: expenses.filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
-      filteredRevenues: revenues.filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
+      filteredExpenses: scopeFinance(expenses).filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
+      filteredRevenues: scopeFinance(revenues).filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
     };
   };
 
@@ -322,6 +331,23 @@ export default function FinancialReportsPage() {
                 onPress={() => setSelectedPeriod(period)}>
                 <Text style={[styles.periodTabText, selectedPeriod === period && styles.periodTabTextActive]}>
                   {getTranslatedPeriod(period)}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.periodContainer}>
+            {[
+              { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
+              { key: 'all', label: 'All History' },
+            ].map((scope) => (
+              <TouchableOpacity
+                key={scope.key}
+                style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
+                onPress={() => setCycleScope(scope.key as 'current' | 'all')}
+              >
+                <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
+                  {scope.label}
                 </Text>
               </TouchableOpacity>
             ))}

@@ -7,7 +7,7 @@ import {
   TextInput, TouchableOpacity, View, Alert, Platform, ActivityIndicator,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, type Sampling, getPhysicalPondKey, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
 import { 
@@ -493,6 +493,16 @@ export default function PondDetails() {
 
     const initialPopulation = pond.pondArea * Number(density);
     const initialWeight = (parseFloat(plValue) || 0) / 10;
+    const hasActiveCycleForPond = ponds.some((existingPond) =>
+      existingPond.id !== pond.id &&
+      isPondCycleActive(existingPond) &&
+      getPhysicalPondKey(existingPond.pondName) === getPhysicalPondKey(pond.pondName)
+    );
+
+    if (hasActiveCycleForPond) {
+      Alert.alert(t.messages.error, `${pond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+      return;
+    }
 
     addPond({
       id: Date.now().toString(),
@@ -522,7 +532,7 @@ export default function PondDetails() {
     });
     router.push('/(tabs)' as any);
     Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [addPond, canEditPonds, newCycleForm, pond, router, t]);
+  }, [addPond, canEditPonds, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);

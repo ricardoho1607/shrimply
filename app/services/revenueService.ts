@@ -23,6 +23,10 @@ export interface Revenue {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   notes: string;
@@ -38,6 +42,10 @@ export interface RevenueInput {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   notes: string;

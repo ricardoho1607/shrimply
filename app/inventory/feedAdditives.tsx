@@ -8,6 +8,7 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { NotificationService } from '../services/notificationService';
 import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedAdditiveStore';
+import { isPondCycleActive, usePondStore } from './../store/pondStore';
 
 type FormData = {
   itemName: string;
@@ -47,8 +48,10 @@ export default function FeedAdditivesScreen() {
   const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const store = useFeedAdditiveStore();
+  const { ponds } = usePondStore();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
 
   const [activeTab, setActiveTab] = useState<'dashboard' | ItemType>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -177,7 +180,7 @@ export default function FeedAdditivesScreen() {
     }
     const qty = Number(formData.quantity);
     const price = Number(formData.unitPrice);
-    if (isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) {
+    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) {
       return Alert.alert(t.inventory.error, t.inventory.invalidQuantityOrPrice);
     }
 
@@ -205,7 +208,7 @@ export default function FeedAdditivesScreen() {
     if (!selectedItem || !formData.quantity || !formData.unitPrice) return Alert.alert(t.inventory.error, t.inventory.quantityAndPriceRequired);
     const qty = Number(formData.quantity);
     const price = Number(formData.unitPrice);
-    if (isNaN(qty) || qty <= 0 || isNaN(price) || price < 0) return Alert.alert(t.inventory.error, t.inventory.invalidValues);
+    if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) return Alert.alert(t.inventory.error, t.inventory.invalidValues);
 
     const method = itemType === 'feed' ? store.stockInFeed : store.stockInAdditive;
     handleAction(() => method(selectedItem.id, qty, price, formData.notes || '', { batch: formData.batch, expiry: formData.expiry, unit: formData.unit || selectedItem.unit || 'kg' }), t.inventory.stockAdded);
@@ -432,6 +435,34 @@ export default function FeedAdditivesScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+    </View>
+  );
+
+  const renderPondUsageSelector = () => (
+    <View style={styles.input}>
+      <Text style={styles.label}>Apply to pond / cycle</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <TouchableOpacity
+          style={[styles.chip, formData.pondId === '' && styles.chipActive]}
+          onPress={() => setFormData(prev => ({ ...prev, pondId: '' }))}
+        >
+          <Text style={[styles.chipText, formData.pondId === '' && styles.chipTextActive]}>General</Text>
+        </TouchableOpacity>
+        {activePonds.map((pond) => (
+          <TouchableOpacity
+            key={pond.id}
+            style={[styles.chip, formData.pondId === pond.id && styles.chipActive]}
+            onPress={() => setFormData(prev => ({ ...prev, pondId: pond.id }))}
+          >
+            <Text style={[styles.chipText, formData.pondId === pond.id && styles.chipTextActive]}>
+              {pond.pondName}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+      <Text style={styles.helperText}>
+        Pick a pond to attach this usage to the active cycle. Use General only for company-level usage.
+      </Text>
     </View>
   );
 
@@ -705,7 +736,7 @@ export default function FeedAdditivesScreen() {
                       </>
                     )}
 
-                    {renderFormInput(t.inventory.pondIdOptional, t.inventory.pondIdPlaceholder, formData.pondId, (v) => setFormData(prev => ({ ...prev, pondId: v })))}
+                    {modalType === 'usage' && renderPondUsageSelector()}
 
                     {modalType === 'editReorder' && (
                       <>
@@ -967,6 +998,7 @@ const styles = StyleSheet.create({
   stockValue: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137' },
   input: { marginBottom: Platform.OS === 'android' ? 16 : 18 },
   label: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
+  helperText: { color: '#6b8aa0', fontSize: 12, fontWeight: '500', marginTop: 8, lineHeight: 17 },
   textInput: { 
     borderWidth: 1, 
     borderColor: '#E8F4F8', 

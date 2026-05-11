@@ -8,7 +8,7 @@ import {
   Text, TextInput, TouchableOpacity, View, Alert, KeyboardAvoidingView, SafeAreaView,
   Keyboard, TouchableWithoutFeedback
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling, type PondCycleEndReason, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from '.././store/pondStore';
+import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, getActiveFarmCycle, getPhysicalPondKey, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from '.././store/pondStore';
 import { useFirebaseSync } from '.././hooks/useFirebaseSync';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -20,6 +20,7 @@ interface FormData {
   supplier: string; 
   plValue: string; 
   docStart: Date;
+  cyclePondId: string;
   selectedPond: string; 
   mbw: string; 
   mortality: string; 
@@ -134,9 +135,12 @@ export default function PondManagementScreen() {
   
   const { 
     ponds, 
+    cycles,
     addPond, 
     addSampling, 
     endPondCycle, 
+    updateFarmCycle,
+    closeFarmCycle,
     calculatePondMetricsWithHarvest, 
     switchAccount, 
     setFirebaseSync 
@@ -150,8 +154,10 @@ export default function PondManagementScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
-  const [modalType, setModalType] = useState<'pond' | 'sampling'>('pond');
+  const [modalType, setModalType] = useState<'pond' | 'sampling' | 'cycle'>('pond');
   const [tempDate, setTempDate] = useState(new Date());
+  const [cycleNameDraft, setCycleNameDraft] = useState('');
+  const [cycleManagerExpanded, setCycleManagerExpanded] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     pondName: '', 
     pondArea: '', 
@@ -159,6 +165,7 @@ export default function PondManagementScreen() {
     supplier: '', 
     plValue: '', 
     docStart: new Date(),
+    cyclePondId: '',
     selectedPond: '', 
     mbw: '', 
     mortality: '', 
@@ -180,6 +187,7 @@ export default function PondManagementScreen() {
         syncPond: firebaseSync.syncPond,
         syncSampling: firebaseSync.syncSampling,
         syncHarvestRecord: firebaseSync.syncHarvestRecord,
+        syncCycle: firebaseSync.syncCycle,
       });
     }
   }, [
@@ -187,6 +195,7 @@ export default function PondManagementScreen() {
     firebaseSync.syncPond, 
     firebaseSync.syncSampling, 
     firebaseSync.syncHarvestRecord, 
+    firebaseSync.syncCycle,
     switchAccount, 
     setFirebaseSync
   ]);
@@ -202,6 +211,7 @@ export default function PondManagementScreen() {
     supplier: '', 
     plValue: '', 
     docStart: new Date(),
+    cyclePondId: '',
     selectedPond: '', 
     mbw: '', 
     mortality: '', 
@@ -221,30 +231,99 @@ export default function PondManagementScreen() {
   }, []);
 
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
+  const endedPonds = useMemo(() => ponds.filter((pond) => !isPondCycleActive(pond)), [ponds]);
+  const activePhysicalPondNames = useMemo(
+    () => new Set(activePonds.map((pond) => getPhysicalPondKey(pond.pondName))),
+    [activePonds]
+  );
+  const startableEndedPonds = useMemo(() => {
+    const latestByPondName = new Map<string, Pond>();
+
+    endedPonds.forEach((pond) => {
+      const pondKey = getPhysicalPondKey(pond.pondName);
+      if (activePhysicalPondNames.has(pondKey)) return;
+
+      const current = latestByPondName.get(pondKey);
+      const pondDate = new Date(pond.cycleEndedAt || pond.docStart || 0).getTime();
+      const currentDate = current ? new Date(current.cycleEndedAt || current.docStart || 0).getTime() : -Infinity;
+      if (!current || pondDate >= currentDate) {
+        latestByPondName.set(pondKey, pond);
+      }
+    });
+
+    return Array.from(latestByPondName.values()).sort((a, b) => a.pondName.localeCompare(b.pondName));
+  }, [activePhysicalPondNames, endedPonds]);
+  const inferredFarmCycle = useMemo<FarmCycle | undefined>(() => {
+    if (cycles.length > 0 || ponds.length === 0) return undefined;
+
+    const groupedPonds = ponds.reduce((groups, pond) => {
+      const cycleId = pond.cycleId || 'legacy-active-cycle';
+      const existing = groups.get(cycleId) || [];
+      groups.set(cycleId, [...existing, pond]);
+      return groups;
+    }, new Map<string, Pond[]>());
+
+    const latestGroup = Array.from(groupedPonds.entries()).sort(([, firstPonds], [, secondPonds]) => {
+      const firstLatest = Math.max(...firstPonds.map((pond) => new Date(pond.cycleStartedAt || pond.docStart || 0).getTime()));
+      const secondLatest = Math.max(...secondPonds.map((pond) => new Date(pond.cycleStartedAt || pond.docStart || 0).getTime()));
+      return secondLatest - firstLatest;
+    })[0];
+
+    if (!latestGroup) return undefined;
+    const [cycleId, cyclePonds] = latestGroup;
+    const firstPond = cyclePonds[0];
+
+    return {
+      id: cycleId,
+      cycleName: firstPond.cycleName || 'Current Cycle',
+      status: 'active',
+      plannedStartDate: firstPond.cycleStartedAt || firstPond.docStart,
+      stockingStartDate: cyclePonds
+        .map((pond) => pond.cycleStartedAt || pond.docStart)
+        .filter(Boolean)
+        .sort()[0],
+    };
+  }, [cycles.length, ponds]);
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles) || inferredFarmCycle, [cycles, inferredFarmCycle]);
+  const currentCyclePonds = useMemo(() => {
+    if (!activeFarmCycle) return activePonds;
+    return ponds.filter((pond) =>
+      pond.cycleId === activeFarmCycle.id ||
+      (activeFarmCycle.id === 'legacy-active-cycle' && !pond.cycleId) ||
+      (!pond.cycleId && isPondCycleActive(pond))
+    );
+  }, [activeFarmCycle, activePonds, ponds]);
+  const activeCyclePonds = useMemo(() => currentCyclePonds.filter(isPondCycleActive), [currentCyclePonds]);
+  const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? 'Current Cycle' : 'No active cycle');
+  const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? 'active' : 'waiting');
   const visiblePonds = useMemo(
     () => ponds.filter((pond) => getPondCycleStatus(pond) === cycleFilter),
     [ponds, cycleFilter]
   );
 
-  const getPondSamplingData = useCallback((pondName: string): Sampling[] => {
-    const pond = ponds.find(p => p.pondName === pondName);
+  useEffect(() => {
+    setCycleNameDraft(activeFarmCycle?.cycleName || '');
+  }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
+
+  const getPondSamplingData = useCallback((pondId: string): Sampling[] => {
+    const pond = ponds.find(p => p.id === pondId);
     return pond ? pond.samplings.filter((s: Sampling) => 
       (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
     ) : [];
   }, [ponds]);
 
-  const getLatestSampling = useCallback((pondName: string): Sampling | null => {
-    const samples = getPondSamplingData(pondName);
+  const getLatestSampling = useCallback((pondId: string): Sampling | null => {
+    const samples = getPondSamplingData(pondId);
     return samples.sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     )[0] || null;
   }, [getPondSamplingData]);
 
-  const getLastADG = useCallback((pondName: string): number => {
-    const pond = ponds.find(p => p.pondName === pondName);
+  const getLastADG = useCallback((pondId: string): number => {
+    const pond = ponds.find(p => p.id === pondId);
     if (!pond) return 0;
     
-    const samples = getPondSamplingData(pondName).sort(
+    const samples = getPondSamplingData(pondId).sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
     
@@ -268,7 +347,7 @@ export default function PondManagementScreen() {
 
   const calculateMetrics = useCallback((pond: Pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);
-    const latestSampling = getLatestSampling(pond.pondName);
+    const latestSampling = getLatestSampling(pond.id);
     const currentMbw = latestSampling ? Number(latestSampling.mbw) : Number(pond.initialWeight);
     const size = (currentMbw && currentMbw > 0) 
       ? (1000 / currentMbw).toFixed(0) 
@@ -291,6 +370,11 @@ export default function PondManagementScreen() {
     if (doc < 90) return '#dbe7df';
     return '#0d2137';
   }, []);
+
+  const closeModal = useCallback(() => { 
+    resetForm(); 
+    setModalVisible(false); 
+  }, [resetForm]);
 
   const handleAddPond = useCallback(() => {
     if (submitLockRef.current) return;
@@ -323,6 +407,13 @@ export default function PondManagementScreen() {
       setIsSubmitting(false);
       return;
     }
+
+    if (activePhysicalPondNames.has(getPhysicalPondKey(pondName))) {
+      Alert.alert(t.messages.error, `${pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     
     addPond({
       id: Date.now().toString(), 
@@ -338,13 +429,76 @@ export default function PondManagementScreen() {
       totalHarvestedBiomass: 0, 
       totalHarvestedPopulation: 0, 
       totalHarvestedFeed: 0,
+      cycleId: activeFarmCycle?.id,
+      cycleName: activeFarmCycle?.cycleName,
       cycleStatus: 'active',
       cycleStartedAt: docStart.toISOString().split('T')[0],
     });
     
     closeModal();
     Alert.alert(t.messages.success, t.home.pondAddedSuccess);
-  }, [canEditPonds, formData, addPond, convertPlToGrams, t]);
+  }, [activeFarmCycle, activePhysicalPondNames, canEditPonds, formData, addPond, convertPlToGrams, t]);
+
+  const handleAddCycle = useCallback(() => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
+    if (!canEditPonds) {
+      Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const {
+      cyclePondId,
+      density,
+      docStart,
+      supplier,
+      plValue,
+    } = formData;
+
+    const sourcePond = startableEndedPonds.find((pond) => pond.id === cyclePondId);
+    if (!sourcePond || !density || !supplier || !plValue) {
+      Alert.alert(t.messages.error, t.home.fillAllFields);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (activePhysicalPondNames.has(getPhysicalPondKey(sourcePond.pondName))) {
+      Alert.alert(t.messages.error, `${sourcePond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    addPond({
+      id: Date.now().toString(),
+      pondName: sourcePond.pondName,
+      supplier,
+      plSupplier: supplier,
+      pondArea: sourcePond.pondArea,
+      density: Number(density),
+      initialPopulation: sourcePond.pondArea * Number(density),
+      docStart: docStart.toISOString().split('T')[0],
+      initialWeight: convertPlToGrams(plValue),
+      samplings: [],
+      totalHarvestedBiomass: 0,
+      totalHarvestedPopulation: 0,
+      totalHarvestedFeed: 0,
+      cycleId: activeFarmCycle?.id,
+      cycleName: activeFarmCycle?.cycleName,
+      cycleStatus: 'active',
+      cycleStartedAt: docStart.toISOString().split('T')[0],
+      previousCyclePondId: sourcePond.id,
+    });
+
+    closeModal();
+    setCycleFilter('active');
+    Alert.alert(t.messages.success, `${sourcePond.pondName} started in the current cycle.`);
+  }, [activeFarmCycle, activePhysicalPondNames, addPond, canEditPonds, closeModal, convertPlToGrams, formData, startableEndedPonds, t]);
 
   const handleAddSamplingData = useCallback(() => {
     if (submitLockRef.current) return;
@@ -387,11 +541,6 @@ export default function PondManagementScreen() {
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
   }, [canEditPonds, formData, activePonds, addSampling, t]);
 
-  const closeModal = useCallback(() => { 
-    resetForm(); 
-    setModalVisible(false); 
-  }, [resetForm]);
-  
   const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canEditPonds) {
       Alert.alert(
@@ -424,13 +573,48 @@ export default function PondManagementScreen() {
     );
   }, [canEditPonds, endPondCycle, t, user?.uid]);
 
+  const handleRenameFarmCycle = useCallback(() => {
+    if (!activeFarmCycle) return;
+    const nextName = cycleNameDraft.trim();
+    if (!nextName) {
+      Alert.alert(t.messages.error, 'Cycle name cannot be empty.');
+      return;
+    }
+
+    updateFarmCycle(activeFarmCycle.id, { cycleName: nextName });
+    Alert.alert(t.messages.success, 'Cycle name updated.');
+  }, [activeFarmCycle, cycleNameDraft, t.messages.error, t.messages.success, updateFarmCycle]);
+
+  const handleCloseFarmCycle = useCallback(() => {
+    if (!activeFarmCycle) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    Alert.alert(
+      'End Cycle',
+      `End "${activeFarmCycle.cycleName}" and move ${currentCyclePonds.length} pond${currentCyclePonds.length === 1 ? '' : 's'} to history? This means the whole cycle is finished and ready for summary/reporting.`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: 'End Cycle',
+          style: 'destructive',
+          onPress: () => {
+            closeFarmCycle(activeFarmCycle.id, today);
+            setCycleFilter('ended');
+            setCycleManagerExpanded(false);
+            Alert.alert(t.messages.success, `${activeFarmCycle.cycleName} ended.`);
+          },
+        },
+      ]
+    );
+  }, [activeFarmCycle, closeFarmCycle, currentCyclePonds.length, t]);
+
   const handleDateChange = useCallback((
     confirmed: boolean, 
     selectedDate?: Date
   ) => {
     if (confirmed && selectedDate) {
       updateForm(
-        modalType === 'pond' ? 'docStart' : 'samplingDate', 
+        modalType === 'sampling' ? 'samplingDate' : 'docStart', 
         selectedDate
       );
     }
@@ -438,11 +622,11 @@ export default function PondManagementScreen() {
   }, [modalType, updateForm]);
 
   const openDatePicker = useCallback(() => {
-    setTempDate(modalType === 'pond' ? formData.docStart : formData.samplingDate);
+    setTempDate(modalType === 'sampling' ? formData.samplingDate : formData.docStart);
     setShowDatePicker(true);
   }, [modalType, formData]);
 
-  const openModal = useCallback((type: 'pond' | 'sampling') => {
+  const openModal = useCallback((type: 'pond' | 'sampling' | 'cycle') => {
     setModalType(type); 
     setMenuModalVisible(false); 
     setModalVisible(true);
@@ -450,7 +634,7 @@ export default function PondManagementScreen() {
 
   const PondCard = useMemo(() => React.memo(({ pond }: { pond: Pond }) => {
     const metrics = calculateMetrics(pond);
-    const lastADG = getLastADG(pond.pondName);
+    const lastADG = getLastADG(pond.id);
 
     return (
       <TouchableOpacity 
@@ -543,9 +727,6 @@ export default function PondManagementScreen() {
           <Ionicons name="calendar-outline" size={14} color="#dce8f2" />
           <Text style={styles.startDate}>
             {t.shrimp.started}: {new Date(pond.docStart).toLocaleDateString()}
-            {metrics.latestSampling && 
-              ` • ${t.shrimp.lastSampling}: ${new Date(metrics.latestSampling.date).toLocaleDateString()}`
-            }
           </Text>
         </View>
       </TouchableOpacity>
@@ -663,12 +844,172 @@ export default function PondManagementScreen() {
     </>
   ), [formData, activePonds, updateForm, openDatePicker, t]);
 
+  const renderCycleForm = useMemo(() => (
+    <>
+      <View style={styles.inputContainer}>
+        <Text style={styles.inputLabel}>Existing Pond</Text>
+        {startableEndedPonds.length === 0 ? (
+          <Text style={styles.inputHint}>
+            No ended ponds are available. End a pond cycle first, then start the next cycle from that pond.
+          </Text>
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.pondSelector}
+          >
+            {startableEndedPonds.map(pond => (
+              <TouchableOpacity
+                key={pond.id}
+                style={[
+                  styles.pondOption,
+                  formData.cyclePondId === pond.id && styles.pondOptionSelected
+                ]}
+                onPress={() => updateForm('cyclePondId', pond.id)}
+              >
+                <Text style={[
+                  styles.pondOptionText,
+                  formData.cyclePondId === pond.id && styles.pondOptionTextSelected
+                ]}>
+                  {pond.pondName}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
+      </View>
+      <InputField
+        label={t.forms.density}
+        value={formData.density}
+        onChangeText={(value) => updateForm('density', value)}
+        placeholder={t.home.densityHint}
+        keyboardType="numeric"
+      />
+      <DateInput
+        label={t.forms.startDate}
+        date={formData.docStart}
+        onPress={openDatePicker}
+      />
+      <InputField
+        label={t.forms.supplier}
+        value={formData.supplier}
+        onChangeText={(value) => updateForm('supplier', value)}
+        placeholder={t.home.supplierPlaceholder}
+      />
+      <InputField
+        label={t.forms.plValue}
+        value={formData.plValue}
+        onChangeText={(value) => updateForm('plValue', value)}
+        placeholder={t.home.plHint}
+        keyboardType="numeric"
+        hint="This starts a new crop in an existing physical pond."
+      />
+    </>
+  ), [formData, openDatePicker, startableEndedPonds, t, updateForm]);
+
 
 
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
+        <View style={styles.cycleManagerCard}>
+          <TouchableOpacity
+            style={styles.cycleManagerHeader}
+            onPress={() => setCycleManagerExpanded((expanded) => !expanded)}
+            activeOpacity={0.8}
+          >
+            <View>
+              <Text style={styles.cycleEyebrow}>Current Cycle</Text>
+              <Text style={styles.cycleTitle}>
+                {currentCycleTitle}
+              </Text>
+              <Text style={styles.cycleCompactMeta}>
+                {currentCyclePonds.length > 0
+                  ? `${currentCyclePonds.length} pond${currentCyclePonds.length === 1 ? '' : 's'} included • ${activeCyclePonds.length} active`
+                  : `Add a pond to create Cycle ${cycles.length + 1}`}
+              </Text>
+            </View>
+            <View style={styles.cycleHeaderRight}>
+              <View style={[
+                styles.cycleStatusBadge,
+                currentCyclePonds.length === 0 && styles.cycleStatusBadgeMuted
+              ]}>
+                <Text style={styles.cycleStatusText}>
+                  {currentCycleStatus.toUpperCase()}
+                </Text>
+              </View>
+              <Ionicons
+                name={cycleManagerExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+                size={20}
+                color="#315f57"
+              />
+            </View>
+          </TouchableOpacity>
+
+          {cycleManagerExpanded && currentCyclePonds.length > 0 ? (
+            <>
+              <View style={styles.cycleStatsRow}>
+                <View style={styles.cycleStat}>
+                  <Text style={styles.cycleStatValue}>{currentCyclePonds.length}</Text>
+                  <Text style={styles.cycleStatLabel}>Ponds</Text>
+                </View>
+                <View style={styles.cycleStat}>
+                  <Text style={styles.cycleStatValue}>
+                    {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || currentCyclePonds[0]?.docStart || '-'}
+                  </Text>
+                  <Text style={styles.cycleStatLabel}>Stocking start</Text>
+                </View>
+              </View>
+
+              {canEditPonds && activeFarmCycle && (
+                <View style={styles.cycleRenameRow}>
+                  <TextInput
+                    value={cycleNameDraft}
+                    onChangeText={setCycleNameDraft}
+                    placeholder="Cycle name"
+                    placeholderTextColor="#6b8aa0"
+                    style={styles.cycleNameInput}
+                  />
+                  <TouchableOpacity style={styles.cycleSmallButton} onPress={handleRenameFarmCycle}>
+                    <Text style={styles.cycleSmallButtonText}>Rename</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <View style={styles.cyclePondList}>
+                {currentCyclePonds.slice(0, 4).map((pond) => (
+                  <View
+                    key={pond.id}
+                    style={[
+                      styles.cyclePondChip,
+                      !isPondCycleActive(pond) && styles.cyclePondChipEnded
+                    ]}
+                  >
+                    <Text style={styles.cyclePondChipText}>{pond.pondName}</Text>
+                  </View>
+                ))}
+                {currentCyclePonds.length > 4 && (
+                  <View style={styles.cyclePondChip}>
+                    <Text style={styles.cyclePondChipText}>+{currentCyclePonds.length - 4} more</Text>
+                  </View>
+                )}
+              </View>
+
+              {canEditPonds && activeFarmCycle && (
+                <TouchableOpacity style={styles.closeFarmCycleButton} onPress={handleCloseFarmCycle}>
+                  <Ionicons name="lock-closed-outline" size={18} color="#fff" />
+                  <Text style={styles.closeFarmCycleText}>End Cycle</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : cycleManagerExpanded ? (
+            <Text style={styles.cycleEmptyText}>
+              Add a pond to create Cycle {cycles.length + 1}. New ponds will join the active cycle until it is ended.
+            </Text>
+          ) : null}
+        </View>
+
         <View style={styles.cycleFilterContainer}>
           <TouchableOpacity
             style={[styles.cycleFilterButton, cycleFilter === 'active' && styles.cycleFilterButtonActive]}
@@ -725,6 +1066,14 @@ export default function PondManagementScreen() {
                   <Text style={styles.menuOptionText}>{t.home.newPond}</Text>
                 </TouchableOpacity>
 
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => openModal('cycle')}
+                >
+                  <Ionicons name="repeat-outline" size={24} color="#0d2137" />
+                  <Text style={styles.menuOptionText}>Add Cycle</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity 
                   style={styles.menuOption} 
                   onPress={() => openModal('sampling')}
@@ -756,10 +1105,11 @@ export default function PondManagementScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>
-                  {modalType === 'pond' 
-                    ? t.home.addNewPond 
-                    : t.home.addSamplingData
-                  }
+                  {modalType === 'pond'
+                    ? t.home.addNewPond
+                    : modalType === 'cycle'
+                      ? 'Add Cycle'
+                      : t.home.addSamplingData}
                 </Text>
                 <TouchableOpacity 
                   onPress={() => setModalVisible(false)} 
@@ -776,7 +1126,11 @@ export default function PondManagementScreen() {
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled={true}
               >
-                {modalType === 'pond' ? renderPondForm : renderSamplingForm}
+                {modalType === 'pond'
+                  ? renderPondForm
+                  : modalType === 'cycle'
+                    ? renderCycleForm
+                    : renderSamplingForm}
 
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity 
@@ -789,17 +1143,19 @@ export default function PondManagementScreen() {
                   </TouchableOpacity>
 	                  <TouchableOpacity 
 	                    style={[styles.addButton, isSubmitting && { opacity: 0.6 }]} 
-	                    onPress={modalType === 'pond' 
-	                      ? handleAddPond 
-	                      : handleAddSamplingData
-	                    }
+	                    onPress={modalType === 'pond'
+	                      ? handleAddPond
+	                      : modalType === 'cycle'
+                          ? handleAddCycle
+	                        : handleAddSamplingData}
 	                    disabled={isSubmitting}
 	                  >
                     <Text style={styles.addButtonText}>
-                      {modalType === 'pond' 
-                        ? t.home.addPondButton 
-                        : t.home.addDataButton
-                      }
+                      {modalType === 'pond'
+                        ? t.home.addPondButton
+                        : modalType === 'cycle'
+                          ? 'Start Cycle'
+                          : t.home.addDataButton}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -853,6 +1209,155 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 16 : 20, 
     paddingTop: Platform.OS === 'android' ? 8 : 12, 
     paddingBottom: 100 
+  },
+
+  cycleManagerCard: {
+    marginHorizontal: Platform.OS === 'android' ? 16 : 20,
+    marginTop: Platform.OS === 'android' ? 14 : 18,
+    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    shadowColor: '#0d2137',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  cycleManagerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    alignItems: 'center',
+  },
+  cycleEyebrow: {
+    color: '#6b8aa0',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  cycleTitle: {
+    color: '#0d2137',
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 4,
+  },
+  cycleCompactMeta: {
+    color: '#315f57',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  cycleHeaderRight: {
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  cycleStatusBadge: {
+    backgroundColor: '#315f57',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cycleStatusBadgeMuted: {
+    backgroundColor: '#6b8aa0',
+  },
+  cycleStatusText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  cycleStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  cycleStat: {
+    flex: 1,
+    backgroundColor: '#f4f8fc',
+    borderRadius: 12,
+    padding: 12,
+  },
+  cycleStatValue: {
+    color: '#0d2137',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  cycleStatLabel: {
+    color: '#6b8aa0',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  cycleRenameRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  cycleNameInput: {
+    flex: 1,
+    backgroundColor: '#f4f8fc',
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#0d2137',
+    fontWeight: '700',
+  },
+  cycleSmallButton: {
+    backgroundColor: '#0d2137',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cycleSmallButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  cyclePondList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 14,
+  },
+  cyclePondChip: {
+    backgroundColor: '#dce8f2',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  cyclePondChipEnded: {
+    backgroundColor: '#eef3f7',
+    borderWidth: 1,
+    borderColor: '#dce8f2',
+  },
+  cyclePondChipText: {
+    color: '#0d2137',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  closeFarmCycleButton: {
+    marginTop: 14,
+    backgroundColor: '#0d2137',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+  },
+  closeFarmCycleText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  cycleEmptyText: {
+    color: '#315f57',
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 19,
+    marginTop: 12,
   },
 
   cycleFilterContainer: {

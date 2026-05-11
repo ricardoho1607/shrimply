@@ -23,6 +23,10 @@ export interface Expense {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   linkedInventory?: string;
@@ -39,6 +43,10 @@ export interface ExpenseInput {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   linkedInventory?: string;

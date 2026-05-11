@@ -42,7 +42,9 @@ import {
   runTransaction, 
   arrayUnion, 
   Timestamp,
-  addDoc
+  addDoc,
+  getDocs,
+  where
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
@@ -51,6 +53,9 @@ interface FeedData {
   ancoPercentage: string;
   totalDailyFeed: string | number;
   inventoryFeedId?: string | null;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   anco1?: string; anco2?: string; anco3?: string; anco4?: string;
 }
 
@@ -60,6 +65,9 @@ interface Sampling {
   mbw: number; 
   mortality: number; 
   feed: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   phMorning?: string;
   phEvening?: string;
   doMorning?: string;
@@ -73,6 +81,9 @@ interface Sampling {
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   cycleStartedAt?: string;
   cycleEndedAt?: string;
@@ -81,9 +92,18 @@ interface Pond {
   previousCyclePondId?: string;
 }
 
+interface FarmCycle {
+  id: string;
+  cycleName: string;
+  status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+  plannedStartDate?: string;
+  stockingStartDate?: string;
+}
+
 const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
+const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 
 /* ─── Custom SVG Chart ─────────────────────────────────────── */
 const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
@@ -196,6 +216,7 @@ export default function PondDetailClient() {
   const [pond, setPond] = useState<Pond | null>(null);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
@@ -240,9 +261,15 @@ export default function PondDetailClient() {
               setInventoryFeeds(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
             });
 
+            const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
+            const unsubCycles = onSnapshot(qCycles, (snapshot: any) => {
+              setCycles(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() } as FarmCycle)));
+            });
+
             return () => {
               unsubPond();
               unsubFeeds();
+              unsubCycles();
             };
           }
         });
@@ -268,13 +295,19 @@ export default function PondDetailClient() {
         mbw: parseFloat(samplingForm.mbw) || 0,
         mortality: parseInt(samplingForm.mortality) || 0,
         feed: parseFloat(samplingForm.feed) || 0,
+        cycleId: pond.cycleId,
+        cycleName: pond.cycleName,
+        pondCycleId: pond.pondCycleId || pond.id,
       };
 
       if (samplingForm.inventoryFeedId) {
         newSampling.feedData = {
           inventoryFeedId: samplingForm.inventoryFeedId, 
           totalDailyFeed: samplingForm.feed,
-          ancoPercentage: '0' 
+          ancoPercentage: '0',
+          cycleId: pond.cycleId,
+          cycleName: pond.cycleName,
+          pondCycleId: pond.pondCycleId || pond.id,
         };
       }
 
@@ -322,8 +355,37 @@ export default function PondDetailClient() {
     e.preventDefault();
     if (!companyId || !pond) return;
     try {
+      const sameNamePonds = await getDocs(query(
+        collection(db, 'companies', companyId, 'ponds'),
+        where('pondName', '==', pond.pondName)
+      ));
+      const hasActiveCycleForPond = sameNamePonds.docs.some((pondDoc) =>
+        pondDoc.id !== pond.id && pondDoc.data().cycleStatus !== 'ended'
+      );
+
+      if (hasActiveCycleForPond) {
+        alert(`${pond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+        return;
+      }
+
       const initialPopulation = Number(pond.pondArea) * Number(startCycleForm.density);
       const initialWeight = parseFloat(startCycleForm.plValue) / 10;
+      const activeCycle = cycles.find(isOpenFarmCycle);
+      let cycleForPond = activeCycle;
+      if (!cycleForPond) {
+        const cycleName = `Cycle ${cycles.length + 1}`;
+        const cycleRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
+          cycleName,
+          status: 'stocking',
+          plannedStartDate: startCycleForm.docStart,
+          stockingStartDate: startCycleForm.docStart,
+          createdAt: serverTimestamp(),
+          createdBy: auth.currentUser?.uid || '',
+          updatedAt: serverTimestamp(),
+          updatedBy: auth.currentUser?.uid || '',
+        });
+        cycleForPond = { id: cycleRef.id, cycleName, status: 'stocking', plannedStartDate: startCycleForm.docStart, stockingStartDate: startCycleForm.docStart };
+      }
       const newDoc = await addDoc(collection(db, 'companies', companyId, 'ponds'), {
         pondName: pond.pondName,
         pondArea: Number(pond.pondArea),
@@ -337,6 +399,8 @@ export default function PondDetailClient() {
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
         totalHarvestedFeed: 0,
+        cycleId: cycleForPond.id,
+        cycleName: cycleForPond.cycleName,
         cycleStatus: 'active',
         cycleStartedAt: startCycleForm.docStart,
         previousCyclePondId: pond.id,

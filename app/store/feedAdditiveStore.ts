@@ -5,6 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import NotificationService from '../services/notificationService';
+import { usePondStore } from './pondStore';
 
 export interface StockHistory {
   id: string;
@@ -22,7 +23,12 @@ export interface UsageHistory {
   id: string;
   date: string;
   quantity: number;
+  unitPrice?: number;
+  totalCost?: number;
   pondId?: string;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   notes?: string;
   createdAt: Timestamp | any;
 }
@@ -192,6 +198,11 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
   addFeed: async (feed) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    const hasStock = (feed.totalStock || 0) > 0;
+    if (hasStock && (feed.totalCost || 0) <= 0) throw new Error('Feed price must be greater than 0');
+    if ((feed.stockInHistory || []).some((stock) => !Number.isFinite(stock.price) || stock.price <= 0)) {
+      throw new Error('Feed stock-in price must be greater than 0');
+    }
     try {
       const ref = doc(collection(db, 'companies', currentCompanyId, 'feeds'));
       const now = serverTimestamp() as any;
@@ -220,6 +231,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
   stockInFeed: async (feedId, quantity, price, notes = '', opts = {}) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
+    if (!Number.isFinite(price) || price <= 0) throw new Error('Feed price must be greater than 0');
     const feedRef = doc(db, 'companies', currentCompanyId, 'feeds', feedId);
 
     try {
@@ -274,15 +287,25 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const currentStock = feed.totalStock || 0;
         if (quantity > currentStock) throw new Error('Insufficient stock');
+        const unitPrice = currentStock > 0 ? (feed.totalCost || 0) / currentStock : 0;
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
 
         const usage: Partial<UsageHistory> = {
           id: Date.now().toString(),
           date: isoDate(),
           quantity,
+          unitPrice,
+          totalCost: quantity * unitPrice,
           createdAt: new Date(),
         };
 
-        if (pondId) usage.pondId = pondId;
+        if (pondId) {
+          const pond = usePondStore.getState().ponds.find((item) => item.id === pondId);
+          usage.pondId = pondId;
+          usage.cycleId = pond?.cycleId;
+          usage.cycleName = pond?.cycleName;
+          usage.pondCycleId = pond?.pondCycleId || pondId;
+        }
         if (notes) usage.notes = notes;
 
         newStock = Math.max(0, currentStock - quantity);
@@ -293,6 +316,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         tx.update(feedRef, {
           usageHistory: arrayUnion(usage),
           totalStock: newStock,
+          totalCost: Math.max(0, (feed.totalCost || 0) - (quantity * unitPrice)),
           lastUpdated: serverTimestamp(),
         });
       });
@@ -353,6 +377,11 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
   addAdditive: async (additive) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    const hasStock = (additive.totalStock || 0) > 0;
+    if (hasStock && (additive.totalCost || 0) <= 0) throw new Error('Additive price must be greater than 0');
+    if ((additive.stockInHistory || []).some((stock) => !Number.isFinite(stock.price) || stock.price <= 0)) {
+      throw new Error('Additive stock-in price must be greater than 0');
+    }
     try {
       const ref = doc(collection(db, 'companies', currentCompanyId, 'additives'));
       const now = serverTimestamp() as any;
@@ -380,6 +409,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
   stockInAdditive: async (additiveId, quantity, price, notes = '', opts = {}) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Quantity must be greater than 0');
+    if (!Number.isFinite(price) || price <= 0) throw new Error('Additive price must be greater than 0');
     const additiveRef = doc(db, 'companies', currentCompanyId, 'additives', additiveId);
 
     try {
@@ -434,15 +465,25 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const currentStock = additive.totalStock || 0;
         if (quantity > currentStock) throw new Error('Insufficient stock');
+        const unitPrice = currentStock > 0 ? (additive.totalCost || 0) / currentStock : 0;
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error('Additive cost is missing. Stock this additive with a price before recording usage.');
 
         const usage: Partial<UsageHistory> = {
           id: Date.now().toString(),
           date: isoDate(),
           quantity,
+          unitPrice,
+          totalCost: quantity * unitPrice,
           createdAt: new Date(),
         };
 
-        if (pondId) usage.pondId = pondId;
+        if (pondId) {
+          const pond = usePondStore.getState().ponds.find((item) => item.id === pondId);
+          usage.pondId = pondId;
+          usage.cycleId = pond?.cycleId;
+          usage.cycleName = pond?.cycleName;
+          usage.pondCycleId = pond?.pondCycleId || pondId;
+        }
         if (notes) usage.notes = notes;
 
         newStock = Math.max(0, currentStock - quantity);
@@ -453,6 +494,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         tx.update(additiveRef, {
           usageHistory: arrayUnion(usage),
           totalStock: newStock,
+          totalCost: Math.max(0, (additive.totalCost || 0) - (quantity * unitPrice)),
           lastUpdated: serverTimestamp(),
         });
       });

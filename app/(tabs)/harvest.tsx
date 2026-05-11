@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import React, { useCallback, useRef, useState } from "react";
 import { FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Platform, KeyboardAvoidingView } from "react-native";
-import { usePondStore, HarvestRecord, isPondCycleActive } from "../store/pondStore";
+import { usePondStore, HarvestRecord, getActiveFarmCycle, isPondCycleActive } from "../store/pondStore";
 import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
@@ -32,8 +32,11 @@ export default function HarvestScreen() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user } = useAuth();
-  const { ponds, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact } = usePondStore();
+  const { ponds, cycles, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact } = usePondStore();
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
+  const activeFarmCycle = React.useMemo(() => getActiveFarmCycle(cycles), [cycles]);
+  const activePondIds = React.useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
+  const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
   
   const canEditHarvest = user?.role === 'technician' || user?.role === 'owner';
 
@@ -50,6 +53,25 @@ export default function HarvestScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
+  const isCurrentCycleHarvest = useCallback((harvest: HarvestRecord) => {
+    if (!activeFarmCycle) {
+      return harvest.ponds.some((pond) => activePondIds.has(pond.pondId));
+    }
+
+    return harvest.cycleId === activeFarmCycle.id ||
+      harvest.ponds.some((pond) =>
+        pond.cycleId === activeFarmCycle.id ||
+        activePondIds.has(pond.pondId)
+      );
+  }, [activeFarmCycle, activePondIds]);
+
+  const visibleHarvestRecords = React.useMemo(
+    () => harvestRecords.filter((harvest) =>
+      harvestFilter === 'current' ? isCurrentCycleHarvest(harvest) : !isCurrentCycleHarvest(harvest)
+    ),
+    [harvestFilter, harvestRecords, isCurrentCycleHarvest]
+  );
+
   React.useEffect(() => {
     if (isModalVisible) {
       submitLockRef.current = false;
@@ -61,6 +83,11 @@ export default function HarvestScreen() {
 
   const updatePondField = (pondId: string, field: string, value: string) => {
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
+  };
+
+  const parsePositiveNumber = (value: string) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   };
 
   const handleSave = () => {
@@ -75,10 +102,48 @@ export default function HarvestScreen() {
       return;
     }
 
-    const pondsWithData = pondData.filter(pond => 
+    const pondsWithData = pondData.filter(pond =>
       pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
 
+    if (activePonds.length === 0) {
+      Alert.alert(t.messages.error, 'There are no active ponds in the current cycle.');
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
     if (pondsWithData.length === 0) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const invalidPond = pondsWithData.find((pond) => {
+      const hasMainHarvest = !!(pond.biomass || pond.size || pond.price);
+      const hasSubHarvest = !!(pond.subBiomass || pond.subSize || pond.subPrice);
+
+      if (hasMainHarvest) {
+        const biomass = parsePositiveNumber(pond.biomass);
+        const size = parsePositiveNumber(pond.size);
+        const price = parsePositiveNumber(pond.price);
+        if (!biomass || !size || !price) return true;
+      }
+
+      if (hasSubHarvest) {
+        const biomass = parsePositiveNumber(pond.subBiomass);
+        const size = parsePositiveNumber(pond.subSize);
+        const price = parsePositiveNumber(pond.subPrice);
+        if (!biomass || !size || !price) return true;
+      }
+
+      return false;
+    });
+
+    if (invalidPond) {
+      Alert.alert(
+        t.messages.error,
+        `${invalidPond.pondName}: biomass, size, and price per kg are required and must be greater than 0 for every harvest line.`
+      );
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -178,8 +243,36 @@ export default function HarvestScreen() {
           <Text style={styles.headerTitle}>{t.harvest.title}</Text>
         </View>
 
+        <View style={styles.cycleSummary}>
+          <View style={styles.cycleSummaryText}>
+            <Text style={styles.cycleEyebrow}>Current Cycle</Text>
+            <Text style={styles.cycleTitle}>{activeFarmCycle?.cycleName || 'No active cycle'}</Text>
+            <Text style={styles.cycleSubtitle}>
+              {activePonds.length} active pond{activePonds.length === 1 ? '' : 's'} available for harvest
+            </Text>
+          </View>
+          <View style={styles.cycleBadge}>
+            <Text style={styles.cycleBadgeText}>{visibleHarvestRecords.length}</Text>
+          </View>
+        </View>
+
+        <View style={styles.filterContainer}>
+          <TouchableOpacity
+            style={[styles.filterButton, harvestFilter === 'current' && styles.filterButtonActive]}
+            onPress={() => setHarvestFilter('current')}
+          >
+            <Text style={[styles.filterText, harvestFilter === 'current' && styles.filterTextActive]}>Current Cycle</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.filterButton, harvestFilter === 'history' && styles.filterButtonActive]}
+            onPress={() => setHarvestFilter('history')}
+          >
+            <Text style={[styles.filterText, harvestFilter === 'history' && styles.filterTextActive]}>History</Text>
+          </TouchableOpacity>
+        </View>
+
         <FlatList
-          data={harvestRecords}
+          data={visibleHarvestRecords}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 20) + 80 }]}
           showsVerticalScrollIndicator={false}
@@ -188,7 +281,9 @@ export default function HarvestScreen() {
               <Ionicons name="cash-outline" size={80} color="#315f57" />
               <Text style={styles.emptyTitle}>{t.harvest.noRecords}</Text>
               <Text style={styles.emptySubtitle}>
-                {canEditHarvest ? t.harvest.addFirst : t.harvest.noDataAvailable}
+                {harvestFilter === 'current'
+                  ? (canEditHarvest ? 'Harvest records for the current cycle will appear here.' : t.harvest.noDataAvailable)
+                  : 'Ended-cycle harvest records will stay here for history.'}
               </Text>
             </View>
           }
@@ -233,7 +328,16 @@ export default function HarvestScreen() {
         />
 
         {canEditHarvest && (
-          <TouchableOpacity style={[styles.floatingButton, { bottom: Math.max(insets.bottom, 30) }]} onPress={() => setIsModalVisible(true)}>
+          <TouchableOpacity
+            style={[styles.floatingButton, { bottom: Math.max(insets.bottom, 30) }, activePonds.length === 0 && styles.floatingButtonDisabled]}
+            onPress={() => {
+              if (activePonds.length === 0) {
+                Alert.alert(t.messages.error, 'Start a pond cycle before adding harvest records.');
+                return;
+              }
+              setIsModalVisible(true);
+            }}
+          >
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}
@@ -362,6 +466,18 @@ const styles = StyleSheet.create({
   },
   screenTitle: { fontSize: 24, fontWeight: 'bold', color: '#0d2137', marginBottom: 20 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 10 : 12 },
+  cycleSummary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginBottom: 12, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: '#e8f2f9' },
+  cycleSummaryText: { flex: 1, marginRight: 12 },
+  cycleEyebrow: { color: '#315f57', fontSize: 11, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  cycleTitle: { color: '#0d2137', fontSize: 18, fontWeight: '800' },
+  cycleSubtitle: { color: '#6b8aa0', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  cycleBadge: { minWidth: 38, height: 38, borderRadius: 19, backgroundColor: '#dce8f2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#315f57' },
+  cycleBadgeText: { color: '#0d2137', fontSize: 15, fontWeight: '800' },
+  filterContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginBottom: 16, backgroundColor: '#dce8f2', borderRadius: 14, padding: 4, borderWidth: 1, borderColor: '#e8f2f9' },
+  filterButton: { flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 10 },
+  filterButtonActive: { backgroundColor: '#0d2137' },
+  filterText: { color: '#315f57', fontSize: 13, fontWeight: '700' },
+  filterTextActive: { color: '#FFFFFF' },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingTop: 0 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
   emptyTitle: { color: '#0d2137', fontSize: 24, fontWeight: 'bold', marginTop: 20 },
@@ -378,6 +494,7 @@ const styles = StyleSheet.create({
   summaryLabel: { color: '#0d2137', fontSize: 12, marginLeft: 6, width: 80, flexShrink: 0 },
   summaryValue: { fontSize: 12, fontWeight: '600', textAlign: 'right', flex: 1, color: '#0d2137' },
   floatingButton: { position: 'absolute', right: 30, backgroundColor: '#0d2137', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+  floatingButtonDisabled: { opacity: 0.5 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#e8f2f9', overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 0 },

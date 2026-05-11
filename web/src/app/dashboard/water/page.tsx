@@ -25,12 +25,14 @@ import { auth, db } from '@/lib/firebase';
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
+  cycleId?: string; cycleName?: string; pondCycleId?: string;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
 }
 
 interface Pond {
   id: string; pondName: string; supplier: string; samplings: Sampling[];
+  cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
@@ -170,6 +172,9 @@ export default function WaterQualityPage() {
         const existingIndex = samplings.findIndex(s => s.date === formData.date);
         
         const wqData = {
+          cycleId: pondData.cycleId,
+          cycleName: pondData.cycleName,
+          pondCycleId: pondData.pondCycleId || formData.pondId,
           phMorning: formData.phMorning,
           phEvening: formData.phEvening,
           doMorning: formData.doMorning,
@@ -181,6 +186,9 @@ export default function WaterQualityPage() {
         if (existingIndex >= 0) {
           samplings[existingIndex] = { 
             ...samplings[existingIndex], 
+            cycleId: pondData.cycleId,
+            cycleName: pondData.cycleName,
+            pondCycleId: pondData.pondCycleId || formData.pondId,
             phMorning: formData.phMorning || samplings[existingIndex].phMorning || '',
             phEvening: formData.phEvening || samplings[existingIndex].phEvening || '',
             doMorning: formData.doMorning || samplings[existingIndex].doMorning || '',
@@ -193,12 +201,7 @@ export default function WaterQualityPage() {
             id: `wq-${Date.now()}`,
             date: formData.date,
             mbw: 0, mortality: 0, feed: 0,
-            phMorning: formData.phMorning,
-            phEvening: formData.phEvening,
-            doMorning: formData.doMorning,
-            doEvening: formData.doEvening,
-            transparency: formData.transparency,
-            salinity: formData.salinity,
+            ...wqData,
           });
         }
 

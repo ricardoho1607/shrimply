@@ -153,6 +153,10 @@ service cloud.firestore {
         allow read, write: if isCompanyMember(companyId);
       }
 
+      match /cycles/{cycleId} {
+        allow read, write: if isCompanyMember(companyId);
+      }
+
       match /harvestRecords/{harvestId} {
         allow read, write: if isCompanyMember(companyId);
       }

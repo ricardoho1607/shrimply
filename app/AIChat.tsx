@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -17,7 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGemini } from './hooks/useGemini';
-import { usePondStore } from './store/pondStore';
+import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -71,6 +71,7 @@ export default function AIChat() {
   
   const { sendMessage, loading } = useGemini();
   const { ponds } = usePondStore(); 
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { company } = useAuth();
   
   const router = useRouter();
@@ -133,7 +134,7 @@ export default function AIChat() {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     try {
-      const aiResponse = await sendMessage(userText, ponds, { companyId: company?.id });
+      const aiResponse = await sendMessage(userText, activePonds, { companyId: company?.id });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
@@ -164,7 +165,7 @@ export default function AIChat() {
         
         <View style={styles.headerCenter}>
           <Text style={styles.headerTitle}>Orson AI</Text>
-          <Text style={styles.headerSubtitle}>{ponds.length} Ponds Connected</Text>
+          <Text style={styles.headerSubtitle}>{activePonds.length} Active Ponds Connected</Text>
         </View>
 
         <TouchableOpacity onPress={confirmClearChat} style={styles.headerSide}>

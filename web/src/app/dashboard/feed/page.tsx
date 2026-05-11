@@ -39,17 +39,23 @@ interface FeedData {
   ancoPercentage: string;
   totalDailyFeed: string;
   inventoryFeedId?: string | null;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   feed1?: string; feed2?: string; feed3?: string; feed4?: string; feed5?: string;
   anco1?: string; anco2?: string; anco3?: string; anco4?: string; anco5?: string;
   anco6?: string; anco7?: string; anco8?: string; anco9?: string; anco10?: string;
 }
 
 interface Sampling {
-  id: string; date: string; feedData?: FeedData;
+  id: string; date: string; cycleId?: string; cycleName?: string; pondCycleId?: string; feedData?: FeedData;
 }
 
 interface Pond {
   id: string; pondName: string; samplings: Sampling[];
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
@@ -186,6 +192,9 @@ export default function FeedRecordsPage() {
           ancoPercentage: formData.ancoPercentage,
           totalDailyFeed: formData.totalDailyFeed,
           inventoryFeedId: formData.inventoryFeedId || null,
+          cycleId: pondData.cycleId,
+          cycleName: pondData.cycleName,
+          pondCycleId: pondData.pondCycleId || formData.pondId,
           anco1: formData.anco1, anco2: formData.anco2,
           anco3: formData.anco3, anco4: formData.anco4,
           anco5: formData.anco5, anco6: formData.anco6,
@@ -199,6 +208,9 @@ export default function FeedRecordsPage() {
         if (existingIndex >= 0) {
           samplings[existingIndex] = { 
             ...samplings[existingIndex], 
+            cycleId: pondData.cycleId,
+            cycleName: pondData.cycleName,
+            pondCycleId: pondData.pondCycleId || formData.pondId,
             feedData: { ...(samplings[existingIndex].feedData || {}), ...feedData } 
           };
         } else {
@@ -206,6 +218,9 @@ export default function FeedRecordsPage() {
             id: `feed-${Date.now()}`,
             date: formData.date,
             mbw: 0, mortality: 0, feed: 0,
+            cycleId: pondData.cycleId,
+            cycleName: pondData.cycleName,
+            pondCycleId: pondData.pondCycleId || formData.pondId,
             feedData
           });
         }
@@ -234,6 +249,9 @@ export default function FeedRecordsPage() {
                 date: formData.date,
                 quantity: feedAmount,
                 pondId: formData.pondId,
+                cycleId: pondData.cycleId,
+                cycleName: pondData.cycleName,
+                pondCycleId: pondData.pondCycleId || formData.pondId,
                 notes: `Daily feed for pond: ${pondData.pondName}`,
                 createdAt: Timestamp.now()
               }),

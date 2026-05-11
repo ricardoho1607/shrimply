@@ -44,6 +44,8 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 interface MaintenanceRecord {
   id: string;
   date: any;
+  cycleId?: string;
+  cycleName?: string;
   description: string;
   technician: string;
   cost?: number;
@@ -89,6 +91,14 @@ interface Asset {
   updatedAt: any;
 }
 
+interface FarmCycle {
+  id: string;
+  cycleName: string;
+  status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+}
+
+const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
+
 const CATEGORIES = ['Equipment', 'Infrastructure', 'Vehicles', 'Tools', 'Technology'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];
 const MAINTENANCE_TYPES = ['Preventive', 'Corrective', 'Inspection', 'Repair', 'Upgrade'];
@@ -103,6 +113,7 @@ export default function AssetInventoryPage() {
   const [user, setUser] = useState<any>(null);
   
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
@@ -170,7 +181,14 @@ export default function AssetInventoryPage() {
               setAssets(data);
               setLoading(false);
             });
-            return () => unsubAssets();
+            const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
+            const unsubCycles = onSnapshot(qCycles, (snapshot) => {
+              setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FarmCycle)));
+            });
+            return () => {
+              unsubAssets();
+              unsubCycles();
+            };
           } else {
             setLoading(false);
           }
@@ -306,6 +324,8 @@ export default function AssetInventoryPage() {
         const maintRecord: MaintenanceRecord = {
           id: `maint_${Date.now()}`,
           date: Timestamp.now(),
+          cycleId: cycles.find(isOpenFarmCycle)?.id,
+          cycleName: cycles.find(isOpenFarmCycle)?.cycleName,
           description: formData.maintDesc,
           technician: formData.technician,
           cost: cost,

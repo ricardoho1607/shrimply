@@ -90,6 +90,11 @@ export function useCompanyPonds<T>(sort: 'asc' | 'desc' = 'desc') {
   return useCompanySubcollection<T>('ponds', constraints);
 }
 
+export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
+  const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
+  return useCompanySubcollection<T>('cycles', constraints);
+}
+
 export function useCompanyMembers<T>() {
   const { companyId } = useCompanyId();
   const [state, setState] = useState<SnapshotState<T>>({
