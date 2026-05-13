@@ -8,6 +8,7 @@ import {
   CalendarDays,
   Clock,
   Database,
+  Download,
   EyeOff,
   FileText,
   Loader2,
@@ -20,6 +21,7 @@ import {
 } from 'lucide-react';
 import { app } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { CompanyDetailDrawer, UserDetailDrawer } from './AdminDetailDrawers';
 import { ActivationFunnel, FollowUpList, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
 
 type Period = 7 | 30;
@@ -36,6 +38,16 @@ type CompanyMetric = {
   feedItemCount: number;
   additiveItemCount: number;
   createdAt: string | null;
+};
+
+type AdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  companyId: string | null;
+  joinedAt: string | null;
+  lastActive: string | null;
 };
 
 type AdminMetrics = {
@@ -66,15 +78,7 @@ type AdminMetrics = {
   };
   dailyNewUsers: Array<{ date: string; count: number }>;
   roleBreakdown: Record<string, number>;
-  recentUsers: Array<{
-    id: string;
-    name: string;
-    email: string;
-    role: string;
-    companyId: string | null;
-    joinedAt: string | null;
-    lastActive: string | null;
-  }>;
+  recentUsers: AdminUser[];
   companies: CompanyMetric[];
 };
 
@@ -133,6 +137,8 @@ export default function HiddenAdminPage() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyMetric | null>(null);
+  const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
   const isAllowed = useMemo(() => {
     const email = String(user?.email || '').toLowerCase();
@@ -154,6 +160,31 @@ export default function HiddenAdminPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const exportCompaniesCsv = () => {
+    if (!metrics) return;
+    const rows = [
+      ['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory items', 'Active cycles', 'Created'],
+      ...metrics.companies.map((company) => [
+        company.companyName,
+        company.ownerEmail || 'Unavailable',
+        getCompanyHealth(company).label,
+        String(company.pondCount),
+        String(company.teamMembersCount),
+        String(company.feedItemCount + company.additiveItemCount),
+        String(company.activeCycleCount),
+        formatDate(company.createdAt),
+      ]),
+    ];
+    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `shrimply-admin-companies-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -211,6 +242,10 @@ export default function HiddenAdminPage() {
               {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
               <span>Refresh</span>
             </button>
+            <button onClick={exportCompaniesCsv} className="dashboard-action dashboard-action-secondary" type="button" disabled={!metrics}>
+              <Download size={18} />
+              <span>Export CSV</span>
+            </button>
           </div>
         </div>
       </div>
@@ -250,7 +285,7 @@ export default function HiddenAdminPage() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '22px' }}>
                 <div>
                   <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Company health</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Company names, owners, ponds, team size, inventory footprint, and status.</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Company names, owners, ponds, team size, inventory footprint, and status. Click a company for details.</div>
                 </div>
                 <Database size={22} color="var(--primary)" />
               </div>
@@ -271,7 +306,7 @@ export default function HiddenAdminPage() {
                       {metrics.companies.map((company) => {
                         const health = getCompanyHealth(company);
                         return (
-                          <tr key={company.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                          <tr key={company.id} onClick={() => setSelectedCompany(company)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                             <td style={{ padding: '16px 10px' }}>
                               <div style={{ color: 'var(--text-primary)', fontWeight: 900 }}>{company.companyName}</div>
                               <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
@@ -322,7 +357,7 @@ export default function HiddenAdminPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
               <div>
                 <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Recent users</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Latest signups and activity data from Firestore users.</div>
+                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Latest signups and activity data from Firestore users. Click a user for details.</div>
               </div>
               <Clock size={22} color="var(--primary)" />
             </div>
@@ -331,14 +366,14 @@ export default function HiddenAdminPage() {
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
                 {metrics.recentUsers.map((item) => (
-                  <div key={item.id} style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+                  <button key={item.id} onClick={() => setSelectedUser(item)} style={{ textAlign: 'left', padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', cursor: 'pointer' }} type="button">
                     <div style={{ color: 'var(--text-primary)', fontWeight: 900, marginBottom: '4px' }}>{item.name || 'Unnamed user'}</div>
                     <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 700, marginBottom: '12px', wordBreak: 'break-word' }}>{item.email}</div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
                       <span>{item.role || 'No role'}</span>
                       <span>{formatDate(item.joinedAt)}</span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -346,6 +381,14 @@ export default function HiddenAdminPage() {
         </>
       ) : (
         <EmptyState message="No admin metrics loaded yet." />
+      )}
+
+      {selectedCompany && (
+        <CompanyDetailDrawer company={selectedCompany} onClose={() => setSelectedCompany(null)} />
+      )}
+
+      {selectedUser && (
+        <UserDetailDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />
       )}
     </div>
   );
