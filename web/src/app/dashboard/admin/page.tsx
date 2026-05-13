@@ -4,7 +4,6 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   AlertTriangle,
-  BarChart3,
   Building2,
   CalendarDays,
   Clock,
@@ -21,6 +20,7 @@ import {
 } from 'lucide-react';
 import { app } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { ActivationFunnel, FollowUpList, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
 
 type Period = 7 | 30;
 
@@ -191,7 +191,7 @@ export default function HiddenAdminPage() {
             </span>
           </div>
           <p className="dashboard-hero-subtitle">
-            Hidden admin view for growth, companies, user activity, and AI/API request usage. This page is not linked from the dashboard sidebar.
+            Hidden admin view for growth, activation, company health, user activity, and AI/API request usage. This page is not linked from the dashboard sidebar.
           </p>
         </div>
         <div className="dashboard-hero-actions">
@@ -240,12 +240,17 @@ export default function HiddenAdminPage() {
             <MetricCard label="AI/API requests" value={formatNumber(metrics.period.aiRequests + metrics.period.apiRequests + metrics.period.requestLogs)} helper={`${formatNumber(metrics.period.aiRequests)} AI requests in this period`} icon={Zap} />
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: '24px', alignItems: 'start' }}>
+            <GrowthChart metrics={metrics} />
+            <ActivationFunnel metrics={metrics} />
+          </div>
+
           <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 420px)', gap: '24px', alignItems: 'start' }}>
             <div className="glass-card" style={{ padding: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '22px' }}>
                 <div>
-                  <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Companies</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Company names, owners, ponds, team size, and inventory footprint.</div>
+                  <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Company health</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Company names, owners, ponds, team size, inventory footprint, and status.</div>
                 </div>
                 <Database size={22} color="var(--primary)" />
               </div>
@@ -254,28 +259,36 @@ export default function HiddenAdminPage() {
                 <EmptyState message="No company records found." />
               ) : (
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '760px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
                     <thead>
                       <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                        {['Company', 'Owner', 'Ponds', 'Team', 'Inventory', 'Created'].map((heading) => (
+                        {['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory', 'Created'].map((heading) => (
                           <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900 }}>{heading}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {metrics.companies.map((company) => (
-                        <tr key={company.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '16px 10px' }}>
-                            <div style={{ color: 'var(--text-primary)', fontWeight: 900 }}>{company.companyName}</div>
-                            <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
-                          </td>
-                          <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.ownerEmail || 'Unavailable'}</td>
-                          <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.pondCount}</td>
-                          <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.teamMembersCount}</td>
-                          <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.feedItemCount + company.additiveItemCount} items</td>
-                          <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{formatDate(company.createdAt)}</td>
-                        </tr>
-                      ))}
+                      {metrics.companies.map((company) => {
+                        const health = getCompanyHealth(company);
+                        return (
+                          <tr key={company.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                            <td style={{ padding: '16px 10px' }}>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 900 }}>{company.companyName}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
+                            </td>
+                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.ownerEmail || 'Unavailable'}</td>
+                            <td style={{ padding: '16px 10px' }}>
+                              <span style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: '999px', background: health.bg, color: health.tone, fontSize: '0.72rem', fontWeight: 900 }}>
+                                {health.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.pondCount}</td>
+                            <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.teamMembersCount}</td>
+                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.feedItemCount + company.additiveItemCount} items</td>
+                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{formatDate(company.createdAt)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -283,31 +296,8 @@ export default function HiddenAdminPage() {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                  <div>
-                    <div style={{ fontSize: '1.12rem', color: 'var(--text-primary)', fontWeight: 900 }}>Daily new users</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>Selected {period} day period</div>
-                  </div>
-                  <BarChart3 size={22} color="var(--primary)" />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {metrics.dailyNewUsers.map((item) => {
-                    const max = Math.max(...metrics.dailyNewUsers.map((d) => d.count), 1);
-                    const width = Math.max(6, (item.count / max) * 100);
-                    return (
-                      <div key={item.date} style={{ display: 'grid', gridTemplateColumns: '80px 1fr 32px', gap: '10px', alignItems: 'center' }}>
-                        <div style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 800 }}>{item.date.slice(5)}</div>
-                        <div style={{ height: '10px', background: 'var(--bg-mid)', borderRadius: '999px', overflow: 'hidden' }}>
-                          <div style={{ width: `${width}%`, height: '100%', background: 'var(--gradient)', borderRadius: '999px' }} />
-                        </div>
-                        <div style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 900, textAlign: 'right' }}>{item.count}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
+              <FollowUpList metrics={metrics} />
+              <MiniRoleBreakdown metrics={metrics} />
               <div className="glass-card" style={{ padding: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
                   <div>
