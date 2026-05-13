@@ -381,3 +381,5 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
   console.log(`Orson notification sent for pond ${pondId}.`);
   return { success: true, notified: true, report };
 });
+
+Object.assign(exports, require("./adminMetrics"));
