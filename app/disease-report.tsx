@@ -106,6 +106,8 @@ export default function DiseaseReportScreen() {
     containmentActionsPlaceholder: t?.diseaseReport?.containmentActionsPlaceholder || 'Describe containment actions...',
     alertRadius: t?.diseaseReport?.alertRadius || 'Alert Radius',
     submitReport: t?.diseaseReport?.submitReport || 'Submit Report',
+    permissionDenied: t?.diseaseReport?.permissionDenied || 'Permission Denied',
+    locationPermissionRequired: t?.diseaseReport?.locationPermissionRequired || 'Location permission is required to use this feature',
   }), [t]);
 
   const DISEASE_TYPES = React.useMemo(() => 

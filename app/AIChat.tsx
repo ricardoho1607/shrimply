@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGemini } from './hooks/useGemini';
 import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
+import ShrimpIcon from './components/icons/ShrimpIcon';
 
 const { width } = Dimensions.get('window');
 
@@ -56,8 +57,8 @@ const detectLanguage = (text: string): string => {
 
 const getWelcomeMessage = (language: string) => {
   const messages: { [key: string]: string } = {
-    en: "🦐 Hello! I'm Orson, your AI aquaculture assistant. I'm currently monitoring your ponds. How can I help you today?",
-    id: "🦐 Halo! Saya Orson, asisten AI budidaya Anda. Saya sedang memantau tambak Anda. Ada yang bisa saya bantu?",
+    en: "Hello! I'm Orson, your AI aquaculture assistant. I'm currently monitoring your ponds. How can I help you today?",
+    id: "Halo! Saya Orson, asisten AI budidaya Anda. Saya sedang memantau tambak Anda. Ada yang bisa saya bantu?",
   };
   return messages[language] || messages.en;
 };
@@ -195,7 +196,7 @@ export default function AIChat() {
                 ]}>
                   {message.type === 'ai' && (
                     <View style={styles.aiIcon}>
-                      <Ionicons name="sparkles" size={12} color="#315f57" />
+                      <ShrimpIcon size={14} color="#315f57" strokeWidth={2.2} />
                     </View>
                   )}
                   <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>

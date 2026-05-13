@@ -13,8 +13,6 @@ import {
   orderBy,
   getDoc,
   addDoc,
-  increment,
-  arrayUnion
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -108,7 +106,7 @@ export const useFirebaseSync = () => {
   // Clean up listeners when company changes (account switch)
   useEffect(() => {
     const companyId = company?.id;
-    
+
     // If company changed, cleanup previous listeners
     if (currentCompanyRef.current && currentCompanyRef.current !== companyId) {
       console.log(`Account switched from ${currentCompanyRef.current} to ${companyId}, cleaning up...`);
@@ -128,7 +126,7 @@ export const useFirebaseSync = () => {
       // Clear local data for account switch
       usePondStore.setState({ ponds: [], cycles: [], harvestRecords: [] });
     }
-    
+
     currentCompanyRef.current = companyId || null;
   }, [company?.id]);
 
@@ -162,10 +160,7 @@ export const useFirebaseSync = () => {
       const newUnsubscribeCallbacks: (() => void)[] = [];
 
       // Listen to ponds collection
-      const cyclesQuery = query(
-        collection(db, 'companies', company.id, 'cycles'),
-        orderBy('createdAt', 'asc')
-      );
+      const cyclesQuery = query(collection(db, 'companies', company.id, 'cycles'));
 
       const unsubscribeCycles = onSnapshot(cyclesQuery,
         (snapshot) => {
@@ -186,6 +181,19 @@ export const useFirebaseSync = () => {
                 createdBy: data.createdBy,
                 updatedBy: data.updatedBy,
               });
+            });
+            serverCycles.sort((a, b) => {
+              const getTime = (cycle: FarmCycle) => {
+                const createdAt = cycle.createdAt?.toDate?.() || (cycle.createdAt?.seconds ? new Date(cycle.createdAt.seconds * 1000) : undefined);
+                return new Date(
+                  createdAt ||
+                  cycle.plannedStartDate ||
+                  cycle.stockingStartDate ||
+                  cycle.closedAt ||
+                  0
+                ).getTime();
+              };
+              return getTime(a) - getTime(b);
             });
             usePondStore.setState({ cycles: serverCycles });
           } catch (error) {
@@ -303,32 +311,14 @@ export const useFirebaseSync = () => {
     }
   }, [company?.id]);
 
-  // Add pending change to queue
-  const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>) => {
-    const pendingChange: PendingChange = {
-      ...change,
-      timestamp: Date.now()
-    };
-    
-    setPendingChanges(prev => [...prev, pendingChange]);
-    setSyncStatus(prev => ({ ...prev, pendingChanges: prev.pendingChanges + 1 }));
-    
-    if (syncStatus.isOnline) {
-      setTimeout(() => syncPendingChanges(), 500);
-    }
-  }, [syncStatus.isOnline]);
-
-  // Sync pending changes to Firebase
-  const syncPendingChanges = useCallback(async () => {
-    if (!company?.id || !user || pendingChanges.length === 0 || syncStatus.isSyncing) return;
-
-    setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
+  const commitChanges = useCallback(async (changes: PendingChange[]): Promise<string[]> => {
+    if (!company?.id || !user || changes.length === 0) return [];
 
     try {
       const batch = writeBatch(db);
       const processedChanges: string[] = [];
 
-      for (const change of pendingChanges) {
+      for (const change of changes) {
         try {
           if (change.type === 'pond') {
             const pondRef = doc(db, 'companies', company.id, 'ponds', change.data.id);
@@ -392,29 +382,6 @@ export const useFirebaseSync = () => {
               
               if (change.action === 'create') {
                 samplings.push(change.data);
-                
-                // Inventory Deduction Logic
-                const feedAmount = change.data.feed || parseFloat(change.data.feedData?.totalDailyFeed || '0');
-                const inventoryFeedId = change.data.feedData?.inventoryFeedId;
-                
-                if (inventoryFeedId && feedAmount > 0) {
-                  const feedRef = doc(db, 'companies', company.id, 'feeds', inventoryFeedId);
-                  batch.update(feedRef, {
-                    totalStock: increment(-feedAmount),
-                    usageHistory: arrayUnion({
-                      id: `usage-m-${Date.now()}`,
-                      date: change.data.date,
-                      quantity: feedAmount,
-                      pondId: change.pondId,
-                      cycleId: change.data.cycleId || pondData.cycleId,
-                      cycleName: change.data.cycleName || pondData.cycleName,
-                      pondCycleId: change.data.pondCycleId || pondData.pondCycleId || change.pondId,
-                      notes: `Mobile Sampling record`,
-                      createdAt: serverTimestamp()
-                    }),
-                    lastUpdated: serverTimestamp()
-                  });
-                }
               } else if (change.action === 'update' && change.samplingId) {
                 const index = samplings.findIndex(s => s.id === change.samplingId);
                 if (index >= 0) {
@@ -438,20 +405,64 @@ export const useFirebaseSync = () => {
         }
       }
 
+      if (processedChanges.length > 0) await batch.commit();
+      return processedChanges;
+    } catch (error) {
+      console.error('Error syncing changes:', error);
+      throw error;
+    }
+  }, [company?.id, user]);
+
+  // Add pending change to queue
+  const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>) => {
+    const pendingChange: PendingChange = {
+      ...change,
+      timestamp: Date.now()
+    };
+
+    setPendingChanges(prev => [...prev, pendingChange]);
+    setSyncStatus(prev => ({ ...prev, pendingChanges: prev.pendingChanges + 1 }));
+
+    commitChanges([pendingChange])
+      .then((processedChanges) => {
+        if (processedChanges.length === 0) return;
+        console.log(`Synced ${processedChanges.length} changes to server`);
+        setPendingChanges(prev => prev.filter(c => !processedChanges.includes(c.id)));
+        setSyncStatus(prev => ({
+          ...prev,
+          pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
+          lastSync: new Date(),
+          error: undefined,
+        }));
+      })
+      .catch(() => {
+        setSyncStatus(prev => ({
+          ...prev,
+          error: 'Sync failed. Please try again.',
+        }));
+      });
+  }, [commitChanges]);
+
+  // Sync pending changes to Firebase
+  const syncPendingChanges = useCallback(async () => {
+    if (!company?.id || !user || pendingChanges.length === 0 || syncStatus.isSyncing) return;
+
+    setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
+
+    try {
+      const processedChanges = await commitChanges(pendingChanges);
       if (processedChanges.length > 0) {
-        await batch.commit();
         console.log(`Synced ${processedChanges.length} changes to server`);
       }
       
       setPendingChanges(prev => prev.filter(c => !processedChanges.includes(c.id)));
       setSyncStatus(prev => ({ 
         ...prev, 
-        pendingChanges: prev.pendingChanges - processedChanges.length,
+        pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
         lastSync: new Date()
       }));
       
-    } catch (error) {
-      console.error('Error syncing changes:', error);
+    } catch {
       setSyncStatus(prev => ({ 
         ...prev, 
         error: 'Sync failed. Please try again.' 
@@ -459,7 +470,7 @@ export const useFirebaseSync = () => {
     } finally {
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
-  }, [company?.id, user, pendingChanges, syncStatus.isSyncing]);
+  }, [commitChanges, company?.id, user, pendingChanges, syncStatus.isSyncing]);
 
   // Sync methods
   const syncPond = useCallback((action: 'create' | 'update' | 'delete', pond: Pond) => {

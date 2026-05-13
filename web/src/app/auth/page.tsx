@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { LogIn, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ROUTES } from '@/config/routes';
 
@@ -17,6 +17,8 @@ export default function AuthPage() {
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('token') || undefined;
 
   const { signIn, resetPassword, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
 
@@ -43,7 +45,7 @@ export default function AuthPage() {
     setSuccess('');
     
     try {
-      await signIn(email, password);
+      await signIn(email, password, true, inviteToken);
       // Let the layouts handle redirection based on user state
       router.push(ROUTES.dashboard);
     } catch (err: unknown) {
@@ -296,7 +298,7 @@ export default function AuthPage() {
 
           <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             {t.auth.noAccount || "Don't have an account?"}{' '}
-            <Link href={ROUTES.join} style={{ font: 'inherit', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href={inviteToken ? `${ROUTES.join}?token=${encodeURIComponent(inviteToken)}` : ROUTES.join} style={{ font: 'inherit', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
               {t.auth.joinUs || 'Join Us'}
             </Link>
           </div>

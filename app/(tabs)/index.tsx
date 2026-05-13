@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
+import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, 
@@ -10,8 +11,10 @@ import {
 } from 'react-native';
 import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, getActiveFarmCycle, getPhysicalPondKey, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from '.././store/pondStore';
 import { useFirebaseSync } from '.././hooks/useFirebaseSync';
+import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
+import ShrimpIcon from '../components/icons/ShrimpIcon';
 
 interface FormData {
   pondName: string; 
@@ -27,15 +30,6 @@ interface FormData {
   feed: string; 
   samplingDate: Date;
 }
-
-const ShrimpIcon = ({ size = 16, color = "#dbe7df" }: { 
-  size?: number; 
-  color?: string 
-}) => (
-  <Text style={{ color, fontSize: size * 0.8, fontWeight: 'bold' }}>
-    🦐
-  </Text>
-);
 
 const DetailItem = ({ 
   iconName, 
@@ -55,7 +49,7 @@ const DetailItem = ({
   return (
     <View style={styles.detailItem}>
       {isShrimp ? (
-        <ShrimpIcon size={14} />
+        <ShrimpIcon size={14} color="#dce8f2" />
       ) : iconName ? (
         <Ionicons name={iconName as any} size={14} color="#dce8f2" />
       ) : (
@@ -275,7 +269,7 @@ export default function PondManagementScreen() {
 
     return {
       id: cycleId,
-      cycleName: firstPond.cycleName || 'Current Cycle',
+      cycleName: firstPond.cycleName || t.farmCycle.currentCycle,
       status: 'active',
       plannedStartDate: firstPond.cycleStartedAt || firstPond.docStart,
       stockingStartDate: cyclePonds
@@ -283,7 +277,7 @@ export default function PondManagementScreen() {
         .filter(Boolean)
         .sort()[0],
     };
-  }, [cycles.length, ponds]);
+  }, [cycles.length, ponds, t.farmCycle.currentCycle]);
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles) || inferredFarmCycle, [cycles, inferredFarmCycle]);
   const currentCyclePonds = useMemo(() => {
     if (!activeFarmCycle) return activePonds;
@@ -294,8 +288,8 @@ export default function PondManagementScreen() {
     );
   }, [activeFarmCycle, activePonds, ponds]);
   const activeCyclePonds = useMemo(() => currentCyclePonds.filter(isPondCycleActive), [currentCyclePonds]);
-  const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? 'Current Cycle' : 'No active cycle');
-  const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? 'active' : 'waiting');
+  const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? t.farmCycle.currentCycle : t.farmCycle.noActiveCycle);
+  const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? t.farmCycle.status.active : t.farmCycle.status.waiting);
   const visiblePonds = useMemo(
     () => ponds.filter((pond) => getPondCycleStatus(pond) === cycleFilter),
     [ponds, cycleFilter]
@@ -409,7 +403,7 @@ export default function PondManagementScreen() {
     }
 
     if (activePhysicalPondNames.has(getPhysicalPondKey(pondName))) {
-      Alert.alert(t.messages.error, `${pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+      Alert.alert(t.messages.error, t.farmCycle.activeDuplicateMessage.replace('{{pondName}}', pondName));
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -468,7 +462,7 @@ export default function PondManagementScreen() {
     }
 
     if (activePhysicalPondNames.has(getPhysicalPondKey(sourcePond.pondName))) {
-      Alert.alert(t.messages.error, `${sourcePond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+      Alert.alert(t.messages.error, t.farmCycle.activeDuplicateMessage.replace('{{pondName}}', sourcePond.pondName));
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -497,7 +491,7 @@ export default function PondManagementScreen() {
 
     closeModal();
     setCycleFilter('active');
-    Alert.alert(t.messages.success, `${sourcePond.pondName} started in the current cycle.`);
+    Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
   }, [activeFarmCycle, activePhysicalPondNames, addPond, canEditPonds, closeModal, convertPlToGrams, formData, startableEndedPonds, t]);
 
   const handleAddSamplingData = useCallback(() => {
@@ -552,23 +546,23 @@ export default function PondManagementScreen() {
     }
 
     if (!isPondCycleActive(pond)) {
-      Alert.alert('Cycle already ended', `${pond.pondName} is already in cycle history.`);
+      Alert.alert(t.farmCycle.pondAlreadyEndedTitle, t.farmCycle.pondAlreadyEndedMessage.replace('{{pondName}}', pond.pondName));
       return;
     }
 
     const endCycle = (reason: PondCycleEndReason) => {
       const today = new Date().toISOString().split('T')[0];
       endPondCycle(pond.id, today, reason, user?.uid);
-      Alert.alert(t.messages.success, `${pond.pondName} cycle ended and moved to history.`);
+      Alert.alert(t.messages.success, t.farmCycle.pondEndedSuccess.replace('{{pondName}}', pond.pondName));
     };
 
     Alert.alert(
-      'End Cycle',
-      `End the current cycle for "${pond.pondName}"? Sampling, water, feed, and harvest history will stay saved.`,
+      t.farmCycle.endCycleTitle,
+      t.farmCycle.endPondCycleMessage.replace('{{pondName}}', pond.pondName),
       [
         { text: t.actions.cancel, style: 'cancel' },
-        { text: 'Harvested', onPress: () => endCycle('harvested') },
-        { text: 'Reset/Other', onPress: () => endCycle('other') },
+        { text: t.farmCycle.reasons.harvested, onPress: () => endCycle('harvested') },
+        { text: t.farmCycle.reasons.resetOther, onPress: () => endCycle('other') },
       ]
     );
   }, [canEditPonds, endPondCycle, t, user?.uid]);
@@ -577,36 +571,94 @@ export default function PondManagementScreen() {
     if (!activeFarmCycle) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
-      Alert.alert(t.messages.error, 'Cycle name cannot be empty.');
+      Alert.alert(t.messages.error, t.farmCycle.cycleNameRequired);
       return;
     }
 
     updateFarmCycle(activeFarmCycle.id, { cycleName: nextName });
-    Alert.alert(t.messages.success, 'Cycle name updated.');
-  }, [activeFarmCycle, cycleNameDraft, t.messages.error, t.messages.success, updateFarmCycle]);
+    Alert.alert(t.messages.success, t.farmCycle.cycleNameUpdated);
+  }, [activeFarmCycle, cycleNameDraft, t, updateFarmCycle]);
+
+  const persistFarmCycleClose = useCallback(async (cycle: FarmCycle, cyclePonds: Pond[], closedAt: string) => {
+    if (!company?.id || !user?.uid) {
+      throw new Error('Missing company or user context.');
+    }
+
+    const batch = writeBatch(db);
+    const cycleRef = doc(db, 'companies', company.id, 'cycles', cycle.id);
+    batch.set(cycleRef, {
+      ...cycle,
+      status: 'closed',
+      closedAt,
+      stockingEndDate: cycle.stockingEndDate || closedAt,
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid,
+      createdAt: cycle.createdAt || serverTimestamp(),
+      createdBy: cycle.createdBy || user.uid,
+    }, { merge: true });
+
+    cyclePonds.forEach((pond) => {
+      const pondRef = doc(db, 'companies', company.id, 'ponds', pond.id);
+      batch.set(pondRef, {
+        cycleId: pond.cycleId || cycle.id,
+        cycleName: pond.cycleName || cycle.cycleName,
+        pondCycleId: pond.pondCycleId || pond.id,
+        cycleStatus: 'ended',
+        cycleEndedAt: closedAt,
+        cycleEndedBy: user.uid,
+        cycleEndReason: pond.cycleEndReason || 'harvested',
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      }, { merge: true });
+    });
+
+    await batch.commit();
+  }, [company?.id, user?.uid]);
 
   const handleCloseFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;
 
     const today = new Date().toISOString().split('T')[0];
+    const reportCycleId = activeFarmCycle.id;
+    const canViewCycleReport = ['owner', 'manager', 'admin'].includes(user?.role || '');
     Alert.alert(
-      'End Cycle',
-      `End "${activeFarmCycle.cycleName}" and move ${currentCyclePonds.length} pond${currentCyclePonds.length === 1 ? '' : 's'} to history? This means the whole cycle is finished and ready for summary/reporting.`,
+      t.farmCycle.endCycleTitle,
+      t.farmCycle.endFarmCycleMessage
+        .replace('{{cycleName}}', activeFarmCycle.cycleName)
+        .replace('{{pondCount}}', String(currentCyclePonds.length)),
       [
         { text: t.actions.cancel, style: 'cancel' },
         {
-          text: 'End Cycle',
+          text: t.farmCycle.endCycleAction,
           style: 'destructive',
-          onPress: () => {
-            closeFarmCycle(activeFarmCycle.id, today);
-            setCycleFilter('ended');
-            setCycleManagerExpanded(false);
-            Alert.alert(t.messages.success, `${activeFarmCycle.cycleName} ended.`);
+          onPress: async () => {
+            try {
+              await persistFarmCycleClose(activeFarmCycle, currentCyclePonds, today);
+              closeFarmCycle(activeFarmCycle.id, today);
+              setCycleFilter('ended');
+              setCycleManagerExpanded(false);
+              Alert.alert(
+                t.messages.success,
+                t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName),
+                canViewCycleReport
+                  ? [
+                      { text: t.farmCycle.later, style: 'cancel' },
+                      {
+                        text: t.farmCycle.viewCycleReport,
+                        onPress: () => router.push({ pathname: '/cycle-report', params: { cycleId: reportCycleId } }),
+                      },
+                    ]
+                  : [{ text: t.actions.confirm }]
+              );
+            } catch (error) {
+              console.error('Failed to persist farm cycle close:', error);
+              Alert.alert(t.messages.error, t.farmCycle.endCycleFailed);
+            }
           },
         },
       ]
     );
-  }, [activeFarmCycle, closeFarmCycle, currentCyclePonds.length, t]);
+  }, [activeFarmCycle, closeFarmCycle, currentCyclePonds, persistFarmCycleClose, router, t, user?.role]);
 
   const handleDateChange = useCallback((
     confirmed: boolean, 
@@ -847,10 +899,10 @@ export default function PondManagementScreen() {
   const renderCycleForm = useMemo(() => (
     <>
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Existing Pond</Text>
+        <Text style={styles.inputLabel}>{t.farmCycle.existingPond}</Text>
         {startableEndedPonds.length === 0 ? (
           <Text style={styles.inputHint}>
-            No ended ponds are available. End a pond cycle first, then start the next cycle from that pond.
+            {t.farmCycle.noEndedPondsAvailable}
           </Text>
         ) : (
           <ScrollView
@@ -902,7 +954,7 @@ export default function PondManagementScreen() {
         onChangeText={(value) => updateForm('plValue', value)}
         placeholder={t.home.plHint}
         keyboardType="numeric"
-        hint="This starts a new crop in an existing physical pond."
+        hint={t.farmCycle.startCycleHint}
       />
     </>
   ), [formData, openDatePicker, startableEndedPonds, t, updateForm]);
@@ -920,14 +972,16 @@ export default function PondManagementScreen() {
             activeOpacity={0.8}
           >
             <View>
-              <Text style={styles.cycleEyebrow}>Current Cycle</Text>
+              <Text style={styles.cycleEyebrow}>{t.farmCycle.currentCycle}</Text>
               <Text style={styles.cycleTitle}>
                 {currentCycleTitle}
               </Text>
               <Text style={styles.cycleCompactMeta}>
                 {currentCyclePonds.length > 0
-                  ? `${currentCyclePonds.length} pond${currentCyclePonds.length === 1 ? '' : 's'} included • ${activeCyclePonds.length} active`
-                  : `Add a pond to create Cycle ${cycles.length + 1}`}
+                  ? t.farmCycle.cycleMeta
+                    .replace('{{pondCount}}', String(currentCyclePonds.length))
+                    .replace('{{activeCount}}', String(activeCyclePonds.length))
+                  : t.farmCycle.addPondToCreateCycle.replace('{{cycleNumber}}', String(cycles.length + 1))}
               </Text>
             </View>
             <View style={styles.cycleHeaderRight}>
@@ -952,13 +1006,13 @@ export default function PondManagementScreen() {
               <View style={styles.cycleStatsRow}>
                 <View style={styles.cycleStat}>
                   <Text style={styles.cycleStatValue}>{currentCyclePonds.length}</Text>
-                  <Text style={styles.cycleStatLabel}>Ponds</Text>
+                  <Text style={styles.cycleStatLabel}>{t.farmCycle.ponds}</Text>
                 </View>
                 <View style={styles.cycleStat}>
                   <Text style={styles.cycleStatValue}>
                     {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || currentCyclePonds[0]?.docStart || '-'}
                   </Text>
-                  <Text style={styles.cycleStatLabel}>Stocking start</Text>
+                  <Text style={styles.cycleStatLabel}>{t.farmCycle.stockingStart}</Text>
                 </View>
               </View>
 
@@ -967,12 +1021,12 @@ export default function PondManagementScreen() {
                   <TextInput
                     value={cycleNameDraft}
                     onChangeText={setCycleNameDraft}
-                    placeholder="Cycle name"
+                    placeholder={t.farmCycle.cycleName}
                     placeholderTextColor="#6b8aa0"
                     style={styles.cycleNameInput}
                   />
                   <TouchableOpacity style={styles.cycleSmallButton} onPress={handleRenameFarmCycle}>
-                    <Text style={styles.cycleSmallButtonText}>Rename</Text>
+                    <Text style={styles.cycleSmallButtonText}>{t.farmCycle.rename}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -999,13 +1053,13 @@ export default function PondManagementScreen() {
               {canEditPonds && activeFarmCycle && (
                 <TouchableOpacity style={styles.closeFarmCycleButton} onPress={handleCloseFarmCycle}>
                   <Ionicons name="lock-closed-outline" size={18} color="#fff" />
-                  <Text style={styles.closeFarmCycleText}>End Cycle</Text>
+                  <Text style={styles.closeFarmCycleText}>{t.farmCycle.endCycleAction}</Text>
                 </TouchableOpacity>
               )}
             </>
           ) : cycleManagerExpanded ? (
             <Text style={styles.cycleEmptyText}>
-              Add a pond to create Cycle {cycles.length + 1}. New ponds will join the active cycle until it is ended.
+              {t.farmCycle.emptyTrackerMessage.replace('{{cycleNumber}}', String(cycles.length + 1))}
             </Text>
           ) : null}
         </View>
@@ -1015,13 +1069,13 @@ export default function PondManagementScreen() {
             style={[styles.cycleFilterButton, cycleFilter === 'active' && styles.cycleFilterButtonActive]}
             onPress={() => setCycleFilter('active')}
           >
-            <Text style={[styles.cycleFilterText, cycleFilter === 'active' && styles.cycleFilterTextActive]}>Active</Text>
+            <Text style={[styles.cycleFilterText, cycleFilter === 'active' && styles.cycleFilterTextActive]}>{t.farmCycle.filterActive}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.cycleFilterButton, cycleFilter === 'ended' && styles.cycleFilterButtonActive]}
             onPress={() => setCycleFilter('ended')}
           >
-            <Text style={[styles.cycleFilterText, cycleFilter === 'ended' && styles.cycleFilterTextActive]}>Ended</Text>
+            <Text style={[styles.cycleFilterText, cycleFilter === 'ended' && styles.cycleFilterTextActive]}>{t.farmCycle.filterEnded}</Text>
           </TouchableOpacity>
         </View>
         <FlatList 
@@ -1071,7 +1125,7 @@ export default function PondManagementScreen() {
                   onPress={() => openModal('cycle')}
                 >
                   <Ionicons name="repeat-outline" size={24} color="#0d2137" />
-                  <Text style={styles.menuOptionText}>Add Cycle</Text>
+                  <Text style={styles.menuOptionText}>{t.farmCycle.addCycle}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity 
@@ -1108,7 +1162,7 @@ export default function PondManagementScreen() {
                   {modalType === 'pond'
                     ? t.home.addNewPond
                     : modalType === 'cycle'
-                      ? 'Add Cycle'
+                      ? t.farmCycle.addCycle
                       : t.home.addSamplingData}
                 </Text>
                 <TouchableOpacity 

@@ -20,7 +20,8 @@ import {
   ChevronRight,
   Zap,
   Layers,
-  RefreshCcwDot
+  RefreshCcwDot,
+  Shrimp
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -107,7 +108,7 @@ export default function LandingPage() {
                         </div>
                       </div>
                       <div className="app-pond-item">
-                        <span className="icon" style={{ fontSize: '0.8rem' }}>🦐</span>
+                        <Shrimp size={14} className="icon" />
                         <div className="col">
                           <span className="lbl">Population</span>
                           <span className="val">85,200</span>
@@ -168,7 +169,7 @@ export default function LandingPage() {
                         </div>
                       </div>
                       <div className="app-pond-item">
-                        <span className="icon" style={{ fontSize: '0.8rem' }}>🦐</span>
+                        <Shrimp size={14} className="icon" />
                         <div className="col">
                           <span className="lbl">Population</span>
                           <span className="val">98,100</span>

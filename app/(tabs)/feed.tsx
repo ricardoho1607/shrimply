@@ -8,7 +8,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePondStore, isPondCycleActive } from "../store/pondStore";
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { 
   collection, 
   query, 
@@ -16,6 +15,7 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { useFeedAdditiveStore } from "../store/feedAdditiveStore";
 
 const initialValues = {
   ancoPercentage: "", feed1: "", feed2: "", feed3: "", feed4: "", feed5: "",
@@ -30,6 +30,7 @@ const Input = React.memo(({ label, value, onChange, placeholder = "" }: any) => 
       onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#6b8aa0" />
   </View>
 ));
+Input.displayName = 'Input';
 
 const AncoGrid = React.memo(({ value, onChange, getColor }: any) => (
   <View style={styles.ancoGridContainer}>
@@ -47,6 +48,7 @@ const AncoGrid = React.memo(({ value, onChange, getColor }: any) => (
     ))}
   </View>
 ));
+AncoGrid.displayName = 'AncoGrid';
 
 const Parameter = React.memo(({ icon, label, value, isAnco = false, a1, a2, getColor }: any) => (
   <View style={styles.parameterItem}>
@@ -63,6 +65,7 @@ const Parameter = React.memo(({ icon, label, value, isAnco = false, a1, a2, getC
     )}
   </View>
 ));
+Parameter.displayName = 'Parameter';
 
 const FeedSection = React.memo(({ num, values, setValues, calculateAncoGrams, getAncoValueColor, t }: any) => {
   const feedKey = `feed${num}` as keyof typeof values;
@@ -107,12 +110,14 @@ const FeedSection = React.memo(({ num, values, setValues, calculateAncoGrams, ge
     </View>
   );
 });
+FeedSection.displayName = 'FeedSection';
 
 export default function FeedManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user } = useAuth();
   const { ponds, addFeedData } = usePondStore();
+  const { setCurrentCompanyId, adjustFeedUsage } = useFeedAdditiveStore();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
 
@@ -133,13 +138,14 @@ export default function FeedManagementScreen() {
 
   React.useEffect(() => {
     if (user?.companyId) {
+      setCurrentCompanyId(user.companyId);
       const q = query(collection(db, 'companies', user.companyId, 'feeds'), orderBy('feedName', 'asc'));
       const unsub = onSnapshot(q, (snapshot) => {
         setInventoryFeeds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       });
       return unsub;
     }
-  }, [user?.companyId]);
+  }, [setCurrentCompanyId, user?.companyId]);
 
   const calculateAncoGrams = (feedKg: string, ancoPercent: string) => 
     (((parseFloat(feedKg) || 0) * 1000 * (parseFloat(ancoPercent) || 0)) / 100).toFixed(0);
@@ -169,7 +175,7 @@ export default function FeedManagementScreen() {
     });
   }, [activePonds]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -193,11 +199,22 @@ export default function FeedManagementScreen() {
       return;
     }
 
+    const totalDailyFeed = parseFloat(calculateTotalDailyFeed()) || 0;
+    const today = new Date().toISOString().split('T')[0];
+    const todayRecord = getTodayFeedRecord(pond);
+    const previousInventoryFeedId = todayRecord?.feedData?.inventoryFeedId || '';
+    const getFeedScreenUsageTotal = (feedId: string) => {
+      const inventoryFeed = inventoryFeeds.find((feed) => feed.id === feedId);
+      return (inventoryFeed?.usageHistory || [])
+      .filter((usage: any) => usage.date === today && usage.pondId === pond.id && usage.notes === 'Feed screen record')
+      .reduce((sum: number, usage: any) => sum + (Number(usage.quantity) || 0), 0);
+    };
+
     const feedData: any = {
       ancoPercentage: values.ancoPercentage.trim(),
       feed1: values.feed1.trim(), feed2: values.feed2.trim(), feed3: values.feed3.trim(),
       feed4: values.feed4.trim(), feed5: values.feed5.trim(),
-      totalDailyFeed: calculateTotalDailyFeed(),
+      totalDailyFeed: totalDailyFeed.toFixed(2),
       inventoryFeedId: inventoryFeedId || null,
     };
 
@@ -206,11 +223,33 @@ export default function FeedManagementScreen() {
       if (values[key]) feedData[key] = values[key];
     }
 
-    addFeedData(pond.id, feedData);
-    setValues(initialValues);
-    setSelectedPond(null);
-    setInventoryFeedId('');
-    setIsModalVisible(false);
+    try {
+      if (previousInventoryFeedId && previousInventoryFeedId !== inventoryFeedId) {
+        const previousDeducted = getFeedScreenUsageTotal(previousInventoryFeedId);
+        if (previousDeducted !== 0) {
+          await adjustFeedUsage(previousInventoryFeedId, -previousDeducted, pond.id, 'Feed screen record');
+        }
+      }
+
+      if (inventoryFeedId) {
+        const alreadyDeductedToday = getFeedScreenUsageTotal(inventoryFeedId);
+        const usageDelta = totalDailyFeed - alreadyDeductedToday;
+        if (usageDelta !== 0) {
+          await adjustFeedUsage(inventoryFeedId, usageDelta, pond.id, 'Feed screen record');
+        }
+      }
+
+      addFeedData(pond.id, feedData);
+      setValues(initialValues);
+      setSelectedPond(null);
+      setInventoryFeedId('');
+      setIsModalVisible(false);
+    } catch (error: any) {
+      console.error('Failed to save feed data:', error);
+      Alert.alert(t.messages?.error || 'Error', error?.message || 'Failed to save feed data');
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
   };
 
   const handlePondSelection = (pondName: string) => {

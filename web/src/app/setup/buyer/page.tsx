@@ -47,17 +47,23 @@ export default function BuyerSetupPage() {
         contactPhone: formData.phone,
         ownerId: user.uid,
         teamMembers: [user.uid],
+        pendingInvites: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         isPublicProfile: true
       };
 
       await setDoc(companyRef, companyData);
-      
       await updateDoc(doc(db, 'users', user.uid), {
-        ...formData,
         companyId: user.uid,
         hasCompletedSetup: true,
+        lastActive: serverTimestamp(),
+      });
+      await updateDoc(doc(db, 'users', user.uid), {
+        businessName: formData.businessName,
+        phone: formData.phone,
+        region: formData.region,
+        interests: formData.interests,
         lastActive: serverTimestamp(),
       });
       

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ROUTES } from '@/config/routes';
 
 export default function JoinPage() {
@@ -16,6 +16,8 @@ export default function JoinPage() {
   const [error, setError] = useState('');
   const { signUp, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('token') || undefined;
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -45,8 +47,8 @@ export default function JoinPage() {
     }
     
     try {
-      await signUp(email, password, name);
-      router.push(ROUTES.roleSelection);
+      await signUp(email, password, name, inviteToken);
+      router.push(inviteToken ? ROUTES.dashboard : ROUTES.roleSelection);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
@@ -275,7 +277,7 @@ export default function JoinPage() {
 
           <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
             Already have an account?{' '}
-            <Link href={ROUTES.auth} style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href={inviteToken ? `${ROUTES.auth}?token=${encodeURIComponent(inviteToken)}` : ROUTES.auth} style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
               Log in
             </Link>
           </div>

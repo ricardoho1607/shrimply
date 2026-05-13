@@ -7,9 +7,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
-import { doc, setDoc, updateDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as Location from 'expo-location';
+import { useLanguage } from '../context/LanguageContext';
 
 interface FormData {
   companyName: string;
@@ -30,12 +31,13 @@ interface LocationCoordinates {
 
 export default function BuyerSetupScreen() {
   const { user, refreshUserData } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
     companyName: '',
     location: '',
     contactPhone: '',
-    businessType: 'Wholesale Distributor',
+    businessType: t.buyerSetup.businessTypeDefault,
   });
   const [locationCoordinates, setLocationCoordinates] = useState<LocationCoordinates | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
@@ -51,7 +53,7 @@ export default function BuyerSetupScreen() {
       
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert('Permission Denied', 'Please allow location access to use this feature.');
+        Alert.alert(t.buyerSetup.permissionDenied, t.buyerSetup.allowLocationAccess);
         setGettingLocation(false);
         return;
       }
@@ -83,11 +85,11 @@ export default function BuyerSetupScreen() {
           country: address.country || '',
         });
 
-        Alert.alert('Success', 'Location detected successfully!');
+        Alert.alert(t.buyerSetup.success, t.buyerSetup.locationDetected);
       }
     } catch (error) {
       console.error('Error getting location:', error);
-      Alert.alert('Error', 'Failed to get your current location. Please enter it manually.');
+      Alert.alert(t.buyerSetup.error, t.buyerSetup.locationFailed);
     } finally {
       setGettingLocation(false);
     }
@@ -97,15 +99,15 @@ export default function BuyerSetupScreen() {
     const { companyName, location } = formData;
 
     if (!companyName.trim() || companyName.trim().length < 2) {
-      Alert.alert('Validation Error', 'Company name must be at least 2 characters');
+      Alert.alert(t.buyerSetup.validationError, t.buyerSetup.companyNameTooShort);
       return;
     }
     if (!location.trim()) {
-      Alert.alert('Validation Error', 'Location is required');
+      Alert.alert(t.buyerSetup.validationError, t.buyerSetup.locationRequired);
       return;
     }
     if (!user?.uid) {
-      Alert.alert('Error', 'User not authenticated. Please sign in again.');
+      Alert.alert(t.buyerSetup.error, t.buyerSetup.userNotAuthenticated);
       return;
     }
 
@@ -131,15 +133,15 @@ export default function BuyerSetupScreen() {
         // If no coordinates, ask user if they want to add them
         const shouldGetLocation = await new Promise<boolean>((resolve) => {
           Alert.alert(
-            'Add Location Coordinates?',
-            'For better marketplace filtering, we recommend adding your location coordinates. Would you like to use your current location?',
+            t.buyerSetup.addCoordinatesTitle,
+            t.buyerSetup.addCoordinatesMessage,
             [
               {
-                text: 'Use Current Location',
+                text: t.buyerSetup.useCurrentLocation,
                 onPress: () => resolve(true),
               },
               {
-                text: 'Skip for Now',
+                text: t.buyerSetup.skipForNow,
                 onPress: () => resolve(false),
               },
             ]
@@ -172,7 +174,7 @@ export default function BuyerSetupScreen() {
                   country: address?.country || '',
                 };
                 country = address?.country || '';
-              } catch (geocodeError) {
+              } catch {
                 // If geocoding fails, just use coordinates
                 locationData = {
                   address: formData.location,
@@ -221,7 +223,7 @@ export default function BuyerSetupScreen() {
         primaryLocation: cleanedLocationData,
         country: country || '',
         contactPhone: formData.contactPhone.trim() || '',
-        businessType: formData.businessType.trim() || 'Shrimp Buyer',
+        businessType: formData.businessType.trim() || t.buyerSetup.fallbackBusinessType,
         farmType: 'buyer',
         businessSize: 'medium',
         description: '',
@@ -242,19 +244,19 @@ export default function BuyerSetupScreen() {
       await updateDoc(doc(db, 'users', user.uid), {
         companyId: user.uid,
         hasCompletedSetup: true,
-        updatedAt: new Date().toISOString(),
+        lastActive: serverTimestamp(),
       });
 
       if (refreshUserData) await refreshUserData();
 
       Alert.alert(
-        'Setup Complete!',
-        'Your buyer profile has been created successfully. You can now start monitoring suppliers!',
-        [{ text: 'Get Started', onPress: () => router.replace('/(tabs)/indexbuyer') }]
+        t.buyerSetup.setupCompleteTitle,
+        t.buyerSetup.setupCompleteMessage,
+        [{ text: t.buyerSetup.getStarted, onPress: () => router.replace('/(tabs)/indexbuyer') }]
       );
     } catch (error) {
       console.error('Error setting up buyer profile:', error);
-      Alert.alert('Setup Failed', 'Failed to set up buyer profile. Please try again.');
+      Alert.alert(t.buyerSetup.setupFailedTitle, t.buyerSetup.setupFailedMessage);
     } finally {
       setIsLoading(false);
     }
@@ -283,7 +285,7 @@ export default function BuyerSetupScreen() {
             ) : (
               <>
                 <Ionicons name="location" size={16} color="#27AE60" />
-                <Text style={styles.locationButtonText}>Use Current</Text>
+                <Text style={styles.locationButtonText}>{t.buyerSetup.useCurrent}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -308,7 +310,7 @@ export default function BuyerSetupScreen() {
         <View style={styles.coordinatesInfo}>
           <Ionicons name="checkmark-circle" size={14} color="#27ae60" />
           <Text style={styles.coordinatesText}>
-            Coordinates: {locationCoordinates.latitude.toFixed(6)}, {locationCoordinates.longitude.toFixed(6)}
+            {t.buyerSetup.coordinates}: {locationCoordinates.latitude.toFixed(6)}, {locationCoordinates.longitude.toFixed(6)}
           </Text>
         </View>
       )}
@@ -328,33 +330,31 @@ export default function BuyerSetupScreen() {
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
           <Ionicons name="arrow-back" size={24} color="#315f57" />
-          <Text style={styles.backButtonText}>Back</Text>
+          <Text style={styles.backButtonText}>{t.buyerSetup.back}</Text>
         </TouchableOpacity>
 
         <View style={styles.header}>
           <View style={styles.headerIcon}>
             <Ionicons name="cart-outline" size={32} color="#27AE60" />
           </View>
-          <Text style={styles.title}>Set Up Your Buyer Profile</Text>
-          <Text style={styles.subtitle}>Tell us about your business to start monitoring suppliers</Text>
+          <Text style={styles.title}>{t.buyerSetup.title}</Text>
+          <Text style={styles.subtitle}>{t.buyerSetup.subtitle}</Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Company Information</Text>
-          <Text style={styles.sectionDescription}>This information helps suppliers identify and contact you</Text>
-          {renderInput('Company Name', 'companyName', 'e.g., Pacific Seafood Trading', true)}
-          {renderInput('Location', 'location', 'e.g., Jakarta, Indonesia', true)}
-          {renderInput('Contact Phone', 'contactPhone', 'Your business contact number', false, 'phone-pad')}
-          {renderInput('Business Type', 'businessType', 'e.g., Wholesale Distributor, Restaurant Chain')}
+          <Text style={styles.sectionTitle}>{t.buyerSetup.companyInformation}</Text>
+          <Text style={styles.sectionDescription}>{t.buyerSetup.sectionDescription}</Text>
+          {renderInput(t.buyerSetup.companyName, 'companyName', t.buyerSetup.companyNamePlaceholder, true)}
+          {renderInput(t.buyerSetup.location, 'location', t.buyerSetup.locationPlaceholder, true)}
+          {renderInput(t.buyerSetup.contactPhone, 'contactPhone', t.buyerSetup.contactPhonePlaceholder, false, 'phone-pad')}
+          {renderInput(t.buyerSetup.businessType, 'businessType', t.buyerSetup.businessTypePlaceholder)}
         </View>
 
         <View style={styles.infoBox}>
           <Ionicons name="information-circle-outline" size={24} color="#315f57" />
           <View style={styles.infoTextContainer}>
-            <Text style={styles.infoTitle}>About Buyer Accounts</Text>
-            <Text style={styles.infoText}>
-              As a buyer, you can monitor supplier farms in real-time, track shrimp availability, and communicate directly with suppliers.
-            </Text>
+            <Text style={styles.infoTitle}>{t.buyerSetup.aboutTitle}</Text>
+            <Text style={styles.infoText}>{t.buyerSetup.aboutText}</Text>
           </View>
         </View>
 
@@ -369,12 +369,12 @@ export default function BuyerSetupScreen() {
           ) : (
             <>
               <Ionicons name="checkmark-circle-outline" size={20} color="#fff" />
-              <Text style={styles.setupButtonText}>Complete Setup</Text>
+              <Text style={styles.setupButtonText}>{t.buyerSetup.completeSetup}</Text>
             </>
           )}
         </TouchableOpacity>
 
-        <Text style={styles.disclaimer}>You can modify these settings anytime from your profile</Text>
+        <Text style={styles.disclaimer}>{t.buyerSetup.disclaimer}</Text>
       </ScrollView>
     </SafeAreaView>
   );

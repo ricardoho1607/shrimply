@@ -19,7 +19,8 @@ import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
   arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app, auth, db } from '@/lib/firebase';
 
 interface User {
   id: string;
@@ -55,8 +56,8 @@ interface AuthContextType {
   user: User | null;
   company: Company | null;
   loading: boolean;
-  signIn: (email: string, password: string, keepMeSignedIn?: boolean) => Promise<void>;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
+  signIn: (email: string, password: string, keepMeSignedIn?: boolean, inviteToken?: string) => Promise<void>;
+  signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
@@ -68,6 +69,7 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const firebaseFunctions = getFunctions(app);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -145,18 +147,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [setupCompanyListener]);
 
-  const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true) => {
+  const acceptInviteAfterAuth = async (inviteToken?: string) => {
+    if (!inviteToken) return;
+    const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await acceptCompanyInvite({ inviteToken });
+  };
+
+  const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true, inviteToken?: string) => {
     setLoading(true);
     try {
       const persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
       await signInWithEmailAndPassword(auth, email, password);
+      await acceptInviteAfterAuth(inviteToken);
     } finally {
       setLoading(false);
     }
   };
 
-  const signUp = async (email: string, password: string, name: string) => {
+  const signUp = async (email: string, password: string, name: string, inviteToken?: string) => {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -171,7 +180,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-      setUser(newUser);
+      await acceptInviteAfterAuth(inviteToken);
+      if (inviteToken) {
+        const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+        setUser(userDoc.exists() ? userDoc.data() as User : newUser);
+      } else {
+        setUser(newUser);
+      }
     } finally {
       setLoading(false);
     }

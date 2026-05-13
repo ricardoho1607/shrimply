@@ -3,7 +3,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Send, 
-  Sparkles, 
   Trash2, 
   Loader2, 
   Waves,
@@ -12,7 +11,8 @@ import {
   AlertCircle,
   ArrowRight,
   TrendingUp,
-  Zap
+  Zap,
+  Shrimp
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc } from 'firebase/firestore';
@@ -73,7 +73,7 @@ export default function OrsonAIPage() {
       const welcomeMsg: ChatMessage = {
         id: 'welcome',
         type: 'ai',
-        message: "🦐 Hello! I'm Orson, your AI aquaculture advisor. I've analyzed your farm data and I'm ready to help you optimize growth and prevent issues. What's on your mind today?",
+        message: "Hello! I'm Orson, your AI aquaculture advisor. I've analyzed your farm data and I'm ready to help you optimize growth and prevent issues. What's on your mind today?",
         timestamp: new Date()
       };
       
@@ -183,7 +183,7 @@ export default function OrsonAIPage() {
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   color: msg.type === 'user' ? '#FFF' : 'var(--primary)'
                 }}>
-                  {msg.type === 'user' ? 'U' : <Sparkles size={18} />}
+                  {msg.type === 'user' ? 'U' : <Shrimp size={18} />}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', alignItems: msg.type === 'user' ? 'flex-end' : 'flex-start' }}>
                   <div style={{

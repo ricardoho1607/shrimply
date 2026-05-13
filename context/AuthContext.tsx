@@ -19,8 +19,9 @@ import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
   arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc
 } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
-import { auth, db } from '../config/firebase';
+import firebaseApp, { auth, db } from '../config/firebase';
 import { LocationData } from '../app/services/googlePlacesService'
 import { useBuyerStore } from '../app/store/buyerStore';
 import { usePondStore } from '../app/store/pondStore';
@@ -163,6 +164,7 @@ export const useAuth = () => {
 };
 
 const generateInviteToken = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+const firebaseFunctions = getFunctions(firebaseApp);
 
 const convertStringToLocationData = (locationString: string): LocationData => ({
   address: locationString,
@@ -347,29 +349,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } catch (pError) {
         console.error('Error setting persistence:', pError);
       }
-      let inviteData: (PendingInvite & { companyId: string }) | null = null;
-      if (inviteToken) {
-        const invite = await checkInviteToken(inviteToken);
-        if (!invite || invite.email !== email || !invite.companyId) throw new Error('Invalid invitation token or email mismatch');
-        inviteData = invite as (PendingInvite & { companyId: string });
-      }
-
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const newUser: User = {
         id: userCredential.user.uid, uid: userCredential.user.uid, email,
         hasCompletedSetup: false, joinedDate: new Date().toISOString(), lastActive: new Date().toISOString()
       };
 
-      if (inviteData) {
-        newUser.companyId = inviteData.companyId;
-        newUser.role = inviteData.role;
-        newUser.invitedBy = inviteData.invitedBy;
-        newUser.inviteToken = inviteToken;
-        newUser.hasCompletedSetup = true;
-      }
-
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-      if (inviteToken && inviteData) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
+      if (inviteToken) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
     } finally {
       setLoading(false);
     }
@@ -377,24 +364,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const processInviteAfterAuth = async (userId: string, inviteToken: string) => {
     try {
-      const inviteData = await checkInviteToken(inviteToken);
-      if (!inviteData || !inviteData.companyId) throw new Error('Invalid or expired invitation');
-
-      await updateDoc(doc(db, 'users', userId), {
-        companyId: inviteData.companyId, role: inviteData.role,
-        invitedBy: inviteData.invitedBy, hasCompletedSetup: true, lastActive: serverTimestamp()
-      });
-
-      await updateDoc(doc(db, 'companies', inviteData.companyId), { teamMembers: arrayUnion(userId) });
-
-      const companyDoc = await getDoc(doc(db, 'companies', inviteData.companyId));
-      if (companyDoc.exists()) {
-        const companyData = companyDoc.data() as Company;
-        const updatedInvites = companyData.pendingInvites.map(invite =>
-          invite.inviteToken === inviteToken ? { ...invite, status: 'accepted' as const } : invite
-        );
-        await updateDoc(doc(db, 'companies', inviteData.companyId), { pendingInvites: updatedInvites });
-      }
+      if (auth.currentUser?.uid !== userId) throw new Error('Authenticated user mismatch');
+      const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+      await acceptCompanyInvite({ inviteToken });
+      await refreshUserData();
     } catch (error) {
       console.error('Error processing invite:', error);
       throw error;

@@ -203,6 +203,13 @@ function RootLayoutNav() {
         }}
       />
       <Stack.Screen
+        name="cycle-report"
+        options={{
+          presentation: 'card',
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
         name="companydetails"
         options={{
           presentation: 'card',

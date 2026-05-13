@@ -10,10 +10,6 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
-    function userCompanyId() {
-      return signedIn() && userDoc().data.companyId != null ? userDoc().data.companyId : '';
-    }
-
     function companyDoc(companyId) {
       return get(/databases/$(database)/documents/companies/$(companyId));
     }
@@ -41,8 +37,55 @@ service cloud.firestore {
       return !(key in data) || (data[key] is string && data[key].size() <= maxLength);
     }
 
+    function validOptionalNullableString(data, key, maxLength) {
+      return !(key in data) || data[key] == null || (data[key] is string && data[key].size() <= maxLength);
+    }
+
     function validOptionalBoolean(data, key) {
       return !(key in data) || data[key] is bool;
+    }
+
+    function validRoleValue(value) {
+      return value == null || value in ['owner', 'manager', 'technician', 'admin', 'buyer'];
+    }
+
+    function validStaffRoleValue(value) {
+      return value in ['manager', 'technician', 'admin'];
+    }
+
+    function currentUserRole() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? userDoc().data.role
+        : null;
+    }
+
+    function userBelongsToCompany(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().data.companyId == companyId;
+    }
+
+    function isCompanyManager(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && currentUserRole() in ['owner', 'manager', 'admin']
+          )
+        );
+    }
+
+    function isCompanyOperator(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && currentUserRole() in ['owner', 'manager', 'technician', 'admin']
+          )
+        );
     }
 
     function validUserPayload(data) {
@@ -51,8 +94,9 @@ service cloud.firestore {
         && validNonEmptyString(data.email)
         && validOptionalString(data, 'name', 120)
         && validOptionalString(data, 'phone', 40)
-        && validOptionalString(data, 'companyId', 160)
-        && validOptionalString(data, 'role', 40)
+        && validOptionalString(data, 'profileImage', 2000)
+        && validOptionalNullableString(data, 'companyId', 160)
+        && (!('role' in data) || validRoleValue(data.role))
         && validOptionalBoolean(data, 'hasCompletedSetup');
     }
 
@@ -76,7 +120,7 @@ service cloud.firestore {
         && data.userId == request.auth.uid
         && validOptionalString(data, 'userName', 120)
         && validOptionalString(data, 'userEmail', 200)
-        && validOptionalString(data, 'requestedRole', 40)
+        && validStaffRoleValue(data.requestedRole)
         && data.status == 'pending';
     }
 
@@ -105,9 +149,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'name',
             'phone',
-            'role',
-            'companyId',
-            'hasCompletedSetup',
+            'profileImage',
             'lastActive',
             'businessName',
             'region',
@@ -115,14 +157,29 @@ service cloud.firestore {
           ])
         )
         || (
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          request.auth.uid == userId
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['role', 'hasCompletedSetup', 'lastActive'])
+          && (!('companyId' in resource.data) || resource.data.companyId == null)
+          && (!('companyId' in request.resource.data) || request.resource.data.companyId == null)
+        )
+        || (
+          request.auth.uid == userId
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
           && isCompanyOwner(request.resource.data.companyId)
         )
         || (
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.companyId != null
+          && isCompanyOwner(request.resource.data.companyId)
+          && validStaffRoleValue(request.resource.data.role)
+        )
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
           && resource.data.companyId != null
           && isCompanyOwner(resource.data.companyId)
+          && request.resource.data.companyId == null
+          && request.resource.data.role == null
         )
       );
       allow delete: if false;
@@ -146,35 +203,53 @@ service cloud.firestore {
       allow update: if isCompanyMember(companyId)
         && validCompanyPayload(request.resource.data)
         && request.resource.data.ownerId == resource.data.ownerId
-        && request.resource.data.teamMembers.hasAll(resource.data.teamMembers);
+        && (
+          isCompanyOwner(companyId)
+          || (
+            isCompanyManager(companyId)
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny([
+              'ownerId',
+              'teamMembers',
+              'pendingInvites',
+              'isVerified'
+            ])
+          )
+        );
       allow delete: if isCompanyOwner(companyId);
 
       match /ponds/{pondId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
       }
 
       match /cycles/{cycleId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
       }
 
       match /harvestRecords/{harvestId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
       }
 
       match /feeds/{feedId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
       }
 
       match /additives/{additiveId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
       }
 
       match /expenses/{expenseId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyManager(companyId);
       }
 
       match /revenues/{revenueId} {
-        allow read, write: if isCompanyMember(companyId);
+        allow read: if isCompanyMember(companyId);
+        allow write: if isCompanyManager(companyId);
       }
 
       match /aiUsage/{usageDateId} {
@@ -203,17 +278,28 @@ service cloud.firestore {
     match /diseaseReports/{reportId} {
       allow read: if signedIn();
       allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
-      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow update, delete: if signedIn() && isCompanyManager(resource.data.companyId);
     }
 
     match /marketplace_listings/{listingId} {
       allow read: if signedIn();
       allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
-      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow update: if signedIn() && (
+        isCompanyMember(resource.data.companyId)
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
+          && resource.data.viewCount is int
+          && request.resource.data.viewCount == resource.data.viewCount + 1
+        )
+      );
+      allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
     }
 
     match /marketplace_responses/{responseId} {
-      allow read: if signedIn();
+      allow read: if signedIn() && (
+        isCompanyMember(resource.data.sellerId)
+        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+      );
       allow create: if signedIn() && isCompanyMember(request.resource.data.sellerId);
       allow update, delete: if signedIn() && (
         isCompanyMember(resource.data.sellerId)

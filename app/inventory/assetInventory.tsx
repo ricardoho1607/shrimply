@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { FlatList, Modal, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View, Alert, Image, Platform } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { useAssetStore, type Asset, type MaintenanceType } from '../store/assetStore';
@@ -23,7 +23,6 @@ const MAINTENANCE_TYPE_COLORS: Record<MaintenanceType, string> = {
 
 export default function AssetInventoryScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { company, user } = useAuth();
   const { t } = useLanguage();
   const store = useAssetStore();
@@ -44,6 +43,7 @@ export default function AssetInventoryScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
+  const [datePickerField, setDatePickerField] = useState<'purchaseDate' | 'expectedReturn' | 'nextMaintenance' | null>(null);
 
   useEffect(() => {
     if (company?.id) {
@@ -106,7 +106,31 @@ export default function AssetInventoryScreen() {
     setSelectedAsset(null);
     setScanned(false);
     setHasPermission(null);
+    setDatePickerField(null);
   };
+
+  const formatDateValue = (date: Date) => date.toISOString().split('T')[0];
+
+  const getDatePickerValue = (field: 'purchaseDate' | 'expectedReturn' | 'nextMaintenance') => {
+    const value = formData[field];
+    if (!value) return new Date();
+    const parsed = new Date(value);
+    return Number.isFinite(parsed.getTime()) ? parsed : new Date();
+  };
+
+  const renderDateField = (
+    label: string,
+    value: string,
+    field: 'purchaseDate' | 'expectedReturn' | 'nextMaintenance'
+  ) => (
+    <View style={styles.input}>
+      <Text style={styles.label}>{label}</Text>
+      <TouchableOpacity style={styles.dateButton} onPress={() => setDatePickerField(field)}>
+        <Text style={styles.dateButtonText}>{value || formatDateValue(new Date())}</Text>
+        <Ionicons name="calendar-outline" size={20} color="#315f57" />
+      </TouchableOpacity>
+    </View>
+  );
 
   const handleAddAsset = async () => {
     if (!formData.name) return Alert.alert(t.asset?.error || 'Error', t.asset?.assetNameRequired || 'Asset name is required');
@@ -191,7 +215,7 @@ export default function AssetInventoryScreen() {
         try {
           const nextDate = new Date(formData.nextMaintenance);
           if (!isNaN(nextDate.getTime())) maintenanceRecord.nextMaintenanceDue = nextDate;
-        } catch (e) {}
+        } catch {}
       }
 
       await store.addMaintenance(selectedAsset.id, maintenanceRecord);
@@ -708,10 +732,8 @@ export default function AssetInventoryScreen() {
                         ))}
                       </ScrollView>
                     </View>
-                    {renderFormField(t.asset?.purchaseDate || 'Purchase Date' + ' (YYYY-MM-DD)', "2024-01-15", 
-                      formData.purchaseDate, v => setFormData(p => ({ ...p, purchaseDate: v })))}
-                    {renderFormField(t.asset?.nextMaintenanceDue || 'Next Maintenance Due' + ' (YYYY-MM-DD)', "2024-12-31", 
-                      formData.nextMaintenance, v => setFormData(p => ({ ...p, nextMaintenance: v })))}
+                    {renderDateField(t.asset?.purchaseDate || 'Purchase Date', formData.purchaseDate, 'purchaseDate')}
+                    {renderDateField(t.asset?.nextMaintenanceDue || 'Next Maintenance Due', formData.nextMaintenance, 'nextMaintenance')}
                     <TouchableOpacity style={styles.photoBtn} onPress={pickImage}>
                       <Ionicons name="camera" size={20} color="#315f57" />
                       <Text style={styles.photoBtnText}>{t.asset?.addPhotos || 'Add Photos'} ({photos.length})</Text>
@@ -736,8 +758,7 @@ export default function AssetInventoryScreen() {
                       formData.to, v => setFormData(p => ({ ...p, to: v })))}
                     {renderFormField(t.asset?.purpose || 'Purpose', t.asset?.purposePlaceholder || "Why is this asset being transferred?", 
                       formData.purpose, v => setFormData(p => ({ ...p, purpose: v })))}
-                    {renderFormField(t.asset?.expectedReturnDate || 'Expected Return Date' + ' (YYYY-MM-DD)', "2024-12-31", 
-                      formData.expectedReturn, v => setFormData(p => ({ ...p, expectedReturn: v })))}
+                    {renderDateField(t.asset?.expectedReturnDate || 'Expected Return Date', formData.expectedReturn, 'expectedReturn')}
                     {renderFormField(t.asset?.notes || 'Notes', t.asset?.notesPlaceholder || "Additional notes", 
                       formData.notes, v => setFormData(p => ({ ...p, notes: v })), { multiline: true, numberOfLines: 3 })}
                   </>
@@ -808,8 +829,7 @@ export default function AssetInventoryScreen() {
                         ))}
                       </ScrollView>
                     </View>
-                    {renderFormField(t.asset?.nextMaintenanceDue || 'Next Maintenance Due' + ' (YYYY-MM-DD)', "2024-12-31", 
-                      formData.nextMaintenance, v => setFormData(p => ({ ...p, nextMaintenance: v })))}
+                    {renderDateField(t.asset?.nextMaintenanceDue || 'Next Maintenance Due', formData.nextMaintenance, 'nextMaintenance')}
                     {renderFormField(t.asset?.additionalNotes || 'Additional Notes', t.asset?.additionalNotesPlaceholder || "Any other details...", 
                       formData.notes, v => setFormData(p => ({ ...p, notes: v })), { multiline: true, numberOfLines: 2 })}
                     <TouchableOpacity style={styles.photoBtn} onPress={pickImage}>
@@ -849,6 +869,20 @@ export default function AssetInventoryScreen() {
                 </View>
               </ScrollView>
             )}
+            {datePickerField && (
+              <DateTimePicker
+                value={getDatePickerValue(datePickerField)}
+                mode="date"
+                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                onChange={(_, date) => {
+                  const field = datePickerField;
+                  if (Platform.OS !== 'ios') setDatePickerField(null);
+                  if (date) {
+                    setFormData((prev) => ({ ...prev, [field]: formatDateValue(date) }));
+                  }
+                }}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -883,6 +917,8 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#FFF' },
   searchContainer: { padding: Platform.OS === 'android' ? 14 : 16 },
   textInput: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', fontSize: Platform.OS === 'android' ? 14 : 15, borderWidth: 1, borderColor: '#E8F4F8' },
+  dateButton: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 12 : 14, borderWidth: 1, borderColor: '#E8F4F8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  dateButtonText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 14 : 15 },
   chip: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderRadius: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#f4f8fc', marginRight: Platform.OS === 'android' ? 7 : 8, borderWidth: 1, borderColor: '#E8F4F8' },
   chipActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
   chipText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#0d2137' },

@@ -367,6 +367,12 @@ export const RegularSidebar: React.FC = () => {
                           onPress={() => navigateAndClose('/shrimp-reports')}
                           color="#9B59B6"
                         />
+                        <MenuButton
+                          icon="file-tray-full-outline"
+                          text={t.sidebar.cycleReports}
+                          onPress={() => navigateAndClose('/cycle-report')}
+                          color="#9B59B6"
+                        />
                       </View>
                     )}
                   </>
@@ -539,6 +545,24 @@ export const StaticSidebar: React.FC = () => {
   const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
 
   const navigateTo = (route: string) => router.push(route as any);
+  const StaticReportsMenuButton = () => (
+    <TouchableOpacity
+      style={[styles.menuItem, reportsExpanded && styles.activeMenuItem]}
+      onPress={toggleReports}
+      activeOpacity={0.7}
+    >
+      <View style={styles.menuIconContainer}>
+        <Ionicons name="document-text-outline" size={22} color="#9B59B6" />
+      </View>
+      <Text style={[styles.menuText, { color: '#9B59B6' }]}>Reports</Text>
+      <Ionicons
+        name={reportsExpanded ? "chevron-up" : "chevron-down"}
+        size={20}
+        color="#9B59B6"
+        style={styles.chevron}
+      />
+    </TouchableOpacity>
+  );
 
   return (
     <View style={styles.staticSidebar}>
@@ -558,6 +582,14 @@ export const StaticSidebar: React.FC = () => {
             <>
               <View style={styles.separator} />
               <MenuButton icon="wallet-outline" text="Finance" onPress={() => navigateTo('/finance')} color="#27AE60" />
+              <StaticReportsMenuButton />
+              {reportsExpanded && (
+                <View style={styles.submenuContainer}>
+                  <MenuButton icon="stats-chart-outline" text="Financial Reports" onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />
+                  <MenuButton icon="bar-chart-outline" text="Shrimp Reports" onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
+                  <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />
+                </View>
+              )}
             </>
           )}
           <View style={styles.separator} />

@@ -14,7 +14,8 @@ import {
   Loader2,
   ArrowRight,
   Lock,
-  Save
+  Save,
+  Shrimp
 } from 'lucide-react';
 import Link from 'next/link';
 import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
@@ -591,7 +592,7 @@ export default function PondsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.population || 'Population'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ fontSize: '18px' }}>🦐</div>
+                    <div style={{ color: 'var(--primary)' }}><Shrimp size={18} /></div>
                     <span style={{ fontSize: '1rem', fontWeight: 800 }}>{pond.initialPopulation.toLocaleString()}</span>
                   </div>
                 </div>

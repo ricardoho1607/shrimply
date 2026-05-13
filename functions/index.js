@@ -1,10 +1,95 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const SEVERITY_RANK = { info: 0, watch: 1, warning: 2, critical: 3 };
+const STAFF_ROLES = new Set(["manager", "technician", "admin"]);
+
+exports.acceptCompanyInvite = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const authEmail = request.auth?.token?.email;
+  const inviteToken = typeof request.data?.inviteToken === "string" ? request.data.inviteToken.trim() : "";
+
+  if (!uid || !authEmail) {
+    throw new HttpsError("unauthenticated", "You must be signed in to accept an invite.");
+  }
+  if (!inviteToken) {
+    throw new HttpsError("invalid-argument", "Invite token is required.");
+  }
+
+  const db = admin.firestore();
+  const companiesSnapshot = await db.collection("companies").get();
+  let targetCompanyRef = null;
+  let targetInvite = null;
+
+  for (const companyDoc of companiesSnapshot.docs) {
+    const companyData = companyDoc.data();
+    const invite = Array.isArray(companyData.pendingInvites)
+      ? companyData.pendingInvites.find((item) => item.inviteToken === inviteToken && item.status === "pending")
+      : null;
+    if (invite) {
+      targetCompanyRef = companyDoc.ref;
+      targetInvite = invite;
+      break;
+    }
+  }
+
+  if (!targetCompanyRef || !targetInvite) {
+    throw new HttpsError("not-found", "Invalid or expired invitation.");
+  }
+
+  if (String(targetInvite.email || "").toLowerCase() !== String(authEmail).toLowerCase()) {
+    throw new HttpsError("permission-denied", "This invitation is for a different email address.");
+  }
+
+  if (!STAFF_ROLES.has(targetInvite.role)) {
+    throw new HttpsError("permission-denied", "This invitation role is not allowed.");
+  }
+
+  await db.runTransaction(async (transaction) => {
+    const companySnap = await transaction.get(targetCompanyRef);
+    if (!companySnap.exists) {
+      throw new HttpsError("not-found", "Company not found.");
+    }
+
+    const companyData = companySnap.data();
+    const pendingInvites = Array.isArray(companyData.pendingInvites) ? companyData.pendingInvites : [];
+    const inviteIndex = pendingInvites.findIndex((item) => item.inviteToken === inviteToken && item.status === "pending");
+    if (inviteIndex < 0) {
+      throw new HttpsError("not-found", "Invalid or expired invitation.");
+    }
+
+    const invite = pendingInvites[inviteIndex];
+    if (String(invite.email || "").toLowerCase() !== String(authEmail).toLowerCase() || !STAFF_ROLES.has(invite.role)) {
+      throw new HttpsError("permission-denied", "This invitation cannot be accepted.");
+    }
+
+    const updatedInvites = pendingInvites.map((item, index) => (
+      index === inviteIndex ? { ...item, status: "accepted", acceptedAt: admin.firestore.Timestamp.now() } : item
+    ));
+
+    transaction.update(targetCompanyRef, {
+      teamMembers: admin.firestore.FieldValue.arrayUnion(uid),
+      pendingInvites: updatedInvites,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(db.collection("users").doc(uid), {
+      companyId: targetCompanyRef.id,
+      role: invite.role,
+      invitedBy: invite.invitedBy || null,
+      hasCompletedSetup: true,
+      lastActive: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  return {
+    companyId: targetCompanyRef.id,
+    role: targetInvite.role,
+  };
+});
 
 const toNumber = (value) => {
   if (typeof value === "number" && Number.isFinite(value)) return value;
