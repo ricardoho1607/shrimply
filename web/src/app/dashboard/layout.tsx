@@ -81,7 +81,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
-  const unreadCount = useUnreadNotificationsCount();
+  const isAdminRoute = pathname?.startsWith('/dashboard/admin') ?? false;
+  const unreadCount = useUnreadNotificationsCount({ enabled: !isAdminRoute });
   const navigation = NAV_STRUCTURE(t);
 
   const sectionLabels: Record<string, string> = {

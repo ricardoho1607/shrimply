@@ -35,8 +35,13 @@ const startOfPeriod = (days) => {
 const dayKey = (date) => date.toISOString().slice(0, 10);
 
 const getSnapshotSize = async (ref) => {
-  const snapshot = await ref.get();
-  return snapshot.size;
+  try {
+    const snapshot = await ref.get();
+    return snapshot.size;
+  } catch (error) {
+    console.warn(`Admin metrics skipped ${ref.path}:`, error.message);
+    return 0;
+  }
 };
 
 const countDocsSince = async (ref, since) => {
@@ -90,7 +95,10 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
     const company = companyDoc.data() || {};
     const [pondCount, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
       getSnapshotSize(companyDoc.ref.collection("ponds")),
-      companyDoc.ref.collection("cycles").get(),
+      companyDoc.ref.collection("cycles").get().catch((error) => {
+        console.warn(`Admin metrics skipped ${companyDoc.ref.path}/cycles:`, error.message);
+        return { docs: [] };
+      }),
       getSnapshotSize(companyDoc.ref.collection("feeds")),
       getSnapshotSize(companyDoc.ref.collection("additives")),
     ]);
@@ -141,14 +149,28 @@ exports.getAdminMetrics = onCall(async (request) => {
   const since = startOfPeriod(periodDays);
   const db = admin.firestore();
 
-  const [usersSnapshot, companiesSnapshot, marketplace, diseaseReports, joinRequests, notifications, aiUsage, apiRequests, requestLogs] = await Promise.all([
-    db.collection("users").get(),
-    db.collection("companies").get(),
+  let usersSnapshot;
+  let companiesSnapshot;
+
+  try {
+    [usersSnapshot, companiesSnapshot] = await Promise.all([
+      db.collection("users").get(),
+      db.collection("companies").get(),
+    ]);
+  } catch (error) {
+    console.error("Admin metrics failed to load required collections:", error);
+    throw new HttpsError("internal", "Admin metrics could not load required user/company data.");
+  }
+
+  const [marketplace, diseaseReports, joinRequests, notifications, aiUsage, apiRequests, requestLogs] = await Promise.all([
     countOptionalCollection(db, "marketplace_listings", since),
     countOptionalCollection(db, "diseaseReports", since),
     countOptionalCollection(db, "joinRequests", since),
     countOptionalCollection(db, "notifications", since),
-    sumAiUsage(db, since),
+    sumAiUsage(db, since).catch((error) => {
+      console.warn("Admin metrics skipped aiUsage:", error.message);
+      return { total: 0, period: 0 };
+    }),
     countOptionalCollection(db, "apiRequests", since),
     countOptionalCollection(db, "requestLogs", since),
   ]);

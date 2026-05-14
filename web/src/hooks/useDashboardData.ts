@@ -471,12 +471,13 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
   return { feeds, additives, ponds, loading, error, companyId };
 }
 
-export function useUnreadNotificationsCount() {
+export function useUnreadNotificationsCount(options: { enabled?: boolean } = {}) {
   const { user } = useAuth();
   const [count, setCount] = useState(0);
+  const enabled = options.enabled ?? true;
 
   useEffect(() => {
-    if (!user?.uid) {
+    if (!enabled || !user?.uid) {
       setCount(0);
       return;
     }
@@ -496,7 +497,7 @@ export function useUnreadNotificationsCount() {
     );
 
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [enabled, user?.uid]);
 
   return count;
 }

@@ -6,6 +6,14 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function isFounderAdmin() {
+      return signedIn()
+        && request.auth.token.email in [
+          'ricardofransiskusho@gmail.com',
+          'Ricardofransiskusho@gmail.com'
+        ];
+    }
+
     function userDoc() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid));
     }
@@ -140,7 +148,8 @@ service cloud.firestore {
     match /users/{userId} {
       allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
       allow read: if signedIn() && (
-        request.auth.uid == userId
+        isFounderAdmin()
+        || request.auth.uid == userId
         || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
       );
       allow update: if signedIn() && validUserPayload(request.resource.data) && (
@@ -195,7 +204,8 @@ service cloud.firestore {
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.teamMembers.hasAny([request.auth.uid]);
       allow read: if signedIn() && (
-        resource.data.isSearchable == true
+        isFounderAdmin()
+        || resource.data.isSearchable == true
         || resource.data.isPublicProfile == true
         || resource.data.ownerId == request.auth.uid
         || resource.data.teamMembers.hasAny([request.auth.uid])
@@ -218,42 +228,42 @@ service cloud.firestore {
       allow delete: if isCompanyOwner(companyId);
 
       match /ponds/{pondId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
       }
 
       match /cycles/{cycleId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
       }
 
       match /harvestRecords/{harvestId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
       }
 
       match /feeds/{feedId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
       }
 
       match /additives/{additiveId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
       }
 
       match /expenses/{expenseId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyManager(companyId);
       }
 
       match /revenues/{revenueId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyManager(companyId);
       }
 
       match /aiUsage/{usageDateId} {
-        allow read: if isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow create, update: if isCompanyMember(companyId)
           && validAiUsagePayload(request.resource.data, usageDateId);
         allow delete: if false;
@@ -263,7 +273,8 @@ service cloud.firestore {
     match /joinRequests/{requestId} {
       allow create: if signedIn() && validJoinRequestCreate(request.resource.data);
       allow read: if signedIn() && (
-        resource.data.userId == request.auth.uid
+        isFounderAdmin()
+        || resource.data.userId == request.auth.uid
         || isCompanyOwner(resource.data.companyId)
       );
       allow update: if signedIn() && isCompanyOwner(resource.data.companyId);
@@ -272,7 +283,11 @@ service cloud.firestore {
 
     match /notifications/{notificationId} {
       allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
-      allow read, update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || isCompanyMember(resource.data.companyId)
+      );
+      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
     }
 
     match /diseaseReports/{reportId} {
@@ -309,7 +324,26 @@ service cloud.firestore {
 
     match /assets/{assetId} {
       allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
-      allow read, update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || isCompanyMember(resource.data.companyId)
+      );
+      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /apiRequests/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /requestLogs/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /{path=**}/aiUsage/{usageDateId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
     }
 
     match /{document=**} {

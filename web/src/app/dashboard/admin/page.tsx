@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { collection, collectionGroup, getDocs } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import {
   AlertTriangle,
@@ -19,7 +20,7 @@ import {
   Waves,
   Zap,
 } from 'lucide-react';
-import { app } from '@/lib/firebase';
+import { app, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { CompanyDetailDrawer, UserDetailDrawer } from './AdminDetailDrawers';
 import { ActivationFunnel, FollowUpList, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
@@ -85,6 +86,228 @@ type AdminMetrics = {
 const ADMIN_EMAILS = ['ricardofransiskusho@gmail.com'];
 
 const formatNumber = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+const toDate = (value: any): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === 'string') {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.toDate === 'function') {
+    const parsed = value.toDate();
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.seconds === 'number') {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+};
+
+const toIso = (value: any) => toDate(value)?.toISOString() || null;
+
+const startOfPeriod = (days: Period) => {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  return start;
+};
+
+const dayKey = (date: Date) => date.toISOString().slice(0, 10);
+
+const countDocsSince = async (collectionName: string, since: Date) => {
+  try {
+    const snapshot = await getDocs(collection(db, collectionName));
+    let period = 0;
+    snapshot.forEach((item) => {
+      const data = item.data();
+      const createdAt = toDate(data.createdAt || data.timestamp || data.generatedAt || data.requestedAt || data.date);
+      if (createdAt && createdAt >= since) period += 1;
+    });
+    return { total: snapshot.size, period };
+  } catch (error) {
+    console.warn(`Admin metrics fallback skipped ${collectionName}:`, error);
+    return { total: 0, period: 0 };
+  }
+};
+
+const sumAiUsageFromFirestore = async (since: Date) => {
+  try {
+    const snapshot = await getDocs(collectionGroup(db, 'aiUsage'));
+    let total = 0;
+    let period = 0;
+
+    snapshot.forEach((item) => {
+      const data = item.data();
+      const functions = data.functions && typeof data.functions === 'object' ? data.functions as Record<string, unknown> : {};
+      const value = Object.values(functions).reduce<number>((sum, current) => (
+        typeof current === 'number' && Number.isFinite(current) ? sum + current : sum
+      ), 0);
+      total += value;
+
+      const usageDate = toDate(data.updatedAt || data.createdAt || data.date) || new Date(`${data.dateKey || item.id}T00:00:00.000Z`);
+      if (!Number.isNaN(usageDate.getTime()) && usageDate >= since) {
+        period += value;
+      }
+    });
+
+    return { total, period };
+  } catch (error) {
+    console.warn('Admin metrics fallback skipped aiUsage:', error);
+    return { total: 0, period: 0 };
+  }
+};
+
+const getCollectionSize = async (...segments: string[]) => {
+  try {
+    const snapshot = await getDocs(collection(db, segments.join('/')));
+    return snapshot.size;
+  } catch (error) {
+    console.warn(`Admin metrics fallback skipped ${segments.join('/')}:`, error);
+    return 0;
+  }
+};
+
+const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMetrics> => {
+  const since = startOfPeriod(periodDays);
+  const [usersSnapshot, companiesSnapshot] = await Promise.all([
+    getDocs(collection(db, 'users')),
+    getDocs(collection(db, 'companies')),
+  ]);
+
+  const usersById = new Map<string, any>();
+  const dailyNewUsers = new Map<string, number>();
+  const roleBreakdown: Record<string, number> = {};
+  let newUsers = 0;
+  let activeUsers = 0;
+  let buyers = 0;
+  let owners = 0;
+  let staff = 0;
+
+  for (let offset = 0; offset < periodDays; offset += 1) {
+    const date = new Date(since);
+    date.setDate(since.getDate() + offset);
+    dailyNewUsers.set(dayKey(date), 0);
+  }
+
+  usersSnapshot.forEach((userDoc) => {
+    const user = userDoc.data();
+    usersById.set(userDoc.id, user);
+    const role = user.role || 'unknown';
+    roleBreakdown[role] = (roleBreakdown[role] || 0) + 1;
+    if (role === 'buyer') buyers += 1;
+    if (role === 'owner') owners += 1;
+    if (['technician', 'manager', 'admin'].includes(role)) staff += 1;
+
+    const joinedAt = toDate(user.joinedDate || user.createdAt);
+    if (joinedAt && joinedAt >= since) {
+      newUsers += 1;
+      const key = dayKey(joinedAt);
+      if (dailyNewUsers.has(key)) dailyNewUsers.set(key, (dailyNewUsers.get(key) || 0) + 1);
+    }
+
+    const lastActive = toDate(user.lastActive || user.updatedAt || user.joinedDate || user.createdAt);
+    if (lastActive && lastActive >= since) activeUsers += 1;
+  });
+
+  let totalPonds = 0;
+  const companies = await Promise.all(companiesSnapshot.docs.map(async (companyDoc) => {
+    const company = companyDoc.data();
+    const [pondCount, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+      getCollectionSize('companies', companyDoc.id, 'ponds'),
+      getDocs(collection(db, 'companies', companyDoc.id, 'cycles')).catch(() => ({ docs: [] })),
+      getCollectionSize('companies', companyDoc.id, 'feeds'),
+      getCollectionSize('companies', companyDoc.id, 'additives'),
+    ]);
+    totalPonds += pondCount;
+
+    const activeCycleCount = cyclesSnapshot.docs.filter((cycleDoc: any) => {
+      const cycle = typeof cycleDoc.data === 'function' ? cycleDoc.data() : {};
+      return String(cycle.status || '').toLowerCase() === 'active';
+    }).length;
+    const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
+    const owner = usersById.get(company.ownerId) || null;
+
+    return {
+      id: companyDoc.id,
+      companyName: company.companyName || company.businessName || 'Unnamed company',
+      ownerEmail: owner?.email || company.ownerEmail || '',
+      farmType: company.farmType || company.businessType || '',
+      businessSize: company.businessSize || '',
+      teamMembersCount: teamMembers.length,
+      pondCount,
+      activeCycleCount,
+      feedItemCount,
+      additiveItemCount,
+      createdAt: toIso(company.createdAt),
+    };
+  }));
+
+  companies.sort((a, b) => b.pondCount - a.pondCount || a.companyName.localeCompare(b.companyName));
+
+  const [marketplace, diseaseReports, joinRequests, notifications, aiUsage, apiRequests, requestLogs] = await Promise.all([
+    countDocsSince('marketplace_listings', since),
+    countDocsSince('diseaseReports', since),
+    countDocsSince('joinRequests', since),
+    countDocsSince('notifications', since),
+    sumAiUsageFromFirestore(since),
+    countDocsSince('apiRequests', since),
+    countDocsSince('requestLogs', since),
+  ]);
+
+  const newCompanies = companiesSnapshot.docs.filter((companyDoc) => {
+    const createdAt = toDate(companyDoc.data().createdAt);
+    return createdAt && createdAt >= since;
+  }).length;
+
+  const recentUsers = usersSnapshot.docs
+    .map((userDoc) => {
+      const user = userDoc.data();
+      return {
+        id: userDoc.id,
+        name: user.name || '',
+        email: user.email || '',
+        role: user.role || '',
+        companyId: user.companyId || null,
+        joinedAt: toIso(user.joinedDate || user.createdAt),
+        lastActive: toIso(user.lastActive || user.updatedAt),
+      };
+    })
+    .sort((a, b) => new Date(b.joinedAt || 0).getTime() - new Date(a.joinedAt || 0).getTime())
+    .slice(0, 12);
+
+  return {
+    generatedAt: new Date().toISOString(),
+    periodDays,
+    totals: {
+      users: usersSnapshot.size,
+      companies: companiesSnapshot.size,
+      ponds: totalPonds,
+      buyers,
+      owners,
+      staff,
+      marketplaceListings: marketplace.total,
+      diseaseReports: diseaseReports.total,
+      joinRequests: joinRequests.total,
+      notifications: notifications.total,
+      aiRequests: aiUsage.total,
+      apiRequests: apiRequests.total,
+      requestLogs: requestLogs.total,
+    },
+    period: {
+      newUsers,
+      activeUsers,
+      newCompanies,
+      aiRequests: aiUsage.period,
+      apiRequests: apiRequests.period,
+      requestLogs: requestLogs.period,
+    },
+    dailyNewUsers: Array.from(dailyNewUsers.entries()).map(([date, count]) => ({ date, count })),
+    roleBreakdown,
+    recentUsers,
+    companies,
+  };
+};
 
 const formatDate = (value?: string | null) => {
   if (!value) return 'Unavailable';
@@ -155,8 +378,14 @@ export default function HiddenAdminPage() {
       const response = await getAdminMetrics({ days: period });
       setMetrics(response.data);
     } catch (err: any) {
-      console.error('Failed to load admin metrics:', err);
-      setError(err?.message || 'Failed to load admin metrics. Check that the admin Cloud Function has been deployed.');
+      console.warn('Admin callable unavailable, using founder Firestore fallback:', err);
+      try {
+        const fallbackMetrics = await getAdminMetricsFromFirestore(period);
+        setMetrics(fallbackMetrics);
+      } catch (fallbackError: any) {
+        console.error('Failed to load admin metrics:', fallbackError);
+        setError(fallbackError?.message || 'Failed to load admin metrics. Check Cloud Function IAM and founder Firestore permissions.');
+      }
     } finally {
       setLoading(false);
     }
