@@ -7,8 +7,6 @@ import {
   AlertTriangle,
   Building2,
   CalendarDays,
-  Clock,
-  Database,
   Download,
   EyeOff,
   FileText,
@@ -22,10 +20,13 @@ import {
 } from 'lucide-react';
 import { app, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { AdminCompanyTable, AdminRecentUsers } from './AdminCoreLists';
 import { CompanyDetailDrawer, UserDetailDrawer } from './AdminDetailDrawers';
 import { ActivationFunnel, FollowUpList, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
+import { AdminLoadingSkeleton, AdminTabs, DataSourceBadge, ExecutiveSummary, type AdminTab } from './AdminUxSections';
 
 type Period = 7 | 30;
+type DataSource = 'Cloud Function' | 'Firestore fallback' | null;
 
 type CompanyMetric = {
   id: string;
@@ -98,9 +99,7 @@ const toDate = (value: any): Date | null => {
     const parsed = value.toDate();
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
-  if (typeof value.seconds === 'number') {
-    return new Date(value.seconds * 1000);
-  }
+  if (typeof value.seconds === 'number') return new Date(value.seconds * 1000);
   return null;
 };
 
@@ -146,9 +145,7 @@ const sumAiUsageFromFirestore = async (since: Date) => {
       total += value;
 
       const usageDate = toDate(data.updatedAt || data.createdAt || data.date) || new Date(`${data.dateKey || item.id}T00:00:00.000Z`);
-      if (!Number.isNaN(usageDate.getTime()) && usageDate >= since) {
-        period += value;
-      }
+      if (!Number.isNaN(usageDate.getTime()) && usageDate >= since) period += value;
     });
 
     return { total, period };
@@ -313,43 +310,68 @@ const formatDate = (value?: string | null) => {
   if (!value) return 'Unavailable';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unavailable';
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(date);
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
 };
 
 function MetricCard({ label, value, helper, icon: Icon }: { label: string; value: string; helper: string; icon: any }) {
   return (
     <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px' }}>
-        <div style={{
-          width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
-        }}>
-          <Icon size={22} strokeWidth={2.5} />
-        </div>
+      <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+        <Icon size={22} strokeWidth={2.5} />
       </div>
       <div>
-        <div style={{ fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900, marginBottom: '8px' }}>
-          {label}
-        </div>
-        <div style={{ fontSize: '1.7rem', color: 'var(--text-primary)', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em', fontFamily: 'var(--jakarta)' }}>
-          {value}
-        </div>
-        <div style={{ marginTop: '10px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-          {helper}
-        </div>
+        <div style={{ fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900, marginBottom: '8px' }}>{label}</div>
+        <div style={{ fontSize: '1.7rem', color: 'var(--text-primary)', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em', fontFamily: 'var(--jakarta)' }}>{value}</div>
+        <div style={{ marginTop: '10px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{helper}</div>
       </div>
     </div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
+  return <div className="glass-card" style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)' }}>{message}</div>;
+}
+
+function MetricLine({ label, value }: { label: string; value: number }) {
   return (
-    <div className="glass-card" style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)' }}>
-      {message}
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
+      <span style={{ color: 'var(--text-muted)', fontWeight: 800 }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontFamily: 'var(--jakarta)' }}>{formatNumber(value)}</span>
+    </div>
+  );
+}
+
+function MetricCards({ metrics, period }: { metrics: AdminMetrics; period: Period }) {
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
+      <MetricCard label={`New users, ${period} days`} value={formatNumber(metrics.period.newUsers)} helper={`${formatNumber(metrics.period.activeUsers)} active users in the same period`} icon={Users} />
+      <MetricCard label="Total users" value={formatNumber(metrics.totals.users)} helper={`${formatNumber(metrics.totals.buyers)} buyers, ${formatNumber(metrics.totals.owners)} owners, ${formatNumber(metrics.totals.staff)} staff/admin users`} icon={ShieldCheck} />
+      <MetricCard label="Companies" value={formatNumber(metrics.totals.companies)} helper={`${formatNumber(metrics.period.newCompanies)} new companies in the selected period`} icon={Building2} />
+      <MetricCard label="Ponds" value={formatNumber(metrics.totals.ponds)} helper="Total pond records across all companies" icon={Waves} />
+      <MetricCard label="Marketplace" value={formatNumber(metrics.totals.marketplaceListings)} helper="Active and historical marketplace listing records" icon={Store} />
+      <MetricCard label="AI/API requests" value={formatNumber(metrics.period.aiRequests + metrics.period.apiRequests + metrics.period.requestLogs)} helper={`${formatNumber(metrics.period.aiRequests)} AI requests in this period`} icon={Zap} />
+    </div>
+  );
+}
+
+function UsagePanel({ metrics }: { metrics: AdminMetrics }) {
+  return (
+    <div className="glass-card" style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
+        <div>
+          <div style={{ fontSize: '1.12rem', color: 'var(--text-primary)', fontWeight: 900 }}>Request counters</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>AI usage and optional API log collections</div>
+        </div>
+        <FileText size={22} color="var(--primary)" />
+      </div>
+      <div style={{ display: 'grid', gap: '12px' }}>
+        <MetricLine label="AI requests" value={metrics.period.aiRequests} />
+        <MetricLine label="API requests" value={metrics.period.apiRequests} />
+        <MetricLine label="Request logs" value={metrics.period.requestLogs} />
+        <MetricLine label="Disease reports" value={metrics.totals.diseaseReports} />
+        <MetricLine label="Join requests" value={metrics.totals.joinRequests} />
+        <MetricLine label="Notifications" value={metrics.totals.notifications} />
+      </div>
     </div>
   );
 }
@@ -357,16 +379,15 @@ function EmptyState({ message }: { message: string }) {
 export default function HiddenAdminPage() {
   const { user } = useAuth();
   const [period, setPeriod] = useState<Period>(7);
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
+  const [dataSource, setDataSource] = useState<DataSource>(null);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<CompanyMetric | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
 
-  const isAllowed = useMemo(() => {
-    const email = String(user?.email || '').toLowerCase();
-    return ADMIN_EMAILS.includes(email);
-  }, [user?.email]);
+  const isAllowed = useMemo(() => ADMIN_EMAILS.includes(String(user?.email || '').toLowerCase()), [user?.email]);
 
   const loadMetrics = async () => {
     if (!isAllowed) return;
@@ -377,11 +398,13 @@ export default function HiddenAdminPage() {
       const getAdminMetrics = httpsCallable<{ days: Period }, AdminMetrics>(functions, 'getAdminMetrics');
       const response = await getAdminMetrics({ days: period });
       setMetrics(response.data);
+      setDataSource('Cloud Function');
     } catch (err: any) {
       console.warn('Admin callable unavailable, using founder Firestore fallback:', err);
       try {
         const fallbackMetrics = await getAdminMetricsFromFirestore(period);
         setMetrics(fallbackMetrics);
+        setDataSource('Firestore fallback');
       } catch (fallbackError: any) {
         console.error('Failed to load admin metrics:', fallbackError);
         setError(fallbackError?.message || 'Failed to load admin metrics. Check Cloud Function IAM and founder Firestore permissions.');
@@ -427,9 +450,7 @@ export default function HiddenAdminPage() {
           <div className="dashboard-hero-copy">
             <span className="dashboard-hero-eyebrow">Restricted</span>
             <h1 className="dashboard-hero-title">Admin access denied</h1>
-            <p className="dashboard-hero-subtitle">
-              This page is hidden and restricted to the Shrimply founder account.
-            </p>
+            <p className="dashboard-hero-subtitle">This page is hidden and restricted to the Shrimply founder account.</p>
           </div>
           <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <EyeOff size={34} />
@@ -446,23 +467,15 @@ export default function HiddenAdminPage() {
           <span className="dashboard-hero-eyebrow">Founder only</span>
           <div className="dashboard-hero-title-row">
             <h1 className="dashboard-hero-title">Shrimply Admin</h1>
-            <span className="dashboard-hero-date">
-              {metrics ? `Updated ${formatDate(metrics.generatedAt)}` : 'Private route'}
-            </span>
+            <span className="dashboard-hero-date">{metrics ? `Updated ${formatDate(metrics.generatedAt)}` : 'Private route'}</span>
           </div>
-          <p className="dashboard-hero-subtitle">
-            Hidden admin view for growth, activation, company health, user activity, and AI/API request usage. This page is not linked from the dashboard sidebar.
-          </p>
+          <p className="dashboard-hero-subtitle">Growth, activation, company health, user activity, and AI/API request tracking. Not linked from the dashboard sidebar.</p>
+          <DataSourceBadge source={dataSource} updatedAt={metrics?.generatedAt} />
         </div>
         <div className="dashboard-hero-actions">
           <div className="dashboard-action-row">
             {[7, 30].map((days) => (
-              <button
-                key={days}
-                onClick={() => setPeriod(days as Period)}
-                className={`dashboard-action ${period === days ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`}
-                type="button"
-              >
+              <button key={days} onClick={() => setPeriod(days as Period)} className={`dashboard-action ${period === days ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`} type="button">
                 <CalendarDays size={18} />
                 <span>{days} days</span>
               </button>
@@ -490,144 +503,55 @@ export default function HiddenAdminPage() {
       )}
 
       {loading && !metrics ? (
-        <div style={{ minHeight: '420px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Loader2 className="animate-spin" size={46} color="var(--primary)" />
-        </div>
+        <AdminLoadingSkeleton />
       ) : metrics ? (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
-            <MetricCard label={`New users, ${period} days`} value={formatNumber(metrics.period.newUsers)} helper={`${formatNumber(metrics.period.activeUsers)} active users in the same period`} icon={Users} />
-            <MetricCard label="Total users" value={formatNumber(metrics.totals.users)} helper={`${formatNumber(metrics.totals.buyers)} buyers, ${formatNumber(metrics.totals.owners)} owners, ${formatNumber(metrics.totals.staff)} staff/admin users`} icon={ShieldCheck} />
-            <MetricCard label="Companies" value={formatNumber(metrics.totals.companies)} helper={`${formatNumber(metrics.period.newCompanies)} new companies in the selected period`} icon={Building2} />
-            <MetricCard label="Ponds" value={formatNumber(metrics.totals.ponds)} helper="Total pond records across all companies" icon={Waves} />
-            <MetricCard label="Marketplace" value={formatNumber(metrics.totals.marketplaceListings)} helper="Active and historical marketplace listing records" icon={Store} />
-            <MetricCard label="AI/API requests" value={formatNumber(metrics.period.aiRequests + metrics.period.apiRequests + metrics.period.requestLogs)} helper={`${formatNumber(metrics.period.aiRequests)} AI requests in this period`} icon={Zap} />
-          </div>
+          <ExecutiveSummary metrics={metrics} />
+          <AdminTabs activeTab={activeTab} onChange={setActiveTab} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: '24px', alignItems: 'start' }}>
-            <GrowthChart metrics={metrics} />
-            <ActivationFunnel metrics={metrics} />
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 420px)', gap: '24px', alignItems: 'start' }}>
-            <div className="glass-card" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '22px' }}>
-                <div>
-                  <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Company health</div>
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Company names, owners, ponds, team size, inventory footprint, and status. Click a company for details.</div>
-                </div>
-                <Database size={22} color="var(--primary)" />
+          {activeTab === 'overview' && (
+            <>
+              <MetricCards metrics={metrics} period={period} />
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(320px, 0.75fr)', gap: '24px', alignItems: 'start' }}>
+                <GrowthChart metrics={metrics} />
+                <ActivationFunnel metrics={metrics} />
               </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 420px)', gap: '24px', alignItems: 'start' }}>
+                <FollowUpList metrics={metrics} />
+                <MiniRoleBreakdown metrics={metrics} />
+              </div>
+            </>
+          )}
 
-              {metrics.companies.length === 0 ? (
-                <EmptyState message="No company records found." />
-              ) : (
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
-                    <thead>
-                      <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                        {['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory', 'Created'].map((heading) => (
-                          <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900 }}>{heading}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {metrics.companies.map((company) => {
-                        const health = getCompanyHealth(company);
-                        return (
-                          <tr key={company.id} onClick={() => setSelectedCompany(company)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
-                            <td style={{ padding: '16px 10px' }}>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 900 }}>{company.companyName}</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
-                            </td>
-                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.ownerEmail || 'Unavailable'}</td>
-                            <td style={{ padding: '16px 10px' }}>
-                              <span style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: '999px', background: health.bg, color: health.tone, fontSize: '0.72rem', fontWeight: 900 }}>
-                                {health.label}
-                              </span>
-                            </td>
-                            <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.pondCount}</td>
-                            <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.teamMembersCount}</td>
-                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.feedItemCount + company.additiveItemCount} items</td>
-                            <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{formatDate(company.createdAt)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
+          {activeTab === 'companies' && <AdminCompanyTable companies={metrics.companies} onSelectCompany={setSelectedCompany} />}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <FollowUpList metrics={metrics} />
+          {activeTab === 'users' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 420px)', gap: '24px', alignItems: 'start' }}>
+              <AdminRecentUsers users={metrics.recentUsers} onSelectUser={setSelectedUser} />
               <MiniRoleBreakdown metrics={metrics} />
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                  <div>
-                    <div style={{ fontSize: '1.12rem', color: 'var(--text-primary)', fontWeight: 900 }}>Request counters</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>AI usage and optional API log collections</div>
-                  </div>
-                  <FileText size={22} color="var(--primary)" />
-                </div>
-                <div style={{ display: 'grid', gap: '12px' }}>
-                  <MetricLine label="AI requests" value={metrics.period.aiRequests} />
-                  <MetricLine label="API requests" value={metrics.period.apiRequests} />
-                  <MetricLine label="Request logs" value={metrics.period.requestLogs} />
-                  <MetricLine label="Disease reports" value={metrics.totals.diseaseReports} />
-                  <MetricLine label="Join requests" value={metrics.totals.joinRequests} />
-                  <MetricLine label="Notifications" value={metrics.totals.notifications} />
-                </div>
-              </div>
             </div>
-          </div>
+          )}
 
-          <div className="glass-card" style={{ padding: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <div>
-                <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Recent users</div>
-                <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Latest signups and activity data from Firestore users. Click a user for details.</div>
-              </div>
-              <Clock size={22} color="var(--primary)" />
+          {activeTab === 'usage' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px', alignItems: 'start' }}>
+              <UsagePanel metrics={metrics} />
+              <GrowthChart metrics={metrics} />
             </div>
-            {metrics.recentUsers.length === 0 ? (
-              <EmptyState message="No user records found." />
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
-                {metrics.recentUsers.map((item) => (
-                  <button key={item.id} onClick={() => setSelectedUser(item)} style={{ textAlign: 'left', padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', cursor: 'pointer' }} type="button">
-                    <div style={{ color: 'var(--text-primary)', fontWeight: 900, marginBottom: '4px' }}>{item.name || 'Unnamed user'}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 700, marginBottom: '12px', wordBreak: 'break-word' }}>{item.email}</div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
-                      <span>{item.role || 'No role'}</span>
-                      <span>{formatDate(item.joinedAt)}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
+
+          {activeTab === 'followUp' && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 440px) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
+              <FollowUpList metrics={metrics} />
+              <AdminCompanyTable companies={metrics.companies} onSelectCompany={setSelectedCompany} />
+            </div>
+          )}
         </>
       ) : (
         <EmptyState message="No admin metrics loaded yet." />
       )}
 
-      {selectedCompany && (
-        <CompanyDetailDrawer company={selectedCompany} onClose={() => setSelectedCompany(null)} />
-      )}
-
-      {selectedUser && (
-        <UserDetailDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />
-      )}
-    </div>
-  );
-}
-
-function MetricLine({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ color: 'var(--text-muted)', fontWeight: 800 }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontFamily: 'var(--jakarta)' }}>{formatNumber(value)}</span>
+      {selectedCompany && <CompanyDetailDrawer company={selectedCompany} onClose={() => setSelectedCompany(null)} />}
+      {selectedUser && <UserDetailDrawer user={selectedUser} onClose={() => setSelectedUser(null)} />}
     </div>
   );
 }
