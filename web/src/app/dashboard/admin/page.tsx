@@ -22,7 +22,8 @@ import { app, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdminCompanyTable, AdminRecentUsers } from './AdminCoreLists';
 import { CompanyDetailDrawer, UserDetailDrawer } from './AdminDetailDrawers';
-import { ActivationFunnel, FollowUpList, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
+import { AdminFollowUpQueue } from './AdminFollowUpQueue';
+import { ActivationFunnel, getCompanyHealth, GrowthChart, MiniRoleBreakdown } from './AdminPremiumSections';
 import { AdminLoadingSkeleton, AdminTabs, DataSourceBadge, ExecutiveSummary, type AdminTab } from './AdminUxSections';
 
 type Period = 7 | 30;
@@ -517,7 +518,7 @@ export default function HiddenAdminPage() {
                 <ActivationFunnel metrics={metrics} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(320px, 420px)', gap: '24px', alignItems: 'start' }}>
-                <FollowUpList metrics={metrics} />
+                <AdminFollowUpQueue metrics={metrics} onSelectCompany={setSelectedCompany} onSelectUser={setSelectedUser} />
                 <MiniRoleBreakdown metrics={metrics} />
               </div>
             </>
@@ -540,8 +541,8 @@ export default function HiddenAdminPage() {
           )}
 
           {activeTab === 'followUp' && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 440px) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
-              <FollowUpList metrics={metrics} />
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 480px) minmax(0, 1fr)', gap: '24px', alignItems: 'start' }}>
+              <AdminFollowUpQueue metrics={metrics} onSelectCompany={setSelectedCompany} onSelectUser={setSelectedUser} />
               <AdminCompanyTable companies={metrics.companies} onSelectCompany={setSelectedCompany} />
             </div>
           )}
