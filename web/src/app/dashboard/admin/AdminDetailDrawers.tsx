@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, MessageSquareText, UserRound, X } from 'lucide-react';
+import { CheckCircle2, Copy, ExternalLink, Mail, MessageSquareText, UserRound, X } from 'lucide-react';
 import { getCompanyHealth } from './AdminPremiumSections';
 
 type CompanyMetric = {
@@ -51,11 +51,52 @@ function saveNote(companyId: string, note: string) {
   window.localStorage.setItem(NOTE_STORAGE_KEY, JSON.stringify(notes));
 }
 
+async function copyText(value: string) {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const input = document.createElement('textarea');
+    input.value = value;
+    document.body.appendChild(input);
+    input.select();
+    document.execCommand('copy');
+    document.body.removeChild(input);
+  }
+}
+
 function DetailRow({ label, value }: { label: string; value: string | number }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
       <span style={{ color: 'var(--text-muted)', fontWeight: 800 }}>{label}</span>
       <span style={{ color: 'var(--text-primary)', fontWeight: 900, textAlign: 'right' }}>{value}</span>
+    </div>
+  );
+}
+
+function QuickActionButton({ children, onClick, href }: { children: React.ReactNode; onClick?: () => void; href?: string }) {
+  if (href) {
+    return (
+      <a href={href} className="dashboard-action dashboard-action-secondary" style={{ minHeight: 38, textDecoration: 'none' }}>
+        {children}
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className="dashboard-action dashboard-action-secondary" style={{ minHeight: 38 }}>
+      {children}
+    </button>
+  );
+}
+
+function RecommendedAction({ title, body }: { title: string; body: string }) {
+  return (
+    <div style={{ padding: '18px', borderRadius: '18px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-primary)', fontWeight: 900, marginBottom: '8px' }}>
+        <ExternalLink size={18} color="var(--primary)" /> {title}
+      </div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.88rem', lineHeight: 1.55 }}>{body}</div>
     </div>
   );
 }
@@ -69,7 +110,7 @@ export function AdminDrawer({ title, onClose, children }: { title: string; onClo
       <div
         className="glass-card"
         onClick={(event) => event.stopPropagation()}
-        style={{ width: 'min(520px, 100%)', height: '100%', borderRadius: '24px 0 0 24px', background: '#fff', padding: '28px', overflowY: 'auto' }}
+        style={{ width: 'min(560px, 100%)', height: '100%', borderRadius: '24px 0 0 24px', background: '#fff', padding: '28px', overflowY: 'auto' }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', marginBottom: '24px' }}>
           <h2 style={{ fontFamily: 'var(--sans)', fontSize: '1.4rem', color: 'var(--text-primary)', fontWeight: 900 }}>{title}</h2>
@@ -87,6 +128,11 @@ export function CompanyDetailDrawer({ company, onClose }: { company: CompanyMetr
   const [note, setNote] = useState('');
   const [saved, setSaved] = useState(false);
   const health = getCompanyHealth(company);
+  const recommendedAction = company.pondCount === 0
+    ? 'Message the owner and offer to help them add their first pond. This is the highest-friction onboarding step.'
+    : company.activeCycleCount === 0 && company.feedItemCount + company.additiveItemCount === 0
+      ? 'They have started setup but have not created enough operational data yet. Push them toward first sampling, feed, or inventory action.'
+      : 'This company has meaningful setup progress. Review whether they are ready for a demo, feedback call, or paid conversion conversation.';
 
   useEffect(() => {
     setNote(readNotes()[company.id] || '');
@@ -106,6 +152,22 @@ export function CompanyDetailDrawer({ company, onClose }: { company: CompanyMetr
           <CheckCircle2 size={20} />
           {health.label} · {health.reason}
         </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          {company.ownerEmail && (
+            <QuickActionButton href={`mailto:${company.ownerEmail}`}>
+              <Mail size={16} /> Email owner
+            </QuickActionButton>
+          )}
+          <QuickActionButton onClick={() => copyText(company.ownerEmail || '')}>
+            <Copy size={16} /> Copy email
+          </QuickActionButton>
+          <QuickActionButton onClick={() => copyText(company.id)}>
+            <Copy size={16} /> Copy company ID
+          </QuickActionButton>
+        </div>
+
+        <RecommendedAction title="Recommended next action" body={recommendedAction} />
 
         <div className="glass-card" style={{ padding: '20px' }}>
           <DetailRow label="Owner" value={company.ownerEmail || 'Unavailable'} />
@@ -142,12 +204,35 @@ export function CompanyDetailDrawer({ company, onClose }: { company: CompanyMetr
 }
 
 export function UserDetailDrawer({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const recommendedAction = !user.companyId && user.role !== 'buyer'
+    ? 'This user has not joined or created a company. Send a short onboarding message and ask what blocked them.'
+    : user.role === 'buyer'
+      ? 'Buyer account. Check whether they are monitoring suppliers or need marketplace liquidity.'
+      : 'User has a company link. Review recent activity and consider asking for product feedback.';
+
   return (
     <AdminDrawer title={user.name || user.email || 'User details'} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <UserRound size={30} />
         </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          {user.email && (
+            <QuickActionButton href={`mailto:${user.email}`}>
+              <Mail size={16} /> Email user
+            </QuickActionButton>
+          )}
+          <QuickActionButton onClick={() => copyText(user.email || '')}>
+            <Copy size={16} /> Copy email
+          </QuickActionButton>
+          <QuickActionButton onClick={() => copyText(user.id)}>
+            <Copy size={16} /> Copy user ID
+          </QuickActionButton>
+        </div>
+
+        <RecommendedAction title="Recommended next action" body={recommendedAction} />
+
         <div className="glass-card" style={{ padding: '20px' }}>
           <DetailRow label="Email" value={user.email || 'Unavailable'} />
           <DetailRow label="Role" value={user.role || 'No role'} />
