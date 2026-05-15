@@ -64,6 +64,12 @@ interface Company {
   logoUrl?: string;
 }
 
+const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
+  if (!user) return undefined;
+  const ownsFarmCompany = company?.ownerId === user.uid && company?.farmType !== 'buyer';
+  return ownsFarmCompany ? 'owner' : user.role;
+};
+
 interface PendingInvite {
   email: string;
   role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
@@ -756,10 +762,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // All hooks must be called before the conditional return
   // All hooks must be called before any conditional return
   const value: AuthContextType = useMemo(() => {
-    // Ensure owner role is correctly identified even if missing in user document
+    // Company ownership is authoritative for farm companies, even if the user doc has a stale role.
+    const effectiveRole = getEffectiveUserRole(user, company);
     const effectiveUser = user ? {
       ...user,
-      role: user.role || (company && company.ownerId === user.uid ? 'owner' : undefined) as User['role']
+      role: effectiveRole,
     } : null;
 
     return {
@@ -786,9 +793,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshUserData,
       refreshCompanyData,
       isAuthenticated: !!user,
-      needsRoleSelection: !!user && !user.role && !(company && company.ownerId === user.uid),
-      needsSetup: !!user && (!!user.role || !!(company && company.ownerId === user.uid)) && !user.hasCompletedSetup,
-      isBuyer: !!user && user.role === 'buyer',
+      needsRoleSelection: !!user && !effectiveRole,
+      needsSetup: !!user && !!effectiveRole && !user.hasCompletedSetup,
+      isBuyer: effectiveRole === 'buyer',
       getCompanyLocationData,
       getCompanyLocationString,
     };

@@ -2,13 +2,13 @@
 export default {
   expo: {
     name: 'Shrimply',
-    slug: 'Shrimply',
-    version: '1.0.5',
+    slug: 'investashrimp',
+    version: '3.1.0',
     orientation: 'portrait',
     icon: './assets/images/Shrimply2Logo.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
-    runtimeVersion: '1.0.5',
+    runtimeVersion: '3.1.0',
     assetBundlePatterns: ['**/*'],
 
     ios: {
@@ -25,7 +25,6 @@ export default {
 
     android: {
       package: 'com.shrimply.tech.investashrimp',
-      versionCode: 2,
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
         foregroundImage: './assets/images/Shrimply2Logo.png',
@@ -71,6 +70,8 @@ export default {
       ],
       'expo-localization',
       'expo-font',
+      '@react-native-community/datetimepicker',
+      'expo-web-browser',
       [
         'expo-location',
         {
