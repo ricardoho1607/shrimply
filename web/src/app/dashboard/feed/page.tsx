@@ -49,6 +49,8 @@ interface FeedData {
 
 interface Sampling {
   id: string; date: string; cycleId?: string; cycleName?: string; pondCycleId?: string; feedData?: FeedData;
+  isBaselineEstimate?: boolean;
+  source?: string;
 }
 
 interface Pond {
@@ -82,6 +84,9 @@ const formatSyncStatus = (date: Date | null): string => {
   if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
   return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
 };
+
+const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
+  Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 
 export default function FeedRecordsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -147,7 +152,7 @@ export default function FeedRecordsPage() {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
     
     const pond = ponds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s => s.date === formData.date);
+    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.date === formData.date);
     
     if (existing?.feedData) {
       // Data exists for this day, pre-fill the form
@@ -185,9 +190,11 @@ export default function FeedRecordsPage() {
       if (pondDoc.exists()) {
         const pondData = pondDoc.data();
         let samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => s.date === formData.date);
+        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.date === formData.date);
+        const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
+        const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
         
-        const feedAmount = parseFloat(formData.totalDailyFeed);
+        const feedAmount = parseFloat(formData.totalDailyFeed) || 0;
         const feedData = {
           ancoPercentage: formData.ancoPercentage,
           totalDailyFeed: formData.totalDailyFeed,
@@ -232,22 +239,30 @@ export default function FeedRecordsPage() {
           updatedBy: user.uid
         });
 
-        // 2. Deduct from Inventory if selected
-        if (formData.inventoryFeedId && feedAmount > 0) {
-          const feedRef = doc(db, 'companies', companyId, 'feeds', formData.inventoryFeedId);
+        const getFeedScreenUsageTotal = async (feedId: string) => {
+          const feedDoc = await getDoc(doc(db, 'companies', companyId, 'feeds', feedId));
+          if (!feedDoc.exists()) return 0;
+          return ((feedDoc.data() as any).usageHistory || [])
+            .filter((usage: any) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
+            .reduce((sum: number, usage: any) => sum + (Number(usage.quantity) || 0), 0);
+        };
+
+        const adjustFeedUsage = async (feedId: string, quantityDelta: number) => {
+          if (!feedId || !Number.isFinite(quantityDelta) || quantityDelta === 0) return;
+          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
           await runTransaction(db, async (transaction: any) => {
             const feedDoc = await transaction.get(feedRef);
             if (!feedDoc.exists()) return;
             
             const currentStock = (feedDoc.data() as any).totalStock || 0;
-            const newStock = Math.max(0, currentStock - feedAmount);
+            const newStock = Math.max(0, currentStock - quantityDelta);
             
             transaction.update(feedRef, {
               totalStock: newStock,
               usageHistory: arrayUnion({
                 id: `usage-${Date.now()}`,
                 date: formData.date,
-                quantity: feedAmount,
+                quantity: quantityDelta,
                 pondId: formData.pondId,
                 cycleId: pondData.cycleId,
                 cycleName: pondData.cycleName,
@@ -258,6 +273,17 @@ export default function FeedRecordsPage() {
               lastUpdated: serverTimestamp()
             });
           });
+        };
+
+        // 2. Adjust inventory by the edit delta so resaving a feed day does not double-deduct stock.
+        if (previousInventoryFeedId && previousInventoryFeedId !== formData.inventoryFeedId) {
+          const previousDeducted = await getFeedScreenUsageTotal(previousInventoryFeedId);
+          await adjustFeedUsage(previousInventoryFeedId, -previousDeducted);
+        }
+
+        if (formData.inventoryFeedId) {
+          const alreadyDeducted = await getFeedScreenUsageTotal(formData.inventoryFeedId);
+          await adjustFeedUsage(formData.inventoryFeedId, feedAmount - alreadyDeducted);
         }
 
         setModalOpen(false);

@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { Stack } from 'expo-router';
+import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
 import * as Updates from 'expo-updates';
 import { StatusBar } from 'expo-status-bar';
@@ -8,11 +8,9 @@ import { LanguageProvider, useLanguage } from '../context/LanguageContext';
 import { CurrencyProvider } from '../context/CurrencyContext';
 import { LanguageCurrencySync } from '../context/LanguageCurrencySync';
 import { SidebarProvider } from '../context/sidebarContext';
-import { useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Text } from 'react-native';
+import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 'react-native';
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
-import { Platform, useWindowDimensions } from 'react-native';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 
@@ -56,13 +54,13 @@ function RootLayoutNav() {
   const { t } = useLanguage();
   const segments = useSegments() as string[];
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || !rootNavigationState?.key) return;
 
     const firstSegment = segments?.[0] ?? null;
-    const isInTabs = firstSegment === '(tabs)' || segments?.includes('(tabs)');
     const isInAuth = firstSegment === 'auth' || segments?.includes('auth');
     const isInRoleSelection = segments?.includes('roleselection');
 
@@ -87,7 +85,6 @@ function RootLayoutNav() {
     }
 
     if (needsSetup) {
-      const firstSegment = segments?.[0] ?? null;
       let setupPath = '/company-setup'; // Default for owners
 
       if (user?.role === 'buyer') {
@@ -112,7 +109,7 @@ function RootLayoutNav() {
     }
 
     setRedirecting(false);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role]);
 
   const { width } = useWindowDimensions();
   const isLargeScreen = Platform.OS === 'web' && width > 1024;
@@ -156,17 +153,6 @@ function RootLayoutNav() {
           headerTintColor: '#f4f8fc',
           headerBackTitle: t.actions.back,
           title: t.shrimp.pondDetails
-        }}
-      />
-      <Stack.Screen
-        name="water-quality"
-        options={{
-          presentation: 'card',
-          headerShown: true,
-          headerStyle: { backgroundColor: '#0d2137' },
-          headerTintColor: '#f4f8fc',
-          headerBackTitle: t.actions.back,
-          title: t.nav.waterQuality
         }}
       />
       <Stack.Screen

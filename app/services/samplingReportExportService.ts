@@ -25,6 +25,8 @@ interface PondData {
   area: number; // in hectares
   initialStock: number;
   density: number; // per m²
+  isMidcycleBaseline?: boolean;
+  baselineDate?: string;
   samplingHistory: SamplingData[];
 }
 
@@ -115,6 +117,7 @@ const getReportAnalysis = (ponds: PondData[]) => {
   const avgADG = latestSamplings.reduce((sum, item) => sum + item.sampling.adg, 0) / latestSamplings.length;
   const avgSR = latestSamplings.reduce((sum, item) => sum + item.sampling.sr, 0) / latestSamplings.length;
   const avgFCR = latestSamplings.reduce((sum, item) => sum + item.sampling.fcr, 0) / latestSamplings.length;
+  const midcyclePonds = ponds.filter((pond) => pond.isMidcycleBaseline);
   const highRiskPonds = latestSamplings.filter(({ pond, sampling }) => {
     const totalMortality = pond.samplingHistory.reduce((sum, s) => sum + s.mortality, 0);
     const mortalityPct = pond.initialStock > 0 ? (totalMortality / pond.initialStock) * 100 : 0;
@@ -148,6 +151,10 @@ const getReportAnalysis = (ponds: PondData[]) => {
         : 'Growth performance requires attention because average daily growth is below the expected operating range.',
   ];
 
+  if (midcyclePonds.length > 0) {
+    executiveSummary.push(`${midcyclePonds.length} pond${midcyclePonds.length === 1 ? ' was' : 's were'} onboarded mid-cycle. Pre-onboarding feed, survival, and biomass values are user-provided estimates and should be treated as baseline assumptions.`);
+  }
+
   if (bestPond) {
     executiveSummary.push(`${bestPond.pond.pondNumber} is currently the strongest pond based on latest ADG, survival rate, and FCR balance.`);
   }
@@ -164,6 +171,9 @@ const getReportAnalysis = (ponds: PondData[]) => {
       ? `${moderateRiskPonds.length} pond${moderateRiskPonds.length === 1 ? '' : 's'} should remain under watch because one or more indicators are outside the preferred range.`
       : 'No moderate-risk growth or feed-efficiency warnings were detected from the latest sampling records.',
     'Biomass, FCR, and survival values should be treated as operational estimates until confirmed by consistent sampling and harvest records.',
+    midcyclePonds.length > 0
+      ? 'For mid-cycle onboarded ponds, compare future Shrimply-tracked sampling records against the baseline before making strong conclusions about historical growth trends.'
+      : 'No mid-cycle baseline assumptions were detected in the selected ponds.',
   ];
 
   return { executiveSummary, riskAssessment };
@@ -222,6 +232,7 @@ const generateSamplingReportHTML = (data: SamplingReportData): string => {
 
   const averages = calculateAverages(ponds);
   const reportAnalysis = getReportAnalysis(ponds);
+  const midcyclePonds = ponds.filter((pond) => pond.isMidcycleBaseline);
 
   // Generate pond rows
   const pondRows = ponds.map((pond, index) => {
@@ -594,6 +605,7 @@ const generateSamplingReportHTML = (data: SamplingReportData): string => {
         DOC = Days of Culture | ABW = Average Body Weight | Prev ABW = Previous Average Body Weight | ADG = Average Daily Growth | SR = Survival Rate | FCR = Feed Conversion Ratio
         <br/>
         <strong>Color Coding:</strong> Green = Excellent Performance | Orange = Moderate Performance | Red = Needs Attention
+        ${midcyclePonds.length > 0 ? `<br/><strong>Data Quality:</strong> ${midcyclePonds.map((pond) => `${pond.pondNumber}${pond.baselineDate ? ` baseline ${formatDate(pond.baselineDate)}` : ''}`).join(', ')} ${midcyclePonds.length === 1 ? 'was' : 'were'} onboarded mid-cycle. Pre-onboarding values are estimates, not exact historical logs.` : ''}
       </div>
 
       <div class="analysis-section">

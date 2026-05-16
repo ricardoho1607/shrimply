@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { usePondStore, type Pond, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, getPondBaselinePopulation, getPondCurrentDoc, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
 
 const isAndroid = Platform.OS === 'android';
@@ -20,11 +20,8 @@ export default function ShrimpReportsScreen() {
   const [loading, setLoading] = useState(false);
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
 
-  const calculateDOC = (docStart: string): number => 
-    Math.max(0, Math.floor((Date.now() - new Date(docStart).getTime()) / (1000 * 60 * 60 * 24)));
-
   const activePonds = useMemo(
-    () => ponds.filter(pond => isPondCycleActive(pond) && calculateDOC(pond.docStart) >= 0),
+    () => ponds.filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond) >= 0),
     [ponds]
   );
 
@@ -35,7 +32,11 @@ export default function ShrimpReportsScreen() {
   const togglePondSelection = (pondId: string) => {
     setSelectedPonds(prev => {
       const newSet = new Set(prev);
-      newSet.has(pondId) ? newSet.delete(pondId) : newSet.add(pondId);
+      if (newSet.has(pondId)) {
+        newSet.delete(pondId);
+      } else {
+        newSet.add(pondId);
+      }
       return newSet;
     });
   };
@@ -52,12 +53,16 @@ export default function ShrimpReportsScreen() {
               return daysDiff > 0 ? (sampling.mbw - prevSampling.mbw) / daysDiff : 0;
             })();
         const cumulativeMortality = allSamplings.slice(0, index + 1).reduce((sum, s) => sum + s.mortality, 0);
-        const samplingFeed = allSamplings.slice(0, index + 1).filter((s) => !(s.mbw === 0 && s.mortality === 0 && s.feed === 0))
-          .reduce((sum, s) => sum + (s.feed || 0), 0);
-        const feedManagementFeed = allSamplings.slice(0, index + 1).filter((s) => s.feedData)
-          .reduce((sum, s) => sum + (parseFloat(s.feedData?.totalDailyFeed || '0') || 0), 0);
-        const cumulativeFeed = feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
-        const currentPopulation = pond.initialPopulation - cumulativeMortality;
+        const samplingsToDate = allSamplings.slice(0, index + 1);
+        const cumulativeFeed = getPondTotalFeedConsumed({ ...pond, samplings: samplingsToDate });
+        const baselinePopulation = getPondBaselinePopulation({ ...pond, samplings: samplingsToDate });
+        const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;
+        const postBaselineMortality = samplingsToDate
+          .filter((s) => !isBaselineSampling(s) && (!baselineTime || new Date(s.date).getTime() >= baselineTime))
+          .reduce((sum, s) => sum + s.mortality, 0);
+        const currentPopulation = baselinePopulation !== null
+          ? baselinePopulation - postBaselineMortality
+          : pond.initialPopulation - cumulativeMortality;
         const biomass = (currentPopulation * sampling.mbw) / 1000;
         const sr = (currentPopulation / pond.initialPopulation) * 100;
         const size = sampling.mbw > 0 ? 1000 / sampling.mbw : 0;
@@ -83,7 +88,10 @@ export default function ShrimpReportsScreen() {
         const pondMetrics = calculatePondMetricsWithHarvest(pond);
         return {
           pondNumber: pond.pondName, stockingDate: pond.docStart, area: pond.pondArea, initialStock: pond.initialPopulation,
-          density: pond.density, samplingHistory: transformSamplingData(pond, pondMetrics),
+          density: pond.density,
+          isMidcycleBaseline: pond.cycleStartMode === 'midcycle',
+          baselineDate: pond.baselineDate,
+          samplingHistory: transformSamplingData(pond, pondMetrics),
         };
       });
       const reportData = prepareSamplingReportData(company?.companyName || t.shrimpReports?.myFarm || 'My Farm',
@@ -103,7 +111,7 @@ export default function ShrimpReportsScreen() {
   };
 
   const getPondStats = (pond: Pond) => {
-    const doc = calculateDOC(pond.docStart);
+    const doc = getPondCurrentDoc(pond);
     const metrics = calculatePondMetricsWithHarvest(pond);
     const latestSampling = pond.samplings.filter(s => s.mbw > 0)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];

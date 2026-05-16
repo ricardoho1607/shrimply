@@ -27,6 +27,9 @@ import { useCompanyCycles, useCompanyPonds, useDebouncedValue } from '@/hooks/us
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
+  cycleId?: string; cycleName?: string; pondCycleId?: string;
+  isBaselineEstimate?: boolean; source?: string;
+  estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
 }
 
 interface Pond {
@@ -42,6 +45,14 @@ interface Pond {
   cycleEndedBy?: string;
   cycleEndReason?: 'harvested' | 'disease' | 'reset' | 'other';
   previousCyclePondId?: string;
+  cycleStartMode?: 'new' | 'midcycle';
+  baselineDate?: string;
+  baselineDoc?: number;
+  baselineMbw?: number;
+  baselineEstimatedPopulation?: number;
+  baselineSurvivalRate?: number;
+  baselineCumulativeFeed?: number;
+  baselineSource?: string;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -61,6 +72,16 @@ const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
+
+const removeUndefinedFields = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(removeUndefinedFields);
+  if (!value || typeof value !== 'object') return value;
+
+  return Object.entries(value).reduce((cleaned, [key, entry]) => {
+    if (entry !== undefined) cleaned[key] = removeUndefinedFields(entry);
+    return cleaned;
+  }, {} as Record<string, unknown>);
+};
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
   if (!value) return null;
@@ -103,7 +124,14 @@ export default function PondsPage() {
     density: '',
     docStart: new Date().toISOString().split('T')[0],
     supplier: '',
-    plValue: '0.5'
+    plValue: '0.5',
+    cycleStartMode: 'new' as 'new' | 'midcycle',
+    baselineDate: new Date().toISOString().split('T')[0],
+    baselineDoc: '',
+    baselineMbw: '',
+    baselineEstimatedPopulation: '',
+    baselineSurvivalRate: '',
+    baselineCumulativeFeed: ''
   });
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
@@ -232,30 +260,75 @@ export default function PondsPage() {
 
       const initialPopulation = Number(formData.pondArea) * Number(formData.density);
       const initialWeight = parseFloat(formData.plValue) / 10; // Simple conversion logic from mobile app
-      const activeCycle = await ensureActiveCycle(formData.docStart);
+      const isMidcycle = formData.cycleStartMode === 'midcycle';
+      const baselineMbwValue = parseFloat(formData.baselineMbw);
+      const baselineDocValue = parseInt(formData.baselineDoc, 10);
+      const baselinePopulationValue = parseFloat(formData.baselineEstimatedPopulation);
+      const baselineSurvivalValue = parseFloat(formData.baselineSurvivalRate);
+      const baselineFeedValue = parseFloat(formData.baselineCumulativeFeed);
+
+      if (isMidcycle && (!formData.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
+        alert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
+        return;
+      }
+
+      if (isMidcycle && (!formData.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0)) {
+        alert(t.midcycleOnboarding?.baselineDocRequired || 'Current DOC is required for an existing cycle.');
+        return;
+      }
+
+      const effectiveDocStart = isMidcycle
+        ? new Date(new Date(formData.baselineDate).getTime() - baselineDocValue * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+        : formData.docStart;
+      const baselineDoc = isMidcycle ? baselineDocValue : 0;
+      const activeCycle = await ensureActiveCycle(effectiveDocStart);
+      const baselineSampling = isMidcycle ? [{
+        id: `baseline-${Date.now()}`,
+        date: formData.baselineDate,
+        mbw: baselineMbwValue,
+        mortality: 0,
+        feed: Number.isNaN(baselineFeedValue) ? 0 : baselineFeedValue,
+        isBaselineEstimate: true,
+        source: 'midcycle_onboarding',
+        ...(Number.isNaN(baselinePopulationValue) ? {} : { estimatedPopulation: baselinePopulationValue }),
+        ...(Number.isNaN(baselineSurvivalValue) ? {} : { estimatedSurvivalRate: baselineSurvivalValue }),
+        ...(Number.isNaN(baselineFeedValue) ? {} : { cumulativeFeedToDate: baselineFeedValue }),
+        ...(activeCycle?.id ? { cycleId: activeCycle.id } : {}),
+        ...(activeCycle?.cycleName ? { cycleName: activeCycle.cycleName } : {}),
+      }] : [];
 
       const pondData = {
         pondName: formData.pondName,
         pondArea: Number(formData.pondArea),
         density: Number(formData.density),
         initialPopulation,
-        docStart: formData.docStart,
+        docStart: effectiveDocStart,
         supplier: formData.supplier,
         plSupplier: formData.supplier,
         initialWeight,
-        samplings: [],
+        samplings: baselineSampling,
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
         totalHarvestedFeed: 0,
         cycleId: activeCycle?.id,
         cycleName: activeCycle?.cycleName,
         cycleStatus: 'active',
-        cycleStartedAt: formData.docStart,
+        cycleStartedAt: effectiveDocStart,
+        cycleStartMode: formData.cycleStartMode,
+        ...(isMidcycle && {
+          baselineDate: formData.baselineDate,
+          baselineDoc,
+          baselineMbw: baselineMbwValue,
+          baselineEstimatedPopulation: Number.isNaN(baselinePopulationValue) ? undefined : baselinePopulationValue,
+          baselineSurvivalRate: Number.isNaN(baselineSurvivalValue) ? undefined : baselineSurvivalValue,
+          baselineCumulativeFeed: Number.isNaN(baselineFeedValue) ? undefined : baselineFeedValue,
+          baselineSource: 'user_midcycle_estimate',
+        }),
         createdAt: serverTimestamp(),
         createdBy: user.uid
       };
 
-      await addDoc(collection(db, 'companies', companyId, 'ponds'), pondData);
+      await addDoc(collection(db, 'companies', companyId, 'ponds'), removeUndefinedFields(pondData));
       setModalOpen(false);
       setFormData({
         pondName: '',
@@ -263,7 +336,14 @@ export default function PondsPage() {
         density: '',
         docStart: new Date().toISOString().split('T')[0],
         supplier: '',
-        plValue: '0.5'
+        plValue: '0.5',
+        cycleStartMode: 'new',
+        baselineDate: new Date().toISOString().split('T')[0],
+        baselineDoc: '',
+        baselineMbw: '',
+        baselineEstimatedPopulation: '',
+        baselineSurvivalRate: '',
+        baselineCumulativeFeed: ''
       });
     } catch (error) {
       console.error('Error adding pond:', error);
@@ -544,6 +624,22 @@ export default function PondsPage() {
                   <div>
                     <h3 style={{ fontSize: '1.12rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{getPlSupplier(pond)}</p>
+                    {pond.cycleStartMode === 'midcycle' && (
+                      <span style={{
+                        display: 'inline-flex',
+                        marginTop: '6px',
+                        padding: '3px 8px',
+                        borderRadius: '8px',
+                        background: '#BBE1FA',
+                        color: '#0F4C75',
+                        fontSize: '0.68rem',
+                        fontWeight: 900,
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.03em'
+                      }}>
+                        {t.midcycleOnboarding?.importedMidcycle || 'Imported mid-cycle'}
+                      </span>
+                    )}
                   </div>
                 </Link>
                 <button
@@ -648,6 +744,38 @@ export default function PondsPage() {
 
             <form onSubmit={handleAddPond} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {t.midcycleOnboarding?.cycleQuestion || 'How is this cycle starting?'}
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                    {(['new', 'midcycle'] as const).map((mode) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, cycleStartMode: mode })}
+                        style={{
+                          padding: '13px 14px',
+                          borderRadius: '12px',
+                          border: `1px solid ${formData.cycleStartMode === mode ? 'var(--primary)' : 'var(--border)'}`,
+                          background: formData.cycleStartMode === mode ? 'var(--primary)' : 'var(--bg-mid)',
+                          color: formData.cycleStartMode === mode ? '#FFFFFF' : 'var(--text-primary)',
+                          fontWeight: 800,
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {mode === 'new'
+                          ? (t.midcycleOnboarding?.newCycle || 'New cycle')
+                          : (t.midcycleOnboarding?.existingCycle || 'Existing cycle')}
+                      </button>
+                    ))}
+                  </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                    {formData.cycleStartMode === 'midcycle'
+                      ? (t.midcycleOnboarding?.existingCycleHint || 'Use this when the pond is already running. Shrimply will create one estimated baseline record.')
+                      : (t.midcycleOnboarding?.newCycleHint || 'Use this when stocking starts in Shrimply.')}
+                  </p>
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
                   <input 
@@ -738,6 +866,35 @@ export default function PondsPage() {
                     onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.background = 'var(--bg-mid)'; }}
                   />
                 </div>
+                {formData.cycleStartMode === 'midcycle' && (
+                  <>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.baselineDate || 'Baseline Date'}</label>
+                      <input required type="date" value={formData.baselineDate} onChange={e => setFormData({...formData, baselineDate: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentDoc || 'Current DOC'}</label>
+                      <input required type="number" placeholder={t.midcycleOnboarding?.currentDocPlaceholder || 'e.g. 45'} value={formData.baselineDoc} onChange={e => setFormData({...formData, baselineDoc: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentMbw || 'Current MBW (g)'}</label>
+                      <input required type="number" step="0.01" placeholder={t.midcycleOnboarding?.currentMbwPlaceholder || 'e.g. 7'} value={formData.baselineMbw} onChange={e => setFormData({...formData, baselineMbw: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentPopulation || 'Current Population (optional)'}</label>
+                      <input type="number" placeholder={t.midcycleOnboarding?.currentPopulationPlaceholder || 'e.g. 85000'} value={formData.baselineEstimatedPopulation} onChange={e => setFormData({...formData, baselineEstimatedPopulation: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.survivalRate || 'Current SR % (optional)'}</label>
+                      <input type="number" step="0.1" placeholder={t.midcycleOnboarding?.survivalRatePlaceholder || 'e.g. 85'} value={formData.baselineSurvivalRate} onChange={e => setFormData({...formData, baselineSurvivalRate: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.feedUsedSoFar || 'Feed Used So Far (kg, optional)'}</label>
+                      <input type="number" step="0.01" placeholder={t.midcycleOnboarding?.feedUsedSoFarPlaceholder || 'e.g. 850'} value={formData.baselineCumulativeFeed} onChange={e => setFormData({...formData, baselineCumulativeFeed: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
+                      <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', margin: 0 }}>{t.midcycleOnboarding?.feedUsedSoFarHint || 'Used for estimates only. It will not deduct inventory.'}</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div style={{ marginTop: '12px', display: 'flex', gap: '20px' }}>

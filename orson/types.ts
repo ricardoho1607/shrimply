@@ -28,6 +28,7 @@ export interface OrsonNormalizedRecord {
   transparencyCm: OrsonNumber;
   temperatureC: OrsonNumber;
   feedData: OrsonNormalizedFeedData | null;
+  isBaselineEstimate: boolean;
   missingFields: string[];
 }
 
@@ -44,6 +45,14 @@ export interface OrsonNormalizedPond {
   totalHarvestedBiomassKg: OrsonNumber;
   totalHarvestedPopulation: OrsonNumber;
   totalHarvestedFeedKg: OrsonNumber;
+  cycleStartMode: 'new' | 'midcycle';
+  baselineDate: string | null;
+  baselineDoc: OrsonNumber;
+  baselineMbwG: OrsonNumber;
+  baselineEstimatedPopulation: OrsonNumber;
+  baselineSurvivalRate: OrsonNumber;
+  baselineCumulativeFeedKg: OrsonNumber;
+  baselineSource: string | null;
   supplier: string | null;
   cycleStatus: 'active' | 'ended';
   records: OrsonNormalizedRecord[];
@@ -106,6 +115,11 @@ export interface OrsonPondMetrics {
   smoothedAdgGPerDay: OrsonNumber;
   mbwOutlierDates: string[];
   totalFeedKg: number;
+  baselineFeedKg: number;
+  operationalFeedKg: number;
+  hasMidcycleBaseline: boolean;
+  baselineDate: string | null;
+  dataAssumptions: string[];
   totalMortalityCount: number;
   estimatedCurrentPopulation: OrsonNumber;
   estimatedSurvivalPercent: OrsonNumber;
@@ -186,6 +200,9 @@ export interface OrsonPromptPondPayload {
   feedPressureRatio: OrsonNumber;
   expectedFeedKg: OrsonNumber;
   actualFeedKg: OrsonNumber;
+  baselineFeedKg: number;
+  operationalFeedKg: number;
+  dataAssumptions: string[];
   dataCompletenessScore: number;
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
   findings: Array<Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>>;

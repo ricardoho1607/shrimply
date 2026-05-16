@@ -4,10 +4,10 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { 
   FlatList, Modal, ScrollView, StatusBar, StyleSheet, Text, 
-  TextInput, TouchableOpacity, View, Alert, Platform, ActivityIndicator,
+  TextInput, TouchableOpacity, View, Alert, Platform,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling, getPhysicalPondKey, getPondCycleStatus, getPondPlSupplier, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, type Sampling, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
 import { 
@@ -295,12 +295,6 @@ export default function PondDetails() {
   const calculations = useMemo(() => {
     if (!pond) return null;
 
-    const calculateDOC = (start: string) => {
-      if (!start) return 0;
-      const diffTime = new Date().getTime() - new Date(start).getTime();
-      return Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
-    };
-
     const getPondSamplingData = () => pond?.samplings || [];
 
     const getLatestSamplingData = () => 
@@ -336,11 +330,14 @@ export default function PondDetails() {
     const getADGData = () => {
       const pondSampling = getPondSamplingData()
         .filter((s: Sampling) => 
-          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
+          !isBaselineSampling(s) && (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .sort((a: Sampling, b: Sampling) => 
           new Date(a.date).getTime() - new Date(b.date).getTime()
         );
+      const baselineSampling = getPondSamplingData()
+        .filter(isBaselineSampling)
+        .sort((a: Sampling, b: Sampling) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
       
       if (pondSampling.length === 0) return { last: 0, average: 0 };
       
@@ -348,16 +345,18 @@ export default function PondDetails() {
       let adgCount = 0;
       let lastADG = 0;
 
-      if (pondSampling.length >= 1 && pond.initialWeight) {
+      if (pondSampling.length >= 1) {
+        const previousWeight = baselineSampling?.mbw || pond.initialWeight || 0.5;
+        const previousDate = baselineSampling?.date || pond.docStart;
         const daysDiff = Math.abs(
           (new Date(pondSampling[0].date).getTime() - 
-           new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24)
+           new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24)
         );
         
         if (daysDiff > 0) {
           const adg = calculateADG(
             pondSampling[0].mbw, 
-            pond.initialWeight, 
+            previousWeight,
             daysDiff
           );
           totalADG += adg;
@@ -391,26 +390,10 @@ export default function PondDetails() {
       };
     };
 
-    const getTotalFeedData = () => {
-      const samplingFeed = getPondSamplingData()
-        .filter((s: Sampling) => 
-          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-        )
-        .reduce((total: number, s: Sampling) => 
-          total + (s.feed || 0), 0
-        );
-
-      const feedManagementFeed = getPondSamplingData()
-        .filter((s: Sampling) => s.feedData)
-        .reduce((total: number, s: Sampling) => 
-          total + (parseFloat(s.feedData?.totalDailyFeed || '0') || 0), 0
-        );
-
-      return feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
-    };
+    const getTotalFeedData = () => getPondTotalFeedConsumed(pond);
 
     const latestSampling = getLatestSamplingData();
-    const doc = calculateDOC(pond.docStart);
+    const doc = getPondCurrentDoc(pond);
     const totalMortality = getTotalMortality();
     
     const currentPopulation = harvestAdjustedMetrics.currentPopulation;
@@ -622,6 +605,11 @@ export default function PondDetails() {
             <View style={[styles.statusBadge, getPondCycleStatus(pond) === 'ended' && styles.statusBadgeEnded]}>
               <Text style={styles.statusBadgeText}>{getPondCycleStatus(pond) === 'ended' ? 'Ended Cycle' : 'Active Cycle'}</Text>
             </View>
+            {pond.cycleStartMode === 'midcycle' && (
+              <View style={styles.midcycleBadge}>
+                <Text style={styles.midcycleBadgeText}>{t.midcycleOnboarding.importedMidcycle}</Text>
+              </View>
+            )}
             {getPondCycleStatus(pond) === 'ended' && canEditPonds && (
               <TouchableOpacity style={styles.startCycleButton} onPress={() => setStartCycleVisible(true)}>
                 <Text style={styles.startCycleButtonText}>Start New Cycle</Text>
@@ -835,6 +823,8 @@ const styles = StyleSheet.create({
   statusBadge: { backgroundColor: '#315f57', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
   statusBadgeEnded: { backgroundColor: '#6b8aa0' },
   statusBadgeText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  midcycleBadge: { backgroundColor: '#BBE1FA', borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 },
+  midcycleBadgeText: { color: '#0F4C75', fontSize: 12, fontWeight: '800' },
   startCycleButton: { backgroundColor: '#0d2137', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14 },
   startCycleButtonText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 12 : 16, marginTop: Platform.OS === 'android' ? 20 : 24 },

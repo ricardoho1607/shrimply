@@ -243,6 +243,14 @@ export const useFirebaseSync = () => {
                 cycleEndedBy: data.cycleEndedBy,
                 cycleEndReason: data.cycleEndReason,
                 previousCyclePondId: data.previousCyclePondId,
+                cycleStartMode: data.cycleStartMode || 'new',
+                baselineDate: data.baselineDate,
+                baselineDoc: data.baselineDoc,
+                baselineMbw: data.baselineMbw,
+                baselineEstimatedPopulation: data.baselineEstimatedPopulation,
+                baselineSurvivalRate: data.baselineSurvivalRate,
+                baselineCumulativeFeed: data.baselineCumulativeFeed,
+                baselineSource: data.baselineSource,
               }));
             });
 

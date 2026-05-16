@@ -27,7 +27,8 @@ const getFRFromMBW = (mbw: number): number | null => {
 
 // Function to calculate population based on new formula using sampling feed data
 const calculatePopulationFromSampling = (sampling: Sampling): number => {
-  const { mbw, feed: feedAmount } = sampling;
+  const { mbw } = sampling;
+  const feedAmount = getSamplingFeedAmount(sampling);
   const frPercentage = getFRFromMBW(mbw);
   
   if (feedAmount === 0 || mbw === 0 || frPercentage === null || frPercentage === 0) return 0;
@@ -70,15 +71,27 @@ export interface FarmCycle {
 export interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
+  isBaselineEstimate?: boolean; source?: 'midcycle_onboarding' | string;
+  estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
   feedData?: FeedData; harvestData?: HarvestData;
 }
+
+export type CycleStartMode = 'new' | 'midcycle';
 
 export interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: PondCycleStatus; cycleStartedAt?: string; cycleEndedAt?: string; cycleEndedBy?: string; cycleEndReason?: PondCycleEndReason; previousCyclePondId?: string;
+  cycleStartMode?: CycleStartMode;
+  baselineDate?: string;
+  baselineDoc?: number;
+  baselineMbw?: number;
+  baselineEstimatedPopulation?: number;
+  baselineSurvivalRate?: number;
+  baselineCumulativeFeed?: number;
+  baselineSource?: 'user_midcycle_estimate' | string;
 }
 
 export const getPondCycleStatus = (pond: Pick<Pond, 'cycleStatus'>): PondCycleStatus => pond.cycleStatus === 'ended' ? 'ended' : 'active';
@@ -87,6 +100,66 @@ export const getPondPlSupplier = (pond: Pick<Pond, 'plSupplier' | 'supplier'>): 
 export const isFarmCycleOpen = (cycle: Pick<FarmCycle, 'status'>): boolean => ['planning', 'stocking', 'active'].includes(cycle.status);
 export const getActiveFarmCycle = (cycles: FarmCycle[]): FarmCycle | undefined => cycles.find(isFarmCycleOpen);
 export const getPhysicalPondKey = (pondName: string): string => pondName.trim().toLowerCase();
+const toFiniteNumber = (value: unknown): number => {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+export const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
+  Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+export const getSamplingFeedAmount = (sampling: Pick<Sampling, 'feed' | 'feedData'>): number => {
+  const samplingFeed = toFiniteNumber(sampling.feed);
+  if (samplingFeed > 0) return samplingFeed;
+  return toFiniteNumber(sampling.feedData?.totalDailyFeed);
+};
+export const getPondBaselineFeed = (pond: Pick<Pond, 'baselineCumulativeFeed' | 'samplings'>): number => {
+  const pondLevelFeed = toFiniteNumber(pond.baselineCumulativeFeed);
+  if (pondLevelFeed > 0) return pondLevelFeed;
+
+  return (pond.samplings || [])
+    .filter(isBaselineSampling)
+    .reduce((maxFeed, sampling) => Math.max(maxFeed, toFiniteNumber(sampling.cumulativeFeedToDate) || getSamplingFeedAmount(sampling)), 0);
+};
+export const getPondOperationalFeed = (pond: Pick<Pond, 'samplings'>): number => {
+  const operationalSamplings = (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling));
+  const feedManagementFeed = operationalSamplings
+    .filter((sampling) => sampling.feedData)
+    .reduce((total, sampling) => total + getSamplingFeedAmount(sampling), 0);
+  const samplingFeed = operationalSamplings
+    .filter((sampling) => Number(sampling.mbw) > 0 || Number(sampling.mortality) > 0 || Number(sampling.feed) > 0)
+    .reduce((total, sampling) => total + toFiniteNumber(sampling.feed), 0);
+
+  return feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
+};
+export const getPondTotalFeedConsumed = (pond: Pick<Pond, 'baselineCumulativeFeed' | 'samplings'>): number =>
+  getPondBaselineFeed(pond) + getPondOperationalFeed(pond);
+export const getPondBaselinePopulation = (pond: Pick<Pond, 'initialPopulation' | 'baselineEstimatedPopulation' | 'baselineSurvivalRate' | 'samplings'>): number | null => {
+  const estimatedPopulation = toFiniteNumber(pond.baselineEstimatedPopulation);
+  if (estimatedPopulation > 0) return estimatedPopulation;
+
+  const survivalRate = toFiniteNumber(pond.baselineSurvivalRate);
+  if (survivalRate > 0 && pond.initialPopulation > 0) return Math.round((pond.initialPopulation * survivalRate) / 100);
+
+  const baselineSampling = (pond.samplings || []).find(isBaselineSampling);
+  const samplingPopulation = toFiniteNumber(baselineSampling?.estimatedPopulation);
+  if (samplingPopulation > 0) return samplingPopulation;
+
+  const samplingSurvival = toFiniteNumber(baselineSampling?.estimatedSurvivalRate);
+  if (samplingSurvival > 0 && pond.initialPopulation > 0) return Math.round((pond.initialPopulation * samplingSurvival) / 100);
+
+  return null;
+};
+export const getPondCurrentDoc = (pond: Pick<Pond, 'docStart' | 'baselineDate' | 'baselineDoc'>): number => {
+  const docFromStart = Math.floor((Date.now() - new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24));
+  const baselineDoc = toFiniteNumber(pond.baselineDoc);
+  const baselineDate = pond.baselineDate ? new Date(pond.baselineDate) : null;
+
+  if (baselineDoc > 0 && baselineDate && !Number.isNaN(baselineDate.getTime())) {
+    const daysSinceBaseline = Math.floor((Date.now() - baselineDate.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(0, Math.floor(baselineDoc + Math.max(0, daysSinceBaseline)));
+  }
+
+  return Math.max(0, Number.isFinite(docFromStart) ? docFromStart : 0);
+};
 export const buildDefaultFarmCycle = (existingCycles: FarmCycle[] = []): FarmCycle => {
   const now = Date.now();
   return {
@@ -104,6 +177,7 @@ export const normalizePondLifecycle = (pond: Pond): Pond => ({
   pondCycleId: pond.pondCycleId || pond.id,
   cycleStatus: getPondCycleStatus(pond),
   cycleStartedAt: pond.cycleStartedAt || pond.docStart,
+  cycleStartMode: pond.cycleStartMode || 'new',
 });
 
 interface PondStore {
@@ -120,7 +194,7 @@ interface PondStore {
   addFeedData: (pondId: string, record: FeedData) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
-  getPondById: (pondId: string) => Pond | undefined; getPondSamplingData: (pondName: string) => Sampling[]; getSamplingDataFlat: () => Array<Sampling & { pondName: string }>;
+  getPondById: (pondId: string) => Pond | undefined; getPondSamplingData: (pondName: string) => Sampling[]; getSamplingDataFlat: () => (Sampling & { pondName: string })[];
   
   calculatePondMetricsWithHarvest: (pond: Pond) => { currentBiomass: number; currentPopulation: number; adjustedSR: number; totalFeedConsumed: number; adjustedFCR: number; };
   
@@ -408,13 +482,14 @@ export const usePondStore = create<PondStore>()(
       calculatePondMetricsWithHarvest: (pond) => {
   const samplings = pond.samplings || [];
   const validSamplings = samplings.filter(s => s.mbw > 0 || s.mortality > 0 || s.feed > 0);
+  const baselinePopulation = getPondBaselinePopulation(pond);
   
   if (validSamplings.length === 0) {
     return {
-      currentBiomass: (pond.initialPopulation * (pond.initialWeight || 0.5)) / 1000,
-      currentPopulation: pond.initialPopulation,
-      adjustedSR: 100,
-      totalFeedConsumed: 0,
+      currentBiomass: ((baselinePopulation || pond.initialPopulation) * (pond.initialWeight || 0.5)) / 1000,
+      currentPopulation: baselinePopulation || pond.initialPopulation,
+      adjustedSR: pond.initialPopulation > 0 ? ((baselinePopulation || pond.initialPopulation) / pond.initialPopulation) * 100 : 0,
+      totalFeedConsumed: getPondBaselineFeed(pond),
       adjustedFCR: 0,
     };
   }
@@ -424,12 +499,18 @@ export const usePondStore = create<PondStore>()(
 
   let currentPopulation = pond.initialPopulation;
   
-  const latestValidSampling = sortedSamplings.filter(s => s.mbw > 0 && s.feed > 0).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  const latestValidSampling = sortedSamplings.filter(s => !isBaselineSampling(s) && s.mbw > 0 && getSamplingFeedAmount(s) > 0).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
-  if (latestValidSampling) {
+  if (baselinePopulation !== null) {
+    const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;
+    const postBaselineMortality = sortedSamplings
+      .filter((sampling) => !isBaselineSampling(sampling) && (!baselineTime || new Date(sampling.date).getTime() >= baselineTime))
+      .reduce((sum, sampling) => sum + (sampling.mortality || 0), 0);
+    currentPopulation = Math.max(0, baselinePopulation - postBaselineMortality);
+  } else if (latestValidSampling) {
     currentPopulation = calculatePopulationFromSampling(latestValidSampling);
   } else {
-    const totalMortality = sortedSamplings.filter(s => s.mortality > 0).reduce((sum, s) => sum + s.mortality, 0);
+    const totalMortality = sortedSamplings.filter(s => !isBaselineSampling(s) && s.mortality > 0).reduce((sum, s) => sum + s.mortality, 0);
     currentPopulation = Math.max(0, pond.initialPopulation - totalMortality);
   }
 
@@ -440,16 +521,7 @@ export const usePondStore = create<PondStore>()(
     currentBiomass = Math.max(0, (currentPopulation * latestSampling.mbw) / 1000);
   }
 
-  // Calculate total feed - same logic as in ponddetails.tsx getTotalFeedData()
-  const samplingFeed = samplings
-    .filter((s) => !(s.mbw === 0 && s.mortality === 0 && s.feed === 0))
-    .reduce((total, s) => total + (s.feed || 0), 0);
-
-  const feedManagementFeed = samplings
-    .filter((s) => s.feedData)
-    .reduce((total, s) => total + (parseFloat(s.feedData?.totalDailyFeed || '0') || 0), 0);
-
-  const totalFeedConsumed = feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
+  const totalFeedConsumed = getPondTotalFeedConsumed(pond);
   
   const adjustedSR = pond.initialPopulation > 0 ? (currentPopulation / pond.initialPopulation) * 100 : 0;
 
@@ -506,7 +578,7 @@ export const usePondStore = create<PondStore>()(
             if (p.id !== pondId) return p;
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             
-            const todayWQIndex = p.samplings.findIndex(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
+            const todayWQIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
             
             let updatedSamplings;
             if (todayWQIndex >= 0) {
@@ -533,7 +605,7 @@ export const usePondStore = create<PondStore>()(
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             const feedRecord = { ...record, ...cycleFields };
             
-            const existingIndex = p.samplings.findIndex(s => s.date === today);
+            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.date === today);
             
             let updatedSamplings;
             if (existingIndex >= 0) {
@@ -564,7 +636,7 @@ export const usePondStore = create<PondStore>()(
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             const harvestRecord = { ...record, ...cycleFields };
             
-            const todayHarvestIndex = p.samplings.findIndex(s => s.harvestData && s.date === today);
+            const todayHarvestIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.harvestData && s.date === today);
             
             let updatedSamplings;
             if (todayHarvestIndex >= 0) {

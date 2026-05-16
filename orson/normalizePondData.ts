@@ -162,6 +162,7 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
     transparencyCm: firstNumber(record.transparency),
     temperatureC: firstNumber(record.temp, record.temperature, record.temperatureC),
     feedData,
+    isBaselineEstimate: Boolean(record.isBaselineEstimate) || record.source === 'midcycle_onboarding',
     missingFields: [],
   };
 
@@ -216,6 +217,14 @@ export const normalizePondData = (
     totalHarvestedBiomassKg: firstNumber(pond.totalHarvestedBiomass, pond.harvestedBiomass),
     totalHarvestedPopulation: firstNumber(pond.totalHarvestedPopulation, pond.harvestedPopulation),
     totalHarvestedFeedKg: firstNumber(pond.totalHarvestedFeed, pond.harvestedFeed),
+    cycleStartMode: pond.cycleStartMode === 'midcycle' ? 'midcycle' : 'new',
+    baselineDate: normalizeDateString(pond.baselineDate),
+    baselineDoc: firstNumber(pond.baselineDoc),
+    baselineMbwG: firstNumber(pond.baselineMbw),
+    baselineEstimatedPopulation: firstNumber(pond.baselineEstimatedPopulation),
+    baselineSurvivalRate: firstNumber(pond.baselineSurvivalRate),
+    baselineCumulativeFeedKg: firstNumber(pond.baselineCumulativeFeed),
+    baselineSource: firstString(pond.baselineSource),
     supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
     records,

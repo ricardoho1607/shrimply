@@ -26,6 +26,7 @@ import { auth, db } from '@/lib/firebase';
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
+  isBaselineEstimate?: boolean; source?: string;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
 }
@@ -59,6 +60,9 @@ const formatSyncStatus = (date: Date | null): string => {
   if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
   return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
 };
+
+const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
+  Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 
 export default function WaterQualityPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -113,7 +117,7 @@ export default function WaterQualityPage() {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
     
     const pond = ponds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s => s.date === formData.date);
+    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.date === formData.date);
     
     if (existing) {
       setFormData(prev => {
@@ -169,7 +173,7 @@ export default function WaterQualityPage() {
       if (pondDoc.exists()) {
         const pondData = pondDoc.data();
         let samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => s.date === formData.date);
+        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.date === formData.date);
         
         const wqData = {
           cycleId: pondData.cycleId,

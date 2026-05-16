@@ -344,7 +344,7 @@ const calculateFeedBiomassModel = (params: {
     doMinimumLatest,
   } = params;
 
-  const latestFeedRecord = latestWith(pond, (record) => positive(record.feedKg));
+  const latestFeedRecord = latestWith(pond, (record) => record.isBaselineEstimate ? null : positive(record.feedKg));
   const actualFeedKg = latestFeedRecord?.value ?? null;
   const feedRatePercent = getFeedRatePercentFromMbw(latestMbwG);
   const expectedFeedKg = hasNumber(estimatedBiomassKg) && hasNumber(feedRatePercent)
@@ -407,14 +407,31 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
   const mbwPoints = recordsWith(pond, (record) => positive(record.mbwG));
   const latestMbw = mbwPoints.length > 0 ? mbwPoints[mbwPoints.length - 1] : null;
   const latestMbwG = latestMbw?.value ?? pond.initialWeightG;
-  const totalFeedKg = sumPositive(pond, (record) => record.feedKg);
-  const totalMortalityCount = sumPositive(pond, (record) => record.mortalityCount);
+  const baselineRecordFeedKg = sumPositive(pond, (record) => record.isBaselineEstimate ? record.feedKg : null);
+  const baselineFeedKg = positive(pond.baselineCumulativeFeedKg) ?? baselineRecordFeedKg;
+  const operationalFeedKg = sumPositive(pond, (record) => record.isBaselineEstimate ? null : record.feedKg);
+  const totalFeedKg = baselineFeedKg + operationalFeedKg;
+  const totalMortalityCount = sumPositive(pond, (record) => record.isBaselineEstimate ? null : record.mortalityCount);
   const harvestedPopulation = positive(pond.totalHarvestedPopulation) ?? 0;
   const harvestedBiomassKg = positive(pond.totalHarvestedBiomassKg) ?? 0;
+  const baselinePopulation = positive(pond.baselineEstimatedPopulation) ??
+    (hasNumber(pond.baselineSurvivalRate) && hasNumber(pond.initialPopulation)
+      ? (pond.initialPopulation * pond.baselineSurvivalRate) / 100
+      : null);
 
-  const estimatedCurrentPopulation = hasNumber(pond.initialPopulation)
-    ? Math.max(0, pond.initialPopulation - totalMortalityCount - harvestedPopulation)
-    : null;
+  const estimatedCurrentPopulation = hasNumber(baselinePopulation)
+    ? Math.max(0, baselinePopulation - totalMortalityCount - harvestedPopulation)
+    : hasNumber(pond.initialPopulation)
+      ? Math.max(0, pond.initialPopulation - totalMortalityCount - harvestedPopulation)
+      : null;
+
+  const hasMidcycleBaseline = pond.cycleStartMode === 'midcycle' || Boolean(pond.baselineDate) || baselineFeedKg > 0 || hasNumber(baselinePopulation);
+  const dataAssumptions = hasMidcycleBaseline
+    ? [
+        `This pond was onboarded mid-cycle${pond.baselineDate ? ` on ${pond.baselineDate}` : ''}. Pre-onboarding feed, survival, and biomass are user-provided estimates.`,
+        'Post-baseline records are Shrimply tracked observations; pre-baseline values should not be treated as exact historical logs.',
+      ]
+    : [];
 
   const estimatedSurvivalPercent = hasNumber(estimatedCurrentPopulation) && hasNumber(pond.initialPopulation) && pond.initialPopulation > 0
     ? round((estimatedCurrentPopulation / pond.initialPopulation) * 100, 2)
@@ -492,6 +509,11 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     smoothedAdgGPerDay: calculateSmoothedAdg(pond, mbwPoints),
     mbwOutlierDates: detectMbwOutliers(mbwPoints),
     totalFeedKg: round(totalFeedKg, 2),
+    baselineFeedKg: round(baselineFeedKg, 2),
+    operationalFeedKg: round(operationalFeedKg, 2),
+    hasMidcycleBaseline,
+    baselineDate: pond.baselineDate,
+    dataAssumptions,
     totalMortalityCount: round(totalMortalityCount, 0),
     estimatedCurrentPopulation: hasNumber(estimatedCurrentPopulation) ? round(estimatedCurrentPopulation, 0) : null,
     estimatedSurvivalPercent,
