@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc
+  arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc, writeBatch
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
@@ -596,14 +596,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const requestDoc = await getDoc(doc(db, 'joinRequests', requestId));
       if (!requestDoc.exists()) throw new Error('Join request not found');
       const requestData = requestDoc.data() as JoinRequest;
+      if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
+      if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
 
-      await updateDoc(doc(db, 'joinRequests', requestId), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'joinRequests', requestId), {
         status: 'approved', processedBy: user.uid, processedAt: new Date().toISOString(),
       });
-      await updateDoc(doc(db, 'companies', company.id), { teamMembers: arrayUnion(requestData.userId) });
-      await updateDoc(doc(db, 'users', requestData.userId), {
+      batch.update(doc(db, 'companies', company.id), {
+        teamMembers: arrayUnion(user.uid, requestData.userId),
+        updatedAt: serverTimestamp(),
+      });
+      batch.update(doc(db, 'users', requestData.userId), {
         companyId: company.id, role: requestData.requestedRole, hasCompletedSetup: true, lastActive: serverTimestamp()
       });
+      await batch.commit();
       await refreshCompanyData();
     } catch (error) {
       console.error('Error approving join request:', error);
