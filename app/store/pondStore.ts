@@ -187,7 +187,7 @@ interface PondStore {
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
   closeFarmCycle: (cycleId: string, closedAt: string) => void;
-  addPond: (pond: Pond) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
+  addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; }) => void;
@@ -361,6 +361,18 @@ export const usePondStore = create<PondStore>()(
         const pondToDelete = state.ponds.find(p => p.id === pondId);
         set((state) => ({ ponds: state.ponds.filter((pond) => pond.id !== pondId) }));
         if (pondToDelete) state.firebaseSync?.syncPond('delete', pondToDelete);
+      },
+
+      updatePond: (pondId, updates) => {
+        let updatedPond: Pond | undefined;
+        set((state) => ({
+          ponds: state.ponds.map((pond) => {
+            if (pond.id !== pondId) return pond;
+            updatedPond = normalizePondLifecycle({ ...pond, ...updates });
+            return updatedPond;
+          })
+        }));
+        if (updatedPond) get().firebaseSync?.syncPond('update', updatedPond);
       },
 
       endPondCycle: (pondId, endedAt, reason, endedBy) => {

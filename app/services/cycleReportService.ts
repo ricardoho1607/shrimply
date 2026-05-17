@@ -5,6 +5,7 @@ import {
   type HarvestRecord,
   type Pond,
   getPondPlSupplier,
+  isBaselineSampling,
   isPondCycleActive,
 } from '../store/pondStore';
 import type { Expense } from './financeService';
@@ -109,14 +110,14 @@ const daysBetween = (start?: string, end?: string): number => {
 
 const getLatestMbw = (pond: Pond): number => {
   const validSamplings = [...(pond.samplings || [])]
-    .filter((sampling) => toNumber(sampling.mbw) > 0)
+    .filter((sampling) => !isBaselineSampling(sampling) && toNumber(sampling.mbw) > 0)
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  return toNumber(validSamplings[0]?.mbw || pond.initialWeight || 0);
+  return toNumber(validSamplings[0]?.mbw || pond.baselineMbw || pond.initialWeight || 0);
 };
 
 const getPondMortality = (pond: Pond): number =>
-  (pond.samplings || []).reduce((sum, sampling) => sum + toNumber(sampling.mortality), 0);
+  (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling)).reduce((sum, sampling) => sum + toNumber(sampling.mortality), 0);
 
 const usageMatchesCycle = (usage: UsageHistory, cycleId: string, cyclePondIds: Set<string>): boolean =>
   usage.cycleId === cycleId ||
@@ -275,7 +276,7 @@ export const buildCycleReport = ({
       harvestedBiomass: toNumber(pond.totalHarvestedBiomass),
       harvestedPopulation: toNumber(pond.totalHarvestedPopulation),
       mortality: getPondMortality(pond),
-      samplingCount: (pond.samplings || []).filter((sampling) => toNumber(sampling.mbw) > 0).length,
+      samplingCount: (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling) && toNumber(sampling.mbw) > 0).length,
     };
   });
 

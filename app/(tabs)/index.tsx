@@ -144,6 +144,7 @@ export default function PondManagementScreen() {
     ponds, 
     cycles,
     addPond, 
+    updatePond,
     addSampling, 
     endPondCycle, 
     updateFarmCycle,
@@ -161,13 +162,14 @@ export default function PondManagementScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
-  const [modalType, setModalType] = useState<'pond' | 'sampling' | 'cycle'>('pond');
+  const [modalType, setModalType] = useState<'pond' | 'sampling' | 'cycle' | 'baseline'>('pond');
   const [datePickerField, setDatePickerField] = useState<'docStart' | 'samplingDate' | 'baselineDate'>('docStart');
   const [tempDate, setTempDate] = useState(new Date());
   const tempDateRef = useRef(new Date());
   const originalDateRef = useRef(new Date());
   const [cycleNameDraft, setCycleNameDraft] = useState('');
   const [cycleManagerExpanded, setCycleManagerExpanded] = useState(false);
+  const [editingBaselinePondId, setEditingBaselinePondId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     pondName: '', 
     pondArea: '', 
@@ -407,6 +409,7 @@ export default function PondManagementScreen() {
 
   const closeModal = useCallback(() => { 
     resetForm(); 
+    setEditingBaselinePondId(null);
     setModalVisible(false); 
   }, [resetForm]);
 
@@ -782,11 +785,114 @@ export default function PondManagementScreen() {
     setShowDatePicker(true);
   }, [modalType, formData, normalizeDateValue]);
 
-  const openModal = useCallback((type: 'pond' | 'sampling' | 'cycle') => {
+  const openModal = useCallback((type: 'pond' | 'sampling' | 'cycle' | 'baseline') => {
     setModalType(type); 
     setMenuModalVisible(false); 
     setModalVisible(true);
   }, []);
+
+  const openBaselineEditModal = useCallback((pond: Pond) => {
+    const baselineSampling = (pond.samplings || [])
+      .filter(isBaselineSampling)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    const baselineDate = pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0];
+
+    setEditingBaselinePondId(pond.id);
+    setFormData((prev) => ({
+      ...prev,
+      baselineDate: normalizeDateValue(new Date(baselineDate)),
+      baselineDoc: String(pond.baselineDoc ?? ''),
+      baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
+      baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
+      baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
+      baselineCumulativeFeed: String(pond.baselineCumulativeFeed ?? baselineSampling?.cumulativeFeedToDate ?? baselineSampling?.feed ?? ''),
+    }));
+    setModalType('baseline');
+    setModalVisible(true);
+  }, [normalizeDateValue]);
+
+  const handleUpdateBaseline = useCallback(() => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
+    if (!canEditPonds) {
+      Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const pond = ponds.find((item) => item.id === editingBaselinePondId);
+    if (!pond) {
+      Alert.alert(t.messages.error, t.messages.error);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const baselineDocValue = parseInt(formData.baselineDoc, 10);
+    const baselineMbwValue = parseFloat(formData.baselineMbw);
+    const baselinePopulationValue = parseFloat(formData.baselineEstimatedPopulation);
+    const baselineSurvivalValue = parseFloat(formData.baselineSurvivalRate);
+    const baselineFeedValue = parseFloat(formData.baselineCumulativeFeed);
+
+    if (!formData.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0) {
+      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineMbwRequired);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!formData.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0) {
+      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDocRequired);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const baselineDateString = formData.baselineDate.toISOString().split('T')[0];
+    const effectiveDocStart = new Date(formData.baselineDate.getTime() - baselineDocValue * 24 * 60 * 60 * 1000);
+    const docStartString = effectiveDocStart.toISOString().split('T')[0];
+    const baselineSamplingIndex = (pond.samplings || []).findIndex(isBaselineSampling);
+    const existingBaseline = baselineSamplingIndex >= 0 ? pond.samplings[baselineSamplingIndex] : undefined;
+    const baselineSampling: Sampling = {
+      id: existingBaseline?.id || `baseline-${Date.now()}`,
+      date: baselineDateString,
+      mbw: baselineMbwValue,
+      mortality: 0,
+      feed: Number.isNaN(baselineFeedValue) ? 0 : baselineFeedValue,
+      isBaselineEstimate: true,
+      source: 'midcycle_onboarding',
+      cycleId: pond.cycleId,
+      cycleName: pond.cycleName,
+      pondCycleId: pond.pondCycleId || pond.id,
+      ...(Number.isNaN(baselinePopulationValue) ? {} : { estimatedPopulation: baselinePopulationValue }),
+      ...(Number.isNaN(baselineSurvivalValue) ? {} : { estimatedSurvivalRate: baselineSurvivalValue }),
+      ...(Number.isNaN(baselineFeedValue) ? {} : { cumulativeFeedToDate: baselineFeedValue }),
+    };
+    const samplings = baselineSamplingIndex >= 0
+      ? pond.samplings.map((sampling, index) => index === baselineSamplingIndex ? baselineSampling : sampling)
+      : [baselineSampling, ...(pond.samplings || [])];
+
+    updatePond(pond.id, {
+      docStart: docStartString,
+      cycleStartedAt: docStartString,
+      cycleStartMode: 'midcycle',
+      baselineDate: baselineDateString,
+      baselineDoc: baselineDocValue,
+      baselineMbw: baselineMbwValue,
+      baselineEstimatedPopulation: Number.isNaN(baselinePopulationValue) ? undefined : baselinePopulationValue,
+      baselineSurvivalRate: Number.isNaN(baselineSurvivalValue) ? undefined : baselineSurvivalValue,
+      baselineCumulativeFeed: Number.isNaN(baselineFeedValue) ? undefined : baselineFeedValue,
+      baselineSource: 'user_midcycle_estimate',
+      samplings,
+    });
+
+    setEditingBaselinePondId(null);
+    closeModal();
+    Alert.alert(t.messages.success, 'Baseline estimates updated.');
+  }, [canEditPonds, closeModal, editingBaselinePondId, formData, ponds, t, updatePond]);
 
   const PondCard = useMemo(() => React.memo(function PondCardItem({ pond }: { pond: Pond }) {
     const metrics = calculateMetrics(pond);
@@ -817,15 +923,28 @@ export default function PondManagementScreen() {
               </Text>
             </View>
             {canEditPonds && (
-              <TouchableOpacity 
-                style={styles.editButton} 
-                onPress={(e) => { 
-                  e.stopPropagation(); 
-                  handleEndPondCycle(pond); 
-                }}
-              >
-                <Ionicons name={isPondCycleActive(pond) ? "archive-outline" : "time-outline"} size={18} color={isPondCycleActive(pond) ? "#315f57" : "#6b8aa0"} />
-              </TouchableOpacity>
+              <>
+                {pond.cycleStartMode === 'midcycle' && isPondCycleActive(pond) && (
+                  <TouchableOpacity
+                    style={styles.baselineEditButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      openBaselineEditModal(pond);
+                    }}
+                  >
+                    <Ionicons name="create-outline" size={18} color="#0F4C75" />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.editButton}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleEndPondCycle(pond);
+                  }}
+                >
+                  <Ionicons name={isPondCycleActive(pond) ? "archive-outline" : "time-outline"} size={18} color={isPondCycleActive(pond) ? "#315f57" : "#6b8aa0"} />
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>
@@ -897,6 +1016,7 @@ export default function PondManagementScreen() {
     getLastADG, 
     getDOCColor, 
     handleEndPondCycle, 
+    openBaselineEditModal,
     router, 
     canEditPonds, 
     t
@@ -1017,6 +1137,55 @@ export default function PondManagementScreen() {
       )}
     </>
   ), [formData, updateForm, openDatePicker, t]);
+
+  const renderBaselineForm = useMemo(() => (
+    <>
+      <Text style={styles.inputHint}>
+        Corrects the mid-cycle baseline estimate only. This will not deduct inventory or create normal sampling history.
+      </Text>
+      <DateInput
+        label={t.midcycleOnboarding.baselineDate}
+        date={formData.baselineDate}
+        onPress={() => openDatePicker('baselineDate')}
+      />
+      <InputField
+        label={t.midcycleOnboarding.currentDoc}
+        value={formData.baselineDoc}
+        onChangeText={(value) => updateForm('baselineDoc', value)}
+        placeholder={t.midcycleOnboarding.currentDocPlaceholder}
+        keyboardType="numeric"
+      />
+      <InputField
+        label={t.midcycleOnboarding.currentMbw}
+        value={formData.baselineMbw}
+        onChangeText={(value) => updateForm('baselineMbw', value)}
+        placeholder={t.midcycleOnboarding.currentMbwPlaceholder}
+        keyboardType="numeric"
+      />
+      <InputField
+        label={t.midcycleOnboarding.currentPopulation}
+        value={formData.baselineEstimatedPopulation}
+        onChangeText={(value) => updateForm('baselineEstimatedPopulation', value)}
+        placeholder={t.midcycleOnboarding.currentPopulationPlaceholder}
+        keyboardType="numeric"
+      />
+      <InputField
+        label={t.midcycleOnboarding.survivalRate}
+        value={formData.baselineSurvivalRate}
+        onChangeText={(value) => updateForm('baselineSurvivalRate', value)}
+        placeholder={t.midcycleOnboarding.survivalRatePlaceholder}
+        keyboardType="numeric"
+      />
+      <InputField
+        label={t.midcycleOnboarding.feedUsedSoFar}
+        value={formData.baselineCumulativeFeed}
+        onChangeText={(value) => updateForm('baselineCumulativeFeed', value)}
+        placeholder={t.midcycleOnboarding.feedUsedSoFarPlaceholder}
+        keyboardType="numeric"
+        hint={t.midcycleOnboarding.feedUsedSoFarHint}
+      />
+    </>
+  ), [formData, openDatePicker, t, updateForm]);
 
   const renderSamplingForm = useMemo(() => (
     <>
@@ -1344,7 +1513,9 @@ export default function PondManagementScreen() {
                     ? t.home.addNewPond
                     : modalType === 'cycle'
                       ? t.farmCycle.addCycle
-                      : t.home.addSamplingData}
+                      : modalType === 'baseline'
+                        ? 'Edit Baseline'
+                        : t.home.addSamplingData}
                 </Text>
                 <TouchableOpacity 
                   onPress={() => setModalVisible(false)} 
@@ -1365,6 +1536,8 @@ export default function PondManagementScreen() {
                   ? renderPondForm
                   : modalType === 'cycle'
                     ? renderCycleForm
+                    : modalType === 'baseline'
+                      ? renderBaselineForm
                     : renderSamplingForm}
 
                 <View style={styles.buttonContainer}>
@@ -1382,6 +1555,8 @@ export default function PondManagementScreen() {
 	                      ? handleAddPond
 	                      : modalType === 'cycle'
                           ? handleAddCycle
+                          : modalType === 'baseline'
+                            ? handleUpdateBaseline
 	                        : handleAddSamplingData}
 	                    disabled={isSubmitting}
 	                  >
@@ -1390,6 +1565,8 @@ export default function PondManagementScreen() {
                         ? t.home.addPondButton
                         : modalType === 'cycle'
                           ? 'Start Cycle'
+                          : modalType === 'baseline'
+                            ? 'Save Baseline'
                           : t.home.addDataButton}
                     </Text>
                   </TouchableOpacity>
@@ -1808,6 +1985,15 @@ const styles = StyleSheet.create({
     borderRadius: 8, 
     borderWidth: 1, 
     borderColor: 'rgba(231, 76, 60, 0.3)' 
+  },
+
+  baselineEditButton: {
+    padding: Platform.OS === 'android' ? 6 : 8,
+    marginLeft: 8,
+    backgroundColor: '#EAF6FD',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBE1FA',
   },
   
   pondDetails: { 

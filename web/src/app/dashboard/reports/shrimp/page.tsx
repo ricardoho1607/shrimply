@@ -53,6 +53,7 @@ interface Pond {
   cycleStartMode?: 'new' | 'midcycle';
   baselineDate?: string;
   baselineDoc?: number;
+  baselineMbw?: number;
   baselineEstimatedPopulation?: number;
   baselineSurvivalRate?: number;
   baselineCumulativeFeed?: number;
@@ -131,9 +132,10 @@ const calculatePondStats = (pond: Pond) => {
   const samplings = pond.samplings || [];
   // Sort by date ascending to correctly identify latest/previous
   const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const operationalSorted = sorted.filter((sampling) => !isBaselineSampling(sampling));
   
   // Normalize latest sampling data (checking for mbw and abw)
-  const latestRaw = sorted[sorted.length - 1] || {};
+  const latestRaw = operationalSorted[operationalSorted.length - 1] || {};
   const latest = {
     mbw: latestRaw.mbw || latestRaw.abw || 0,
     mortality: latestRaw.mortality || 0,
@@ -141,7 +143,7 @@ const calculatePondStats = (pond: Pond) => {
     date: latestRaw.date || new Date().toISOString()
   };
 
-  const previousRaw = sorted[sorted.length - 2] || null;
+  const previousRaw = operationalSorted[operationalSorted.length - 2] || null;
   const previous = previousRaw ? {
     mbw: previousRaw.mbw || previousRaw.abw || 0,
     date: previousRaw.date
@@ -154,8 +156,8 @@ const calculatePondStats = (pond: Pond) => {
   const docDays = getPondCurrentDoc(pond);
   
   // Find latest valid MBW across history (handling records without MBW updates)
-  const lastRecordedMBW = [...sorted].reverse().find(s => (s.mbw || s.abw || 0) > 0);
-  const currentMBW = lastRecordedMBW ? (lastRecordedMBW.mbw || lastRecordedMBW.abw) : initialW;
+  const lastRecordedMBW = [...operationalSorted].reverse().find(s => (s.mbw || s.abw || 0) > 0);
+  const currentMBW = lastRecordedMBW ? (lastRecordedMBW.mbw || lastRecordedMBW.abw) : (pond.baselineMbw || initialW);
 
   // 1. Calculate Population & Survival Rate (SR)
   const baselinePopulation = getPondBaselinePopulation(pond);
@@ -176,7 +178,7 @@ const calculatePondStats = (pond: Pond) => {
   const size = (currentMBW || 0) > 0 ? Math.round(1000 / (currentMBW || 1)) : 0;
   
   // 4. Calculate ADG (Average Daily Growth)
-  const validSamplings = sorted.filter(s => !isBaselineSampling(s) && (s.mbw || s.abw || 0) > 0);
+  const validSamplings = operationalSorted.filter(s => (s.mbw || s.abw || 0) > 0);
   const baselineSampling = sorted.filter(isBaselineSampling).reverse()[0];
   let adg = 0;
   if (validSamplings.length >= 2) {
@@ -344,6 +346,7 @@ export default function ShrimpReportsPage() {
         label: pond.pondName,
         borderColor: ['#0F4C75', '#3282B8', '#10B981', '#F59E0B', '#6366F1'][idx % 5],
         data: (pond.samplings || [])
+          .filter((s) => !isBaselineSampling(s))
           .map(s => {
             const val = s.mbw || s.abw || 0;
             return { 

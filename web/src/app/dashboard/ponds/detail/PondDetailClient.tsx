@@ -311,6 +311,15 @@ export default function PondDetailClient() {
     plValue: '0.5',
     plSupplier: '',
   });
+  const [isBaselineModalOpen, setBaselineModalOpen] = useState(false);
+  const [baselineForm, setBaselineForm] = useState({
+    baselineDate: new Date().toISOString().split('T')[0],
+    baselineDoc: '',
+    baselineMbw: '',
+    baselineEstimatedPopulation: '',
+    baselineSurvivalRate: '',
+    baselineCumulativeFeed: '',
+  });
   const [samplingForm, setSamplingForm] = useState({
     date: new Date().toISOString().split('T')[0],
     mbw: '',
@@ -494,6 +503,86 @@ export default function PondDetailClient() {
     }
   };
 
+  const openBaselineModal = () => {
+    if (!pond) return;
+    const baselineSampling = (pond.samplings || [])
+      .filter(isBaselineSampling)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+    setBaselineForm({
+      baselineDate: pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0],
+      baselineDoc: String(pond.baselineDoc ?? ''),
+      baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
+      baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
+      baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
+      baselineCumulativeFeed: String(pond.baselineCumulativeFeed ?? baselineSampling?.cumulativeFeedToDate ?? baselineSampling?.feed ?? ''),
+    });
+    setBaselineModalOpen(true);
+  };
+
+  const handleUpdateBaseline = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!companyId || !pond) return;
+
+    const baselineDocValue = parseInt(baselineForm.baselineDoc, 10);
+    const baselineMbwValue = parseFloat(baselineForm.baselineMbw);
+    const baselinePopulationValue = parseFloat(baselineForm.baselineEstimatedPopulation);
+    const baselineSurvivalValue = parseFloat(baselineForm.baselineSurvivalRate);
+    const baselineFeedValue = parseFloat(baselineForm.baselineCumulativeFeed);
+
+    if (!baselineForm.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0) {
+      alert('Current MBW is required for an existing cycle.');
+      return;
+    }
+    if (!baselineForm.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0) {
+      alert('Current DOC is required for an existing cycle.');
+      return;
+    }
+
+    const effectiveDocStart = new Date(new Date(baselineForm.baselineDate).getTime() - baselineDocValue * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    const baselineSamplingIndex = (pond.samplings || []).findIndex(isBaselineSampling);
+    const existingBaseline = baselineSamplingIndex >= 0 ? pond.samplings[baselineSamplingIndex] : undefined;
+    const baselineSampling: Sampling = {
+      id: existingBaseline?.id || `baseline-${Date.now()}`,
+      date: baselineForm.baselineDate,
+      mbw: baselineMbwValue,
+      mortality: 0,
+      feed: Number.isNaN(baselineFeedValue) ? 0 : baselineFeedValue,
+      isBaselineEstimate: true,
+      source: 'midcycle_onboarding',
+      cycleId: pond.cycleId,
+      cycleName: pond.cycleName,
+      pondCycleId: pond.pondCycleId || pond.id,
+      ...(Number.isNaN(baselinePopulationValue) ? {} : { estimatedPopulation: baselinePopulationValue }),
+      ...(Number.isNaN(baselineSurvivalValue) ? {} : { estimatedSurvivalRate: baselineSurvivalValue }),
+      ...(Number.isNaN(baselineFeedValue) ? {} : { cumulativeFeedToDate: baselineFeedValue }),
+    };
+    const samplings = baselineSamplingIndex >= 0
+      ? pond.samplings.map((sampling, index) => index === baselineSamplingIndex ? baselineSampling : sampling)
+      : [baselineSampling, ...(pond.samplings || [])];
+
+    try {
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        docStart: effectiveDocStart,
+        cycleStartedAt: effectiveDocStart,
+        cycleStartMode: 'midcycle',
+        baselineDate: baselineForm.baselineDate,
+        baselineDoc: baselineDocValue,
+        baselineMbw: baselineMbwValue,
+        ...(Number.isNaN(baselinePopulationValue) ? {} : { baselineEstimatedPopulation: baselinePopulationValue }),
+        ...(Number.isNaN(baselineSurvivalValue) ? {} : { baselineSurvivalRate: baselineSurvivalValue }),
+        ...(Number.isNaN(baselineFeedValue) ? {} : { baselineCumulativeFeed: baselineFeedValue }),
+        baselineSource: 'user_midcycle_estimate',
+        samplings,
+        updatedAt: serverTimestamp(),
+        updatedBy: auth.currentUser?.uid || '',
+      });
+      setBaselineModalOpen(false);
+    } catch (error) {
+      console.error('Error updating baseline:', error);
+      alert('Failed to update baseline.');
+    }
+  };
+
   /* ─── Biological Projection Utility ────────────────────────── */
   const getFRFromMBW = (mbw: number): number | null => {
     const frTable = [
@@ -668,7 +757,13 @@ export default function PondDetailClient() {
               <span>Start New Cycle</span>
             </button>
           )}
-          <button className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
+          <button
+            onClick={openBaselineModal}
+            className="dashboard-action dashboard-action-secondary"
+            disabled={pond.cycleStartMode !== 'midcycle' || !isActiveCycle(pond)}
+            title="Edit baseline estimates"
+            style={{ padding: '0 14px', opacity: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 1 : 0.45, cursor: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
+          >
             <Settings size={18} strokeWidth={2.5} />
           </button>
           <button 
@@ -929,6 +1024,52 @@ export default function PondDetailClient() {
                 <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>End Cycle</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {isBaselineModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Edit Baseline</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.</p>
+              </div>
+              <button onClick={() => setBaselineModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Baseline Date
+                <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Current DOC
+                <input required type="number" value={baselineForm.baselineDoc} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDoc: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Current MBW (g)
+                <input required type="number" step="0.01" value={baselineForm.baselineMbw} onChange={e => setBaselineForm(prev => ({ ...prev, baselineMbw: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Current Population
+                <input type="number" value={baselineForm.baselineEstimatedPopulation} onChange={e => setBaselineForm(prev => ({ ...prev, baselineEstimatedPopulation: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Current SR %
+                <input type="number" step="0.1" value={baselineForm.baselineSurvivalRate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineSurvivalRate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Feed Used So Far (kg)
+                <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+              </label>
+              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
+                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Baseline</button>
+              </div>
+            </form>
           </div>
         </div>
       )}
