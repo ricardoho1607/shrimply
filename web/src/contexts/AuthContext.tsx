@@ -17,7 +17,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc
+  arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc, writeBatch
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
@@ -52,6 +52,31 @@ interface Company {
   pendingInvites: any[];
 }
 
+type StaffRole = 'manager' | 'technician' | 'admin';
+
+interface JoinRequest {
+  id: string;
+  companyId: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  requestedRole: StaffRole;
+  message?: string;
+  requestedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  processedBy?: string;
+  processedAt?: string;
+}
+
+interface CompanySearchResult {
+  id: string;
+  companyName: string;
+  primaryLocation?: { address?: string } | string;
+  farmType?: string;
+  businessSize?: string;
+  memberCount: number;
+}
+
 interface AuthContextType {
   user: User | null;
   company: Company | null;
@@ -62,6 +87,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
   completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
   completeCompanySetup: (companyData: any) => Promise<void>;
+  requestToJoinCompany: (request: { companyId: string; requestedRole: StaffRole; message?: string }) => Promise<void>;
+  searchCompanies: (searchTerm: string) => Promise<CompanySearchResult[]>;
+  getJoinRequests: () => Promise<JoinRequest[]>;
+  approveJoinRequest: (requestId: string) => Promise<void>;
+  rejectJoinRequest: (requestId: string) => Promise<void>;
+  refreshCompanyData: () => Promise<void>;
   isAuthenticated: boolean;
   needsRoleSelection: boolean;
   needsSetup: boolean;
@@ -233,6 +264,125 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const refreshCompanyData = useCallback(async () => {
+    const companyId = user?.companyId || company?.id;
+    if (!companyId) return;
+    const companyDoc = await getDoc(doc(db, 'companies', companyId));
+    setCompany(companyDoc.exists() ? companyDoc.data() as Company : null);
+  }, [company?.id, user?.companyId]);
+
+  const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
+    if (!user) throw new Error('User must be authenticated to request joining a company');
+    if (user.companyId) throw new Error('You are already part of a company');
+
+    const existingRequestQuery = query(
+      collection(db, 'joinRequests'),
+      where('userId', '==', user.uid),
+      where('companyId', '==', request.companyId),
+      where('status', '==', 'pending')
+    );
+    const existingRequests = await getDocs(existingRequestQuery);
+    if (!existingRequests.empty) throw new Error('You already have a pending request for this company');
+
+    const joinRequest: Record<string, unknown> = {
+      companyId: request.companyId,
+      userId: user.uid,
+      userName: user.name || user.email.split('@')[0],
+      userEmail: user.email,
+      requestedRole: request.requestedRole,
+      requestedAt: new Date().toISOString(),
+      status: 'pending',
+    };
+    if (request.message) joinRequest.message = request.message;
+    await addDoc(collection(db, 'joinRequests'), joinRequest);
+  }, [user]);
+
+  const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) return [];
+
+    const companiesQuery = query(collection(db, 'companies'), where('isSearchable', '==', true));
+    const snapshot = await getDocs(companiesQuery);
+    const farms: CompanySearchResult[] = [];
+    snapshot.forEach((companyDoc) => {
+      const data = companyDoc.data() as Company;
+      if (!data.companyName?.toLowerCase().includes(normalizedSearch)) return;
+      farms.push({
+        id: companyDoc.id,
+        companyName: data.companyName,
+        primaryLocation: data.primaryLocation,
+        farmType: data.farmType,
+        businessSize: data.businessSize,
+        memberCount: Array.isArray(data.teamMembers) ? data.teamMembers.length : 0,
+      });
+    });
+    return farms;
+  }, []);
+
+  const getJoinRequests = useCallback(async (): Promise<JoinRequest[]> => {
+    if (!user || user.role !== 'owner' || !company) return [];
+
+    const requestsQuery = query(
+      collection(db, 'joinRequests'),
+      where('companyId', '==', company.id),
+      where('status', '==', 'pending')
+    );
+    const requestsSnapshot = await getDocs(requestsQuery);
+    return requestsSnapshot.docs.map((requestDoc) => ({
+      id: requestDoc.id,
+      ...requestDoc.data(),
+    } as JoinRequest));
+  }, [company, user]);
+
+  const approveJoinRequest = useCallback(async (requestId: string) => {
+    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can approve join requests');
+
+    const requestRef = doc(db, 'joinRequests', requestId);
+    const requestDoc = await getDoc(requestRef);
+    if (!requestDoc.exists()) throw new Error('Join request not found');
+
+    const requestData = requestDoc.data() as JoinRequest;
+    if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
+    if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
+
+    const batch = writeBatch(db);
+    batch.update(requestRef, {
+      status: 'approved',
+      processedBy: user.uid,
+      processedAt: new Date().toISOString(),
+    });
+    batch.update(doc(db, 'companies', company.id), {
+      teamMembers: arrayUnion(user.uid, requestData.userId),
+      updatedAt: serverTimestamp(),
+    });
+    batch.update(doc(db, 'users', requestData.userId), {
+      companyId: company.id,
+      role: requestData.requestedRole,
+      hasCompletedSetup: true,
+      lastActive: serverTimestamp(),
+    });
+    await batch.commit();
+    await refreshCompanyData();
+  }, [company, refreshCompanyData, user]);
+
+  const rejectJoinRequest = useCallback(async (requestId: string) => {
+    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can reject join requests');
+
+    const requestRef = doc(db, 'joinRequests', requestId);
+    const requestDoc = await getDoc(requestRef);
+    if (!requestDoc.exists()) throw new Error('Join request not found');
+
+    const requestData = requestDoc.data() as JoinRequest;
+    if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
+    if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
+
+    await updateDoc(requestRef, {
+      status: 'rejected',
+      processedBy: user.uid,
+      processedAt: new Date().toISOString(),
+    });
+  }, [company, user]);
+
   const value = useMemo(() => ({
     user,
     company,
@@ -243,11 +393,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signOut,
     completeRoleSelection,
     completeCompanySetup,
+    requestToJoinCompany,
+    searchCompanies,
+    getJoinRequests,
+    approveJoinRequest,
+    rejectJoinRequest,
+    refreshCompanyData,
     isAuthenticated: !!user,
     needsRoleSelection: !!user && !user.role,
     needsSetup: !!user && !!user.role && !user.hasCompletedSetup,
     isBuyer: !!user && user.role === 'buyer',
-  }), [user, company, loading]);
+  }), [user, company, loading, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);
 
   if (initializing) return null;
 

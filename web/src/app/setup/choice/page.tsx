@@ -6,11 +6,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { ROUTES } from '@/config/routes';
+import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
 
 export default function SetupChoicePage() {
   const isReady = useOnboardingGuard('setup');
   const { user } = useAuth();
   const router = useRouter();
+  const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
 
   const isBuyer = user?.role === 'buyer';
 
@@ -40,6 +42,8 @@ export default function SetupChoicePage() {
   ];
 
   if (!isReady) return <OnboardingLoading />;
+  if (pendingRequestLoading) return <OnboardingLoading />;
+  if (pendingRequest && user?.role !== 'buyer') return <PendingJoinRequestScreen request={pendingRequest} />;
 
   return (
     <main style={{

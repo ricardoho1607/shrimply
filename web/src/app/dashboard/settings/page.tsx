@@ -16,7 +16,9 @@ import {
   Globe,
   Languages,
   Info,
-  ArrowUpRight
+  ArrowUpRight,
+  Clock,
+  XCircle
 } from 'lucide-react';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import Link from 'next/link';
@@ -81,11 +83,19 @@ const getLocationValue = (company: any) => {
 };
 
 export default function SettingsPage() {
-  const { user, company } = useAuth();
+  const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest } = useAuth();
   const { data: members } = useCompanyMembers<any>();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
+  const [joinRequests, setJoinRequests] = useState<Array<{
+    id: string;
+    userName: string;
+    userEmail: string;
+    requestedRole: string;
+    requestedAt?: string;
+  }>>([]);
+  const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
@@ -128,6 +138,43 @@ export default function SettingsPage() {
       isPublicProfile: company.isPublicProfile ?? true,
     });
   }, [company]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (activeTab !== 'organization' || user?.role !== 'owner' || !company) {
+      return;
+    }
+
+    getJoinRequests()
+      .then((requests) => {
+        if (isMounted) setJoinRequests(requests);
+      })
+      .catch((error) => {
+        console.error('Error loading join requests:', error);
+        if (isMounted) setJoinRequests([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTab, company, getJoinRequests, user?.role]);
+
+  const handleJoinRequestDecision = async (requestId: string, decision: 'approve' | 'reject') => {
+    setProcessingRequestId(requestId);
+    try {
+      if (decision === 'approve') {
+        await approveJoinRequest(requestId);
+      } else {
+        await rejectJoinRequest(requestId);
+      }
+      setJoinRequests((requests) => requests.filter((request) => request.id !== requestId));
+    } catch (error: unknown) {
+      console.error('Error processing join request:', error);
+      alert(error instanceof Error ? error.message : 'Failed to process join request.');
+    } finally {
+      setProcessingRequestId(null);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -394,10 +441,62 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Team Members</h3>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Manage your organization's members and their roles.</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Manage your organization&apos;s members and their roles.</p>
                 </div>
                 <button className="btn-primary" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
               </div>
+
+              {user?.role === 'owner' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid var(--border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <Clock size={18} color="var(--primary)" />
+                      <div>
+                        <h4 style={{ fontSize: '15px', fontWeight: 900, margin: 0, color: 'var(--text-primary)' }}>Pending join requests</h4>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>Approve staff waiting to join this company.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {joinRequests.length === 0 && (
+                    <div style={{ padding: '14px', borderRadius: '12px', background: '#FFFFFF', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650 }}>
+                      No pending join requests.
+                    </div>
+                  )}
+
+                  {joinRequests.map((request) => (
+                    <div key={request.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px', borderRadius: '14px', background: '#FFFFFF', border: '1px solid var(--border)' }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 900 }}>
+                        {(request.userName?.[0] || request.userEmail?.[0] || 'U').toUpperCase()}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', fontWeight: 850, color: 'var(--text-primary)' }}>{request.userName || request.userEmail}</div>
+                        <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{request.userEmail} • {request.requestedRole}</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        <button
+                          type="button"
+                          disabled={processingRequestId === request.id}
+                          onClick={() => handleJoinRequestDecision(request.id, 'reject')}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          <XCircle size={15} />
+                          Reject
+                        </button>
+                        <button
+                          type="button"
+                          disabled={processingRequestId === request.id}
+                          onClick={() => handleJoinRequestDecision(request.id, 'approve')}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #BBE1FA', background: 'var(--primary)', color: '#FFFFFF', fontWeight: 800, cursor: 'pointer' }}
+                        >
+                          {processingRequestId === request.id ? <Loader2 className="animate-spin" size={15} /> : <ShieldCheck size={15} />}
+                          Approve
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {members.map((member) => (

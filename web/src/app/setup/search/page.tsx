@@ -1,24 +1,24 @@
 "use client";
 
 import React, { useRef, useState } from 'react';
-import { Search, Building2, ArrowRight, UserPlus, Info, CheckCircle2 } from 'lucide-react';
+import { Search, Building2, UserPlus, Info, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
-import { ROUTES } from '@/config/routes';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
+import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
+
+type StaffRole = 'manager' | 'technician' | 'admin';
 
 export default function CompanySearchPage() {
   const isReady = useOnboardingGuard('setup');
-  const { user } = useAuth();
-  const router = useRouter();
+  const { user, searchCompanies, requestToJoinCompany } = useAuth();
+  const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
   const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }>>([]);
+  const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string; memberCount?: number }>>([]);
   const [searching, setSearching] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [requesting, setRequesting] = useState<string | null>(null);
+  const [sentRequestCompanyId, setSentRequestCompanyId] = useState<string | null>(null);
   const latestSearchId = useRef(0);
 
   const handleSearch = async (e: React.FormEvent) => {
@@ -30,16 +30,8 @@ export default function CompanySearchPage() {
     setSearching(true);
     setSearchError(null);
     try {
-      const q = query(collection(db, 'companies'), where('isSearchable', '==', true));
-      const snapshot = await withTimeout(getDocs(q), 12000, 'Farm search is taking too long. Please try again.');
+      const farms = await withTimeout(searchCompanies(searchTerm), 12000, 'Farm search is taking too long. Please try again.');
       if (latestSearchId.current !== requestId) return;
-      const farms: Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string }> = [];
-      snapshot.forEach(doc => {
-        const data = doc.data() as { companyName?: string; primaryLocation?: { address?: string } | string };
-        if (data.companyName?.toLowerCase().includes(searchTerm.toLowerCase())) {
-          farms.push({ id: doc.id, companyName: data.companyName, primaryLocation: data.primaryLocation });
-        }
-      });
       setResults(farms);
     } catch (error: unknown) {
       if (latestSearchId.current === requestId) {
@@ -57,19 +49,19 @@ export default function CompanySearchPage() {
 
   const handleJoinRequest = async (company: { id: string; companyName: string }) => {
     if (!user) return;
+    if (!['manager', 'technician', 'admin'].includes(user.role || '')) {
+      alert('Only staff roles can request to join an existing farm. Buyers and owners should create their own company profile.');
+      return;
+    }
+
     setRequesting(company.id);
     try {
-      await withTimeout(addDoc(collection(db, 'joinRequests'), {
+      await withTimeout(requestToJoinCompany({
         companyId: company.id,
-        userId: user.uid,
-        userName: user.name || user.email.split('@')[0],
-        userEmail: user.email,
-        requestedRole: user.role,
-        requestedAt: serverTimestamp(),
-        status: 'pending',
+        requestedRole: user.role as StaffRole,
       }), 12000, 'Sending your request is taking too long. Please try again.');
-      alert(`Request sent to ${company.companyName}! You'll be notified once approved.`);
-      router.push(ROUTES.dashboard);
+      setSentRequestCompanyId(company.id);
+      alert(`Request sent to ${company.companyName}. Stay on this setup screen until the company owner approves you.`);
     } catch (error: unknown) {
       alert(getErrorMessage(error, 'Failed to send request'));
     } finally {
@@ -78,6 +70,8 @@ export default function CompanySearchPage() {
   };
 
   if (!isReady) return <OnboardingLoading />;
+  if (pendingRequestLoading) return <OnboardingLoading />;
+  if (pendingRequest && user?.role !== 'buyer') return <PendingJoinRequestScreen request={pendingRequest} />;
 
   return (
     <main style={{
@@ -173,11 +167,14 @@ export default function CompanySearchPage() {
                 <div>
                   <h4 style={{ fontSize: '18px', fontWeight: 700 }}>{company.companyName}</h4>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{typeof company.primaryLocation === 'string' ? company.primaryLocation : company.primaryLocation?.address || 'Location unknown'}</p>
+                  {typeof company.memberCount === 'number' && (
+                    <p style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{company.memberCount} team members</p>
+                  )}
                 </div>
               </div>
               <button 
                 onClick={() => handleJoinRequest(company)}
-                disabled={requesting === company.id}
+                disabled={requesting === company.id || sentRequestCompanyId === company.id}
                 style={{
                   padding: '10px 20px',
                   borderRadius: '10px',
@@ -192,7 +189,12 @@ export default function CompanySearchPage() {
                   gap: '8px'
                 }}
               >
-                {requesting === company.id ? 'Sending...' : (
+                {sentRequestCompanyId === company.id ? (
+                  <>
+                    Request Sent
+                    <CheckCircle2 size={16} />
+                  </>
+                ) : requesting === company.id ? 'Sending...' : (
                   <>
                     Request Access
                     <UserPlus size={16} />
@@ -202,7 +204,7 @@ export default function CompanySearchPage() {
             </div>
           )) : searchTerm && !searching ? (
             <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-faint)' }}>
-              No farms found matching "{searchTerm}"
+              No farms found matching &quot;{searchTerm}&quot;
             </div>
           ) : null}
         </div>
@@ -217,7 +219,7 @@ export default function CompanySearchPage() {
         }}>
           <Info size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-            <b>Can't find your farm?</b> Ask your manager for an invitation link, or ensure they have enabled "Public Profile" in their company settings.
+            <b>Can&apos;t find your farm?</b> Ask your manager for an invitation link, or ensure they have enabled &quot;Public Profile&quot; in their company settings.
           </p>
         </div>
       </div>
