@@ -26,6 +26,13 @@ type AdminUser = {
   companyId: string | null;
   joinedAt: string | null;
   lastActive: string | null;
+  pendingJoinRequest?: {
+    id: string;
+    companyId: string;
+    companyName: string;
+    requestedAt: string | null;
+    requestedRole: string;
+  } | null;
 };
 
 const NOTE_STORAGE_KEY = 'shrimply-admin-company-notes';
@@ -204,7 +211,10 @@ export function CompanyDetailDrawer({ company, onClose }: { company: CompanyMetr
 }
 
 export function UserDetailDrawer({ user, onClose }: { user: AdminUser; onClose: () => void }) {
-  const recommendedAction = !user.companyId && user.role !== 'buyer'
+  const pendingRequest = user.pendingJoinRequest;
+  const recommendedAction = pendingRequest
+    ? `This user has a pending join request for ${pendingRequest.companyName || pendingRequest.companyId}. Ask the company owner to approve or reject it; the user is waiting on approval, not incomplete setup.`
+    : !user.companyId && user.role !== 'buyer'
     ? 'This user has not joined or created a company. Send a short onboarding message and ask what blocked them.'
     : user.role === 'buyer'
       ? 'Buyer account. Check whether they are monitoring suppliers or need marketplace liquidity.'
@@ -237,6 +247,9 @@ export function UserDetailDrawer({ user, onClose }: { user: AdminUser; onClose: 
           <DetailRow label="Email" value={user.email || 'Unavailable'} />
           <DetailRow label="Role" value={user.role || 'No role'} />
           <DetailRow label="Company ID" value={user.companyId || 'No company'} />
+          <DetailRow label="Join request" value={pendingRequest ? `Pending: ${pendingRequest.companyName || pendingRequest.companyId}` : 'None'} />
+          {pendingRequest && <DetailRow label="Requested role" value={pendingRequest.requestedRole || user.role || 'Unavailable'} />}
+          {pendingRequest && <DetailRow label="Requested" value={formatDate(pendingRequest.requestedAt)} />}
           <DetailRow label="Joined" value={formatDate(user.joinedAt)} />
           <DetailRow label="Last active" value={formatDate(user.lastActive)} />
         </div>

@@ -26,6 +26,13 @@ type AdminUser = {
   companyId: string | null;
   joinedAt: string | null;
   lastActive: string | null;
+  pendingJoinRequest?: {
+    id: string;
+    companyId: string;
+    companyName: string;
+    requestedAt: string | null;
+    requestedRole: string;
+  } | null;
 };
 
 type AdminMetricsLike = {
@@ -73,17 +80,24 @@ const buildFollowUpItems = (metrics: AdminMetricsLike): FollowUpItem[] => {
 
   const userItems = metrics.recentUsers
     .filter((user) => !user.companyId && user.role !== 'buyer')
-    .map((user) => ({
-      id: `user-${user.id}`,
-      type: 'user' as const,
-      severity: 'medium' as const,
-      title: user.name || user.email || 'Unnamed user',
-      subtitle: user.email || 'Email unavailable',
-      issue: `Signed up as ${user.role || 'unknown'} but has not joined or created a company.`,
-      action: 'Follow up and help them complete onboarding.',
-      email: user.email,
-      user,
-    }));
+    .map((user) => {
+      const pendingRequest = user.pendingJoinRequest;
+      return {
+        id: `user-${user.id}`,
+        type: 'user' as const,
+        severity: pendingRequest ? 'low' as const : 'medium' as const,
+        title: user.name || user.email || 'Unnamed user',
+        subtitle: user.email || 'Email unavailable',
+        issue: pendingRequest
+          ? `Pending approval to join ${pendingRequest.companyName || pendingRequest.companyId} as ${pendingRequest.requestedRole || user.role || 'staff'}.`
+          : `Signed up as ${user.role || 'unknown'} but has not joined or created a company.`,
+        action: pendingRequest
+          ? 'Ask the company owner to approve or reject the join request. The user is waiting on approval, not setup.'
+          : 'Follow up and help them complete onboarding.',
+        email: user.email,
+        user,
+      };
+    });
 
   return [...companyItems, ...userItems].slice(0, 14);
 };

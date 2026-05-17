@@ -19,6 +19,11 @@ type AdminUser = {
   email: string;
   role: string;
   companyId: string | null;
+  pendingJoinRequest?: {
+    companyId: string;
+    companyName: string;
+    requestedRole: string;
+  } | null;
 };
 
 type AdminMetricsLike = {
@@ -183,12 +188,17 @@ export function FollowUpList({ metrics }: { metrics: AdminMetricsLike }) {
   const userItems = metrics.recentUsers
     .filter((user) => !user.companyId && user.role !== 'buyer')
     .slice(0, 6)
-    .map((user) => ({
-      id: `user-${user.id}`,
-      title: user.name || user.email || 'Unnamed user',
-      type: 'User',
-      description: 'Signed up but has not joined or created a company.',
-    }));
+    .map((user) => {
+      const pendingRequest = user.pendingJoinRequest;
+      return {
+        id: `user-${user.id}`,
+        title: user.name || user.email || 'Unnamed user',
+        type: 'User',
+        description: pendingRequest
+          ? `Pending approval to join ${pendingRequest.companyName || pendingRequest.companyId}.`
+          : 'Signed up but has not joined or created a company.',
+      };
+    });
 
   const items = [...companyItems, ...userItems];
 

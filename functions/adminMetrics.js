@@ -133,6 +133,36 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
   return { rows, totalPonds };
 };
 
+const getPendingJoinRequestsByUserId = async (db, companyRows) => {
+  const pendingByUserId = new Map();
+  const companyNamesById = new Map(companyRows.map((company) => [company.id, company.companyName]));
+
+  try {
+    const snapshot = await db.collection("joinRequests").where("status", "==", "pending").get();
+    snapshot.forEach((doc) => {
+      const request = doc.data() || {};
+      if (!request.userId) return;
+
+      const pendingRequest = {
+        id: doc.id,
+        companyId: request.companyId || "",
+        companyName: companyNamesById.get(request.companyId) || request.companyName || request.companyId || "Unknown company",
+        requestedAt: toIso(request.requestedAt || request.createdAt),
+        requestedRole: request.requestedRole || "",
+      };
+
+      const existing = pendingByUserId.get(request.userId);
+      if (!existing || new Date(pendingRequest.requestedAt || 0).getTime() > new Date(existing.requestedAt || 0).getTime()) {
+        pendingByUserId.set(request.userId, pendingRequest);
+      }
+    });
+  } catch (error) {
+    console.warn("Admin metrics skipped pending join request enrichment:", error.message);
+  }
+
+  return pendingByUserId;
+};
+
 exports.getAdminMetrics = onCall(async (request) => {
   const uid = request.auth?.uid;
   const email = String(request.auth?.token?.email || "").toLowerCase();
@@ -214,6 +244,7 @@ exports.getAdminMetrics = onCall(async (request) => {
   });
 
   const companyMetrics = await getCompanyMetrics(db, companiesSnapshot, usersById);
+  const pendingJoinRequestsByUserId = await getPendingJoinRequestsByUserId(db, companyMetrics.rows);
 
   const newCompanies = companiesSnapshot.docs.filter((companyDoc) => {
     const company = companyDoc.data() || {};
@@ -232,6 +263,7 @@ exports.getAdminMetrics = onCall(async (request) => {
         companyId: user.companyId || null,
         joinedAt: toIso(user.joinedDate || user.createdAt),
         lastActive: toIso(user.lastActive || user.updatedAt),
+        pendingJoinRequest: pendingJoinRequestsByUserId.get(userDoc.id) || null,
       };
     })
     .sort((a, b) => new Date(b.joinedAt || 0).getTime() - new Date(a.joinedAt || 0).getTime())

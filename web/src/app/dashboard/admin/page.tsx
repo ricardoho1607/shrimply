@@ -51,6 +51,13 @@ type AdminUser = {
   companyId: string | null;
   joinedAt: string | null;
   lastActive: string | null;
+  pendingJoinRequest?: {
+    id: string;
+    companyId: string;
+    companyName: string;
+    requestedAt: string | null;
+    requestedRole: string;
+  } | null;
 };
 
 type AdminMetrics = {
@@ -258,6 +265,29 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
     return createdAt && createdAt >= since;
   }).length;
 
+  const companyNamesById = new Map(companies.map((company) => [company.id, company.companyName]));
+  const pendingJoinRequestsByUserId = new Map<string, NonNullable<AdminUser['pendingJoinRequest']>>();
+  try {
+    const joinRequestsSnapshot = await getDocs(collection(db, 'joinRequests'));
+    joinRequestsSnapshot.forEach((requestDoc) => {
+      const request = requestDoc.data();
+      if (String(request.status || '').toLowerCase() !== 'pending' || !request.userId) return;
+      const pendingRequest = {
+        id: requestDoc.id,
+        companyId: request.companyId || '',
+        companyName: companyNamesById.get(request.companyId) || request.companyName || request.companyId || 'Unknown company',
+        requestedAt: toIso(request.requestedAt || request.createdAt),
+        requestedRole: request.requestedRole || '',
+      };
+      const existing = pendingJoinRequestsByUserId.get(request.userId);
+      if (!existing || new Date(pendingRequest.requestedAt || 0).getTime() > new Date(existing.requestedAt || 0).getTime()) {
+        pendingJoinRequestsByUserId.set(request.userId, pendingRequest);
+      }
+    });
+  } catch (error) {
+    console.warn('Admin metrics fallback skipped pending join request enrichment:', error);
+  }
+
   const recentUsers = usersSnapshot.docs
     .map((userDoc) => {
       const user = userDoc.data();
@@ -269,6 +299,7 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
         companyId: user.companyId || null,
         joinedAt: toIso(user.joinedDate || user.createdAt),
         lastActive: toIso(user.lastActive || user.updatedAt),
+        pendingJoinRequest: pendingJoinRequestsByUserId.get(userDoc.id) || null,
       };
     })
     .sort((a, b) => new Date(b.joinedAt || 0).getTime() - new Date(a.joinedAt || 0).getTime())
