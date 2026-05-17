@@ -21,7 +21,6 @@ import {
   getDocs 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
@@ -116,7 +115,13 @@ export default function CompanySearchScreen() {
       Alert.alert(
         'Request Sent!',
         `Your request to join ${selectedCompany.companyName} has been sent. The company owner will review your request.`,
-        [{ text: 'OK', onPress: () => { setShowModal(false); router.back(); } }]
+        [{ text: 'OK', onPress: () => {
+          setShowModal(false);
+          setPendingRequest({
+            ...requestData,
+            requestedAt: new Date().toISOString(),
+          });
+        } }]
       );
     } catch (error: any) {
       console.error('Request failed:', error);
@@ -138,17 +143,9 @@ export default function CompanySearchScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={24} color="#0d2137" />
-          </TouchableOpacity>
+          <View style={styles.headerSide} />
           <Text style={styles.headerTitle}>Find Company</Text>
-          <View style={styles.headerRight} />
+          <View style={styles.headerSide} />
         </View>
       </SafeAreaView>
 
@@ -336,10 +333,19 @@ const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
   topSafeArea: { backgroundColor: '#dce8f2' },
   container: { flex: 1, backgroundColor: '#f4f8fc' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#dce8f2', borderBottomWidth: 1, borderBottomColor: '#315f57' },
-  backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16,
+    paddingTop: Platform.OS === 'android' ? 14 : 16,
+    paddingBottom: Platform.OS === 'android' ? 7 : 8,
+    backgroundColor: '#dce8f2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dce8f2'
+  },
   headerTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: '600' },
-  headerRight: { width: Platform.OS === 'android' ? 36 : 40 },
+  headerSide: { width: Platform.OS === 'android' ? 36 : 40 },
   content: { flex: 1, padding: Platform.OS === 'android' ? 18 : 20 },
   
   searchRow: { flexDirection: 'row', marginBottom: Platform.OS === 'android' ? 18 : 20, gap: Platform.OS === 'android' ? 10 : 12 },
