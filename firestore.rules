@@ -152,9 +152,10 @@ service cloud.firestore {
         || request.auth.uid == userId
         || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
       );
-      allow update: if signedIn() && validUserPayload(request.resource.data) && (
+      allow update: if signedIn() && (
         (
           request.auth.uid == userId
+          && validUserPayload(request.resource.data)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly([
             'name',
             'phone',
@@ -167,12 +168,14 @@ service cloud.firestore {
         )
         || (
           request.auth.uid == userId
+          && validUserPayload(request.resource.data)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['role', 'hasCompletedSetup', 'lastActive'])
           && (!('companyId' in resource.data) || resource.data.companyId == null)
           && (!('companyId' in request.resource.data) || request.resource.data.companyId == null)
         )
         || (
           request.auth.uid == userId
+          && validUserPayload(request.resource.data)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
           && isCompanyOwner(request.resource.data.companyId)
