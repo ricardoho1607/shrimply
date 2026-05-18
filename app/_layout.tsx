@@ -13,6 +13,7 @@ import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 're
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+let hasCheckedForStartupUpdate = false;
 
 if (sentryDsn) {
   Sentry.init({
@@ -229,6 +230,28 @@ function RootLayoutNav() {
 }
 
 function RootLayout() {
+  useEffect(() => {
+    if (__DEV__ || Platform.OS === 'web' || hasCheckedForStartupUpdate || !Updates.isEnabled) return;
+
+    hasCheckedForStartupUpdate = true;
+
+    const applyStartupUpdate = async () => {
+      try {
+        const checkResult = await Updates.checkForUpdateAsync();
+        if (!checkResult.isAvailable) return;
+
+        const fetchResult = await Updates.fetchUpdateAsync();
+        if (fetchResult.isNew) {
+          await Updates.reloadAsync();
+        }
+      } catch (error) {
+        console.log('Startup update check failed:', error);
+      }
+    };
+
+    applyStartupUpdate();
+  }, []);
+
   return (
     <LanguageProvider>
       <CurrencyProvider>
