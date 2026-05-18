@@ -8,7 +8,7 @@ import { LanguageProvider, useLanguage } from '../context/LanguageContext';
 import { CurrencyProvider } from '../context/CurrencyContext';
 import { LanguageCurrencySync } from '../context/LanguageCurrencySync';
 import { SidebarProvider } from '../context/sidebarContext';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 'react-native';
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
 
@@ -55,7 +55,6 @@ function RootLayoutNav() {
   const segments = useSegments() as string[];
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
-  const [redirecting, setRedirecting] = useState(false);
 
   useEffect(() => {
     if (loading || !rootNavigationState?.key) return;
@@ -65,7 +64,6 @@ function RootLayoutNav() {
     const isInRoleSelection = segments?.includes('roleselection');
 
     const handleRedirect = (path: string) => {
-      setRedirecting(true);
       router.replace(path as any);
     };
 
@@ -104,17 +102,15 @@ function RootLayoutNav() {
     const isInSetup = segments?.includes('company-setup') || segments?.includes('buyersetup') || segments?.includes('companysearch');
 
     if (isInAuth || isInRoleSelection || isInSetup) {
-      handleRedirect('/(tabs)');
+      handleRedirect(isBuyer ? '/(tabs)/indexbuyer' : '/(tabs)/index');
       return;
     }
-
-    setRedirecting(false);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, isBuyer]);
 
   const { width } = useWindowDimensions();
   const isLargeScreen = Platform.OS === 'web' && width > 1024;
 
-  if (loading || redirecting) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
         <ActivityIndicator size="large" color="#0d2137" />
