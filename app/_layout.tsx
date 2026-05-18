@@ -101,6 +101,11 @@ function RootLayoutNav() {
 
     const isInSetup = segments?.includes('company-setup') || segments?.includes('buyersetup') || segments?.includes('companysearch');
 
+    if (!firstSegment) {
+      handleRedirect(isBuyer ? '/(tabs)/indexbuyer' : '/(tabs)/index');
+      return;
+    }
+
     if (isInAuth || isInRoleSelection || isInSetup) {
       handleRedirect(isBuyer ? '/(tabs)/indexbuyer' : '/(tabs)/index');
       return;
