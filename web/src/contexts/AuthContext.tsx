@@ -50,6 +50,7 @@ interface Company {
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
+  isSearchable?: boolean;
   ownerId: string;
   teamMembers: string[];
   pendingInvites: any[];
@@ -119,7 +120,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const setupCompanyListener = useCallback((companyId: string) => {
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
       if (companyDoc.exists()) {
-        setCompany(companyDoc.data() as Company);
+        const companyData = companyDoc.data() as Company;
+        setCompany({ ...companyData, id: companyData.id || companyDoc.id });
       } else {
         setCompany(null);
       }
@@ -251,6 +253,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         id: companyRef.id,
         ownerId: user.uid,
         teamMembers: [user.uid],
+        isSearchable: companyData.isSearchable ?? companyData.isPublicProfile ?? true,
         createdAt: serverTimestamp(),
       };
       await setDoc(companyRef, newCompany);
@@ -302,10 +305,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const normalizedSearch = searchTerm.trim().toLowerCase();
     if (!normalizedSearch) return [];
 
-    const companiesQuery = query(collection(db, 'companies'), where('isSearchable', '==', true));
-    const snapshot = await getDocs(companiesQuery);
+    const [searchableSnapshot, publicSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'companies'), where('isSearchable', '==', true))),
+      getDocs(query(collection(db, 'companies'), where('isPublicProfile', '==', true))),
+    ]);
     const farms: CompanySearchResult[] = [];
-    snapshot.forEach((companyDoc) => {
+    const seenCompanyIds = new Set<string>();
+
+    [...searchableSnapshot.docs, ...publicSnapshot.docs].forEach((companyDoc) => {
+      if (seenCompanyIds.has(companyDoc.id)) return;
+      seenCompanyIds.add(companyDoc.id);
       const data = companyDoc.data() as Company;
       if (!data.companyName?.toLowerCase().includes(normalizedSearch)) return;
       farms.push({

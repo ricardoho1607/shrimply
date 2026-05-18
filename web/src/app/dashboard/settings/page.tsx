@@ -200,6 +200,7 @@ export default function SettingsPage() {
           description: companyForm.description,
           contactPhone: companyForm.contactPhone,
           isPublicProfile: companyForm.isPublicProfile,
+          isSearchable: companyForm.isPublicProfile,
           ownerId: user.uid,
           updatedAt: new Date().toISOString()
         };
