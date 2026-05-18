@@ -28,6 +28,9 @@ import { usePondStore } from '../app/store/pondStore';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
+type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+type StaffRole = 'manager' | 'technician' | 'admin' | 'mechanic';
+
 interface User {
   id: string;
   uid: string;
@@ -35,7 +38,7 @@ interface User {
   name?: string;
   phone?: string;
   profileImage?: string;
-  role?: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+  role?: UserRole;
   hasCompletedSetup: boolean;
   companyId?: string;
   invitedBy?: string;
@@ -72,7 +75,7 @@ const getEffectiveUserRole = (user: User | null, company: Company | null): User[
 
 interface PendingInvite {
   email: string;
-  role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+  role: UserRole;
   invitedBy: string;
   inviteToken: string;
   inviteDate: string;
@@ -85,7 +88,7 @@ interface TeamMember {
   id: string;
   email: string;
   name: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
+  role: UserRole;
   status: 'active' | 'pending' | 'inactive';
   joinedDate: string;
   lastActive?: string;
@@ -97,7 +100,7 @@ interface JoinRequest {
   userId: string;
   userName: string;
   userEmail: string;
-  requestedRole: 'manager' | 'technician' | 'admin';
+  requestedRole: StaffRole;
   message?: string;
   requestedAt: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -138,11 +141,11 @@ interface AuthContextType {
   signUp: (email: string, password: string, inviteToken?: string, keepMeSignedIn?: boolean) => Promise<void>;
   signInWithGoogle: (inviteToken?: string, idToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
-  completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
+  completeRoleSelection: (role: UserRole) => Promise<void>;
   completeCompanySetup: (companyData: CompanySetupData) => Promise<void>;
   updateUserProfile?: (profileData: { name?: string; phone?: string; profileImage?: string }) => Promise<void>;
-  inviteTeamMember?: (inviteData: { email: string; role: 'manager' | 'technician' | 'admin'; message?: string }) => Promise<void>;
-  requestToJoinCompany: (request: { companyId: string; requestedRole: 'manager' | 'technician' | 'admin'; message?: string }) => Promise<void>;
+  inviteTeamMember?: (inviteData: { email: string; role: StaffRole; message?: string }) => Promise<void>;
+  requestToJoinCompany: (request: { companyId: string; requestedRole: StaffRole; message?: string }) => Promise<void>;
   searchCompanies: (query: string) => Promise<CompanySearchResult[]>;
   getJoinRequests: () => Promise<JoinRequest[]>;
   approveJoinRequest: (requestId: string) => Promise<void>;
@@ -425,7 +428,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const completeRoleSelection = async (role: User['role']) => {
     if (!user) return;
     const updatedData: any = { role, lastActive: serverTimestamp() };
-    if (role === 'technician' || role === 'manager' || role === 'admin') updatedData.hasCompletedSetup = false;
+    if (role === 'technician' || role === 'manager' || role === 'admin' || role === 'mechanic') updatedData.hasCompletedSetup = false;
     await updateDoc(doc(db, 'users', user.uid), updatedData);
     setUser({ ...user, ...updatedData });
   };
@@ -521,7 +524,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user]);
 
-  const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: 'manager' | 'technician' | 'admin'; message?: string }) => {
+  const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
     if (!user) throw new Error('User must be authenticated to request joining a company');
     if (user.companyId) throw new Error('You are already part of a company');
 
@@ -645,7 +648,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, company, refreshCompanyData]);
 
-  const inviteTeamMember = useCallback(async (inviteData: { email: string; role: 'manager' | 'technician' | 'admin'; message?: string }) => {
+  const inviteTeamMember = useCallback(async (inviteData: { email: string; role: StaffRole; message?: string }) => {
     if (!user || !company || user.role !== 'owner') throw new Error('Only company owners can send invitations');
 
     const existingInvite = company.pendingInvites.find(invite => invite.email === inviteData.email && invite.status === 'pending');

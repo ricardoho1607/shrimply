@@ -37,10 +37,11 @@ interface Company {
   logoUrl?: string;
 }
 
-type Role = 'manager' | 'technician' | 'admin';
+type Role = 'manager' | 'technician' | 'admin' | 'mechanic';
 
 const ROLES = [
   { id: 'technician', title: 'Aquaculture Technician', icon: 'flask' },
+  { id: 'mechanic', title: 'Mechanic', icon: 'construct' },
   { id: 'manager', title: 'Farm Manager', icon: 'people' },
   { id: 'admin', title: 'System Administrator', icon: 'settings' },
 ] as const;
@@ -72,6 +73,12 @@ export default function CompanySearchScreen() {
     };
     checkPending();
   }, [user]);
+
+  React.useEffect(() => {
+    if (user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role)) {
+      setSelectedRole(user.role as Role);
+    }
+  }, [user?.role]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -134,7 +141,7 @@ export default function CompanySearchScreen() {
   const openRequestModal = (company: Company) => {
     setSelectedCompany(company);
     setRequestMessage('');
-    setSelectedRole('technician');
+    setSelectedRole(user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role) ? user.role as Role : 'technician');
     setShowModal(true);
   };
 

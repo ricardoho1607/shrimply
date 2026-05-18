@@ -18,12 +18,13 @@ import {
   XCircle,
   UserRound,
   Users,
+  Wrench,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
 
-type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
+type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
 
 interface CompanyProfile {
   id?: string;
@@ -50,7 +51,7 @@ interface JoinRequest {
   id: string;
   userName: string;
   userEmail: string;
-  requestedRole: 'manager' | 'technician' | 'admin';
+  requestedRole: 'manager' | 'technician' | 'admin' | 'mechanic';
   requestedAt?: string;
 }
 
@@ -147,6 +148,18 @@ export default function CompanyPage() {
       ],
       icon: FlaskConical,
       maxCount: 10,
+    },
+    mechanic: {
+      title: t.companyDetails?.mechanic || 'Mechanic',
+      description: t.companyDetails?.assetMaintenance || 'Maintains farm assets and service records without editing pond operations.',
+      permissions: [
+        t.companyDetails?.viewPonds || 'View ponds',
+        t.companyDetails?.viewAssetInventory || 'View asset inventory',
+        t.companyDetails?.logMaintenance || 'Log maintenance',
+        t.companyDetails?.updateServiceRecords || 'Update service records',
+      ],
+      icon: Wrench,
+      maxCount: 8,
     },
     admin: {
       title: t.companyDetails?.systemAdministrator || 'System Administrator',

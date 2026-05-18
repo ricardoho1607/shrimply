@@ -7,6 +7,7 @@ import {
   Users, 
   ShoppingCart, 
   ShieldCheck, 
+  Wrench,
   CheckCircle2, 
   ArrowRight,
   HelpCircle
@@ -17,7 +18,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { ROUTES } from '@/config/routes';
 
-type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 
 type RoleOption = {
   id: UserRole;
@@ -63,6 +64,20 @@ export default function RoleSelectionPage() {
         t.roleSelection.technicianFeature2 || 'Monitor shrimp health and growth',
         t.roleSelection.technicianFeature3 || 'Feed management and optimization',
         t.roleSelection.technicianFeature4 || 'Real-time biological alerts',
+      ],
+      requiresCompany: true
+    },
+    {
+      id: 'mechanic',
+      title: t.roleSelection.mechanic || 'Mechanic',
+      description: t.roleSelection.mechanicDesc || 'Maintain farm equipment and asset service records.',
+      icon: Wrench,
+      color: '#607D8B',
+      features: [
+        t.roleSelection.mechanicFeature1 || 'Join existing companies',
+        t.roleSelection.mechanicFeature2 || 'View pond status',
+        t.roleSelection.mechanicFeature3 || 'Log asset maintenance',
+        t.roleSelection.mechanicFeature4 || 'Update equipment service records',
       ],
       requiresCompany: true
     },

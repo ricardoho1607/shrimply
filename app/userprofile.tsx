@@ -232,6 +232,7 @@ export default function UserProfileScreen() {
                   {user?.role === 'owner' ? 'Farm Owner' :
                    user?.role === 'manager' ? 'Manager' :
                    user?.role === 'technician' ? 'Technician' :
+                   user?.role === 'mechanic' ? 'Mechanic' :
                    user?.role === 'admin' ? 'Administrator' :
                    user?.role === 'buyer' ? 'Buyer' : 'Member'}
                 </Text>

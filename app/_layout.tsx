@@ -87,7 +87,7 @@ function RootLayoutNav() {
 
       if (user?.role === 'buyer') {
         setupPath = '/buyersetup';
-      } else if (user?.role === 'technician' || user?.role === 'manager' || user?.role === 'admin') {
+      } else if (user?.role === 'technician' || user?.role === 'manager' || user?.role === 'admin' || user?.role === 'mechanic') {
         setupPath = '/companysearch';
       }
 

@@ -30,7 +30,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface InviteInfo {
   email: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
+  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
   message?: string;
 }
 
@@ -38,6 +38,7 @@ const ROLE_DEFINITIONS = {
   owner: 'Farm Owner',
   manager: 'Farm Manager',
   technician: 'Aquaculture Technician',
+  mechanic: 'Mechanic',
   admin: 'System Administrator',
   buyer: 'Buyer'
 };

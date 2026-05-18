@@ -7,7 +7,7 @@ import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuar
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
 
-type StaffRole = 'manager' | 'technician' | 'admin';
+type StaffRole = 'manager' | 'technician' | 'admin' | 'mechanic';
 
 export default function CompanySearchPage() {
   const isReady = useOnboardingGuard('setup');
@@ -49,7 +49,7 @@ export default function CompanySearchPage() {
 
   const handleJoinRequest = async (company: { id: string; companyName: string }) => {
     if (!user) return;
-    if (!['manager', 'technician', 'admin'].includes(user.role || '')) {
+    if (!['manager', 'technician', 'admin', 'mechanic'].includes(user.role || '')) {
       alert('Only staff roles can request to join an existing farm. Buyers and owners should create their own company profile.');
       return;
     }

@@ -551,10 +551,12 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }
     }
 
+    const skipCycleLink = Boolean((maintenance as any).skipCycleLink);
+    const { skipCycleLink: _skipCycleLink, ...maintenanceData } = maintenance as any;
     const newMaintenance: MaintenanceRecord = {
-      ...maintenance,
-      cycleId: maintenance.cycleId || getActiveFarmCycle(usePondStore.getState().cycles)?.id,
-      cycleName: maintenance.cycleName || getActiveFarmCycle(usePondStore.getState().cycles)?.cycleName,
+      ...maintenanceData,
+      cycleId: maintenance.cycleId || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.id),
+      cycleName: maintenance.cycleName || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.cycleName),
       photos: uploadedPhotoUrls,
       id: `maint_${Date.now()}`,
       date: new Date(),

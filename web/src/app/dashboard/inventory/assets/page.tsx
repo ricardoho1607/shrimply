@@ -36,6 +36,7 @@ import {
   orderBy
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 
@@ -106,6 +107,9 @@ const MAINTENANCE_TYPES = ['Preventive', 'Corrective', 'Inspection', 'Repair', '
 export default function AssetInventoryPage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+  const { user: authUser } = useAuth();
+  const isMechanic = authUser?.role === 'mechanic';
+  const canManageAssets = !isMechanic;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -165,6 +169,7 @@ export default function AssetInventoryPage() {
         setUser(firebaseUser);
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const cid = uDoc.data()?.companyId;
+          const role = uDoc.data()?.role;
           setCompanyId(cid);
           if (cid) {
             const q = query(collection(db, 'assets'), where('companyId', '==', cid));
@@ -182,9 +187,11 @@ export default function AssetInventoryPage() {
               setLoading(false);
             });
             const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
-            const unsubCycles = onSnapshot(qCycles, (snapshot) => {
-              setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FarmCycle)));
-            });
+            const unsubCycles = role === 'mechanic'
+              ? () => {}
+              : onSnapshot(qCycles, (snapshot) => {
+                setCycles(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FarmCycle)));
+              });
             return () => {
               unsubAssets();
               unsubCycles();
@@ -224,6 +231,11 @@ export default function AssetInventoryPage() {
   }, [assets, searchTerm, categoryFilter]);
 
   const handleOpenModal = (type: typeof modalType, asset?: Asset) => {
+    if (isMechanic && ['add', 'transfer', 'return'].includes(type)) {
+      alert('Mechanics can log maintenance but cannot change asset ownership or master records.');
+      return;
+    }
+
     if (type === 'add' || type === 'maintenance') {
       setReferralSource(type === 'add' ? 'add' : 'log');
       setModalType('scanReferral');
@@ -269,6 +281,10 @@ export default function AssetInventoryPage() {
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) return;
+    if (!canManageAssets && ['add', 'transfer', 'return'].includes(modalType)) {
+      alert('Mechanics can log maintenance but cannot change asset ownership or master records.');
+      return;
+    }
 
     try {
       if (modalType === 'add') {
@@ -324,8 +340,8 @@ export default function AssetInventoryPage() {
         const maintRecord: MaintenanceRecord = {
           id: `maint_${Date.now()}`,
           date: Timestamp.now(),
-          cycleId: cycles.find(isOpenFarmCycle)?.id,
-          cycleName: cycles.find(isOpenFarmCycle)?.cycleName,
+          cycleId: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.id,
+          cycleName: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.cycleName,
           description: formData.maintDesc,
           technician: formData.technician,
           cost: cost,
@@ -353,6 +369,10 @@ export default function AssetInventoryPage() {
   };
 
   const handleDeleteAsset = async (id: string) => {
+    if (!canManageAssets) {
+      alert('Mechanics can log maintenance but cannot delete assets.');
+      return;
+    }
     if (!window.confirm('Are you sure you want to delete this asset?')) return;
     try {
       await deleteDoc(doc(db, 'assets', id));
@@ -372,10 +392,12 @@ export default function AssetInventoryPage() {
   return (
     <div className="dashboard-page">
       <div className="dashboard-action-row">
-        <button className="btn-primary" onClick={() => handleOpenModal('add')}>
-          <Plus size={20} />
-          {t.asset.addAsset}
-        </button>
+        {canManageAssets && (
+          <button className="btn-primary" onClick={() => handleOpenModal('add')}>
+            <Plus size={20} />
+            {t.asset.addAsset}
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -554,7 +576,9 @@ export default function AssetInventoryPage() {
                     </div>
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <button className="btn-secondary" style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('history', asset)}><History size={16} /></button>
-                      <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} /></button>
+                      {canManageAssets && (
+                        <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} /></button>
+                      )}
                     </div>
                   </div>
 
@@ -566,10 +590,12 @@ export default function AssetInventoryPage() {
                   </div>
 
                   <div style={{ padding: '20px 24px', display: 'flex', gap: '12px' }}>
-                    <button className="btn-primary" style={{ flex: 1, borderRadius: '10px', padding: '10px' }} onClick={() => handleOpenModal('transfer', asset)}>
-                      <ArrowRightLeft size={16} /> Transfer
-                    </button>
-                    {asset.currentHolder && (
+                    {canManageAssets && (
+                      <button className="btn-primary" style={{ flex: 1, borderRadius: '10px', padding: '10px' }} onClick={() => handleOpenModal('transfer', asset)}>
+                        <ArrowRightLeft size={16} /> Transfer
+                      </button>
+                    )}
+                    {canManageAssets && asset.currentHolder && (
                       <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#27ae60', borderColor: '#27ae60', padding: '10px' }} onClick={() => handleOpenModal('return', asset)}>
                         <CheckCircle2 size={16} /> Return
                       </button>

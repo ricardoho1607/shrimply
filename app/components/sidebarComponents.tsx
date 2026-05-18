@@ -283,9 +283,10 @@ export const RegularSidebar: React.FC = () => {
                 <Text style={styles.userRole}>
                   {user?.role === 'owner' || (company && company.ownerId === user?.uid) ? 'Farm Owner' :
                     user?.role === 'technician' ? 'Aquaculture Technician' :
-                      user?.role === 'manager' ? 'Manager' :
-                        user?.role === 'admin' ? 'Administrator' : 
-                          user?.role === 'buyer' ? 'Shrimp Buyer' : 'No Role Assigned'}
+                      user?.role === 'mechanic' ? 'Mechanic' :
+                        user?.role === 'manager' ? 'Manager' :
+                          user?.role === 'admin' ? 'Administrator' :
+                            user?.role === 'buyer' ? 'Shrimp Buyer' : 'No Role Assigned'}
                 </Text>
                 <Text style={styles.companyNameSmall}>{company?.companyName || 'My Company'}</Text>
                 <Text style={styles.systemTitle}>Shrimply Aquaculture Management</Text>
@@ -383,12 +384,14 @@ export const RegularSidebar: React.FC = () => {
 
                 {inventoryExpanded && (
                   <View style={styles.submenuContainer}>
-                    <MenuButton
-                      icon="fish-outline"
-                      text="Feeds & Additives"
-                      onPress={() => navigateAndClose('/inventory/feedAdditives')}
-                      color="#315f57"
-                    />
+                    {user?.role !== 'mechanic' && (
+                      <MenuButton
+                        icon="fish-outline"
+                        text="Feeds & Additives"
+                        onPress={() => navigateAndClose('/inventory/feedAdditives')}
+                        color="#315f57"
+                      />
+                    )}
                     <MenuButton
                       icon="construct-outline"
                       text="Assets"

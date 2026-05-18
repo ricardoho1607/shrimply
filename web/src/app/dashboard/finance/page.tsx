@@ -138,7 +138,7 @@ export default function FinancePage() {
   };
 
 
-  if (user?.role === 'technician') {
+  if (user?.role === 'technician' || user?.role === 'mechanic') {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
         <AlertCircle size={48} color="#ef4444" style={{ marginBottom: '16px' }} />

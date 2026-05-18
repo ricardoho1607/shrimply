@@ -54,11 +54,11 @@ service cloud.firestore {
     }
 
     function validRoleValue(value) {
-      return value == null || value in ['owner', 'manager', 'technician', 'admin', 'buyer'];
+      return value == null || value in ['owner', 'manager', 'technician', 'admin', 'buyer', 'mechanic'];
     }
 
     function validStaffRoleValue(value) {
-      return value in ['manager', 'technician', 'admin'];
+      return value in ['manager', 'technician', 'admin', 'mechanic'];
     }
 
     function currentUserRole() {
@@ -94,6 +94,24 @@ service cloud.firestore {
             && currentUserRole() in ['owner', 'manager', 'technician', 'admin']
           )
         );
+    }
+
+    function isCompanyMechanic(companyId) {
+      return isCompanyMember(companyId)
+        && userBelongsToCompany(companyId)
+        && currentUserRole() == 'mechanic';
+    }
+
+    function validMechanicAssetUpdate() {
+      return request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'maintenanceHistory',
+          'totalMaintenanceCost',
+          'nextMaintenanceDue',
+          'lastMaintenanceDate',
+          'condition',
+          'updatedAt'
+        ]);
     }
 
     function validUserPayload(data) {
@@ -326,12 +344,16 @@ service cloud.firestore {
     }
 
     match /assets/{assetId} {
-      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow create: if signedIn() && isCompanyOperator(request.resource.data.companyId);
       allow read: if signedIn() && (
         isFounderAdmin()
         || isCompanyMember(resource.data.companyId)
       );
-      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow update: if signedIn() && (
+        isCompanyOperator(resource.data.companyId)
+        || (isCompanyMechanic(resource.data.companyId) && validMechanicAssetUpdate())
+      );
+      allow delete: if signedIn() && isCompanyOperator(resource.data.companyId);
     }
 
     match /apiRequests/{requestId} {

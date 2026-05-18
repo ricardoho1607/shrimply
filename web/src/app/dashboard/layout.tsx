@@ -84,6 +84,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isAdminRoute = pathname?.startsWith('/dashboard/admin') ?? false;
   const unreadCount = useUnreadNotificationsCount({ enabled: !isAdminRoute });
   const navigation = NAV_STRUCTURE(t);
+  const isMechanic = user?.role === 'mechanic';
+  const visibleNavigation = isMechanic ? {
+    management: navigation.management.filter((item) => ['/dashboard', '/dashboard/ponds'].includes(item.href)),
+    appServices: navigation.appServices.filter((item) => ['/dashboard/ai', '/dashboard/notifications'].includes(item.href)),
+    business: [
+      {
+        label: 'Inventory',
+        icon: Box,
+        id: 'inventory',
+        children: [
+          { label: t.nav.inventoryAssets || 'Assets', href: '/dashboard/inventory/assets' },
+        ],
+      },
+    ],
+    system: navigation.system,
+  } : navigation;
 
   const sectionLabels: Record<string, string> = {
     management: 'Management',
@@ -93,7 +109,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   };
 
   const currentNavMeta = (() => {
-    for (const [groupKey, items] of Object.entries(navigation)) {
+    for (const [groupKey, items] of Object.entries(visibleNavigation)) {
       for (const item of items as any[]) {
         if (item.href && pathname === item.href) {
           return {
@@ -272,7 +288,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
-          {Object.entries(navigation).map(([groupKey, items]) => (
+          {Object.entries(visibleNavigation).map(([groupKey, items]) => (
             <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
               <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}

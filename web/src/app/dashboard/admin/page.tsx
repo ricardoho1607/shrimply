@@ -202,7 +202,7 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
     roleBreakdown[role] = (roleBreakdown[role] || 0) + 1;
     if (role === 'buyer') buyers += 1;
     if (role === 'owner') owners += 1;
-    if (['technician', 'manager', 'admin'].includes(role)) staff += 1;
+    if (['technician', 'manager', 'admin', 'mechanic'].includes(role)) staff += 1;
 
     const joinedAt = toDate(user.joinedDate || user.createdAt);
     if (joinedAt && joinedAt >= since) {

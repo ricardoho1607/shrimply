@@ -26,6 +26,8 @@ export default function AssetInventoryScreen() {
   const { company, user } = useAuth();
   const { t } = useLanguage();
   const store = useAssetStore();
+  const isMechanic = user?.role === 'mechanic';
+  const canManageAssets = !isMechanic;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -133,6 +135,7 @@ export default function AssetInventoryScreen() {
   );
 
   const handleAddAsset = async () => {
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot add assets.');
     if (!formData.name) return Alert.alert(t.asset?.error || 'Error', t.asset?.assetNameRequired || 'Asset name is required');
     
     try {
@@ -155,6 +158,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleTransfer = async () => {
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot transfer assets.');
     if (!selectedAsset || !formData.to) return Alert.alert(t.asset?.error || 'Error', t.asset?.recipientRequired || 'Recipient is required');
     
     try {
@@ -173,6 +177,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleReturn = async () => {
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot return assets.');
     if (!selectedAsset) return;
     
     try {
@@ -194,6 +199,7 @@ export default function AssetInventoryScreen() {
         photos: photos, severity: formData.severity as any, type: formData.maintenanceType,
         conditionBefore: formData.conditionBefore as any, conditionAfter: formData.conditionAfter as any,
         notes: formData.notes || '',
+        skipCycleLink: isMechanic,
       };
 
       if (formData.cost?.trim()) {
@@ -228,6 +234,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleDelete = (id: string) => {
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot delete assets.');
     Alert.alert(t.asset?.deleteAsset || 'Delete Asset', t.asset?.deleteConfirmation || 'Are you sure? This cannot be undone.', [
       { text: t.asset?.cancel || 'Cancel', style: 'cancel' },
       { 
@@ -246,6 +253,10 @@ export default function AssetInventoryScreen() {
   };
 
   const openModal = (type: ModalType, asset?: Asset) => {
+    if (isMechanic && ['add', 'transfer', 'return'].includes(type)) {
+      Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot change asset ownership or master records.');
+      return;
+    }
     setModalType(type);
     if (asset) {
       setSelectedAsset(asset);
@@ -310,9 +321,11 @@ export default function AssetInventoryScreen() {
             <TouchableOpacity onPress={() => openModal('qr-view', asset)} style={styles.qrBtn}>
               <Ionicons name="qr-code-outline" size={20} color="#315f57" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(asset.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={20} color="#e74c3c" />
-            </TouchableOpacity>
+            {canManageAssets && (
+              <TouchableOpacity onPress={() => handleDelete(asset.id)} style={styles.deleteBtn}>
+                <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+              </TouchableOpacity>
+            )}
           </View>
         </TouchableOpacity>
 
@@ -329,11 +342,13 @@ export default function AssetInventoryScreen() {
         </View>
 
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => openModal('transfer', asset)}>
-            <Ionicons name="swap-horizontal" size={16} color="#fff" />
-            <Text style={styles.actionText}>{t.asset?.transfer || 'Transfer'}</Text>
-          </TouchableOpacity>
-          {asset.currentHolder && (
+          {canManageAssets && (
+            <TouchableOpacity style={styles.actionBtn} onPress={() => openModal('transfer', asset)}>
+              <Ionicons name="swap-horizontal" size={16} color="#fff" />
+              <Text style={styles.actionText}>{t.asset?.transfer || 'Transfer'}</Text>
+            </TouchableOpacity>
+          )}
+          {canManageAssets && asset.currentHolder && (
             <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#27ae60' }]} 
               onPress={() => { setSelectedAsset(asset); openModal('return'); }}>
               <Ionicons name="return-down-back" size={16} color="#fff" />
@@ -565,15 +580,17 @@ export default function AssetInventoryScreen() {
             <TouchableOpacity style={styles.scanButton} onPress={() => openModal('qr-scan')}>
               <Ionicons name="qr-code" size={24} color="#0d2137" />
             </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => { resetForm(); openModal('add'); }}
-              accessibilityRole="button"
-              accessibilityLabel="Add asset"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="add" size={24} color="#0d2137" />
-            </TouchableOpacity>
+            {canManageAssets && (
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => { resetForm(); openModal('add'); }}
+                accessibilityRole="button"
+                accessibilityLabel="Add asset"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="add" size={24} color="#0d2137" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </SafeAreaView>

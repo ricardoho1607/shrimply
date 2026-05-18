@@ -15,7 +15,7 @@ interface TeamMember {
   id: string;
   email: string;
   name: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
+  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
   status: 'active' | 'pending' | 'inactive';
   joinedDate: string;
   lastActive?: string;
@@ -26,13 +26,13 @@ interface JoinRequest {
   userId: string;
   userName: string;
   userEmail: string;
-  requestedRole: 'manager' | 'technician' | 'admin';
+  requestedRole: 'manager' | 'technician' | 'admin' | 'mechanic';
   message?: string;
   requestedAt: string;
   status: 'pending' | 'approved' | 'rejected';
 }
 
-type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer';
+type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
 
 export default function CompanyDetailsScreen() {
   const router = useRouter();
@@ -73,6 +73,19 @@ export default function CompanyDetailsScreen() {
       color: '#315f57',
       icon: 'flask' as const,
       maxCount: 10
+    },
+    mechanic: {
+      title: t.companyDetails.mechanic || 'Mechanic',
+      description: t.companyDetails.assetMaintenance || 'Maintains farm assets and equipment without editing pond operations.',
+      permissions: [
+        t.companyDetails.viewPonds || 'View ponds',
+        t.companyDetails.viewAssetInventory || 'View asset inventory',
+        t.companyDetails.logMaintenance || 'Log maintenance',
+        t.companyDetails.updateServiceRecords || 'Update service records',
+      ],
+      color: '#607D8B',
+      icon: 'construct' as const,
+      maxCount: 8
     },
     admin: {
       title: t.companyDetails.systemAdministrator,

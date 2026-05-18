@@ -15,6 +15,7 @@ export default function SetupChoicePage() {
   const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
 
   const isBuyer = user?.role === 'buyer';
+  const isStaffRole = ['manager', 'technician', 'admin', 'mechanic'].includes(user?.role || '');
 
   const choices = [
     {
@@ -39,7 +40,7 @@ export default function SetupChoicePage() {
       href: ROUTES.setupSearch,
       action: 'Find Company'
     }
-  ];
+  ].filter((choice) => !isStaffRole || choice.id === 'join');
 
   if (!isReady) return <OnboardingLoading />;
   if (pendingRequestLoading) return <OnboardingLoading />;

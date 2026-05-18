@@ -22,6 +22,9 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
 
+type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+type StaffRole = 'manager' | 'technician' | 'admin' | 'mechanic';
+
 interface User {
   id: string;
   uid: string;
@@ -29,7 +32,7 @@ interface User {
   name?: string;
   phone?: string;
   profileImage?: string;
-  role?: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+  role?: UserRole;
   hasCompletedSetup: boolean;
   companyId?: string;
   invitedBy?: string;
@@ -51,8 +54,6 @@ interface Company {
   teamMembers: string[];
   pendingInvites: any[];
 }
-
-type StaffRole = 'manager' | 'technician' | 'admin';
 
 interface JoinRequest {
   id: string;
@@ -85,7 +86,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
-  completeRoleSelection: (role: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer') => Promise<void>;
+  completeRoleSelection: (role: UserRole) => Promise<void>;
   completeCompanySetup: (companyData: any) => Promise<void>;
   requestToJoinCompany: (request: { companyId: string; requestedRole: StaffRole; message?: string }) => Promise<void>;
   searchCompanies: (searchTerm: string) => Promise<CompanySearchResult[]>;

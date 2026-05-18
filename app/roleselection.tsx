@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
 
 interface RoleOption {
-  id: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+  id: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
   title: string;
   description: string;
   icon: string;
@@ -60,6 +60,20 @@ export default function RoleSelectionScreen() {
         t.roleSelection.technicianFeature2,
         t.roleSelection.technicianFeature3,
         t.roleSelection.technicianFeature4,
+      ],
+      requiresCompany: true
+    },
+    {
+      id: 'mechanic',
+      title: t.roleSelection.mechanic || 'Mechanic',
+      description: t.roleSelection.mechanicDesc || 'I maintain farm assets and equipment',
+      icon: 'construct-outline',
+      color: '#607D8B',
+      features: [
+        t.roleSelection.mechanicFeature1 || 'Join existing companies',
+        t.roleSelection.mechanicFeature2 || 'View pond status',
+        t.roleSelection.mechanicFeature3 || 'Log asset maintenance',
+        t.roleSelection.mechanicFeature4 || 'Update equipment service records',
       ],
       requiresCompany: true
     },
@@ -122,7 +136,7 @@ export default function RoleSelectionScreen() {
         return;
       }
 
-      // If role requires company (technician, manager, admin), navigate to company search
+      // If role requires company (technician, mechanic, manager, admin), navigate to company search
       if (role.requiresCompany) {
         await completeRoleSelection(role.id);
         console.log(`${role.title} role set, navigating to company search`);
