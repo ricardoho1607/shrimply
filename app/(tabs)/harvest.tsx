@@ -282,8 +282,8 @@ export default function HarvestScreen() {
               <Text style={styles.emptyTitle}>{t.harvest.noRecords}</Text>
               <Text style={styles.emptySubtitle}>
                 {harvestFilter === 'current'
-                  ? (canEditHarvest ? 'Harvest records for the current cycle will appear here.' : t.harvest.noDataAvailable)
-                  : 'Ended-cycle harvest records will stay here for history.'}
+                  ? (canEditHarvest ? t.harvest.currentCycleEmpty : t.harvest.noDataAvailable)
+                  : t.harvest.historyEmpty}
               </Text>
             </View>
           }

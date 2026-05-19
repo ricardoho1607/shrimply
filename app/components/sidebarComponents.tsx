@@ -112,12 +112,12 @@ export const RegularSidebar: React.FC = () => {
       Alert.alert(t.messages.success, t.messages.saveSuccess);
     } catch (error: any) {
       console.error('Backup failed:', error);
-      Alert.alert('Backup Failed', 'Failed to back up data. Please try again.');
+      Alert.alert(t.sidebar.backupFailed, t.sidebar.backupFailedMessage);
     }
   };
 
   const handleSignOut = () => {
-    Alert.alert(t.sidebar.signOut, 'Are you sure you want to sign out?', [
+    Alert.alert(t.sidebar.signOut, t.sidebar.signOutWarning, [
       { text: t.actions.cancel, style: 'cancel' },
       {
         text: t.sidebar.signOut,
@@ -128,7 +128,7 @@ export const RegularSidebar: React.FC = () => {
             setSidebarVisible(false);
           } catch (error: any) {
             console.error('Sign out failed:', error);
-            Alert.alert(t.messages.error, 'Failed to sign out. Please try again.');
+            Alert.alert(t.messages.error, t.sidebar.signOutFailed);
           }
         }
       }
@@ -147,7 +147,7 @@ export const RegularSidebar: React.FC = () => {
       <View style={styles.menuIconContainer}>
         <Ionicons name="cube-outline" size={22} color="#0d2137" />
       </View>
-      <Text style={[styles.menuText, { color: '#0d2137' }]}>Inventory</Text>
+      <Text style={[styles.menuText, { color: '#0d2137' }]}>{t.sidebar.inventory}</Text>
       <Ionicons
         name={inventoryExpanded ? "chevron-up" : "chevron-down"}
         size={20}
@@ -166,7 +166,7 @@ export const RegularSidebar: React.FC = () => {
       <View style={styles.menuIconContainer}>
         <Ionicons name="document-text-outline" size={22} color="#9B59B6" />
       </View>
-      <Text style={[styles.menuText, { color: '#9B59B6' }]}>Reports</Text>
+      <Text style={[styles.menuText, { color: '#9B59B6' }]}>{t.sidebar.reports}</Text>
       <Ionicons
         name={reportsExpanded ? "chevron-up" : "chevron-down"}
         size={20}
@@ -281,12 +281,12 @@ export const RegularSidebar: React.FC = () => {
                 </TouchableOpacity>
                 <Text style={styles.userName}>{user?.name || user?.email.split('@')[0]}</Text>
                 <Text style={styles.userRole}>
-                  {user?.role === 'owner' || (company && company.ownerId === user?.uid) ? 'Farm Owner' :
-                    user?.role === 'technician' ? 'Aquaculture Technician' :
-                      user?.role === 'mechanic' ? 'Mechanic' :
-                        user?.role === 'manager' ? 'Manager' :
-                          user?.role === 'admin' ? 'Administrator' :
-                            user?.role === 'buyer' ? 'Shrimp Buyer' : 'No Role Assigned'}
+                  {user?.role === 'owner' || (company && company.ownerId === user?.uid) ? t.roleSelection.farmOwner :
+                    user?.role === 'technician' ? t.companyDetails.aquacultureTechnician :
+                      user?.role === 'mechanic' ? t.companyDetails.mechanic :
+                        user?.role === 'manager' ? t.roleSelection.manager :
+                          user?.role === 'admin' ? t.roleSelection.administrator :
+                            user?.role === 'buyer' ? t.roleSelection.shrimpBuyer : 'No Role Assigned'}
                 </Text>
                 <Text style={styles.companyNameSmall}>{company?.companyName || 'My Company'}</Text>
                 <Text style={styles.systemTitle}>Shrimply Aquaculture Management</Text>
@@ -335,14 +335,14 @@ export const RegularSidebar: React.FC = () => {
                 <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />
-                <MenuButton icon="notifications-outline" text="Notifications" onPress={() => navigateAndClose('/notifications')} />
+                <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 {hasFinanceAccess && (
                   <>
                     <View style={styles.separator} />
                     <MenuButton
                       icon="wallet-outline"
-                      text="Finance"
+                      text={t.sidebar.finance}
                       onPress={() => navigateAndClose('/finance')}
                       color="#27AE60"
                     />
@@ -358,13 +358,13 @@ export const RegularSidebar: React.FC = () => {
                       <View style={styles.submenuContainer}>
                         <MenuButton
                           icon="stats-chart-outline"
-                          text="Financial Reports"
+                          text={t.sidebar.financialReports}
                           onPress={() => navigateAndClose('/financial-reports')}
                           color="#9B59B6"
                         />
                         <MenuButton
                           icon="bar-chart-outline"
-                          text="Shrimp Reports"
+                          text={t.sidebar.shrimpReports}
                           onPress={() => navigateAndClose('/shrimp-reports')}
                           color="#9B59B6"
                         />
@@ -387,14 +387,14 @@ export const RegularSidebar: React.FC = () => {
                     {user?.role !== 'mechanic' && (
                       <MenuButton
                         icon="fish-outline"
-                        text="Feeds & Additives"
+                        text={t.sidebar.feedsAdditives}
                         onPress={() => navigateAndClose('/inventory/feedAdditives')}
                         color="#315f57"
                       />
                     )}
                     <MenuButton
                       icon="construct-outline"
-                      text="Assets"
+                      text={t.sidebar.assets}
                       onPress={() => navigateAndClose('/inventory/assetInventory')}
                       color="#315f57"
                     />
@@ -442,10 +442,10 @@ export const BuyerSidebar: React.FC = () => {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t.sidebar.signOut, t.sidebar.signOutWarning, [
+      { text: t.actions.cancel, style: 'cancel' },
       {
-        text: 'Sign Out',
+        text: t.sidebar.signOut,
         style: 'destructive',
         onPress: async () => {
           try {
@@ -453,7 +453,7 @@ export const BuyerSidebar: React.FC = () => {
             setSidebarVisible(false);
           } catch (error: any) {
             console.error('Sign out failed:', error);
-            Alert.alert('Error', 'Failed to sign out. Please try again.');
+            Alert.alert(t.messages.error, t.sidebar.signOutFailed);
           }
         }
       }
@@ -523,12 +523,12 @@ export const BuyerSidebar: React.FC = () => {
                 <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 <MenuButton icon="document-text-outline" text="My Listings" onPress={() => navigateAndClose('/marketplace/buyerlisting')} />
-                <MenuButton icon="notifications-outline" text="Notifications" onPress={() => navigateAndClose('/notifications')} />
+                <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 <View style={styles.separator} />
-                <MenuButton icon="settings-outline" text="Settings" onPress={() => navigateAndClose('/settings')} color="#0d2137" />
-                <MenuButton icon="help-circle-outline" text="Help & Support" onPress={() => navigateAndClose('/help-support')} color="#0d2137" />
-                <MenuButton icon="log-out-outline" text="Sign Out" onPress={handleSignOut} color="#ff3b30" />
+                <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateAndClose('/settings')} color="#0d2137" />
+                <MenuButton icon="help-circle-outline" text={t.sidebar.helpSupport} onPress={() => navigateAndClose('/help-support')} color="#0d2137" />
+                <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
               </View>
             </ScrollView>
           </View>
@@ -548,6 +548,23 @@ export const StaticSidebar: React.FC = () => {
   const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
 
   const navigateTo = (route: string) => router.push(route as any);
+  const handleSignOut = () => {
+    Alert.alert(t.sidebar.signOut, t.sidebar.signOutWarning, [
+      { text: t.actions.cancel, style: 'cancel' },
+      {
+        text: t.sidebar.signOut,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (error: any) {
+            console.error('Sign out failed:', error);
+            Alert.alert(t.messages.error, t.sidebar.signOutFailed);
+          }
+        }
+      }
+    ]);
+  };
   const StaticReportsMenuButton = () => (
     <TouchableOpacity
       style={[styles.menuItem, reportsExpanded && styles.activeMenuItem]}
@@ -557,7 +574,7 @@ export const StaticSidebar: React.FC = () => {
       <View style={styles.menuIconContainer}>
         <Ionicons name="document-text-outline" size={22} color="#9B59B6" />
       </View>
-      <Text style={[styles.menuText, { color: '#9B59B6' }]}>Reports</Text>
+      <Text style={[styles.menuText, { color: '#9B59B6' }]}>{t.sidebar.reports}</Text>
       <Ionicons
         name={reportsExpanded ? "chevron-up" : "chevron-down"}
         size={20}
@@ -584,12 +601,12 @@ export const StaticSidebar: React.FC = () => {
           {hasFinanceAccess && (
             <>
               <View style={styles.separator} />
-              <MenuButton icon="wallet-outline" text="Finance" onPress={() => navigateTo('/finance')} color="#27AE60" />
+              <MenuButton icon="wallet-outline" text={t.sidebar.finance} onPress={() => navigateTo('/finance')} color="#27AE60" />
               <StaticReportsMenuButton />
               {reportsExpanded && (
                 <View style={styles.submenuContainer}>
-                  <MenuButton icon="stats-chart-outline" text="Financial Reports" onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />
-                  <MenuButton icon="bar-chart-outline" text="Shrimp Reports" onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
+                  <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />
+                  <MenuButton icon="bar-chart-outline" text={t.sidebar.shrimpReports} onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
                   <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />
                 </View>
               )}
@@ -597,7 +614,7 @@ export const StaticSidebar: React.FC = () => {
           )}
           <View style={styles.separator} />
           <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
-          <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={signOut} color="#ff3b30" />
+          <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
         </View>
       </ScrollView>
     </View>
@@ -606,8 +623,26 @@ export const StaticSidebar: React.FC = () => {
 
 export const StaticBuyerSidebar: React.FC = () => {
   const { user, signOut } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const navigateTo = (route: string) => router.push(route as any);
+  const handleSignOut = () => {
+    Alert.alert(t.sidebar.signOut, t.sidebar.signOutWarning, [
+      { text: t.actions.cancel, style: 'cancel' },
+      {
+        text: t.sidebar.signOut,
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await signOut();
+          } catch (error: any) {
+            console.error('Sign out failed:', error);
+            Alert.alert(t.messages.error, t.sidebar.signOutFailed);
+          }
+        }
+      }
+    ]);
+  };
 
   return (
     <View style={styles.staticSidebar}>
@@ -623,8 +658,8 @@ export const StaticBuyerSidebar: React.FC = () => {
           <MenuButton icon="business" text="Suppliers" onPress={() => navigateTo('/indexbuyer')} active color="#27AE60" />
           <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateTo('/marketplace')} color="#27AE60" />
           <View style={styles.separator} />
-          <MenuButton icon="settings-outline" text="Settings" onPress={() => navigateTo('/settings')} color="#0d2137" />
-          <MenuButton icon="log-out-outline" text="Sign Out" onPress={signOut} color="#ff3b30" />
+          <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
+          <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
         </View>
       </ScrollView>
     </View>
