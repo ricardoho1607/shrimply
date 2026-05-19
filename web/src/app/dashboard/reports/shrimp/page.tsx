@@ -181,23 +181,24 @@ const calculatePondStats = (pond: Pond) => {
   const validSamplings = operationalSorted.filter(s => (s.mbw || s.abw || 0) > 0);
   const baselineSampling = sorted.filter(isBaselineSampling).reverse()[0];
   let adg = 0;
-  if (validSamplings.length >= 2) {
-    const s2 = validSamplings[validSamplings.length - 1];
-    const s1 = validSamplings[validSamplings.length - 2];
-    const s2w = s2.mbw || s2.abw || 0;
-    const s1w = s1.mbw || s1.abw || 0;
-    const daysDiff = (new Date(s2.date).getTime() - new Date(s1.date).getTime()) / (1000 * 60 * 60 * 24);
+  if (validSamplings.length) {
+    const currentSampling = validSamplings[validSamplings.length - 1];
+    const currentSamplingTime = new Date(currentSampling.date).getTime();
+    const baselineSamplingTime = baselineSampling ? new Date(baselineSampling.date).getTime() : Number.NaN;
+    const validBaselineSampling = baselineSampling &&
+      Number.isFinite(baselineSamplingTime) &&
+      baselineSamplingTime < currentSamplingTime
+      ? baselineSampling
+      : undefined;
+    const previousSampling = [...validSamplings]
+      .reverse()
+      .find((sample) => new Date(sample.date).getTime() < currentSamplingTime) || validBaselineSampling;
+    const currentWeight = currentSampling.mbw || currentSampling.abw || 0;
+    const previousWeight = previousSampling?.mbw || previousSampling?.abw || initialW;
+    const previousDate = previousSampling?.date || pond.docStart;
+    const daysDiff = (currentSamplingTime - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24);
     if (daysDiff > 0) {
-      adg = (s2w - s1w) / daysDiff;
-    }
-  } else if (validSamplings.length === 1) {
-    const s1 = validSamplings[0];
-    const s1w = s1.mbw || s1.abw || 0;
-    const previousWeight = baselineSampling?.mbw || baselineSampling?.abw || initialW;
-    const previousDate = baselineSampling?.date || pond.docStart;
-    const daysDiff = (new Date(s1.date).getTime() - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysDiff > 0) {
-      adg = (s1w - previousWeight) / daysDiff;
+      adg = (currentWeight - previousWeight) / daysDiff;
     }
   }
 

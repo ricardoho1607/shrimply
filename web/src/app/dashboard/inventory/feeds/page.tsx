@@ -1,17 +1,17 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from 'react';
-import { 
-  Plus, 
-  Search, 
-  Trash2, 
-  Box, 
-  FlaskConical, 
-  ArrowDownCircle, 
-  ArrowUpCircle, 
-  Download, 
-  AlertCircle, 
-  MoreHorizontal, 
+import {
+  Plus,
+  Search,
+  Trash2,
+  Box,
+  FlaskConical,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Download,
+  AlertCircle,
+  MoreHorizontal,
   History,
   X,
   Loader2,
@@ -23,18 +23,19 @@ import {
   LayoutDashboard,
   ShoppingBag
 } from 'lucide-react';
-import { 
-  collection, 
-  doc, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
-  serverTimestamp, 
+import {
+  collection,
+  doc,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
   runTransaction,
   arrayUnion,
   Timestamp
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
@@ -84,14 +85,16 @@ interface InventoryItem {
 const UNITS = ['kg', 'L', 'pack', 'sack'];
 const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 export default function InventoryFeedsPage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  
+  const { user } = useAuth();
+
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
   const { feeds, additives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
-  
+
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -100,6 +103,7 @@ export default function InventoryFeedsPage() {
     () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
     [ponds]
   );
+  const canEditInventory = canEditOperations(user?.role);
 
   const formatDate = (date: any) => {
     if (!date) return '';
@@ -113,13 +117,13 @@ export default function InventoryFeedsPage() {
     } catch (e) {}
     return '';
   };
-  
+
   // Modal States
   const [isModalOpen, setModalOpen] = useState(false);
   const [modalType, setModalType] = useState<'add' | 'stockIn' | 'usage' | 'history' | 'editReorder'>('add');
   const [itemType, setItemType] = useState<'feed' | 'additive'>('feed');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  
+
   // Form State
   const [formData, setFormData] = useState({
     itemName: '',
@@ -139,7 +143,7 @@ export default function InventoryFeedsPage() {
     const totalFeedStock = feeds.reduce((s, f) => s + (f.totalStock || 0), 0);
     const totalAdditiveValue = additives.reduce((s, a) => s + (a.totalCost || 0), 0);
     const feedStockValue = feeds.reduce((s, f) => s + (f.totalCost || 0), 0);
-    
+
     // Calculate total feed cost (money spent on feed consumed)
     // Synchronized with mobile logic from app/inventory/feedAdditives.tsx
     let totalFeedCost = 0;
@@ -202,7 +206,7 @@ export default function InventoryFeedsPage() {
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
     return items.filter(item => {
       const matchesSearch = !normalizedSearch ||
-                            item.itemName.toLowerCase().includes(normalizedSearch) || 
+                            item.itemName.toLowerCase().includes(normalizedSearch) ||
                             (item.brand || '').toLowerCase().includes(normalizedSearch);
       const matchesCategory = !categoryFilter || (activeTab === 'feed' ? (item as any).feedType : (item as any).category) === categoryFilter;
       return matchesSearch && matchesCategory;
@@ -210,6 +214,7 @@ export default function InventoryFeedsPage() {
   }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter]);
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
+    if (!canEditInventory && type !== 'history') return;
     setModalType(type);
     if (item) {
       setSelectedItem(item);
@@ -249,11 +254,20 @@ export default function InventoryFeedsPage() {
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) return;
+    if (!canEditInventory) return;
 
     try {
       const qty = Number(formData.quantity);
       const price = Number(formData.unitPrice);
       const reorder = Number(formData.reorderLevel);
+      if (['add', 'stockIn', 'usage'].includes(modalType) && (!Number.isFinite(qty) || qty <= 0)) {
+        alert('Quantity must be greater than 0.');
+        return;
+      }
+      if (['add', 'stockIn'].includes(modalType) && (!Number.isFinite(price) || price <= 0)) {
+        alert('Unit price must be greater than 0.');
+        return;
+      }
 
       if (modalType === 'add') {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
@@ -282,19 +296,19 @@ export default function InventoryFeedsPage() {
           createdAt: now
         };
         await addDoc(collection(db, 'companies', companyId, collectionName), itemData);
-      } 
+      }
       else if (modalType === 'stockIn' && selectedItem) {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
-        
+
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
-          
+
           const newStock = (data.totalStock || 0) + qty;
           const newCost = (data.totalCost || 0) + (qty * price);
-          
+
           tx.update(ref, {
             totalStock: newStock,
             totalCost: newCost,
@@ -320,20 +334,29 @@ export default function InventoryFeedsPage() {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
         const selectedPond = activePonds.find((pond: any) => pond.id === formData.pondId);
-        
+
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
-          
+
           const newStock = Math.max(0, (data.totalStock || 0) - qty);
-          
+          const currentStock = data.totalStock || 0;
+          const currentCost = data.totalCost || 0;
+          const unitPrice = currentStock > 0 ? currentCost / currentStock : 0;
+          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+            throw new Error('Item cost is missing. Stock this item with a price before recording usage.');
+          }
+
           tx.update(ref, {
             totalStock: newStock,
+            totalCost: Math.max(0, currentCost - (qty * unitPrice)),
             usageHistory: arrayUnion({
               id: Date.now().toString(),
               date: new Date().toISOString().split('T')[0],
               quantity: qty,
+              unitPrice,
+              totalCost: qty * unitPrice,
               pondId: formData.pondId || null,
               cycleId: selectedPond?.cycleId || null,
               cycleName: selectedPond?.cycleName || null,
@@ -363,6 +386,7 @@ export default function InventoryFeedsPage() {
 
   const handleDeleteItem = async (item: InventoryItem, type: 'feed' | 'additive') => {
     if (!companyId || !window.confirm(`Are you sure you want to delete ${item.itemName}?`)) return;
+    if (!canEditInventory) return;
     try {
       const collectionName = type === 'feed' ? 'feeds' : 'additives';
       await deleteDoc(doc(db, 'companies', companyId, collectionName, item.id));
@@ -381,12 +405,13 @@ export default function InventoryFeedsPage() {
 
   return (
     <div className="dashboard-page-relaxed" style={{ paddingBottom: '40px' }}>
-      
+
+      {canEditInventory && (
       <div className="dashboard-action-row animate-fade-up">
-          <button 
-            className="btn-secondary" 
+          <button
+            className="btn-secondary"
             onClick={() => { setItemType('feed'); handleOpenModal('add'); }}
-            style={{ 
+            style={{
               background: 'white',
               border: '1px solid var(--border)',
               boxShadow: 'var(--shadow-card)',
@@ -396,10 +421,10 @@ export default function InventoryFeedsPage() {
             <Plus size={18} />
             {t.inventory.addFeed}
           </button>
-          <button 
-            className="btn-primary" 
+          <button
+            className="btn-primary"
             onClick={() => { setItemType('additive'); handleOpenModal('add'); }}
-            style={{ 
+            style={{
               boxShadow: 'var(--shadow-glow)',
               transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
             }}
@@ -408,14 +433,15 @@ export default function InventoryFeedsPage() {
             {t.inventory.addAdditive}
           </button>
       </div>
+      )}
 
       {/* Modern Tabs Navigation */}
-      <div style={{ 
-        display: 'flex', 
-        gap: '12px', 
-        padding: '6px', 
-        background: 'var(--bg-mid)', 
-        borderRadius: '24px', 
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        padding: '6px',
+        background: 'var(--bg-mid)',
+        borderRadius: '24px',
         width: 'fit-content',
         border: '1px solid var(--border)',
         boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
@@ -425,7 +451,7 @@ export default function InventoryFeedsPage() {
           { id: 'feed', label: t.inventory.feeds, icon: Box },
           { id: 'additive', label: t.inventory.additives, icon: FlaskConical }
         ].map(tab => (
-          <button 
+          <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
             style={{
@@ -454,7 +480,7 @@ export default function InventoryFeedsPage() {
       <div style={{ flex: 1 }}>
         {activeTab === 'dashboard' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
-            
+
             {/* High-Impact Metrics Grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
               <div className="glass-card animate-fade-up" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
@@ -523,7 +549,7 @@ export default function InventoryFeedsPage() {
 
             {/* Split View: Alerts and Transactions */}
             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '32px' }}>
-              
+
               {/* Critical Alerts Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -533,8 +559,8 @@ export default function InventoryFeedsPage() {
                     </div>
                     Stock Status Alerts
                   </h2>
-                  <span style={{ 
-                    padding: '6px 14px', 
+                  <span style={{
+                    padding: '6px 14px',
                     background: metrics.lowStockCount > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
                     color: metrics.lowStockCount > 0 ? '#e74c3c' : '#27ae60',
                     borderRadius: '30px',
@@ -558,21 +584,21 @@ export default function InventoryFeedsPage() {
                       </div>
                     </div>
                   ) : metrics.lowStockItems.map((item, i) => (
-                    <div key={item.id} className="glass-card animate-fade-up" style={{ 
-                      padding: '24px 28px', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'space-between', 
+                    <div key={item.id} className="glass-card animate-fade-up" style={{
+                      padding: '24px 28px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
                       background: 'rgba(231, 76, 60, 0.02)',
                       border: '1px solid rgba(231, 76, 60, 0.15)',
                       animationDelay: `${i * 0.05}s`,
                       borderLeft: '6px solid #e74c3c'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <div style={{ 
-                          width: '48px', height: '48px', borderRadius: '50%', background: 'white', 
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', 
-                          boxShadow: '0 8px 20px rgba(231, 76, 60, 0.15)', border: '1px solid #fee2e2' 
+                        <div style={{
+                          width: '48px', height: '48px', borderRadius: '50%', background: 'white',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c',
+                          boxShadow: '0 8px 20px rgba(231, 76, 60, 0.15)', border: '1px solid #fee2e2'
                         }}>
                           <AlertCircle size={24} />
                         </div>
@@ -584,19 +610,21 @@ export default function InventoryFeedsPage() {
                           </div>
                         </div>
                       </div>
-                      <button 
-                        className="btn-primary" 
-                        style={{ 
-                          padding: '12px 20px', 
-                          fontSize: '13px', 
-                          fontWeight: 900, 
-                          background: '#e74c3c', 
-                          boxShadow: '0 4px 15px rgba(231, 76, 60, 0.3)' 
-                        }} 
-                        onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
-                      >
-                        RESTOCK NOW
-                      </button>
+                      {canEditInventory && (
+                        <button
+                          className="btn-primary"
+                          style={{
+                            padding: '12px 20px',
+                            fontSize: '13px',
+                            fontWeight: 900,
+                            background: '#e74c3c',
+                            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.3)'
+                          }}
+                          onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
+                        >
+                          RESTOCK NOW
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -613,7 +641,7 @@ export default function InventoryFeedsPage() {
                   </h2>
                   <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-mid)', padding: '6px', borderRadius: '14px', border: '1px solid var(--border)' }}>
                     {(['all', 'stockIn', 'usage'] as const).map(f => (
-                      <button 
+                      <button
                         key={f}
                         onClick={() => setRecentActivityFilter(f)}
                         style={{
@@ -634,12 +662,12 @@ export default function InventoryFeedsPage() {
                   {recentTransactions
                     .filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))
                     .map((tx, i) => (
-                    <div key={tx.id} className="glass-card animate-fade-up" style={{ 
-                      padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', background: 'white', 
+                    <div key={tx.id} className="glass-card animate-fade-up" style={{
+                      padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', background: 'white',
                       animationDelay: `${i * 0.05}s`, transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
-                      <div style={{ 
-                        width: '52px', height: '52px', borderRadius: '16px', 
+                      <div style={{
+                        width: '52px', height: '52px', borderRadius: '16px',
                         background: tx.type === 'Stock In' ? 'rgba(39, 174, 96, 0.08)' : 'rgba(231, 76, 60, 0.08)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c',
@@ -670,24 +698,24 @@ export default function InventoryFeedsPage() {
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-            
+
             {/* Advanced Search and Filtering */}
             <div className="glass-card animate-fade-up" style={{ padding: '24px', background: 'white', display: 'flex', gap: '24px', alignItems: 'center' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search size={20} style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-                <input 
+                <input
                   placeholder={t.inventory.searchPlaceholder}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   style={{
-                    background: 'var(--bg-mid)', 
-                    border: '1px solid var(--border)', 
+                    background: 'var(--bg-mid)',
+                    border: '1px solid var(--border)',
                     borderRadius: '16px',
-                    padding: '16px 20px 16px 52px', 
-                    width: '100%', 
-                    fontSize: '16px', 
-                    outline: 'none', 
-                    fontWeight: 700, 
+                    padding: '16px 20px 16px 52px',
+                    width: '100%',
+                    fontSize: '16px',
+                    outline: 'none',
+                    fontWeight: 700,
                     color: 'var(--text-primary)',
                     boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -695,10 +723,10 @@ export default function InventoryFeedsPage() {
                 />
               </div>
               <div style={{ display: 'flex', gap: '8px', padding: '6px', background: 'var(--bg-mid)', borderRadius: '18px', border: '1px solid var(--border)' }}>
-                <button 
+                <button
                   onClick={() => setCategoryFilter(null)}
-                  style={{ 
-                    padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, 
+                  style={{
+                    padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800,
                     background: !categoryFilter ? 'white' : 'transparent',
                     color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -706,11 +734,11 @@ export default function InventoryFeedsPage() {
                   }}
                 >All Categories</button>
                 {(activeTab === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(cat => (
-                  <button 
+                  <button
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
-                    style={{ 
-                      padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800, 
+                    style={{
+                      padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800,
                       background: categoryFilter === cat ? 'white' : 'transparent',
                       color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -733,14 +761,16 @@ export default function InventoryFeedsPage() {
                 <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontWeight: 600, fontSize: '16px', maxWidth: '400px', lineHeight: 1.6 }}>
                   {activeTab === 'feed' ? t.inventory.addFeedToStart : t.inventory.addAdditivesToStart}
                 </p>
-                <button 
-                  className="btn-primary" 
-                  onClick={() => handleOpenModal('add')}
-                  style={{ padding: '18px 40px', borderRadius: '20px', fontWeight: 900, fontSize: '16px', boxShadow: 'var(--shadow-glow)' }}
-                >
-                  <Plus size={22} />
-                  Add Your First {activeTab === 'feed' ? 'Feed' : 'Additive'}
-                </button>
+                {canEditInventory && (
+                  <button
+                    className="btn-primary"
+                    onClick={() => handleOpenModal('add')}
+                    style={{ padding: '18px 40px', borderRadius: '20px', fontWeight: 900, fontSize: '16px', boxShadow: 'var(--shadow-glow)' }}
+                  >
+                    <Plus size={22} />
+                    Add Your First {activeTab === 'feed' ? 'Feed' : 'Additive'}
+                  </button>
+                )}
               </div>
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '32px' }}>
@@ -751,11 +781,11 @@ export default function InventoryFeedsPage() {
                   const totalOut = item.usageHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
 
                   return (
-                    <div key={item.id} className="glass-card animate-fade-up" style={{ 
-                      background: 'white', 
-                      padding: '0', 
-                      overflow: 'hidden', 
-                      display: 'flex', 
+                    <div key={item.id} className="glass-card animate-fade-up" style={{
+                      background: 'white',
+                      padding: '0',
+                      overflow: 'hidden',
+                      display: 'flex',
                       flexDirection: 'column',
                       border: isLow ? '2px solid #e74c3c' : '1px solid var(--border)',
                       boxShadow: isLow ? '0 10px 40px rgba(231, 76, 60, 0.1)' : 'var(--shadow-card)',
@@ -765,14 +795,14 @@ export default function InventoryFeedsPage() {
                     }}>
                       <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: isLow ? 'rgba(231, 76, 60, 0.03)' : 'linear-gradient(to bottom, var(--bg-mid), white)' }}>
                         <div style={{ display: 'flex', gap: '20px' }}>
-                          <div style={{ 
-                            width: '64px', 
-                            height: '64px', 
-                            borderRadius: '20px', 
-                            background: 'white', 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            justifyContent: 'center', 
+                          <div style={{
+                            width: '64px',
+                            height: '64px',
+                            borderRadius: '20px',
+                            background: 'white',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
                             color: isLow ? '#e74c3c' : (activeTab === 'feed' ? 'var(--primary)' : '#f39c12'),
                             border: '1px solid var(--border)',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.06)'
@@ -784,9 +814,9 @@ export default function InventoryFeedsPage() {
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                               <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700 }}>{item.brand || 'No Brand'}</span>
                               <span style={{ opacity: 0.2, fontWeight: 900 }}>•</span>
-                              <span style={{ 
-                                padding: '2px 10px', background: 'var(--primary-dim)', color: 'var(--primary)', 
-                                borderRadius: '20px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase' 
+                              <span style={{
+                                padding: '2px 10px', background: 'var(--primary-dim)', color: 'var(--primary)',
+                                borderRadius: '20px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase'
                               }}>
                                 {(item as any).feedType || (item as any).category}
                               </span>
@@ -794,22 +824,24 @@ export default function InventoryFeedsPage() {
                           </div>
                         </div>
                         <div style={{ display: 'flex', gap: '10px' }}>
-                          <button 
-                            className="btn-secondary" 
-                            style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'white' }} 
+                          <button
+                            className="btn-secondary"
+                            style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'white' }}
                             onClick={() => handleOpenModal('history', item, activeTab)}
                             title="Transaction History"
                           >
                             <History size={20} />
                           </button>
-                          <button 
-                            onClick={() => handleDeleteItem(item, activeTab)}
-                            style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s' }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#ef4444'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
-                          >
-                            <Trash2 size={20} />
-                          </button>
+                          {canEditInventory && (
+                            <button
+                              onClick={() => handleDeleteItem(item, activeTab)}
+                              style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s' }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#ef4444'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
+                            >
+                              <Trash2 size={20} />
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -855,30 +887,32 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '28px 32px', display: 'flex', gap: '16px', background: 'white', borderTop: '1px solid var(--border)' }}>
-                        <button 
-                          className="btn-primary" 
-                          style={{ flex: 1.6, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', boxShadow: '0 4px 15px var(--primary-dim)' }} 
-                          onClick={() => handleOpenModal('stockIn', item, activeTab)}
-                        >
-                          <Plus size={18} /> {t.inventory.stockIn}
-                        </button>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ flex: 1, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }} 
-                          onClick={() => handleOpenModal('usage', item, activeTab)}
-                        >
-                          <ArrowUpCircle size={18} /> {t.inventory.use}
-                        </button>
-                        <button 
-                          className="btn-secondary" 
-                          style={{ width: '56px', height: '56px', padding: '0', borderRadius: '16px', background: 'white', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} 
-                          onClick={() => handleOpenModal('editReorder', item, activeTab)}
-                          title="Threshold Settings"
-                        >
-                          <AlertCircle size={22} style={{ color: isLow ? '#e74c3c' : 'var(--text-faint)' }} />
-                        </button>
-                      </div>
+                      {canEditInventory && (
+                        <div style={{ padding: '28px 32px', display: 'flex', gap: '16px', background: 'white', borderTop: '1px solid var(--border)' }}>
+                          <button
+                            className="btn-primary"
+                            style={{ flex: 1.6, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', boxShadow: '0 4px 15px var(--primary-dim)' }}
+                            onClick={() => handleOpenModal('stockIn', item, activeTab)}
+                          >
+                            <Plus size={18} /> {t.inventory.stockIn}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ flex: 1, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
+                            onClick={() => handleOpenModal('usage', item, activeTab)}
+                          >
+                            <ArrowUpCircle size={18} /> {t.inventory.use}
+                          </button>
+                          <button
+                            className="btn-secondary"
+                            style={{ width: '56px', height: '56px', padding: '0', borderRadius: '16px', background: 'white', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            onClick={() => handleOpenModal('editReorder', item, activeTab)}
+                            title="Threshold Settings"
+                          >
+                            <AlertCircle size={22} style={{ color: isLow ? '#e74c3c' : 'var(--text-faint)' }} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -895,18 +929,18 @@ export default function InventoryFeedsPage() {
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
         }}>
-          <div className="glass-card animate-fade-up" style={{ 
-            width: '100%', maxWidth: modalType === 'history' ? '1000px' : '680px', background: '#FFFFFF', padding: '0', 
+          <div className="glass-card animate-fade-up" style={{
+            width: '100%', maxWidth: modalType === 'history' ? '1000px' : '680px', background: '#FFFFFF', padding: '0',
             overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.2)',
             maxHeight: '90vh', display: 'flex', flexDirection: 'column',
             border: '1px solid var(--border)', borderRadius: '32px'
           }}>
             <div style={{ padding: '32px 40px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, var(--bg-mid), white)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                <div style={{ 
-                  width: '64px', height: '64px', borderRadius: '20px', background: 'white', 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', 
-                  border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)' 
+                <div style={{
+                  width: '64px', height: '64px', borderRadius: '20px', background: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
+                  border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
                 }}>
                   {modalType === 'add' ? <Plus size={32} /> :
                    modalType === 'stockIn' ? <ArrowDownCircle size={32} /> :
@@ -927,12 +961,12 @@ export default function InventoryFeedsPage() {
                   )}
                 </div>
               </div>
-              <button 
-                onClick={() => setModalOpen(false)} 
-                style={{ 
-                  background: 'white', border: '1px solid var(--border)', borderRadius: '16px', 
-                  padding: '12px', cursor: 'pointer', color: 'var(--text-muted)', 
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'all 0.3s' 
+              <button
+                onClick={() => setModalOpen(false)}
+                style={{
+                  background: 'white', border: '1px solid var(--border)', borderRadius: '16px',
+                  padding: '12px', cursor: 'pointer', color: 'var(--text-muted)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'all 0.3s'
                 }}
                 onMouseEnter={e => e.currentTarget.style.transform = 'rotate(90deg)'}
               >
@@ -1071,15 +1105,15 @@ export default function InventoryFeedsPage() {
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.quantity} ({formData.unit || 'units'})</label>
                         <input required type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} placeholder="0.00" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 900, fontSize: '20px', outline: 'none', color: 'var(--primary)' }} />
                       </div>
-                      
+
                       {modalType === 'usage' && (
                         <div style={{ gridColumn: 'span 2' }}>
                           <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Assign to Pond</label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
-                            <button 
+                            <button
                               type="button"
                               onClick={() => setFormData({...formData, pondId: ''})}
-                              style={{ 
+                              style={{
                                 padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 800,
                                 background: formData.pondId === '' ? 'var(--primary)' : 'var(--bg-mid)',
                                 color: formData.pondId === '' ? 'white' : 'var(--text-muted)',
@@ -1087,11 +1121,11 @@ export default function InventoryFeedsPage() {
                               }}
                             >General Use</button>
                             {activePonds.map((p: any) => (
-                              <button 
+                              <button
                                 key={p.id}
                                 type="button"
                                 onClick={() => setFormData({...formData, pondId: p.id})}
-                                style={{ 
+                                style={{
                                   padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 800,
                                   background: formData.pondId === p.id ? 'var(--primary)' : 'var(--bg-mid)',
                                   color: formData.pondId === p.id ? 'white' : 'var(--text-muted)',
@@ -1146,21 +1180,21 @@ export default function InventoryFeedsPage() {
 
             {modalType !== 'history' && (
               <div style={{ padding: '32px 40px', borderTop: '1px solid var(--border)', display: 'flex', gap: '20px', background: 'var(--bg-mid)' }}>
-                <button 
-                  type="button" 
-                  onClick={() => setModalOpen(false)} 
-                  style={{ 
-                    flex: 1, padding: '18px', borderRadius: '18px', border: '1px solid var(--border)', 
-                    background: 'white', color: 'var(--text-muted)', fontWeight: 800, fontSize: '15px', 
-                    cursor: 'pointer', transition: 'all 0.3s' 
+                <button
+                  type="button"
+                  onClick={() => setModalOpen(false)}
+                  style={{
+                    flex: 1, padding: '18px', borderRadius: '18px', border: '1px solid var(--border)',
+                    background: 'white', color: 'var(--text-muted)', fontWeight: 800, fontSize: '15px',
+                    cursor: 'pointer', transition: 'all 0.3s'
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                 >Cancel</button>
-                <button 
-                  form="inventoryForm" 
-                  type="submit" 
-                  className="btn-primary" 
-                  style={{ 
+                <button
+                  form="inventoryForm"
+                  type="submit"
+                  className="btn-primary"
+                  style={{
                     flex: 1.5, padding: '18px', borderRadius: '18px', fontWeight: 900, fontSize: '15px',
                     boxShadow: '0 8px 25px var(--primary-dim)'
                   }}

@@ -259,6 +259,12 @@ export default function PondManagementScreen() {
     return new Date();
   }, []);
 
+  const calculateDocFromDates = useCallback((startDate: Date, baselineDate: Date): number => {
+    const startTime = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+    const baselineTime = new Date(baselineDate.getFullYear(), baselineDate.getMonth(), baselineDate.getDate()).getTime();
+    return Math.floor((baselineTime - startTime) / (24 * 60 * 60 * 1000));
+  }, []);
+
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const endedPonds = useMemo(() => ponds.filter((pond) => !isPondCycleActive(pond)), [ponds]);
   const activePhysicalPondNames = useMemo(
@@ -444,7 +450,6 @@ export default function PondManagementScreen() {
       plValue,
       cycleStartMode,
       baselineDate,
-      baselineDoc,
       baselineMbw,
       baselineEstimatedPopulation,
       baselineSurvivalRate,
@@ -467,10 +472,10 @@ export default function PondManagementScreen() {
 
     const isMidcycle = cycleStartMode === 'midcycle';
     const baselineMbwValue = parseFloat(baselineMbw);
-    const baselineDocValue = parseInt(baselineDoc, 10);
     const baselinePopulationValue = parseFloat(baselineEstimatedPopulation);
     const baselineSurvivalValue = parseFloat(baselineSurvivalRate);
     const baselineFeedValue = parseFloat(baselineCumulativeFeed);
+    const baselineDocValue = isMidcycle ? calculateDocFromDates(docStart, baselineDate) : 0;
 
     if (isMidcycle && (!baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
       Alert.alert(t.messages.error, t.midcycleOnboarding.baselineMbwRequired);
@@ -479,8 +484,8 @@ export default function PondManagementScreen() {
       return;
     }
 
-    if (isMidcycle && (!baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0)) {
-      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDocRequired);
+    if (isMidcycle && (!Number.isFinite(baselineDocValue) || baselineDocValue < 0)) {
+      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDateInvalid);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -488,9 +493,7 @@ export default function PondManagementScreen() {
 
     const initialPopulation = Number(pondArea) * Number(density);
     const baselineDateString = baselineDate.toISOString().split('T')[0];
-    const effectiveDocStart = isMidcycle
-      ? new Date(baselineDate.getTime() - baselineDocValue * 24 * 60 * 60 * 1000)
-      : docStart;
+    const effectiveDocStart = docStart;
     const docStartString = effectiveDocStart.toISOString().split('T')[0];
     const savedBaselineDoc = isMidcycle ? baselineDocValue : 0;
     const baselineSampling = isMidcycle ? [{
@@ -540,7 +543,7 @@ export default function PondManagementScreen() {
     
     closeModal();
     Alert.alert(t.messages.success, t.home.pondAddedSuccess);
-  }, [activeFarmCycle, activePhysicalPondNames, canEditPonds, closeModal, formData, addPond, convertPlToGrams, t]);
+  }, [activeFarmCycle, activePhysicalPondNames, calculateDocFromDates, canEditPonds, closeModal, formData, addPond, convertPlToGrams, t]);
 
   const handleAddCycle = useCallback(() => {
     if (submitLockRef.current) return;
@@ -616,7 +619,7 @@ export default function PondManagementScreen() {
     }
     
     const { selectedPond, mbw, mortality, feed, samplingDate } = formData;
-    if (!selectedPond || !mbw || mortality === '' || !feed) {
+    if (!selectedPond || !mbw || mortality === '') {
       Alert.alert(t.messages.error, t.home.fillAllFields);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -1102,13 +1105,6 @@ export default function PondManagementScreen() {
             label={t.midcycleOnboarding.baselineDate}
             date={formData.baselineDate}
             onPress={() => openDatePicker('baselineDate')}
-          />
-          <InputField
-            label={t.midcycleOnboarding.currentDoc}
-            value={formData.baselineDoc}
-            onChangeText={(value) => updateForm('baselineDoc', value)}
-            placeholder={t.midcycleOnboarding.currentDocPlaceholder}
-            keyboardType="numeric"
           />
           <InputField
             label={t.midcycleOnboarding.currentMbw}

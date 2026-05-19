@@ -73,6 +73,16 @@ const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const getDateOnlyUtcTime = (dateString: string): number => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return Date.UTC(year, (month || 1) - 1, day || 1);
+};
+
+const calculateDocFromDates = (startDate: string, baselineDate: string): number =>
+  Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
 
 const removeUndefinedFields = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(removeUndefinedFields);
@@ -163,6 +173,7 @@ export default function PondsPage() {
   });
 
   const activeFarmCycle = useMemo(() => cycles.find(isOpenFarmCycle), [cycles]);
+  const canEditPonds = canEditOperations(user?.role);
   const activeCyclePonds = useMemo(
     () => activeFarmCycle
       ? ponds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || !pond.cycleId))
@@ -175,7 +186,7 @@ export default function PondsPage() {
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
   const ensureActiveCycle = async (stockingDate: string) => {
-    if (!companyId || !user) return null;
+    if (!companyId || !user || !canEditPonds) return null;
     const activeCycle = cycles.find(isOpenFarmCycle);
     if (activeCycle) return activeCycle;
 
@@ -195,6 +206,7 @@ export default function PondsPage() {
 
   const handleRenameCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
+    if (!canEditPonds) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
       alert('Cycle name cannot be empty.');
@@ -223,6 +235,7 @@ export default function PondsPage() {
 
   const handleCloseFarmCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
+    if (!canEditPonds) return;
     const today = new Date().toISOString().split('T')[0];
     if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
 
@@ -256,6 +269,7 @@ export default function PondsPage() {
   const handleAddPond = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !user) return;
+    if (!canEditPonds) return;
 
     try {
       const hasActiveCycleForPond = ponds.some((pond) =>
@@ -272,24 +286,22 @@ export default function PondsPage() {
       const initialWeight = parseFloat(formData.plValue) / 10; // Simple conversion logic from mobile app
       const isMidcycle = formData.cycleStartMode === 'midcycle';
       const baselineMbwValue = parseFloat(formData.baselineMbw);
-      const baselineDocValue = parseInt(formData.baselineDoc, 10);
       const baselinePopulationValue = parseFloat(formData.baselineEstimatedPopulation);
       const baselineSurvivalValue = parseFloat(formData.baselineSurvivalRate);
       const baselineFeedValue = parseFloat(formData.baselineCumulativeFeed);
+      const baselineDocValue = isMidcycle ? calculateDocFromDates(formData.docStart, formData.baselineDate) : 0;
 
       if (isMidcycle && (!formData.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
         alert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
         return;
       }
 
-      if (isMidcycle && (!formData.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0)) {
-        alert(t.midcycleOnboarding?.baselineDocRequired || 'Current DOC is required for an existing cycle.');
+      if (isMidcycle && (!Number.isFinite(baselineDocValue) || baselineDocValue < 0)) {
+        alert(t.midcycleOnboarding?.baselineDateInvalid || 'Baseline date must be on or after the stocking date.');
         return;
       }
 
-      const effectiveDocStart = isMidcycle
-        ? new Date(new Date(formData.baselineDate).getTime() - baselineDocValue * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        : formData.docStart;
+      const effectiveDocStart = formData.docStart;
       const baselineDoc = isMidcycle ? baselineDocValue : 0;
       const activeCycle = await ensureActiveCycle(effectiveDocStart);
       const baselineSampling = isMidcycle ? [{
@@ -363,6 +375,7 @@ export default function PondsPage() {
 
   const handleEndCycle = async () => {
     if (!companyId || !user || !endCyclePond) return;
+    if (!canEditPonds) return;
     try {
       await updateDoc(doc(db, 'companies', companyId, 'ponds', endCyclePond.id), {
         cycleStatus: 'ended',
@@ -385,6 +398,7 @@ export default function PondsPage() {
   };
 
   const openStartCycle = (pond: Pond) => {
+    if (!canEditPonds) return;
     setStartCyclePond(pond);
     setStartCycleForm({
       density: '',
@@ -395,6 +409,7 @@ export default function PondsPage() {
   };
 
   const openBaselineEdit = (pond: Pond) => {
+    if (!canEditPonds) return;
     const baselineSampling = (pond.samplings || []).filter((sampling) =>
       Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding'
     ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -413,6 +428,7 @@ export default function PondsPage() {
   const handleUpdateBaseline = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!companyId || !user || !baselineEditPond) return;
+    if (!canEditPonds) return;
 
     const baselineDocValue = parseInt(baselineForm.baselineDoc, 10);
     const baselineMbwValue = parseFloat(baselineForm.baselineMbw);
@@ -480,6 +496,7 @@ export default function PondsPage() {
   const handleStartCycle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !user || !startCyclePond) return;
+    if (!canEditPonds) return;
 
     try {
       const hasActiveCycleForPond = ponds.some((pond) =>
@@ -527,11 +544,13 @@ export default function PondsPage() {
   };
 
   const handleDeletePond = async (pondId: string) => {
+    if (!canEditPonds) return;
     setDeleteConfirm({ isOpen: true, id: pondId });
   };
 
   const confirmDelete = async () => {
     if (!deleteConfirm.id || !companyId) return;
+    if (!canEditPonds) return;
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, 'companies', companyId, 'ponds', deleteConfirm.id));
@@ -604,29 +623,31 @@ export default function PondsPage() {
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-              <input
-                value={cycleNameDraft}
-                onChange={(event) => setCycleNameDraft(event.target.value)}
-                placeholder="Cycle name"
-                style={{
-                  flex: '1 1 260px',
-                  padding: '12px 14px',
-                  borderRadius: '12px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-mid)',
-                  color: 'var(--text-primary)',
-                  fontWeight: 700,
-                  outline: 'none',
-                }}
-              />
-              <button type="button" className="btn-secondary" onClick={handleRenameCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
-                <Save size={17} /> Rename
-              </button>
-              <button type="button" className="btn-primary" onClick={handleCloseFarmCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
-                <Lock size={17} /> End Cycle
-              </button>
-            </div>
+            {canEditPonds && (
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <input
+                  value={cycleNameDraft}
+                  onChange={(event) => setCycleNameDraft(event.target.value)}
+                  placeholder="Cycle name"
+                  style={{
+                    flex: '1 1 260px',
+                    padding: '12px 14px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border)',
+                    background: 'var(--bg-mid)',
+                    color: 'var(--text-primary)',
+                    fontWeight: 700,
+                    outline: 'none',
+                  }}
+                />
+                <button type="button" className="btn-secondary" onClick={handleRenameCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
+                  <Save size={17} /> Rename
+                </button>
+                <button type="button" className="btn-primary" onClick={handleCloseFarmCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
+                  <Lock size={17} /> End Cycle
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div style={{ padding: '18px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>
@@ -673,10 +694,12 @@ export default function PondsPage() {
             Ended
           </button>
         </div>
-        <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
-          <Plus size={20} strokeWidth={3} />
-          <span>{t.ponds.addNew || 'Add New Pond'}</span>
-        </button>
+        {canEditPonds && (
+          <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
+            <Plus size={20} strokeWidth={3} />
+            <span>{t.ponds.addNew || 'Add New Pond'}</span>
+          </button>
+        )}
       </div>
 
       {/* Grid */}
@@ -697,10 +720,12 @@ export default function PondsPage() {
           <p style={{ color: 'var(--text-muted)', marginBottom: '32px', maxWidth: '400px', margin: '0 auto 32px', lineHeight: 1.6 }}>
             {t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}
           </p>
-          <button className="btn-primary" onClick={() => setModalOpen(true)}>
-            <Plus size={20} strokeWidth={3} />
-            {t.ponds.addNew || 'Add New Pond'}
-          </button>
+          {canEditPonds && (
+            <button className="btn-primary" onClick={() => setModalOpen(true)}>
+              <Plus size={20} strokeWidth={3} />
+              {t.ponds.addNew || 'Add New Pond'}
+            </button>
+          )}
         </div>
       ) : (
         <div className="animate-fade-up animate-delay-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
@@ -735,6 +760,7 @@ export default function PondsPage() {
                     )}
                   </div>
                 </Link>
+                {canEditPonds && (
                 <div style={{ display: 'flex', gap: '8px' }}>
                   {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && (
                     <button
@@ -769,6 +795,7 @@ export default function PondsPage() {
                     {isActiveCycle(pond) ? <Archive size={18} /> : <RotateCcw size={18} />}
                   </button>
                 </div>
+                )}
               </div>
               
               <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
@@ -979,10 +1006,6 @@ export default function PondsPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.baselineDate || 'Baseline Date'}</label>
                       <input required type="date" value={formData.baselineDate} onChange={e => setFormData({...formData, baselineDate: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentDoc || 'Current DOC'}</label>
-                      <input required type="number" placeholder={t.midcycleOnboarding?.currentDocPlaceholder || 'e.g. 45'} value={formData.baselineDoc} onChange={e => setFormData({...formData, baselineDoc: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentMbw || 'Current MBW (g)'}</label>

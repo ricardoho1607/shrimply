@@ -90,6 +90,7 @@ const formatSyncStatus = (date: Date | null): string => {
   if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
   return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
 };
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 export default function HarvestPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -112,13 +113,15 @@ export default function HarvestPage() {
     subSize: '',
     subPrice: ''
   });
+  const canEditHarvest = canEditOperations(user?.role);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
+          const userData = uDoc.data();
+          setUser({ uid: firebaseUser.uid, ...userData });
+          const cid = userData?.companyId;
           setCompanyId(cid);
           if (cid) {
             // Load Ponds
@@ -156,6 +159,7 @@ export default function HarvestPage() {
   const handleAddHarvest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
+    if (!canEditHarvest) return;
 
     try {
       const selectedPond = ponds.find(p => p.id === formData.pondId);
@@ -214,6 +218,7 @@ export default function HarvestPage() {
 
   const handleDeleteRecord = async (recordId: string) => {
     if (!companyId || !window.confirm('Delete this harvest record?')) return;
+    if (!canEditHarvest) return;
     try {
       const record = harvestRecords.find((item) => item.id === recordId);
       if (record) {
@@ -268,10 +273,12 @@ export default function HarvestPage() {
             style={{ padding: '10px 16px 10px 40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', fontSize: '14px', outline: 'none' }}
           />
         </div>
-        <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
-          <Plus size={20} />
-          <span>Log Harvest</span>
-        </button>
+        {canEditHarvest && (
+          <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
+            <Plus size={20} />
+            <span>Log Harvest</span>
+          </button>
+        )}
       </div>
 
       {/* Financial Overview */}
@@ -317,7 +324,9 @@ export default function HarvestPage() {
                     <Calendar size={18} color="var(--primary)" />
                     <span style={{ fontSize: '15px', fontWeight: 700 }}>{new Date(record.date).toLocaleDateString()}</span>
                   </div>
-                  <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
+                  {canEditHarvest && (
+                    <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
+                  )}
                 </div>
                 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>

@@ -40,7 +40,11 @@ export default function SetupChoicePage() {
       href: ROUTES.setupSearch,
       action: 'Find Company'
     }
-  ].filter((choice) => !isStaffRole || choice.id === 'join');
+  ].filter((choice) => {
+    if (isBuyer) return choice.id === 'new';
+    if (isStaffRole) return choice.id === 'join';
+    return true;
+  });
 
   if (!isReady) return <OnboardingLoading />;
   if (pendingRequestLoading) return <OnboardingLoading />;

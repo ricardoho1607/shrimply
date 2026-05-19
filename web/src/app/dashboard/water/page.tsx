@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  Droplets, 
-  Search, 
-  Activity, 
-  Thermometer, 
+import {
+  Plus,
+  Droplets,
+  Search,
+  Activity,
+  Thermometer,
   Wind,
   X,
   Loader2,
@@ -27,6 +27,7 @@ interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;
+  feedData?: unknown; harvestData?: unknown;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
 }
@@ -63,17 +64,18 @@ const formatSyncStatus = (date: Date | null): string => {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 export default function WaterQualityPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  
+
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  
+
   // Form State
   const [formData, setFormData] = useState({
     pondId: '',
@@ -85,13 +87,15 @@ export default function WaterQualityPage() {
     transparency: '',
     salinity: ''
   });
+  const canEditWater = canEditOperations(user?.role);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
+          const userData = uDoc.data();
+          setUser({ uid: firebaseUser.uid, ...userData });
+          const cid = userData?.companyId;
           setCompanyId(cid);
           if (cid) {
             const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
@@ -115,10 +119,18 @@ export default function WaterQualityPage() {
   // ── Sync form data with existing records when pond/date changes ────
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
-    
+
     const pond = ponds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.date === formData.date);
-    
+    const existing = pond?.samplings?.find(s =>
+      !isBaselineSampling(s) &&
+      !s.feedData &&
+      !s.harvestData &&
+      s.mbw === 0 &&
+      s.feed === 0 &&
+      s.mortality === 0 &&
+      s.date === formData.date
+    );
+
     if (existing) {
       setFormData(prev => {
         // Only update if the values are actually different to avoid input loops
@@ -145,7 +157,7 @@ export default function WaterQualityPage() {
       setFormData(prev => {
         // Only clear if not already empty
         if (
-          !prev.phMorning && !prev.phEvening && !prev.doMorning && 
+          !prev.phMorning && !prev.phEvening && !prev.doMorning &&
           !prev.doEvening && !prev.transparency && !prev.salinity
         ) return prev;
 
@@ -165,16 +177,25 @@ export default function WaterQualityPage() {
   const handleAddWQ = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
+    if (!canEditWater) return;
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       const pondDoc = await getDoc(pondRef);
-      
+
       if (pondDoc.exists()) {
         const pondData = pondDoc.data();
-        let samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.date === formData.date);
-        
+        const samplings = [...(pondData.samplings || [])];
+        const existingIndex = samplings.findIndex(s =>
+          !isBaselineSampling(s) &&
+          !s.feedData &&
+          !s.harvestData &&
+          s.mbw === 0 &&
+          s.feed === 0 &&
+          s.mortality === 0 &&
+          s.date === formData.date
+        );
+
         const wqData = {
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
@@ -188,8 +209,8 @@ export default function WaterQualityPage() {
         };
 
         if (existingIndex >= 0) {
-          samplings[existingIndex] = { 
-            ...samplings[existingIndex], 
+          samplings[existingIndex] = {
+            ...samplings[existingIndex],
             cycleId: pondData.cycleId,
             cycleName: pondData.cycleName,
             pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -246,18 +267,18 @@ export default function WaterQualityPage() {
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      
+
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-          <input 
-            placeholder="Search ponds or parameters..." 
+          <input
+            placeholder="Search ponds or parameters..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               background: 'var(--glass-bg)', border: '1px solid var(--border)', borderRadius: '16px',
-              padding: '14px 16px 14px 48px', width: '100%', fontSize: '1rem', outline: 'none', 
+              padding: '14px 16px 14px 48px', width: '100%', fontSize: '1rem', outline: 'none',
               color: 'var(--text-primary)', fontWeight: 600, backdropFilter: 'var(--glass-blur)',
               boxShadow: 'var(--shadow-card)', transition: 'all 0.2s'
             }}
@@ -265,13 +286,15 @@ export default function WaterQualityPage() {
             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
           />
         </div>
-        <button 
-          onClick={() => { setFormData({ ...formData, pondId: '' }); setModalOpen(true); }}
-          className="dashboard-action dashboard-action-primary"
-        >
-          <Plus size={20} strokeWidth={3} />
-          <span>New Parameter Log</span>
-        </button>
+        {canEditWater && (
+          <button
+            onClick={() => { setFormData({ ...formData, pondId: '' }); setModalOpen(true); }}
+            className="dashboard-action dashboard-action-primary"
+          >
+            <Plus size={20} strokeWidth={3} />
+            <span>New Parameter Log</span>
+          </button>
+        )}
       </div>
 
       {/* Pond Grid */}
@@ -297,7 +320,7 @@ export default function WaterQualityPage() {
                       </div>
                     </Link>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedPondForHistory(pond)}
                     className="icon-btn-modern"
                   >
@@ -309,41 +332,43 @@ export default function WaterQualityPage() {
                   <div className="wq-metric">
                     <span className="wq-label">pH Level</span>
                     <div className="wq-value">
-                      <Activity size={16} color="var(--accent)" /> 
+                      <Activity size={16} color="var(--accent)" />
                       <span>{latest ? `${latest.phMorning || '-'} / ${latest.phEvening || '-'}` : '--'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">DO (mg/L)</span>
                     <div className="wq-value">
-                      <Wind size={16} color="var(--primary)" /> 
+                      <Wind size={16} color="var(--primary)" />
                       <span>{latest ? `${latest.doMorning || '-'} / ${latest.doEvening || '-'}` : '--'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">Salinity</span>
                     <div className="wq-value">
-                      <Droplets size={16} color="#10b981" /> 
+                      <Droplets size={16} color="#10b981" />
                       <span>{latest ? `${latest.salinity || '--'} PPT` : '--'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">Transparency</span>
                     <div className="wq-value">
-                      <Thermometer size={16} color="#f59e0b" /> 
+                      <Thermometer size={16} color="#f59e0b" />
                       <span>{latest ? `${latest.transparency || '--'} CM` : '--'}</span>
                     </div>
                   </div>
                 </div>
 
                 <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-mid)' }}>
-                  <button 
-                    onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
-                    className="btn-secondary"
-                    style={{ padding: '9px 16px', fontSize: '0.82rem' }}
-                  >
-                    Quick Log <Plus size={16} strokeWidth={2.5} />
-                  </button>
+                  {canEditWater && (
+                    <button
+                      onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
+                      className="btn-secondary"
+                      style={{ padding: '9px 16px', fontSize: '0.82rem' }}
+                    >
+                      Quick Log <Plus size={16} strokeWidth={2.5} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -368,7 +393,7 @@ export default function WaterQualityPage() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {selectedPondForHistory.samplings
@@ -431,8 +456,8 @@ export default function WaterQualityPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label className="form-label">Target Pond</label>
-                  <select 
-                    required 
+                  <select
+                    required
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     className="form-input"
@@ -479,9 +504,9 @@ export default function WaterQualityPage() {
               </div>
 
               <div style={{ marginTop: '12px', display: 'flex', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ 
-                  flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', 
-                  background: 'transparent', fontWeight: 700, cursor: 'pointer' 
+                <button type="button" onClick={() => setModalOpen(false)} style={{
+                  flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
+                  background: 'transparent', fontWeight: 700, cursor: 'pointer'
                 }}>Cancel</button>
                 <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', fontWeight: 800 }}>Save Log Entry</button>
               </div>

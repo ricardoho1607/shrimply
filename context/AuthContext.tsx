@@ -238,45 +238,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     let isMounted = true;
+    let userUnsubscribe: (() => void) | null = null;
     let companyUnsubscribe: (() => void) | null = null;
 
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (!isMounted) return;
+      if (userUnsubscribe) {
+        userUnsubscribe();
+        userUnsubscribe = null;
+      }
       if (companyUnsubscribe) {
         companyUnsubscribe();
         companyUnsubscribe = null;
       }
 
-      try {
-        if (firebaseUser) {
-          const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-          if (userDoc.exists()) {
-            const userData = userDoc.data() as User;
-            setUser(userData);
-            if (userData.companyId) companyUnsubscribe = setupCompanyListener(userData.companyId);
-          } else {
-            const newUser: User = {
-              id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email || '',
-              hasCompletedSetup: false, joinedDate: new Date().toISOString(), lastActive: new Date().toISOString()
-            };
-            await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-            setUser(newUser);
+      if (firebaseUser) {
+        userUnsubscribe = onSnapshot(
+          doc(db, 'users', firebaseUser.uid),
+          async (userDoc) => {
+            if (!isMounted) return;
+            if (userDoc.exists()) {
+              const userData = userDoc.data() as User;
+              setUser(userData);
+
+              if (companyUnsubscribe) {
+                companyUnsubscribe();
+                companyUnsubscribe = null;
+              }
+              if (userData.companyId) {
+                companyUnsubscribe = setupCompanyListener(userData.companyId);
+              } else {
+                previousCompanyRef.current = null;
+                setCompany(null);
+              }
+            } else {
+              const newUser: User = {
+                id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email || '',
+                hasCompletedSetup: false, joinedDate: new Date().toISOString(), lastActive: new Date().toISOString()
+              };
+              await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+              setUser(newUser);
+              previousCompanyRef.current = null;
+              setCompany(null);
+            }
+            setInitializing(false);
+          },
+          (error) => {
+            console.error('Error listening to user data:', error);
+            if (isMounted) setInitializing(false);
           }
-        } else {
-          setUser(null);
-          previousCompanyRef.current = null;
-          setCompany(null);
-        }
-      } catch (error) {
-        console.error('Error in auth state change:', error);
-      } finally {
-        if (isMounted) setInitializing(false);
+        );
+      } else {
+        setUser(null);
+        previousCompanyRef.current = null;
+        setCompany(null);
+        setInitializing(false);
       }
     });
 
     return () => {
       isMounted = false;
       unsubscribe();
+      if (userUnsubscribe) userUnsubscribe();
       if (companyUnsubscribe) companyUnsubscribe();
     };
   }, [setupCompanyListener]);

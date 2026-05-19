@@ -99,6 +99,7 @@ interface FarmCycle {
 }
 
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 const CATEGORIES = ['Equipment', 'Infrastructure', 'Vehicles', 'Tools', 'Technology'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];
@@ -109,7 +110,8 @@ export default function AssetInventoryPage() {
   const { formatCurrency } = useCurrency();
   const { user: authUser } = useAuth();
   const isMechanic = authUser?.role === 'mechanic';
-  const canManageAssets = !isMechanic;
+  const canManageAssets = canEditOperations(authUser?.role);
+  const canLogMaintenance = canManageAssets || isMechanic;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -231,8 +233,13 @@ export default function AssetInventoryPage() {
   }, [assets, searchTerm, categoryFilter]);
 
   const handleOpenModal = (type: typeof modalType, asset?: Asset) => {
-    if (isMechanic && ['add', 'transfer', 'return'].includes(type)) {
-      alert('Mechanics can log maintenance but cannot change asset ownership or master records.');
+    if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
+      alert('Only owners and technicians can change asset ownership or master records.');
+      return;
+    }
+
+    if (!canLogMaintenance && type === 'maintenance') {
+      alert('Only owners, technicians, and mechanics can log maintenance.');
       return;
     }
 
@@ -282,7 +289,11 @@ export default function AssetInventoryPage() {
     e.preventDefault();
     if (!companyId) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(modalType)) {
-      alert('Mechanics can log maintenance but cannot change asset ownership or master records.');
+      alert('Only owners and technicians can change asset ownership or master records.');
+      return;
+    }
+    if (!canLogMaintenance && modalType === 'maintenance') {
+      alert('Only owners, technicians, and mechanics can log maintenance.');
       return;
     }
 
@@ -370,7 +381,7 @@ export default function AssetInventoryPage() {
 
   const handleDeleteAsset = async (id: string) => {
     if (!canManageAssets) {
-      alert('Mechanics can log maintenance but cannot delete assets.');
+      alert('Only owners and technicians can delete assets.');
       return;
     }
     if (!window.confirm('Are you sure you want to delete this asset?')) return;
@@ -499,7 +510,9 @@ export default function AssetInventoryPage() {
                         <div style={{ fontWeight: 800 }}>{asset.name}</div>
                         <div style={{ fontSize: '12px', color: 'rgba(153, 27, 27, 0.8)' }}>{asset.category} • {asset.serialNumber || 'No SN'}</div>
                       </div>
-                      <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '12px', background: '#991B1B', border: 'none' }} onClick={() => handleOpenModal('maintenance', asset)}>{t.asset.log}</button>
+                      {canLogMaintenance && (
+                        <button className="btn-primary" style={{ padding: '8px 16px', fontSize: '12px', background: '#991B1B', border: 'none' }} onClick={() => handleOpenModal('maintenance', asset)}>{t.asset.log}</button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -600,9 +613,11 @@ export default function AssetInventoryPage() {
                         <CheckCircle2 size={16} /> Return
                       </button>
                     )}
-                    <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#f39c12', borderColor: '#f39c12', padding: '10px' }} onClick={() => handleOpenModal('maintenance', asset)}>
-                      <Wrench size={16} /> Log
-                    </button>
+                    {canLogMaintenance && (
+                      <button className="btn-secondary" style={{ flex: 1, borderRadius: '10px', color: '#f39c12', borderColor: '#f39c12', padding: '10px' }} onClick={() => handleOpenModal('maintenance', asset)}>
+                        <Wrench size={16} /> Log
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

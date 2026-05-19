@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
+import {
   ArrowLeft,
   Waves,
   Scale,
@@ -30,17 +30,17 @@ import {
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
-import { 
-  doc, 
-  onSnapshot, 
-  updateDoc, 
-  deleteDoc, 
-  query, 
-  collection, 
-  orderBy, 
-  serverTimestamp, 
-  runTransaction, 
-  arrayUnion, 
+import {
+  doc,
+  onSnapshot,
+  updateDoc,
+  deleteDoc,
+  query,
+  collection,
+  orderBy,
+  serverTimestamp,
+  runTransaction,
+  arrayUnion,
   Timestamp,
   addDoc,
   getDocs,
@@ -60,10 +60,10 @@ interface FeedData {
 }
 
 interface Sampling {
-  id: string; 
-  date: string; 
-  mbw: number; 
-  mortality: number; 
+  id: string;
+  date: string;
+  mbw: number;
+  mortality: number;
   feed: number;
   cycleId?: string;
   cycleName?: string;
@@ -117,6 +117,7 @@ const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 const toFiniteNumber = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -209,7 +210,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
   const getY = (y: number) => height - padding - ((y - minY) / (maxY - minY || 1)) * (height - padding * 2);
 
   const points = data.map(d => `${getX(d.x)},${getY(d.y)}`).join(' ');
-  
+
   return (
     <div style={{ width: '100%', overflow: 'hidden', position: 'relative' }}>
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet">
@@ -217,7 +218,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
         {[0, 0.25, 0.5, 0.75, 1].map((p, i) => (
           <line key={i} x1={padding} y1={getY(maxY * p)} x2={width - padding} y2={getY(maxY * p)} stroke="var(--border)" strokeDasharray="4 4" />
         ))}
-        
+
         {/* Gradient Fill */}
         <defs>
           <linearGradient id="growthGradient" x1="0" y1="0" x2="0" y2="1">
@@ -225,32 +226,32 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
             <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
           </linearGradient>
         </defs>
-        <path 
-          d={`M ${getX(data[0].x)} ${height - padding} L ${points} L ${getX(data[data.length-1].x)} ${height - padding} Z`} 
-          fill="url(#growthGradient)" 
+        <path
+          d={`M ${getX(data[0].x)} ${height - padding} L ${points} L ${getX(data[data.length-1].x)} ${height - padding} Z`}
+          fill="url(#growthGradient)"
         />
 
         {/* Line */}
         <polyline points={points} fill="none" stroke="var(--primary)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-        
+
         {/* Data Points */}
         {data.map((d, i) => (
           <g key={i} onMouseEnter={() => setHoveredPoint(d)} onMouseLeave={() => setHoveredPoint(null)}>
-            <circle 
-              cx={getX(d.x)} 
-              cy={getY(d.y)} 
-              r={hoveredPoint === d ? "6" : "4"} 
-              fill={hoveredPoint === d ? "var(--primary)" : "#FFF"} 
-              stroke="var(--primary)" 
-              strokeWidth="2" 
+            <circle
+              cx={getX(d.x)}
+              cy={getY(d.y)}
+              r={hoveredPoint === d ? "6" : "4"}
+              fill={hoveredPoint === d ? "var(--primary)" : "#FFF"}
+              stroke="var(--primary)"
+              strokeWidth="2"
               style={{ transition: 'all 0.2s', cursor: 'pointer' }}
             />
             {/* Larger invisible hit area */}
-            <circle 
-              cx={getX(d.x)} 
-              cy={getY(d.y)} 
-              r="20" 
-              fill="transparent" 
+            <circle
+              cx={getX(d.x)}
+              cy={getY(d.y)}
+              r="20"
+              fill="transparent"
               style={{ cursor: 'pointer' }}
             />
           </g>
@@ -295,10 +296,10 @@ export default function PondDetailClient() {
   const [pond, setPond] = useState<Pond | null>(null);
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | undefined>();
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [isEndCycleOpen, setEndCycleOpen] = useState(false);
   const [endCycleForm, setEndCycleForm] = useState({
     cycleEndedAt: new Date().toISOString().split('T')[0],
@@ -324,15 +325,16 @@ export default function PondDetailClient() {
     date: new Date().toISOString().split('T')[0],
     mbw: '',
     feed: '',
-    mortality: '0',
-    inventoryFeedId: ''
+    mortality: '0'
   });
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
+          const userData = uDoc.data();
+          const cid = userData?.companyId;
+          setUserRole(userData?.role);
           setCompanyId(cid);
           if (cid) {
             // Listen to Pond
@@ -343,12 +345,6 @@ export default function PondDetailClient() {
               setLoading(false);
             });
 
-            // Fetch Inventory Feeds
-            const qFeeds = query(collection(db, 'companies', cid, 'feeds'), orderBy('feedName', 'asc'));
-            const unsubFeeds = onSnapshot(qFeeds, (snapshot: any) => {
-              setInventoryFeeds(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
-            });
-
             const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
             const unsubCycles = onSnapshot(qCycles, (snapshot: any) => {
               setCycles(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() } as FarmCycle)));
@@ -356,7 +352,6 @@ export default function PondDetailClient() {
 
             return () => {
               unsubPond();
-              unsubFeeds();
               unsubCycles();
             };
           }
@@ -365,10 +360,12 @@ export default function PondDetailClient() {
     });
     return () => unsubAuth();
   }, [id]);
+  const canEditPond = canEditOperations(userRole);
 
   const handleAddSampling = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
+    if (!canEditPond) return;
     if (!isActiveCycle(pond)) {
       alert('Ended cycles are read-only. Start a new cycle before adding sampling data.');
       return;
@@ -383,21 +380,10 @@ export default function PondDetailClient() {
         mbw: parseFloat(samplingForm.mbw) || 0,
         mortality: parseInt(samplingForm.mortality) || 0,
         feed: parseFloat(samplingForm.feed) || 0,
-        cycleId: pond.cycleId,
-        cycleName: pond.cycleName,
         pondCycleId: pond.pondCycleId || pond.id,
+        ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
+        ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
       };
-
-      if (samplingForm.inventoryFeedId) {
-        newSampling.feedData = {
-          inventoryFeedId: samplingForm.inventoryFeedId, 
-          totalDailyFeed: samplingForm.feed,
-          ancoPercentage: '0',
-          cycleId: pond.cycleId,
-          cycleName: pond.cycleName,
-          pondCycleId: pond.pondCycleId || pond.id,
-        };
-      }
 
       // 1. Update Pond
       await updateDoc(pondRef, {
@@ -410,8 +396,7 @@ export default function PondDetailClient() {
         date: new Date().toISOString().split('T')[0],
         mbw: '',
         mortality: '0',
-        feed: '',
-        inventoryFeedId: ''
+        feed: ''
       });
     } catch (error) {
       console.error("Error adding sampling:", error);
@@ -423,6 +408,7 @@ export default function PondDetailClient() {
 
   const handleEndCycle = async () => {
     if (!companyId || !pond) return;
+    if (!canEditPond) return;
     try {
       await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
         cycleStatus: 'ended',
@@ -442,6 +428,7 @@ export default function PondDetailClient() {
   const handleStartCycle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
+    if (!canEditPond) return;
     try {
       const sameNamePonds = await getDocs(query(
         collection(db, 'companies', companyId, 'ponds'),
@@ -505,6 +492,7 @@ export default function PondDetailClient() {
 
   const openBaselineModal = () => {
     if (!pond) return;
+    if (!canEditPond) return;
     const baselineSampling = (pond.samplings || [])
       .filter(isBaselineSampling)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -522,6 +510,7 @@ export default function PondDetailClient() {
   const handleUpdateBaseline = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!companyId || !pond) return;
+    if (!canEditPond) return;
 
     const baselineDocValue = parseInt(baselineForm.baselineDoc, 10);
     const baselineMbwValue = parseFloat(baselineForm.baselineMbw);
@@ -613,10 +602,10 @@ export default function PondDetailClient() {
       const feedVal = getSamplingFeedAmount(s);
       return !isBaselineSampling(s) && s.mbw > 0 && feedVal > 0;
     }).reverse()[0];
-    
+
     const docStart = new Date(pond.docStart);
     const docDays = getPondCurrentDoc(pond);
-    
+
     let population = pond.initialPopulation;
     const baselinePopulation = getPondBaselinePopulation(pond);
     if (baselinePopulation !== null) {
@@ -649,43 +638,48 @@ export default function PondDetailClient() {
 
     const adg = (() => {
       const validForADG = sorted.filter(s => !isBaselineSampling(s) && s.mbw > 0);
-      const baseline = sorted.filter(isBaselineSampling).reverse()[0];
-      if (validForADG.length >= 2) {
-        const s2 = validForADG[validForADG.length - 1];
-        const s1 = validForADG[validForADG.length - 2];
-        const days = Math.max(1, (new Date(s2.date).getTime() - new Date(s1.date).getTime()) / (1000 * 60 * 60 * 24));
-        return (s2.mbw - s1.mbw) / days;
-      } else if (validForADG.length === 1) {
-        const s1 = validForADG[0];
-        const previousWeight = baseline?.mbw || pond.initialWeight || 0.5;
-        const previousDate = baseline?.date || pond.docStart;
-        const days = Math.max(1, (new Date(s1.date).getTime() - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24));
-        return (s1.mbw - previousWeight) / days;
-      }
-      return 0;
+      if (!validForADG.length) return 0;
+
+      const currentSampling = validForADG[validForADG.length - 1];
+      const currentSamplingTime = new Date(currentSampling.date).getTime();
+      const baselineSampling = sorted.filter(isBaselineSampling).reverse()[0];
+      const baselineSamplingTime = baselineSampling ? new Date(baselineSampling.date).getTime() : Number.NaN;
+      const validBaselineSampling = baselineSampling &&
+        Number.isFinite(baselineSamplingTime) &&
+        baselineSamplingTime < currentSamplingTime
+        ? baselineSampling
+        : undefined;
+      const previousSampling = [...validForADG]
+        .reverse()
+        .find((sample) => new Date(sample.date).getTime() < currentSamplingTime) || validBaselineSampling;
+      const previousWeight = previousSampling?.mbw ?? pond.initialWeight ?? 0.5;
+      const previousDate = previousSampling?.date || pond.docStart;
+      const days = (currentSamplingTime - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24);
+      if (isNaN(currentSampling.mbw) || isNaN(previousWeight) || days <= 0) return 0;
+      return (currentSampling.mbw - previousWeight) / days;
     })();
 
     const size = lastRecordedMBW > 0 ? Math.round(1000 / lastRecordedMBW) : 0;
-    
+
     // Additional Comprehensive Metrics
     const totalMortality = sorted.reduce((sum, s) => sum + (s.mortality || 0), 0);
     const totalMortalityWeight = sorted.reduce((sum, s) => sum + ((s.mortality || 0) * (s.mbw || 0)) / 1000, 0);
     const totalFeed = getPondTotalFeedConsumed(pond);
-    
+
     // FCR Calculation (Total Feed / Total Biomass Gain)
     const initialBiomass = (pond.initialPopulation * (pond.initialWeight || 0.5)) / 1000;
     const biomassGain = biomass - initialBiomass;
     const fcr = biomassGain > 0 ? totalFeed / biomassGain : 0;
 
-    return { 
-      doc: docDays, 
-      population, 
-      biomass, 
-      sr, 
-      latest, 
-      chartData, 
-      adg, 
-      lastRecordedMBW, 
+    return {
+      doc: docDays,
+      population,
+      biomass,
+      sr,
+      latest,
+      chartData,
+      adg,
+      lastRecordedMBW,
       size,
       totalMortality,
       totalMortalityWeight,
@@ -699,13 +693,13 @@ export default function PondDetailClient() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
-      
+
       {/* Breadcrumbs & Actions */}
       <div className="glass-card animate-fade-up" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-          <Link href="/dashboard/ponds" style={{ 
-            width: '42px', height: '42px', borderRadius: '12px', background: 'var(--glass-bg)', 
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', 
+          <Link href="/dashboard/ponds" style={{
+            width: '42px', height: '42px', borderRadius: '12px', background: 'var(--glass-bg)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
             border: '1px solid var(--border)', textDecoration: 'none', transition: 'all 0.2s',
             boxShadow: 'var(--shadow-card)'
           }} onMouseEnter={e => e.currentTarget.style.transform = 'translateX(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}>
@@ -745,37 +739,39 @@ export default function PondDetailClient() {
               </div>
             </div>
           </div>
-        <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
-          {isActiveCycle(pond) ? (
-            <button onClick={() => setEndCycleOpen(true)} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
-              <Archive size={18} strokeWidth={2.5} />
-              <span>End Cycle</span>
+        {canEditPond && (
+          <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
+            {isActiveCycle(pond) ? (
+              <button onClick={() => setEndCycleOpen(true)} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
+                <Archive size={18} strokeWidth={2.5} />
+                <span>End Cycle</span>
+              </button>
+            ) : (
+              <button onClick={() => setStartCycleOpen(true)} className="dashboard-action dashboard-action-primary">
+                <RotateCcw size={18} strokeWidth={2.5} />
+                <span>Start New Cycle</span>
+              </button>
+            )}
+            <button
+              onClick={openBaselineModal}
+              className="dashboard-action dashboard-action-secondary"
+              disabled={pond.cycleStartMode !== 'midcycle' || !isActiveCycle(pond)}
+              title="Edit baseline estimates"
+              style={{ padding: '0 14px', opacity: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 1 : 0.45, cursor: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
+            >
+              <Settings size={18} strokeWidth={2.5} />
             </button>
-          ) : (
-            <button onClick={() => setStartCycleOpen(true)} className="dashboard-action dashboard-action-primary">
-              <RotateCcw size={18} strokeWidth={2.5} />
-              <span>Start New Cycle</span>
+            <button
+              onClick={() => setSamplingModalOpen(true)}
+              className="dashboard-action dashboard-action-primary"
+              disabled={!isActiveCycle(pond)}
+              style={{ opacity: isActiveCycle(pond) ? 1 : 0.45, cursor: isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
+            >
+              <Plus size={20} strokeWidth={3} />
+              <span>New Sampling</span>
             </button>
-          )}
-          <button
-            onClick={openBaselineModal}
-            className="dashboard-action dashboard-action-secondary"
-            disabled={pond.cycleStartMode !== 'midcycle' || !isActiveCycle(pond)}
-            title="Edit baseline estimates"
-            style={{ padding: '0 14px', opacity: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 1 : 0.45, cursor: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
-          >
-            <Settings size={18} strokeWidth={2.5} />
-          </button>
-          <button 
-            onClick={() => setSamplingModalOpen(true)}
-            className="dashboard-action dashboard-action-primary"
-            disabled={!isActiveCycle(pond)}
-            style={{ opacity: isActiveCycle(pond) ? 1 : 0.45, cursor: isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
-          >
-            <Plus size={20} strokeWidth={3} />
-            <span>New Sampling</span>
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
       {/* Hero Stats */}
@@ -830,10 +826,10 @@ export default function PondDetailClient() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '28px' }}>
-        
+
         {/* Left Content */}
         <div className="animate-fade-up animate-delay-2" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
-          
+
           {/* Growth Chart Section */}
           <div className="glass-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
@@ -841,10 +837,10 @@ export default function PondDetailClient() {
                 <h3 style={{ fontSize: '1.08rem', fontWeight: 800, marginBottom: '4px' }}>Biological Growth Curve</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mean Body Weight (MBW) trajectory over production cycle.</p>
               </div>
-              <div style={{ 
-                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', 
-                background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '0.75rem', 
-                fontWeight: 800, color: 'var(--primary)', border: '1px solid var(--border)' 
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
+                background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '0.75rem',
+                fontWeight: 800, color: 'var(--primary)', border: '1px solid var(--border)'
               }}>
                 <LineChartIcon size={16} />
                 LIVE TRACKING
@@ -904,9 +900,9 @@ export default function PondDetailClient() {
               </div>
               <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Detailed Metrics</h4>
             </div>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              
+
               {/* Biological Specs */}
               <div>
                 <h5 style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Biological & Feed</h5>
@@ -974,9 +970,9 @@ export default function PondDetailClient() {
             </div>
           </div>
 
-          <div style={{ 
-            background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', 
-            borderRadius: 'var(--radius-lg)', padding: '20px', color: '#ef4444' 
+          <div style={{
+            background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)',
+            borderRadius: 'var(--radius-lg)', padding: '20px', color: '#ef4444'
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <Trash2 size={20} />
@@ -1112,14 +1108,13 @@ export default function PondDetailClient() {
         </div>
       )}
 
-      <SamplingModal 
-        isOpen={isSamplingModalOpen} 
+      <SamplingModal
+        isOpen={isSamplingModalOpen}
         onClose={() => setSamplingModalOpen(false)}
         onSubmit={handleAddSampling}
         form={samplingForm}
         setForm={setSamplingForm}
         isSubmitting={isSubmitting}
-        inventoryFeeds={inventoryFeeds}
       />
 
       <style jsx>{`
@@ -1165,14 +1160,14 @@ export default function PondDetailClient() {
   );
 }
 
-function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, inventoryFeeds }: any) {
+function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting }: any) {
   if (!isOpen) return null;
 
   return (
-    <div style={{ 
-      position: 'fixed', inset: 0, zIndex: 1000, 
-      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-      background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px' 
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px'
     }}>
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1180,80 +1175,79 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
             <h3 style={{ fontSize: '1.5rem', fontWeight: 800 }}>New Sampling</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Log biological and feeding data.</p>
           </div>
-          <button 
-            onClick={onClose} 
+          <button
+            onClick={onClose}
             style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}
           >
             <X size={24} />
           </button>
         </div>
-        
+
         <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sampling Date</label>
-            <input 
-              type="date" 
-              required 
-              value={form.date} 
+            <input
+              type="date"
+              required
+              value={form.date}
               onChange={e => setForm({...form, date: e.target.value})}
-              style={{ 
-                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
-                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
-              }} 
+              style={{
+                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
+                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600
+              }}
             />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MBW (grams)</label>
-              <input 
-                type="number" 
-                step="0.01" 
-                required 
+              <input
+                type="number"
+                step="0.01"
+                required
                 placeholder="0.00"
-                value={form.mbw} 
+                value={form.mbw}
                 onChange={e => setForm({...form, mbw: e.target.value})}
-                style={{ 
-                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
-                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
-                }} 
+                style={{
+                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
+                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600
+                }}
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feed (kg)</label>
-              <input 
-                type="number" 
-                step="0.1" 
-                required 
+              <input
+                type="number"
+                step="0.1"
                 placeholder="0.0"
-                value={form.feed} 
+                value={form.feed}
                 onChange={e => setForm({...form, feed: e.target.value})}
-                style={{ 
-                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
-                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
-                }} 
+                style={{
+                  padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
+                  background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600
+                }}
               />
             </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mortality (pcs)</label>
-            <input 
-              type="number" 
+            <input
+              type="number"
               placeholder="0"
-              value={form.mortality} 
+              value={form.mortality}
               onChange={e => setForm({...form, mortality: e.target.value})}
-              style={{ 
-                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
-                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
-              }} 
+              style={{
+                padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
+                background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600
+              }}
             />
           </div>
 
           <div style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
-            <button type="button" onClick={onClose} style={{ 
-              flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', 
-              background: 'transparent', fontWeight: 700, cursor: 'pointer' 
+            <button type="button" onClick={onClose} style={{
+              flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
+              background: 'transparent', fontWeight: 700, cursor: 'pointer'
             }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Record'}

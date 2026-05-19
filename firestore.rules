@@ -91,7 +91,7 @@ service cloud.firestore {
           isCompanyOwner(companyId)
           || (
             userBelongsToCompany(companyId)
-            && currentUserRole() in ['owner', 'manager', 'technician', 'admin']
+            && currentUserRole() in ['owner', 'technician']
           )
         );
     }

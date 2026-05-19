@@ -600,7 +600,15 @@ export const usePondStore = create<PondStore>()(
             if (p.id !== pondId) return p;
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             
-            const todayWQIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
+            const todayWQIndex = p.samplings.findIndex(s =>
+              !isBaselineSampling(s) &&
+              !s.feedData &&
+              !s.harvestData &&
+              s.mbw === 0 &&
+              s.feed === 0 &&
+              s.mortality === 0 &&
+              s.date === today
+            );
             
             let updatedSamplings;
             if (todayWQIndex >= 0) {
@@ -627,7 +635,7 @@ export const usePondStore = create<PondStore>()(
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             const feedRecord = { ...record, ...cycleFields };
             
-            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.date === today);
+            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === today);
             
             let updatedSamplings;
             if (existingIndex >= 0) {

@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  History, 
-  Search, 
-  Activity, 
+import {
+  Plus,
+  History,
+  Search,
+  Activity,
   ShoppingBag,
   X,
   Loader2,
@@ -19,14 +19,14 @@ import {
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import Link from 'next/link';
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  onSnapshot, 
-  doc, 
-  updateDoc, 
-  serverTimestamp, 
+import {
+  collection,
+  query,
+  orderBy,
+  onSnapshot,
+  doc,
+  updateDoc,
+  serverTimestamp,
   getDoc,
   runTransaction,
   arrayUnion,
@@ -87,18 +87,19 @@ const formatSyncStatus = (date: Date | null): string => {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 export default function FeedRecordsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  
+
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
-  
+
   // Form State
   const [formData, setFormData] = useState<FeedData & { pondId: string; date: string }>({
     pondId: '',
@@ -110,13 +111,15 @@ export default function FeedRecordsPage() {
     anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
     anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
   });
+  const canEditFeed = canEditOperations(user?.role);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        setUser(firebaseUser);
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
+          const userData = uDoc.data();
+          setUser({ uid: firebaseUser.uid, ...userData });
+          const cid = userData?.companyId;
           setCompanyId(cid);
           if (cid) {
             const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
@@ -150,10 +153,10 @@ export default function FeedRecordsPage() {
   // ── Sync form data with existing records when pond/date changes ────
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
-    
+
     const pond = ponds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.date === formData.date);
-    
+    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
+
     if (existing?.feedData) {
       // Data exists for this day, pre-fill the form
       const data = existing.feedData;
@@ -182,18 +185,19 @@ export default function FeedRecordsPage() {
   const handleAddFeed = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
+    if (!canEditFeed) return;
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       const pondDoc = await getDoc(pondRef);
-      
+
       if (pondDoc.exists()) {
         const pondData = pondDoc.data();
-        let samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.date === formData.date);
+        const samplings = [...(pondData.samplings || [])];
+        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
         const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
-        
+
         const feedAmount = parseFloat(formData.totalDailyFeed) || 0;
         const feedData = {
           ancoPercentage: formData.ancoPercentage,
@@ -213,12 +217,12 @@ export default function FeedRecordsPage() {
         };
 
         if (existingIndex >= 0) {
-          samplings[existingIndex] = { 
-            ...samplings[existingIndex], 
+          samplings[existingIndex] = {
+            ...samplings[existingIndex],
             cycleId: pondData.cycleId,
             cycleName: pondData.cycleName,
             pondCycleId: pondData.pondCycleId || formData.pondId,
-            feedData: { ...(samplings[existingIndex].feedData || {}), ...feedData } 
+            feedData: { ...(samplings[existingIndex].feedData || {}), ...feedData }
           };
         } else {
           samplings.push({
@@ -253,16 +257,38 @@ export default function FeedRecordsPage() {
           await runTransaction(db, async (transaction: any) => {
             const feedDoc = await transaction.get(feedRef);
             if (!feedDoc.exists()) return;
-            
-            const currentStock = (feedDoc.data() as any).totalStock || 0;
+
+            const feedData = feedDoc.data() as any;
+            const currentStock = feedData.totalStock || 0;
+            const currentCost = feedData.totalCost || 0;
+            if (quantityDelta > 0 && quantityDelta > currentStock) {
+              throw new Error('Insufficient stock');
+            }
+            const matchingUsage = (feedData.usageHistory || [])
+              .filter((usage: any) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
+              .slice()
+              .reverse()
+              .find((usage: any) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
+            const historicalUnitPrice = matchingUsage
+              ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
+              : 0;
+            const unitPrice = currentStock > 0 ? currentCost / currentStock : historicalUnitPrice;
+            if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+              throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
+            }
             const newStock = Math.max(0, currentStock - quantityDelta);
-            
+
             transaction.update(feedRef, {
               totalStock: newStock,
+              totalCost: quantityDelta > 0
+                ? Math.max(0, currentCost - (quantityDelta * unitPrice))
+                : currentCost + (Math.abs(quantityDelta) * unitPrice),
               usageHistory: arrayUnion({
                 id: `usage-${Date.now()}`,
                 date: formData.date,
                 quantity: quantityDelta,
+                unitPrice,
+                totalCost: quantityDelta * unitPrice,
                 pondId: formData.pondId,
                 cycleId: pondData.cycleId,
                 cycleName: pondData.cycleName,
@@ -317,13 +343,13 @@ export default function FeedRecordsPage() {
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      
+
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-          <input 
-            placeholder="Search ponds..." 
+          <input
+            placeholder="Search ponds..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -332,25 +358,27 @@ export default function FeedRecordsPage() {
             }}
           />
         </div>
-        <button 
-          onClick={() => {
-            setFormData({
-              pondId: '',
-              inventoryFeedId: '',
-              date: new Date().toISOString().split('T')[0],
-              totalDailyFeed: '',
-              ancoPercentage: '',
-              feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
-              anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
-              anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
-            });
-            setModalOpen(true);
-          }}
-          className="dashboard-action dashboard-action-primary"
-        >
-          <Plus size={20} />
-          <span>New Feed Log</span>
-        </button>
+        {canEditFeed && (
+          <button
+            onClick={() => {
+              setFormData({
+                pondId: '',
+                inventoryFeedId: '',
+                date: new Date().toISOString().split('T')[0],
+                totalDailyFeed: '',
+                ancoPercentage: '',
+                feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
+                anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
+                anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
+              });
+              setModalOpen(true);
+            }}
+            className="dashboard-action dashboard-action-primary"
+          >
+            <Plus size={20} />
+            <span>New Feed Log</span>
+          </button>
+        )}
       </div>
 
       {/* Pond Grid */}
@@ -374,7 +402,7 @@ export default function FeedRecordsPage() {
                       </div>
                     </Link>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setSelectedPondForHistory(pond)}
                     style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', color: 'var(--primary)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                     onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
@@ -394,10 +422,10 @@ export default function FeedRecordsPage() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Efficiency</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{ 
-                        fontSize: '21px', 
-                        fontWeight: 900, 
-                        color: latest?.ancoPercentage === '100' ? '#22c55e' : '#f59e0b' 
+                      <div style={{
+                        fontSize: '21px',
+                        fontWeight: 900,
+                        color: latest?.ancoPercentage === '100' ? '#22c55e' : '#f59e0b'
                       }}>
                         {latest ? `${latest.ancoPercentage}%` : '--'}
                       </div>
@@ -426,14 +454,14 @@ export default function FeedRecordsPage() {
                               const isFinished = val === '100';
                               const hasData = val !== undefined && val !== '';
                               return (
-                                <div key={tNum} 
-                                  style={{ 
-                                    flex: 1, height: '8px', borderRadius: '4px', 
+                                <div key={tNum}
+                                  style={{
+                                    flex: 1, height: '8px', borderRadius: '4px',
                                     background: isFinished ? '#22c55e' : (hasData ? '#f59e0b' : 'var(--bg-mid)'),
                                     border: '1px solid var(--border)',
                                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                                  }} 
-                                  title={`Feeding ${fNum}, Tray ${tNum % 2 === 0 ? 2 : 1}: ${val || '0'}%`} 
+                                  }}
+                                  title={`Feeding ${fNum}, Tray ${tNum % 2 === 0 ? 2 : 1}: ${val || '0'}%`}
                                 />
                               );
                             })}
@@ -446,14 +474,16 @@ export default function FeedRecordsPage() {
 
                 <div style={{ padding: '14px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>4 Tray Monitoring System</span>
-                  <button 
-                    onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
-                    onMouseOver={(e) => (e.currentTarget.style.gap = '10px')}
-                    onMouseOut={(e) => (e.currentTarget.style.gap = '6px')}
-                  >
-                    Quick Entry <ArrowRight size={16} />
-                  </button>
+                  {canEditFeed && (
+                    <button
+                      onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
+                      onMouseOver={(e) => (e.currentTarget.style.gap = '10px')}
+                      onMouseOut={(e) => (e.currentTarget.style.gap = '6px')}
+                    >
+                      Quick Entry <ArrowRight size={16} />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -474,7 +504,7 @@ export default function FeedRecordsPage() {
                 <X size={20} />
               </button>
             </div>
-            
+
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {selectedPondForHistory.samplings
@@ -543,8 +573,8 @@ export default function FeedRecordsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Pond</label>
-                  <select 
-                    required 
+                  <select
+                    required
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
@@ -566,7 +596,7 @@ export default function FeedRecordsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Feed (Optional)</label>
-                  <select 
+                  <select
                     value={formData.inventoryFeedId || ''}
                     onChange={e => setFormData({...formData, inventoryFeedId: e.target.value})}
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
