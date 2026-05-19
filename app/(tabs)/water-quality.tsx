@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useCallback } from "react";
-import { StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView } from "react-native";
+import React, { useState, useMemo, useCallback, useRef } from "react";
+import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePondStore } from "../store/pondStore";
+import { usePondStore, isPondCycleActive } from "../store/pondStore";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 
@@ -11,13 +11,13 @@ const Input = React.memo(({ label, value, onChange, placeholder = "" }: any) => 
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>{label}</Text>
     <TextInput style={styles.input} keyboardType="numeric" value={value} 
-      onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#3282B8" />
+      onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#6b8aa0" />
   </View>
 ));
 
 const Parameter = React.memo(({ icon, label, value, color }: any) => (
   <View style={styles.parameterItem}>
-    <Ionicons name={icon} size={16} color="#3282B8" />
+    <Ionicons name={icon} size={16} color="#315f57" />
     <Text style={styles.parameterLabel}>{label}</Text>
     <Text style={[styles.parameterValue, { color }]}>{value || "N/A"}</Text>
   </View>
@@ -29,26 +29,36 @@ export default function WaterQualityScreen() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
+  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
   
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
   const [values, setValues] = useState({
     phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: ""
   });
 
+  React.useEffect(() => {
+    if (isModalVisible) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [isModalVisible]);
+
   const getColor = useCallback((type: string, value: string) => {
     const num = parseFloat(value);
-    if (isNaN(num)) return "#3282B8";
-    if (type === "do") return num < 3.5 ? "#e74c3c" : num <= 4.5 ? "#f39c12" : "#0F4C75";
-    if (type === "ph") return num < 7.5 || num > 8.5 ? "#e74c3c" : "#0F4C75";
-    if (type === "transparency") return num < 30 || num > 40 ? "#e74c3c" : "#0F4C75";
-    return "#1B262C";
+    if (isNaN(num)) return "#315f57";
+    if (type === "do") return num < 3.5 ? "#e74c3c" : num <= 4.5 ? "#f39c12" : "#0d2137";
+    if (type === "ph") return num < 7.5 || num > 8.5 ? "#e74c3c" : "#0d2137";
+    if (type === "transparency") return num < 30 || num > 40 ? "#e74c3c" : "#0d2137";
+    return "#0d2137";
   }, []);
 
   const allWaterRecords = useMemo(() => {
     const today = new Date().toISOString().split('T')[0];
-    return ponds.map((p) => {
+    return activePonds.map((p) => {
       const todayWQRecord = p.samplings.find(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
       return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
         id: `temp-${p.id}`, date: today, mbw: 0, mortality: 0, feed: 0,
@@ -56,16 +66,30 @@ export default function WaterQualityScreen() {
         doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName
       };
     });
-  }, [ponds]);
+  }, [activePonds]);
 
   const handleSave = useCallback(() => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
     if (!canEditPonds) {
       Alert.alert(t.waterQuality.permissionDenied, t.waterQuality.permissionMessage);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
       return;
     }
-    if (!selectedPond) return;
-    const pond = ponds.find((p) => p.pondName === selectedPond);
-    if (!pond) return;
+    if (!selectedPond) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    const pond = activePonds.find((p) => p.pondName === selectedPond);
+    if (!pond) {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
 
     addWaterQuality(pond.id, {
       phMorning: values.phMorning.trim(), phEvening: values.phEvening.trim(),
@@ -75,7 +99,7 @@ export default function WaterQualityScreen() {
     setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
     setSelectedPond(null);
     setIsModalVisible(false);
-  }, [canEditPonds, selectedPond, ponds, values, addWaterQuality, t]);
+  }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t]);
 
   const handlePondSelection = useCallback((pondName: string) => {
     setSelectedPond(pondName);
@@ -94,6 +118,8 @@ export default function WaterQualityScreen() {
   const closeModal = useCallback(() => {
     setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
     setSelectedPond(null);
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     setIsModalVisible(false);
   }, []);
 
@@ -103,31 +129,32 @@ export default function WaterQualityScreen() {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
         <View style={styles.header}>
-          <Ionicons name="water-outline" size={28} color="#0F4C75" />
+          <Ionicons name="water-outline" size={28} color="#315f57" />
           <Text style={styles.headerTitle}>{t.waterQuality.title}</Text>
         </View>
 
-        <ScrollView 
+        <FlatList 
+          data={allWaterRecords}
+          keyExtractor={(item, index) => `${item.pondName}-${item.date || index}`}
           contentContainerStyle={[
             styles.scrollContent,
             { paddingBottom: Platform.OS === 'android' ? Math.max(insets.bottom, 20) + 80 : 100 }
           ]} 
           showsVerticalScrollIndicator={false}
-        >
-          {allWaterRecords.length === 0 ? (
+          ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="flask-outline" size={80} color="#3282B8" />
+              <Ionicons name="flask-outline" size={80} color="#315f57" />
               <Text style={styles.emptyTitle}>{t.waterQuality.noData}</Text>
               <Text style={styles.emptySubtitle}>
                 {canEditPonds ? t.waterQuality.addFirst : t.waterQuality.noDataAvailable}
               </Text>
             </View>
-          ) : (
-            allWaterRecords.map((rec, idx) => (
-              <TouchableOpacity key={idx} style={styles.recordCard}
+          }
+          renderItem={({ item: rec }) => (
+              <TouchableOpacity style={styles.recordCard}
                 onPress={() => {
                   const pond = ponds.find(p => p.pondName === rec.pondName);
                   if (pond) router.push({ pathname: '/water-quality-history', params: { pondId: pond.id, pondName: rec.pondName }});
@@ -147,16 +174,16 @@ export default function WaterQualityScreen() {
                   </View>
                   <View style={styles.parameterRow}>
                     <Parameter icon="eye-outline" label={t.waterQuality.transparency} value={`${rec.transparency || "N/A"} cm`} color={getColor("transparency", rec.transparency ?? "")} />
-                    <Parameter icon="water-outline" label={t.waterQuality.salinity} value={`${rec.salinity || "N/A"} ppt`} color="#1B262C" />
+                    <Parameter icon="water-outline" label={t.waterQuality.salinity} value={`${rec.salinity || "N/A"} ppt`} color="#0d2137" />
                   </View>
                 </View>
               </TouchableOpacity>
-            ))
           )}
-        </ScrollView>
+        />
 
         {canEditPonds && (
-          <TouchableOpacity style={[styles.floatingButton, { bottom: 30 + Math.max(insets.bottom, 0) }]} onPress={() => setIsModalVisible(true)}>
+          // UPDATED BUTTON TO MATCH YOUR OTHER PAGE
+          <TouchableOpacity style={styles.floatingButton} onPress={() => setIsModalVisible(true)}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}
@@ -169,8 +196,14 @@ export default function WaterQualityScreen() {
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>{t.waterQuality.addWaterQuality}</Text>
-                <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
-                  <Ionicons name="close" size={24} color="#3282B8" />
+                <TouchableOpacity
+                  onPress={closeModal}
+                  style={styles.closeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color="#315f57" />
                 </TouchableOpacity>
               </View>
 
@@ -184,7 +217,7 @@ export default function WaterQualityScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>{t.waterQuality.selectPond}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
-                    {ponds.map((p) => (
+                    {activePonds.map((p) => (
                       <TouchableOpacity key={p.id}
                         style={[styles.pondOption, selectedPond === p.pondName && styles.pondOptionSelected]}
                         onPress={() => handlePondSelection(p.pondName)}>
@@ -227,7 +260,7 @@ export default function WaterQualityScreen() {
                   <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
                     <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.addButton} onPress={handleSave}>
+                  <TouchableOpacity style={[styles.addButton, isSubmitting && { opacity: 0.6 }]} onPress={handleSave} disabled={isSubmitting}>
                     <Text style={styles.addButtonText}>{t.waterQuality.saveRecord}</Text>
                   </TouchableOpacity>
                 </View>
@@ -241,41 +274,42 @@ export default function WaterQualityScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  container: { flex: 1, backgroundColor: "#f4f8fc" },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 16 : 20, paddingBottom: Platform.OS === 'android' ? 16 : 20 },
-  headerTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#1B262C', marginLeft: Platform.OS === 'android' ? 10 : 12 },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 10 : 12 },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingTop: 0 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
-  emptyTitle: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
-  emptySubtitle: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', lineHeight: Platform.OS === 'android' ? 20 : 22 },
-  recordCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 12 : 16, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
+  emptySubtitle: { color: '#315f57', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', lineHeight: Platform.OS === 'android' ? 20 : 22 },
+  recordCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 12 : 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 12 : 16 },
-  pondName: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#1B262C' },
-  dateText: { color: '#3282B8', fontSize: Platform.OS === 'android' ? 11 : 12 },
+  pondName: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
+  dateText: { color: '#315f57', fontSize: Platform.OS === 'android' ? 11 : 12 },
   parametersContainer: { gap: Platform.OS === 'android' ? 10 : 12 },
   parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
   parameterItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
-  parameterLabel: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: Platform.OS === 'android' ? 75 : 80, flexShrink: 0 },
+  parameterLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: Platform.OS === 'android' ? 75 : 80, flexShrink: 0 },
   parameterValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'right', flex: 1 },
-  floatingButton: { position: 'absolute', right: 30, backgroundColor: '#0F4C75', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+  // UPDATED STYLE: Added fixed bottom/right position
+  floatingButton: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#0d2137', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#BBE1FA', overflow: 'hidden' },
+  modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#e8f2f9', overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Platform.OS === 'android' ? 20 : 24, paddingBottom: 0 },
-  modalTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#1B262C' },
+  modalTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137' },
   closeButton: { padding: 4 },
   modalScrollView: { padding: Platform.OS === 'android' ? 20 : 24, paddingTop: 0 },
   inputContainer: { marginBottom: Platform.OS === 'android' ? 16 : 20 },
-  inputLabel: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
-  input: { borderWidth: 1, borderColor: '#BBE1FA', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#F8FAFC', color: '#1B262C', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
+  inputLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
+  input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 0 },
   inputGroup: { flex: 1 },
   pondSelector: { maxHeight: 50 },
-  pondOption: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, marginRight: 8, backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#BBE1FA' },
-  pondOptionSelected: { backgroundColor: '#0F4C75', borderColor: '#0F4C75' },
-  pondOptionText: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
+  pondOption: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, marginRight: 8, backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#e8f2f9' },
+  pondOptionSelected: { backgroundColor: '#0d2137', borderColor: '#0d2137' },
+  pondOptionText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
   pondOptionTextSelected: { color: '#FFFFFF' },
   buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: Platform.OS === 'android' ? 20 : 24 },
-  addButton: { backgroundColor: '#3282B8', paddingVertical: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, borderRadius: 12, alignItems: 'center', flex: 1, marginLeft: 6, shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  addButton: { backgroundColor: '#315f57', paddingVertical: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, borderRadius: 12, alignItems: 'center', flex: 1, marginLeft: 6, shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
   addButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },
   cancelButton: { backgroundColor: 'transparent', paddingVertical: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e74c3c', flex: 1, marginRight: 6 },
   cancelButtonText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },

@@ -1,7 +1,7 @@
 // app/(tabs)/_layout.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { View, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
@@ -13,10 +13,18 @@ export default function TabsLayout() {
   const { t } = useLanguage();
   const { toggleSidebar } = useSidebar();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const isLargeScreen = Platform.OS === 'web' && width > 1024;
 
   const HeaderLeft = () => (
-    <TouchableOpacity onPress={toggleSidebar} style={styles.menuButton}>
-      <Ionicons name="menu-outline" size={24} color="#1B262C" />
+    <TouchableOpacity
+      onPress={toggleSidebar}
+      style={styles.menuButton}
+      accessibilityRole="button"
+      accessibilityLabel="Open menu"
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Ionicons name="menu-outline" size={24} color="#0d2137" />
     </TouchableOpacity>
   );
 
@@ -27,22 +35,23 @@ export default function TabsLayout() {
   );
 
   const tabScreenOptions = {
-    tabBarActiveTintColor: isBuyer ? '#27AE60' : '#0F4C75',
+    tabBarActiveTintColor: isBuyer ? '#27AE60' : '#0d2137',
     headerShadowVisible: false,
-    headerTintColor: '#1B262C',
-    tabBarStyle: { 
-      backgroundColor: '#FFFFFF', 
-      borderTopColor: '#BBE1FA', 
+    headerTintColor: '#0d2137',
+    tabBarStyle: {
+      backgroundColor: '#FFFFFF',
+      borderTopColor: '#dce8f2',
       borderTopWidth: 1,
-      height: Platform.OS === 'android' 
-        ? 60 + Math.max(insets.bottom, 0) 
+      height: Platform.OS === 'android'
+        ? 60 + Math.max(insets.bottom, 0)
         : 60 + insets.bottom,
-      paddingBottom: Platform.OS === 'android' 
-        ? Math.max(insets.bottom, 8) 
+      paddingBottom: Platform.OS === 'android'
+        ? Math.max(insets.bottom, 8)
         : insets.bottom,
       paddingTop: Platform.OS === 'android' ? 8 : 6,
+      display: (isLargeScreen ? 'none' : 'flex') as 'none' | 'flex',
     },
-    tabBarInactiveTintColor: '#3282B8',
+    tabBarInactiveTintColor: '#315f57',
     tabBarLabelStyle: {
       fontSize: Platform.OS === 'android' ? 11 : 12,
       fontWeight: '600' as '600',
@@ -52,9 +61,9 @@ export default function TabsLayout() {
     tabBarIconStyle: {
       marginTop: Platform.OS === 'android' ? 4 : 0,
     },
-    headerLeft: () => <HeaderLeft />,
+    headerLeft: isLargeScreen ? undefined : () => <HeaderLeft />,
     headerRight: () => <HeaderRight />,
-    headerStyle: { backgroundColor: '#BBE1FA' },
+    headerStyle: { backgroundColor: '#dce8f2' },
     headerTitleStyle: {
       fontSize: Platform.OS === 'android' ? 18 : 20,
       fontWeight: '700' as '700',
@@ -64,19 +73,19 @@ export default function TabsLayout() {
   if (isBuyer) {
     return (
       <Tabs screenOptions={tabScreenOptions}>
-        <Tabs.Screen 
-          name="indexbuyer" 
+        <Tabs.Screen
+          name="indexbuyer"
           options={{
             headerTitle: "Shrimply Buyer",
             tabBarLabel: "Suppliers",
             tabBarIcon: ({ focused, color }) => (
-              <Ionicons 
-                name={focused ? "business" : "business-outline"} 
-                color={color} 
-                size={Platform.OS === 'android' ? 26 : 30} 
+              <Ionicons
+                name={focused ? "business" : "business-outline"}
+                color={color}
+                size={Platform.OS === 'android' ? 26 : 30}
               />
             )
-          }} 
+          }}
         />
         <Tabs.Screen name="index" options={{ href: null }} />
         <Tabs.Screen name="water-quality" options={{ href: null }} />
@@ -88,59 +97,59 @@ export default function TabsLayout() {
 
   return (
     <Tabs screenOptions={tabScreenOptions}>
-      <Tabs.Screen 
-        name="index" 
+      <Tabs.Screen
+        name="index"
         options={{
           headerTitle: "Ponds",
           tabBarLabel: t.nav.ponds,
           tabBarIcon: ({ focused, color }) => (
-            <Ionicons 
-              name={focused ? "home-sharp" : "home-outline"} 
-              color={color} 
-              size={Platform.OS === 'android' ? 26 : 30} 
+            <Ionicons
+              name={focused ? "home-sharp" : "home-outline"}
+              color={color}
+              size={Platform.OS === 'android' ? 26 : 30}
             />
           )
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="water-quality" 
+      <Tabs.Screen
+        name="water-quality"
         options={{
           title: t.nav.waterQuality,
           tabBarIcon: ({ focused, color }) => (
-            <Ionicons 
-              name={focused ? "water-sharp" : "water-outline"} 
-              color={color} 
-              size={Platform.OS === 'android' ? 26 : 30} 
+            <Ionicons
+              name={focused ? "water-sharp" : "water-outline"}
+              color={color}
+              size={Platform.OS === 'android' ? 26 : 30}
             />
           )
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="feed" 
+      <Tabs.Screen
+        name="feed"
         options={{
           title: t.nav.feed,
           tabBarIcon: ({ focused, color }) => (
-            <Ionicons 
-              name={focused ? "fish-sharp" : "fish-outline"} 
-              color={color} 
-              size={Platform.OS === 'android' ? 26 : 30} 
+            <Ionicons
+              name={focused ? "fish-sharp" : "fish-outline"}
+              color={color}
+              size={Platform.OS === 'android' ? 26 : 30}
             />
           )
-        }} 
+        }}
       />
-      <Tabs.Screen 
-        name="harvest" 
+      <Tabs.Screen
+        name="harvest"
         options={{
           title: t.nav.harvest,
           tabBarLabel: t.nav.harvest,
           tabBarIcon: ({ focused, color }) => (
-            <Ionicons 
-              name={focused ? "cash-sharp" : "cash-outline"} 
-              color={color} 
-              size={Platform.OS === 'android' ? 26 : 30} 
+            <Ionicons
+              name={focused ? "cash-sharp" : "cash-outline"}
+              color={color}
+              size={Platform.OS === 'android' ? 26 : 30}
             />
           )
-        }} 
+        }}
       />
       <Tabs.Screen name="indexbuyer" options={{ href: null }} />
     </Tabs>
@@ -148,15 +157,15 @@ export default function TabsLayout() {
 }
 
 const styles = StyleSheet.create({
-  menuButton: { 
+  menuButton: {
     marginLeft: 16,
     padding: 8,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerRight: { 
-    marginRight: 16, 
-    flexDirection: 'row', 
-    alignItems: 'center' 
+  headerRight: {
+    marginRight: 16,
+    flexDirection: 'row',
+    alignItems: 'center'
   },
 });

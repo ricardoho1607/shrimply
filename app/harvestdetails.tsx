@@ -58,7 +58,7 @@ export default function HarvestDetailsScreen() {
   const formatNumber = (num: string) => parseFloat(num).toLocaleString('id-ID');
 
   const renderDetailItem = (label: string, value: string, unit: string = "", 
-    color: string = "#1B262C") => (
+    color: string = "#0d2137") => (
     <View style={styles.detailItem}>
       <Text style={styles.detailLabel}>{label}</Text>
       <Text style={[styles.detailValue, { color }]}>{value} {unit}</Text>
@@ -107,15 +107,15 @@ export default function HarvestDetailsScreen() {
         <Stack.Screen options={{
             title: t.harvestDetails.title,
             headerBackTitle: t.actions.back,
-            headerStyle: { backgroundColor: '#BBE1FA' },
-            headerTintColor: '#1B262C',
+            headerStyle: { backgroundColor: '#dce8f2' },
+            headerTintColor: '#0d2137',
             headerTitleStyle: { fontWeight: 'bold', fontSize: Platform.OS === 'android' ? 17 : 18 },
             headerShadowVisible: false,
           }} />
-        <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+        <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
         <View style={styles.container}>
           <View style={styles.emptyState}>
-            <Ionicons name="cash-outline" size={80} color="#3282B8" />
+            <Ionicons name="cash-outline" size={80} color="#315f57" />
             <Text style={styles.emptyTitle}>{t.harvestDetails.harvestNotFound}</Text>
             <Text style={styles.emptySubtitle}>{t.harvestDetails.recordNotFound}</Text>
           </View>
@@ -129,12 +129,12 @@ export default function HarvestDetailsScreen() {
       <Stack.Screen options={{
           title: t.harvestDetails.title,
           headerBackTitle: t.actions.back,
-          headerStyle: { backgroundColor: '#BBE1FA' },
-          headerTintColor: '#1B262C',
+          headerStyle: { backgroundColor: '#dce8f2' },
+          headerTintColor: '#0d2137',
           headerTitleStyle: { fontWeight: 'bold', fontSize: Platform.OS === 'android' ? 17 : 18 },
           headerShadowVisible: false,
         }} />
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <View style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.dateHeader}>
@@ -149,7 +149,7 @@ export default function HarvestDetailsScreen() {
 
           <View style={styles.totalsCard}>
             <View style={styles.totalsHeader}>
-              <Ionicons name="cash-outline" size={24} color="#3282B8" />
+              <Ionicons name="cash-outline" size={24} color="#315f57" />
               <Text style={styles.totalsTitle}>{t.harvestDetails.overallTotals}</Text>
             </View>
             
@@ -177,29 +177,29 @@ export default function HarvestDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8FAFC" },
+  container: { flex: 1, backgroundColor: "#f4f8fc" },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingBottom: 40 },
-  dateHeader: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  dateTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#3282B8', textAlign: 'center' },
+  dateHeader: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  dateTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#315f57', textAlign: 'center' },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
-  emptyTitle: { color: '#1B262C', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
-  emptySubtitle: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, lineHeight: Platform.OS === 'android' ? 20 : 22 },
-  pondCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  pondTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#3282B8', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
+  emptySubtitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, lineHeight: Platform.OS === 'android' ? 20 : 22 },
+  pondCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  pondTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#315f57', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   detailsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
-  detailItem: { flex: 1, backgroundColor: '#F8FAFC', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#BBE1FA' },
-  detailLabel: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '600', marginBottom: 2 },
-  detailValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#1B262C' },
-  pondTotal: { backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#27ae60', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
-  pondTotalLabel: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
+  detailItem: { flex: 1, backgroundColor: '#f4f8fc', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9' },
+  detailLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '600', marginBottom: 2 },
+  detailValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0d2137' },
+  pondTotal: { backgroundColor: '#f4f8fc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#27ae60', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 },
+  pondTotalLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
   pondTotalValue: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#27ae60' },
-  totalsCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 12, marginTop: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#3282B8', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  totalsCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 12, marginTop: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#315f57', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   totalsHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 14 : 16, justifyContent: 'center' },
-  totalsTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#3282B8', marginLeft: 8 },
+  totalsTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#315f57', marginLeft: 8 },
   totalsGrid: { gap: 12 },
-  totalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#BBE1FA' },
-  totalItemFull: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#F8FAFC', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 8, borderWidth: 1, borderColor: '#27ae60' },
-  totalLabel: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
-  totalValue: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#1B262C' },
+  totalItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f4f8fc', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9' },
+  totalItemFull: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f4f8fc', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 8, borderWidth: 1, borderColor: '#27ae60' },
+  totalLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
+  totalValue: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137' },
   priceHighlight: { color: '#27ae60', fontSize: Platform.OS === 'android' ? 15 : 16 },
 });

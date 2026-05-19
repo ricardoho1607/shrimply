@@ -1,6 +1,5 @@
-// components/SyncStatusIndicator.tsx - Just animated cloud icon
 import React, { useRef, useEffect } from 'react';
-import { StyleSheet, TouchableOpacity, Animated } from 'react-native';
+import { Alert, Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useDataBackup } from '../hooks/useDataBackup';
 
@@ -52,7 +51,7 @@ export const SyncStatusIndicator = () => {
   const getStatusColor = () => {
     if (!syncStatus?.isOnline) return '#e74c3c'; // Red for offline
     if (syncStatus.isSyncing) return '#f39c12'; // Orange for syncing
-    if (hasPendingChanges) return '#3282B8'; // Blue for pending
+    if (hasPendingChanges) return '#315f57'; // Pending sync
     return '#27ae60'; // Green for synced
   };
 
@@ -66,8 +65,14 @@ export const SyncStatusIndicator = () => {
   // Handle cases where syncStatus might be undefined
   if (!syncStatus) {
     return (
-      <TouchableOpacity style={styles.container}>
+      <TouchableOpacity
+        style={styles.container}
+        onPress={() => Alert.alert('Offline', 'Internet connection is unavailable. Changes will sync when you are back online.')}
+        accessibilityRole="button"
+        accessibilityLabel="Offline"
+      >
         <Ionicons name="cloud-offline-outline" size={20} color="#e74c3c" />
+        <Text style={styles.offlineText}>Offline</Text>
       </TouchableOpacity>
     );
   }
@@ -80,9 +85,17 @@ export const SyncStatusIndicator = () => {
 
   return (
     <TouchableOpacity 
-      style={styles.container}
-      onPress={triggerSync}
-      disabled={!syncStatus.isOnline || syncStatus.isSyncing}
+      style={[styles.container, !syncStatus.isOnline && styles.offlineContainer]}
+      onPress={() => {
+        if (!syncStatus.isOnline) {
+          Alert.alert('Offline', 'Internet connection is unavailable. Changes will sync when you are back online.');
+          return;
+        }
+        triggerSync();
+      }}
+      disabled={syncStatus.isSyncing}
+      accessibilityRole="button"
+      accessibilityLabel={syncStatus.isOnline ? 'Sync status' : 'Offline'}
     >
       <Animated.View
         style={{
@@ -98,6 +111,7 @@ export const SyncStatusIndicator = () => {
           color={getStatusColor()} 
         />
       </Animated.View>
+      {!syncStatus.isOnline && <Text style={styles.offlineText}>Offline</Text>}
     </TouchableOpacity>
   );
 };
@@ -106,7 +120,20 @@ const styles = StyleSheet.create({
   container: {
     padding: 8,
     marginHorizontal: 8,
+    borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    minHeight: 36,
+  },
+  offlineContainer: {
+    backgroundColor: 'rgba(231, 76, 60, 0.08)',
+    paddingHorizontal: 10,
+  },
+  offlineText: {
+    color: '#e74c3c',
+    fontSize: 12,
+    fontWeight: '600',
+    marginLeft: 4,
   },
 });

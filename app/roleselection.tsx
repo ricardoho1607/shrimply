@@ -10,6 +10,7 @@ import {
   Alert,
   ActivityIndicator,
   Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
@@ -17,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
 
 interface RoleOption {
-  id: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer';
+  id: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
   title: string;
   description: string;
   icon: string;
@@ -27,7 +28,7 @@ interface RoleOption {
 }
 
 export default function RoleSelectionScreen() {
-  const { completeRoleSelection, user } = useAuth();
+  const { completeRoleSelection, user, signOut } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
@@ -39,7 +40,7 @@ export default function RoleSelectionScreen() {
       title: t.roleSelection.farmOwner,
       description: t.roleSelection.farmOwnerDesc,
       icon: 'business-outline',
-      color: '#0F4C75',
+      color: '#0d2137',
       features: [
         t.roleSelection.ownerFeature1,
         t.roleSelection.ownerFeature2,
@@ -53,7 +54,7 @@ export default function RoleSelectionScreen() {
       title: t.roleSelection.aquacultureTechnician,
       description: t.roleSelection.technicianDesc,
       icon: 'flask-outline',
-      color: '#3282B8',
+      color: '#315f57',
       features: [
         t.roleSelection.technicianFeature1,
         t.roleSelection.technicianFeature2,
@@ -63,11 +64,25 @@ export default function RoleSelectionScreen() {
       requiresCompany: true
     },
     {
+      id: 'mechanic',
+      title: t.roleSelection.mechanic || 'Mechanic',
+      description: t.roleSelection.mechanicDesc || 'I maintain farm assets and equipment',
+      icon: 'construct-outline',
+      color: '#607D8B',
+      features: [
+        t.roleSelection.mechanicFeature1 || 'Join existing companies',
+        t.roleSelection.mechanicFeature2 || 'View pond status',
+        t.roleSelection.mechanicFeature3 || 'Log asset maintenance',
+        t.roleSelection.mechanicFeature4 || 'Update equipment service records',
+      ],
+      requiresCompany: true
+    },
+    {
       id: 'manager',
       title: t.roleSelection.manager,
       description: t.roleSelection.managerDesc,
       icon: 'people-outline',
-      color: '#BBE1FA',
+      color: '#dce8f2',
       features: [
         t.roleSelection.managerFeature1,
         t.roleSelection.managerFeature2,
@@ -95,7 +110,7 @@ export default function RoleSelectionScreen() {
       title: t.roleSelection.administrator,
       description: t.roleSelection.adminDesc,
       icon: 'shield-checkmark-outline',
-      color: '#1B262C',
+      color: '#0d2137',
       features: [
         t.roleSelection.adminFeature1,
         t.roleSelection.adminFeature2,
@@ -121,7 +136,7 @@ export default function RoleSelectionScreen() {
         return;
       }
 
-      // If role requires company (technician, manager, admin), navigate to company search
+      // If role requires company (technician, mechanic, manager, admin), navigate to company search
       if (role.requiresCompany) {
         await completeRoleSelection(role.id);
         console.log(`${role.title} role set, navigating to company search`);
@@ -150,7 +165,7 @@ export default function RoleSelectionScreen() {
       console.error('Role selection failed:', error);
       Alert.alert(
         t.messages.error,
-        error.message || t.roleSelection.failedToSetup,
+        t.roleSelection.failedToSetup,
         [
           { text: 'OK', onPress: () => {
             setSelectedRole(null);
@@ -222,13 +237,28 @@ export default function RoleSelectionScreen() {
         <View style={styles.header}>
           <View style={styles.logoContainer}>
             <Image
-              source={require('../assets/images/iShrimpLogo.png')}
+              source={require('../assets/images/Shrimply2Logo.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />
           </View>
           <Text style={styles.title}>{t.roleSelection.welcomeTitle}</Text>
           <Text style={styles.subtitle}>{t.roleSelection.welcomeSubtitle}</Text>
+          
+          <TouchableOpacity 
+            style={{ flexDirection: 'row', alignItems: 'center', marginTop: 15 }} 
+            onPress={async () => {
+              try {
+                await signOut();
+                router.replace('/auth');
+              } catch (e) {
+                Alert.alert('Error', 'Failed to logout');
+              }
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#e74c3c" />
+            <Text style={{ color: '#e74c3c', marginLeft: 5, fontWeight: '600' }}>Logout</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Role Cards */}
@@ -256,166 +286,161 @@ export default function RoleSelectionScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f4f8fc',
   },
   scrollContent: {
-    padding: 20,
-    paddingTop: 40,
-    paddingBottom: 40,
+    padding: Platform.OS === 'android' ? 18 : 20,
+    paddingTop: Platform.OS === 'android' ? 36 : 40,
+    paddingBottom: Platform.OS === 'android' ? 36 : 40,
   },
   // Header styles
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: Platform.OS === 'android' ? 36 : 40,
   },
   logoContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#FFFFFF',
+    width: Platform.OS === 'android' ? 140 : 160,
+    height: Platform.OS === 'android' ? 140 : 160,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 3,
-    borderColor: '#0F4C75',
-    overflow: 'hidden',
-    shadowColor: '#0F4C75',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: Platform.OS === 'android' ? 12 : 15,
   },
   logoImage: {
-    width: 100,
-    height: 100,
+    width: '100%',
+    height: '100%',
   },
   title: {
-    fontSize: 28,
+    fontSize: Platform.OS === 'android' ? 28 : 32,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginBottom: 8,
+    color: '#0d2137',
+    marginBottom: Platform.OS === 'android' ? 6 : 8,
     textAlign: 'center',
+    letterSpacing: -0.5,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#3282B8',
+    fontSize: Platform.OS === 'android' ? 16 : 18,
+    color: '#315f57',
     textAlign: 'center',
-    marginHorizontal: 20,
+    marginHorizontal: Platform.OS === 'android' ? 18 : 20,
+    lineHeight: Platform.OS === 'android' ? 22 : 24,
+    fontWeight: '500',
   },
   // Role cards
   rolesContainer: {
-    gap: 20,
+    gap: Platform.OS === 'android' ? 18 : 20,
   },
   roleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: Platform.OS === 'android' ? 14 : 16,
+    padding: Platform.OS === 'android' ? 18 : 20,
     borderWidth: 2,
-    borderColor: '#BBE1FA',
-    shadowColor: '#0F4C75',
+    borderColor: '#e8f2f9',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
   },
   roleCardSelected: {
-    borderColor: '#0F4C75',
+    borderColor: '#0d2137',
     shadowOpacity: 0.1,
     elevation: 4,
   },
   roleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
   },
   roleIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: Platform.OS === 'android' ? 52 : 56,
+    height: Platform.OS === 'android' ? 52 : 56,
+    borderRadius: Platform.OS === 'android' ? 26 : 28,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: Platform.OS === 'android' ? 14 : 16,
   },
   roleInfo: {
     flex: 1,
   },
   roleTitle: {
-    fontSize: 18,
+    fontSize: Platform.OS === 'android' ? 17 : 18,
     fontWeight: 'bold',
-    color: '#1B262C',
+    color: '#0d2137',
     marginBottom: 4,
   },
   roleDescription: {
-    fontSize: 14,
-    color: '#3282B8',
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#315f57',
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   // Features
   featuresContainer: {
-    marginBottom: 16,
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
   },
   featureText: {
-    fontSize: 14,
-    color: '#1B262C',
-    marginLeft: 8,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#0d2137',
+    marginLeft: Platform.OS === 'android' ? 7 : 8,
     flex: 1,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   // Company required badge
   companyRequiredBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFF9E6',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginBottom: 16,
+    paddingVertical: Platform.OS === 'android' ? 7 : 8,
+    paddingHorizontal: Platform.OS === 'android' ? 10 : 12,
+    borderRadius: Platform.OS === 'android' ? 7 : 8,
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
     borderWidth: 1,
     borderColor: '#f39c12',
   },
   companyRequiredText: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     fontWeight: '600',
     color: '#f39c12',
-    marginLeft: 6,
+    marginLeft: Platform.OS === 'android' ? 5 : 6,
   },
   // Select button
   selectButton: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: Platform.OS === 'android' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'android' ? 18 : 20,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
     alignItems: 'center',
   },
   selectButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '600',
   },
   // Help section
   helpSection: {
-    marginTop: 40,
-    padding: 20,
+    marginTop: Platform.OS === 'android' ? 36 : 40,
+    padding: Platform.OS === 'android' ? 18 : 20,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
     borderWidth: 1,
-    borderColor: '#BBE1FA',
+    borderColor: '#e8f2f9',
   },
   helpTitle: {
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: 'bold',
-    color: '#1B262C',
-    marginBottom: 8,
+    color: '#0d2137',
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
   },
   helpText: {
-    fontSize: 14,
-    color: '#3282B8',
-    lineHeight: 22,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#315f57',
+    lineHeight: Platform.OS === 'android' ? 20 : 22,
   },
   helpBold: {
     fontWeight: '600',
-    color: '#0F4C75',
+    color: '#0d2137',
   },
 });

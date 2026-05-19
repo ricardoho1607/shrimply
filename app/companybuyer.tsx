@@ -1,6 +1,6 @@
 // app/companybuyer.tsx - Buyer company details screen with edit support
 import React, { useMemo } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
@@ -95,12 +95,18 @@ export default function CompanyBuyerScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Company Details</Text>
           <View style={{ width: 40 }} />
@@ -167,7 +173,7 @@ export default function CompanyBuyerScreen() {
 const InfoItem = React.memo(({ label, value, icon }: { label: string; value: string; icon?: string }) => (
   <View style={styles.infoItem}>
     <View style={styles.infoLabelRow}>
-      {icon && <Ionicons name={icon as any} size={14} color="#3282B8" style={{ marginRight: 4 }} />}
+      {icon && <Ionicons name={icon as any} size={14} color="#315f57" style={{ marginRight: 4 }} />}
       <Text style={styles.infoLabel}>{label}</Text>
     </View>
     <Text style={styles.infoValue}>{value}</Text>
@@ -182,32 +188,32 @@ const FeatureItem = React.memo(({ icon, text }: { icon: string; text: string }) 
 ));
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  topSafeArea: { backgroundColor: '#BBE1FA' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'space-between', 
-    paddingHorizontal: 20, 
-    paddingVertical: 8, 
-    backgroundColor: '#BBE1FA', 
+    paddingHorizontal: Platform.OS === 'android' ? 18 : 20, 
+    paddingVertical: Platform.OS === 'android' ? 7 : 8, 
+    backgroundColor: '#dce8f2', 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#1B262C' },
+  backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
+  headerTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
   scrollView: { flex: 1 },
-  scrollContent: { padding: 20, paddingBottom: 40 },
+  scrollContent: { padding: Platform.OS === 'android' ? 18 : 20, paddingBottom: Platform.OS === 'android' ? 36 : 40 },
 
   // Cards
   card: { 
     backgroundColor: '#FFFFFF', 
-    borderRadius: 16, 
-    padding: 20, 
-    marginBottom: 20, 
+    borderRadius: Platform.OS === 'android' ? 14 : 16, 
+    padding: Platform.OS === 'android' ? 18 : 20, 
+    marginBottom: Platform.OS === 'android' ? 18 : 20, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     shadowColor: '#27AE60', 
     shadowOffset: { width: 0, height: 2 }, 
     shadowOpacity: 0.1, 
@@ -217,38 +223,38 @@ const styles = StyleSheet.create({
   cardHeader: { 
     flexDirection: 'row', 
     alignItems: 'center', 
-    marginBottom: 20 
+    marginBottom: Platform.OS === 'android' ? 18 : 20 
   },
   cardTitle: { 
-    fontSize: 18, 
+    fontSize: Platform.OS === 'android' ? 17 : 18, 
     fontWeight: 'bold', 
-    color: '#1B262C', 
-    marginLeft: 10, 
+    color: '#0d2137', 
+    marginLeft: Platform.OS === 'android' ? 9 : 10, 
     flex: 1 
   },
   editButton: { 
-    padding: 8, 
+    padding: Platform.OS === 'android' ? 7 : 8, 
     backgroundColor: 'rgba(39, 174, 96, 0.1)', 
-    borderRadius: 8 
+    borderRadius: Platform.OS === 'android' ? 7 : 8 
   },
 
   // Company Info
-  infoGrid: { marginBottom: 16 },
-  infoItem: { marginBottom: 16 },
+  infoGrid: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
+  infoItem: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
   infoLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
   infoLabel: { 
-    fontSize: 12, 
+    fontSize: Platform.OS === 'android' ? 11 : 12, 
     fontWeight: '600', 
-    color: '#3282B8', 
+    color: '#315f57', 
     textTransform: 'uppercase' 
   },
   infoValue: { 
-    fontSize: 16, 
-    color: '#1B262C', 
+    fontSize: Platform.OS === 'android' ? 15 : 16, 
+    color: '#0d2137', 
     fontWeight: '500' 
   },
   
@@ -256,10 +262,10 @@ const styles = StyleSheet.create({
   locationStatus: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
+    padding: Platform.OS === 'android' ? 10 : 12,
     backgroundColor: '#F0FFF4',
-    borderRadius: 8,
-    marginBottom: 12,
+    borderRadius: Platform.OS === 'android' ? 7 : 8,
+    marginBottom: Platform.OS === 'android' ? 10 : 12,
     borderWidth: 1,
     borderColor: '#C6F6D5',
   },
@@ -268,92 +274,92 @@ const styles = StyleSheet.create({
     borderColor: '#FFE4A3',
   },
   locationStatusText: {
-    fontSize: 12,
+    fontSize: Platform.OS === 'android' ? 11 : 12,
     color: '#27AE60',
-    marginLeft: 8,
+    marginLeft: Platform.OS === 'android' ? 7 : 8,
     flex: 1,
   },
   addLocationButton: {
     backgroundColor: '#f39c12',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginLeft: 8,
+    paddingHorizontal: Platform.OS === 'android' ? 10 : 12,
+    paddingVertical: Platform.OS === 'android' ? 5 : 6,
+    borderRadius: Platform.OS === 'android' ? 5 : 6,
+    marginLeft: Platform.OS === 'android' ? 7 : 8,
   },
   addLocationButtonText: {
     color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: Platform.OS === 'android' ? 10 : 11,
     fontWeight: '600',
   },
 
   descriptionContainer: { 
-    marginTop: 8, 
-    paddingTop: 16, 
+    marginTop: Platform.OS === 'android' ? 7 : 8, 
+    paddingTop: Platform.OS === 'android' ? 14 : 16, 
     borderTopWidth: 1, 
-    borderTopColor: '#BBE1FA' 
+    borderTopColor: '#dce8f2' 
   },
   description: { 
-    fontSize: 14, 
-    color: '#0F4C75', 
-    lineHeight: 20 
+    fontSize: Platform.OS === 'android' ? 13 : 14, 
+    color: '#0d2137', 
+    lineHeight: Platform.OS === 'android' ? 18 : 20 
   },
 
   // Info Box
   infoBox: {
     backgroundColor: '#F0FFF4',
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    padding: Platform.OS === 'android' ? 14 : 16,
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
     borderWidth: 1,
     borderColor: '#C6F6D5',
   },
   infoBoxIcon: {
-    marginRight: 12,
+    marginRight: Platform.OS === 'android' ? 10 : 12,
   },
   infoBoxText: {
     flex: 1,
-    fontSize: 14,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
     color: '#22543D',
-    lineHeight: 20,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
 
   // Features List
   featuresList: {
-    marginTop: 8,
+    marginTop: Platform.OS === 'android' ? 7 : 8,
   },
   featureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    marginBottom: 8,
+    paddingVertical: Platform.OS === 'android' ? 10 : 12,
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16,
+    backgroundColor: '#f4f8fc',
+    borderRadius: Platform.OS === 'android' ? 7 : 8,
+    marginBottom: Platform.OS === 'android' ? 7 : 8,
   },
   featureText: {
-    fontSize: 14,
-    color: '#1B262C',
-    marginLeft: 12,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#0d2137',
+    marginLeft: Platform.OS === 'android' ? 10 : 12,
     fontWeight: '500',
   },
 
   // Marketplace Section
   marketplaceDescription: {
-    fontSize: 14,
-    color: '#3282B8',
-    marginBottom: 16,
-    lineHeight: 20,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#315f57',
+    marginBottom: Platform.OS === 'android' ? 14 : 16,
+    lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   marketplaceButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#27AE60',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 12,
+    paddingVertical: Platform.OS === 'android' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'android' ? 18 : 20,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
     shadowColor: '#27AE60',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -362,8 +368,8 @@ const styles = StyleSheet.create({
   },
   marketplaceButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '600',
-    marginLeft: 8,
+    marginLeft: Platform.OS === 'android' ? 7 : 8,
   },
 });

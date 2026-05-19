@@ -1,6 +1,7 @@
 // app/services/cogsExportService.ts - Cost of Goods Sold Export Service
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
 
 export interface COGSData {
@@ -234,7 +235,7 @@ const generateCOGSHTML = (data: COGSData): string => {
       
       ${Object.keys(categoryBreakdown).length > 0 ? `
         <div class="section">
-          <div class="section-title">Cost Breakdown by Category</div>
+          <div class="section-title">Direct Costs Breakdown</div>
           ${Object.entries(categoryBreakdown)
             .sort(([, a], [, b]) => b - a)
             .map(([category, amount]) => {
@@ -293,10 +294,21 @@ export const exportCOGSPDF = async (data: COGSData) => {
       base64: false,
     });
     
+    // Create Custom Filename
+    const cleanDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '');
+    const safeCompanyName = data.companyName.replace(/[^a-zA-Z0-9]/g, '');
+    const filename = `COGS_Report_${safeCompanyName}_${cleanDate}.pdf`;
+    
+    const newUri = `${FileSystem.documentDirectory}${filename}`;
+    await FileSystem.copyAsync({
+      from: uri,
+      to: newUri
+    });
+    
     const canShare = await Sharing.isAvailableAsync();
     
     if (canShare) {
-      await Sharing.shareAsync(uri, {
+      await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
         dialogTitle: 'Share COGS Report',
         UTI: 'com.adobe.pdf',
@@ -304,12 +316,12 @@ export const exportCOGSPDF = async (data: COGSData) => {
     } else {
       Alert.alert(
         'PDF Generated',
-        `Your COGS report has been saved to: ${uri}`,
+        `Your COGS report has been saved to: ${newUri}`,
         [{ text: 'OK' }]
       );
     }
     
-    return uri;
+    return newUri;
   } catch (error) {
     console.error('Error generating COGS PDF:', error);
     Alert.alert('Error', 'Failed to generate COGS PDF report');

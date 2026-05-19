@@ -16,9 +16,10 @@ export const useDataBackup = () => {
         syncPond: firebaseSync.syncPond,
         syncSampling: firebaseSync.syncSampling,
         syncHarvestRecord: firebaseSync.syncHarvestRecord,
+        syncCycle: firebaseSync.syncCycle,
       });
     }
-  }, [firebaseSync.syncPond, firebaseSync.syncSampling, firebaseSync.syncHarvestRecord]);
+  }, [firebaseSync.syncPond, firebaseSync.syncSampling, firebaseSync.syncHarvestRecord, firebaseSync.syncCycle]);
 
   // Auto-restore when user logs in (now handled by real-time listeners) - FIXED: removed store lengths from dependencies
   useEffect(() => {

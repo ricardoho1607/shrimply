@@ -3,24 +3,25 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator,
-  Modal, SafeAreaView, Dimensions, Switch, Platform,
+  FlatList, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator,
+  Modal, SafeAreaView, Dimensions, Switch, Platform, StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense, ExpenseInput } from './services/financeService';
 import revenueService, { Revenue, RevenueInput } from './services/revenueService';
-import { usePondStore } from './store/pondStore';
+import { getActiveFarmCycle, usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
 
 const COLORS: Record<string, string> = {
-  Feed: '#0F4C75', 'Pond Additives': '#3282B8', Labor: '#BBE1FA',
-  Repairs: '#1B262C', Utilities: '#5DADE2', Miscellaneous: '#85C1E9',
+  Feed: '#0d2137', 'Pond Additives': '#315f57', Labor: '#dbe7df',
+  Repairs: '#0d2137', Utilities: '#5DADE2', Miscellaneous: '#85C1E9',
   'Shrimp Sales': '#27AE60', Consultation: '#2ECC71',
   'Equipment Rental': '#52BE80', 'Other Income': '#7DCEA0',
 };
@@ -34,10 +35,12 @@ type FormData = {
 
 export default function FinancePage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { harvestRecords } = usePondStore();
+  const { harvestRecords, cycles } = usePondStore();
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
   const CATEGORIES = [
@@ -68,6 +71,7 @@ export default function FinancePage() {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<'expense' | 'revenue'>('expense');
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('Today');
+  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
   const [filterCategory, setFilterCategory] = useState(t.finance?.all || 'All');
   const [submitting, setSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -178,7 +182,8 @@ export default function FinancePage() {
       );
       setSyncedInventoryIds(inventoryRefs);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load data');
+      console.error('Failed to load finance data:', error);
+      Alert.alert('Error', 'Failed to load finance data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -262,6 +267,8 @@ export default function FinancePage() {
           category: REVENUE_CATEGORIES[0],
           item: `${t.harvest?.title || 'Harvest'} (${new Date(harvest.date).toLocaleDateString()}) - ${totalBiomass.toFixed(1)} kg`,
           amount: totalPrice,
+          cycleId: harvest.cycleId,
+          cycleName: harvest.cycleName,
           paymentType: 'Cash',
           reference: `HARVEST-${harvest.id}`,
           notes: `${t.finance?.autoSynced || 'Auto-synced from'} harvest`,
@@ -321,6 +328,8 @@ export default function FinancePage() {
       const baseData = {
         date: formData.date, category: formData.category, item: formData.item, amount,
         paymentType: formData.paymentType, reference: formData.reference, notes: formData.notes,
+        cycleId: activeFarmCycle?.id,
+        cycleName: activeFarmCycle?.cycleName,
       };
 
       if (formType === 'expense') {
@@ -346,7 +355,8 @@ export default function FinancePage() {
       resetForm();
       setShowForm(false);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to save data');
+      console.error('Failed to save finance data:', error);
+      Alert.alert('Error', 'Failed to save data. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -399,7 +409,8 @@ export default function FinancePage() {
               Alert.alert('Success', `${type === 'expense' ? t.finance?.expenses || 'Expense' : t.finance?.revenue || 'Revenue'} ${t.finance?.deleteSuccess || 'deleted successfully'}`);
               await loadData();
             } catch (error: any) {
-              Alert.alert('Error', error.message || `Failed to delete ${type}`);
+              console.error(`Failed to delete ${type}:`, error);
+              Alert.alert('Error', `Failed to delete ${type}. Please try again.`);
             }
           },
         },
@@ -417,11 +428,16 @@ export default function FinancePage() {
     setEditingRevenue(null);
   };
 
-  const getFilteredData = <T extends { date: string; category?: string }>(data: T[], useCategory = true) => {
+  const getCycleScopedData = <T extends { cycleId?: string }>(data: T[]) => {
+    if (cycleScope === 'all' || !activeFarmCycle) return data;
+    return data.filter((item) => item.cycleId === activeFarmCycle.id);
+  };
+
+  const getFilteredData = <T extends { date: string; category?: string; cycleId?: string }>(data: T[], useCategory = true) => {
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     
-    let filtered = data.filter(item => {
+    let filtered = getCycleScopedData(data).filter(item => {
       const itemDate = new Date(item.date);
       if (selectedPeriod === 'All Time') return true;
       if (selectedPeriod === 'Today') return itemDate >= today;
@@ -457,9 +473,11 @@ export default function FinancePage() {
   const profit = revenueTotals.total - expenseTotals.total;
 
   const profitLossData = useMemo(() => {
-    if (expenses.length === 0 && revenues.length === 0) return null;
+    const scopedExpenses = getCycleScopedData(expenses);
+    const scopedRevenues = getCycleScopedData(revenues);
+    if (scopedExpenses.length === 0 && scopedRevenues.length === 0) return null;
 
-    const allDates = [...expenses.map(e => e.date), ...revenues.map(r => r.date)];
+    const allDates = [...scopedExpenses.map(e => e.date), ...scopedRevenues.map(r => r.date)];
     if (allDates.length === 0) return null;
 
     const earliestDate = new Date(Math.min(...allDates.map(d => new Date(d).getTime())));
@@ -471,18 +489,18 @@ export default function FinancePage() {
       const monthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
       const monthLabel = currentDate.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
 
-      const monthRevenue = revenues.filter(r => r.date.startsWith(monthKey)).reduce((sum, r) => sum + r.amount, 0);
-      const monthExpense = expenses.filter(e => e.date.startsWith(monthKey)).reduce((sum, e) => sum + e.amount, 0);
+      const monthRevenue = scopedRevenues.filter(r => r.date.startsWith(monthKey)).reduce((sum, r) => sum + r.amount, 0);
+      const monthExpense = scopedExpenses.filter(e => e.date.startsWith(monthKey)).reduce((sum, e) => sum + e.amount, 0);
 
       months.push({ month: monthLabel, revenue: monthRevenue, expense: monthExpense, profit: monthRevenue - monthExpense });
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
     return months;
-  }, [expenses, revenues]);
+  }, [expenses, revenues, activeFarmCycle?.id, cycleScope]);
 
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
-      name, population, color: COLORS[name] || '#BBE1FA',
+      name, population, color: COLORS[name] || '#dbe7df',
       legendFontColor: '#7F8C8D', legendFontSize: Platform.OS === 'android' ? 10 : 11,
     }));
 
@@ -550,32 +568,39 @@ export default function FinancePage() {
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="arrow-back" size={24} color="#2C3E50" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
+      <View style={[styles.header, { 
+        paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 
+      }]}>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={styles.headerButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons name="arrow-back" size={24} color="#2C3E50" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={() => {
+              resetForm();
+              setFormType('revenue');
+              setFormData(prev => ({ ...prev, category: REVENUE_CATEGORIES[0] }));
+              setShowForm(true);
+            }} style={styles.addButtonIcon}>
+            <Ionicons name="arrow-down-circle" size={28} color="#27AE60" />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
-          <View style={styles.headerActions}>
-            <TouchableOpacity onPress={() => {
-                resetForm();
-                setFormType('revenue');
-                setFormData(prev => ({ ...prev, category: REVENUE_CATEGORIES[0] }));
-                setShowForm(true);
-              }} style={styles.addButtonIcon}>
-              <Ionicons name="arrow-down-circle" size={28} color="#27AE60" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => {
-                resetForm();
-                setFormType('expense');
-                setFormData(prev => ({ ...prev, category: CATEGORIES[0] }));
-                setShowForm(true);
-              }} style={styles.addButtonIcon}>
-              <Ionicons name="arrow-up-circle" size={28} color="#E74C3C" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity onPress={() => {
+              resetForm();
+              setFormType('expense');
+              setFormData(prev => ({ ...prev, category: CATEGORIES[0] }));
+              setShowForm(true);
+            }} style={styles.addButtonIcon}>
+            <Ionicons name="arrow-up-circle" size={28} color="#E74C3C" />
+          </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.periodContainer}>
@@ -585,6 +610,23 @@ export default function FinancePage() {
               onPress={() => setSelectedPeriod(period)}>
               <Text style={[styles.periodTabText, selectedPeriod === period && styles.periodTabTextActive]}>
                 {getTranslatedPeriod(period)}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.periodContainer}>
+          {[
+            { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
+            { key: 'all', label: 'All History' },
+          ].map((scope) => (
+            <TouchableOpacity
+              key={scope.key}
+              style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
+              onPress={() => setCycleScope(scope.key as 'current' | 'all')}
+            >
+              <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
+                {scope.label}
               </Text>
             </TouchableOpacity>
           ))}
@@ -814,7 +856,12 @@ export default function FinancePage() {
                 <Text style={styles.emptyStateSubtext}>{t.finance?.addFirstExpense || 'Add your first expense to get started'}</Text>
               </View>
             ) : (
-              getFilteredExpenses().map(item => renderLedgerItem(item, 'expense'))
+              <FlatList
+                data={getFilteredExpenses()}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => renderLedgerItem(item, 'expense')}
+              />
             )}
           </View>
         )}
@@ -841,7 +888,12 @@ export default function FinancePage() {
                 <Text style={styles.emptyStateSubtext}>{t.finance?.addFirstRevenue || 'Add your first revenue to get started'}</Text>
               </View>
             ) : (
-              getFilteredRevenues().map(item => renderLedgerItem(item, 'revenue'))
+              <FlatList
+                data={getFilteredRevenues()}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                renderItem={({ item }) => renderLedgerItem(item, 'revenue')}
+              />
             )}
           </View>
         )}
@@ -861,12 +913,12 @@ export default function FinancePage() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.formContent} showsVerticalScrollIndicator={false}>
+            <ScrollView style={styles.formContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>Date {t.finance?.required || '*'}</Text>
                 <TextInput style={styles.formInput} value={formData.date}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, date: text }))}
-                  placeholder="YYYY-MM-DD" placeholderTextColor="#95A5A6" />
+                  placeholder="YYYY-MM-DD" placeholderTextColor="#6b8aa0" />
               </View>
 
               <View style={styles.formGroup}>
@@ -886,14 +938,14 @@ export default function FinancePage() {
                 <Text style={styles.formLabel}>{t.finance?.itemDescription || 'Item/Description'} {t.finance?.required || '*'}</Text>
                 <TextInput style={styles.formInput} value={formData.item}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, item: text }))}
-                  placeholder={t.finance?.enterDescription || 'Enter description'} placeholderTextColor="#95A5A6" />
+                  placeholder={t.finance?.enterDescription || 'Enter description'} placeholderTextColor="#6b8aa0" />
               </View>
 
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>{t.finance?.amountRp || 'Amount (Rp)'} {t.finance?.required || '*'}</Text>
                 <TextInput style={styles.formInput} value={formData.amount}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, amount: text }))}
-                  placeholder="0" placeholderTextColor="#95A5A6" keyboardType="numeric" />
+                  placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric" />
               </View>
 
               <View style={styles.formGroup}>
@@ -913,7 +965,7 @@ export default function FinancePage() {
                 <Text style={styles.formLabel}>{t.finance?.referenceInvoice || 'Reference/Invoice #'}</Text>
                 <TextInput style={styles.formInput} value={formData.reference}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, reference: text }))}
-                  placeholder={t.finance?.optional || 'Optional'} placeholderTextColor="#95A5A6" />
+                  placeholder={t.finance?.optional || 'Optional'} placeholderTextColor="#6b8aa0" />
               </View>
 
               {formType === 'expense' && (
@@ -921,7 +973,7 @@ export default function FinancePage() {
                   <Text style={styles.formLabel}>{t.finance?.linkedInventory || 'Linked Inventory'}</Text>
                   <TextInput style={styles.formInput} value={formData.linkedInventory}
                     onChangeText={(text) => setFormData(prev => ({ ...prev, linkedInventory: text }))}
-                    placeholder={t.finance?.optional || 'Optional'} placeholderTextColor="#95A5A6" />
+                    placeholder={t.finance?.optional || 'Optional'} placeholderTextColor="#6b8aa0" />
                 </View>
               )}
 
@@ -929,7 +981,7 @@ export default function FinancePage() {
                 <Text style={styles.formLabel}>Notes</Text>
                 <TextInput style={[styles.formInput, styles.formTextArea]} value={formData.notes}
                   onChangeText={(text) => setFormData(prev => ({ ...prev, notes: text }))}
-                  placeholder={t.finance?.additionalNotes || 'Additional notes (optional)'} placeholderTextColor="#95A5A6"
+                  placeholder={t.finance?.additionalNotes || 'Additional notes (optional)'} placeholderTextColor="#6b8aa0"
                   multiline numberOfLines={4} />
               </View>
 
@@ -958,36 +1010,36 @@ export default function FinancePage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F7FA' },
-  safeArea: { backgroundColor: '#BBE1FA' },
+  safeArea: { backgroundColor: '#dce8f2' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
   loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#dce8f2', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
   headerButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center', marginHorizontal: Platform.OS === 'android' ? 14 : 16 },
   headerActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12 },
   addButtonIcon: { padding: 4 },
-  syncToggleContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  syncToggleContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   syncToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12, flex: 1 },
   syncToggleTextContainer: { flex: 1 },
   syncToggleLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#2C3E50', marginBottom: 2 },
   syncToggleSubtext: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#7F8C8D' },
   content: { flex: 1 },
-  periodContainer: { flexDirection: 'row', margin: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  periodContainer: { flexDirection: 'row', margin: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   periodTab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: Platform.OS === 'android' ? 7 : 8 },
   periodTabActive: { backgroundColor: '#3498DB' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#7F8C8D' },
   periodTabTextActive: { color: '#FFFFFF' },
-  summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12 },
   summaryRowLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#7F8C8D', textTransform: 'uppercase', letterSpacing: 0.5 },
   summaryRowAmount: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: '700' },
   summaryDivider: { height: 1, backgroundColor: '#ECF0F1' },
-  tabContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  tabContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 7 : 8, gap: Platform.OS === 'android' ? 5 : 6 },
   tabActive: { backgroundColor: '#EBF5FB' },
   tabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#95A5A6' },
   tabTextActive: { color: '#3498DB' },
-  chartCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  chartCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   chartTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   monthlyCardsScroll: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
   monthlyCardsContainer: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12, paddingRight: Platform.OS === 'android' ? 18 : 20 },
@@ -1026,7 +1078,7 @@ const styles = StyleSheet.create({
   legendDot: { width: Platform.OS === 'android' ? 10 : 12, height: Platform.OS === 'android' ? 10 : 12, borderRadius: 6 },
   legendLabel: { flex: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#34495E', fontWeight: '500' },
   legendValue: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#7F8C8D', fontWeight: '600' },
-  sectionCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  sectionCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   topItem: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10 },
   topRank: { width: Platform.OS === 'android' ? 30 : 32, height: Platform.OS === 'android' ? 30 : 32, borderRadius: 16, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
@@ -1049,7 +1101,7 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: '#3498DB', borderColor: '#3498DB' },
   filterPillText: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#7F8C8D' },
   filterPillTextActive: { color: '#FFFFFF' },
-  ledgerItem: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  ledgerItem: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
   ledgerLeft: { flex: 1, marginRight: Platform.OS === 'android' ? 10 : 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Platform.OS === 'android' ? 5 : 6 },
   categoryPill: { alignSelf: 'flex-start', paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 5 : 6 },
   expensePill: { backgroundColor: '#FADBD8' },

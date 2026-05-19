@@ -1,0 +1,378 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isFounderAdmin() {
+      return signedIn()
+        && request.auth.token.email in [
+          'ricardofransiskusho@gmail.com',
+          'Ricardofransiskusho@gmail.com'
+        ];
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function companyDoc(companyId) {
+      return get(/databases/$(database)/documents/companies/$(companyId));
+    }
+
+    function isCompanyMember(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && (
+          companyDoc(companyId).data.ownerId == request.auth.uid
+          || companyDoc(companyId).data.teamMembers.hasAny([request.auth.uid])
+        );
+    }
+
+    function isCompanyOwner(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/companies/$(companyId))
+        && companyDoc(companyId).data.ownerId == request.auth.uid;
+    }
+
+    function validNonEmptyString(value) {
+      return value is string && value.size() > 0 && value.size() <= 200;
+    }
+
+    function validOptionalString(data, key, maxLength) {
+      return !(key in data) || (data[key] is string && data[key].size() <= maxLength);
+    }
+
+    function validOptionalNullableString(data, key, maxLength) {
+      return !(key in data) || data[key] == null || (data[key] is string && data[key].size() <= maxLength);
+    }
+
+    function validOptionalBoolean(data, key) {
+      return !(key in data) || data[key] is bool;
+    }
+
+    function validRoleValue(value) {
+      return value == null || value in ['owner', 'manager', 'technician', 'admin', 'buyer', 'mechanic'];
+    }
+
+    function validStaffRoleValue(value) {
+      return value in ['manager', 'technician', 'admin', 'mechanic'];
+    }
+
+    function currentUserRole() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? userDoc().data.role
+        : null;
+    }
+
+    function userBelongsToCompany(companyId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().data.companyId == companyId;
+    }
+
+    function isCompanyManager(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && currentUserRole() in ['owner', 'manager', 'admin']
+          )
+        );
+    }
+
+    function isCompanyOperator(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && currentUserRole() in ['owner', 'manager', 'technician', 'admin']
+          )
+        );
+    }
+
+    function isCompanyMechanic(companyId) {
+      return isCompanyMember(companyId)
+        && userBelongsToCompany(companyId)
+        && currentUserRole() == 'mechanic';
+    }
+
+    function validMechanicAssetUpdate() {
+      return request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'maintenanceHistory',
+          'totalMaintenanceCost',
+          'nextMaintenanceDue',
+          'lastMaintenanceDate',
+          'condition',
+          'updatedAt'
+        ]);
+    }
+
+    function validUserPayload(data) {
+      return (!('uid' in data) || data.uid == request.auth.uid)
+        && (!('id' in data) || data.id == request.auth.uid)
+        && validNonEmptyString(data.email)
+        && validOptionalString(data, 'name', 120)
+        && validOptionalString(data, 'phone', 40)
+        && validOptionalString(data, 'profileImage', 2000)
+        && validOptionalNullableString(data, 'companyId', 160)
+        && (!('role' in data) || validRoleValue(data.role))
+        && validOptionalBoolean(data, 'hasCompletedSetup');
+    }
+
+    function validCompanyPayload(data) {
+      return data.ownerId is string
+        && data.teamMembers is list
+        && data.teamMembers.hasAny([data.ownerId])
+        && (!('companyName' in data) || validNonEmptyString(data.companyName))
+        && validOptionalString(data, 'businessType', 120)
+        && validOptionalString(data, 'farmType', 120)
+        && validOptionalString(data, 'businessSize', 120)
+        && validOptionalString(data, 'description', 2000)
+        && validOptionalString(data, 'contactPhone', 40)
+        && validOptionalBoolean(data, 'isSearchable')
+        && validOptionalBoolean(data, 'isPublicProfile')
+        && validOptionalBoolean(data, 'isVerified');
+    }
+
+    function validJoinRequestCreate(data) {
+      return validNonEmptyString(data.companyId)
+        && data.userId == request.auth.uid
+        && validOptionalString(data, 'userName', 120)
+        && validOptionalString(data, 'userEmail', 200)
+        && validStaffRoleValue(data.requestedRole)
+        && data.status == 'pending';
+    }
+
+    function validOptionalUsageCount(data, key, max) {
+      return !(key in data) || (data[key] is int && data[key] >= 0 && data[key] <= max);
+    }
+
+    function validAiUsagePayload(data, usageDateId) {
+      return data.dateKey == usageDateId
+        && data.updatedAt is timestamp
+        && data.functions is map
+        && data.functions.keys().hasOnly(['chat', 'projection'])
+        && validOptionalUsageCount(data.functions, 'chat', 20)
+        && validOptionalUsageCount(data.functions, 'projection', 5);
+    }
+
+    match /users/{userId} {
+      allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || request.auth.uid == userId
+        || (resource.data.companyId != null && isCompanyMember(resource.data.companyId))
+      );
+      allow update: if signedIn() && (
+        (
+          request.auth.uid == userId
+          && validUserPayload(request.resource.data)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'name',
+            'phone',
+            'profileImage',
+            'lastActive',
+            'businessName',
+            'region',
+            'interests'
+          ])
+        )
+        || (
+          request.auth.uid == userId
+          && validUserPayload(request.resource.data)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['role', 'hasCompletedSetup', 'lastActive'])
+          && (!('companyId' in resource.data) || resource.data.companyId == null)
+          && (!('companyId' in request.resource.data) || request.resource.data.companyId == null)
+        )
+        || (
+          request.auth.uid == userId
+          && validUserPayload(request.resource.data)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.companyId != null
+          && isCompanyOwner(request.resource.data.companyId)
+        )
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.companyId != null
+          && isCompanyOwner(request.resource.data.companyId)
+          && validStaffRoleValue(request.resource.data.role)
+        )
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
+          && resource.data.companyId != null
+          && isCompanyOwner(resource.data.companyId)
+          && request.resource.data.companyId == null
+          && request.resource.data.role == null
+        )
+      );
+      allow delete: if false;
+
+      match /monitoredCompanies/{companyId} {
+        allow read, write: if signedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /companies/{companyId} {
+      allow create: if signedIn()
+        && validCompanyPayload(request.resource.data)
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.teamMembers.hasAny([request.auth.uid]);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || resource.data.isSearchable == true
+        || resource.data.isPublicProfile == true
+        || resource.data.ownerId == request.auth.uid
+        || resource.data.teamMembers.hasAny([request.auth.uid])
+      );
+      allow update: if isCompanyMember(companyId)
+        && validCompanyPayload(request.resource.data)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && (
+          isCompanyOwner(companyId)
+          || (
+            isCompanyManager(companyId)
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny([
+              'ownerId',
+              'teamMembers',
+              'pendingInvites',
+              'isVerified'
+            ])
+          )
+        );
+      allow delete: if isCompanyOwner(companyId);
+
+      match /ponds/{pondId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
+      match /cycles/{cycleId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
+      match /harvestRecords/{harvestId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
+      match /feeds/{feedId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
+      match /additives/{additiveId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      match /revenues/{revenueId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyManager(companyId);
+      }
+
+      match /aiUsage/{usageDateId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow create, update: if isCompanyMember(companyId)
+          && validAiUsagePayload(request.resource.data, usageDateId);
+        allow delete: if false;
+      }
+    }
+
+    match /joinRequests/{requestId} {
+      allow create: if signedIn() && validJoinRequestCreate(request.resource.data);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || resource.data.userId == request.auth.uid
+        || isCompanyOwner(resource.data.companyId)
+      );
+      allow update: if signedIn() && isCompanyOwner(resource.data.companyId);
+      allow delete: if false;
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || isCompanyMember(resource.data.companyId)
+      );
+      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /diseaseReports/{reportId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow update, delete: if signedIn() && isCompanyManager(resource.data.companyId);
+    }
+
+    match /marketplace_listings/{listingId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow update: if signedIn() && (
+        isCompanyMember(resource.data.companyId)
+        || (
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
+          && resource.data.viewCount is int
+          && request.resource.data.viewCount == resource.data.viewCount + 1
+        )
+      );
+      allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
+    }
+
+    match /marketplace_responses/{responseId} {
+      allow read: if signedIn() && (
+        isCompanyMember(resource.data.sellerId)
+        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+      );
+      allow create: if signedIn() && isCompanyMember(request.resource.data.sellerId);
+      allow update, delete: if signedIn() && (
+        isCompanyMember(resource.data.sellerId)
+        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+      );
+    }
+
+    match /assets/{assetId} {
+      allow create: if signedIn() && isCompanyOperator(request.resource.data.companyId);
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || isCompanyMember(resource.data.companyId)
+      );
+      allow update: if signedIn() && (
+        isCompanyOperator(resource.data.companyId)
+        || (isCompanyMechanic(resource.data.companyId) && validMechanicAssetUpdate())
+      );
+      allow delete: if signedIn() && isCompanyOperator(resource.data.companyId);
+    }
+
+    match /apiRequests/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /requestLogs/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /{path=**}/aiUsage/{usageDateId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

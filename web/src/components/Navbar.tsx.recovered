@@ -1,0 +1,2 @@
+"\"use client\";\n\nimport React, { useEffect, useState } from 'react';\nimport Link from 'next/link';\nimport { LogIn, Menu, X, ChevronRight } from 'lucide-react';\n\nexport default function Navbar() {\n  const [scrolled, setScrolled] = useState(false);\n
+<truncated 7097 bytes>

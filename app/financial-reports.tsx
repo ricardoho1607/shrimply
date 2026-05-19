@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, TextInput, Platform } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, SafeAreaView, TextInput, Platform, StatusBar } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -10,21 +11,26 @@ import revenueService, { Revenue } from './services/revenueService';
 import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportService';
 import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExportService';
 import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
+import { normalizeCategory } from './utils/categoryNormalizer';
+import { getActiveFarmCycle, usePondStore } from './store/pondStore';
 
 type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
 
 export default function FinancialReportsPage() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
+  const { cycles } = usePondStore();
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
 
   const REPORT_TYPES: ReportType[] = [
     { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
     { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', icon: 'calculator', color: '#27AE60' },
     { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', icon: 'cash', color: '#9B59B6' },
-    { id: 'expense-report', name: t.financialReports?.expenseReport || 'Expense Report', icon: 'receipt', color: '#E74C3C', disabled: true },
+    { id: 'harvest-projections', name: t.financialReports?.harvestProjection || 'Harvest Projections', icon: 'analytics', color: '#E74C3C' },
   ];
 
   const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
@@ -43,6 +49,7 @@ export default function FinancialReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('This Month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
+  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -77,7 +84,8 @@ export default function FinancialReportsPage() {
       setExpenses(fetchedExpenses);
       setRevenues(fetchedRevenues);
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to load data');
+      console.error('Failed to load financial report data:', error);
+      Alert.alert('Error', 'Failed to load financial report data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -108,9 +116,14 @@ export default function FinancialReportsPage() {
 
   const getFilteredData = () => {
     const { startDate, endDate } = getDateRange();
+    const scopeFinance = <T extends { cycleId?: string }>(items: T[]) =>
+      cycleScope === 'current' && activeFarmCycle
+        ? items.filter((item) => item.cycleId === activeFarmCycle.id)
+        : items;
+
     return {
-      filteredExpenses: expenses.filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
-      filteredRevenues: revenues.filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
+      filteredExpenses: scopeFinance(expenses).filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
+      filteredRevenues: scopeFinance(revenues).filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
     };
   };
 
@@ -126,17 +139,48 @@ export default function FinancialReportsPage() {
   const revenueTotals = calculateTotals(filteredRevenues, revenueService);
   const profit = revenueTotals.total - expenseTotals.total;
 
-  const COGS_CATEGORIES = ['Feed', 'Pond Additives', 'Labor'];
-  const cogsExpenses = filteredExpenses.filter(e => COGS_CATEGORIES.includes(e.category));
-  const purchases = cogsExpenses.filter(e => e.category === 'Feed').reduce((sum, e) => sum + e.amount, 0);
-  const directMaterials = cogsExpenses.filter(e => e.category === 'Pond Additives').reduce((sum, e) => sum + e.amount, 0);
-  const directLabor = cogsExpenses.filter(e => e.category === 'Labor').reduce((sum, e) => sum + e.amount, 0);
-  const totalCOGS = openingInventory + purchases + directLabor + directMaterials - closingInventory;
-  const grossProfit = revenueTotals.total - totalCOGS;
-  const grossProfitMargin = revenueTotals.total > 0 ? (grossProfit / revenueTotals.total) * 100 : 0;
 
+  const COGS_CATEGORIES = ['Feed', 'Pond Additives', 'Labor'];
+  const cogsExpenses = filteredExpenses.filter(e => COGS_CATEGORIES.includes(normalizeCategory(e.category)));
+  const purchases = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Feed').reduce((sum, e) => sum + e.amount, 0);
+  const directMaterials = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Pond Additives').reduce((sum, e) => sum + e.amount, 0);
+  const directLabor = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Labor').reduce((sum, e) => sum + e.amount, 0);
+  const totalCOGSInventory = openingInventory + purchases + directLabor + directMaterials - closingInventory; // For COGS Report
+
+  // P&L Metrics — use English display names in breakdowns so PDF always shows clean labels
   const cogsCategoryBreakdown: { [key: string]: number } = {};
-  cogsExpenses.forEach(exp => { cogsCategoryBreakdown[exp.category] = (cogsCategoryBreakdown[exp.category] || 0) + exp.amount; });
+  cogsExpenses.forEach(exp => {
+    const key = normalizeCategory(exp.category);
+    cogsCategoryBreakdown[key] = (cogsCategoryBreakdown[key] || 0) + exp.amount;
+  });
+  const totalCOGSPL = cogsExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const grossProfitPL = revenueTotals.total - totalCOGSPL;
+
+  const OPERATING_CATEGORIES = ['Utilities', 'Miscellaneous', 'Maintenance', 'Salaries', 'Marketing', 'Rent'];
+  const NON_OPEX_CATEGORIES = ['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend'];
+
+  const opexExpenses = filteredExpenses.filter(e => {
+    const norm = normalizeCategory(e.category);
+    return !COGS_CATEGORIES.includes(norm) && !NON_OPEX_CATEGORIES.includes(norm);
+  });
+  const opexCategoryBreakdown: { [key: string]: number } = {};
+  opexExpenses.forEach(exp => {
+    const key = normalizeCategory(exp.category);
+    opexCategoryBreakdown[key] = (opexCategoryBreakdown[key] || 0) + exp.amount;
+  });
+  const totalOPEX = opexExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const operatingIncome = grossProfitPL - totalOPEX;
+
+  const otherExpenses = filteredExpenses.filter(e => ['Loan Payment', 'Taxes', 'Interest'].includes(normalizeCategory(e.category)));
+  const otherExpenseBreakdown: { [key: string]: number } = {};
+  otherExpenses.forEach(exp => {
+    const key = normalizeCategory(exp.category);
+    otherExpenseBreakdown[key] = (otherExpenseBreakdown[key] || 0) + exp.amount;
+  });
+  const totalOtherExpenses = otherExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const netProfitPL = operatingIncome - totalOtherExpenses;
 
   const getOpeningBalance = () => {
     const { startDate } = getDateRange();
@@ -145,9 +189,8 @@ export default function FinancialReportsPage() {
     return revenueService.calculateTotal(previousRevenues) - financeService.calculateTotal(previousExpenses);
   };
 
-  const OPERATING_CATEGORIES = ['Feed', 'Pond Additives', 'Labor', 'Utilities', 'Miscellaneous'];
-  const INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
-  const FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
+  const CF_INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
+  const CF_FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
 
   const categorizeCashFlow = () => {
     const operating = { cashFromSales: 0, cashFromCustomers: 0, paymentToSuppliers: 0, paymentForExpenses: 0, otherOperatingCash: 0 };
@@ -155,21 +198,23 @@ export default function FinancialReportsPage() {
     const financing = { loansReceived: 0, loanRepayments: 0, capitalContributed: 0, dividendsPaid: 0, ownerWithdrawals: 0 };
 
     filteredRevenues.forEach(rev => {
-      if (rev.category === 'Shrimp Sales') operating.cashFromSales += rev.amount;
+      if (normalizeCategory(rev.category) === 'Shrimp Sales') operating.cashFromSales += rev.amount;
       else operating.cashFromCustomers += rev.amount;
     });
 
     filteredExpenses.forEach(exp => {
-      if (OPERATING_CATEGORIES.includes(exp.category)) {
-        if (exp.category === 'Feed' || exp.category === 'Pond Additives') operating.paymentToSuppliers += exp.amount;
+      const norm = normalizeCategory(exp.category);
+      if (!CF_INVESTING_CATEGORIES.includes(norm) && !CF_FINANCING_CATEGORIES.includes(norm)) {
+        if (norm === 'Feed' || norm === 'Pond Additives') operating.paymentToSuppliers += exp.amount;
         else operating.paymentForExpenses += exp.amount;
-      } else if (INVESTING_CATEGORIES.includes(exp.category)) {
+      } else if (CF_INVESTING_CATEGORIES.includes(norm)) {
         investing.purchaseOfAssets += exp.amount;
-      } else if (FINANCING_CATEGORIES.includes(exp.category)) {
-        if (exp.category === 'Loan Payment') financing.loanRepayments += exp.amount;
+      } else if (CF_FINANCING_CATEGORIES.includes(norm)) {
+        if (norm === 'Loan Payment') financing.loanRepayments += exp.amount;
         else financing.ownerWithdrawals += exp.amount;
       } else {
-        operating.otherOperatingCash -= exp.amount;
+        // Fallback for any unhandled categories
+        operating.paymentForExpenses += exp.amount;
       }
     });
     return { operating, investing, financing };
@@ -195,8 +240,11 @@ export default function FinancialReportsPage() {
       const { startDate, endDate } = getDateRange();
       if (selectedReportType === 'profit-loss') {
         await exportFinancialPDF(prepareFinancialData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
-          company?.companyName || company?.id || 'Company', revenueTotals.total, expenseTotals.total, profit,
-          expenseTotals.byCategory, revenueTotals.byCategory, expenseTotals.top));
+          company?.companyName || company?.id || 'Company', 
+          revenueTotals.total, revenueTotals.byCategory, 
+          totalCOGSPL, cogsCategoryBreakdown, grossProfitPL, 
+          totalOPEX, opexCategoryBreakdown, operatingIncome, 
+          totalOtherExpenses, otherExpenseBreakdown, netProfitPL));
       } else if (selectedReportType === 'cash-flow') {
         await exportCashFlowPDF(prepareCashFlowData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
           company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing));
@@ -227,7 +275,13 @@ export default function FinancialReportsPage() {
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Ionicons name="arrow-back" size={24} color="#2C3E50" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.financialReports?.title || 'Financial Reports'}</Text>
@@ -242,7 +296,13 @@ export default function FinancialReportsPage() {
             {REPORT_TYPES.map((type) => (
               <TouchableOpacity key={type.id}
                 style={[styles.reportTypeCard, selectedReportType === type.id && styles.reportTypeCardActive, type.disabled && styles.reportTypeCardDisabled]}
-                onPress={() => !type.disabled && setSelectedReportType(type.id)} disabled={type.disabled}>
+                onPress={() => {
+                  if (type.id === 'harvest-projections') {
+                    router.push('/harvest-projection');
+                  } else if (!type.disabled) {
+                    setSelectedReportType(type.id);
+                  }
+                }} disabled={type.disabled}>
                 <View style={[styles.reportTypeIcon, { backgroundColor: type.color + '20' }]}>
                   <Ionicons name={type.icon as any} size={28} color={type.color} />
                 </View>
@@ -276,17 +336,34 @@ export default function FinancialReportsPage() {
             ))}
           </View>
 
+          <View style={styles.periodContainer}>
+            {[
+              { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
+              { key: 'all', label: 'All History' },
+            ].map((scope) => (
+              <TouchableOpacity
+                key={scope.key}
+                style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
+                onPress={() => setCycleScope(scope.key as 'current' | 'all')}
+              >
+                <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
+                  {scope.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           {selectedPeriod === 'Custom' && (
             <View style={styles.customDateContainer}>
               <View style={styles.dateInputGroup}>
                 <Text style={styles.dateLabel}>{t.financialReports?.startDate || 'Start Date'}</Text>
                 <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
-                  placeholderTextColor="#95A5A6" value={customStartDate} onChangeText={setCustomStartDate} />
+                  placeholderTextColor="#6b8aa0" value={customStartDate} onChangeText={setCustomStartDate} />
               </View>
               <View style={styles.dateInputGroup}>
                 <Text style={styles.dateLabel}>{t.financialReports?.endDate || 'End Date'}</Text>
                 <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
-                  placeholderTextColor="#95A5A6" value={customEndDate} onChangeText={setCustomEndDate} />
+                  placeholderTextColor="#6b8aa0" value={customEndDate} onChangeText={setCustomEndDate} />
               </View>
             </View>
           )}
@@ -298,12 +375,12 @@ export default function FinancialReportsPage() {
             <View style={styles.inventoryInputs}>
               <View style={styles.dateInputGroup}>
                 <Text style={styles.dateLabel}>{t.financialReports?.openingInventory || 'Opening Inventory (Rp)'}</Text>
-                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#95A5A6" keyboardType="numeric"
+                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={openingInventory.toString()} onChangeText={(text) => setOpeningInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>
               <View style={styles.dateInputGroup}>
                 <Text style={styles.dateLabel}>{t.financialReports?.closingInventory || 'Closing Inventory (Rp)'}</Text>
-                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#95A5A6" keyboardType="numeric"
+                <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={closingInventory.toString()} onChangeText={(text) => setClosingInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>
             </View>
@@ -388,7 +465,7 @@ export default function FinancialReportsPage() {
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.totalCOGS || 'Total COGS'}</Text>
-                <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatCurrency(totalCOGS)}</Text>
+                <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatCurrency(totalCOGSInventory)}</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
@@ -397,15 +474,15 @@ export default function FinancialReportsPage() {
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.lessCOGS || 'Less: COGS'}</Text>
-                <Text style={styles.summaryValue}>({formatCurrency(totalCOGS)})</Text>
+                <Text style={styles.summaryValue}>({formatCurrency(totalCOGSInventory)})</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.grossProfit || 'Gross Profit'}</Text>
-                <Text style={[styles.summaryValueBold, grossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(grossProfit))}</Text>
+                <Text style={[styles.summaryValueBold, grossProfitPL >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(grossProfitPL))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.grossProfitMargin || 'Gross Profit Margin'}</Text>
-                <Text style={[styles.summaryValue, grossProfitMargin >= 0 ? styles.revenueColor : styles.expenseColor]}>{grossProfitMargin.toFixed(2)}%</Text>
+                <Text style={[styles.summaryValue, grossProfitPL >= 0 ? styles.revenueColor : styles.expenseColor]}>{revenueTotals.total > 0 ? ((grossProfitPL / revenueTotals.total) * 100).toFixed(2) : '0.00'}%</Text>
               </View>
               {Object.keys(cogsCategoryBreakdown).length > 0 && (
                 <View style={styles.breakdownPreview}>
@@ -534,16 +611,16 @@ export default function FinancialReportsPage() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F7FA' },
-  safeArea: { backgroundColor: '#BBE1FA' },
+  safeArea: { backgroundColor: '#dce8f2' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
   loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },   headerButton: { padding: 8, width: 40 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#dce8f2', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },   headerButton: { padding: 8, width: 40 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center' },
   content: { flex: 1 },
   section: { marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: 8 },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   reportTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12 },
-  reportTypeCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
+  reportTypeCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, alignItems: 'center', shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
   reportTypeCardActive: { borderColor: '#3498DB', backgroundColor: '#EBF5FB' },
   reportTypeCardDisabled: { opacity: 0.5 },
   reportTypeIcon: { width: Platform.OS === 'android' ? 52 : 56, height: Platform.OS === 'android' ? 52 : 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
@@ -552,7 +629,7 @@ const styles = StyleSheet.create({
   comingSoonBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: '#F39C12', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: 8 },
   comingSoonText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase' },
   selectedCheck: { position: 'absolute', top: 8, right: 8 },
-  periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   periodTab: { flex: 1, minWidth: '30%', paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#F8FAFB' },
   periodTabActive: { backgroundColor: '#3498DB' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
@@ -562,7 +639,7 @@ const styles = StyleSheet.create({
   dateLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#34495E' },
   dateInput: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#ECF0F1', borderRadius: 10, padding: Platform.OS === 'android' ? 12 : 14, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#2C3E50' },
   inventoryInputs: { gap: Platform.OS === 'android' ? 10 : 12 },
-  previewCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  previewCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   previewHeader: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12 },
   previewHeaderText: { flex: 1 },
   previewTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: 4 },

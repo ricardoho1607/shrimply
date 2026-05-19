@@ -1,4 +1,5 @@
 // services/revenueService.ts
+import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
   collection, 
   doc, 
@@ -22,6 +23,10 @@ export interface Revenue {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   notes: string;
@@ -37,6 +42,10 @@ export interface RevenueInput {
   category: string;
   item: string;
   amount: number;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+  pondId?: string;
   paymentType: string;
   reference: string;
   notes: string;
@@ -203,11 +212,8 @@ class RevenueService {
     const breakdown: Record<string, number> = {};
     
     revenues.forEach(revenue => {
-      if (breakdown[revenue.category]) {
-        breakdown[revenue.category] += revenue.amount;
-      } else {
-        breakdown[revenue.category] = revenue.amount;
-      }
+      const key = normalizeCategory(revenue.category);
+      breakdown[key] = (breakdown[key] || 0) + revenue.amount;
     });
     
     return breakdown;

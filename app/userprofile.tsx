@@ -1,6 +1,7 @@
 // app/userprofile.tsx - User Profile with Firebase Storage Upload
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Image, Alert, ActivityIndicator, StatusBar, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -126,7 +127,7 @@ export default function UserProfileScreen() {
       ]);
     } catch (error: any) {
       console.error('Error updating profile:', error);
-      Alert.alert('Error', error.message || 'Failed to update profile');
+      Alert.alert('Error', 'Failed to update profile. Please try again.');
     } finally {
       setLoading(false);
       setUploading(false);
@@ -135,12 +136,18 @@ export default function UserProfileScreen() {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>My Profile</Text>
           <View style={styles.headerRight} />
@@ -156,7 +163,7 @@ export default function UserProfileScreen() {
                 <Image source={{ uri: profileImage }} style={styles.profileImage} />
               ) : (
                 <View style={styles.profileImagePlaceholder}>
-                  <Ionicons name="person" size={60} color="#BBE1FA" />
+                  <Ionicons name="person" size={60} color="#dce8f2" />
                 </View>
               )}
               <View style={styles.editIconContainer}>
@@ -174,7 +181,7 @@ export default function UserProfileScreen() {
           {/* User Info Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons name="person-circle" size={24} color="#0F4C75" />
+              <Ionicons name="person-circle" size={24} color="#0d2137" />
               <Text style={styles.cardTitle}>Personal Information</Text>
             </View>
 
@@ -185,7 +192,7 @@ export default function UserProfileScreen() {
                 value={name}
                 onChangeText={setName}
                 placeholder="Enter your full name"
-                placeholderTextColor="#BBE1FA"
+                placeholderTextColor="#6b8aa0"
               />
             </View>
 
@@ -193,7 +200,7 @@ export default function UserProfileScreen() {
               <Text style={styles.label}>Email</Text>
               <View style={styles.disabledInput}>
                 <Text style={styles.disabledText}>{user?.email}</Text>
-                <Ionicons name="lock-closed" size={16} color="#BBE1FA" />
+                <Ionicons name="lock-closed" size={16} color="#dce8f2" />
               </View>
               <Text style={styles.hint}>Email cannot be changed</Text>
             </View>
@@ -205,7 +212,7 @@ export default function UserProfileScreen() {
                 value={phone}
                 onChangeText={setPhone}
                 placeholder="Enter your phone number"
-                placeholderTextColor="#BBE1FA"
+                placeholderTextColor="#6b8aa0"
                 keyboardType="phone-pad"
               />
             </View>
@@ -214,7 +221,7 @@ export default function UserProfileScreen() {
           {/* Account Info Card */}
           <View style={styles.card}>
             <View style={styles.cardHeader}>
-              <Ionicons name="shield-checkmark" size={24} color="#0F4C75" />
+              <Ionicons name="shield-checkmark" size={24} color="#0d2137" />
               <Text style={styles.cardTitle}>Account Information</Text>
             </View>
 
@@ -225,6 +232,7 @@ export default function UserProfileScreen() {
                   {user?.role === 'owner' ? 'Farm Owner' :
                    user?.role === 'manager' ? 'Manager' :
                    user?.role === 'technician' ? 'Technician' :
+                   user?.role === 'mechanic' ? 'Mechanic' :
                    user?.role === 'admin' ? 'Administrator' :
                    user?.role === 'buyer' ? 'Buyer' : 'Member'}
                 </Text>
@@ -272,9 +280,9 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  topSafeArea: { backgroundColor: '#BBE1FA' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -282,13 +290,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingTop: Platform.OS === 'android' ? 14 : 16, 
     paddingBottom: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#BBE1FA', 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#3282B8' 
+    backgroundColor: '#dce8f2', 
+    borderBottomWidth: 0, 
+    borderBottomColor: '#315f57' 
   },
   backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 17 : 18, 
     fontWeight: '600' 
   },
@@ -311,7 +319,7 @@ const styles = StyleSheet.create({
     height: 120, 
     borderRadius: 60, 
     borderWidth: 4, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
   profileImagePlaceholder: { 
     width: 120, 
@@ -321,13 +329,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center', 
     alignItems: 'center', 
     borderWidth: 4, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
   editIconContainer: { 
     position: 'absolute', 
     bottom: 0, 
     right: 0, 
-    backgroundColor: '#0F4C75', 
+    backgroundColor: '#0d2137', 
     width: 40, 
     height: 40, 
     borderRadius: 20, 
@@ -338,7 +346,7 @@ const styles = StyleSheet.create({
   },
   profileImageHint: { 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
-    color: '#3282B8', 
+    color: '#315f57', 
     textAlign: 'center' 
   },
   uploadingText: { 
@@ -353,8 +361,8 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 18 : 20, 
     marginBottom: Platform.OS === 'android' ? 18 : 20, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
-    shadowColor: '#0F4C75', 
+    borderColor: '#e8f2f9', 
+    shadowColor: '#315f57', 
     shadowOffset: { width: 0, height: 2 }, 
     shadowOpacity: 0.1, 
     shadowRadius: 4, 
@@ -366,35 +374,35 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === 'android' ? 18 : 20, 
     paddingBottom: Platform.OS === 'android' ? 14 : 16, 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   cardTitle: { 
     fontSize: Platform.OS === 'android' ? 17 : 18, 
     fontWeight: 'bold', 
-    color: '#1B262C', 
+    color: '#0d2137', 
     marginLeft: Platform.OS === 'android' ? 9 : 10 
   },
   inputGroup: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
   label: { 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     fontWeight: '600', 
-    color: '#0F4C75', 
+    color: '#0d2137', 
     marginBottom: Platform.OS === 'android' ? 7 : 8 
   },
   input: { 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingVertical: Platform.OS === 'android' ? 12 : 14, 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
-    color: '#1B262C' 
+    color: '#0d2137' 
   },
   disabledInput: { 
     backgroundColor: '#F0F7FF', 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingVertical: Platform.OS === 'android' ? 12 : 14, 
@@ -404,11 +412,11 @@ const styles = StyleSheet.create({
   },
   disabledText: { 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
-    color: '#3282B8' 
+    color: '#315f57' 
   },
   hint: { 
     fontSize: Platform.OS === 'android' ? 11 : 12, 
-    color: '#BBE1FA', 
+    color: '#dce8f2', 
     marginTop: Platform.OS === 'android' ? 5 : 6, 
     fontStyle: 'italic' 
   },
@@ -423,15 +431,15 @@ const styles = StyleSheet.create({
   infoLabel: { 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     fontWeight: '600', 
-    color: '#3282B8' 
+    color: '#315f57' 
   },
   infoValue: { 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontWeight: '500' 
   },
   roleBadge: { 
-    backgroundColor: '#0F4C75', 
+    backgroundColor: '#0d2137', 
     paddingHorizontal: Platform.OS === 'android' ? 10 : 12, 
     paddingVertical: Platform.OS === 'android' ? 5 : 6, 
     borderRadius: Platform.OS === 'android' ? 7 : 8 
@@ -442,7 +450,7 @@ const styles = StyleSheet.create({
     fontWeight: '600' 
   },
   saveButton: { 
-    backgroundColor: '#0F4C75', 
+    backgroundColor: '#0d2137', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     paddingVertical: Platform.OS === 'android' ? 14 : 16, 
     flexDirection: 'row', 

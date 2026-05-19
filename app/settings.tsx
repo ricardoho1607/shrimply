@@ -1,12 +1,17 @@
 // app/settings.tsx - Optimized with consistent Android styles
 import { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, Switch, ActivityIndicator, StatusBar, Platform } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency, CURRENCIES, Currency } from '../context/CurrencyContext';
 import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
+import { usePondStore } from './store/pondStore';
+import { exportPondReportPDF } from './services/pondReportExportService';
+import { format } from 'date-fns';
+import { useDataBackup } from './hooks/useDataBackup';
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -28,6 +33,9 @@ export default function Settings() {
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
   const [isChangingCurrency, setIsChangingCurrency] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
+  const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
+  const { manualRestore, isRestoring } = useDataBackup();
+  const [isExporting, setIsExporting] = useState(false);
 
   const handleLanguageSelect = async (languageCode: string) => {
     try {
@@ -120,7 +128,7 @@ export default function Settings() {
               console.error('Migration failed:', error);
               Alert.alert(
                 'Migration Failed', 
-                error.message || 'An error occurred during migration. Please try updating your location manually in Company Settings.'
+                'An error occurred during migration. Please try updating your location manually in Company Settings.'
               );
             } finally {
               setIsMigrating(false);
@@ -131,13 +139,94 @@ export default function Settings() {
     );
   };
 
+  const handleExportPondData = async () => {
+    if (!ponds || ponds.length === 0) {
+      Alert.alert(t.messages.error || 'Error', 'No pond data available to export.');
+      return;
+    }
+
+    try {
+      setIsExporting(true);
+      
+      const reportPonds = ponds.map(pond => {
+        const metrics = calculatePondMetricsWithHarvest(pond);
+        const diffTime = new Date().getTime() - new Date(pond.docStart).getTime();
+        const doc = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+        
+        // Get latest water quality record
+        const latestWQ = pond.samplings
+          .filter(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0)
+          .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity)
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+        return {
+          name: pond.pondName,
+          area: pond.pondArea,
+          density: pond.density,
+          doc: doc,
+          population: metrics.currentPopulation,
+          biomass: metrics.currentBiomass,
+          sr: metrics.adjustedSR.toFixed(1),
+          fcr: metrics.adjustedFCR.toFixed(2),
+          waterQuality: {
+            doMorning: latestWQ?.doMorning || '',
+            doEvening: latestWQ?.doEvening || '',
+            phMorning: latestWQ?.phMorning || '',
+            phEvening: latestWQ?.phEvening || '',
+            transparency: latestWQ?.transparency || '',
+            salinity: latestWQ?.salinity || '',
+          }
+        };
+      });
+
+      const totalArea = ponds.reduce((sum, p) => sum + p.pondArea, 0);
+      const totalBiomass = reportPonds.reduce((sum, p) => sum + p.biomass, 0);
+      const avgSR = reportPonds.reduce((sum, p) => sum + parseFloat(p.sr), 0) / reportPonds.length;
+
+      await exportPondReportPDF({
+        companyName: company?.companyName || 'My Farm',
+        reportDate: format(new Date(), 'PPP'),
+        totalPonds: ponds.length,
+        totalArea,
+        totalBiomass,
+        avgSR,
+        ponds: reportPonds,
+      });
+
+    } catch (error) {
+      console.error('Export failed:', error);
+      Alert.alert(t.messages.error || 'Error', 'Failed to generate pond report. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleManualRestore = () => {
+    Alert.alert('Restore Data', 'This will replace your current local data with data from the cloud. Only use this if you are recovering data or fixing a sync issue.', [
+      { text: t.actions?.cancel || 'Cancel', style: 'cancel' },
+      {
+        text: 'Restore',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await manualRestore();
+            Alert.alert(t.messages?.success || 'Success', 'Data restored successfully.');
+          } catch (error: any) {
+            console.error('Restore failed:', error);
+            Alert.alert('Restore Failed', 'Failed to restore data. Please try again.');
+          }
+        }
+      }
+    ]);
+  };
+
   const currentLangInfo = AVAILABLE_LANGUAGES.find(lang => lang.code === currentLanguage);
 
   const SettingItem = ({ icon, title, subtitle, onPress, showArrow = true, rightComponent }: any) => (
     <TouchableOpacity style={styles.settingItem} onPress={onPress} disabled={!onPress}>
       <View style={styles.settingLeft}>
         <View style={styles.iconContainer}>
-          <Ionicons name={icon as any} size={Platform.OS === 'android' ? 20 : 22} color="#3282B8" />
+          <Ionicons name={icon as any} size={Platform.OS === 'android' ? 20 : 22} color="#315f57" />
         </View>
         <View style={styles.textContainer}>
           <Text style={styles.settingTitle}>{title}</Text>
@@ -146,7 +235,7 @@ export default function Settings() {
       </View>
       <View style={styles.settingRight}>
         {rightComponent}
-        {showArrow && onPress && <Ionicons name="chevron-forward" size={Platform.OS === 'android' ? 16 : 18} color="#3282B8" />}
+        {showArrow && onPress && <Ionicons name="chevron-forward" size={Platform.OS === 'android' ? 16 : 18} color="#315f57" />}
       </View>
     </TouchableOpacity>
   );
@@ -168,8 +257,8 @@ export default function Settings() {
             </Text>
             <Text style={styles.languageSubtext}>{lang.name}</Text>
           </View>
-          {currentLanguage === lang.code && <Ionicons name="checkmark-circle" size={24} color="#3282B8" />}
-          {isChangingLanguage && currentLanguage !== lang.code && <ActivityIndicator size="small" color="#3282B8" />}
+          {currentLanguage === lang.code && <Ionicons name="checkmark-circle" size={24} color="#315f57" />}
+          {isChangingLanguage && currentLanguage !== lang.code && <ActivityIndicator size="small" color="#315f57" />}
         </TouchableOpacity>
       ))}
     </View>
@@ -192,8 +281,8 @@ export default function Settings() {
             </Text>
             <Text style={styles.languageSubtext}>{curr.symbol} ({curr.code})</Text>
           </View>
-          {currentCurrency === curr.code && <Ionicons name="checkmark-circle" size={24} color="#3282B8" />}
-          {isChangingCurrency && currentCurrency !== curr.code && <ActivityIndicator size="small" color="#3282B8" />}
+          {currentCurrency === curr.code && <Ionicons name="checkmark-circle" size={24} color="#315f57" />}
+          {isChangingCurrency && currentCurrency !== curr.code && <ActivityIndicator size="small" color="#315f57" />}
         </TouchableOpacity>
       ))}
     </View>
@@ -201,11 +290,17 @@ export default function Settings() {
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.nav?.settings || 'Settings'}</Text>
           <View style={styles.headerRight} />
@@ -223,7 +318,7 @@ export default function Settings() {
               onPress={() => setShowLanguageOptions(!showLanguageOptions)}
               rightComponent={
                 <View style={styles.languageRightContainer}>
-                  {isChangingLanguage && <ActivityIndicator size="small" color="#3282B8" style={{ marginRight: 8 }} />}
+                  {isChangingLanguage && <ActivityIndicator size="small" color="#315f57" style={{ marginRight: 8 }} />}
                   <Text style={styles.currentValue}>{currentLangInfo?.flag} {currentLangInfo?.nativeName}</Text>
                 </View>
               }
@@ -240,7 +335,7 @@ export default function Settings() {
               onPress={() => setShowCurrencyOptions(!showCurrencyOptions)}
               rightComponent={
                 <View style={styles.languageRightContainer}>
-                  {isChangingCurrency && <ActivityIndicator size="small" color="#3282B8" style={{ marginRight: 8 }} />}
+                  {isChangingCurrency && <ActivityIndicator size="small" color="#315f57" style={{ marginRight: 8 }} />}
                   <Text style={styles.currentValue}>{currencyConfig.symbol} {currencyConfig.code}</Text>
                 </View>
               }
@@ -256,8 +351,8 @@ export default function Settings() {
                 <Switch 
                   value={autoSyncEnabled} 
                   onValueChange={handleAutoSyncToggle}
-                  trackColor={{ false: '#BBE1FA', true: '#3282B8' }} 
-                  thumbColor={autoSyncEnabled ? '#FFFFFF' : '#F8FAFC'} 
+                  trackColor={{ false: '#dbe7df', true: '#315f57' }} 
+                  thumbColor={autoSyncEnabled ? '#FFFFFF' : '#f4f8fc'} 
                 />
               }
             />
@@ -279,7 +374,7 @@ export default function Settings() {
               showArrow={false}
               rightComponent={
                 <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: '#BBE1FA', true: '#3282B8' }} thumbColor={notificationsEnabled ? '#FFFFFF' : '#F8FAFC'} />
+                  trackColor={{ false: '#dbe7df', true: '#315f57' }} thumbColor={notificationsEnabled ? '#FFFFFF' : '#f4f8fc'} />
               }
             />
           </View>
@@ -293,14 +388,22 @@ export default function Settings() {
               showArrow={false}
               rightComponent={
                 <Switch value={autoBackupEnabled} onValueChange={setAutoBackupEnabled}
-                  trackColor={{ false: '#BBE1FA', true: '#3282B8' }} thumbColor={autoBackupEnabled ? '#FFFFFF' : '#F8FAFC'} />
+                  trackColor={{ false: '#dbe7df', true: '#315f57' }} thumbColor={autoBackupEnabled ? '#FFFFFF' : '#f4f8fc'} />
               }
             />
             <SettingItem
-              icon="download-outline"
+              icon="document-text-outline"
               title={t.settings?.exportData || 'Export Data'}
-              subtitle={t.settings?.exportDataSubtitle || 'Download your pond data as CSV'}
-              onPress={() => Alert.alert('Export Data', 'Feature coming soon!')}
+              subtitle={'Download comprehensive pond report as PDF'}
+              onPress={handleExportPondData}
+              rightComponent={isExporting ? <ActivityIndicator size="small" color="#315f57" /> : null}
+            />
+            <SettingItem
+              icon="cloud-download-outline"
+              title={t.sidebar?.restoreFromCloud || t.settings?.restoreFromCloud || 'Restore from Cloud'}
+              subtitle={'Advanced recovery option. This can overwrite local data.'}
+              onPress={handleManualRestore}
+              rightComponent={isRestoring ? <ActivityIndicator size="small" color="#315f57" /> : null}
             />
           </View>
 
@@ -337,24 +440,27 @@ export default function Settings() {
             <Text style={styles.sectionHeader}>{t.settings?.app || 'APP'}</Text>
             <SettingItem
               icon="information-circle-outline"
-              title={t.settings?.about || 'About investaShrimp'}
+              title={t.settings?.about || 'About Shrimply'}
               subtitle="Version 1.0.0"
-              onPress={() => Alert.alert('About', 'investaShrimp v1.0.0\nAquaculture Management System')}
+              onPress={() => Alert.alert('About', 'Shrimply v1.0.0\nAquaculture Management System')}
             />
             <SettingItem
               icon="help-circle-outline"
               title={t.settings?.help || 'Help & Support'}
-              onPress={() => Alert.alert('Help', 'Contact support: help@investashrimp.com')}
+              onPress={() => Alert.alert('Help', 'Contact support: shrimply.tech@gmail.com')}
             />
             <SettingItem
               icon="document-text-outline"
               title={t.settings?.privacy || 'Privacy Policy'}
-              onPress={() => Alert.alert('Privacy Policy', 'Feature coming soon!')}
+              onPress={() => Alert.alert(
+                'Privacy Policy',
+                'Shrimply uses account, farm, marketplace, and permission data only to provide app features. For privacy questions, contact shrimply.tech@gmail.com.'
+              )}
             />
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>investaShrimp © 2024</Text>
+            <Text style={styles.footerText}>Shrimply © 2024</Text>
             <Text style={styles.footerSubtext}>
               {t.settings?.madeWith || 'Made with'} 💚 {t.settings?.forAquaculture || 'for aquaculture'}
             </Text>
@@ -366,9 +472,9 @@ export default function Settings() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  topSafeArea: { backgroundColor: '#BBE1FA' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
   flexDirection: 'row', 
   alignItems: 'center', 
@@ -376,13 +482,13 @@ const styles = StyleSheet.create({
   paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
   paddingTop: Platform.OS === 'android' ? 14 : 16, 
   paddingBottom: Platform.OS === 'android' ? 7 : 8, 
-  backgroundColor: '#BBE1FA', 
+  backgroundColor: '#dce8f2', 
   borderBottomWidth: 0, 
-  borderBottomColor: '#3282B8' 
+  borderBottomColor: '#315f57' 
 },
   backButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 17 : 18, 
     fontWeight: '600' 
   },
@@ -390,7 +496,7 @@ const styles = StyleSheet.create({
   scrollContainer: { flex: 1 },
   section: { marginBottom: Platform.OS === 'android' ? 28 : 32 },
   sectionHeader: { 
-    color: '#3282B8', 
+    color: '#315f57', 
     fontSize: Platform.OS === 'android' ? 12 : 13, 
     fontWeight: '600', 
     letterSpacing: 0.5, 
@@ -406,35 +512,35 @@ const styles = StyleSheet.create({
     paddingVertical: Platform.OS === 'android' ? 10 : 12, 
     backgroundColor: '#FFFFFF', 
     borderBottomWidth: 0.5, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   settingLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   iconContainer: { 
     width: Platform.OS === 'android' ? 30 : 32, 
     height: Platform.OS === 'android' ? 30 : 32, 
     borderRadius: Platform.OS === 'android' ? 7 : 8, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     justifyContent: 'center', 
     alignItems: 'center', 
     marginRight: Platform.OS === 'android' ? 10 : 12, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA' 
+    borderColor: '#e8f2f9' 
   },
   textContainer: { flex: 1 },
   settingTitle: { 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
     fontWeight: '500' 
   },
   settingSubtitle: { 
-    color: '#3282B8', 
+    color: '#315f57', 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     marginTop: 2 
   },
   settingRight: { flexDirection: 'row', alignItems: 'center' },
   languageRightContainer: { flexDirection: 'row', alignItems: 'center' },
   currentValue: { 
-    color: '#3282B8', 
+    color: '#315f57', 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     marginRight: Platform.OS === 'android' ? 7 : 8 
   },
@@ -442,20 +548,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF', 
     marginTop: Platform.OS === 'android' ? 7 : 8, 
     borderWidth: 1, 
-    borderColor: '#BBE1FA', 
+    borderColor: '#e8f2f9', 
     borderRadius: Platform.OS === 'android' ? 10 : 12, 
     marginHorizontal: Platform.OS === 'android' ? 14 : 16, 
     overflow: 'hidden' 
   },
   sectionTitle: { 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
     fontWeight: '600', 
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#F8FAFC', 
+    backgroundColor: '#f4f8fc', 
     borderBottomWidth: 1, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   languageOption: { 
     flexDirection: 'row', 
@@ -463,7 +569,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
     paddingVertical: Platform.OS === 'android' ? 10 : 12, 
     borderBottomWidth: 0.5, 
-    borderBottomColor: '#BBE1FA' 
+    borderBottomColor: '#dce8f2' 
   },
   selectedLanguageOption: { backgroundColor: 'rgba(50, 130, 184, 0.1)' },
   languageFlag: { 
@@ -472,13 +578,13 @@ const styles = StyleSheet.create({
   },
   languageTextContainer: { flex: 1 },
   languageText: { 
-    color: '#1B262C', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
     fontWeight: '500' 
   },
-  selectedLanguageText: { color: '#0F4C75' },
+  selectedLanguageText: { color: '#0d2137' },
   languageSubtext: { 
-    color: '#3282B8', 
+    color: '#315f57', 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     marginTop: 2 
   },
@@ -498,7 +604,7 @@ const styles = StyleSheet.create({
   migrationTitle: {
     fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '600',
-    color: '#1B262C',
+    color: '#0d2137',
     marginLeft: Platform.OS === 'android' ? 10 : 12,
   },
   migrationDescription: {
@@ -508,7 +614,7 @@ const styles = StyleSheet.create({
     lineHeight: Platform.OS === 'android' ? 18 : 20,
   },
   migrationButton: {
-    backgroundColor: '#3282B8',
+    backgroundColor: '#315f57',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -528,12 +634,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: Platform.OS === 'android' ? 14 : 16 
   },
   footerText: { 
-    color: '#3282B8', 
+    color: '#315f57', 
     fontSize: Platform.OS === 'android' ? 13 : 14, 
     fontWeight: '500' 
   },
   footerSubtext: { 
-    color: '#0F4C75', 
+    color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 11 : 12, 
     marginTop: 4 
   },

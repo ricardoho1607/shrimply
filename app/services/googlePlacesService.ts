@@ -1,4 +1,6 @@
 // services/googlePlacesService.ts
+import { API_KEYS } from '../../config/apiKeys';
+
 export interface PlaceDetails {
   place_id: string;
   formatted_address: string;
@@ -132,6 +134,4 @@ class GooglePlacesService {
   }
 }
 
-// Export singleton instance - PUT YOUR API KEY HERE
-const GOOGLE_API_KEY = 'AIzaSyCNhWlS3oBq30BQ5gok3WRoirw9s3qFQI8';
-export const googlePlacesService = new GooglePlacesService(GOOGLE_API_KEY);
+export const googlePlacesService = new GooglePlacesService(API_KEYS.GOOGLE_PLACES);

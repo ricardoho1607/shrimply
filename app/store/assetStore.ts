@@ -15,6 +15,7 @@ import {
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { db, storage } from '../../config/firebase';
 import NotificationService from '../services/notificationService';
+import { getActiveFarmCycle, usePondStore } from './pondStore';
 
 export type AssetCategory = 'Equipment' | 'Infrastructure' | 'Vehicles' | 'Tools' | 'Technology';
 export type AssetCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Needs Repair';
@@ -24,6 +25,8 @@ export type MaintenanceType = 'Preventive' | 'Corrective' | 'Inspection' | 'Repa
 export interface MaintenanceRecord {
   id: string;
   date: Date;
+  cycleId?: string;
+  cycleName?: string;
   description: string;
   technician: string;
   cost?: number;
@@ -548,8 +551,12 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       }
     }
 
+    const skipCycleLink = Boolean((maintenance as any).skipCycleLink);
+    const { skipCycleLink: _skipCycleLink, ...maintenanceData } = maintenance as any;
     const newMaintenance: MaintenanceRecord = {
-      ...maintenance,
+      ...maintenanceData,
+      cycleId: maintenance.cycleId || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.id),
+      cycleName: maintenance.cycleName || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.cycleName),
       photos: uploadedPhotoUrls,
       id: `maint_${Date.now()}`,
       date: new Date(),

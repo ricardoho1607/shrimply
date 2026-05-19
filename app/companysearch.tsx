@@ -12,7 +12,15 @@ import {
   ActivityIndicator,
   StatusBar,
   Image,
+  Platform,
 } from 'react-native';
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs 
+} from 'firebase/firestore';
+import { db } from '@/config/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
@@ -29,17 +37,18 @@ interface Company {
   logoUrl?: string;
 }
 
-type Role = 'manager' | 'technician' | 'admin';
+type Role = 'manager' | 'technician' | 'admin' | 'mechanic';
 
 const ROLES = [
   { id: 'technician', title: 'Aquaculture Technician', icon: 'flask' },
+  { id: 'mechanic', title: 'Mechanic', icon: 'construct' },
   { id: 'manager', title: 'Farm Manager', icon: 'people' },
   { id: 'admin', title: 'System Administrator', icon: 'settings' },
 ] as const;
 
 export default function CompanySearchScreen() {
   const router = useRouter();
-  const { searchCompanies, requestToJoinCompany } = useAuth();
+  const { searchCompanies, requestToJoinCompany, user, signOut } = useAuth();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -48,6 +57,28 @@ export default function CompanySearchScreen() {
   const [selectedRole, setSelectedRole] = useState<Role>('technician');
   const [requestMessage, setRequestMessage] = useState('');
   const [showModal, setShowModal] = useState(false);
+  const [pendingRequest, setPendingRequest] = useState<any>(null);
+
+  React.useEffect(() => {
+    const checkPending = async () => {
+      if (!user) return;
+      const q = query(collection(db, 'joinRequests'), 
+        where('userId', '==', user.uid), 
+        where('status', '==', 'pending')
+      );
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        setPendingRequest(snap.docs[0].data());
+      }
+    };
+    checkPending();
+  }, [user]);
+
+  React.useEffect(() => {
+    if (user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role)) {
+      setSelectedRole(user.role as Role);
+    }
+  }, [user?.role]);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -65,7 +96,7 @@ export default function CompanySearchScreen() {
       }
     } catch (error: any) {
       console.error('Search failed:', error);
-      Alert.alert('Error', error.message || 'Failed to search companies');
+      Alert.alert('Error', 'Failed to search companies. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -91,11 +122,17 @@ export default function CompanySearchScreen() {
       Alert.alert(
         'Request Sent!',
         `Your request to join ${selectedCompany.companyName} has been sent. The company owner will review your request.`,
-        [{ text: 'OK', onPress: () => { setShowModal(false); router.back(); } }]
+        [{ text: 'OK', onPress: () => {
+          setShowModal(false);
+          setPendingRequest({
+            ...requestData,
+            requestedAt: new Date().toISOString(),
+          });
+        } }]
       );
     } catch (error: any) {
       console.error('Request failed:', error);
-      Alert.alert('Error', error.message || 'Failed to send join request');
+      Alert.alert('Error', 'Failed to send your join request. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -104,20 +141,18 @@ export default function CompanySearchScreen() {
   const openRequestModal = (company: Company) => {
     setSelectedCompany(company);
     setRequestMessage('');
-    setSelectedRole('technician');
+    setSelectedRole(user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role) ? user.role as Role : 'technician');
     setShowModal(true);
   };
 
   return (
     <View style={styles.outerContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#BBE1FA" />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <SafeAreaView style={styles.topSafeArea}>
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={24} color="#1B262C" />
-          </TouchableOpacity>
+          <View style={styles.headerSide} />
           <Text style={styles.headerTitle}>Find Company</Text>
-          <View style={styles.headerRight} />
+          <View style={styles.headerSide} />
         </View>
       </SafeAreaView>
 
@@ -125,14 +160,14 @@ export default function CompanySearchScreen() {
         <View style={styles.content}>
           <View style={styles.searchRow}>
             <View style={styles.searchInput}>
-              <Ionicons name="search" size={20} color="#3282B8" />
+              <Ionicons name="search" size={20} color="#315f57" />
               <TextInput
                 style={styles.input}
                 placeholder="Search by company name..."
                 value={searchQuery}
                 onChangeText={setSearchQuery}
                 onSubmitEditing={handleSearch}
-                placeholderTextColor="#BBE1FA"
+                placeholderTextColor="#6b8aa0"
               />
             </View>
             <TouchableOpacity style={styles.searchBtn} onPress={handleSearch} disabled={loading}>
@@ -140,74 +175,109 @@ export default function CompanySearchScreen() {
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={styles.results} showsVerticalScrollIndicator={false}>
-            {companies.length === 0 && !loading && searchQuery && (
-              <View style={styles.empty}>
-                <Ionicons name="business-outline" size={64} color="#BBE1FA" />
-                <Text style={styles.emptyText}>No companies found</Text>
-                <Text style={styles.emptySubtext}>Try adjusting your search terms</Text>
-              </View>
-            )}
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={async () => {
+              try {
+                await signOut();
+                router.replace('/auth');
+              } catch (e) {
+                Alert.alert('Error', 'Failed to logout');
+              }
+            }}
+          >
+            <Ionicons name="log-out-outline" size={18} color="#e74c3c" />
+            <Text style={styles.logoutBtnText}>Logout</Text>
+          </TouchableOpacity>
 
-            {companies.map((company) => (
-              <View key={company.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.icon}>
-                    {company.logo || company.logoUrl ? (
-                      <Image 
-                        source={{ uri: company.logo || company.logoUrl }} 
-                        style={styles.companyLogo}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <Ionicons name="business" size={24} color="#0F4C75" />
-                    )}
-                  </View>
-                  <View style={styles.info}>
-                    <Text style={styles.name}>{company.companyName}</Text>
-                    {(company.region || company.country) && (
-                      <View style={styles.location}>
-                        <Ionicons name="location-outline" size={14} color="#3282B8" />
-                        <Text style={styles.locationText}>
-                          {[company.region, company.country].filter(Boolean).join(', ')}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
+          {pendingRequest ? (
+            <View style={[styles.card, { marginTop: 20, alignItems: 'center' }]}>
+              <Ionicons name="time-outline" size={48} color="#f39c12" />
+              <Text style={[styles.name, { marginTop: 10 }]}>Request Pending</Text>
+              <Text style={[styles.locationText, { textAlign: 'center', marginTop: 5 }]}>
+                You have sent a request to join a company. Please wait for the owner to approve your request.
+              </Text>
+              <View style={[styles.details, { width: '100%', marginTop: 15 }]}>
+                <View style={styles.detail}>
+                  <Text style={styles.detailLabel}>Requested Role</Text>
+                  <Text style={styles.detailValue}>{pendingRequest.requestedRole}</Text>
                 </View>
-
-                {(company.farmType || company.businessSize || company.memberCount) && (
-                  <View style={styles.details}>
-                    {company.farmType && (
-                      <View style={styles.detail}>
-                        <Text style={styles.detailLabel}>Farm Type</Text>
-                        <Text style={styles.detailValue}>{company.farmType}</Text>
-                      </View>
-                    )}
-                    {company.businessSize && (
-                      <View style={styles.detail}>
-                        <Text style={styles.detailLabel}>Size</Text>
-                        <Text style={styles.detailValue}>
-                          {company.businessSize.charAt(0).toUpperCase() + company.businessSize.slice(1)}
-                        </Text>
-                      </View>
-                    )}
-                    {company.memberCount !== undefined && (
-                      <View style={styles.detail}>
-                        <Text style={styles.detailLabel}>Team</Text>
-                        <Text style={styles.detailValue}>{company.memberCount} members</Text>
-                      </View>
-                    )}
-                  </View>
-                )}
-
-                <TouchableOpacity style={styles.applyBtn} onPress={() => openRequestModal(company)}>
-                  <Ionicons name="send-outline" size={16} color="#fff" />
-                  <Text style={styles.applyBtnText}>Request to Join</Text>
-                </TouchableOpacity>
+                <View style={styles.detail}>
+                  <Text style={styles.detailLabel}>Sent On</Text>
+                  <Text style={styles.detailValue}>{new Date(pendingRequest.requestedAt).toLocaleDateString()}</Text>
+                </View>
               </View>
-            ))}
-          </ScrollView>
+            </View>
+          ) : (
+            <ScrollView style={styles.results} showsVerticalScrollIndicator={false}>
+              {companies.length === 0 && !loading && searchQuery && (
+                <View style={styles.empty}>
+                  <Ionicons name="business-outline" size={64} color="#dce8f2" />
+                  <Text style={styles.emptyText}>No companies found</Text>
+                  <Text style={styles.emptySubtext}>Try adjusting your search terms</Text>
+                </View>
+              )}
+
+              {companies.map((company) => (
+                <View key={company.id} style={styles.card}>
+                  <View style={styles.cardHeader}>
+                    <View style={styles.icon}>
+                      {company.logo || company.logoUrl ? (
+                        <Image 
+                          source={{ uri: company.logo || company.logoUrl }} 
+                          style={styles.companyLogo}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <Ionicons name="business" size={24} color="#0d2137" />
+                      )}
+                    </View>
+                    <View style={styles.info}>
+                      <Text style={styles.name}>{company.companyName}</Text>
+                      {(company.region || company.country) && (
+                        <View style={styles.location}>
+                          <Ionicons name="location-outline" size={14} color="#315f57" />
+                          <Text style={styles.locationText}>
+                            {[company.region, company.country].filter(Boolean).join(', ')}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  {(company.farmType || company.businessSize || company.memberCount) && (
+                    <View style={styles.details}>
+                      {company.farmType && (
+                        <View style={styles.detail}>
+                          <Text style={styles.detailLabel}>Farm Type</Text>
+                          <Text style={styles.detailValue}>{company.farmType}</Text>
+                        </View>
+                      )}
+                      {company.businessSize && (
+                        <View style={styles.detail}>
+                          <Text style={styles.detailLabel}>Size</Text>
+                          <Text style={styles.detailValue}>
+                            {company.businessSize.charAt(0).toUpperCase() + company.businessSize.slice(1)}
+                          </Text>
+                        </View>
+                      )}
+                      {company.memberCount !== undefined && (
+                        <View style={styles.detail}>
+                          <Text style={styles.detailLabel}>Team</Text>
+                          <Text style={styles.detailValue}>{company.memberCount} members</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  <TouchableOpacity style={styles.applyBtn} onPress={() => openRequestModal(company)}>
+                    <Ionicons name="send-outline" size={16} color="#fff" />
+                    <Text style={styles.applyBtnText}>Request to Join</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </ScrollView>
+          )}
         </View>
       </SafeAreaView>
 
@@ -217,11 +287,11 @@ export default function CompanySearchScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Join Request</Text>
               <TouchableOpacity onPress={() => setShowModal(false)}>
-                <Ionicons name="close" size={24} color="#3282B8" />
+                <Ionicons name="close" size={24} color="#315f57" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody}>
+            <ScrollView style={styles.modalBody} keyboardShouldPersistTaps="handled">
               <Text style={styles.companyName}>{selectedCompany.companyName}</Text>
               <Text style={styles.label}>Select Your Role *</Text>
               
@@ -231,7 +301,7 @@ export default function CompanySearchScreen() {
                   style={[styles.role, selectedRole === role.id && styles.roleSelected]}
                   onPress={() => setSelectedRole(role.id)}
                 >
-                  <Ionicons name={role.icon as any} size={20} color={selectedRole === role.id ? '#fff' : '#3282B8'} />
+                  <Ionicons name={role.icon as any} size={20} color={selectedRole === role.id ? '#fff' : '#315f57'} />
                   <Text style={[styles.roleText, selectedRole === role.id && styles.roleTextSelected]}>
                     {role.title}
                   </Text>
@@ -247,7 +317,7 @@ export default function CompanySearchScreen() {
                 onChangeText={setRequestMessage}
                 multiline
                 numberOfLines={4}
-                placeholderTextColor="#BBE1FA"
+                placeholderTextColor="#6b8aa0"
               />
             </ScrollView>
 
@@ -267,61 +337,72 @@ export default function CompanySearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  outerContainer: { flex: 1, backgroundColor: '#F8FAFC' },
-  topSafeArea: { backgroundColor: '#BBE1FA' },
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#BBE1FA', borderBottomWidth: 1, borderBottomColor: '#3282B8' },
-  backButton: { padding: 8 },
-  headerTitle: { color: '#1B262C', fontSize: 18, fontWeight: '600' },
-  headerRight: { width: 40 },
-  content: { flex: 1, padding: 20 },
+  outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16,
+    paddingTop: Platform.OS === 'android' ? 14 : 16,
+    paddingBottom: Platform.OS === 'android' ? 7 : 8,
+    backgroundColor: '#dce8f2',
+    borderBottomWidth: 1,
+    borderBottomColor: '#dce8f2'
+  },
+  headerTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: '600' },
+  headerSide: { width: Platform.OS === 'android' ? 36 : 40 },
+  content: { flex: 1, padding: Platform.OS === 'android' ? 18 : 20 },
   
-  searchRow: { flexDirection: 'row', marginBottom: 20, gap: 12 },
-  searchInput: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#BBE1FA' },
-  input: { flex: 1, fontSize: 16, color: '#1B262C', marginLeft: 8, paddingVertical: 12 },
-  searchBtn: { backgroundColor: '#0F4C75', paddingHorizontal: 24, borderRadius: 12, justifyContent: 'center', minWidth: 100 },
-  searchBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  searchRow: { flexDirection: 'row', marginBottom: Platform.OS === 'android' ? 18 : 20, gap: Platform.OS === 'android' ? 10 : 12 },
+  searchInput: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: Platform.OS === 'android' ? 10 : 12, paddingHorizontal: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#e8f2f9' },
+  input: { flex: 1, fontSize: Platform.OS === 'android' ? 15 : 16, color: '#0d2137', marginLeft: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 10 : 12 },
+  searchBtn: { backgroundColor: '#0d2137', paddingHorizontal: Platform.OS === 'android' ? 22 : 24, borderRadius: Platform.OS === 'android' ? 10 : 12, justifyContent: 'center', minWidth: Platform.OS === 'android' ? 90 : 100 },
+  searchBtnText: { color: '#fff', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
 
   results: { flex: 1 },
-  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
-  emptyText: { fontSize: 18, fontWeight: '600', color: '#1B262C', marginTop: 16 },
-  emptySubtext: { fontSize: 14, color: '#3282B8', marginTop: 8 },
+  empty: { alignItems: 'center', justifyContent: 'center', paddingTop: Platform.OS === 'android' ? 54 : 60 },
+  emptyText: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: '600', color: '#0d2137', marginTop: Platform.OS === 'android' ? 14 : 16 },
+  emptySubtext: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginTop: Platform.OS === 'android' ? 7 : 8 },
 
-  card: { backgroundColor: '#fff', borderRadius: 16, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  cardHeader: { flexDirection: 'row', marginBottom: 16 },
-  icon: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#F0F7FF', justifyContent: 'center', alignItems: 'center', marginRight: 12, overflow: 'hidden' },
-  companyLogo: { width: 48, height: 48, borderRadius: 24 },
+  card: { backgroundColor: '#fff', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  cardHeader: { flexDirection: 'row', marginBottom: Platform.OS === 'android' ? 14 : 16 },
+  icon: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: Platform.OS === 'android' ? 22 : 24, backgroundColor: '#F0F7FF', justifyContent: 'center', alignItems: 'center', marginRight: Platform.OS === 'android' ? 10 : 12, overflow: 'hidden' },
+  companyLogo: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: Platform.OS === 'android' ? 22 : 24 },
   info: { flex: 1 },
-  name: { fontSize: 18, fontWeight: 'bold', color: '#1B262C', marginBottom: 4 },
+  name: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
   location: { flexDirection: 'row', alignItems: 'center' },
-  locationText: { fontSize: 14, color: '#3282B8', marginLeft: 4 },
+  locationText: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginLeft: 4 },
   
-  details: { flexDirection: 'row', paddingVertical: 12, marginBottom: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#BBE1FA' },
+  details: { flexDirection: 'row', paddingVertical: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 14 : 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#e8f2f9' },
   detail: { flex: 1 },
-  detailLabel: { fontSize: 12, color: '#3282B8', marginBottom: 4 },
-  detailValue: { fontSize: 14, fontWeight: '600', color: '#1B262C' },
+  detailLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', marginBottom: 4 },
+  detailValue: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137' },
 
-  applyBtn: { flexDirection: 'row', backgroundColor: '#0F4C75', paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  applyBtnText: { color: '#fff', fontSize: 16, fontWeight: '600', marginLeft: 8 },
+  applyBtn: { flexDirection: 'row', backgroundColor: '#0d2137', paddingVertical: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12, alignItems: 'center', justifyContent: 'center' },
+  applyBtnText: { color: '#fff', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', marginLeft: Platform.OS === 'android' ? 7 : 8 },
 
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 76, 117, 0.8)', justifyContent: 'center', padding: 20 },
-  modal: { backgroundColor: '#fff', borderRadius: 20, maxHeight: '80%', overflow: 'hidden' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#1B262C' },
-  modalBody: { padding: 20 },
-  companyName: { fontSize: 18, fontWeight: 'bold', color: '#0F4C75', marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: '#1B262C', marginBottom: 12 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(15, 76, 117, 0.8)', justifyContent: 'center', padding: Platform.OS === 'android' ? 18 : 20 },
+  modal: { backgroundColor: '#fff', borderRadius: Platform.OS === 'android' ? 18 : 20, maxHeight: '80%', overflow: 'hidden' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Platform.OS === 'android' ? 18 : 20, borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
+  modalTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
+  modalBody: { padding: Platform.OS === 'android' ? 18 : 20 },
+  companyName: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  label: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 10 : 12 },
 
-  role: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#BBE1FA', marginBottom: 12 },
-  roleSelected: { backgroundColor: '#0F4C75', borderColor: '#0F4C75' },
-  roleText: { flex: 1, fontSize: 16, fontWeight: '600', color: '#1B262C', marginLeft: 12 },
+  role: { flexDirection: 'row', alignItems: 'center', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  roleSelected: { backgroundColor: '#0d2137', borderColor: '#0d2137' },
+  roleText: { flex: 1, fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 10 : 12 },
   roleTextSelected: { color: '#fff' },
 
-  messageInput: { borderWidth: 1, borderColor: '#BBE1FA', borderRadius: 12, padding: 16, fontSize: 16, color: '#1B262C', height: 100, textAlignVertical: 'top', marginBottom: 20 },
+  messageInput: { borderWidth: 1, borderColor: '#e8f2f9', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 15 : 16, color: '#0d2137', height: Platform.OS === 'android' ? 90 : 100, textAlignVertical: 'top', marginBottom: Platform.OS === 'android' ? 18 : 20 },
 
-  footer: { flexDirection: 'row', padding: 20, borderTopWidth: 1, borderTopColor: '#BBE1FA', gap: 12 },
-  cancelBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: 'transparent', borderWidth: 2, borderColor: '#e74c3c', alignItems: 'center' },
-  cancelBtnText: { color: '#e74c3c', fontSize: 16, fontWeight: '600' },
-  submitBtn: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#0F4C75', alignItems: 'center' },
-  submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  footer: { flexDirection: 'row', padding: Platform.OS === 'android' ? 18 : 20, borderTopWidth: 1, borderTopColor: '#dce8f2', gap: Platform.OS === 'android' ? 10 : 12 },
+  cancelBtn: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: 'transparent', borderWidth: 2, borderColor: '#e74c3c', alignItems: 'center' },
+  cancelBtnText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  submitBtn: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#0d2137', alignItems: 'center' },
+  submitBtnText: { color: '#fff', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: 12, marginTop: 10, borderBottomWidth: 1, borderBottomColor: '#eee', marginBottom: 10 },
+  logoutBtnText: { color: '#e74c3c', fontSize: 14, fontWeight: '600', marginLeft: 8 },
 });

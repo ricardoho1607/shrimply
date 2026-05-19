@@ -1,12 +1,16 @@
 // app/auth.tsx - Fixed for Android navigation bar spacing
+import { LibreBaskerville_400Regular, LibreBaskerville_700Bold, useFonts } from '@expo-google-fonts/libre-baskerville';
 import { Ionicons } from '@expo/vector-icons';
-import { useFonts, LibreBaskerville_400Regular, LibreBaskerville_700Bold } from '@expo-google-fonts/libre-baskerville';
+import * as Google from 'expo-auth-session/providers/google';
+import { sendPasswordResetEmail } from 'firebase/auth';
 import { useLocalSearchParams } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Animated,
+  Easing,
   Image,
   Keyboard,
   KeyboardAvoidingView,
@@ -20,10 +24,13 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { auth } from '../config/firebase';
+
+WebBrowser.maybeCompleteAuthSession();
 
 interface InviteInfo {
   email: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin';
+  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
   message?: string;
 }
 
@@ -31,7 +38,51 @@ const ROLE_DEFINITIONS = {
   owner: 'Farm Owner',
   manager: 'Farm Manager',
   technician: 'Aquaculture Technician',
-  admin: 'System Administrator'
+  mechanic: 'Mechanic',
+  admin: 'System Administrator',
+  buyer: 'Buyer'
+};
+
+const GoogleSignInButton = ({ loading, signInWithGoogle, inviteToken }: {
+  loading: boolean;
+  signInWithGoogle: (inviteToken?: string, idToken?: string) => Promise<void>;
+  inviteToken?: string;
+}) => {
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: '496805431411-krbvmpg014dgq2n6mk5a771ip49ra1tu.apps.googleusercontent.com',
+    webClientId: '496805431411-d55t74gq1dpll8g8b3dcjv5epdeicphf.apps.googleusercontent.com',
+    iosClientId: 'placeholder-ios-client-id.apps.googleusercontent.com',
+  });
+
+  const handlePress = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        await signInWithGoogle(inviteToken);
+      } else {
+        const result = await promptAsync();
+        if (result?.type === 'success') {
+          const { id_token } = result.params;
+          await signInWithGoogle(inviteToken, id_token);
+        }
+      }
+    } catch (error: any) {
+      console.error('Google sign-in failed:', error);
+      if (error.code !== 'auth/popup-closed-by-user') {
+        Alert.alert('Google Sign-In Error', 'We could not sign you in with Google. Please try again.');
+      }
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      style={[styles.googleButton, loading && styles.googleButtonDisabled]}
+      onPress={handlePress}
+      disabled={loading}
+    >
+      <Ionicons name="logo-google" size={20} color="#EA4335" style={styles.googleIcon} />
+      <Text style={styles.googleButtonText}>Continue with Google</Text>
+    </TouchableOpacity>
+  );
 };
 
 export default function AuthScreen() {
@@ -44,6 +95,7 @@ export default function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [keepMeSignedIn, setKeepMeSignedIn] = useState(true);
   const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
 
   // Get safe area insets for proper spacing
@@ -51,38 +103,57 @@ export default function AuthScreen() {
 
   // Keyboard animation values
   const logoTranslateY = useMemo(() => new Animated.Value(0), []);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const logoOpacity = useMemo(() => new Animated.Value(1), []);
 
-  const { signIn, signUp, loading, checkInviteToken } = useAuth();
+  const { signIn, signUp, signInWithGoogle, loading, checkInviteToken } = useAuth();
   const params = useLocalSearchParams();
   const inviteToken = useMemo(() => params.token as string, [params.token]);
   const isFormValid = useMemo(() => email.trim() && password.trim(), [email, password]);
 
   // Simple and reliable keyboard animation
   useEffect(() => {
-    const showListener = Keyboard.addListener('keyboardDidShow', () => {
-      setKeyboardVisible(true);
-      Animated.timing(logoTranslateY, {
-        toValue: 180,
-        duration: 0, // Instant to avoid conflicts
-        useNativeDriver: true,
-      }).start();
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showListener = Keyboard.addListener(showEvent, () => {
+      Animated.parallel([
+        Animated.timing(logoTranslateY, {
+          toValue: 120,
+          duration: 350,
+          easing: Easing.bezier(0.33, 1, 0.68, 1), // Smooth cubic easing
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        })
+      ]).start();
     });
 
-    const hideListener = Keyboard.addListener('keyboardDidHide', () => {
-      setKeyboardVisible(false);
-      Animated.timing(logoTranslateY, {
-        toValue: 0,
-        duration: 300, // Smooth return animation
-        useNativeDriver: true,
-      }).start();
+    const hideListener = Keyboard.addListener(hideEvent, () => {
+      Animated.parallel([
+        Animated.timing(logoTranslateY, {
+          toValue: 0,
+          duration: 350,
+          easing: Easing.bezier(0.33, 1, 0.68, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(logoOpacity, {
+          toValue: 1,
+          duration: 350,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        })
+      ]).start();
     });
 
     return () => {
       showListener?.remove();
       hideListener?.remove();
     };
-  }, [logoTranslateY]);
+  }, [logoTranslateY, logoOpacity]);
 
   useEffect(() => {
     if (!inviteToken) return;
@@ -107,14 +178,31 @@ export default function AuthScreen() {
     if (!isFormValid) return Alert.alert('Error', 'Please fill in all fields');
     try {
       if (isLogin) {
-        await signIn(email.trim(), password, inviteToken);
+        await signIn(email.trim(), password, inviteToken, keepMeSignedIn);
       } else {
-        await signUp(email.trim(), password, inviteToken);
+        await signUp(email.trim(), password, inviteToken, keepMeSignedIn);
       }
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'An error occurred');
+      console.error('Authentication failed:', error);
+      Alert.alert('Error', isLogin ? 'We could not sign you in. Please check your details and try again.' : 'We could not create your account. Please check your details and try again.');
     }
-  }, [isFormValid, isLogin, signIn, signUp, email, password, inviteToken]);
+  }, [isFormValid, isLogin, signIn, signUp, email, password, inviteToken, keepMeSignedIn]);
+
+  const handleForgotPassword = useCallback(async () => {
+    const targetEmail = email.trim();
+    if (!targetEmail) {
+      Alert.alert('Reset Password', 'Enter your email address first, then tap Forgot? again.');
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, targetEmail);
+      Alert.alert('Reset Password', `A password reset email has been sent to ${targetEmail}.`);
+    } catch (error: any) {
+      console.error('Password reset failed:', error);
+      Alert.alert('Reset Password', 'Unable to send a password reset email. Please check the address and try again.');
+    }
+  }, [email]);
 
   const toggleAuthMode = useCallback(() => {
     if (!loading) {
@@ -129,7 +217,7 @@ export default function AuthScreen() {
     return (
       <View style={styles.inviteBanner}>
         <View style={styles.inviteIconContainer}>
-          <Ionicons name="mail-open" size={24} color="#0F4C75" />
+          <Ionicons name="mail-open" size={24} color="#0d2137" />
         </View>
         <Text style={styles.inviteTitle}>You're Invited!</Text>
         <Text style={styles.inviteMessage}>Join as a {ROLE_DEFINITIONS[inviteInfo.role]}</Text>
@@ -152,7 +240,7 @@ export default function AuthScreen() {
 
   if (!fontsLoaded) return (
     <SafeAreaView style={[styles.container, styles.loadingContainer]}>
-      <ActivityIndicator size="large" color="#0F4C75" />
+      <ActivityIndicator size="large" color="#0d2137" />
     </SafeAreaView>
   );
 
@@ -164,7 +252,7 @@ export default function AuthScreen() {
             styles.logoContainer,
             {
               transform: [{ translateY: logoTranslateY }],
-              opacity: keyboardVisible ? 0 : 1 // Fade out when keyboard is visible
+              opacity: logoOpacity
             }
           ]}>
             <Image source={require('../assets/images/ShrimplyLogo.png')} style={styles.logo} resizeMode="contain" />
@@ -181,11 +269,11 @@ export default function AuthScreen() {
             <Text style={styles.formTitle}>{formTitle}</Text>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="mail-outline" size={20} color="#3282B8" style={styles.inputIcon} />
+              <Ionicons name="mail-outline" size={20} color="#315f57" style={styles.inputIcon} />
               <TextInput
                 style={[styles.input, inviteInfo && styles.inputReadonly]}
                 placeholder="Email"
-                placeholderTextColor="#999"
+                placeholderTextColor="#6b8aa0"
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -195,15 +283,15 @@ export default function AuthScreen() {
                 autoComplete="email"
                 textContentType="emailAddress"
               />
-              {inviteInfo && <Ionicons name="lock-closed" size={16} color="#BBE1FA" />}
+              {inviteInfo && <Ionicons name="lock-closed" size={16} color="#dce8f2" />}
             </View>
 
             <View style={styles.inputContainer}>
-              <Ionicons name="lock-closed-outline" size={20} color="#3282B8" style={styles.inputIcon} />
+              <Ionicons name="lock-closed-outline" size={20} color="#315f57" style={styles.inputIcon} />
               <TextInput
                 style={styles.input}
                 placeholder="Password"
-                placeholderTextColor="#999"
+                placeholderTextColor="#6b8aa0"
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry={!showPassword}
@@ -213,15 +301,33 @@ export default function AuthScreen() {
                 textContentType={isLogin ? "password" : "newPassword"}
               />
               <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon} disabled={loading}>
-                <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#3282B8" />
+                <Ionicons name={showPassword ? "eye-outline" : "eye-off-outline"} size={20} color="#315f57" />
               </TouchableOpacity>
             </View>
 
-            {isLogin && !inviteInfo && (
-              <TouchableOpacity style={styles.forgotPasswordButton}>
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+            <View style={styles.optionsRow}>
+              <TouchableOpacity
+                style={styles.checkboxContainer}
+                onPress={() => setKeepMeSignedIn(!keepMeSignedIn)}
+                disabled={loading}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={keepMeSignedIn ? "checkbox" : "square-outline"}
+                  size={22}
+                  color={keepMeSignedIn ? "#0d2137" : "#64748B"}
+                />
+                <Text style={[styles.checkboxText, keepMeSignedIn && styles.checkboxTextActive]}>
+                  Keep me signed in
+                </Text>
               </TouchableOpacity>
-            )}
+
+              {isLogin && !inviteInfo && (
+                <TouchableOpacity style={styles.forgotPasswordButton} onPress={handleForgotPassword} disabled={loading}>
+                  <Text style={styles.forgotPasswordText}>Forgot?</Text>
+                </TouchableOpacity>
+              )}
+            </View>
 
             <TouchableOpacity
               style={[styles.authButton, (!isFormValid || loading) && styles.authButtonDisabled]}
@@ -230,6 +336,18 @@ export default function AuthScreen() {
             >
               {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.authButtonText}>{buttonText}</Text>}
             </TouchableOpacity>
+
+            <View style={styles.dividerContainer}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>OR</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            <GoogleSignInButton
+              loading={loading}
+              signInWithGoogle={signInWithGoogle}
+              inviteToken={inviteToken}
+            />
 
             {!inviteInfo && (
               <TouchableOpacity style={styles.switchButton} onPress={toggleAuthMode} disabled={loading}>
@@ -260,7 +378,7 @@ export default function AuthScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#BBE1FA'
+    backgroundColor: '#dce8f2'
   },
   loadingContainer: {
     justifyContent: 'center',
@@ -295,7 +413,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 24,
     padding: Platform.OS === 'android' ? 20 : 24,
-    shadowColor: '#0F4C75',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
     shadowRadius: 12,
@@ -304,7 +422,7 @@ const styles = StyleSheet.create({
   },
   formTitle: {
     fontSize: Platform.OS === 'android' ? 28 : 32,
-    color: '#1B262C',
+    color: '#0d2137',
     textAlign: 'center',
     marginBottom: Platform.OS === 'android' ? 20 : 24,
     fontFamily: 'LibreBaskerville_700Bold',
@@ -313,7 +431,7 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#f4f8fc',
     borderRadius: 16,
     marginBottom: 16,
     paddingHorizontal: 16,
@@ -326,7 +444,7 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    color: '#1B262C',
+    color: '#0d2137',
     fontSize: Platform.OS === 'android' ? 15 : 16,
     fontWeight: '500',
     includeFontPadding: false,
@@ -344,17 +462,38 @@ const styles = StyleSheet.create({
     marginBottom: Platform.OS === 'android' ? 20 : 24
   },
   forgotPasswordText: {
-    color: '#3282B8',
+    color: '#315f57',
     fontSize: Platform.OS === 'android' ? 13 : 14,
     fontWeight: '600'
   },
+  optionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Platform.OS === 'android' ? 20 : 24,
+    paddingHorizontal: 4,
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkboxText: {
+    marginLeft: 8,
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  checkboxTextActive: {
+    color: '#0d2137',
+    fontWeight: '600',
+  },
   authButton: {
-    backgroundColor: '#0F4C75',
+    backgroundColor: '#0d2137',
     paddingVertical: Platform.OS === 'android' ? 16 : 18,
     borderRadius: 16,
     alignItems: 'center',
     marginBottom: Platform.OS === 'android' ? 20 : 24,
-    shadowColor: '#0F4C75',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -368,6 +507,49 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'android' ? 17 : 18,
     fontWeight: '700'
   },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Platform.OS === 'android' ? 20 : 24,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    color: '#64748B',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  googleButton: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingVertical: Platform.OS === 'android' ? 14 : 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Platform.OS === 'android' ? 20 : 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    shadowColor: '#dce8f2',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  googleButtonDisabled: {
+    opacity: 0.6
+  },
+  googleIcon: {
+    marginRight: 12
+  },
+  googleButtonText: {
+    color: '#0d2137',
+    fontSize: Platform.OS === 'android' ? 15 : 16,
+    fontWeight: '600'
+  },
   switchButton: {
     alignItems: 'center'
   },
@@ -380,7 +562,7 @@ const styles = StyleSheet.create({
     opacity: 0.6
   },
   switchLinkText: {
-    color: '#3282B8',
+    color: '#315f57',
     fontWeight: '700'
   },
   inviteBanner: {
@@ -390,7 +572,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: Platform.OS === 'android' ? 16 : 20,
     alignItems: 'center',
-    shadowColor: '#0F4C75',
+    shadowColor: '#315f57',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 8,
@@ -408,13 +590,13 @@ const styles = StyleSheet.create({
   },
   inviteTitle: {
     fontSize: Platform.OS === 'android' ? 18 : 20,
-    color: '#0F4C75',
+    color: '#0d2137',
     marginBottom: 8,
     fontFamily: 'LibreBaskerville_700Bold',
   },
   inviteMessage: {
     fontSize: Platform.OS === 'android' ? 14 : 15,
-    color: '#3282B8',
+    color: '#315f57',
     textAlign: 'center',
     fontWeight: '500'
   },

@@ -1,22 +1,23 @@
 // app/(tabs)/indexbuyer.tsx - Buyer home page for monitoring suppliers
 import { Ionicons } from '@expo/vector-icons';
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { 
-  Modal, 
-  ScrollView, 
-  StatusBar, 
-  StyleSheet, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  View,
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
   FlatList,
-  ActivityIndicator
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
-import { useLanguage } from '../../context/LanguageContext';
-import { useAuth } from '../../context/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { useBuyerStore, type MonitoredCompany } from '../store/buyerStore';
 
 interface CompanyMetrics {
@@ -46,7 +47,7 @@ const DetailItem = ({
   return (
     <View style={styles.detailItem}>
       {iconName ? (
-        <Ionicons name={iconName as any} size={16} color="#BBE1FA" />
+        <Ionicons name={iconName as any} size={16} color="#dce8f2" />
       ) : (
         <View style={{ width: 16 }} />
       )}
@@ -319,10 +320,10 @@ export default function BuyerHomeScreen() {
   }, [searchQuery, availableCompanies, monitoredCompanies]);
 
   const getDOCColor = useCallback((doc: number): string => {
-    if (doc < 30) return '#0F4C75';
-    if (doc < 60) return '#3282B8';
-    if (doc < 90) return '#BBE1FA';
-    return '#1B262C';
+    if (doc < 30) return '#0d2137';
+    if (doc < 60) return '#315f57';
+    if (doc < 90) return '#dbe7df';
+    return '#0d2137';
   }, []);
 
   const handleAddCompany = useCallback(async (monitoredCompany: MonitoredCompany) => {
@@ -371,7 +372,7 @@ export default function BuyerHomeScreen() {
           <View style={styles.companyNameContainer}>
             <Text style={styles.companyName}>{company.companyName}</Text>
             <View style={styles.locationContainer}>
-              <Ionicons name="location-outline" size={12} color="#3282B8" />
+              <Ionicons name="location-outline" size={12} color="#315f57" />
               <Text style={styles.locationText}>{company.location}</Text>
             </View>
             {company.farmType && (
@@ -443,7 +444,7 @@ export default function BuyerHomeScreen() {
               console.log('Contact company:', company.id);
             }}
           >
-            <Ionicons name="mail-outline" size={16} color="#0F4C75" />
+            <Ionicons name="mail-outline" size={16} color="#0d2137" />
             <Text style={styles.actionButtonText}>Contact</Text>
           </TouchableOpacity>
           <TouchableOpacity 
@@ -467,7 +468,7 @@ export default function BuyerHomeScreen() {
         <View style={styles.searchResultInfo}>
           <Text style={styles.searchResultName}>{company.companyName}</Text>
           <View style={styles.locationContainer}>
-            <Ionicons name="location-outline" size={12} color="#3282B8" />
+            <Ionicons name="location-outline" size={12} color="#315f57" />
             <Text style={styles.locationText}>{company.location}</Text>
           </View>
           {company.farmType && (
@@ -489,7 +490,7 @@ export default function BuyerHomeScreen() {
             handleAddCompany(monitoredCompany);
           }}
         >
-          <Ionicons name="add-circle" size={32} color="#3282B8" />
+          <Ionicons name="add-circle" size={32} color="#315f57" />
         </TouchableOpacity>
       </View>
       <View style={styles.searchResultStats}>
@@ -514,39 +515,40 @@ export default function BuyerHomeScreen() {
 
   return (
     <>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8FAFC" />
+      <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
-        <ScrollView 
-          contentContainerStyle={styles.scrollContent} 
+        <FlatList
+          data={monitoredCompanies}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.headerSection}>
-            <Text style={styles.welcomeText}>
-              Welcome, {company?.companyName || 'Buyer'}
-            </Text>
-            <Text style={styles.subtitleText}>Monitor your suppliers in real-time</Text>
-          </View>
-
-          {monitoredCompanies.length === 0 ? (
+          ListHeaderComponent={
+            <>
+              <View style={styles.headerSection}>
+                <Text style={styles.welcomeText}>
+                  Welcome, {company?.companyName || 'Buyer'}
+                </Text>
+                <Text style={styles.subtitleText}>Monitor your suppliers in real-time</Text>
+              </View>
+              {monitoredCompanies.length > 0 && (
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>Monitored Suppliers</Text>
+                  <Text style={styles.sectionCount}>{monitoredCompanies.length}</Text>
+                </View>
+              )}
+            </>
+          }
+          ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="search-outline" size={80} color="#3282B8" />
+              <Ionicons name="search-outline" size={80} color="#315f57" />
               <Text style={styles.emptyTitle}>No suppliers monitored yet</Text>
               <Text style={styles.emptySubtitle}>
                 Search for companies in your area to start monitoring their farms
               </Text>
             </View>
-          ) : (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Monitored Suppliers</Text>
-                <Text style={styles.sectionCount}>{monitoredCompanies.length}</Text>
-              </View>
-              {monitoredCompanies.map(company => (
-                <CompanyCard key={company.id} company={company} />
-              ))}
-            </>
-          )}
-        </ScrollView>
+          }
+          renderItem={({ item }) => <CompanyCard company={item} />}
+        />
 
         <TouchableOpacity 
           style={styles.floatingButton} 
@@ -595,16 +597,16 @@ export default function BuyerHomeScreen() {
                   onPress={() => setSearchModalVisible(false)}
                   style={styles.closeButton}
                 >
-                  <Ionicons name="close" size={24} color="#BBE1FA" />
+                  <Ionicons name="close" size={24} color="#dce8f2" />
                 </TouchableOpacity>
               </View>
 
               <View style={styles.searchInputContainer}>
-                <Ionicons name="search-outline" size={20} color="#3282B8" />
+                <Ionicons name="search-outline" size={20} color="#315f57" />
                 <TextInput
                   style={styles.searchInput}
                   placeholder="Search by company name or location"
-                  placeholderTextColor="#BBE1FA"
+                  placeholderTextColor="#6b8aa0"
                   value={searchQuery}
                   onChangeText={setSearchQuery}
                 />
@@ -618,7 +620,7 @@ export default function BuyerHomeScreen() {
 
               {isLoadingCompanies ? (
                 <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color="#0F4C75" />
+                  <ActivityIndicator size="large" color="#0d2137" />
                   <Text style={styles.loadingText}>Searching for suppliers...</Text>
                 </View>
               ) : (
@@ -630,7 +632,7 @@ export default function BuyerHomeScreen() {
                   showsVerticalScrollIndicator={false}
                   ListEmptyComponent={
                     <View style={styles.noResultsContainer}>
-                      <Ionicons name="business-outline" size={48} color="#BBE1FA" />
+                      <Ionicons name="business-outline" size={48} color="#dce8f2" />
                       <Text style={styles.noResultsText}>
                         {searchQuery ? 'No companies match your search' : 'No public companies available'}
                       </Text>
@@ -650,70 +652,70 @@ export default function BuyerHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8FAFC' },
-  scrollContent: { padding: 20, paddingTop: 10, paddingBottom: 100 },
-  headerSection: { marginBottom: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  welcomeText: { fontSize: 24, fontWeight: 'bold', color: '#1B262C', marginBottom: 4 },
-  subtitleText: { fontSize: 14, color: '#3282B8' },
-  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', color: '#1B262C' },
-  sectionCount: { fontSize: 14, fontWeight: '600', color: '#3282B8', backgroundColor: '#BBE1FA', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
-  emptyTitle: { color: '#1B262C', fontSize: 24, fontWeight: 'bold', marginTop: 20 },
-  emptySubtitle: { color: '#0F4C75', fontSize: 16, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
-  companyCard: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: '#BBE1FA', shadowColor: '#0F4C75', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  companyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
+  container: { flex: 1, backgroundColor: '#f4f8fc' },
+  scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 8 : 10, paddingBottom: 100 },
+  headerSection: { marginBottom: Platform.OS === 'android' ? 20 : 24, paddingBottom: Platform.OS === 'android' ? 14 : 16, borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
+  welcomeText: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
+  subtitleText: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57' },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 14 : 16 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137' },
+  sectionCount: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#315f57', backgroundColor: '#dce8f2', paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: 4, borderRadius: 12 },
+  emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
+  emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },
+  emptySubtitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 },
+  companyCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 16 : 20, borderRadius: 16, marginBottom: Platform.OS === 'android' ? 12 : 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  companyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: Platform.OS === 'android' ? 12 : 16 },
   companyNameContainer: { flex: 1 },
-  companyName: { fontSize: 18, fontWeight: 'bold', color: '#1B262C', marginBottom: 4 },
+  companyName: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
   locationContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
-  locationText: { fontSize: 12, color: '#3282B8', marginLeft: 4 },
-  farmTypeText: { fontSize: 11, color: '#0F4C75', fontStyle: 'italic' },
+  locationText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', marginLeft: 4 },
+  farmTypeText: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#0d2137', fontStyle: 'italic' },
   headerRight: { flexDirection: 'row', alignItems: 'center' },
-  docBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginLeft: 12 },
-  docText: { color: '#fff', fontSize: 11, fontWeight: 'bold' },
-  deleteButton: { padding: 8, marginLeft: 8, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(231, 76, 60, 0.3)' },
-  companyDetails: { marginBottom: 12 },
-  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  docBadge: { paddingHorizontal: Platform.OS === 'android' ? 10 : 12, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: 12, marginLeft: Platform.OS === 'android' ? 10 : 12 },
+  docText: { color: '#fff', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: 'bold' },
+  deleteButton: { padding: Platform.OS === 'android' ? 6 : 8, marginLeft: 8, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(231, 76, 60, 0.3)' },
+  companyDetails: { marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   detailItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
-  detailLabel: { color: '#0F4C75', fontSize: 12, marginLeft: 6, width: 70, flexShrink: 0 },
-  detailValue: { color: '#1B262C', fontSize: 12, fontWeight: '600', textAlign: 'right', flex: 1 },
-  actionsContainer: { flexDirection: 'row', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#BBE1FA' },
-  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, borderRadius: 10, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#BBE1FA' },
-  primaryActionButton: { backgroundColor: '#3282B8', borderColor: '#3282B8' },
-  actionButtonText: { color: '#0F4C75', fontSize: 14, fontWeight: '600', marginLeft: 6 },
+  detailLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: Platform.OS === 'android' ? 65 : 70, flexShrink: 0 },
+  detailValue: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'right', flex: 1 },
+  actionsContainer: { flexDirection: 'row', gap: 8, paddingTop: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#dce8f2' },
+  actionButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 9 : 10, borderRadius: 10, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9' },
+  primaryActionButton: { backgroundColor: '#315f57', borderColor: '#315f57' },
+  actionButtonText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginLeft: 6 },
   primaryActionButtonText: { color: '#FFFFFF' },
-  floatingButton: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#0F4C75', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
+  floatingButton: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#0d2137', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 60 },
-  loadingText: { marginTop: 16, fontSize: 14, color: '#3282B8' },
+  loadingText: { marginTop: 16, fontSize: 14, color: '#315f57' },
   deleteModalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  deleteModalContent: { backgroundColor: '#0F4C75', padding: 24, borderRadius: 20, width: '90%', maxWidth: 400, borderWidth: 1, borderColor: '#3282B8', alignItems: 'center' },
-  deleteModalIcon: { marginBottom: 16 },
-  deleteModalTitle: { fontSize: 22, fontWeight: 'bold', color: '#F8FAFC', marginBottom: 12, textAlign: 'center' },
-  deleteModalMessage: { fontSize: 16, color: '#F8FAFC', textAlign: 'center', marginBottom: 12 },
-  deleteModalWarning: { fontSize: 14, color: '#BBE1FA', textAlign: 'center', marginBottom: 24, fontStyle: 'italic' },
+  deleteModalContent: { backgroundColor: '#0d2137', padding: Platform.OS === 'android' ? 20 : 24, borderRadius: 20, width: '90%', maxWidth: 400, borderWidth: 1, borderColor: '#315f57', alignItems: 'center' },
+  deleteModalIcon: { marginBottom: Platform.OS === 'android' ? 12 : 16 },
+  deleteModalTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#f4f8fc', marginBottom: 12, textAlign: 'center' },
+  deleteModalMessage: { fontSize: Platform.OS === 'android' ? 15 : 16, color: '#f4f8fc', textAlign: 'center', marginBottom: 12, lineHeight: Platform.OS === 'android' ? 20 : 22 },
+  deleteModalWarning: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#dce8f2', textAlign: 'center', marginBottom: Platform.OS === 'android' ? 20 : 24, fontStyle: 'italic', lineHeight: Platform.OS === 'android' ? 18 : 20 },
   deleteModalButtons: { flexDirection: 'row', gap: 12, width: '100%' },
-  deleteModalCancelButton: { flex: 1, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#3282B8', alignItems: 'center' },
-  deleteModalCancelText: { color: '#F8FAFC', fontSize: 16, fontWeight: '600' },
-  deleteModalConfirmButton: { flex: 1, paddingVertical: 14, paddingHorizontal: 20, borderRadius: 12, backgroundColor: '#e74c3c', alignItems: 'center' },
-  deleteModalConfirmText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  deleteModalCancelButton: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, paddingHorizontal: Platform.OS === 'android' ? 16 : 20, borderRadius: 12, backgroundColor: '#315f57', alignItems: 'center' },
+  deleteModalCancelText: { color: '#f4f8fc', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  deleteModalConfirmButton: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, paddingHorizontal: Platform.OS === 'android' ? 16 : 20, borderRadius: 12, backgroundColor: '#e74c3c', alignItems: 'center' },
+  deleteModalConfirmText: { color: '#fff', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },
   searchModalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.8)', justifyContent: 'flex-end' },
-  searchModalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '90%', borderWidth: 1, borderColor: '#BBE1FA' },
-  searchModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: '#BBE1FA' },
-  searchModalTitle: { fontSize: 24, fontWeight: 'bold', color: '#1B262C' },
+  searchModalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '90%', borderWidth: 1, borderColor: '#e8f2f9' },
+  searchModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Platform.OS === 'android' ? 20 : 24, paddingBottom: Platform.OS === 'android' ? 14 : 16, borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
+  searchModalTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137' },
   closeButton: { padding: 4 },
-  searchInputContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: 24, marginTop: 16, marginBottom: 12, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#BBE1FA' },
-  searchInput: { flex: 1, marginLeft: 12, fontSize: 16, color: '#1B262C' },
-  searchResultsHeader: { paddingHorizontal: 24, paddingVertical: 12, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#BBE1FA' },
-  searchResultsTitle: { fontSize: 14, fontWeight: '600', color: '#0F4C75' },
+  searchInputContainer: { flexDirection: 'row', alignItems: 'center', marginHorizontal: Platform.OS === 'android' ? 20 : 24, marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#f4f8fc', borderRadius: 12, borderWidth: 1, borderColor: '#e8f2f9' },
+  searchInput: { flex: 1, marginLeft: 12, fontSize: Platform.OS === 'android' ? 15 : 16, color: '#0d2137' },
+  searchResultsHeader: { paddingHorizontal: Platform.OS === 'android' ? 20 : 24, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#f4f8fc', borderTopWidth: 1, borderBottomWidth: 1, borderColor: '#e8f2f9' },
+  searchResultsTitle: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137' },
   searchResultsList: { flex: 1 },
-  searchResultCard: { padding: 16, marginHorizontal: 24, marginVertical: 8, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#BBE1FA' },
-  searchResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  searchResultCard: { padding: Platform.OS === 'android' ? 14 : 16, marginHorizontal: Platform.OS === 'android' ? 20 : 24, marginVertical: Platform.OS === 'android' ? 6 : 8, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: '#e8f2f9' },
+  searchResultHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 6 : 8 },
   searchResultInfo: { flex: 1 },
-  searchResultName: { fontSize: 16, fontWeight: 'bold', color: '#1B262C', marginBottom: 4 },
+  searchResultName: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
   addButton: { marginLeft: 12 },
   searchResultStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  searchResultStat: { fontSize: 12, color: '#3282B8' },
-  noResultsContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60, paddingHorizontal: 40 },
-  noResultsText: { fontSize: 14, color: '#3282B8', marginTop: 12, textAlign: 'center' },
-  noResultsSubtext: { fontSize: 12, color: '#BBE1FA', marginTop: 8, textAlign: 'center' },
+  searchResultStat: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57' },
+  noResultsContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 50 : 60, paddingHorizontal: 40 },
+  noResultsText: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginTop: 12, textAlign: 'center' },
+  noResultsSubtext: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#dce8f2', marginTop: 8, textAlign: 'center' },
 });
