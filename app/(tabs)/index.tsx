@@ -1083,7 +1083,7 @@ export default function PondManagementScreen() {
       <DateInput 
         label={t.forms.startDate} 
         date={formData.docStart} 
-        onPress={openDatePicker} 
+        onPress={() => openDatePicker('docStart')}
       />
       <InputField 
         label={t.forms.supplier} 
@@ -1287,7 +1287,7 @@ export default function PondManagementScreen() {
       <DateInput
         label={t.forms.startDate}
         date={formData.docStart}
-        onPress={openDatePicker}
+        onPress={() => openDatePicker('docStart')}
       />
       <InputField
         label={t.forms.supplier}
@@ -1525,9 +1525,10 @@ export default function PondManagementScreen() {
               <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 style={styles.modalScrollView}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                contentContainerStyle={styles.modalScrollContent}
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled={true}
+                bounces={false}
               >
                 {modalType === 'pond'
                   ? renderPondForm
@@ -2137,8 +2138,14 @@ const styles = StyleSheet.create({
   },
   
   modalScrollView: { 
+    flexGrow: 0,
+    flexShrink: 1,
     padding: Platform.OS === 'android' ? 20 : 24, 
     paddingTop: 0 
+  },
+
+  modalScrollContent: {
+    paddingBottom: Platform.OS === 'android' ? 80 : 64,
   },
   
   inputContainer: { 

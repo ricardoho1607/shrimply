@@ -187,9 +187,12 @@ const EditSamplingModal = ({
           </View>
           
           <ScrollView 
+            style={styles.editModalScrollView}
+            contentContainerStyle={styles.editModalScrollContent}
             keyboardShouldPersistTaps="handled" 
             showsVerticalScrollIndicator={false}
             nestedScrollEnabled={true}
+            bounces={false}
           >
             <EditInputField
               label={t.shrimp.meanBodyWeight}
@@ -791,11 +794,20 @@ export default function PondDetails() {
                   <Ionicons name="close" size={24} color="#315f57" />
                 </TouchableOpacity>
               </View>
-              <Text style={styles.cycleHint}>{pond.pondName} and {pond.pondArea.toLocaleString()} m² will be reused. Enter new stocking details for this cycle.</Text>
-              <EditInputField label={t.forms.density} value={newCycleForm.density} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, density: value }))} keyboardType="numeric" />
-              <EditInputField label={t.forms.startDate} value={newCycleForm.docStart} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, docStart: value }))} />
-              <EditInputField label={t.forms.plValue} value={newCycleForm.plValue} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plValue: value }))} keyboardType="numeric" />
-              <EditInputField label="PL Supplier" value={newCycleForm.plSupplier} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plSupplier: value }))} />
+              <ScrollView
+                style={styles.editModalScrollView}
+                contentContainerStyle={styles.editModalScrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                bounces={false}
+              >
+                <Text style={styles.cycleHint}>{pond.pondName} and {pond.pondArea.toLocaleString()} m² will be reused. Enter new stocking details for this cycle.</Text>
+                <EditInputField label={t.forms.density} value={newCycleForm.density} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, density: value }))} keyboardType="numeric" />
+                <EditInputField label={t.forms.startDate} value={newCycleForm.docStart} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, docStart: value }))} />
+                <EditInputField label={t.forms.plValue} value={newCycleForm.plValue} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plValue: value }))} keyboardType="numeric" />
+                <EditInputField label="PL Supplier" value={newCycleForm.plSupplier} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plSupplier: value }))} />
+              </ScrollView>
               <View style={styles.editButtonContainer}>
                 <TouchableOpacity style={styles.editCancelButton} onPress={() => setStartCycleVisible(false)}>
                   <Text style={styles.editCancelText}>{t.actions.cancel}</Text>
@@ -848,9 +860,11 @@ const styles = StyleSheet.create({
   
   // MODAL STYLES
   editModalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
-  editModalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxWidth: 400, padding: 24 },
+  editModalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxWidth: 400, maxHeight: '85%', padding: 24 },
   editModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
   editModalTitle: { fontSize: 20, fontWeight: 'bold', color: '#0d2137' },
+  editModalScrollView: { flexGrow: 0, flexShrink: 1 },
+  editModalScrollContent: { paddingBottom: 12 },
   closeButton: { padding: 4 },
   editInputContainer: { marginBottom: 16 },
   editInputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
