@@ -351,7 +351,7 @@ export default function CompanySetupScreen() {
           text: t.companySetup.getStarted, 
           onPress: () => {
             // Navigate to home which will redirect properly
-            router.replace('/(tabs)/index' as any);
+            router.replace('/');
           }
         }]
       );

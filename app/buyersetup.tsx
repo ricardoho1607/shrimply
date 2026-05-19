@@ -252,7 +252,7 @@ export default function BuyerSetupScreen() {
       Alert.alert(
         t.buyerSetup.setupCompleteTitle,
         t.buyerSetup.setupCompleteMessage,
-        [{ text: t.buyerSetup.getStarted, onPress: () => router.replace('/(tabs)/indexbuyer') }]
+        [{ text: t.buyerSetup.getStarted, onPress: () => router.replace('/indexbuyer') }]
       );
     } catch (error) {
       console.error('Error setting up buyer profile:', error);

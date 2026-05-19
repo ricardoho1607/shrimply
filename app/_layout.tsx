@@ -56,6 +56,7 @@ function RootLayoutNav() {
   const segments = useSegments() as string[];
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
+  const homePath = isBuyer ? '/indexbuyer' : '/';
 
   useEffect(() => {
     if (loading || !rootNavigationState?.key) return;
@@ -103,15 +104,15 @@ function RootLayoutNav() {
     const isInSetup = segments?.includes('company-setup') || segments?.includes('buyersetup') || segments?.includes('companysearch');
 
     if (!firstSegment) {
-      handleRedirect(isBuyer ? '/(tabs)/indexbuyer' : '/(tabs)/index');
+      handleRedirect(homePath);
       return;
     }
 
     if (isInAuth || isInRoleSelection || isInSetup) {
-      handleRedirect(isBuyer ? '/(tabs)/indexbuyer' : '/(tabs)/index');
+      handleRedirect(homePath);
       return;
     }
-  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, isBuyer]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, homePath]);
 
   const { width } = useWindowDimensions();
   const isLargeScreen = Platform.OS === 'web' && width > 1024;
