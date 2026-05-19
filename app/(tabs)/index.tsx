@@ -334,26 +334,23 @@ export default function PondManagementScreen() {
     setCycleNameDraft(activeFarmCycle?.cycleName || '');
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
-  const getPondSamplingData = useCallback((pondId: string): Sampling[] => {
-    const pond = ponds.find(p => p.id === pondId);
-    return pond ? pond.samplings.filter((s: Sampling) => 
-      (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-    ) : [];
-  }, [ponds]);
-
   const getLatestSampling = useCallback((pondId: string): Sampling | null => {
-    const samples = getPondSamplingData(pondId);
+    const pond = ponds.find(p => p.id === pondId);
+    const samples = (pond?.samplings || []).filter((sample) =>
+      !isBaselineSampling(sample) && Number(sample.mbw) > 0
+    );
     return samples.sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     )[0] || null;
-  }, [getPondSamplingData]);
+  }, [ponds]);
 
   const getLastADG = useCallback((pondId: string): number => {
     const pond = ponds.find(p => p.id === pondId);
     if (!pond) return 0;
     
-    const samples = getPondSamplingData(pondId)
+    const samples = (pond.samplings || [])
       .filter((sample) => !isBaselineSampling(sample))
+      .filter((sample) => Number(sample.mbw) > 0)
       .sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
@@ -370,7 +367,16 @@ export default function PondManagementScreen() {
     };
 
     const currentSampling = samples[samples.length - 1];
-    const previousSampling = samples.length > 1 ? samples[samples.length - 2] : baselineSampling;
+    const currentSamplingTime = new Date(currentSampling.date).getTime();
+    const baselineSamplingTime = baselineSampling ? new Date(baselineSampling.date).getTime() : Number.NaN;
+    const validBaselineSampling = baselineSampling &&
+      Number.isFinite(baselineSamplingTime) &&
+      baselineSamplingTime < currentSamplingTime
+      ? baselineSampling
+      : undefined;
+    const previousSampling = [...samples]
+      .reverse()
+      .find((sample) => new Date(sample.date).getTime() < currentSamplingTime) || validBaselineSampling;
     const currentWeight = Number(currentSampling.mbw);
     const previousWeight = Number(previousSampling?.mbw ?? pond.initialWeight ?? 0.5);
     const previousDate = previousSampling?.date || pond.docStart;
@@ -379,7 +385,7 @@ export default function PondManagementScreen() {
     if (isNaN(currentWeight) || isNaN(previousWeight) || daysDiff <= 0) return 0;
     const adg = (currentWeight - previousWeight) / daysDiff;
     return isNaN(adg) ? 0 : adg;
-  }, [ponds, getPondSamplingData]);
+  }, [ponds]);
 
   const calculateMetrics = useCallback((pond: Pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);

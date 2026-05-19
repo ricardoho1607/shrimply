@@ -42,18 +42,24 @@ export default function ShrimpReportsScreen() {
   };
 
   const transformSamplingData = (pond: Pond, pondMetrics: any) => {
-    return pond.samplings.filter(s => s.mbw > 0 || s.mortality > 0 || s.feed > 0)
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    const operationalSamplings = (pond.samplings || [])
+      .filter((sampling) => !isBaselineSampling(sampling))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const growthSamplings = operationalSamplings.filter((sampling) => Number(sampling.mbw) > 0);
+
+    return growthSamplings
       .map((sampling, index, allSamplings) => {
         const samplingDoc = Math.floor((new Date(sampling.date).getTime() - new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24));
-        const adg = index === 0 ? samplingDoc > 0 ? (sampling.mbw - (pond.initialWeight || 0.5)) / samplingDoc : 0
-          : (() => {
-              const prevSampling = allSamplings[index - 1];
-              const daysDiff = Math.floor((new Date(sampling.date).getTime() - new Date(prevSampling.date).getTime()) / (1000 * 60 * 60 * 24));
-              return daysDiff > 0 ? (sampling.mbw - prevSampling.mbw) / daysDiff : 0;
-            })();
-        const cumulativeMortality = allSamplings.slice(0, index + 1).reduce((sum, s) => sum + s.mortality, 0);
-        const samplingsToDate = allSamplings.slice(0, index + 1);
+        const samplingTime = new Date(sampling.date).getTime();
+        const previousSampling = [...allSamplings]
+          .reverse()
+          .find((item) => new Date(item.date).getTime() < samplingTime) || null;
+        const previousWeight = previousSampling?.mbw || pond.initialWeight || 0.5;
+        const previousDate = previousSampling?.date || pond.docStart;
+        const daysDiff = Math.floor((new Date(sampling.date).getTime() - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24));
+        const adg = daysDiff > 0 ? (sampling.mbw - previousWeight) / daysDiff : 0;
+        const samplingsToDate = operationalSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime);
+        const cumulativeMortality = samplingsToDate.reduce((sum, s) => sum + s.mortality, 0);
         const cumulativeFeed = getPondTotalFeedConsumed({ ...pond, samplings: samplingsToDate });
         const baselinePopulation = getPondBaselinePopulation({ ...pond, samplings: samplingsToDate });
         const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;

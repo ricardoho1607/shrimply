@@ -550,36 +550,46 @@ export const usePondStore = create<PondStore>()(
 },
       addSampling: (pondId, sampling) => {
         const pond = get().ponds.find((item) => item.id === pondId);
+        if (!pond) return;
+
         const samplingWithId = {
           ...sampling,
           id: sampling.id || Date.now().toString(),
-          cycleId: sampling.cycleId || pond?.cycleId,
-          cycleName: sampling.cycleName || pond?.cycleName,
-          pondCycleId: sampling.pondCycleId || pond?.pondCycleId || pondId,
+          cycleId: sampling.cycleId || pond.cycleId,
+          cycleName: sampling.cycleName || pond.cycleName,
+          pondCycleId: sampling.pondCycleId || pond.pondCycleId || pondId,
         };
-        set((state) => ({ ponds: state.ponds.map((p) => p.id === pondId ? { ...p, samplings: [...p.samplings, samplingWithId] } : p) }));
-        get().firebaseSync?.syncSampling('create', pondId, samplingWithId);
+        const updatedPond = { ...pond, samplings: [...(pond.samplings || []), samplingWithId] };
+        set((state) => ({ ponds: state.ponds.map((p) => p.id === pondId ? updatedPond : p) }));
+        get().firebaseSync?.syncPond('update', updatedPond);
       },
 
       updateSampling: (pondId, samplingId, updates) => {
-        set((state) => ({
-          ponds: state.ponds.map((pond) => pond.id === pondId ? { ...pond, samplings: pond.samplings.map((sampling) => sampling.id === samplingId ? { ...sampling, ...updates } : sampling) } : pond)
-        }));
-        
         const state = get();
         const pond = state.ponds.find(p => p.id === pondId);
-        const sampling = pond?.samplings.find(s => s.id === samplingId);
-        if (sampling) state.firebaseSync?.syncSampling('update', pondId, { ...sampling, ...updates }, samplingId);
+        if (!pond) return;
+
+        const updatedPond = {
+          ...pond,
+          samplings: (pond.samplings || []).map((sampling) => sampling.id === samplingId ? { ...sampling, ...updates } : sampling),
+        };
+        set((state) => ({
+          ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond)
+        }));
+        state.firebaseSync?.syncPond('update', updatedPond);
       },
 
       deleteSampling: (pondId, samplingId) => {
         const state = get();
         const pond = state.ponds.find(p => p.id === pondId);
-        const samplingToDelete = pond?.samplings.find(s => s.id === samplingId);
+        if (!pond) return;
         
-        set((state) => ({ ponds: state.ponds.map((pond) => pond.id === pondId ? { ...pond, samplings: pond.samplings.filter((s) => s.id !== samplingId) } : pond) }));
-        
-        if (samplingToDelete) state.firebaseSync?.syncSampling('delete', pondId, samplingToDelete, samplingId);
+        const updatedPond = {
+          ...pond,
+          samplings: (pond.samplings || []).filter((s) => s.id !== samplingId),
+        };
+        set((state) => ({ ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond) }));
+        state.firebaseSync?.syncPond('update', updatedPond);
       },
 
       addWaterQuality: (pondId, record) => {
