@@ -449,7 +449,6 @@ export default function PondManagementScreen() {
       supplier, 
       plValue,
       cycleStartMode,
-      baselineDate,
       baselineMbw,
       baselineEstimatedPopulation,
       baselineSurvivalRate,
@@ -475,6 +474,7 @@ export default function PondManagementScreen() {
     const baselinePopulationValue = parseFloat(baselineEstimatedPopulation);
     const baselineSurvivalValue = parseFloat(baselineSurvivalRate);
     const baselineFeedValue = parseFloat(baselineCumulativeFeed);
+    const baselineDate = new Date();
     const baselineDocValue = isMidcycle ? calculateDocFromDates(docStart, baselineDate) : 0;
 
     if (isMidcycle && (!baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
@@ -485,7 +485,7 @@ export default function PondManagementScreen() {
     }
 
     if (isMidcycle && (!Number.isFinite(baselineDocValue) || baselineDocValue < 0)) {
-      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDateInvalid);
+      Alert.alert(t.messages.error, 'Start date must be today or earlier for an existing cycle.');
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -1101,11 +1101,6 @@ export default function PondManagementScreen() {
       />
       {formData.cycleStartMode === 'midcycle' && (
         <>
-          <DateInput
-            label={t.midcycleOnboarding.baselineDate}
-            date={formData.baselineDate}
-            onPress={() => openDatePicker('baselineDate')}
-          />
           <InputField
             label={t.midcycleOnboarding.currentMbw}
             value={formData.baselineMbw}

@@ -289,7 +289,8 @@ export default function PondsPage() {
       const baselinePopulationValue = parseFloat(formData.baselineEstimatedPopulation);
       const baselineSurvivalValue = parseFloat(formData.baselineSurvivalRate);
       const baselineFeedValue = parseFloat(formData.baselineCumulativeFeed);
-      const baselineDocValue = isMidcycle ? calculateDocFromDates(formData.docStart, formData.baselineDate) : 0;
+      const baselineDate = new Date().toISOString().split('T')[0];
+      const baselineDocValue = isMidcycle ? calculateDocFromDates(formData.docStart, baselineDate) : 0;
 
       if (isMidcycle && (!formData.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
         alert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
@@ -297,7 +298,7 @@ export default function PondsPage() {
       }
 
       if (isMidcycle && (!Number.isFinite(baselineDocValue) || baselineDocValue < 0)) {
-        alert(t.midcycleOnboarding?.baselineDateInvalid || 'Baseline date must be on or after the stocking date.');
+        alert('Start date must be today or earlier for an existing cycle.');
         return;
       }
 
@@ -306,7 +307,7 @@ export default function PondsPage() {
       const activeCycle = await ensureActiveCycle(effectiveDocStart);
       const baselineSampling = isMidcycle ? [{
         id: `baseline-${Date.now()}`,
-        date: formData.baselineDate,
+        date: baselineDate,
         mbw: baselineMbwValue,
         mortality: 0,
         feed: Number.isNaN(baselineFeedValue) ? 0 : baselineFeedValue,
@@ -338,7 +339,7 @@ export default function PondsPage() {
         cycleStartedAt: effectiveDocStart,
         cycleStartMode: formData.cycleStartMode,
         ...(isMidcycle && {
-          baselineDate: formData.baselineDate,
+          baselineDate,
           baselineDoc,
           baselineMbw: baselineMbwValue,
           baselineEstimatedPopulation: Number.isNaN(baselinePopulationValue) ? undefined : baselinePopulationValue,
@@ -1003,10 +1004,6 @@ export default function PondsPage() {
                 </div>
                 {formData.cycleStartMode === 'midcycle' && (
                   <>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.baselineDate || 'Baseline Date'}</label>
-                      <input required type="date" value={formData.baselineDate} onChange={e => setFormData({...formData, baselineDate: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
-                    </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.midcycleOnboarding?.currentMbw || 'Current MBW (g)'}</label>
                       <input required type="number" step="0.01" placeholder={t.midcycleOnboarding?.currentMbwPlaceholder || 'e.g. 7'} value={formData.baselineMbw} onChange={e => setFormData({...formData, baselineMbw: e.target.value})} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 }} />
