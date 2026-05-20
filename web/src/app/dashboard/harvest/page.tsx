@@ -10,11 +10,7 @@ import {
   X,
   Loader2,
   Calendar,
-  Waves,
-  ChevronRight,
   Trash2,
-  ArrowRight,
-  TrendingUp,
   History
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -49,12 +45,20 @@ interface Pond {
   id: string;
   pondName: string;
   initialPopulation?: number;
+  initialWeight?: number;
+  samplings?: { date?: string; mbw?: number; abw?: number; mortality?: number }[];
   totalHarvestedBiomass?: number;
   totalHarvestedPopulation?: number;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
+}
+
+interface DashboardUser {
+  uid: string;
+  role?: string;
+  companyId?: string;
 }
 
 const getHarvestRemoval = (harvestPond: Pick<HarvestPond, 'biomass' | 'size' | 'subBiomass' | 'subSize'>) => {
@@ -69,34 +73,33 @@ const getHarvestRemoval = (harvestPond: Pick<HarvestPond, 'biomass' | 'size' | '
   };
 };
 
-const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
-  if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
-  return null;
+const getEstimatedCurrentBiomass = (pond: Pond) => {
+  const sortedSamplings = [...(pond.samplings || [])].sort((a, b) => {
+    const aTime = a.date ? new Date(a.date).getTime() : 0;
+    const bTime = b.date ? new Date(b.date).getTime() : 0;
+    return bTime - aTime;
+  });
+  const latestWeight = sortedSamplings
+    .map((sampling) => Number(sampling.mbw || sampling.abw || 0))
+    .find((weight) => Number.isFinite(weight) && weight > 0);
+  const totalMortality = sortedSamplings.reduce((sum, sampling) => {
+    const mortality = Number(sampling.mortality || 0);
+    return sum + (Number.isFinite(mortality) && mortality > 0 ? mortality : 0);
+  }, 0);
+  const initialPopulation = pond.initialPopulation || 0;
+  const remainingPopulation = Math.max(0, initialPopulation - totalMortality - (pond.totalHarvestedPopulation || 0));
+  const weight = latestWeight || pond.initialWeight || 0.5;
+
+  return Math.max(0, (remainingPopulation * weight) / 1000);
 };
 
-const formatSyncStatus = (date: Date | null): string => {
-  if (!date) return 'Sync status unavailable';
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return 'Last synced today';
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
-  return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
-};
 const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
 
 export default function HarvestPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<DashboardUser | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
   
   const [isModalOpen, setModalOpen] = useState(false);
@@ -119,9 +122,9 @@ export default function HarvestPage() {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const userData = uDoc.data();
+          const userData = uDoc.data() as Omit<DashboardUser, 'uid'> | undefined;
           setUser({ uid: firebaseUser.uid, ...userData });
-          const cid = userData?.companyId;
+          const cid = userData?.companyId || null;
           setCompanyId(cid);
           if (cid) {
             // Load Ponds
@@ -131,6 +134,8 @@ export default function HarvestPage() {
                   id: doc.id,
                   pondName: doc.data().pondName,
                   initialPopulation: doc.data().initialPopulation || 0,
+                  initialWeight: doc.data().initialWeight || 0.5,
+                  samplings: Array.isArray(doc.data().samplings) ? doc.data().samplings : [],
                   totalHarvestedBiomass: doc.data().totalHarvestedBiomass || 0,
                   totalHarvestedPopulation: doc.data().totalHarvestedPopulation || 0,
                   cycleId: doc.data().cycleId,
@@ -164,6 +169,18 @@ export default function HarvestPage() {
     try {
       const selectedPond = ponds.find(p => p.id === formData.pondId);
       if (!selectedPond) return;
+      const removal = getHarvestRemoval(formData);
+      const estimatedBiomass = getEstimatedCurrentBiomass(selectedPond);
+
+      if (
+        estimatedBiomass > 0 &&
+        removal.biomass > estimatedBiomass * 1.1 &&
+        !window.confirm(
+          `${selectedPond.pondName}: recorded harvest (${removal.biomass.toFixed(1)} kg) is higher than estimated pond biomass (${estimatedBiomass.toFixed(1)} kg). This can happen when sampling underestimates stock or MBW. Continue saving?`
+        )
+      ) {
+        return;
+      }
 
       const newRecord = {
         date: formData.date,
@@ -188,7 +205,6 @@ export default function HarvestPage() {
 
       await addDoc(collection(db, 'companies', companyId, 'harvestRecords'), newRecord);
 
-      const removal = getHarvestRemoval(newRecord.ponds[0]);
       await updateDoc(doc(db, 'companies', companyId, 'ponds', selectedPond.id), {
         totalHarvestedBiomass: (selectedPond.totalHarvestedBiomass || 0) + removal.biomass,
         totalHarvestedPopulation: Math.min(

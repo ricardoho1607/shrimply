@@ -8,23 +8,25 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-interface HarvestData extends HarvestRecord {}
-
-const Input = React.memo(({ label, value, onChangeText, placeholder }: any) => (
+const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
+  return (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>{label}</Text>
     <TextInput style={styles.input} keyboardType="numeric" value={value} 
       onChangeText={onChangeText} placeholder={placeholder} placeholderTextColor="#6b8aa0" />
   </View>
-));
+  );
+});
 
-const SummaryItem = React.memo(({ iconName, label, value, unit = "" }: any) => (
+const SummaryItem = React.memo(function SummaryItem({ iconName, label, value, unit = "" }: any) {
+  return (
   <View style={styles.summaryItem}>
     <Ionicons name={iconName as any} size={16} color="#dce8f2" />
     <Text style={styles.summaryLabel}>{label}</Text>
     <Text style={styles.summaryValue}>{value} {unit}</Text>
   </View>
-));
+  );
+});
 
 export default function HarvestScreen() {
   const router = useRouter();
@@ -32,7 +34,7 @@ export default function HarvestScreen() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user } = useAuth();
-  const { ponds, cycles, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact } = usePondStore();
+  const { ponds, cycles, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact, calculatePondMetricsWithHarvest } = usePondStore();
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const activeFarmCycle = React.useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   const activePondIds = React.useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
@@ -88,6 +90,51 @@ export default function HarvestScreen() {
   const parsePositiveNumber = (value: string) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const getHarvestBiomass = (pond: { biomass: string; subBiomass: string }) =>
+    (parseFloat(pond.biomass) || 0) + (parseFloat(pond.subBiomass) || 0);
+
+  const getExcessHarvestWarning = (pondsWithData: typeof pondData) => {
+    const warningPond = pondsWithData.find((harvestPond) => {
+      const pond = activePonds.find((item) => item.id === harvestPond.pondId);
+      if (!pond) return false;
+
+      const estimatedBiomass = calculatePondMetricsWithHarvest(pond).currentBiomass;
+      return estimatedBiomass > 0 && getHarvestBiomass(harvestPond) > estimatedBiomass * 1.1;
+    });
+
+    if (!warningPond) return null;
+
+    const pond = activePonds.find((item) => item.id === warningPond.pondId);
+    const estimatedBiomass = pond ? calculatePondMetricsWithHarvest(pond).currentBiomass : 0;
+
+    return {
+      pondName: warningPond.pondName,
+      harvestBiomass: getHarvestBiomass(warningPond),
+      estimatedBiomass,
+    };
+  };
+
+  const saveHarvestRecords = (pondsWithData: typeof pondData) => {
+    pondsWithData.forEach(pondData => {
+      const recordToSave = {
+        biomass: pondData.biomass.trim(), size: pondData.size.trim(), pricePerKg: pondData.price.trim(),
+        subBiomass: pondData.subBiomass.trim(), subSize: pondData.subSize.trim(), subPricePerKg: pondData.subPrice.trim(),
+      };
+      addHarvestData(pondData.pondId, recordToSave);
+    });
+
+    const newHarvest: HarvestRecord = {
+      id: Date.now().toString(),
+      date: new Date().toISOString().split('T')[0],
+      ponds: pondsWithData,
+    };
+
+    addHarvestRecord(newHarvest);
+    processHarvestImpact(newHarvest);
+    resetForm();
+    setIsModalVisible(false);
   };
 
   const handleSave = () => {
@@ -149,24 +196,30 @@ export default function HarvestScreen() {
       return;
     }
 
-    pondsWithData.forEach(pondData => {
-      const recordToSave = {
-        biomass: pondData.biomass.trim(), size: pondData.size.trim(), pricePerKg: pondData.price.trim(),
-        subBiomass: pondData.subBiomass.trim(), subSize: pondData.subSize.trim(), subPricePerKg: pondData.subPrice.trim(),
-      };
-      addHarvestData(pondData.pondId, recordToSave);
-    });
+    const warning = getExcessHarvestWarning(pondsWithData);
+    if (warning) {
+      Alert.alert(
+        t.harvest.biomassWarningTitle,
+        `${warning.pondName}: ${t.harvest.biomassWarningMessage} (${warning.harvestBiomass.toFixed(1)} kg vs ${warning.estimatedBiomass.toFixed(1)} kg).`,
+        [
+          {
+            text: t.actions.cancel,
+            style: 'cancel',
+            onPress: () => {
+              submitLockRef.current = false;
+              setIsSubmitting(false);
+            },
+          },
+          {
+            text: t.harvest.continueSave,
+            onPress: () => saveHarvestRecords(pondsWithData),
+          },
+        ]
+      );
+      return;
+    }
 
-    const newHarvest: HarvestRecord = {
-      id: Date.now().toString(),
-      date: new Date().toISOString().split('T')[0],
-      ponds: pondsWithData,
-    };
-
-    addHarvestRecord(newHarvest);
-    processHarvestImpact(newHarvest);
-    resetForm();
-    setIsModalVisible(false);
+    saveHarvestRecords(pondsWithData);
   };
 
   const resetForm = () => { setPondData(initializePondData()); };
