@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
@@ -11,13 +11,11 @@ import {
   setPersistence,
   browserLocalPersistence,
   browserSessionPersistence,
-  GoogleAuthProvider,
-  signInWithPopup,
   sendPasswordResetEmail,
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  arrayUnion, arrayRemove, serverTimestamp, onSnapshot, addDoc, writeBatch
+  arrayUnion, serverTimestamp, onSnapshot, addDoc, writeBatch
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
@@ -44,7 +42,7 @@ interface User {
 interface Company {
   id: string;
   companyName: string;
-  primaryLocation: any;
+  primaryLocation?: { address?: string } | string;
   farmType: string;
   businessSize: 'small' | 'medium' | 'large';
   description: string;
@@ -53,7 +51,18 @@ interface Company {
   isSearchable?: boolean;
   ownerId: string;
   teamMembers: string[];
-  pendingInvites: any[];
+  pendingInvites: PendingInvite[];
+}
+
+interface PendingInvite {
+  email: string;
+  role: UserRole;
+  invitedBy: string;
+  inviteToken: string;
+  inviteDate: string;
+  message?: string;
+  status: 'pending' | 'accepted' | 'expired';
+  companyId?: string;
 }
 
 interface JoinRequest {
@@ -79,6 +88,18 @@ interface CompanySearchResult {
   memberCount: number;
 }
 
+interface CompanySetupData {
+  companyName: string;
+  primaryLocation: Company['primaryLocation'];
+  farmType: string;
+  businessSize: 'small' | 'medium' | 'large';
+  description: string;
+  contactPhone: string;
+  isPublicProfile: boolean;
+  isSearchable?: boolean;
+  [key: string]: unknown;
+}
+
 interface AuthContextType {
   user: User | null;
   company: Company | null;
@@ -88,7 +109,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: UserRole) => Promise<void>;
-  completeCompanySetup: (companyData: any) => Promise<void>;
+  completeCompanySetup: (companyData: CompanySetupData) => Promise<void>;
   requestToJoinCompany: (request: { companyId: string; requestedRole: StaffRole; message?: string }) => Promise<void>;
   searchCompanies: (searchTerm: string) => Promise<CompanySearchResult[]>;
   getJoinRequests: () => Promise<JoinRequest[]>;
@@ -187,13 +208,45 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await acceptCompanyInvite({ inviteToken });
   };
 
+  const hydrateAuthenticatedUserState = async (firebaseUser: FirebaseUser, fallbackEmail: string) => {
+    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as User;
+      setUser(userData);
+
+      if (userData.companyId) {
+        const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
+        setCompany(companyDoc.exists()
+          ? { ...(companyDoc.data() as Company), id: companyDoc.id }
+          : null);
+      } else {
+        setCompany(null);
+      }
+      return;
+    }
+
+    const newUser: User = {
+      id: firebaseUser.uid,
+      uid: firebaseUser.uid,
+      email: firebaseUser.email || fallbackEmail,
+      hasCompletedSetup: false,
+      joinedDate: new Date().toISOString(),
+      lastActive: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+    setUser(newUser);
+    setCompany(null);
+  };
+
   const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true, inviteToken?: string) => {
     setLoading(true);
     try {
       const persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
       await acceptInviteAfterAuth(inviteToken);
+      await hydrateAuthenticatedUserState(userCredential.user, email);
     } finally {
       setLoading(false);
     }
@@ -237,14 +290,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     router.push('/auth');
   };
 
-  const completeRoleSelection = async (role: User['role']) => {
+  const completeRoleSelection = async (role: UserRole) => {
     if (!user) return;
-    const updatedData: any = { role, lastActive: serverTimestamp() };
+    const updatedData = { role, lastActive: serverTimestamp() };
     await updateDoc(doc(db, 'users', user.uid), updatedData);
-    setUser({ ...user, ...updatedData });
+    setUser({ ...user, role, lastActive: new Date().toISOString() });
   };
 
-  const completeCompanySetup = async (companyData: any) => {
+  const completeCompanySetup = async (companyData: CompanySetupData) => {
     if (!user) return;
     try {
       const companyRef = doc(collection(db, 'companies'));
@@ -320,7 +373,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       farms.push({
         id: companyDoc.id,
         companyName: data.companyName,
-        primaryLocation: data.primaryLocation,
+        primaryLocation: data.primaryLocation || undefined,
         farmType: data.farmType,
         businessSize: data.businessSize,
         memberCount: Array.isArray(data.teamMembers) ? data.teamMembers.length : 0,

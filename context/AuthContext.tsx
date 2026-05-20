@@ -362,6 +362,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       if (inviteToken) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data() as User;
+        setUser(userData);
+        if (userData.companyId) await refreshCompanyData(userData.companyId);
+      } else {
+        const newUser: User = {
+          id: userCredential.user.uid,
+          uid: userCredential.user.uid,
+          email: userCredential.user.email || email,
+          hasCompletedSetup: false,
+          joinedDate: new Date().toISOString(),
+          lastActive: new Date().toISOString()
+        };
+        await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
+        setUser(newUser);
+        previousCompanyRef.current = null;
+        setCompany(null);
+      }
     } finally {
       setLoading(false);
     }
