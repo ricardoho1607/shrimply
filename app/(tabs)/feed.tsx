@@ -291,7 +291,7 @@ export default function FeedManagementScreen() {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyState}>
-              <Ionicons name="nutrition-outline" size={80} color="#315f57" />
+              <Ionicons name="file-tray-outline" size={80} color="#315f57" />
               <Text style={styles.emptyTitle}>{t.feed.noData}</Text>
               <Text style={styles.emptySubtitle}>
                 {canEditPonds ? t.feed.addFirst : t.feed.noDataAvailable}
