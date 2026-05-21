@@ -1312,37 +1312,64 @@ export default function PondManagementScreen() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
-        <View style={styles.cycleManagerCard}>
+        <View style={[
+          styles.cycleManagerCard,
+          !cycleManagerExpanded && styles.cycleManagerCardCollapsed
+        ]}>
           <TouchableOpacity
-            style={styles.cycleManagerHeader}
+            style={[
+              styles.cycleManagerHeader,
+              !cycleManagerExpanded && styles.cycleManagerHeaderCollapsed
+            ]}
             onPress={() => setCycleManagerExpanded((expanded) => !expanded)}
             activeOpacity={0.8}
           >
-            <View>
-              <Text style={styles.cycleEyebrow}>{t.farmCycle.currentCycle}</Text>
-              <Text style={styles.cycleTitle}>
-                {currentCycleTitle}
-              </Text>
-              <Text style={styles.cycleCompactMeta}>
-                {currentCyclePonds.length > 0
-                  ? t.farmCycle.cycleMeta
-                    .replace('{{pondCount}}', String(currentCyclePonds.length))
-                    .replace('{{activeCount}}', String(activeCyclePonds.length))
-                  : t.farmCycle.addPondToCreateCycle.replace('{{cycleNumber}}', String(cycles.length + 1))}
-              </Text>
+            <View style={styles.cycleHeaderLeft}>
+              {cycleManagerExpanded ? (
+                <>
+                  <Text style={styles.cycleEyebrow}>{t.farmCycle.currentCycle}</Text>
+                  <Text style={styles.cycleTitle}>
+                    {currentCycleTitle}
+                  </Text>
+                  <Text style={styles.cycleCompactMeta}>
+                    {currentCyclePonds.length > 0
+                      ? t.farmCycle.cycleMeta
+                        .replace('{{pondCount}}', String(currentCyclePonds.length))
+                        .replace('{{activeCount}}', String(activeCyclePonds.length))
+                      : t.farmCycle.addPondToCreateCycle.replace('{{cycleNumber}}', String(cycles.length + 1))}
+                  </Text>
+                </>
+              ) : (
+                <View style={styles.cycleCollapsedContent}>
+                  <View style={[
+                    styles.cycleStatusDot,
+                    currentCyclePonds.length === 0 && styles.cycleStatusDotMuted
+                  ]} />
+                  <Text style={styles.cycleCollapsedTitle} numberOfLines={1}>
+                    {currentCycleTitle}
+                  </Text>
+                  <Text style={styles.cycleCollapsedMeta} numberOfLines={1}>
+                    {currentCyclePonds.length > 0
+                      ? `${currentCyclePonds.length} ${t.farmCycle.ponds} | ${currentCycleStatus.toUpperCase()}`
+                      : t.farmCycle.addPondToCreateCycle.replace('{{cycleNumber}}', String(cycles.length + 1))}
+                  </Text>
+                </View>
+              )}
             </View>
             <View style={styles.cycleHeaderRight}>
-              <View style={[
-                styles.cycleStatusBadge,
-                currentCyclePonds.length === 0 && styles.cycleStatusBadgeMuted
-              ]}>
-                <Text style={styles.cycleStatusText}>
-                  {currentCycleStatus.toUpperCase()}
-                </Text>
-              </View>
+              {cycleManagerExpanded && (
+                <View style={[
+                  styles.cycleStatusBadge,
+                  currentCyclePonds.length === 0 && styles.cycleStatusBadgeMuted
+                ]}>
+                  <Text style={styles.cycleStatusText}>
+                    {currentCycleStatus.toUpperCase()}
+                  </Text>
+                </View>
+              )}
               <Ionicons
                 name={cycleManagerExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
-                size={20}
+                size={cycleManagerExpanded ? 20 : 18}
                 color="#315f57"
               />
             </View>
@@ -1643,11 +1670,26 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 3,
   },
+  cycleManagerCardCollapsed: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
+  },
   cycleManagerHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     gap: 12,
     alignItems: 'center',
+  },
+  cycleManagerHeaderCollapsed: {
+    minHeight: 32,
+  },
+  cycleHeaderLeft: {
+    flex: 1,
+    minWidth: 0,
   },
   cycleEyebrow: {
     color: '#6b8aa0',
@@ -1667,6 +1709,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     marginTop: 3,
+  },
+  cycleCollapsedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  cycleStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#315f57',
+    marginRight: 8,
+  },
+  cycleStatusDotMuted: {
+    backgroundColor: '#6b8aa0',
+  },
+  cycleCollapsedTitle: {
+    color: '#0d2137',
+    fontSize: 14,
+    fontWeight: '900',
+    maxWidth: '45%',
+    marginRight: 8,
+  },
+  cycleCollapsedMeta: {
+    color: '#6b8aa0',
+    fontSize: 12,
+    fontWeight: '800',
+    flex: 1,
   },
   cycleHeaderRight: {
     alignItems: 'flex-end',
