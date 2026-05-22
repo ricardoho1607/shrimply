@@ -3,7 +3,6 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, Alert, Switch, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import * as Updates from 'expo-updates';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency, CURRENCIES, Currency } from '../context/CurrencyContext';
 import { migrateOwnCompany } from './utils/migrateOwnCompany';
@@ -36,25 +35,6 @@ export default function Settings() {
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
-  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
-  const [updateStatusMessage, setUpdateStatusMessage] = useState<string | null>(null);
-
-  const getUpdateGroupId = () => {
-    const manifest = Updates.manifest;
-    const metadata = manifest && 'metadata' in manifest ? manifest.metadata : undefined;
-    return metadata && 'updateGroup' in metadata && typeof metadata.updateGroup === 'string'
-      ? metadata.updateGroup
-      : null;
-  };
-
-  const getUpdateDiagnostics = () => [
-    { label: 'Enabled', value: Updates.isEnabled ? 'Yes' : 'No' },
-    { label: 'Channel', value: Updates.channel || 'Unavailable' },
-    { label: 'Runtime', value: Updates.runtimeVersion || 'Unavailable' },
-    { label: 'Update ID', value: Updates.updateId || 'Embedded build' },
-    { label: 'Source', value: Updates.isEmbeddedLaunch ? 'Embedded' : 'OTA update' },
-    { label: 'Update group', value: getUpdateGroupId() || 'Unavailable' },
-  ];
 
   const handleLanguageSelect = async (languageCode: string) => {
     try {
@@ -237,51 +217,6 @@ export default function Settings() {
         }
       }
     ]);
-  };
-
-  const handleManualUpdateCheck = async () => {
-    if (__DEV__ || Platform.OS === 'web') {
-      Alert.alert('OTA unavailable', 'Updates are only available in installed native builds.');
-      return;
-    }
-
-    if (!Updates.isEnabled) {
-      Alert.alert('OTA disabled', 'expo-updates is not enabled in this installed build.');
-      return;
-    }
-
-    try {
-      setIsCheckingUpdate(true);
-      setUpdateStatusMessage('Checking for updates...');
-
-      const checkResult = await Updates.checkForUpdateAsync();
-      if (!('isAvailable' in checkResult) || !checkResult.isAvailable) {
-        const logs = await Updates.readLogEntriesAsync(60 * 60 * 1000).catch(() => []);
-        const latestLog = logs[0]?.message ? `\n\nLatest update log: ${logs[0].message}` : '';
-        setUpdateStatusMessage(`No update available.${latestLog}`);
-        Alert.alert('No Update Available', `This build did not receive a newer OTA update.${latestLog}`);
-        return;
-      }
-
-      setUpdateStatusMessage('Update found. Downloading...');
-      const fetchResult = await Updates.fetchUpdateAsync();
-      if ('isNew' in fetchResult && fetchResult.isNew) {
-        setUpdateStatusMessage('Update downloaded. Reloading...');
-        await Updates.reloadAsync();
-        return;
-      }
-
-      setUpdateStatusMessage('Update was already downloaded. Reloading...');
-      await Updates.reloadAsync();
-    } catch (error: any) {
-      const logs = await Updates.readLogEntriesAsync(60 * 60 * 1000).catch(() => []);
-      const latestLog = logs[0]?.message ? `\n\nLatest update log: ${logs[0].message}` : '';
-      const message = error?.message || 'Unknown update error';
-      setUpdateStatusMessage(`${message}${latestLog}`);
-      Alert.alert('Update Check Failed', `${message}${latestLog}`);
-    } finally {
-      setIsCheckingUpdate(false);
-    }
   };
 
   const currentLangInfo = AVAILABLE_LANGUAGES.find(lang => lang.code === currentLanguage);
@@ -502,38 +437,6 @@ export default function Settings() {
 
           <View style={styles.section}>
             <Text style={styles.sectionHeader}>{t.settings?.app || 'APP'}</Text>
-            <View style={styles.updateDiagnosticsCard}>
-              <View style={styles.updateDiagnosticsHeader}>
-                <Ionicons name="cloud-download-outline" size={22} color="#315f57" />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.updateDiagnosticsTitle}>OTA Update Diagnostics</Text>
-                  <Text style={styles.updateDiagnosticsSubtitle}>Use this when an EAS update does not appear on this device.</Text>
-                </View>
-              </View>
-              {getUpdateDiagnostics().map((item) => (
-                <View key={item.label} style={styles.updateDiagnosticsRow}>
-                  <Text style={styles.updateDiagnosticsLabel}>{item.label}</Text>
-                  <Text style={styles.updateDiagnosticsValue} numberOfLines={2}>{item.value}</Text>
-                </View>
-              ))}
-              {updateStatusMessage && (
-                <Text style={styles.updateStatusText}>{updateStatusMessage}</Text>
-              )}
-              <TouchableOpacity
-                style={[styles.updateCheckButton, isCheckingUpdate && styles.updateCheckButtonDisabled]}
-                onPress={handleManualUpdateCheck}
-                disabled={isCheckingUpdate}
-              >
-                {isCheckingUpdate ? (
-                  <ActivityIndicator color="#FFFFFF" size="small" />
-                ) : (
-                  <>
-                    <Ionicons name="refresh" size={18} color="#FFFFFF" />
-                    <Text style={styles.updateCheckButtonText}>Check and Apply OTA Update</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
             <SettingItem
               icon="information-circle-outline"
               title={t.settings?.about || 'About Shrimply'}
@@ -599,80 +502,6 @@ const styles = StyleSheet.create({
     marginLeft: Platform.OS === 'android' ? 14 : 16, 
     marginBottom: Platform.OS === 'android' ? 7 : 8, 
     marginTop: Platform.OS === 'android' ? 14 : 16 
-  },
-  updateDiagnosticsCard: {
-    marginHorizontal: Platform.OS === 'android' ? 14 : 16,
-    marginBottom: Platform.OS === 'android' ? 10 : 12,
-    padding: Platform.OS === 'android' ? 14 : 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#dce8f2',
-  },
-  updateDiagnosticsHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
-  },
-  updateDiagnosticsTitle: {
-    color: '#0d2137',
-    fontSize: Platform.OS === 'android' ? 14 : 15,
-    fontWeight: '800',
-  },
-  updateDiagnosticsSubtitle: {
-    color: '#6b8aa0',
-    fontSize: Platform.OS === 'android' ? 11 : 12,
-    fontWeight: '600',
-    marginTop: 2,
-    lineHeight: 16,
-  },
-  updateDiagnosticsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#f0f6fa',
-  },
-  updateDiagnosticsLabel: {
-    color: '#6b8aa0',
-    fontSize: Platform.OS === 'android' ? 11 : 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  updateDiagnosticsValue: {
-    flex: 1,
-    color: '#0d2137',
-    fontSize: Platform.OS === 'android' ? 12 : 13,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  updateStatusText: {
-    color: '#315f57',
-    fontSize: Platform.OS === 'android' ? 12 : 13,
-    fontWeight: '700',
-    lineHeight: 18,
-    marginTop: 10,
-  },
-  updateCheckButton: {
-    marginTop: 14,
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: '#315f57',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  updateCheckButtonDisabled: {
-    opacity: 0.7,
-  },
-  updateCheckButtonText: {
-    color: '#FFFFFF',
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    fontWeight: '800',
   },
   settingItem: { 
     flexDirection: 'row', 
