@@ -312,7 +312,7 @@ nav.scrolled {
   justify-content: center;
   gap: 8px;
   font-size: 0.86rem;
-  font-weight: 800;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
@@ -333,7 +333,7 @@ nav.scrolled {
 }
 
 .sidebar { background: #FFF; border-right: 1px solid var(--shell-border-strong); box-shadow: 20px 0 80px rgba(15, 76, 117, 0.04); }
-.sidebar-link { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); color: var(--text-muted); font-weight: 600; border-radius: var(--radius-md); }
+.sidebar-link { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); color: var(--text-muted); font-weight: 550; border-radius: var(--radius-md); }
 .sidebar-link:hover { color: var(--primary); background: var(--bg-mid); transform: translateX(4px); }
 .sidebar-link.active { color: var(--primary); background: var(--primary-dim); }
 
@@ -377,9 +377,9 @@ nav.scrolled {
 }
 
 .dashboard-hero-title {
-  font-family: var(--sans);
+  font-family: var(--jakarta);
   font-size: clamp(1.7rem, 2.8vw, 2.3rem);
-  font-weight: 800;
+  font-weight: 650;
   line-height: 1.05;
   letter-spacing: 0;
   color: var(--text-primary);
@@ -424,7 +424,7 @@ nav.scrolled {
   border-radius: 12px;
   border: 1px solid transparent;
   font-size: 0.9rem;
-  font-weight: 800;
+  font-weight: 650;
   letter-spacing: 0;
   line-height: 1;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;

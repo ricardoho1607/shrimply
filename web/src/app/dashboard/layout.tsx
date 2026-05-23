@@ -177,8 +177,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   );
 
   return (
-    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
+    <div className="dashboard-saas" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
       <style jsx global>{`
+        .dashboard-saas,
+        .dashboard-saas :where(h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label, div) {
+          font-family: var(--jakarta) !important;
+        }
+        .dashboard-saas {
+          font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+          -webkit-font-smoothing: antialiased;
+          text-rendering: geometricPrecision;
+        }
         @media (min-width: 1024px) {
           .sidebar {
             position: sticky !important;
@@ -277,7 +286,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Waves size={20} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1e293b', marginBottom: '2px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 650, color: '#1e293b', marginBottom: '2px' }}>
               {company?.companyName || 'Company profile'}
             </div>
             <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8' }}>
@@ -290,7 +299,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
             <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 650, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
               {items.map((item: any) => {
@@ -309,7 +318,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                           border: 'none',
                           fontSize: '0.9rem',
                           borderRadius: '14px',
-                          fontWeight: 600,
+                          fontWeight: 550,
                           color: '#64748b',
                           cursor: 'pointer',
                           transition: 'all 0.2s',
@@ -339,7 +348,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                                   fontSize: '0.85rem',
                                   textDecoration: 'none',
                                   borderRadius: '10px',
-                                  fontWeight: isChildActive ? 700 : 500,
+                                  fontWeight: isChildActive ? 650 : 500,
                                   color: isChildActive ? '#1e293b' : '#64748b',
                                   background: isChildActive ? '#f1f5f9' : 'transparent',
                                   transition: 'all 0.2s'
@@ -368,7 +377,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       textDecoration: 'none',
                       fontSize: '0.9rem',
                       borderRadius: '14px',
-                      fontWeight: isActive ? 700 : 600,
+                      fontWeight: isActive ? 650 : 550,
                       color: isActive ? '#1e293b' : '#64748b',
                       background: isActive ? '#f1f5f9' : 'transparent',
                       transition: 'all 0.2s'
@@ -391,7 +400,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             style={{
               display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 22px',
               color: '#ef4444', background: 'transparent', border: 'none', width: '100%',
-              fontSize: '0.95rem', fontWeight: 700, borderRadius: 'var(--radius-md)'
+              fontSize: '0.95rem', fontWeight: 650, borderRadius: 'var(--radius-md)'
             }}
           >
             <LogOut size={20} strokeWidth={2.5} />
@@ -425,12 +434,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.62rem', color: 'var(--primary)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '4px 8px', background: 'var(--primary-dim)', borderRadius: '999px', lineHeight: 1 }}>
+                <span style={{ fontSize: '0.62rem', color: 'var(--primary)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '4px 8px', background: 'var(--primary-dim)', borderRadius: '999px', lineHeight: 1 }}>
                   {currentNavMeta.section}
                 </span>
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 900, letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {currentNavMeta.title}
                 </div>
               </div>
@@ -448,7 +457,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <input
                 type="text"
                 placeholder="Search anything..."
-                style={{ background: 'transparent', border: 'none', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', outline: 'none', width: '100%' }}
+                style={{ background: 'transparent', border: 'none', fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)', outline: 'none', width: '100%' }}
               />
             </div>
 
@@ -458,7 +467,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {unreadCount > 0 && (
                   <span style={{
                     position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white',
-                    fontSize: '0.65rem', fontWeight: 900, minWidth: '18px', height: '18px', borderRadius: '50%',
+                    fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px', borderRadius: '50%',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid white'
                   }}>
                     {unreadCount}
@@ -474,13 +483,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
-                <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>{(company as any)?.role || (user as any)?.role || 'Farmer'}</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{(company as any)?.role || (user as any)?.role || 'Farmer'}</div>
               </div>
               <div style={{
                 width: '44px', height: '44px', borderRadius: '12px', background: 'var(--gradient)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
-                fontWeight: 900, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
+                fontWeight: 700, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
               }}>
                 {(user?.name?.[0] || 'U').toUpperCase()}
               </div>
