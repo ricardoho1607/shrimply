@@ -295,8 +295,8 @@ companySetup: {
     newCycleHint: 'ใช้เมื่อลงลูกกุ้งและเริ่มบันทึกใน Shrimply',
     existingCycleHint: 'ใช้เมื่อบ่อกำลังเลี้ยงอยู่แล้ว Shrimply จะสร้างข้อมูลตั้งต้นแบบประมาณการหนึ่งรายการ',
     baselineDate: 'วันที่ข้อมูลตั้งต้น',
-    currentDoc: 'DOC ปัจจุบัน',
-    currentDocPlaceholder: 'เช่น 45',
+    currentDoc: 'DOC ที่คำนวณ',
+    currentDocPlaceholder: 'คำนวณจากวันที่เริ่มรอบและวันที่ข้อมูลตั้งต้น',
     currentMbw: 'MBW ปัจจุบัน (g)',
     currentMbwPlaceholder: 'เช่น 7',
     currentPopulation: 'ประชากรปัจจุบัน (ไม่บังคับ)',
@@ -306,9 +306,11 @@ companySetup: {
     feedUsedSoFar: 'อาหารที่ใช้ไปแล้ว (kg, ไม่บังคับ)',
     feedUsedSoFarPlaceholder: 'เช่น 850',
     feedUsedSoFarHint: 'ใช้สำหรับประมาณการเท่านั้น ไม่หักสต็อก',
+    baselineEditHint: 'แก้ไขเฉพาะค่าประมาณข้อมูลตั้งต้นกลางรอบเท่านั้น รายการนี้จะไม่หักสต็อกหรือสร้างประวัติการสุ่มตัวอย่างปกติ',
     baselineMbwRequired: 'ต้องกรอก MBW ปัจจุบันสำหรับรอบที่กำลังเลี้ยง',
-    baselineDocRequired: 'ต้องกรอก DOC ปัจจุบันสำหรับรอบที่กำลังเลี้ยง',
+    baselineDocRequired: 'DOC ของข้อมูลตั้งต้นจะคำนวณจากวันที่เริ่มรอบและวันที่ข้อมูลตั้งต้น',
     baselineDateInvalid: 'วันที่ข้อมูลตั้งต้นต้องตรงกับหรือหลังวันที่ลงลูกกุ้ง',
+    baselineUpdated: 'อัปเดตค่าประมาณข้อมูลตั้งต้นแล้ว',
     importedMidcycle: 'นำเข้ากลางรอบ'
   },
   shrimp: {

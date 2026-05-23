@@ -25,7 +25,6 @@ interface FormData {
   docStart: Date;
   cycleStartMode: 'new' | 'midcycle';
   baselineDate: Date;
-  baselineDoc: string;
   baselineMbw: string;
   baselineEstimatedPopulation: string;
   baselineSurvivalRate: string;
@@ -179,7 +178,6 @@ export default function PondManagementScreen() {
     docStart: new Date(),
     cycleStartMode: 'new',
     baselineDate: new Date(),
-    baselineDoc: '',
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
@@ -232,7 +230,6 @@ export default function PondManagementScreen() {
     docStart: new Date(),
     cycleStartMode: 'new',
     baselineDate: new Date(),
-    baselineDoc: '',
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
@@ -810,7 +807,6 @@ export default function PondManagementScreen() {
     setFormData((prev) => ({
       ...prev,
       baselineDate: normalizeDateValue(new Date(baselineDate)),
-      baselineDoc: String(pond.baselineDoc ?? ''),
       baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
       baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
       baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
@@ -840,7 +836,8 @@ export default function PondManagementScreen() {
       return;
     }
 
-    const baselineDocValue = parseInt(formData.baselineDoc, 10);
+    const cycleStartDate = normalizeDateValue(pond.docStart || pond.cycleStartedAt || formData.baselineDate);
+    const baselineDocValue = calculateDocFromDates(cycleStartDate, formData.baselineDate);
     const baselineMbwValue = parseFloat(formData.baselineMbw);
     const baselinePopulationValue = parseFloat(formData.baselineEstimatedPopulation);
     const baselineSurvivalValue = parseFloat(formData.baselineSurvivalRate);
@@ -853,16 +850,15 @@ export default function PondManagementScreen() {
       return;
     }
 
-    if (!formData.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0) {
-      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDocRequired);
+    if (!Number.isFinite(baselineDocValue) || baselineDocValue < 0) {
+      Alert.alert(t.messages.error, t.midcycleOnboarding.baselineDateInvalid);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
     }
 
     const baselineDateString = formData.baselineDate.toISOString().split('T')[0];
-    const effectiveDocStart = new Date(formData.baselineDate.getTime() - baselineDocValue * 24 * 60 * 60 * 1000);
-    const docStartString = effectiveDocStart.toISOString().split('T')[0];
+    const docStartString = cycleStartDate.toISOString().split('T')[0];
     const baselineSamplingIndex = (pond.samplings || []).findIndex(isBaselineSampling);
     const existingBaseline = baselineSamplingIndex >= 0 ? pond.samplings[baselineSamplingIndex] : undefined;
     const baselineSampling: Sampling = {
@@ -900,8 +896,8 @@ export default function PondManagementScreen() {
 
     setEditingBaselinePondId(null);
     closeModal();
-    Alert.alert(t.messages.success, 'Baseline estimates updated.');
-  }, [canEditPonds, closeModal, editingBaselinePondId, formData, ponds, t, updatePond]);
+    Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
+  }, [calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, normalizeDateValue, ponds, t, updatePond]);
 
   const PondCard = useMemo(() => React.memo(function PondCardItem({ pond }: { pond: Pond }) {
     const metrics = calculateMetrics(pond);
@@ -1138,19 +1134,12 @@ export default function PondManagementScreen() {
   const renderBaselineForm = useMemo(() => (
     <>
       <Text style={styles.inputHint}>
-        Corrects the mid-cycle baseline estimate only. This will not deduct inventory or create normal sampling history.
+        {t.midcycleOnboarding.baselineEditHint}
       </Text>
       <DateInput
         label={t.midcycleOnboarding.baselineDate}
         date={formData.baselineDate}
         onPress={() => openDatePicker('baselineDate')}
-      />
-      <InputField
-        label={t.midcycleOnboarding.currentDoc}
-        value={formData.baselineDoc}
-        onChangeText={(value) => updateForm('baselineDoc', value)}
-        placeholder={t.midcycleOnboarding.currentDocPlaceholder}
-        keyboardType="numeric"
       />
       <InputField
         label={t.midcycleOnboarding.currentMbw}

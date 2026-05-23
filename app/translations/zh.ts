@@ -313,8 +313,8 @@ companySetup: {
     newCycleHint: '适用于从 Shrimply 开始记录投苗。',
     existingCycleHint: '适用于池塘已经在养殖中。Shrimply 会创建一条估算基准记录。',
     baselineDate: '基准日期',
-    currentDoc: '当前 DOC',
-    currentDocPlaceholder: '例如 45',
+    currentDoc: '计算 DOC',
+    currentDocPlaceholder: '根据周期开始日期和基准日期计算',
     currentMbw: '当前 MBW (g)',
     currentMbwPlaceholder: '例如 7',
     currentPopulation: '当前存塘数（可选）',
@@ -324,9 +324,11 @@ companySetup: {
     feedUsedSoFar: '已用饲料（kg，可选）',
     feedUsedSoFarPlaceholder: '例如 850',
     feedUsedSoFarHint: '仅用于估算，不会扣减库存。',
+    baselineEditHint: '仅修正中途周期的基准估算。不会扣减库存，也不会创建正常采样历史。',
     baselineMbwRequired: '进行中的周期必须填写当前 MBW。',
-    baselineDocRequired: '进行中的周期必须填写当前 DOC。',
+    baselineDocRequired: '基准 DOC 会根据周期开始日期和基准日期计算。',
     baselineDateInvalid: '基准日期必须等于或晚于投苗日期。',
+    baselineUpdated: '基准估算已更新。',
     importedMidcycle: '中途导入'
   },
   shrimp: {

@@ -295,8 +295,8 @@ companySetup: {
     newCycleHint: 'Dùng khi thả giống bắt đầu trong Shrimply.',
     existingCycleHint: 'Dùng khi ao đã đang nuôi. Shrimply sẽ tạo một bản ghi nền ước tính.',
     baselineDate: 'Ngày nền',
-    currentDoc: 'DOC hiện tại',
-    currentDocPlaceholder: 'vd. 45',
+    currentDoc: 'DOC đã tính',
+    currentDocPlaceholder: 'Tính từ ngày bắt đầu vụ và ngày nền',
     currentMbw: 'MBW hiện tại (g)',
     currentMbwPlaceholder: 'vd. 7',
     currentPopulation: 'Số lượng hiện tại (tùy chọn)',
@@ -306,9 +306,11 @@ companySetup: {
     feedUsedSoFar: 'Thức ăn đã dùng (kg, tùy chọn)',
     feedUsedSoFarPlaceholder: 'vd. 850',
     feedUsedSoFarHint: 'Chỉ dùng để ước tính. Không trừ tồn kho.',
+    baselineEditHint: 'Chỉ chỉnh ước tính nền giữa vụ. Việc này không trừ tồn kho hoặc tạo lịch sử lấy mẫu thông thường.',
     baselineMbwRequired: 'MBW hiện tại là bắt buộc cho vụ đang chạy.',
-    baselineDocRequired: 'DOC hiện tại là bắt buộc cho vụ đang chạy.',
+    baselineDocRequired: 'DOC nền được tính từ ngày bắt đầu vụ và ngày nền.',
     baselineDateInvalid: 'Ngày nền phải bằng hoặc sau ngày thả giống.',
+    baselineUpdated: 'Đã cập nhật ước tính nền.',
     importedMidcycle: 'Nhập giữa vụ'
   },
   shrimp: {

@@ -297,8 +297,8 @@ companySetup: {
     newCycleHint: 'Use this when stocking starts in Shrimply.',
     existingCycleHint: 'Use this when the pond is already running. Shrimply will create one estimated baseline record.',
     baselineDate: 'Baseline Date',
-    currentDoc: 'Current DOC',
-    currentDocPlaceholder: 'e.g. 45',
+    currentDoc: 'Calculated DOC',
+    currentDocPlaceholder: 'Calculated from cycle start and baseline date',
     currentMbw: 'Current MBW (g)',
     currentMbwPlaceholder: 'e.g. 7',
     currentPopulation: 'Current Population (optional)',
@@ -308,9 +308,11 @@ companySetup: {
     feedUsedSoFar: 'Feed Used So Far (kg, optional)',
     feedUsedSoFarPlaceholder: 'e.g. 850',
     feedUsedSoFarHint: 'Used for estimates only. It will not deduct inventory.',
+    baselineEditHint: 'Corrects the mid-cycle baseline estimate only. This will not deduct inventory or create normal sampling history.',
     baselineMbwRequired: 'Current MBW is required for an existing cycle.',
-    baselineDocRequired: 'Current DOC is required for an existing cycle.',
+    baselineDocRequired: 'Baseline DOC is calculated from the cycle start date and baseline date.',
     baselineDateInvalid: 'Baseline date must be on or after the stocking date.',
+    baselineUpdated: 'Baseline estimates updated.',
     importedMidcycle: 'Imported mid-cycle'
   },
   shrimp: {

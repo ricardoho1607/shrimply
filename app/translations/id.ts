@@ -295,8 +295,8 @@ companySetup: {
     newCycleHint: 'Gunakan ini saat tebar dimulai di Shrimply.',
     existingCycleHint: 'Gunakan ini saat kolam sudah berjalan. Shrimply akan membuat satu catatan baseline estimasi.',
     baselineDate: 'Tanggal Baseline',
-    currentDoc: 'DOC Saat Ini',
-    currentDocPlaceholder: 'mis. 45',
+    currentDoc: 'DOC Terhitung',
+    currentDocPlaceholder: 'Dihitung dari tanggal mulai siklus dan tanggal baseline',
     currentMbw: 'MBW Saat Ini (g)',
     currentMbwPlaceholder: 'mis. 7',
     currentPopulation: 'Populasi Saat Ini (opsional)',
@@ -306,9 +306,11 @@ companySetup: {
     feedUsedSoFar: 'Pakan Terpakai Sejauh Ini (kg, opsional)',
     feedUsedSoFarPlaceholder: 'mis. 850',
     feedUsedSoFarHint: 'Hanya untuk estimasi. Tidak akan mengurangi inventaris.',
+    baselineEditHint: 'Hanya memperbaiki estimasi baseline tengah siklus. Ini tidak akan mengurangi inventaris atau membuat riwayat sampling normal.',
     baselineMbwRequired: 'MBW saat ini wajib diisi untuk siklus berjalan.',
-    baselineDocRequired: 'DOC saat ini wajib diisi untuk siklus berjalan.',
+    baselineDocRequired: 'DOC baseline dihitung dari tanggal mulai siklus dan tanggal baseline.',
     baselineDateInvalid: 'Tanggal baseline harus sama atau setelah tanggal tebar.',
+    baselineUpdated: 'Estimasi baseline diperbarui.',
     importedMidcycle: 'Diimpor tengah siklus'
   },
   shrimp: {
