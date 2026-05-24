@@ -709,6 +709,32 @@ function AdminInspectorPanel({
         </button>
       </div>
 
+      <section style={{ padding: 14, borderRadius: 8, background: '#fff7f7', border: '1px solid #fecaca', marginBottom: 22 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#b91c1c', fontWeight: 900, fontSize: '0.84rem', marginBottom: 8 }}>
+          <Trash2 size={16} />
+          Delete company and linked users
+        </div>
+        <p style={{ margin: '0 0 12px', color: '#7f1d1d', lineHeight: 1.45, fontSize: '0.8rem', fontWeight: 700 }}>
+          This permanently wipes the company, nested company data, linked user records, and matching Auth users.
+        </p>
+        <button
+          className="dashboard-action"
+          type="button"
+          disabled={deletingCompanyId === company.id}
+          onClick={() => onHardDeleteCompany(company)}
+          style={{
+            width: '100%',
+            background: '#dc2626',
+            border: '1px solid #b91c1c',
+            color: '#fff',
+            fontWeight: 900,
+          }}
+        >
+          {deletingCompanyId === company.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+          <span>{deletingCompanyId === company.id ? 'Deleting company...' : 'Delete permanently'}</span>
+        </button>
+      </section>
+
       <section className="admin-card" style={{ padding: 16, marginBottom: 22, background: '#f8fbff' }}>
         <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>
           <CheckCircle2 size={17} color="var(--primary)" />
@@ -772,31 +798,6 @@ function AdminInspectorPanel({
         </button>
       </section>
 
-      <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginTop: 22 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, color: '#b91c1c', fontWeight: 900, fontSize: '0.86rem' }}>
-          <Trash2 size={16} />
-          Danger zone
-        </div>
-        <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.82rem', fontWeight: 700 }}>
-          Permanently deletes this company, its nested company data, linked top-level records, linked Firestore users, and matching Auth users.
-        </p>
-        <button
-          className="dashboard-action"
-          type="button"
-          disabled={deletingCompanyId === company.id}
-          onClick={() => onHardDeleteCompany(company)}
-          style={{
-            width: '100%',
-            background: '#fee2e2',
-            border: '1px solid #fecaca',
-            color: '#b91c1c',
-            fontWeight: 900,
-          }}
-        >
-          {deletingCompanyId === company.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
-          <span>{deletingCompanyId === company.id ? 'Deleting company...' : 'Delete company permanently'}</span>
-        </button>
-      </section>
     </aside>
   );
 }
