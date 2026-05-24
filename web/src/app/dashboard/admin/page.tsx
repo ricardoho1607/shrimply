@@ -24,6 +24,7 @@ import {
   UserRoundCheck,
   Users,
   Waves,
+  X,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
@@ -365,14 +366,14 @@ const formatDate = (value?: string | null) => {
 
 function MetricCard({ label, value, helper, icon: Icon }: { label: string; value: string; helper: string; icon: LucideIcon }) {
   return (
-    <div className="glass-card" style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-        <Icon size={22} strokeWidth={2.5} />
+    <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+      <div style={{ width: '42px', height: '42px', borderRadius: '8px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+        <Icon size={21} strokeWidth={2.25} />
       </div>
       <div>
-        <div style={{ fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900, marginBottom: '8px' }}>{label}</div>
-        <div style={{ fontSize: '1.7rem', color: 'var(--text-primary)', fontWeight: 900, lineHeight: 1, letterSpacing: '-0.04em', fontFamily: 'var(--sans)' }}>{value}</div>
-        <div style={{ marginTop: '10px', fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>{helper}</div>
+        <div style={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 760, marginBottom: '8px' }}>{label}</div>
+        <div style={{ fontSize: '1.58rem', color: 'var(--text-primary)', fontWeight: 760, lineHeight: 1.05, letterSpacing: 0, fontFamily: 'var(--sans)' }}>{value}</div>
+        <div style={{ marginTop: '10px', fontSize: '0.81rem', color: 'var(--text-muted)', lineHeight: 1.5, fontWeight: 500 }}>{helper}</div>
       </div>
     </div>
   );
@@ -399,8 +400,8 @@ async function copyText(value: string) {
 function MetricLine({ label, value }: { label: string; value: number }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ color: 'var(--text-muted)', fontWeight: 800 }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', fontWeight: 900, fontFamily: 'var(--sans)' }}>{formatNumber(value)}</span>
+      <span style={{ color: 'var(--text-muted)', fontWeight: 650 }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontWeight: 760, fontFamily: 'var(--sans)' }}>{formatNumber(value)}</span>
     </div>
   );
 }
@@ -422,6 +423,7 @@ function AdminShellStyles() {
   return (
     <style jsx global>{`
       .shrimply-admin-shell {
+        --admin-gap: 22px;
         position: fixed;
         inset: 0;
         z-index: 1200;
@@ -430,20 +432,59 @@ function AdminShellStyles() {
         background: #f8fafc;
         color: var(--text-primary);
         overflow: hidden;
-        font-family: var(--sans);
+        font-family: var(--sans), "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+        letter-spacing: 0;
+      }
+      .shrimply-admin-shell.admin-shell-no-inspector {
+        grid-template-columns: 210px minmax(0, 1fr);
       }
       .shrimply-admin-sidebar {
-        background: linear-gradient(180deg, #0f4c75 0%, #07385d 100%);
+        background: #f8fafc;
         color: #fff;
-        padding: 22px 12px 18px;
+        padding: 12px;
+        min-height: 0;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .admin-sidebar-container {
+        width: 100%;
+        height: calc(100vh - 24px);
+        min-width: 0;
+        min-height: 0;
+        max-width: 100%;
+        box-sizing: border-box;
+        overflow: hidden;
+        border-radius: 8px;
+        background: linear-gradient(180deg, #0f4c75 0%, #07385d 100%);
+        padding: 18px 10px 14px;
         display: flex;
         flex-direction: column;
-        min-height: 0;
+        box-shadow: 0 18px 38px rgba(7, 56, 93, 0.16);
+      }
+      .admin-sidebar-logo {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 4px 24px;
+        min-width: 0;
       }
       .shrimply-admin-main {
         min-width: 0;
         overflow-y: auto;
-        padding: 26px 30px 34px;
+        padding: 28px 32px 36px;
+      }
+      .admin-main-container {
+        width: 100%;
+        max-width: 1320px;
+        min-width: 0;
+        margin: 0 auto;
+        padding: 22px;
+        border: 1px solid rgba(15, 76, 117, 0.1);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.62);
+        box-shadow: 0 18px 42px rgba(15, 76, 117, 0.045);
+        display: grid;
+        gap: var(--admin-gap);
       }
       .shrimply-admin-panel {
         min-width: 0;
@@ -470,19 +511,108 @@ function AdminShellStyles() {
         padding: 0 12px;
         background: transparent;
         color: rgba(255, 255, 255, 0.84);
-        font-weight: 800;
+        font-weight: 700;
         cursor: pointer;
       }
       .admin-nav-button.active {
         background: rgba(187, 225, 250, 0.16);
         color: #fff;
       }
+      .admin-sidebar-footer {
+        display: grid;
+        gap: 10px;
+        margin-top: 18px;
+        min-width: 0;
+        max-width: 100%;
+      }
+      .admin-sidebar-profile {
+        min-width: 0;
+        max-width: 100%;
+        display: grid;
+        grid-template-columns: 34px minmax(0, 1fr);
+        align-items: center;
+        gap: 9px;
+        padding: 10px;
+        border-radius: 8px;
+        background: rgba(0, 0, 0, 0.16);
+        overflow: hidden;
+      }
+      .admin-sidebar-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 999px;
+        background: #bbe1fa;
+        color: #0f4c75;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 760;
+        flex-shrink: 0;
+      }
+      .admin-sidebar-profile-copy {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+      }
+      .admin-sidebar-name {
+        min-width: 0;
+        max-width: 100%;
+        color: #fff;
+        font-size: 0.76rem;
+        font-weight: 760;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        line-height: 1.25;
+      }
+      .admin-sidebar-role {
+        margin-top: 3px;
+        font-size: 0.68rem;
+        opacity: 0.72;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+      .admin-sidebar-back {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        overflow: hidden;
+      }
+      .admin-sidebar-version {
+        min-width: 0;
+        max-width: 100%;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 0.66rem;
+        text-align: center;
+        font-weight: 650;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .admin-inspector-close {
+        width: 34px;
+        height: 34px;
+        border: 1px solid rgba(15, 76, 117, 0.12);
+        border-radius: 8px;
+        background: #fff;
+        color: var(--text-muted);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .admin-inspector-close:hover {
+        color: var(--primary);
+        border-color: rgba(15, 76, 117, 0.24);
+        background: var(--primary-dim);
+      }
       .admin-topbar {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 18px;
-        margin-bottom: 20px;
+        margin-bottom: 0;
       }
       .admin-toolbar {
         display: flex;
@@ -494,11 +624,27 @@ function AdminShellStyles() {
       .admin-metric-grid {
         display: grid;
         grid-template-columns: repeat(6, minmax(130px, 1fr));
-        gap: 12px;
+        gap: 16px;
+      }
+      .admin-content-stack {
+        display: grid;
+        gap: var(--admin-gap);
+      }
+      .admin-grid-gap {
+        gap: var(--admin-gap) !important;
+      }
+      .admin-founder-summary {
+        margin-bottom: 0;
+      }
+      .shrimply-admin-shell h1,
+      .shrimply-admin-shell h2,
+      .shrimply-admin-shell h3 {
+        letter-spacing: 0;
       }
       .shrimply-admin-shell .dashboard-action {
         border-radius: 7px !important;
         min-height: 38px;
+        font-weight: 700 !important;
       }
       .shrimply-admin-shell table th,
       .shrimply-admin-shell table td {
@@ -508,19 +654,37 @@ function AdminShellStyles() {
         .shrimply-admin-shell {
           grid-template-columns: 190px minmax(0, 1fr);
         }
+        .shrimply-admin-shell.admin-shell-no-inspector {
+          grid-template-columns: 190px minmax(0, 1fr);
+        }
         .shrimply-admin-panel {
           display: none;
         }
         .admin-metric-grid {
           grid-template-columns: repeat(3, minmax(150px, 1fr));
         }
+        .admin-founder-summary {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        .admin-founder-summary > div:first-child {
+          grid-column: 1 / -1;
+        }
       }
       @media (max-width: 860px) {
         .shrimply-admin-shell {
+          --admin-gap: 18px;
+          grid-template-columns: 1fr;
+        }
+        .shrimply-admin-shell.admin-shell-no-inspector {
           grid-template-columns: 1fr;
         }
         .shrimply-admin-sidebar {
           position: static;
+          min-height: auto;
+          padding: 10px;
+        }
+        .admin-sidebar-container {
+          height: auto;
           min-height: auto;
           padding: 14px;
         }
@@ -532,6 +696,10 @@ function AdminShellStyles() {
         .shrimply-admin-main {
           padding: 18px 14px 28px;
         }
+        .admin-main-container {
+          padding: 14px;
+          border-radius: 8px;
+        }
         .admin-topbar {
           flex-direction: column;
         }
@@ -540,6 +708,12 @@ function AdminShellStyles() {
         }
         .admin-metric-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+        .admin-founder-summary {
+          grid-template-columns: 1fr !important;
+        }
+        .admin-founder-summary > div:first-child {
+          grid-column: auto;
         }
       }
     `}</style>
@@ -557,35 +731,37 @@ function AdminSidebar({ activeTab, onChange, userName }: { activeTab: AdminTab; 
 
   return (
     <aside className="shrimply-admin-sidebar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 6px 26px' }}>
-        <img src="/shrimplylogo_v2.webp" alt="Shrimply" style={{ height: 36, width: 'auto', filter: 'brightness(0) invert(1)' }} />
-      </div>
-      <div className="admin-sidebar-links" style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1 }}>
-        {items.map((item) => {
-          const Icon = item.icon;
-          return (
-            <button key={item.id} className={`admin-nav-button ${activeTab === item.id ? 'active' : ''}`} type="button" onClick={() => onChange(item.id)}>
-              <Icon size={17} />
-              <span>{item.label}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ display: 'grid', gap: 12, marginTop: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, borderRadius: 8, background: 'rgba(0,0,0,0.16)' }}>
-          <div style={{ width: 34, height: 34, borderRadius: 999, background: '#bbe1fa', color: '#0f4c75', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>
-            {(userName?.[0] || 'R').toUpperCase()}
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 900, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{userName || 'Founder'}</div>
-            <div style={{ fontSize: '0.68rem', opacity: 0.72, fontWeight: 700 }}>Founder</div>
-          </div>
+      <div className="admin-sidebar-container">
+        <div className="admin-sidebar-logo">
+          <img src="/shrimplylogo_v2.webp" alt="Shrimply" style={{ height: 36, width: 'auto', maxWidth: '100%', filter: 'brightness(0) invert(1)' }} />
         </div>
-        <Link href="/dashboard" className="dashboard-action dashboard-action-secondary" style={{ textDecoration: 'none', justifyContent: 'center', color: '#fff', borderColor: 'rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.08)' }}>
-          <ArrowLeft size={16} />
-          <span>Back to app</span>
-        </Link>
-        <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.68rem', textAlign: 'center', fontWeight: 700 }}>Shrimply Admin v1.0.0</div>
+        <div className="admin-sidebar-links" style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
+          {items.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} className={`admin-nav-button ${activeTab === item.id ? 'active' : ''}`} type="button" onClick={() => onChange(item.id)}>
+                <Icon size={17} />
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="admin-sidebar-footer">
+          <div className="admin-sidebar-profile">
+            <div className="admin-sidebar-avatar">
+              {(userName?.[0] || 'R').toUpperCase()}
+            </div>
+            <div className="admin-sidebar-profile-copy">
+              <div className="admin-sidebar-name" title={userName || 'Founder'}>{userName || 'Founder'}</div>
+              <div className="admin-sidebar-role">Founder</div>
+            </div>
+          </div>
+          <Link href="/dashboard" className="dashboard-action dashboard-action-secondary admin-sidebar-back" style={{ textDecoration: 'none', justifyContent: 'center', color: '#fff', borderColor: 'rgba(255,255,255,0.22)', background: 'rgba(255,255,255,0.08)' }}>
+            <ArrowLeft size={16} />
+            <span>Back to app</span>
+          </Link>
+          <div className="admin-sidebar-version">Shrimply Admin v1.0.0</div>
+        </div>
       </div>
     </aside>
   );
@@ -596,11 +772,13 @@ function AdminInspectorPanel({
   user,
   deletingCompanyId,
   onHardDeleteCompany,
+  onClose,
 }: {
   company: CompanyMetric | null;
   user: AdminUser | null;
   deletingCompanyId: string | null;
   onHardDeleteCompany: (company: CompanyMetric) => void;
+  onClose: () => void;
 }) {
   if (user) {
     const pendingRequest = user.pendingJoinRequest;
@@ -608,10 +786,15 @@ function AdminInspectorPanel({
       <aside className="shrimply-admin-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
           <div style={{ minWidth: 0 }}>
-            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.18rem', fontWeight: 900, margin: 0, lineHeight: 1.2 }}>{user.name || 'Unnamed user'}</h2>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800, marginTop: 8, wordBreak: 'break-word' }}>{user.email || 'Email unavailable'}</div>
+            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 760, margin: 0, lineHeight: 1.2 }}>{user.name || 'Unnamed user'}</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650, marginTop: 8, wordBreak: 'break-word' }}>{user.email || 'Email unavailable'}</div>
           </div>
-          <span style={{ padding: '5px 9px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 900 }}>{user.role || 'No role'}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <span style={{ padding: '5px 9px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 700 }}>{user.role || 'No role'}</span>
+            <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
+              <X size={16} />
+            </button>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
           {user.email && (
@@ -630,7 +813,7 @@ function AdminInspectorPanel({
           </button>
         </div>
         <section className="admin-card" style={{ padding: 16, marginBottom: 22, background: '#f8fbff' }}>
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 760, marginBottom: 8 }}>
             <CheckCircle2 size={17} color="var(--primary)" />
             Recommended next action
           </div>
@@ -643,7 +826,7 @@ function AdminInspectorPanel({
           </p>
         </section>
         <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
-          <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 900, margin: '0 0 10px' }}>User details</h3>
+          <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 10px' }}>User details</h3>
           {[
             ['Email', user.email || 'Unavailable'],
             ['Role', user.role || 'No role'],
@@ -652,7 +835,7 @@ function AdminInspectorPanel({
             ['Joined', formatDate(user.joinedAt)],
             ['Last active', formatDate(user.lastActive)],
           ].map(([label, value]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 800 }}>
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650 }}>
               <span>{label}</span>
               <span style={{ color: 'var(--text-primary)', textAlign: 'right', wordBreak: 'break-word' }}>{value}</span>
             </div>
@@ -665,7 +848,12 @@ function AdminInspectorPanel({
   if (!company) {
     return (
       <aside className="shrimply-admin-panel">
-        <div style={{ color: 'var(--text-muted)', fontWeight: 800 }}>Select a company to inspect details.</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+          <div style={{ color: 'var(--text-muted)', fontWeight: 650 }}>Select a company to inspect details.</div>
+          <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
+            <X size={16} />
+          </button>
+        </div>
       </aside>
     );
   }
@@ -684,12 +872,17 @@ function AdminInspectorPanel({
     <aside className="shrimply-admin-panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
         <div style={{ minWidth: 0 }}>
-          <h2 style={{ color: 'var(--text-primary)', fontSize: '1.18rem', fontWeight: 900, margin: 0, lineHeight: 1.2 }}>{company.companyName}</h2>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800, marginTop: 8 }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 760, margin: 0, lineHeight: 1.2 }}>{company.companyName}</h2>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650, marginTop: 8 }}>
             Company ID: {company.id.slice(0, 12)}
           </div>
         </div>
-        <span style={{ padding: '5px 9px', borderRadius: 999, background: health.bg, color: health.tone, fontSize: '0.68rem', fontWeight: 900 }}>{health.label}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ padding: '5px 9px', borderRadius: 999, background: health.bg, color: health.tone, fontSize: '0.68rem', fontWeight: 700 }}>{health.label}</span>
+          <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
@@ -710,7 +903,7 @@ function AdminInspectorPanel({
       </div>
 
       <section style={{ padding: 14, borderRadius: 8, background: '#fff7f7', border: '1px solid #fecaca', marginBottom: 22 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#b91c1c', fontWeight: 900, fontSize: '0.84rem', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#b91c1c', fontWeight: 760, fontSize: '0.84rem', marginBottom: 8 }}>
           <Trash2 size={16} />
           Delete company and linked users
         </div>
@@ -727,7 +920,7 @@ function AdminInspectorPanel({
             background: '#dc2626',
             border: '1px solid #b91c1c',
             color: '#fff',
-            fontWeight: 900,
+            fontWeight: 760,
           }}
         >
           {deletingCompanyId === company.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
@@ -736,7 +929,7 @@ function AdminInspectorPanel({
       </section>
 
       <section className="admin-card" style={{ padding: 16, marginBottom: 22, background: '#f8fbff' }}>
-        <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 900, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 760, marginBottom: 8 }}>
           <CheckCircle2 size={17} color="var(--primary)" />
           Recommended next action
         </div>
@@ -749,7 +942,7 @@ function AdminInspectorPanel({
       </section>
 
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginBottom: 22 }}>
-        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 900, margin: '0 0 10px' }}>Company details</h3>
+        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 10px' }}>Company details</h3>
         {[
           ['Owner', company.ownerEmail || 'Unavailable'],
           ['Industry', company.farmType || 'Grow-out Farming'],
@@ -758,7 +951,7 @@ function AdminInspectorPanel({
           ['Active cycles', company.activeCycleCount],
           ['Status', health.label],
         ].map(([label, value]) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 800 }}>
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650 }}>
             <span>{label}</span>
             <span style={{ color: label === 'Status' ? health.tone : 'var(--text-primary)', textAlign: 'right' }}>{value}</span>
           </div>
@@ -766,7 +959,7 @@ function AdminInspectorPanel({
       </section>
 
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginBottom: 22 }}>
-        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 900, margin: '0 0 14px' }}>Statistics</h3>
+        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 14px' }}>Statistics</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {[
             ['Ponds', company.pondCount],
@@ -780,15 +973,15 @@ function AdminInspectorPanel({
               <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
                 <ChevronRight size={14} />
               </div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 900, fontSize: '1rem' }}>{value}</div>
-              <div style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.68rem' }}>{label}</div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 760, fontSize: '1rem' }}>{value}</div>
+              <div style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.68rem' }}>{label}</div>
             </div>
           ))}
         </div>
       </section>
 
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, color: 'var(--text-primary)', fontWeight: 900, fontSize: '0.86rem' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, color: 'var(--text-primary)', fontWeight: 760, fontSize: '0.86rem' }}>
           <MessageSquareText size={16} />
           Admin note
         </div>
@@ -807,7 +1000,7 @@ function UsagePanel({ metrics }: { metrics: AdminMetrics }) {
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
         <div>
-          <div style={{ fontSize: '1.12rem', color: 'var(--text-primary)', fontWeight: 900 }}>Request counters</div>
+          <div style={{ fontSize: '1.08rem', color: 'var(--text-primary)', fontWeight: 760 }}>Request counters</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>AI usage and optional API log collections</div>
         </div>
         <FileText size={22} color="var(--primary)" />
@@ -842,6 +1035,10 @@ export default function HiddenAdminPage() {
   const selectUser = (adminUser: AdminUser) => {
     setSelectedUser(adminUser);
     setSelectedCompany(null);
+  };
+  const clearSelection = () => {
+    setSelectedCompany(null);
+    setSelectedUser(null);
   };
 
   const isAllowed = useMemo(() => ADMIN_EMAILS.includes(String(user?.email || '').toLowerCase()), [user?.email]);
@@ -942,109 +1139,114 @@ export default function HiddenAdminPage() {
   }
 
   return (
-    <div className="shrimply-admin-shell">
+    <div className={`shrimply-admin-shell ${selectedCompany || selectedUser ? '' : 'admin-shell-no-inspector'}`}>
       <AdminShellStyles />
       <AdminSidebar activeTab={activeTab} onChange={setActiveTab} userName={user?.name || user?.email || undefined} />
 
       <main className="shrimply-admin-main">
-        <div className="admin-topbar">
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-              <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.55rem', lineHeight: 1.1, fontWeight: 900 }}>Shrimply Admin</h1>
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '5px 9px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 900 }}>
-                <ShieldCheck size={12} />
-                Founder only
-              </span>
+        <div className="admin-main-container">
+          <div className="admin-topbar">
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
+                <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.48rem', lineHeight: 1.14, fontWeight: 760, letterSpacing: 0 }}>Shrimply Admin</h1>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '5px 9px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 700 }}>
+                  <ShieldCheck size={12} />
+                  Founder only
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650 }}>
+                <span>{metrics ? `Last updated: ${formatDate(metrics.generatedAt)}` : 'Private route'}</span>
+                <DataSourceBadge source={dataSource} updatedAt={metrics?.generatedAt} />
+              </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
-              <span>{metrics ? `Last updated: ${formatDate(metrics.generatedAt)}` : 'Private route'}</span>
-              <DataSourceBadge source={dataSource} updatedAt={metrics?.generatedAt} />
-            </div>
-          </div>
-          <div className="admin-toolbar">
-            {[7, 30].map((days) => (
-              <button key={days} onClick={() => setPeriod(days as Period)} className={`dashboard-action ${period === days ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`} type="button">
-                <CalendarDays size={18} />
-                <span>{days} days</span>
+            <div className="admin-toolbar">
+              {[7, 30].map((days) => (
+                <button key={days} onClick={() => setPeriod(days as Period)} className={`dashboard-action ${period === days ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`} type="button">
+                  <CalendarDays size={18} />
+                  <span>{days} days</span>
+                </button>
+              ))}
+              <button onClick={loadMetrics} className="dashboard-action dashboard-action-secondary" type="button" disabled={loading}>
+                {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
+                <span>Refresh</span>
               </button>
-            ))}
-            <button onClick={loadMetrics} className="dashboard-action dashboard-action-secondary" type="button" disabled={loading}>
-              {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
-              <span>Refresh</span>
-            </button>
-            <button onClick={exportCompaniesCsv} className="dashboard-action dashboard-action-secondary" type="button" disabled={!metrics}>
-              <Download size={18} />
-              <span>Export CSV</span>
-            </button>
+              <button onClick={exportCompaniesCsv} className="dashboard-action dashboard-action-secondary" type="button" disabled={!metrics}>
+                <Download size={18} />
+                <span>Export CSV</span>
+              </button>
+            </div>
           </div>
-        </div>
 
-        {error && (
-        <div className="admin-card" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start', borderColor: '#ef444433', background: '#fff7f7', marginBottom: 16 }}>
-          <AlertTriangle size={22} color="#ef4444" />
-          <div>
-            <div style={{ color: '#991b1b', fontWeight: 900, marginBottom: '4px' }}>Admin metrics unavailable</div>
-            <div style={{ color: '#7f1d1d', fontSize: '0.9rem', lineHeight: 1.5 }}>{error}</div>
+          {error && (
+          <div className="admin-card" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start', borderColor: '#ef444433', background: '#fff7f7' }}>
+            <AlertTriangle size={22} color="#ef4444" />
+            <div>
+              <div style={{ color: '#991b1b', fontWeight: 760, marginBottom: '4px' }}>Admin metrics unavailable</div>
+              <div style={{ color: '#7f1d1d', fontSize: '0.9rem', lineHeight: 1.5 }}>{error}</div>
+            </div>
           </div>
-        </div>
-        )}
+          )}
 
-        {loading && !metrics ? (
-          <AdminLoadingSkeleton />
-        ) : metrics ? (
-          <>
-            <ExecutiveSummary metrics={metrics} />
-            <AdminTabs activeTab={activeTab} onChange={setActiveTab} />
+          {loading && !metrics ? (
+            <AdminLoadingSkeleton />
+          ) : metrics ? (
+            <div className="admin-content-stack">
+              <ExecutiveSummary metrics={metrics} />
+              <AdminTabs activeTab={activeTab} onChange={setActiveTab} />
 
-            {activeTab === 'overview' && (
-              <>
-                <MetricCards metrics={metrics} period={period} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(300px, 0.9fr) minmax(260px, 0.8fr)', gap: 14, alignItems: 'start' }}>
-                  <GrowthChart metrics={metrics} />
-                  <ActivationFunnel metrics={metrics} />
-                  <AdminFollowUpQueue metrics={metrics} onSelectCompany={selectCompany} onSelectUser={selectUser} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.35fr) minmax(0, 0.65fr)', gap: 14, alignItems: 'start' }}>
+              {activeTab === 'overview' && (
+                <>
+                  <MetricCards metrics={metrics} period={period} />
+                  <div className="admin-grid-gap" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.35fr) minmax(300px, 0.9fr) minmax(260px, 0.8fr)', gap: 22, alignItems: 'start' }}>
+                    <GrowthChart metrics={metrics} />
+                    <ActivationFunnel metrics={metrics} />
+                    <AdminFollowUpQueue metrics={metrics} onSelectCompany={selectCompany} onSelectUser={selectUser} compact />
+                  </div>
+                  <div className="admin-grid-gap" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 0.35fr) minmax(0, 0.65fr)', gap: 22, alignItems: 'start' }}>
+                    <MiniRoleBreakdown metrics={metrics} />
+                    <AdminCompanyTable companies={metrics.companies.slice(0, 6)} onSelectCompany={selectCompany} />
+                  </div>
+                </>
+              )}
+
+              {activeTab === 'companies' && <AdminCompanyTable companies={metrics.companies} onSelectCompany={selectCompany} />}
+
+              {activeTab === 'users' && (
+                <div className="admin-grid-gap" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 360px)', gap: 22, alignItems: 'start' }}>
+                  <AdminRecentUsers users={metrics.recentUsers} onSelectUser={selectUser} />
                   <MiniRoleBreakdown metrics={metrics} />
-                  <AdminCompanyTable companies={metrics.companies.slice(0, 6)} onSelectCompany={selectCompany} />
                 </div>
-              </>
-            )}
+              )}
 
-            {activeTab === 'companies' && <AdminCompanyTable companies={metrics.companies} onSelectCompany={selectCompany} />}
+              {activeTab === 'usage' && (
+                <div className="admin-grid-gap" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 22, alignItems: 'start' }}>
+                  <UsagePanel metrics={metrics} />
+                  <GrowthChart metrics={metrics} />
+                </div>
+              )}
 
-            {activeTab === 'users' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(300px, 360px)', gap: 14, alignItems: 'start' }}>
-                <AdminRecentUsers users={metrics.recentUsers} onSelectUser={selectUser} />
-                <MiniRoleBreakdown metrics={metrics} />
-              </div>
-            )}
-
-            {activeTab === 'usage' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, alignItems: 'start' }}>
-                <UsagePanel metrics={metrics} />
-                <GrowthChart metrics={metrics} />
-              </div>
-            )}
-
-            {activeTab === 'followUp' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 420px) minmax(0, 1fr)', gap: 14, alignItems: 'start' }}>
-                <AdminFollowUpQueue metrics={metrics} onSelectCompany={selectCompany} onSelectUser={selectUser} />
-                <AdminCompanyTable companies={metrics.companies} onSelectCompany={selectCompany} />
-              </div>
-            )}
-          </>
-        ) : (
-          <EmptyState message="No admin metrics loaded yet." />
-        )}
+              {activeTab === 'followUp' && (
+                <div className="admin-grid-gap" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 420px) minmax(0, 1fr)', gap: 22, alignItems: 'start' }}>
+                  <AdminFollowUpQueue metrics={metrics} onSelectCompany={selectCompany} onSelectUser={selectUser} />
+                  <AdminCompanyTable companies={metrics.companies} onSelectCompany={selectCompany} />
+                </div>
+              )}
+            </div>
+          ) : (
+            <EmptyState message="No admin metrics loaded yet." />
+          )}
+        </div>
       </main>
 
-      <AdminInspectorPanel
-        company={selectedCompany || metrics?.companies[0] || null}
-        user={selectedUser}
-        deletingCompanyId={deletingCompanyId}
-        onHardDeleteCompany={hardDeleteCompany}
-      />
+      {(selectedCompany || selectedUser) && (
+        <AdminInspectorPanel
+          company={selectedCompany}
+          user={selectedUser}
+          deletingCompanyId={deletingCompanyId}
+          onHardDeleteCompany={hardDeleteCompany}
+          onClose={clearSelection}
+        />
+      )}
     </div>
   );
 }

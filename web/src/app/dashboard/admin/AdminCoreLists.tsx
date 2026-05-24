@@ -38,7 +38,7 @@ const formatDate = (value?: string | null) => {
 
 function EmptyInline({ message }: { message: string }) {
   return (
-    <div style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '18px', background: 'var(--bg-mid)', fontWeight: 800 }}>
+    <div style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)', borderRadius: '8px', background: 'var(--bg-mid)', fontWeight: 650 }}>
       {message}
     </div>
   );
@@ -74,7 +74,7 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '22px' }}>
         <div>
-          <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Company health</div>
+          <div style={{ fontSize: '1.14rem', color: 'var(--text-primary)', fontWeight: 760 }}>Company health</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Search, filter, sort, and inspect companies. Click a row for details.</div>
         </div>
         <Database size={22} color="var(--primary)" />
@@ -97,7 +97,7 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
                 {['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory', 'Created'].map((heading) => (
-                  <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 900 }}>{heading}</th>
+                  <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 760 }}>{heading}</th>
                 ))}
               </tr>
             </thead>
@@ -107,17 +107,17 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
                 return (
                   <tr key={company.id} onClick={() => onSelectCompany(company)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
                     <td style={{ padding: '16px 10px' }}>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 900 }}>{company.companyName}</div>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 760 }}>{company.companyName}</div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
                     </td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.ownerEmail || 'Unavailable'}</td>
                     <td style={{ padding: '16px 10px' }}>
-                      <span style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: '999px', background: health.bg, color: health.tone, fontSize: '0.72rem', fontWeight: 900 }}>
+                      <span style={{ display: 'inline-flex', padding: '6px 10px', borderRadius: '999px', background: health.bg, color: health.tone, fontSize: '0.72rem', fontWeight: 700 }}>
                         {health.label}
                       </span>
                     </td>
-                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.pondCount}</td>
-                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 900 }}>{company.teamMembersCount}</td>
+                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.pondCount}</td>
+                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.teamMembersCount}</td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.feedItemCount + company.additiveItemCount} items</td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{formatDate(company.createdAt)}</td>
                   </tr>
@@ -136,7 +136,7 @@ export function AdminRecentUsers({ users, onSelectUser }: { users: AdminUser[]; 
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
         <div>
-          <div style={{ fontSize: '1.25rem', color: 'var(--text-primary)', fontWeight: 900 }}>Recent users</div>
+          <div style={{ fontSize: '1.14rem', color: 'var(--text-primary)', fontWeight: 760 }}>Recent users</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Latest signups and activity data from Firestore users. Click a user for details.</div>
         </div>
         <Clock size={22} color="var(--primary)" />
@@ -147,10 +147,10 @@ export function AdminRecentUsers({ users, onSelectUser }: { users: AdminUser[]; 
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '16px' }}>
           {users.map((item) => (
-            <button key={item.id} onClick={() => onSelectUser(item)} style={{ textAlign: 'left', padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', cursor: 'pointer' }} type="button">
-              <div style={{ color: 'var(--text-primary)', fontWeight: 900, marginBottom: '4px' }}>{item.name || 'Unnamed user'}</div>
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 700, marginBottom: '12px', wordBreak: 'break-word' }}>{item.email}</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
+            <button key={item.id} onClick={() => onSelectUser(item)} style={{ textAlign: 'left', padding: '18px', borderRadius: '8px', background: 'var(--bg-mid)', border: '1px solid var(--border)', cursor: 'pointer' }} type="button">
+              <div style={{ color: 'var(--text-primary)', fontWeight: 760, marginBottom: '4px' }}>{item.name || 'Unnamed user'}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650, marginBottom: '12px', wordBreak: 'break-word' }}>{item.email}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650 }}>
                 <span>{item.role || 'No role'}</span>
                 <span>{formatDate(item.joinedAt)}</span>
               </div>

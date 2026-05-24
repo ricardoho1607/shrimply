@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Activity, BarChart3, Building2, Database, Filter, Search, Sparkles, UserRoundCheck, Users } from 'lucide-react';
+import { Activity, BarChart3, Building2, Database, Filter, Search, Sparkles, UserRoundCheck, Users, type LucideIcon } from 'lucide-react';
 
 type AdminTab = 'overview' | 'companies' | 'users' | 'usage' | 'followUp';
 
@@ -46,7 +46,7 @@ export const ADMIN_TABS: Array<{ id: AdminTab; label: string; helper: string }> 
 
 export function AdminTabs({ activeTab, onChange }: { activeTab: AdminTab; onChange: (tab: AdminTab) => void }) {
   return (
-    <div className="glass-card" style={{ padding: '10px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px' }}>
+    <div className="glass-card admin-tabs-card" style={{ padding: '8px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '6px' }}>
       {ADMIN_TABS.map((tab) => {
         const active = activeTab === tab.id;
         return (
@@ -55,8 +55,8 @@ export function AdminTabs({ activeTab, onChange }: { activeTab: AdminTab; onChan
             type="button"
             onClick={() => onChange(tab.id)}
             style={{
-              borderRadius: '16px',
-              padding: '14px 16px',
+              borderRadius: '6px',
+              padding: '12px 14px',
               border: active ? '1px solid var(--primary)' : '1px solid transparent',
               background: active ? 'var(--primary-dim)' : 'transparent',
               color: active ? 'var(--primary)' : 'var(--text-muted)',
@@ -64,8 +64,8 @@ export function AdminTabs({ activeTab, onChange }: { activeTab: AdminTab; onChan
               textAlign: 'left',
             }}
           >
-            <div style={{ fontWeight: 900, fontSize: '0.92rem', color: active ? 'var(--primary)' : 'var(--text-primary)' }}>{tab.label}</div>
-            <div style={{ fontSize: '0.76rem', marginTop: '4px', fontWeight: 700 }}>{tab.helper}</div>
+            <div style={{ fontWeight: 760, fontSize: '0.9rem', color: active ? 'var(--primary)' : 'var(--text-primary)' }}>{tab.label}</div>
+            <div style={{ fontSize: '0.74rem', marginTop: '4px', fontWeight: 600 }}>{tab.helper}</div>
           </button>
         );
       })}
@@ -79,12 +79,12 @@ export function ExecutiveSummary({ metrics }: { metrics: AdminMetricsSummary }) 
   const periodRequests = metrics.period.aiRequests + metrics.period.apiRequests + metrics.period.requestLogs;
 
   return (
-    <div className="glass-card" style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) repeat(4, minmax(130px, 0.7fr))', gap: '18px', alignItems: 'center' }}>
+    <div className="glass-card admin-founder-summary" style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'minmax(260px, 1.3fr) repeat(4, minmax(132px, 0.75fr))', gap: '14px', alignItems: 'stretch' }}>
       <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '7px 10px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '12px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
           <Sparkles size={14} /> Founder summary
         </div>
-        <div style={{ fontSize: '1.15rem', color: 'var(--text-primary)', fontWeight: 900, lineHeight: 1.45 }}>
+        <div style={{ fontSize: '1.05rem', color: 'var(--text-primary)', fontWeight: 760, lineHeight: 1.5, letterSpacing: 0 }}>
           Last {metrics.periodDays} days: {formatNumber(metrics.period.newUsers)} new users, {formatNumber(activeCompanies)} active companies, {formatNumber(stuckCompanies)} companies needing help, and {formatNumber(periodRequests)} tracked requests.
         </div>
       </div>
@@ -96,14 +96,14 @@ export function ExecutiveSummary({ metrics }: { metrics: AdminMetricsSummary }) 
   );
 }
 
-function SummaryMini({ label, value, icon: Icon }: { label: string; value: number; icon: any }) {
+function SummaryMini({ label, value, icon: Icon }: { label: string; value: number; icon: LucideIcon }) {
   return (
-    <div style={{ padding: '16px', borderRadius: '18px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+    <div className="admin-summary-mini" style={{ padding: '15px', borderRadius: '8px', background: 'var(--bg-mid)', border: '1px solid var(--border)', minHeight: '112px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
         <Icon size={16} color="var(--primary)" />
       </div>
-      <div style={{ color: 'var(--text-primary)', fontSize: '1.35rem', fontWeight: 900, fontFamily: 'var(--sans)' }}>{formatNumber(value)}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '1.32rem', fontWeight: 760, fontFamily: 'var(--sans)', letterSpacing: 0 }}>{formatNumber(value)}</div>
     </div>
   );
 }
@@ -118,7 +118,7 @@ export function DataSourceBadge({ source, updatedAt }: { source: 'Cloud Function
     : 'Unavailable';
 
   return (
-    <div style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '10px 12px', borderRadius: '999px', background: isFallback ? '#fef3c7' : 'var(--primary-dim)', color: isFallback ? '#92400e' : 'var(--primary)', fontSize: '0.78rem', fontWeight: 900 }}>
+    <div style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '999px', background: isFallback ? '#fef3c7' : 'var(--primary-dim)', color: isFallback ? '#92400e' : 'var(--primary)', fontSize: '0.76rem', fontWeight: 700 }}>
       <Database size={15} /> Data source: {source}
       <span style={{ opacity: 0.75 }}>· Updated {updatedLabel}</span>
     </div>
@@ -178,12 +178,12 @@ export function CompanyTableControls({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search company or owner email"
-          style={{ width: '100%', height: 44, borderRadius: 14, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 700 }}
+          style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 650 }}
         />
       </label>
       <label style={{ position: 'relative' }}>
         <Filter size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-        <select value={status} onChange={(event) => onStatusChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 14, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 800, background: '#fff' }}>
+        <select value={status} onChange={(event) => onStatusChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 700, background: '#fff' }}>
           <option value="all">All statuses</option>
           <option value="Active">Active</option>
           <option value="Configured">Configured</option>
@@ -193,7 +193,7 @@ export function CompanyTableControls({
       </label>
       <label style={{ position: 'relative' }}>
         <BarChart3 size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-        <select value={sort} onChange={(event) => onSortChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 14, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 800, background: '#fff' }}>
+        <select value={sort} onChange={(event) => onSortChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 700, background: '#fff' }}>
           <option value="ponds-desc">Most ponds</option>
           <option value="created-desc">Newest</option>
           <option value="name-asc">Company A-Z</option>
