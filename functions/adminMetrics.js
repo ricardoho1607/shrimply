@@ -163,6 +163,127 @@ const getPendingJoinRequestsByUserId = async (db, companyRows) => {
   return pendingByUserId;
 };
 
+const deleteQuerySnapshot = async (db, snapshot) => {
+  if (snapshot.empty) return 0;
+
+  let deleted = 0;
+  let batch = db.batch();
+  let operationCount = 0;
+
+  for (const doc of snapshot.docs) {
+    batch.delete(doc.ref);
+    deleted += 1;
+    operationCount += 1;
+
+    if (operationCount === 450) {
+      await batch.commit();
+      batch = db.batch();
+      operationCount = 0;
+    }
+  }
+
+  if (operationCount > 0) {
+    await batch.commit();
+  }
+
+  return deleted;
+};
+
+const deleteTopLevelWhereCompanyId = async (db, collectionName, companyId) => {
+  try {
+    const snapshot = await db.collection(collectionName).where("companyId", "==", companyId).get();
+    return await deleteQuerySnapshot(db, snapshot);
+  } catch (error) {
+    console.warn(`Hard delete skipped ${collectionName} by companyId:`, error.message);
+    return 0;
+  }
+};
+
+const getCompanyUserIds = async (db, companyId, company) => {
+  const userIds = new Set();
+  if (company.ownerId) userIds.add(company.ownerId);
+  if (Array.isArray(company.teamMembers)) {
+    company.teamMembers.forEach((userId) => userId && userIds.add(userId));
+  }
+
+  const linkedUsersSnapshot = await db.collection("users").where("companyId", "==", companyId).get();
+  linkedUsersSnapshot.forEach((userDoc) => userIds.add(userDoc.id));
+
+  return Array.from(userIds);
+};
+
+exports.hardDeleteCompany = onCall({ timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
+  const uid = request.auth?.uid;
+  const email = String(request.auth?.token?.email || "").toLowerCase();
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "You must be signed in to delete a company.");
+  }
+
+  if (!ADMIN_EMAILS.has(email)) {
+    throw new HttpsError("permission-denied", "This action is restricted to the founder account.");
+  }
+
+  if (!companyId) {
+    throw new HttpsError("invalid-argument", "Company ID is required.");
+  }
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const companySnapshot = await companyRef.get();
+
+  if (!companySnapshot.exists) {
+    throw new HttpsError("not-found", "Company not found.");
+  }
+
+  const company = companySnapshot.data() || {};
+  const userIds = (await getCompanyUserIds(db, companyId, company)).filter((userId) => userId !== uid);
+
+  const deleteCounts = {};
+  const topLevelCollections = [
+    "joinRequests",
+    "notifications",
+    "marketplace_listings",
+    "marketplace_responses",
+    "diseaseReports",
+    "apiRequests",
+    "requestLogs",
+    "assets",
+  ];
+
+  for (const collectionName of topLevelCollections) {
+    deleteCounts[collectionName] = await deleteTopLevelWhereCompanyId(db, collectionName, companyId);
+  }
+
+  for (const userId of userIds) {
+    await db.recursiveDelete(db.collection("users").doc(userId));
+  }
+
+  await db.recursiveDelete(companyRef);
+
+  const authDeleted = [];
+  const authSkipped = [];
+  for (const userId of userIds) {
+    try {
+      await admin.auth().deleteUser(userId);
+      authDeleted.push(userId);
+    } catch (error) {
+      authSkipped.push({ userId, reason: error.message });
+      console.warn(`Hard delete could not remove auth user ${userId}:`, error.message);
+    }
+  }
+
+  return {
+    success: true,
+    companyId,
+    deletedUserCount: userIds.length,
+    authDeletedCount: authDeleted.length,
+    authSkipped,
+    deleteCounts,
+  };
+});
+
 exports.getAdminMetrics = onCall(async (request) => {
   const uid = request.auth?.uid;
   const email = String(request.auth?.token?.email || "").toLowerCase();

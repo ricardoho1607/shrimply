@@ -20,6 +20,7 @@ import {
   RefreshCcw,
   ShieldCheck,
   Store,
+  Trash2,
   UserRoundCheck,
   Users,
   Waves,
@@ -36,6 +37,15 @@ import { AdminLoadingSkeleton, AdminTabs, DataSourceBadge, ExecutiveSummary, typ
 
 type Period = 7 | 30;
 type DataSource = 'Cloud Function' | 'Firestore fallback' | null;
+
+type DeleteCompanyResult = {
+  success: boolean;
+  companyId: string;
+  deletedUserCount: number;
+  authDeletedCount: number;
+  authSkipped?: Array<{ userId: string; reason: string }>;
+  deleteCounts?: Record<string, number>;
+};
 
 type CompanyMetric = {
   id: string;
@@ -581,7 +591,17 @@ function AdminSidebar({ activeTab, onChange, userName }: { activeTab: AdminTab; 
   );
 }
 
-function AdminInspectorPanel({ company, user }: { company: CompanyMetric | null; user: AdminUser | null }) {
+function AdminInspectorPanel({
+  company,
+  user,
+  deletingCompanyId,
+  onHardDeleteCompany,
+}: {
+  company: CompanyMetric | null;
+  user: AdminUser | null;
+  deletingCompanyId: string | null;
+  onHardDeleteCompany: (company: CompanyMetric) => void;
+}) {
   if (user) {
     const pendingRequest = user.pendingJoinRequest;
     return (
@@ -751,6 +771,32 @@ function AdminInspectorPanel({ company, user }: { company: CompanyMetric | null;
           <span>Save note</span>
         </button>
       </section>
+
+      <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginTop: 22 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, color: '#b91c1c', fontWeight: 900, fontSize: '0.86rem' }}>
+          <Trash2 size={16} />
+          Danger zone
+        </div>
+        <p style={{ margin: '0 0 12px', color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.82rem', fontWeight: 700 }}>
+          Permanently deletes this company, its nested company data, linked top-level records, linked Firestore users, and matching Auth users.
+        </p>
+        <button
+          className="dashboard-action"
+          type="button"
+          disabled={deletingCompanyId === company.id}
+          onClick={() => onHardDeleteCompany(company)}
+          style={{
+            width: '100%',
+            background: '#fee2e2',
+            border: '1px solid #fecaca',
+            color: '#b91c1c',
+            fontWeight: 900,
+          }}
+        >
+          {deletingCompanyId === company.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+          <span>{deletingCompanyId === company.id ? 'Deleting company...' : 'Delete company permanently'}</span>
+        </button>
+      </section>
     </aside>
   );
 }
@@ -787,6 +833,7 @@ export default function HiddenAdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<CompanyMetric | null>(null);
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
   const selectCompany = (company: CompanyMetric) => {
     setSelectedCompany(company);
     setSelectedUser(null);
@@ -847,6 +894,29 @@ export default function HiddenAdminPage() {
     link.click();
     URL.revokeObjectURL(url);
   };
+
+  const hardDeleteCompany = useCallback(async (company: CompanyMetric) => {
+    if (!isAllowed || deletingCompanyId) return;
+    const confirmed = window.confirm(`Permanently delete ${company.companyName}? This will wipe the company, linked company records, linked user Firestore docs, and matching Auth users. This cannot be undone.`);
+    if (!confirmed) return;
+
+    setDeletingCompanyId(company.id);
+    setError(null);
+    try {
+      const functions = getFunctions(app);
+      const deleteCompany = httpsCallable<{ companyId: string }, DeleteCompanyResult>(functions, 'hardDeleteCompany');
+      const response = await deleteCompany({ companyId: company.id });
+      console.info('Company hard delete completed:', response.data);
+      setSelectedCompany(null);
+      setSelectedUser(null);
+      await loadMetrics();
+    } catch (deleteError: unknown) {
+      console.error('Failed to hard delete company:', deleteError);
+      setError(deleteError instanceof Error ? deleteError.message : 'Failed to hard delete company. Check Cloud Function deployment and founder permissions.');
+    } finally {
+      setDeletingCompanyId(null);
+    }
+  }, [deletingCompanyId, isAllowed, loadMetrics]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -968,7 +1038,12 @@ export default function HiddenAdminPage() {
         )}
       </main>
 
-      <AdminInspectorPanel company={selectedCompany || metrics?.companies[0] || null} user={selectedUser} />
+      <AdminInspectorPanel
+        company={selectedCompany || metrics?.companies[0] || null}
+        user={selectedUser}
+        deletingCompanyId={deletingCompanyId}
+        onHardDeleteCompany={hardDeleteCompany}
+      />
     </div>
   );
 }
