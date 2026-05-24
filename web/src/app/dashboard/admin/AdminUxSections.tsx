@@ -103,7 +103,7 @@ function SummaryMini({ label, value, icon: Icon }: { label: string; value: numbe
         <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</span>
         <Icon size={16} color="var(--primary)" />
       </div>
-      <div style={{ color: 'var(--text-primary)', fontSize: '1.35rem', fontWeight: 900, fontFamily: 'var(--jakarta)' }}>{formatNumber(value)}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '1.35rem', fontWeight: 900, fontFamily: 'var(--sans)' }}>{formatNumber(value)}</div>
     </div>
   );
 }
