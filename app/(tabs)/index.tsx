@@ -406,7 +406,7 @@ export default function PondManagementScreen() {
   const calculateMetrics = useCallback((pond: Pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);
     const latestSampling = getLatestSampling(pond.id);
-    const currentMbw = latestSampling ? Number(latestSampling.mbw) : Number(pond.initialWeight);
+    const currentMbw = latestSampling ? Number(latestSampling.mbw) : Number(pond.baselineMbw || pond.initialWeight);
     const size = (currentMbw && currentMbw > 0) 
       ? (1000 / currentMbw).toFixed(0) 
       : '0';
