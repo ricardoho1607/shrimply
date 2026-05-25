@@ -252,6 +252,14 @@ export default function PondManagementScreen() {
     return Number.isFinite(parsed) ? parsed : 0;
   }, []);
 
+  const formatLocalDateKey = useCallback((date: Date): string => {
+    const safeDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+    const year = safeDate.getFullYear();
+    const month = String(safeDate.getMonth() + 1).padStart(2, '0');
+    const day = String(safeDate.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const normalizeDateValue = useCallback((value: unknown): Date => {
     if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
     if (typeof value === 'string' || typeof value === 'number') {
@@ -641,13 +649,13 @@ export default function PondManagementScreen() {
       mbw: parseNumericInput(mbw),
       mortality: parseNumericInput(mortality),
       feed: parseNumericInput(feed),
-      date: samplingDate.toISOString().split('T')[0],
+      date: formatLocalDateKey(samplingDate),
       // No feedData here - sampling doesn't deduct from inventory
     });
     
     closeModal();
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
-  }, [canEditPonds, closeModal, formData, activePonds, addSampling, parseNumericInput, t]);
+  }, [canEditPonds, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canEditPonds) {
