@@ -101,9 +101,16 @@ export const isFarmCycleOpen = (cycle: Pick<FarmCycle, 'status'>): boolean => ['
 export const getActiveFarmCycle = (cycles: FarmCycle[]): FarmCycle | undefined => cycles.find(isFarmCycleOpen);
 export const getPhysicalPondKey = (pondName: string): string => pondName.trim().toLowerCase();
 const toFiniteNumber = (value: unknown): number => {
-  const parsed = typeof value === 'number' ? value : Number(value);
+  const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const normalizeSamplingNumbers = <T extends Partial<Sampling>>(sampling: T): T => ({
+  ...sampling,
+  ...(sampling.mbw !== undefined ? { mbw: toFiniteNumber(sampling.mbw) } : {}),
+  ...(sampling.mortality !== undefined ? { mortality: toFiniteNumber(sampling.mortality) } : {}),
+  ...(sampling.feed !== undefined ? { feed: toFiniteNumber(sampling.feed) } : {}),
+});
 export const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 export const getSamplingFeedAmount = (sampling: Pick<Sampling, 'feed' | 'feedData'>): number => {
@@ -552,13 +559,13 @@ export const usePondStore = create<PondStore>()(
         const pond = get().ponds.find((item) => item.id === pondId);
         if (!pond) return;
 
-        const samplingWithId = {
+        const samplingWithId = normalizeSamplingNumbers({
           ...sampling,
           id: sampling.id || Date.now().toString(),
           cycleId: sampling.cycleId || pond.cycleId,
           cycleName: sampling.cycleName || pond.cycleName,
           pondCycleId: sampling.pondCycleId || pond.pondCycleId || pondId,
-        };
+        });
         const updatedPond = { ...pond, samplings: [...(pond.samplings || []), samplingWithId] };
         set((state) => ({ ponds: state.ponds.map((p) => p.id === pondId ? updatedPond : p) }));
         get().firebaseSync?.syncPond('update', updatedPond);
@@ -571,7 +578,7 @@ export const usePondStore = create<PondStore>()(
 
         const updatedPond = {
           ...pond,
-          samplings: (pond.samplings || []).map((sampling) => sampling.id === samplingId ? { ...sampling, ...updates } : sampling),
+          samplings: (pond.samplings || []).map((sampling) => sampling.id === samplingId ? normalizeSamplingNumbers({ ...sampling, ...updates }) : sampling),
         };
         set((state) => ({
           ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond)

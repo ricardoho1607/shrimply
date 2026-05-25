@@ -247,6 +247,11 @@ export default function PondManagementScreen() {
     return isNaN(numericValue) ? 0 : numericValue / 10;
   }, []);
 
+  const parseNumericInput = useCallback((value: string): number => {
+    const parsed = Number(String(value).trim().replace(',', '.'));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }, []);
+
   const normalizeDateValue = useCallback((value: unknown): Date => {
     if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
     if (typeof value === 'string' || typeof value === 'number') {
@@ -633,16 +638,16 @@ export default function PondManagementScreen() {
     
     addSampling(selectedPondData.id, {
       id: Date.now().toString(), 
-      mbw: Number(mbw), 
-      mortality: Number(mortality),
-      feed: Number(feed), 
+      mbw: parseNumericInput(mbw),
+      mortality: parseNumericInput(mortality),
+      feed: parseNumericInput(feed),
       date: samplingDate.toISOString().split('T')[0],
       // No feedData here - sampling doesn't deduct from inventory
     });
     
     closeModal();
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
-  }, [canEditPonds, closeModal, formData, activePonds, addSampling, t]);
+  }, [canEditPonds, closeModal, formData, activePonds, addSampling, parseNumericInput, t]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canEditPonds) {

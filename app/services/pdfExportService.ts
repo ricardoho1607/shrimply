@@ -1,8 +1,17 @@
 // services/pdfExportService.ts
+import { Asset } from 'expo-asset';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+
+const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
+const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
+
+interface PdfBrandAssets {
+  backgroundBase64: string;
+  logoBase64: string;
+}
 
 type ExpenseBreakdown = Record<string, number>;
 type RevenueBreakdown = Record<string, number>;
@@ -26,6 +35,29 @@ interface FinancialData {
   currencyCode?: string;
   currencySymbol?: string;
 }
+
+const loadBase64Asset = async (assetModule: number): Promise<string> => {
+  const asset = Asset.fromModule(assetModule);
+  await asset.downloadAsync();
+
+  const assetUri = asset.localUri || asset.uri;
+  if (!assetUri) {
+    throw new Error('Unable to resolve PDF asset URI');
+  }
+
+  return FileSystem.readAsStringAsync(assetUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+};
+
+const loadProfitLossBrandAssets = async (): Promise<PdfBrandAssets> => {
+  const [backgroundBase64, logoBase64] = await Promise.all([
+    loadBase64Asset(PDF_BACKGROUND_ASSET),
+    loadBase64Asset(PDF_LOGO_ASSET),
+  ]);
+
+  return { backgroundBase64, logoBase64 };
+};
 
 const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
   const localeMap: Record<string, string> = {
@@ -131,7 +163,7 @@ const getProfitLossAnalysis = (data: FinancialData) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateProfitLossHTML = (data: FinancialData): string => {
+const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets): string => {
   const { 
     startDate, 
     endDate, 
@@ -159,16 +191,52 @@ const generateProfitLossHTML = (data: FinancialData): string => {
       <title>Profit and Loss Statement</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 13px; line-height: 1.5; }
-        .header { margin-bottom: 25px; }
+        @page { size: 612px 792px; margin: 0; }
+        html { width: 100%; height: 100%; }
+        body {
+          width: 100%;
+          height: 100%;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          color: #2C3E50;
+          background: #0F4C75;
+          font-size: 12px;
+          line-height: 1.35;
+        }
+        .pdf-page {
+          width: 100%;
+          height: 100%;
+          padding: 38px 44px 34px;
+          position: relative;
+          overflow: hidden;
+          background: #0F4C75;
+          page-break-after: always;
+        }
+        .pdf-page:last-child { page-break-after: auto; }
+        .page-bg {
+          position: absolute;
+          inset: -14px;
+          width: calc(100% + 28px);
+          height: calc(100% + 28px);
+          object-fit: cover;
+          z-index: 0;
+        }
+        .page-content {
+          position: relative;
+          z-index: 1;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+        .header { margin-bottom: 18px; padding-right: 78px; position: relative; min-height: 58px; }
+        .header-logo { position: absolute; top: -6px; right: 0; width: 64px; height: 64px; object-fit: contain; }
         .title { font-size: 28px; font-weight: 700; color: #0066CC; margin-bottom: 6px; }
         .company-name { font-size: 14px; color: #2C3E50; margin-bottom: 3px; font-weight: 600; }
         .subtitle { font-size: 13px; color: #4A5568; }
-        .date-range { font-size: 13px; color: #2C3E50; margin-bottom: 20px; }
+        .date-range { font-size: 13px; color: #2C3E50; }
         .divider { height: 3px; background: linear-gradient(to right, #0066CC, #0099FF); margin: 15px 0; border-radius: 2px; }
-        .section { margin-bottom: 20px; }
+        .section { margin-bottom: 14px; }
         .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #BDC3C7; padding-bottom: 4px; }
-        .line-item { display: flex; justify-content: space-between; padding: 6px 0; }
+        .line-item { display: flex; justify-content: space-between; padding: 5px 0; }
         .line-item.category { color: #34495E; padding-left: 10px; }
         .line-item.total { font-weight: 700; font-size: 14px; border-top: 1px solid #BDC3C7; padding: 8px 0; margin-top: 4px; color: #2C3E50; }
         .line-item.gross { font-weight: 700; font-size: 15px; border-top: 2px solid #34495E; border-bottom: 1px solid #34495E; padding: 10px 0; margin-top: 8px; color: #2C3E50; background: #F8FAFB; padding-left: 10px; padding-right: 10px; }
@@ -177,31 +245,27 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         .amount.positive { color: #2D7A4F; }
         .amount.negative { color: #C0392B; }
         .currency { font-size: 11px; color: #4A5568; display: inline-block; margin-left: 4px; }
-        .summary-box { background: #F8FAFB; border-left: 4px solid #0066CC; padding: 12px; margin-top: 25px; border-radius: 4px; }
+        .summary-box { background: rgba(248, 250, 251, 0.78); border-left: 4px solid #0066CC; padding: 12px; margin-top: 18px; border-radius: 0; }
         .summary-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
         .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 8px; padding-top: 8px; }
         .analysis-section {
-          page-break-before: always;
-          break-before: page;
-          page-break-inside: avoid;
-          break-inside: avoid;
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
-          margin-top: 0;
+          margin-top: 12px;
         }
         .analysis-box {
           page-break-inside: avoid;
           break-inside: avoid;
           min-height: 180px;
           padding: 16px;
-          background: #F8FAFB;
+          background: rgba(248, 250, 251, 0.72);
           border: 1px solid #DDEAF3;
           border-left: 4px solid #0066CC;
-          border-radius: 6px;
+          border-radius: 0;
         }
         .analysis-box.risk {
-          background: #FFFBEA;
+          background: rgba(255, 251, 234, 0.74);
           border-color: #F5D08A;
           border-left-color: #F39C12;
         }
@@ -223,143 +287,164 @@ const generateProfitLossHTML = (data: FinancialData): string => {
         .analysis-list li {
           margin-bottom: 8px;
         }
-        .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ECF0F1; font-size: 11px; color: #4A5568; text-align: center; }
+        .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #4A5568; text-align: center; }
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="title">Income Statement</div>
-        <div class="company-name">${companyName}</div>
-        <div class="subtitle">Multi-Step Profit & Loss</div>
-        <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <!-- REVENUE -->
-      <div class="section">
-        <div class="section-title">Revenue</div>
-        ${Object.entries(revenueBreakdown).map(([category, amount]) => `
-          <div class="line-item category">
-            <span>${category}</span>
-            <span class="amount">${formatCurrency(amount)}</span>
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="page-content">
+          <div class="header">
+            <img class="header-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">Income Statement</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">Multi-Step Profit & Loss</div>
+            <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
           </div>
-        `).join('')}
-        <div class="line-item total">
-          <span>Total Revenue</span>
-          <span class="amount">${formatCurrency(totalRevenue)}</span>
-        </div>
-      </div>
-      
-      <!-- COGS -->
-      <div class="section">
-        <div class="section-title">Cost of Goods Sold (COGS)</div>
-        ${Object.entries(cogsBreakdown).map(([category, amount]) => `
-          <div class="line-item category">
-            <span>${category}</span>
-            <span class="amount">${formatCurrency(amount)}</span>
+
+          <div class="divider"></div>
+
+          <!-- REVENUE -->
+          <div class="section">
+            <div class="section-title">Revenue</div>
+            ${Object.entries(revenueBreakdown).map(([category, amount]) => `
+              <div class="line-item category">
+                <span>${category}</span>
+                <span class="amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+            <div class="line-item total">
+              <span>Total Revenue</span>
+              <span class="amount">${formatCurrency(totalRevenue)}</span>
+            </div>
           </div>
-        `).join('')}
-        ${Object.keys(cogsBreakdown).length === 0 ? '<div class="line-item category"><span>No COGS recorded</span><span class="amount">-</span></div>' : ''}
-        <div class="line-item total">
-          <span>Total Cost of Goods Sold</span>
-          <span class="amount">(${formatCurrency(totalCOGS)})</span>
-        </div>
-      </div>
-      
-      <!-- GROSS PROFIT -->
-      <div class="line-item gross">
-        <span>Gross Profit</span>
-        <span class="amount">${formatCurrency(grossProfit)}</span>
-      </div>
-      <br/>
-      
-      <!-- OPERATING EXPENSES -->
-      <div class="section">
-        <div class="section-title">Operating Expenses (OPEX)</div>
-        ${Object.entries(opexBreakdown).map(([category, amount]) => `
-          <div class="line-item category">
-            <span>${category}</span>
-            <span class="amount">${formatCurrency(amount)}</span>
+
+          <!-- COGS -->
+          <div class="section">
+            <div class="section-title">Cost of Goods Sold (COGS)</div>
+            ${Object.entries(cogsBreakdown).map(([category, amount]) => `
+              <div class="line-item category">
+                <span>${category}</span>
+                <span class="amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+            ${Object.keys(cogsBreakdown).length === 0 ? '<div class="line-item category"><span>No COGS recorded</span><span class="amount">-</span></div>' : ''}
+            <div class="line-item total">
+              <span>Total Cost of Goods Sold</span>
+              <span class="amount">(${formatCurrency(totalCOGS)})</span>
+            </div>
           </div>
-        `).join('')}
-        ${Object.keys(opexBreakdown).length === 0 ? '<div class="line-item category"><span>No Operating Expenses recorded</span><span class="amount">-</span></div>' : ''}
-        <div class="line-item total">
-          <span>Total Operating Expenses</span>
-          <span class="amount">(${formatCurrency(totalOPEX)})</span>
-        </div>
-      </div>
-      
-      <!-- OPERATING INCOME -->
-      <div class="line-item gross">
-        <span>Operating Income (EBITDA)</span>
-        <span class="amount">${formatCurrency(operatingIncome)}</span>
-      </div>
-      <br/>
-      
-      <!-- NON-OPERATING EXPENSES -->
-      ${totalOtherExpenses > 0 ? `
-      <div class="section">
-        <div class="section-title">Non-Operating Expenses / Other</div>
-        ${Object.entries(otherExpenseBreakdown).map(([category, amount]) => `
-          <div class="line-item category">
-            <span>${category}</span>
-            <span class="amount">${formatCurrency(amount)}</span>
+
+          <!-- GROSS PROFIT -->
+          <div class="line-item gross">
+            <span>Gross Profit</span>
+            <span class="amount">${formatCurrency(grossProfit)}</span>
           </div>
-        `).join('')}
-        <div class="line-item total">
-          <span>Total Non-Operating Expenses</span>
-          <span class="amount">(${formatCurrency(totalOtherExpenses)})</span>
-        </div>
-      </div>
-      ` : ''}
-      
-      <!-- NET PROFIT -->
-      <div class="line-item net ${netProfit >= 0 ? '' : 'negative'}">
-        <span style="color: ${netProfit >= 0 ? '#2D7A4F' : '#C0392B'}">Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
-        <div>
-          <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(netProfit))}</span>
-          <span class="currency">IDR</span>
-        </div>
-      </div>
-      
-      <div class="summary-box">
-        <div class="summary-item">
-          <span>Gross Profit Margin:</span>
-          <span>${totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
-        </div>
-        <div class="summary-item">
-          <span>Operating Margin:</span>
-          <span>${totalRevenue > 0 ? ((operatingIncome / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
-        </div>
-        <div class="summary-item highlight">
-          <span>Net Profit Margin:</span>
-          <span class="${netProfit >= 0 ? 'positive' : 'negative'}">${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
+          <br/>
+
+          <!-- OPERATING EXPENSES -->
+          <div class="section">
+            <div class="section-title">Operating Expenses (OPEX)</div>
+            ${Object.entries(opexBreakdown).map(([category, amount]) => `
+              <div class="line-item category">
+                <span>${category}</span>
+                <span class="amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+            ${Object.keys(opexBreakdown).length === 0 ? '<div class="line-item category"><span>No Operating Expenses recorded</span><span class="amount">-</span></div>' : ''}
+            <div class="line-item total">
+              <span>Total Operating Expenses</span>
+              <span class="amount">(${formatCurrency(totalOPEX)})</span>
+            </div>
+          </div>
+
+          <!-- OPERATING INCOME -->
+          <div class="line-item gross">
+            <span>Operating Income (EBITDA)</span>
+            <span class="amount">${formatCurrency(operatingIncome)}</span>
+          </div>
+          <br/>
+
+          <!-- NON-OPERATING EXPENSES -->
+          ${totalOtherExpenses > 0 ? `
+          <div class="section">
+            <div class="section-title">Non-Operating Expenses / Other</div>
+            ${Object.entries(otherExpenseBreakdown).map(([category, amount]) => `
+              <div class="line-item category">
+                <span>${category}</span>
+                <span class="amount">${formatCurrency(amount)}</span>
+              </div>
+            `).join('')}
+            <div class="line-item total">
+              <span>Total Non-Operating Expenses</span>
+              <span class="amount">(${formatCurrency(totalOtherExpenses)})</span>
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- NET PROFIT -->
+          <div class="line-item net ${netProfit >= 0 ? '' : 'negative'}">
+            <span style="color: ${netProfit >= 0 ? '#2D7A4F' : '#C0392B'}">Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
+            <div>
+              <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(netProfit))}</span>
+              <span class="currency">IDR</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div class="analysis-section">
-        <div class="analysis-box">
-          <div class="analysis-title">Executive Summary</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="page-content">
+          <div class="header">
+            <img class="header-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">Profit & Loss Analysis</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">Margin and risk review</div>
+            <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="summary-box">
+            <div class="summary-item">
+              <span>Gross Profit Margin:</span>
+              <span>${totalRevenue > 0 ? ((grossProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
+            </div>
+            <div class="summary-item">
+              <span>Operating Margin:</span>
+              <span>${totalRevenue > 0 ? ((operatingIncome / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
+            </div>
+            <div class="summary-item highlight">
+              <span>Net Profit Margin:</span>
+              <span class="${netProfit >= 0 ? 'positive' : 'negative'}">${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(2) : '0.00'}%</span>
+            </div>
+          </div>
+
+          <div class="analysis-section">
+            <div class="analysis-box">
+              <div class="analysis-title">Executive Summary</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="analysis-box risk">
+              <div class="analysis-title">Risk Assessment</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+
+          <div class="footer">
+            Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })} - ${companyName}
+            <br/>Statement prepared according to multi-step income format.
+          </div>
         </div>
-        <div class="analysis-box risk">
-          <div class="analysis-title">Risk Assessment</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      </div>
-      
-      <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric'
-        })} - ${companyName}
-        <br/>Statement prepared according to multi-step income format.
       </div>
     </body>
     </html>
@@ -368,10 +453,20 @@ const generateProfitLossHTML = (data: FinancialData): string => {
 
 export const exportFinancialPDF = async (data: FinancialData) => {
   try {
-    const html = generateProfitLossHTML(data);
+    const brandAssets = await loadProfitLossBrandAssets();
+    const html = generateProfitLossHTML(data, brandAssets);
     
     const { uri } = await Print.printToFileAsync({
       html,
+      textZoom: 100,
+      width: 612,
+      height: 792,
+      margins: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
       base64: false,
     });
     

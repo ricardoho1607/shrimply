@@ -11,6 +11,13 @@ import { exportSamplingReportPDF, prepareSamplingReportData } from './services/s
 
 const isAndroid = Platform.OS === 'android';
 
+const toFiniteNumber = (value: unknown): number => {
+  const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(',', '.'));
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const getSamplingMbw = (sampling: any): number => toFiniteNumber(sampling?.mbw ?? sampling?.abw);
+
 export default function ShrimpReportsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -45,7 +52,7 @@ export default function ShrimpReportsScreen() {
     const operationalSamplings = (pond.samplings || [])
       .filter((sampling) => !isBaselineSampling(sampling))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const growthSamplings = operationalSamplings.filter((sampling) => Number(sampling.mbw) > 0);
+    const growthSamplings = operationalSamplings.filter((sampling) => getSamplingMbw(sampling) > 0);
 
     return growthSamplings
       .map((sampling, index, allSamplings) => {
@@ -54,12 +61,13 @@ export default function ShrimpReportsScreen() {
         const previousSampling = [...allSamplings]
           .reverse()
           .find((item) => new Date(item.date).getTime() < samplingTime) || null;
-        const previousWeight = previousSampling?.mbw || pond.initialWeight || 0.5;
+        const currentMbw = getSamplingMbw(sampling);
+        const previousWeight = getSamplingMbw(previousSampling) || toFiniteNumber(pond.initialWeight) || 0.5;
         const previousDate = previousSampling?.date || pond.docStart;
         const daysDiff = Math.floor((new Date(sampling.date).getTime() - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24));
-        const adg = daysDiff > 0 ? (sampling.mbw - previousWeight) / daysDiff : 0;
+        const adg = daysDiff > 0 ? (currentMbw - previousWeight) / daysDiff : 0;
         const samplingsToDate = operationalSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime);
-        const cumulativeMortality = samplingsToDate.reduce((sum, s) => sum + s.mortality, 0);
+        const cumulativeMortality = samplingsToDate.reduce((sum, s) => sum + toFiniteNumber(s.mortality), 0);
         const cumulativeFeed = getPondTotalFeedConsumed({ ...pond, samplings: samplingsToDate });
         const baselinePopulation = getPondBaselinePopulation({ ...pond, samplings: samplingsToDate });
         const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;
@@ -69,14 +77,14 @@ export default function ShrimpReportsScreen() {
         const currentPopulation = baselinePopulation !== null
           ? baselinePopulation - postBaselineMortality
           : pond.initialPopulation - cumulativeMortality;
-        const biomass = (currentPopulation * sampling.mbw) / 1000;
-        const sr = (currentPopulation / pond.initialPopulation) * 100;
-        const size = sampling.mbw > 0 ? 1000 / sampling.mbw : 0;
+        const biomass = (currentPopulation * currentMbw) / 1000;
+        const sr = pond.initialPopulation > 0 ? (currentPopulation / pond.initialPopulation) * 100 : 0;
+        const size = currentMbw > 0 ? 1000 / currentMbw : 0;
         const fcr = index === allSamplings.length - 1 ? pondMetrics.adjustedFCR : biomass > 0 ? cumulativeFeed / biomass : 0;
-        const mortalityPercentage = (cumulativeMortality / pond.initialPopulation) * 100;
+        const mortalityPercentage = pond.initialPopulation > 0 ? (cumulativeMortality / pond.initialPopulation) * 100 : 0;
         return {
-          samplingNumber: index + 1, samplingDate: sampling.date, doc: samplingDoc, abw: sampling.mbw, adg, size, sr, biomass,
-          feedCumulative: cumulativeFeed, fcr, mortality: sampling.mortality, mortalityPercentage,
+          samplingNumber: index + 1, samplingDate: sampling.date, doc: samplingDoc, mbw: currentMbw, abw: currentMbw, adg, size, sr, biomass,
+          feedCumulative: cumulativeFeed, fcr, mortality: toFiniteNumber(sampling.mortality), mortalityPercentage,
         };
       });
   };
@@ -119,11 +127,11 @@ export default function ShrimpReportsScreen() {
   const getPondStats = (pond: Pond) => {
     const doc = getPondCurrentDoc(pond);
     const metrics = calculatePondMetricsWithHarvest(pond);
-    const latestSampling = pond.samplings.filter(s => s.mbw > 0)
+    const latestSampling = pond.samplings.filter(s => getSamplingMbw(s) > 0)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     return {
       doc, currentPopulation: metrics.currentPopulation, biomass: metrics.currentBiomass, sr: metrics.adjustedSR,
-      latestMBW: latestSampling?.mbw || 0, samplingCount: pond.samplings.filter(s => s.mbw > 0).length,
+      latestMBW: getSamplingMbw(latestSampling), samplingCount: pond.samplings.filter(s => getSamplingMbw(s) > 0).length,
     };
   };
 

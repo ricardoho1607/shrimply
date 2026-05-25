@@ -1,8 +1,17 @@
 // services/cashFlowExportService.ts
+import { Asset } from 'expo-asset';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+
+const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
+const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
+
+interface PdfBrandAssets {
+  backgroundBase64: string;
+  logoBase64: string;
+}
 
 interface CashFlowData {
   period: string;
@@ -39,6 +48,29 @@ interface CashFlowData {
   currencyCode?: string;
   currencySymbol?: string;
 }
+
+const loadBase64Asset = async (assetModule: number): Promise<string> => {
+  const asset = Asset.fromModule(assetModule);
+  await asset.downloadAsync();
+
+  const assetUri = asset.localUri || asset.uri;
+  if (!assetUri) {
+    throw new Error('Unable to resolve PDF asset URI');
+  }
+
+  return FileSystem.readAsStringAsync(assetUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+};
+
+const loadCashFlowBrandAssets = async (): Promise<PdfBrandAssets> => {
+  const [backgroundBase64, logoBase64] = await Promise.all([
+    loadBase64Asset(PDF_BACKGROUND_ASSET),
+    loadBase64Asset(PDF_LOGO_ASSET),
+  ]);
+
+  return { backgroundBase64, logoBase64 };
+};
 
 const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
   const localeMap: Record<string, string> = {
@@ -185,7 +217,7 @@ const getCashFlowAnalysis = (data: CashFlowData) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateCashFlowHTML = (data: CashFlowData): string => {
+const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): string => {
   const { 
     startDate, 
     endDate, 
@@ -214,33 +246,65 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
       <title>Statement of Cash Flows</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
-        .header { margin-bottom: 30px; }
+        @page { size: 612px 792px; margin: 0; }
+        html { width: 100%; min-height: 100%; }
+        body {
+          width: 100%;
+          min-height: 100%;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          padding: 40px 44px;
+          color: #2C3E50;
+          background: #0F4C75;
+          font-size: 14px;
+          line-height: 1.6;
+        }
+        .page-bg {
+          position: fixed;
+          inset: -14px;
+          width: calc(100% + 28px);
+          height: calc(100% + 28px);
+          object-fit: cover;
+          z-index: 0;
+        }
+        .page-logo {
+          position: fixed;
+          top: 30px;
+          right: 38px;
+          width: 64px;
+          height: 64px;
+          object-fit: contain;
+          z-index: 2;
+        }
+        .report-content {
+          position: relative;
+          z-index: 1;
+        }
+        .header { margin-bottom: 30px; padding-right: 82px; min-height: 62px; }
         .title { font-size: 32px; font-weight: 700; color: #27AE60; margin-bottom: 8px; }
         .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; }
         .subtitle { font-size: 14px; color: #2C3E50; }
         .date-range { font-size: 14px; color: #2C3E50; margin-bottom: 30px; }
         .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 20px 0; border-radius: 2px; }
         .section { margin-bottom: 25px; }
-        .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: #F0F9F4; padding: 10px 12px; border-left: 4px solid #27AE60; border-radius: 4px; }
+        .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(240, 249, 244, 0.78); padding: 10px 12px; border-left: 4px solid #27AE60; border-radius: 0; }
         .line-item { display: flex; justify-content: space-between; padding: 8px 0 8px 20px; border-bottom: 1px solid #ECF0F1; }
         .line-item.main { padding-left: 0; font-weight: 600; color: #34495E; }
         .line-item.indent { padding-left: 30px; color: #7F8C8D; font-size: 13px; }
-        .line-item.subtotal { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; background: #F8FAFB; padding-left: 12px; padding-right: 12px; border-radius: 4px; }
-        .line-item.total { font-weight: 700; font-size: 16px; border-bottom: 3px solid #34495E; padding: 15px 12px; margin-top: 12px; color: #2C3E50; background: #F0F9F4; border-radius: 4px; }
-        .line-item.balance { font-weight: 700; font-size: 16px; padding: 12px; background: #EBF5FB; border-radius: 4px; border: 2px solid #3498DB; }
-        .line-item.closing { font-weight: 700; font-size: 17px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 15px 12px; margin-top: 15px; background: #F0F9F4; border-radius: 4px; }
-        .line-item.closing.negative { color: #C0392B; border-bottom: 3px double #C0392B; background: #FADBD8; }
+        .line-item.subtotal { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; background: rgba(248, 250, 251, 0.72); padding-left: 12px; padding-right: 12px; border-radius: 0; }
+        .line-item.total { font-weight: 700; font-size: 16px; border-bottom: 3px solid #34495E; padding: 15px 12px; margin-top: 12px; color: #2C3E50; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
+        .line-item.balance { font-weight: 700; font-size: 16px; padding: 12px; background: rgba(235, 245, 251, 0.76); border-radius: 0; border: 2px solid #3498DB; }
+        .line-item.closing { font-weight: 700; font-size: 17px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 15px 12px; margin-top: 15px; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
+        .line-item.closing.negative { color: #C0392B; border-bottom: 3px double #C0392B; background: rgba(250, 219, 216, 0.78); }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
         .amount.positive { color: #2D7A4F; }
         .amount.negative { color: #C0392B; }
         .amount.neutral { color: #2C3E50; }
         .currency { font-size: 12px; color: #2C3E50; display: block; text-align: right; margin-top: 2px; }
-        .summary-box { background: #F8FAFB; border-left: 4px solid #27AE60; padding: 15px; margin-top: 30px; border-radius: 4px; }
+        .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 15px; margin-top: 30px; border-radius: 0; }
         .summary-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
         .summary-item.highlight { font-weight: 700; font-size: 16px; color: #2C3E50; border-top: 2px solid #BDC3C7; margin-top: 10px; padding-top: 12px; }
         .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ECF0F1; font-size: 12px; color: #2C3E50; text-align: center; }
-        .note { background: #FFF9E6; border-left: 4px solid #F39C12; padding: 12px; margin-top: 20px; border-radius: 4px; font-size: 12px; color: #856404; }
+        .note { background: rgba(255, 249, 230, 0.78); border-left: 4px solid #F39C12; padding: 12px; margin-top: 20px; border-radius: 0; font-size: 12px; color: #856404; }
         .activity-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
         .badge-operating { background: #D5F4E6; color: #27AE60; }
         .badge-investing { background: #FFF3CD; color: #F39C12; }
@@ -260,13 +324,13 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           break-inside: avoid;
           min-height: 180px;
           padding: 16px;
-          background: #F8FAFB;
+          background: rgba(248, 250, 251, 0.72);
           border: 1px solid #DDEAF3;
           border-left: 4px solid #27AE60;
-          border-radius: 6px;
+          border-radius: 0;
         }
         .analysis-box.risk {
-          background: #FFFBEA;
+          background: rgba(255, 251, 234, 0.76);
           border-color: #F5D08A;
           border-left-color: #F39C12;
         }
@@ -291,12 +355,15 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
       </style>
     </head>
     <body>
-      <div class="header">
-        <div class="title">Statement of Cash Flows</div>
-        <div class="company-name">${companyName}</div>
-        <div class="subtitle">Cash Flow Statement (Direct Method)</div>
-        <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
-      </div>
+      <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+      <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+      <div class="report-content">
+        <div class="header">
+          <div class="title">Statement of Cash Flows</div>
+          <div class="company-name">${companyName}</div>
+          <div class="subtitle">Cash Flow Statement (Direct Method)</div>
+          <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+        </div>
       
       <div class="divider"></div>
       
@@ -533,6 +600,7 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
           day: 'numeric'
         })} - ${companyName}
       </div>
+      </div>
     </body>
     </html>
   `;
@@ -540,10 +608,20 @@ const generateCashFlowHTML = (data: CashFlowData): string => {
 
 export const exportCashFlowPDF = async (data: CashFlowData) => {
   try {
-    const html = generateCashFlowHTML(data);
+    const brandAssets = await loadCashFlowBrandAssets();
+    const html = generateCashFlowHTML(data, brandAssets);
     
     const { uri } = await Print.printToFileAsync({
       html,
+      textZoom: 100,
+      width: 612,
+      height: 792,
+      margins: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
       base64: false,
     });
     
