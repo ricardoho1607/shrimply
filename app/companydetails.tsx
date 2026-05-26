@@ -15,7 +15,7 @@ interface TeamMember {
   id: string;
   email: string;
   name: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
+  role: 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
   status: 'active' | 'pending' | 'inactive';
   joinedDate: string;
   lastActive?: string;
@@ -26,13 +26,13 @@ interface JoinRequest {
   userId: string;
   userName: string;
   userEmail: string;
-  requestedRole: 'manager' | 'technician' | 'admin' | 'mechanic';
+  requestedRole: 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
   message?: string;
   requestedAt: string;
   status: 'pending' | 'approved' | 'rejected';
 }
 
-type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
+type RoleKey = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
 
 export default function CompanyDetailsScreen() {
   const router = useRouter();
@@ -57,6 +57,14 @@ export default function CompanyDetailsScreen() {
       color: '#0d2137',
       icon: 'business' as const,
       maxCount: 1
+    },
+    'co-owner': {
+      title: t.companyDetails.coOwner || 'Co-owner',
+      description: t.companyDetails.coOwnerAccess || 'Full access except removing owners and co-owners',
+      permissions: [t.companyDetails.allPermissions, t.companyDetails.inviteMembers, t.companyDetails.manageFinances, t.companyDetails.exportData],
+      color: '#0F4C75',
+      icon: 'shield-checkmark' as const,
+      maxCount: 3
     },
     manager: {
       title: t.companyDetails.farmManager,
@@ -127,7 +135,7 @@ export default function CompanyDetailsScreen() {
         setTeamMembers([]);
       }
       
-      if (user?.role === 'owner' && getJoinRequests) {
+      if ((user?.role === 'owner' || user?.role === 'co-owner') && getJoinRequests) {
         try {
           const requests = await getJoinRequests();
           const pending = requests.filter(r => r.status === 'pending');
@@ -240,7 +248,7 @@ export default function CompanyDetailsScreen() {
   }, [rejectJoinRequest, loadData, t]);
 
   const handleRemoveMember = useCallback(async (member: TeamMember) => {
-    if (member.role === 'owner') {
+    if (member.role === 'owner' || member.role === 'co-owner') {
       Alert.alert(t.messages.error, t.companyDetails.cannotRemoveOwner);
       return;
     }
@@ -345,7 +353,7 @@ export default function CompanyDetailsScreen() {
         </View>
 
         {/* Join Requests Section */}
-        {user?.role === 'owner' && joinRequests.length > 0 && (
+        {(user?.role === 'owner' || user?.role === 'co-owner') && joinRequests.length > 0 && (
           <View style={styles.requestsSection}>
             <TouchableOpacity style={styles.requestsHeader} onPress={() => setShowRequestsTab(!showRequestsTab)}>
               <View style={styles.requestsHeaderLeft}>
@@ -416,7 +424,7 @@ export default function CompanyDetailsScreen() {
                     filled={filled}
                     members={roleMembers}
                     onRemoveMember={handleRemoveMember}
-                    isOwner={user?.role === 'owner'}
+                    isOwner={user?.role === 'owner' || user?.role === 'co-owner'}
                     t={t}
                   />
                 );
@@ -563,7 +571,7 @@ const MemberItem = React.memo(({ member, onRemove, isOwner, t }: { member: TeamM
         <Text style={styles.memberJoinDate}>
           {member.status === 'pending' ? t.companyDetails.invited : formatLastActive(member.lastActive) || `${t.companyDetails.joined} ${new Date(member.joinedDate).toLocaleDateString()}`}
         </Text>
-        {isOwner && member.role !== 'owner' && (
+        {isOwner && member.role !== 'owner' && member.role !== 'co-owner' && (
           <TouchableOpacity style={styles.removeMemberButton} onPress={() => onRemove(member)}>
             <Ionicons name="trash-outline" size={Platform.OS === 'android' ? 14 : 16} color="#e74c3c" />
           </TouchableOpacity>

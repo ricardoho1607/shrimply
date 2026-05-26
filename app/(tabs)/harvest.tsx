@@ -40,7 +40,7 @@ export default function HarvestScreen() {
   const activePondIds = React.useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
   const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
   
-  const canEditHarvest = user?.role === 'technician' || user?.role === 'owner';
+  const canEditHarvest = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);

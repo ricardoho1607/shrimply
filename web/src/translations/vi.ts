@@ -146,7 +146,7 @@ companyDetails: {
   rejectRequest: 'Từ Chối Yêu Cầu',
   approveRequest: 'Phê Duyệt Yêu Cầu',
   removeMember: 'Xóa Thành Viên',
-  cannotRemoveOwner: 'Không thể xóa chủ sở hữu công ty',
+  cannotRemoveOwner: 'Không thể xóa owner hoặc co-owner',
   removed: 'đã xóa',
   hasBeenAdded: 'đã được thêm vào nhóm của bạn!',
   requestRejected: 'Yêu cầu đã bị từ chối',
@@ -157,12 +157,14 @@ companyDetails: {
   companyName: 'Tên Công Ty',
   
   farmOwner: 'Chủ Trang Trại',
+  coOwner: 'Co-owner',
   farmManager: 'Quản Lý Trang Trại',
   aquacultureTechnician: 'Kỹ Thuật Viên Nuôi Trồng Thủy Sản',
   mechanic: 'Mechanic',
   systemAdministrator: 'Quản Trị Viên Hệ Thống',
   
   fullAccess: 'Truy cập đầy đủ tất cả tính năng và cài đặt',
+  coOwnerAccess: 'Truy cập đầy đủ trừ việc xóa owner và co-owner',
   overseeOperations: 'Giám sát hoạt động và quản lý nhóm',
   handsOnManagement: 'Quản lý ao trực tiếp và nhập dữ liệu',
   assetMaintenance: 'Maintains farm assets and equipment without editing pond operations',
@@ -1171,6 +1173,8 @@ companySetup: {
   
   farmOwner: 'Chủ Trại',
   farmOwnerDesc: 'Tôi sở hữu và quản lý trại tôm',
+  coOwner: 'Co-owner',
+  coOwnerDesc: 'Tôi đồng sở hữu hoặc cùng quản lý trại tôm',
   aquacultureTechnician: 'Kỹ Thuật Viên Nuôi Trồng',
   technicianDesc: 'Tôi làm việc với hoạt động và dữ liệu trại',
   manager: 'Quản Lý',
@@ -1184,6 +1188,10 @@ companySetup: {
   ownerFeature2: 'Kiểm soát hoàn toàn mọi hoạt động',
   ownerFeature3: 'Phê duyệt yêu cầu thành viên nhóm',
   ownerFeature4: 'Kết nối với người mua',
+  coOwnerFeature1: 'Tham gia công ty hiện có',
+  coOwnerFeature2: 'Phê duyệt yêu cầu thành viên',
+  coOwnerFeature3: 'Truy cập vận hành và tài chính',
+  coOwnerFeature4: 'Chỉnh sửa hồ sơ công ty',
   
   technicianFeature1: 'Tham gia công ty hiện có',
   technicianFeature2: 'Chỉnh sửa dữ liệu trại và ao',

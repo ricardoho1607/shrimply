@@ -18,7 +18,7 @@ import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
 
 interface RoleOption {
-  id: 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+  id: 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
   title: string;
   description: string;
   icon: string;
@@ -48,6 +48,20 @@ export default function RoleSelectionScreen() {
         t.roleSelection.ownerFeature4,
       ],
       requiresCompany: false
+    },
+    {
+      id: 'co-owner',
+      title: t.roleSelection.coOwner || 'Co-owner',
+      description: t.roleSelection.coOwnerDesc || 'I co-own or jointly manage a shrimp farm',
+      icon: 'shield-checkmark-outline',
+      color: '#0F4C75',
+      features: [
+        t.roleSelection.coOwnerFeature1 || 'Join an existing company',
+        t.roleSelection.coOwnerFeature2 || 'Approve team member requests',
+        t.roleSelection.coOwnerFeature3 || 'Access operations and finance',
+        t.roleSelection.coOwnerFeature4 || 'Edit company profile details',
+      ],
+      requiresCompany: true
     },
     {
       id: 'technician',

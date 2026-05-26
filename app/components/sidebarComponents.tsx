@@ -68,7 +68,7 @@ export const RegularSidebar: React.FC = () => {
     slideAnimRef
   } = useSidebar();
 
-  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
   const loadTeamStats = useCallback(async () => {
     if (!company || !company.id) return;
@@ -177,7 +177,7 @@ export const RegularSidebar: React.FC = () => {
   );
 
   const CompanyInfoCard = () => {
-    const isOwner = user?.role === 'owner';
+    const isOwner = user?.role === 'owner' || user?.role === 'co-owner';
     const hasCompany = !!company;
 
     if (isOwner && hasCompany) {
@@ -282,6 +282,7 @@ export const RegularSidebar: React.FC = () => {
                 <Text style={styles.userName}>{user?.name || user?.email.split('@')[0]}</Text>
                 <Text style={styles.userRole}>
                   {user?.role === 'owner' || (company && company.ownerId === user?.uid) ? t.roleSelection.farmOwner :
+                   user?.role === 'co-owner' ? (t.roleSelection.coOwner || 'Co-owner') :
                     user?.role === 'technician' ? t.companyDetails.aquacultureTechnician :
                       user?.role === 'mechanic' ? t.companyDetails.mechanic :
                         user?.role === 'manager' ? t.roleSelection.manager :
@@ -545,7 +546,7 @@ export const StaticSidebar: React.FC = () => {
   const { t } = useLanguage();
   const router = useRouter();
   const { reportsExpanded, inventoryExpanded, toggleReports, toggleInventory } = useSidebar();
-  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
   const navigateTo = (route: string) => router.push(route as any);
   const handleSignOut = () => {

@@ -54,11 +54,11 @@ service cloud.firestore {
     }
 
     function validRoleValue(value) {
-      return value == null || value in ['owner', 'manager', 'technician', 'admin', 'buyer', 'mechanic'];
+      return value == null || value in ['owner', 'co-owner', 'manager', 'technician', 'admin', 'buyer', 'mechanic'];
     }
 
     function validStaffRoleValue(value) {
-      return value in ['manager', 'technician', 'admin', 'mechanic'];
+      return value in ['co-owner', 'manager', 'technician', 'admin', 'mechanic'];
     }
 
     function currentUserRole() {
@@ -74,13 +74,24 @@ service cloud.firestore {
         && userDoc().data.companyId == companyId;
     }
 
+    function isCompanyOwnerRole(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && currentUserRole() in ['owner', 'co-owner']
+          )
+        );
+    }
+
     function isCompanyManager(companyId) {
       return isCompanyMember(companyId)
         && (
           isCompanyOwner(companyId)
           || (
             userBelongsToCompany(companyId)
-            && currentUserRole() in ['owner', 'manager', 'admin']
+            && currentUserRole() in ['owner', 'co-owner', 'manager', 'admin']
           )
         );
     }
@@ -91,7 +102,7 @@ service cloud.firestore {
           isCompanyOwner(companyId)
           || (
             userBelongsToCompany(companyId)
-            && currentUserRole() in ['owner', 'technician']
+            && currentUserRole() in ['owner', 'co-owner', 'technician']
           )
         );
     }
@@ -201,13 +212,14 @@ service cloud.firestore {
         || (
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
-          && isCompanyOwner(request.resource.data.companyId)
+          && isCompanyOwnerRole(request.resource.data.companyId)
           && validStaffRoleValue(request.resource.data.role)
         )
         || (
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
           && resource.data.companyId != null
-          && isCompanyOwner(resource.data.companyId)
+          && isCompanyOwnerRole(resource.data.companyId)
+          && !(resource.data.role in ['owner', 'co-owner'])
           && request.resource.data.companyId == null
           && request.resource.data.role == null
         )
@@ -236,6 +248,11 @@ service cloud.firestore {
         && request.resource.data.ownerId == resource.data.ownerId
         && (
           isCompanyOwner(companyId)
+          || (
+            isCompanyOwnerRole(companyId)
+            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['teamMembers', 'updatedAt'])
+            && request.resource.data.teamMembers.hasAny([request.auth.uid])
+          )
           || (
             isCompanyManager(companyId)
             && !request.resource.data.diff(resource.data).changedKeys().hasAny([
@@ -296,9 +313,9 @@ service cloud.firestore {
       allow read: if signedIn() && (
         isFounderAdmin()
         || resource.data.userId == request.auth.uid
-        || isCompanyOwner(resource.data.companyId)
+        || isCompanyOwnerRole(resource.data.companyId)
       );
-      allow update: if signedIn() && isCompanyOwner(resource.data.companyId);
+      allow update: if signedIn() && isCompanyOwnerRole(resource.data.companyId);
       allow delete: if false;
     }
 

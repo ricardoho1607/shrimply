@@ -57,7 +57,7 @@ export default function FinancialReportsPage() {
   const [openingInventory, setOpeningInventory] = useState(0);
   const [closingInventory, setClosingInventory] = useState(0);
 
-  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
   useEffect(() => {
     if (!hasFinanceAccess) {

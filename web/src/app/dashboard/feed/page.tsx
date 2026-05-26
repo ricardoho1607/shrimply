@@ -87,7 +87,7 @@ const formatSyncStatus = (date: Date | null): string => {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function FeedRecordsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);

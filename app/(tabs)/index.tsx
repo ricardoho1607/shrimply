@@ -137,7 +137,7 @@ export default function PondManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user, company } = useAuth();
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
+  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
   
   const { 
     ponds, 
@@ -742,7 +742,7 @@ export default function PondManagementScreen() {
 
     const today = new Date().toISOString().split('T')[0];
     const reportCycleId = activeFarmCycle.id;
-    const canViewCycleReport = ['owner', 'manager', 'admin'].includes(user?.role || '');
+    const canViewCycleReport = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
     Alert.alert(
       t.farmCycle.endCycleTitle,
       t.farmCycle.endFarmCycleMessage

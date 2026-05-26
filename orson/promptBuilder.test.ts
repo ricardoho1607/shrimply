@@ -91,7 +91,7 @@ export const runPromptTimeoutSelfTest = async () => {
     await withOrsonTimeout(new Promise((resolve) => setTimeout(resolve, 20)), 1);
     throw new Error('timeout should have thrown');
   } catch (error) {
-    assert(error instanceof Error, 'throws timeout error');
+    if (!(error instanceof Error)) throw error;
     assert(error.message === ORSON_FALLBACK_RESPONSE, 'uses fallback timeout message');
   }
 };

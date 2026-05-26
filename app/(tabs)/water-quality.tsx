@@ -30,7 +30,7 @@ export default function WaterQualityScreen() {
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
+  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
   
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);

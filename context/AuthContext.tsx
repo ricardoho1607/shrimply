@@ -28,8 +28,8 @@ import { usePondStore } from '../app/store/pondStore';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
-type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
-type StaffRole = 'manager' | 'technician' | 'admin' | 'mechanic';
+type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
 
 interface User {
   id: string;
@@ -72,6 +72,11 @@ const getEffectiveUserRole = (user: User | null, company: Company | null): User[
   const ownsFarmCompany = company?.ownerId === user.uid && company?.farmType !== 'buyer';
   return ownsFarmCompany ? 'owner' : user.role;
 };
+
+const OWNER_ROLES: UserRole[] = ['owner', 'co-owner'];
+const STAFF_SETUP_ROLES: UserRole[] = ['co-owner', 'technician', 'manager', 'admin', 'mechanic'];
+const isOwnerRole = (role?: UserRole | null) => !!role && OWNER_ROLES.includes(role);
+const isProtectedOwnerRole = (role?: UserRole | null) => role === 'owner' || role === 'co-owner';
 
 interface PendingInvite {
   email: string;
@@ -470,7 +475,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const completeRoleSelection = async (role: User['role']) => {
     if (!user) return;
     const updatedData: any = { role, lastActive: serverTimestamp() };
-    if (role === 'technician' || role === 'manager' || role === 'admin' || role === 'mechanic') updatedData.hasCompletedSetup = false;
+    if (role && STAFF_SETUP_ROLES.includes(role)) updatedData.hasCompletedSetup = false;
     await updateDoc(doc(db, 'users', user.uid), updatedData);
     setUser({ ...user, ...updatedData });
   };
@@ -620,7 +625,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const getJoinRequests = useCallback(async (): Promise<JoinRequest[]> => {
-    if (!user || user.role !== 'owner' || !company) return [];
+    if (!user || !isOwnerRole(user.role) || !company) return [];
     try {
       const requestsQuery = query(collection(db, 'joinRequests'),
         where('companyId', '==', company.id), where('status', '==', 'pending')
@@ -636,7 +641,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, company]);
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
-    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can approve join requests');
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
     try {
       const requestDoc = await getDoc(doc(db, 'joinRequests', requestId));
       if (!requestDoc.exists()) throw new Error('Join request not found');
@@ -664,7 +669,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, company, refreshCompanyData]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
-    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can reject join requests');
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
     try {
       const requestDoc = await getDoc(doc(db, 'joinRequests', requestId));
       if (!requestDoc.exists()) throw new Error('Join request not found');
@@ -678,11 +683,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, company]);
 
   const removeMember = useCallback(async (memberId: string) => {
-    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can remove members');
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can remove members');
     if (memberId === user.uid) throw new Error('Cannot remove yourself');
     try {
-      await updateDoc(doc(db, 'companies', company.id), { teamMembers: arrayRemove(memberId) });
-      await updateDoc(doc(db, 'users', memberId), { companyId: null, role: null, hasCompletedSetup: false });
+      const memberDoc = await getDoc(doc(db, 'users', memberId));
+      const memberRole = memberDoc.exists() ? (memberDoc.data() as User).role : undefined;
+      if (isProtectedOwnerRole(memberRole) || memberId === company.ownerId) {
+        throw new Error('Owners and co-owners cannot be removed from the team');
+      }
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'companies', company.id), { teamMembers: arrayRemove(memberId), updatedAt: serverTimestamp() });
+      batch.update(doc(db, 'users', memberId), { companyId: null, role: null, hasCompletedSetup: false, lastActive: serverTimestamp() });
+      await batch.commit();
       await refreshCompanyData();
     } catch (error) {
       console.error('Error removing member:', error);
@@ -691,7 +703,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, company, refreshCompanyData]);
 
   const inviteTeamMember = useCallback(async (inviteData: { email: string; role: StaffRole; message?: string }) => {
-    if (!user || !company || user.role !== 'owner') throw new Error('Only company owners can send invitations');
+    if (!user || !company || !isOwnerRole(user.role)) throw new Error('Only company owners and co-owners can send invitations');
 
     const existingInvite = company.pendingInvites.find(invite => invite.email === inviteData.email && invite.status === 'pending');
     if (existingInvite) throw new Error('This email already has a pending invitation');

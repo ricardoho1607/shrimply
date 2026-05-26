@@ -30,12 +30,13 @@ WebBrowser.maybeCompleteAuthSession();
 
 interface InviteInfo {
   email: string;
-  role: 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
+  role: 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
   message?: string;
 }
 
 const ROLE_DEFINITIONS = {
   owner: 'Farm Owner',
+  'co-owner': 'Co-owner',
   manager: 'Farm Manager',
   technician: 'Aquaculture Technician',
   mechanic: 'Mechanic',

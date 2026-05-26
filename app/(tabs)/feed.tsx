@@ -119,7 +119,7 @@ export default function FeedManagementScreen() {
   const { ponds, addFeedData } = usePondStore();
   const { setCurrentCompanyId, adjustFeedUsage } = useFeedAdditiveStore();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
+  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);

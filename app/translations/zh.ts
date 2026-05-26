@@ -137,7 +137,7 @@ companyDetails: {
   rejectRequest: '拒绝请求',
   approveRequest: '批准请求',
   removeMember: '移除成员',
-  cannotRemoveOwner: '无法移除公司所有者',
+  cannotRemoveOwner: '无法移除 owner 或 co-owner',
   removed: '已移除',
   hasBeenAdded: '已添加到您的团队！',
   requestRejected: '请求已被拒绝',
@@ -148,12 +148,14 @@ companyDetails: {
   companyName: '公司名称',
   
   farmOwner: '养殖场主',
+  coOwner: 'Co-owner',
   farmManager: '养殖场经理',
   aquacultureTechnician: '水产养殖技术员',
   mechanic: '维修员',
   systemAdministrator: '系统管理员',
   
   fullAccess: '完全访问所有功能和设置',
+  coOwnerAccess: '拥有完整访问权限，但不能移除 owner 和 co-owner',
   overseeOperations: '监督运营和管理团队',
   handsOnManagement: '实际池塘管理和数据录入',
   assetMaintenance: '维护养殖场资产和设备，不编辑池塘运营数据',
@@ -1408,6 +1410,8 @@ companySetup: {
   
   farmOwner: '养殖场主',
   farmOwnerDesc: '我拥有和管理虾场',
+  coOwner: 'Co-owner',
+  coOwnerDesc: '我共同拥有或共同管理虾场',
   aquacultureTechnician: '水产养殖技术员',
   technicianDesc: '我负责养殖场运营和数据',
   manager: '经理',
@@ -1421,6 +1425,10 @@ companySetup: {
   ownerFeature2: '完全控制所有运营',
   ownerFeature3: '批准团队成员请求',
   ownerFeature4: '与买家联系',
+  coOwnerFeature1: '加入现有公司',
+  coOwnerFeature2: '批准团队成员请求',
+  coOwnerFeature3: '访问运营和财务',
+  coOwnerFeature4: '编辑公司资料',
   
   technicianFeature1: '加入现有公司',
   technicianFeature2: '编辑养殖场数据和池塘',

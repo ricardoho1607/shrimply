@@ -34,7 +34,7 @@ const settingsShellStyle: React.CSSProperties = {
   gap: '24px',
   maxWidth: '1120px',
   margin: '0 auto',
-  fontFamily: 'var(--jakarta), sans-serif',
+  fontFamily: 'var(--sans)',
 };
 
 const categoryRailStyle: React.CSSProperties = {
@@ -60,7 +60,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.08em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'var(--jakarta)',
+  fontFamily: 'var(--sans)',
 };
 
 const controlStyle: React.CSSProperties = {
@@ -72,7 +72,7 @@ const controlStyle: React.CSSProperties = {
   color: 'var(--text-primary)',
   fontWeight: 650,
   fontSize: '14px',
-  fontFamily: 'var(--jakarta)',
+  fontFamily: 'var(--sans)',
   width: '100%',
 };
 
@@ -141,7 +141,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let isMounted = true;
-    if (activeTab !== 'organization' || user?.role !== 'owner' || !company) {
+    if (activeTab !== 'organization' || !['owner', 'co-owner'].includes(user?.role || '') || !company) {
       return;
     }
 
@@ -201,7 +201,7 @@ export default function SettingsPage() {
           contactPhone: companyForm.contactPhone,
           isPublicProfile: companyForm.isPublicProfile,
           isSearchable: companyForm.isPublicProfile,
-          ownerId: user.uid,
+          ownerId: company?.ownerId || user.uid,
           updatedAt: new Date().toISOString()
         };
 
@@ -261,7 +261,7 @@ export default function SettingsPage() {
                 border: 'none', background: activeTab === tab.id ? 'var(--primary-dim)' : 'transparent',
                 color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
                 fontWeight: activeTab === tab.id ? 800 : 650, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
-                fontFamily: 'var(--jakarta)',
+                fontFamily: 'var(--sans)',
                 transition: 'all 0.2s'
               }}
             >
@@ -447,7 +447,7 @@ export default function SettingsPage() {
                 <button className="btn-primary" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
               </div>
 
-              {user?.role === 'owner' && (
+              {['owner', 'co-owner'].includes(user?.role || '') && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -517,7 +517,7 @@ export default function SettingsPage() {
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : (t.roleSelection?.manager || 'Staff')}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : member.role === 'co-owner' ? (t.roleSelection?.coOwner || 'Co-owner') : (t.roleSelection?.manager || 'Staff')}</div>
                     </div>
                   </div>
                 ))}
@@ -648,7 +648,7 @@ export default function SettingsPage() {
         .settings-shell :global(h2),
         .settings-shell :global(h3),
         .settings-shell :global(h4) {
-          font-family: var(--jakarta), sans-serif !important;
+          font-family: var(--sans) !important;
         }
 
         .settings-shell :global(h1),
@@ -659,7 +659,7 @@ export default function SettingsPage() {
         }
 
         .settings-shell :global(.btn-primary) {
-          font-family: var(--jakarta), sans-serif !important;
+          font-family: var(--sans) !important;
           letter-spacing: 0;
           text-transform: none;
           font-size: 13px;

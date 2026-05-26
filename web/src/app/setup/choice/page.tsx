@@ -15,7 +15,7 @@ export default function SetupChoicePage() {
   const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
 
   const isBuyer = user?.role === 'buyer';
-  const isStaffRole = ['manager', 'technician', 'admin', 'mechanic'].includes(user?.role || '');
+  const isStaffRole = ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user?.role || '');
 
   const choices = [
     {

@@ -18,7 +18,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { ROUTES } from '@/config/routes';
 
-type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 
 type RoleOption = {
   id: UserRole;
@@ -52,6 +52,20 @@ export default function RoleSelectionPage() {
         t.roleSelection.ownerFeature4 || 'Enterprise-level data insights',
       ],
       requiresCompany: false
+    },
+    {
+      id: 'co-owner',
+      title: t.roleSelection.coOwner || 'Co-owner',
+      description: t.roleSelection.coOwnerDesc || 'Join an existing farm with owner-level access except removing owners.',
+      icon: ShieldCheck,
+      color: '#0F4C75',
+      features: [
+        t.roleSelection.coOwnerFeature1 || 'Join an existing company',
+        t.roleSelection.coOwnerFeature2 || 'Approve team member requests',
+        t.roleSelection.coOwnerFeature3 || 'Access operations and finance',
+        t.roleSelection.coOwnerFeature4 || 'Edit company profile details',
+      ],
+      requiresCompany: true
     },
     {
       id: 'technician',
@@ -214,7 +228,7 @@ export default function RoleSelectionPage() {
             }}>
               {loading && selectedRole === role.id ? 'Setting up...' : (
                 <>
-                  Continue as {role.id === 'owner' ? 'Owner' : role.id === 'technician' ? 'Technician' : role.id === 'manager' ? 'Manager' : 'Buyer'}
+                  Continue as {role.title}
                   <ArrowRight size={18} />
                 </>
               )}

@@ -20,8 +20,11 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
 
-type UserRole = 'owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
-type StaffRole = 'manager' | 'technician' | 'admin' | 'mechanic';
+type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
+type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
+
+const OWNER_ROLES: UserRole[] = ['owner', 'co-owner'];
+const isOwnerRole = (role?: UserRole | null) => !!role && OWNER_ROLES.includes(role);
 
 interface User {
   id: string;
@@ -299,6 +302,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const completeCompanySetup = async (companyData: CompanySetupData) => {
     if (!user) return;
+    if (user.role !== 'owner') throw new Error('Only owners can set up a company');
     try {
       const companyRef = doc(collection(db, 'companies'));
       const newCompany = {
@@ -383,7 +387,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const getJoinRequests = useCallback(async (): Promise<JoinRequest[]> => {
-    if (!user || user.role !== 'owner' || !company) return [];
+    if (!user || !isOwnerRole(user.role) || !company) return [];
 
     const requestsQuery = query(
       collection(db, 'joinRequests'),
@@ -398,7 +402,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [company, user]);
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
-    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can approve join requests');
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
 
     const requestRef = doc(db, 'joinRequests', requestId);
     const requestDoc = await getDoc(requestRef);
@@ -429,7 +433,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [company, refreshCompanyData, user]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
-    if (!user || user.role !== 'owner' || !company) throw new Error('Only company owners can reject join requests');
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
 
     const requestRef = doc(db, 'joinRequests', requestId);
     const requestDoc = await getDoc(requestRef);

@@ -22,7 +22,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
 
-type RoleKey = 'owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
+type RoleKey = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
 
 interface CompanyProfile {
   id?: string;
@@ -74,7 +74,7 @@ const labelStyle: React.CSSProperties = {
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'var(--jakarta)',
+  fontFamily: 'var(--sans)',
 };
 
 const formatLocation = (company: CompanyProfile) => {
@@ -112,6 +112,18 @@ export default function CompanyPage() {
       ],
       icon: ShieldCheck,
       maxCount: 1,
+    },
+    'co-owner': {
+      title: t.companyDetails?.coOwner || 'Co-owner',
+      description: t.companyDetails?.coOwnerAccess || 'Full access except removing owners and co-owners.',
+      permissions: [
+        t.companyDetails?.allPermissions || 'All permissions',
+        t.companyDetails?.inviteMembers || 'Invite members',
+        t.companyDetails?.manageFinances || 'Manage finances',
+        t.companyDetails?.exportData || 'Export data',
+      ],
+      icon: ShieldCheck,
+      maxCount: 3,
     },
     manager: {
       title: t.companyDetails?.farmManager || 'Farm Manager',
@@ -187,7 +199,7 @@ export default function CompanyPage() {
         </Link>
         <div style={{ ...panelStyle, padding: '40px', textAlign: 'center' }}>
           <Building2 size={44} color="var(--primary)" style={{ marginBottom: '16px' }} />
-          <h1 style={{ fontSize: '28px', fontWeight: 850, marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>No company profile found</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: 850, marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>No company profile found</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>Set up your company profile before using this page.</p>
           <Link href="/dashboard/settings" className="btn-primary" style={{ borderRadius: '12px', padding: '12px 18px' }}>
             Open settings
@@ -205,7 +217,7 @@ export default function CompanyPage() {
             <ArrowLeft size={16} />
             Dashboard
           </Link>
-          <h1 style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>
+          <h1 style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>
             {companyProfile.companyName || t.companyDetails?.title || 'Company Details'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '15px', maxWidth: '680px', lineHeight: 1.6 }}>
@@ -270,7 +282,7 @@ export default function CompanyPage() {
         )}
       </section>
 
-      {user?.role === 'owner' && (
+      {(user?.role === 'owner' || user?.role === 'co-owner') && (
         <section style={{ ...panelStyle, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -278,7 +290,7 @@ export default function CompanyPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'var(--jakarta)', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                <h2 style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'var(--sans)', color: 'var(--text-primary)', marginBottom: '4px' }}>
                   Manage join requests in Settings
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -296,7 +308,7 @@ export default function CompanyPage() {
       <section style={{ ...panelStyle, padding: '30px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--jakarta)', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--sans)', color: 'var(--text-primary)', marginBottom: '4px' }}>
               {t.companyDetails?.organizationStructure || 'Organization Structure'}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>

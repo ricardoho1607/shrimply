@@ -99,7 +99,7 @@ interface FarmCycle {
 }
 
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 const CATEGORIES = ['Equipment', 'Infrastructure', 'Vehicles', 'Tools', 'Technology'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];

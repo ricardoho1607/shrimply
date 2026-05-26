@@ -68,7 +68,7 @@ export default function CycleReportScreen() {
   const initializeAssets = useAssetStore((state) => state.initializeForCompany);
   const cleanupAssets = useAssetStore((state) => state.cleanup);
 
-  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
   useEffect(() => {
     if (!company?.id || !hasFinanceAccess) return;

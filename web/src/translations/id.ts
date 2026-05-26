@@ -146,7 +146,7 @@ companyDetails: {
   rejectRequest: 'Tolak Permintaan',
   approveRequest: 'Setujui Permintaan',
   removeMember: 'Hapus Anggota',
-  cannotRemoveOwner: 'Tidak dapat menghapus pemilik perusahaan',
+  cannotRemoveOwner: 'Tidak dapat menghapus owner atau co-owner',
   removed: 'dihapus',
   hasBeenAdded: 'telah ditambahkan ke tim Anda!',
   requestRejected: 'Permintaan telah ditolak',
@@ -157,12 +157,14 @@ companyDetails: {
   companyName: 'Nama Perusahaan',
   
   farmOwner: 'Pemilik Peternakan',
+  coOwner: 'Co-owner',
   farmManager: 'Manajer Peternakan',
   aquacultureTechnician: 'Teknisi Akuakultur',
   mechanic: 'Mechanic',
   systemAdministrator: 'Administrator Sistem',
   
   fullAccess: 'Akses penuh ke semua fitur dan pengaturan',
+  coOwnerAccess: 'Akses penuh kecuali menghapus owner dan co-owner',
   overseeOperations: 'Mengawasi operasi dan mengelola tim',
   handsOnManagement: 'Manajemen kolam langsung dan entri data',
   assetMaintenance: 'Maintains farm assets and equipment without editing pond operations',
@@ -1353,6 +1355,8 @@ companySetup: {
     
     farmOwner: 'Pemilik Tambak',
     farmOwnerDesc: 'Saya memiliki dan mengelola tambak udang',
+    coOwner: 'Co-owner',
+    coOwnerDesc: 'Saya ikut memiliki atau mengelola tambak udang',
     aquacultureTechnician: 'Teknisi Akuakultur',
     technicianDesc: 'Saya bekerja dengan operasi dan data tambak',
     manager: 'Manajer',
@@ -1366,6 +1370,10 @@ companySetup: {
     ownerFeature2: 'Kontrol penuh atas semua operasi',
     ownerFeature3: 'Setujui permintaan anggota tim',
     ownerFeature4: 'Terhubung dengan pembeli',
+    coOwnerFeature1: 'Bergabung dengan perusahaan yang sudah ada',
+    coOwnerFeature2: 'Menyetujui permintaan anggota tim',
+    coOwnerFeature3: 'Mengakses operasional dan keuangan',
+    coOwnerFeature4: 'Mengedit profil perusahaan',
     
     technicianFeature1: 'Bergabung dengan perusahaan yang ada',
     technicianFeature2: 'Edit data tambak dan kolam',

@@ -137,7 +137,7 @@ companyDetails: {
   rejectRequest: 'ปฏิเสธคำขอ',
   approveRequest: 'อนุมัติคำขอ',
   removeMember: 'ลบสมาชิก',
-  cannotRemoveOwner: 'ไม่สามารถลบเจ้าของบริษัทได้',
+  cannotRemoveOwner: 'ไม่สามารถลบ owner หรือ co-owner ได้',
   removed: 'ลบแล้ว',
   hasBeenAdded: 'ถูกเพิ่มเข้าทีมของคุณแล้ว!',
   requestRejected: 'คำขอถูกปฏิเสธ',
@@ -148,12 +148,14 @@ companyDetails: {
   companyName: 'ชื่อบริษัท',
   
   farmOwner: 'เจ้าของฟาร์ม',
+  coOwner: 'Co-owner',
   farmManager: 'ผู้จัดการฟาร์ม',
   aquacultureTechnician: 'ช่างเทคนิคการเพาะเลี้ยง',
   mechanic: 'ช่างซ่อมบำรุง',
   systemAdministrator: 'ผู้ดูแลระบบ',
   
   fullAccess: 'เข้าถึงคุณสมบัติและการตั้งค่าทั้งหมด',
+  coOwnerAccess: 'เข้าถึงทั้งหมด ยกเว้นการลบ owner และ co-owner',
   overseeOperations: 'ดูแลการดำเนินงานและจัดการทีม',
   handsOnManagement: 'การจัดการบ่อและการป้อนข้อมูล',
   assetMaintenance: 'ดูแลสินทรัพย์และอุปกรณ์ฟาร์มโดยไม่แก้ไขการดำเนินงานบ่อ',
@@ -1277,6 +1279,8 @@ common: {
   
   farmOwner: 'เจ้าของฟาร์ม',
   farmOwnerDesc: 'ฉันเป็นเจ้าของและจัดการฟาร์มกุ้ง',
+  coOwner: 'Co-owner',
+  coOwnerDesc: 'ฉันเป็นเจ้าของร่วมหรือร่วมจัดการฟาร์มกุ้ง',
   aquacultureTechnician: 'ช่างเทคนิคการเพาะเลี้ยง',
   technicianDesc: 'ฉันทำงานกับการดำเนินงานและข้อมูลฟาร์ม',
   manager: 'ผู้จัดการ',
@@ -1290,6 +1294,10 @@ common: {
   ownerFeature2: 'ควบคุมการดำเนินงานทั้งหมดอย่างเต็มที่',
   ownerFeature3: 'อนุมัติคำขอสมาชิกในทีม',
   ownerFeature4: 'เชื่อมต่อกับผู้ซื้อ',
+  coOwnerFeature1: 'เข้าร่วมบริษัทที่มีอยู่',
+  coOwnerFeature2: 'อนุมัติคำขอสมาชิกทีม',
+  coOwnerFeature3: 'เข้าถึงการดำเนินงานและการเงิน',
+  coOwnerFeature4: 'แก้ไขโปรไฟล์บริษัท',
   
   technicianFeature1: 'เข้าร่วมบริษัทที่มีอยู่',
   technicianFeature2: 'แก้ไขข้อมูลฟาร์มและบ่อ',

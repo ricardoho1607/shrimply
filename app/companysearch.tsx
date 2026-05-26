@@ -37,9 +37,10 @@ interface Company {
   logoUrl?: string;
 }
 
-type Role = 'manager' | 'technician' | 'admin' | 'mechanic';
+type Role = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
 
 const ROLES = [
+  { id: 'co-owner', title: 'Co-owner', icon: 'shield-checkmark' },
   { id: 'technician', title: 'Aquaculture Technician', icon: 'flask' },
   { id: 'mechanic', title: 'Mechanic', icon: 'construct' },
   { id: 'manager', title: 'Farm Manager', icon: 'people' },
@@ -75,7 +76,7 @@ export default function CompanySearchScreen() {
   }, [user]);
 
   React.useEffect(() => {
-    if (user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role)) {
+    if (user?.role && ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user.role)) {
       setSelectedRole(user.role as Role);
     }
   }, [user?.role]);
@@ -141,7 +142,7 @@ export default function CompanySearchScreen() {
   const openRequestModal = (company: Company) => {
     setSelectedCompany(company);
     setRequestMessage('');
-    setSelectedRole(user?.role && ['manager', 'technician', 'admin', 'mechanic'].includes(user.role) ? user.role as Role : 'technician');
+    setSelectedRole(user?.role && ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user.role) ? user.role as Role : 'technician');
     setShowModal(true);
   };
 

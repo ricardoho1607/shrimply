@@ -247,7 +247,7 @@ export default function PondDetails() {
   const { user, company } = useAuth();
   const insets = useSafeAreaInsets();
   
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner';
+  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
   
   const { 
     getPondById, 

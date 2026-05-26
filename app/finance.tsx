@@ -93,7 +93,7 @@ export default function FinancePage() {
     notes: '',
   });
 
-  const hasFinanceAccess = ['owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
   const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
     switch (period) {

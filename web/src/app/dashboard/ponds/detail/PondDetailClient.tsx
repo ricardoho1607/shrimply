@@ -117,7 +117,16 @@ const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const getDateOnlyUtcTime = (dateString: string): number => {
+  const [year, month, day] = dateString.split('-').map(Number);
+  return Date.UTC(year, (month || 1) - 1, day || 1);
+};
+
+const calculateDocFromDates = (startDate: string, baselineDate: string): number =>
+  Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
 
 const toFiniteNumber = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value);
@@ -315,7 +324,6 @@ export default function PondDetailClient() {
   const [isBaselineModalOpen, setBaselineModalOpen] = useState(false);
   const [baselineForm, setBaselineForm] = useState({
     baselineDate: new Date().toISOString().split('T')[0],
-    baselineDoc: '',
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
@@ -498,7 +506,6 @@ export default function PondDetailClient() {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     setBaselineForm({
       baselineDate: pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0],
-      baselineDoc: String(pond.baselineDoc ?? ''),
       baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
       baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
       baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
@@ -512,7 +519,8 @@ export default function PondDetailClient() {
     if (!companyId || !pond) return;
     if (!canEditPond) return;
 
-    const baselineDocValue = parseInt(baselineForm.baselineDoc, 10);
+    const cycleStartDate = pond.docStart || pond.cycleStartedAt || baselineForm.baselineDate;
+    const baselineDocValue = calculateDocFromDates(cycleStartDate, baselineForm.baselineDate);
     const baselineMbwValue = parseFloat(baselineForm.baselineMbw);
     const baselinePopulationValue = parseFloat(baselineForm.baselineEstimatedPopulation);
     const baselineSurvivalValue = parseFloat(baselineForm.baselineSurvivalRate);
@@ -522,12 +530,11 @@ export default function PondDetailClient() {
       alert('Current MBW is required for an existing cycle.');
       return;
     }
-    if (!baselineForm.baselineDoc || Number.isNaN(baselineDocValue) || baselineDocValue < 0) {
+    if (!baselineForm.baselineDate || !Number.isFinite(baselineDocValue) || baselineDocValue < 0) {
       alert('Current DOC is required for an existing cycle.');
       return;
     }
 
-    const effectiveDocStart = new Date(new Date(baselineForm.baselineDate).getTime() - baselineDocValue * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const baselineSamplingIndex = (pond.samplings || []).findIndex(isBaselineSampling);
     const existingBaseline = baselineSamplingIndex >= 0 ? pond.samplings[baselineSamplingIndex] : undefined;
     const baselineSampling: Sampling = {
@@ -551,8 +558,8 @@ export default function PondDetailClient() {
 
     try {
       await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-        docStart: effectiveDocStart,
-        cycleStartedAt: effectiveDocStart,
+        docStart: cycleStartDate,
+        cycleStartedAt: cycleStartDate,
         cycleStartMode: 'midcycle',
         baselineDate: baselineForm.baselineDate,
         baselineDoc: baselineDocValue,
@@ -1040,10 +1047,6 @@ export default function PondDetailClient() {
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Baseline Date
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Current DOC
-                <input required type="number" value={baselineForm.baselineDoc} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDoc: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Current MBW (g)

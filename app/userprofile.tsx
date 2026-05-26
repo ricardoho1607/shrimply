@@ -230,6 +230,7 @@ export default function UserProfileScreen() {
               <View style={styles.roleBadge}>
                 <Text style={styles.roleText}>
                   {user?.role === 'owner' ? 'Farm Owner' :
+                   user?.role === 'co-owner' ? 'Co-owner' :
                    user?.role === 'manager' ? 'Manager' :
                    user?.role === 'technician' ? 'Technician' :
                    user?.role === 'mechanic' ? 'Mechanic' :

@@ -64,7 +64,7 @@ const formatSyncStatus = (date: Date | null): string => {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function WaterQualityPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -382,7 +382,7 @@ export default function WaterQualityPage() {
           <div className="drawer-content animate-slide-left">
             <div style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, fontFamily: "'Plus Jakarta Sans', sans-serif", color: 'var(--text-primary)' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 800, fontFamily: "var(--sans)", color: 'var(--text-primary)' }}>
                   {selectedPondForHistory.pondName} Water Quality History
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>

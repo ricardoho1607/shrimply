@@ -93,7 +93,7 @@ const getEstimatedCurrentBiomass = (pond: Pond) => {
   return Math.max(0, (remainingPopulation * weight) / 1000);
 };
 
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function HarvestPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);

@@ -85,7 +85,7 @@ interface InventoryItem {
 const UNITS = ['kg', 'L', 'pack', 'sack'];
 const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
-const canEditOperations = (role?: string) => role === 'owner' || role === 'technician';
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function InventoryFeedsPage() {
   const { t } = useLanguage();
