@@ -462,6 +462,7 @@ companySetup: {
     activeDuplicateMessage: '{{pondName}} sudah memiliki siklus aktif. Akhiri kolam itu terlebih dahulu sebelum memulai siklus baru.',
     cycleStartedSuccess: '{{pondName}} dimulai dalam siklus saat ini.',
     filterActive: 'Aktif',
+    filterInactive: 'Tidak Aktif',
     filterEnded: 'Berakhir',
     ponds: 'Kolam',
     stockingStart: 'Mulai tebar',

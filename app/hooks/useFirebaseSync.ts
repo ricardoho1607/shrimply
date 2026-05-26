@@ -16,7 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
-import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, normalizePondLifecycle } from './../store/pondStore';
+import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, normalizePondLifecycle } from './../store/pondStore';
 import { Platform } from 'react-native';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
@@ -53,7 +53,7 @@ interface SyncStatus {
 
 interface PendingChange {
   id: string;
-  type: 'pond' | 'sampling' | 'harvest' | 'cycle';
+  type: 'pond' | 'physicalPond' | 'sampling' | 'harvest' | 'cycle';
   action: 'create' | 'update' | 'delete';
   data: any;
   timestamp: number;
@@ -124,7 +124,7 @@ export const useFirebaseSync = () => {
       initialLoadComplete.current = false;
       
       // Clear local data for account switch
-      usePondStore.setState({ ponds: [], cycles: [], harvestRecords: [] });
+      usePondStore.setState({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [] });
     }
 
     currentCompanyRef.current = companyId || null;
@@ -207,6 +207,42 @@ export const useFirebaseSync = () => {
         }
       );
       newUnsubscribeCallbacks.push(unsubscribeCycles);
+
+      const physicalPondsQuery = query(
+        collection(db, 'companies', company.id, 'physicalPonds'),
+        orderBy('createdAt', 'asc')
+      );
+
+      const unsubscribePhysicalPonds = onSnapshot(physicalPondsQuery,
+        (snapshot) => {
+          try {
+            const serverPhysicalPonds: PhysicalPond[] = [];
+            snapshot.forEach(doc => {
+              const data = doc.data();
+              serverPhysicalPonds.push({
+                id: doc.id,
+                pondName: data.pondName || '',
+                pondArea: data.pondArea || 0,
+                status: data.status === 'active' ? 'active' : 'idle',
+                activePondId: data.activePondId,
+                createdAt: data.createdAt,
+                updatedAt: data.updatedAt,
+                createdBy: data.createdBy,
+                updatedBy: data.updatedBy,
+              });
+            });
+            usePondStore.setState({ physicalPonds: serverPhysicalPonds });
+          } catch (error) {
+            console.error('Error processing physical ponds snapshot:', error);
+            setSyncStatus(prev => ({ ...prev, error: 'Error processing physical pond data' }));
+          }
+        },
+        (error) => {
+          console.error('Error listening to physical ponds:', error);
+          setSyncStatus(prev => ({ ...prev, error: 'Unable to sync physical pond data' }));
+        }
+      );
+      newUnsubscribeCallbacks.push(unsubscribePhysicalPonds);
 
       const pondsQuery = query(
         collection(db, 'companies', company.id, 'ponds'),
@@ -346,6 +382,23 @@ export const useFirebaseSync = () => {
               batch.delete(pondRef);
             }
           } 
+          else if (change.type === 'physicalPond') {
+            const physicalPondRef = doc(db, 'companies', company.id, 'physicalPonds', change.data.id);
+            if (change.action === 'create' || change.action === 'update') {
+              const physicalPondData = {
+                ...removeUndefinedFields(change.data),
+                updatedAt: serverTimestamp(),
+                updatedBy: user.uid,
+                ...(change.action === 'create' && {
+                  createdAt: serverTimestamp(),
+                  createdBy: user.uid,
+                }),
+              };
+              batch.set(physicalPondRef, physicalPondData, { merge: change.action === 'update' });
+            } else if (change.action === 'delete') {
+              batch.delete(physicalPondRef);
+            }
+          }
           else if (change.type === 'cycle') {
             const cycleRef = doc(db, 'companies', company.id, 'cycles', change.data.id);
             if (change.action === 'create' || change.action === 'update') {
@@ -490,6 +543,15 @@ export const useFirebaseSync = () => {
     });
   }, [addPendingChange]);
 
+  const syncPhysicalPond = useCallback((action: 'create' | 'update' | 'delete', pond: PhysicalPond) => {
+    addPendingChange({
+      id: `physical-pond-${pond.id}-${Date.now()}`,
+      type: 'physicalPond',
+      action,
+      data: pond
+    });
+  }, [addPendingChange]);
+
   const syncSampling = useCallback((action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => {
     addPendingChange({
       id: `sampling-${sampling.id}-${Date.now()}`,
@@ -528,6 +590,7 @@ export const useFirebaseSync = () => {
   return {
     syncStatus,
     syncPond,
+    syncPhysicalPond,
     syncSampling,
     syncHarvestRecord,
     syncCycle,

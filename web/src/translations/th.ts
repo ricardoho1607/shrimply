@@ -454,6 +454,7 @@ companySetup: {
     addNew: 'เพิ่มบ่อใหม่',
     searchPlaceholder: 'ค้นหาบ่อตามชื่อ...',
     active: 'ใช้งานอยู่',
+    inactive: 'ไม่ใช้งาน',
     harvested: 'เก็บเกี่ยวแล้ว',
     noPondsFound: 'ไม่พบบ่อ',
     noPondsSubtitle: 'เริ่มต้นโดยเพิ่มบ่อกุ้งแรกของคุณเข้าสู่ระบบ',

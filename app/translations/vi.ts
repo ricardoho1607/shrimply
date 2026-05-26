@@ -462,6 +462,7 @@ companySetup: {
     activeDuplicateMessage: '{{pondName}} đã có vụ đang hoạt động. Hãy kết thúc ao đó trước khi bắt đầu vụ mới.',
     cycleStartedSuccess: '{{pondName}} đã bắt đầu trong vụ hiện tại.',
     filterActive: 'Đang hoạt động',
+    filterInactive: 'Không hoạt động',
     filterEnded: 'Đã kết thúc',
     ponds: 'Ao',
     stockingStart: 'Bắt đầu thả giống',

@@ -462,6 +462,7 @@ companySetup: {
     activeDuplicateMessage: '{{pondName}} มีรอบที่ใช้งานอยู่แล้ว กรุณาสิ้นสุดบ่อนั้นก่อนเริ่มรอบใหม่',
     cycleStartedSuccess: '{{pondName}} เริ่มในรอบปัจจุบันแล้ว',
     filterActive: 'ใช้งาน',
+    filterInactive: 'ไม่ใช้งาน',
     filterEnded: 'สิ้นสุด',
     ponds: 'บ่อ',
     stockingStart: 'เริ่มปล่อยลูกกุ้ง',

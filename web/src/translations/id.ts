@@ -444,6 +444,7 @@ companySetup: {
     addNew: 'Tambah Kolam Baru',
     searchPlaceholder: 'Cari kolam berdasarkan nama...',
     active: 'Aktif',
+    inactive: 'Tidak Aktif',
     harvested: 'Dipanen',
     noPondsFound: 'Kolam Tidak Ditemukan',
     noPondsSubtitle: 'Mulai dengan menambahkan kolam udang pertama Anda ke sistem.',

@@ -454,6 +454,7 @@ companySetup: {
     addNew: 'Thêm ao mới',
     searchPlaceholder: 'Tìm kiếm ao theo tên...',
     active: 'Đang hoạt động',
+    inactive: 'Không hoạt động',
     harvested: 'Đã thu hoạch',
     noPondsFound: 'Không tìm thấy ao',
     noPondsSubtitle: 'Bắt đầu bằng cách thêm ao tôm đầu tiên của bạn vào hệ thống.',

@@ -480,6 +480,7 @@ companySetup: {
     activeDuplicateMessage: '{{pondName}} 已有活跃周期。请先结束该池塘，再开始新的周期。',
     cycleStartedSuccess: '{{pondName}} 已在当前周期中开始。',
     filterActive: '活跃',
+    filterInactive: '未激活',
     filterEnded: '已结束',
     ponds: '池塘',
     stockingStart: '开始投苗',

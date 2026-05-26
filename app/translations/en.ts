@@ -464,6 +464,7 @@ companySetup: {
     activeDuplicateMessage: '{{pondName}} already has an active cycle. End that pond first before starting another cycle for it.',
     cycleStartedSuccess: '{{pondName}} started in the current cycle.',
     filterActive: 'Active',
+    filterInactive: 'Inactive',
     filterEnded: 'Ended',
     ponds: 'Ponds',
     stockingStart: 'Stocking start',

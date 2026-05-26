@@ -482,6 +482,7 @@ companySetup: {
     addNew: '添加新池塘',
     searchPlaceholder: '按名称搜索池塘...',
     active: '活跃',
+    inactive: '未激活',
     harvested: '已收获',
     noPondsFound: '未找到池塘',
     noPondsSubtitle: '开始通过向系统添加您的第一个虾池。',

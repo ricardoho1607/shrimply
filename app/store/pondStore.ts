@@ -68,6 +68,18 @@ export interface FarmCycle {
   updatedBy?: string;
 }
 
+export interface PhysicalPond {
+  id: string;
+  pondName: string;
+  pondArea: number;
+  status?: 'idle' | 'active';
+  activePondId?: string;
+  createdAt?: any;
+  updatedAt?: any;
+  createdBy?: string;
+  updatedBy?: string;
+}
+
 export interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
@@ -188,12 +200,14 @@ export const normalizePondLifecycle = (pond: Pond): Pond => ({
 });
 
 interface PondStore {
-  ponds: Pond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
+  ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
+  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
   closeFarmCycle: (cycleId: string, closedAt: string) => void;
+  addPhysicalPond: (pond: PhysicalPond) => void;
+  updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
@@ -211,7 +225,7 @@ interface PondStore {
 
 export const usePondStore = create<PondStore>()(
     (set, get) => ({
-      ponds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
+      ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
       
       setFirebaseSync: (sync) => set({ firebaseSync: sync }),
       
@@ -219,11 +233,11 @@ export const usePondStore = create<PondStore>()(
         const state = get();
         if (state.currentCompanyId !== companyId) {
           console.log(`Switching account from ${state.currentCompanyId} to ${companyId}`);
-          set({ ponds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId });
+          set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId });
         }
       },
       
-      clearData: () => set({ ponds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined }),
+      clearData: () => set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined }),
       
       backupToFirebase: async (userId: string) => { console.log('Legacy backupToFirebase called - real-time sync handles this now'); return Promise.resolve(); },
       restoreFromFirebase: async (userId: string) => { console.log('Legacy restoreFromFirebase called - real-time sync handles this now'); return Promise.resolve(); },
@@ -319,6 +333,32 @@ export const usePondStore = create<PondStore>()(
         endedPonds.forEach((pond) => state.firebaseSync?.syncPond('update', pond));
       },
 
+      addPhysicalPond: (pond) => {
+        const state = get();
+        const pondKey = getPhysicalPondKey(pond.pondName);
+        const duplicate = state.physicalPonds.find((existingPond) =>
+          getPhysicalPondKey(existingPond.pondName) === pondKey
+        );
+        if (duplicate) {
+          console.warn(`Skipped adding ${pond.pondName}: this physical pond already exists.`);
+          return;
+        }
+        const newPond: PhysicalPond = { ...pond, status: pond.status || 'idle' };
+        set((state) => ({ physicalPonds: [...state.physicalPonds, newPond] }));
+        state.firebaseSync?.syncPhysicalPond?.('create', newPond);
+      },
+
+      updatePhysicalPond: (pondId, updates) => {
+        const state = get();
+        const existingPond = state.physicalPonds.find((pond) => pond.id === pondId);
+        if (!existingPond) return;
+        const updatedPond = { ...existingPond, ...updates };
+        set((state) => ({
+          physicalPonds: state.physicalPonds.map((pond) => pond.id === pondId ? updatedPond : pond),
+        }));
+        state.firebaseSync?.syncPhysicalPond?.('update', updatedPond);
+      },
+
       addPond: (pond) => {
         const state = get();
         const pondKey = getPhysicalPondKey(pond.pondName);
@@ -360,6 +400,17 @@ export const usePondStore = create<PondStore>()(
           cycleEndReason: undefined,
         });
         set((state) => ({ ponds: [...state.ponds, newPond] }));
+        const physicalPond = state.physicalPonds.find((item) =>
+          item.id === pond.previousCyclePondId ||
+          getPhysicalPondKey(item.pondName) === pondKey
+        );
+        if (physicalPond) {
+          const updatedPhysicalPond = { ...physicalPond, status: 'active' as const, activePondId: newPond.id };
+          set((state) => ({
+            physicalPonds: state.physicalPonds.map((item) => item.id === physicalPond.id ? updatedPhysicalPond : item),
+          }));
+          get().firebaseSync?.syncPhysicalPond?.('update', updatedPhysicalPond);
+        }
         get().firebaseSync?.syncPond('create', newPond);
       },
 

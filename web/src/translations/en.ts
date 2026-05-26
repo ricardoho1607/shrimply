@@ -446,6 +446,7 @@ companySetup: {
     addNew: 'Add New Pond',
     searchPlaceholder: 'Search ponds by name...',
     active: 'Active',
+    inactive: 'Inactive',
     harvested: 'Harvested',
     noPondsFound: 'No Ponds Found',
     noPondsSubtitle: 'Get started by adding your first shrimp pond to the system.',

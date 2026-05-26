@@ -270,6 +270,11 @@ service cloud.firestore {
         allow write: if isCompanyOperator(companyId);
       }
 
+      match /physicalPonds/{physicalPondId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if isCompanyOperator(companyId);
+      }
+
       match /cycles/{cycleId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
