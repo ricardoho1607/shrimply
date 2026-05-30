@@ -98,7 +98,7 @@ export default function RoleSelectionPage() {
     {
       id: 'manager',
       title: t.roleSelection.manager || 'Farm Manager',
-      description: t.roleSelection.managerDesc || 'Oversee daily operations and coordinate between technicians and owners.',
+      description: t.roleSelection.managerDesc || 'Oversee daily operations and coordinate between technicians, owners, and co-owners.',
       icon: Users,
       color: '#BBE1FA',
       features: [
@@ -158,7 +158,7 @@ export default function RoleSelectionPage() {
           Choose Your Path
         </h1>
         <p style={{ fontSize: '18px', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto' }}>
-          Select the role that best describes your responsibilities. We'll customize your experience accordingly.
+          Select the role that best describes your responsibilities. We&apos;ll customize your experience accordingly.
         </p>
       </div>
 

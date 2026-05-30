@@ -100,6 +100,9 @@ interface FarmCycle {
 
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const assetManagementPermissionMessage = 'Only owners, co-owners, and technicians can change asset ownership or master records.';
+const assetMaintenancePermissionMessage = 'Only owners, co-owners, technicians, and mechanics can log maintenance.';
+const assetDeletePermissionMessage = 'Only owners, co-owners, and technicians can delete assets.';
 
 const CATEGORIES = ['Equipment', 'Infrastructure', 'Vehicles', 'Tools', 'Technology'];
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];
@@ -234,12 +237,12 @@ export default function AssetInventoryPage() {
 
   const handleOpenModal = (type: typeof modalType, asset?: Asset) => {
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
-      alert('Only owners and technicians can change asset ownership or master records.');
+      alert(assetManagementPermissionMessage);
       return;
     }
 
     if (!canLogMaintenance && type === 'maintenance') {
-      alert('Only owners, technicians, and mechanics can log maintenance.');
+      alert(assetMaintenancePermissionMessage);
       return;
     }
 
@@ -289,11 +292,11 @@ export default function AssetInventoryPage() {
     e.preventDefault();
     if (!companyId) return;
     if (!canManageAssets && ['add', 'transfer', 'return'].includes(modalType)) {
-      alert('Only owners and technicians can change asset ownership or master records.');
+      alert(assetManagementPermissionMessage);
       return;
     }
     if (!canLogMaintenance && modalType === 'maintenance') {
-      alert('Only owners, technicians, and mechanics can log maintenance.');
+      alert(assetMaintenancePermissionMessage);
       return;
     }
 
@@ -381,7 +384,7 @@ export default function AssetInventoryPage() {
 
   const handleDeleteAsset = async (id: string) => {
     if (!canManageAssets) {
-      alert('Only owners and technicians can delete assets.');
+      alert(assetDeletePermissionMessage);
       return;
     }
     if (!window.confirm('Are you sure you want to delete this asset?')) return;

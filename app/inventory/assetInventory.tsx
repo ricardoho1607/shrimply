@@ -21,13 +21,19 @@ const MAINTENANCE_TYPE_COLORS: Record<MaintenanceType, string> = {
   Preventive: '#27ae60', Corrective: '#f39c12', Inspection: '#315f57', Repair: '#e74c3c', Upgrade: '#9b59b6'
 };
 
+const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const assetManagementPermissionMessage = 'Only owners, co-owners, and technicians can change asset ownership or master records.';
+const assetMaintenancePermissionMessage = 'Only owners, co-owners, technicians, and mechanics can log maintenance.';
+const assetDeletePermissionMessage = 'Only owners, co-owners, and technicians can delete assets.';
+
 export default function AssetInventoryScreen() {
   const router = useRouter();
   const { company, user } = useAuth();
   const { t } = useLanguage();
   const store = useAssetStore();
   const isMechanic = user?.role === 'mechanic';
-  const canManageAssets = !isMechanic;
+  const canManageAssets = canEditOperations(user?.role);
+  const canLogMaintenance = canManageAssets || isMechanic;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -135,7 +141,7 @@ export default function AssetInventoryScreen() {
   );
 
   const handleAddAsset = async () => {
-    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot add assets.');
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!formData.name) return Alert.alert(t.asset?.error || 'Error', t.asset?.assetNameRequired || 'Asset name is required');
     
     try {
@@ -158,7 +164,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleTransfer = async () => {
-    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot transfer assets.');
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!selectedAsset || !formData.to) return Alert.alert(t.asset?.error || 'Error', t.asset?.recipientRequired || 'Recipient is required');
     
     try {
@@ -177,7 +183,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleReturn = async () => {
-    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot return assets.');
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
     if (!selectedAsset) return;
     
     try {
@@ -191,6 +197,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleMaintenance = async () => {
+    if (!canLogMaintenance) return Alert.alert(t.asset?.error || 'Error', assetMaintenancePermissionMessage);
     if (!selectedAsset || !formData.description2) return Alert.alert(t.asset?.error || 'Error', t.asset?.descriptionRequired || 'Description is required');
     
     try {
@@ -234,7 +241,7 @@ export default function AssetInventoryScreen() {
   };
 
   const handleDelete = (id: string) => {
-    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot delete assets.');
+    if (!canManageAssets) return Alert.alert(t.asset?.error || 'Error', assetDeletePermissionMessage);
     Alert.alert(t.asset?.deleteAsset || 'Delete Asset', t.asset?.deleteConfirmation || 'Are you sure? This cannot be undone.', [
       { text: t.asset?.cancel || 'Cancel', style: 'cancel' },
       { 
@@ -253,8 +260,12 @@ export default function AssetInventoryScreen() {
   };
 
   const openModal = (type: ModalType, asset?: Asset) => {
-    if (isMechanic && ['add', 'transfer', 'return'].includes(type)) {
-      Alert.alert(t.asset?.error || 'Error', 'Mechanics can log maintenance but cannot change asset ownership or master records.');
+    if (!canManageAssets && ['add', 'transfer', 'return'].includes(type)) {
+      Alert.alert(t.asset?.error || 'Error', assetManagementPermissionMessage);
+      return;
+    }
+    if (!canLogMaintenance && type === 'maintenance') {
+      Alert.alert(t.asset?.error || 'Error', assetMaintenancePermissionMessage);
       return;
     }
     setModalType(type);
