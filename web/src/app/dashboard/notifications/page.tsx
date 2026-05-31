@@ -12,9 +12,7 @@ import {
   Users, 
   ShoppingBag,
   Filter,
-  MoreVertical,
   Check,
-  ChevronRight,
   Loader2,
   BrainCircuit
 } from 'lucide-react';
@@ -27,7 +25,6 @@ import {
   deleteDoc, 
   writeBatch,
   getDocs,
-  Timestamp 
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -37,21 +34,21 @@ import { useCompanyNotifications } from '@/hooks/useDashboardData';
 
 interface Notification {
   id: string;
-  type: 'disease_alert' | 'feed_low_stock' | 'asset_overdue' | 'system' | 'team' | 'buyer';
+  type: 'disease_alert' | 'feed_low_stock' | 'asset_overdue' | 'system' | 'team' | 'buyer' | 'orson_risk' | 'orson_daily_brief' | 'inventory_forecast' | 'orson_biosecurity';
   title: string;
   message: string;
-  timestamp: any;
+  timestamp: Date | { toDate?: () => Date } | string | number | null;
   read: boolean;
   priority: 'high' | 'medium' | 'low';
   data?: {
     isOrson?: boolean;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
 /* ─── Components ─────────────────────────────────────────────── */
 
-const NotificationIcon = ({ type, priority, data }: { type: string, priority: string, data?: any }) => {
+const NotificationIcon = ({ type, priority, data }: { type: string, priority: string, data?: Notification['data'] }) => {
   const getIconColor = () => {
     if (data?.isOrson) return '#3282B8'; // Orson Navy
     if (priority === 'high') return '#ef4444';
@@ -162,7 +159,7 @@ export default function NotificationsPage() {
     }
   };
 
-  const formatTime = (timestamp: any) => {
+  const formatTime = (timestamp: Notification['timestamp']) => {
     if (!timestamp) return '';
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     const now = new Date();

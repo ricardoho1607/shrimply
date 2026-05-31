@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  ActivityIndicator, FlatList, RefreshControl, Platform, Dimensions, Alert
+  ActivityIndicator, FlatList, RefreshControl, Platform, Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -21,11 +21,9 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 
-const { width } = Dimensions.get('window');
-
 interface Notification {
   id: string;
-  type: 'disease_alert' | 'system' | 'team' | 'buyer' | 'feed_low_stock' | 'asset_overdue';
+  type: 'disease_alert' | 'system' | 'team' | 'buyer' | 'feed_low_stock' | 'asset_overdue' | 'orson_risk' | 'orson_daily_brief' | 'inventory_forecast' | 'orson_biosecurity';
   title: string;
   message: string;
   timestamp: any;
@@ -39,7 +37,7 @@ interface Notification {
 export default function NotificationsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, company } = useAuth();
+  const { company } = useAuth();
   const { t } = useLanguage();
   
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -155,7 +153,7 @@ export default function NotificationsScreen() {
         batch.delete(doc(db, 'notifications', n.id));
       });
       await batch.commit();
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Could not delete notifications");
     } finally {
       setLoading(false);

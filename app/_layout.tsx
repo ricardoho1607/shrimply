@@ -11,6 +11,7 @@ import { SidebarProvider } from '../context/sidebarContext';
 import { useEffect } from 'react';
 import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 'react-native';
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
+import { useNotificationChecker } from './hooks/useNotificationChecker';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 let hasCheckedForStartupUpdate = false;
@@ -57,6 +58,8 @@ function RootLayoutNav() {
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
   const homePath = isBuyer ? '/indexbuyer' : '/';
+
+  useNotificationChecker();
 
   useEffect(() => {
     if (loading || !rootNavigationState?.key) return;

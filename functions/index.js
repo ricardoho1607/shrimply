@@ -1,5 +1,6 @@
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const admin = require("firebase-admin");
 
 admin.initializeApp();
@@ -7,6 +8,7 @@ admin.initializeApp();
 const DAY_MS = 1000 * 60 * 60 * 24;
 const SEVERITY_RANK = { info: 0, watch: 1, warning: 2, critical: 3 };
 const STAFF_ROLES = new Set(["manager", "technician", "admin"]);
+const BIOSECURITY_RISK_IDS = new Set(["low_do", "do_decline", "appetite_drop", "mortality_spike", "unsafe_ph"]);
 
 exports.acceptCompanyInvite = onCall(async (request) => {
   const uid = request.auth?.uid;
@@ -98,6 +100,46 @@ const toNumber = (value) => {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+};
+
+const toDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (typeof value === "string") {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.toDate === "function") {
+    const parsed = value.toDate();
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+  if (typeof value.seconds === "number") {
+    return new Date(value.seconds * 1000);
+  }
+  return null;
+};
+
+const dayKey = (date = new Date()) => date.toISOString().slice(0, 10);
+
+const isValidLocation = (location) => (
+  location
+  && typeof location === "object"
+  && typeof location.latitude === "number"
+  && Number.isFinite(location.latitude)
+  && typeof location.longitude === "number"
+  && Number.isFinite(location.longitude)
+);
+
+const distanceKm = (point1, point2) => {
+  const radiusKm = 6371;
+  const deg2rad = (deg) => deg * (Math.PI / 180);
+  const dLat = deg2rad(point2.latitude - point1.latitude);
+  const dLon = deg2rad(point2.longitude - point1.longitude);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(deg2rad(point1.latitude)) * Math.cos(deg2rad(point2.latitude)) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return Math.round((radiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))) * 100) / 100;
 };
 
 const round = (value, decimals = 2) => {
@@ -319,6 +361,142 @@ const shouldCreateNotification = async (companyId, riskSignature) => {
   return snapshot.empty;
 };
 
+const shouldCreateProactiveNotification = async (db, companyId, type, dedupeKey, lookbackMs = DAY_MS) => {
+  const sinceMs = Date.now() - lookbackMs;
+  const snapshot = await db.collection("notifications")
+    .where("companyId", "==", companyId)
+    .get();
+  return !snapshot.docs.some((doc) => {
+    const notification = doc.data() || {};
+    const notificationDate = toDate(notification.timestamp);
+    return notification.type === type
+      && notification.dedupeKey === dedupeKey
+      && notificationDate
+      && notificationDate.getTime() >= sinceMs;
+  });
+};
+
+const createProactiveNotification = async (db, notification, lookbackMs = DAY_MS) => {
+  const shouldCreate = await shouldCreateProactiveNotification(
+    db,
+    notification.companyId,
+    notification.type,
+    notification.dedupeKey,
+    lookbackMs,
+  );
+  if (!shouldCreate) return false;
+
+  await db.collection("notifications").add({
+    ...notification,
+    timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    read: false,
+    isOrson: true,
+    icon: "brain-circuit",
+    data: {
+      isOrson: true,
+      ...(notification.data || {}),
+    },
+  });
+  return true;
+};
+
+const getRecentUsageForecast = (item, type) => {
+  const usageHistory = Array.isArray(item.usageHistory) ? item.usageHistory : [];
+  const sinceMs = Date.now() - (7 * DAY_MS);
+  const recentUsage = usageHistory.reduce((sum, usage) => {
+    const usageDate = toDate(usage.date || usage.createdAt);
+    const quantity = toNumber(usage.quantity);
+    if (!usageDate || usageDate.getTime() < sinceMs || quantity === null || quantity <= 0) return sum;
+    return sum + quantity;
+  }, 0);
+  const avgDailyUsage = recentUsage / 7;
+  const totalStock = toNumber(item.totalStock);
+  if (totalStock === null || totalStock <= 0 || avgDailyUsage <= 0) return null;
+  const daysLeft = totalStock / avgDailyUsage;
+  if (!Number.isFinite(daysLeft) || daysLeft > 7) return null;
+
+  return {
+    itemId: item.id || null,
+    itemName: type === "feed" ? (item.feedName || "Unnamed feed") : (item.additiveName || "Unnamed additive"),
+    itemType: type,
+    currentStock: round(totalStock, 2),
+    avgDailyUsage: round(avgDailyUsage, 2),
+    daysLeft: round(daysLeft, 1),
+    unit: item.unit || "kg",
+  };
+};
+
+const getCompanyInventoryForecasts = async (companyDoc) => {
+  const [feedsSnapshot, additivesSnapshot] = await Promise.all([
+    companyDoc.ref.collection("feeds").get().catch(() => ({ docs: [] })),
+    companyDoc.ref.collection("additives").get().catch(() => ({ docs: [] })),
+  ]);
+
+  const forecasts = [];
+  feedsSnapshot.docs.forEach((doc) => {
+    const forecast = getRecentUsageForecast({ id: doc.id, ...(doc.data() || {}) }, "feed");
+    if (forecast) forecasts.push(forecast);
+  });
+  additivesSnapshot.docs.forEach((doc) => {
+    const forecast = getRecentUsageForecast({ id: doc.id, ...(doc.data() || {}) }, "additive");
+    if (forecast) forecasts.push(forecast);
+  });
+  return forecasts.sort((a, b) => a.daysLeft - b.daysLeft);
+};
+
+const getNearbyActiveDiseaseReports = async (db, companyId, companyLocation) => {
+  if (!isValidLocation(companyLocation)) return [];
+  const sinceMs = Date.now() - (14 * DAY_MS);
+  const snapshot = await db.collection("diseaseReports")
+    .where("status", "==", "active")
+    .get()
+    .catch(() => ({ docs: [] }));
+
+  const nearby = [];
+  snapshot.docs.forEach((doc) => {
+    const report = doc.data() || {};
+    if (report.companyId === companyId || !isValidLocation(report.location)) return;
+    const reportDate = toDate(report.reportDate || report.createdAt);
+    if (!reportDate || reportDate.getTime() < sinceMs) return;
+    const radiusKm = toNumber(report.notificationRadius) || 50;
+    const distance = distanceKm(companyLocation, report.location);
+    if (distance <= radiusKm) {
+      nearby.push({
+        id: doc.id,
+        diseaseName: report.diseaseName || "Disease report",
+        diseaseType: report.diseaseType || "unknown",
+        severity: report.severity || "medium",
+        reporterCompany: report.companyName || "Nearby farm",
+        distanceKm: distance,
+      });
+    }
+  });
+  return nearby.sort((a, b) => a.distanceKm - b.distanceKm);
+};
+
+const summarizePondRisks = (pondsSnapshot) => {
+  const reports = [];
+  pondsSnapshot.docs.forEach((doc) => {
+    const pond = doc.data() || {};
+    if (pond.cycleStatus === "ended") return;
+    const report = calculateRiskReport(pond, doc.id);
+    reports.push(report);
+  });
+
+  const findings = reports.flatMap((report) => report.findings.map((finding) => ({
+    pondId: report.pondId,
+    pondName: report.pondName,
+    ...finding,
+  })));
+
+  return {
+    reports,
+    warningFindings: findings.filter((finding) => SEVERITY_RANK[finding.severity] >= SEVERITY_RANK.warning),
+    watchFindings: findings.filter((finding) => finding.severity === "watch"),
+    biosecurityFindings: findings.filter((finding) => BIOSECURITY_RISK_IDS.has(finding.id) && SEVERITY_RANK[finding.severity] >= SEVERITY_RANK.watch),
+  };
+};
+
 /**
  * Orson AI Proactive Consultant
  * Triggers when a pond document receives new sampling, water-quality, or feed/appetite records.
@@ -380,6 +558,124 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
 
   console.log(`Orson notification sent for pond ${pondId}.`);
   return { success: true, notified: true, report };
+});
+
+/**
+ * Orson Daily Supervisor
+ * Runs without the app open and turns Shrimply data into actionable notifications.
+ */
+exports.orsonDailySupervisor = onSchedule({
+  schedule: "0 6 * * *",
+  timeZone: "Asia/Jakarta",
+  region: "us-central1",
+}, async () => {
+  const db = admin.firestore();
+  const companiesSnapshot = await db.collection("companies").get();
+  const todayKey = dayKey();
+  let notificationsCreated = 0;
+
+  for (const companyDoc of companiesSnapshot.docs) {
+    const companyId = companyDoc.id;
+    const company = companyDoc.data() || {};
+    const companyLocation = company.primaryLocation;
+
+    const [pondsSnapshot, inventoryForecasts, nearbyDiseaseReports] = await Promise.all([
+      companyDoc.ref.collection("ponds").get().catch(() => ({ docs: [] })),
+      getCompanyInventoryForecasts(companyDoc),
+      getNearbyActiveDiseaseReports(db, companyId, companyLocation),
+    ]);
+
+    const riskSummary = summarizePondRisks(pondsSnapshot);
+    const topRisk = riskSummary.warningFindings[0] || riskSummary.watchFindings[0] || null;
+    const criticalInventory = inventoryForecasts.filter((item) => item.daysLeft <= 3);
+
+    for (const item of inventoryForecasts) {
+      const created = await createProactiveNotification(db, {
+        companyId,
+        type: "inventory_forecast",
+        priority: item.daysLeft <= 3 ? "high" : "medium",
+        title: `Orson: ${item.itemName} may run out in ${item.daysLeft} days`,
+        message: `${item.itemName} has ${item.currentStock} ${item.unit} left. Recent usage averages ${item.avgDailyUsage} ${item.unit}/day, so stock may run out in about ${item.daysLeft} days.`,
+        dedupeKey: `inventory_forecast:${item.itemType}:${item.itemId}:${todayKey}`,
+        data: {
+          itemId: item.itemId,
+          itemName: item.itemName,
+          itemType: item.itemType,
+          currentStock: item.currentStock,
+          avgDailyUsage: item.avgDailyUsage,
+          daysLeft: item.daysLeft,
+          unit: item.unit,
+        },
+      });
+      if (created) notificationsCreated += 1;
+    }
+
+    if (nearbyDiseaseReports.length > 0 && riskSummary.biosecurityFindings.length > 0) {
+      const disease = nearbyDiseaseReports[0];
+      const finding = riskSummary.biosecurityFindings[0];
+      const created = await createProactiveNotification(db, {
+        companyId,
+        type: "orson_biosecurity",
+        priority: SEVERITY_RANK[finding.severity] >= SEVERITY_RANK.warning || disease.severity === "critical" ? "high" : "medium",
+        title: `Orson: Biosecurity risk near ${finding.pondName}`,
+        message: `${disease.diseaseName} was reported ${disease.distanceKm} km away, while ${finding.pondName} shows ${finding.title.toLowerCase()}. Tighten biosecurity and monitor appetite, mortality, and water quality today.`,
+        dedupeKey: `orson_biosecurity:${disease.id}:${finding.pondId}:${finding.id}:${todayKey}`,
+        data: {
+          reportId: disease.id,
+          diseaseName: disease.diseaseName,
+          diseaseType: disease.diseaseType,
+          distanceKm: disease.distanceKm,
+          pondId: finding.pondId,
+          pondName: finding.pondName,
+          riskId: finding.id,
+          severity: finding.severity,
+        },
+      });
+      if (created) notificationsCreated += 1;
+    }
+
+    if (topRisk || criticalInventory.length > 0 || nearbyDiseaseReports.length > 0) {
+      const briefParts = [];
+      if (topRisk) {
+        briefParts.push(`${topRisk.pondName}: ${topRisk.summary}`);
+      }
+      if (criticalInventory.length > 0) {
+        briefParts.push(`${criticalInventory.length} inventory item${criticalInventory.length === 1 ? "" : "s"} may run out within 3 days.`);
+      } else if (inventoryForecasts.length > 0) {
+        briefParts.push(`${inventoryForecasts.length} inventory item${inventoryForecasts.length === 1 ? "" : "s"} may run out within 7 days.`);
+      }
+      if (nearbyDiseaseReports.length > 0) {
+        briefParts.push(`${nearbyDiseaseReports.length} active disease report${nearbyDiseaseReports.length === 1 ? "" : "s"} nearby.`);
+      }
+
+      const created = await createProactiveNotification(db, {
+        companyId,
+        type: "orson_daily_brief",
+        priority: riskSummary.warningFindings.length > 0 || criticalInventory.length > 0 ? "high" : "medium",
+        title: "Orson Daily Brief",
+        message: briefParts.join(" "),
+        dedupeKey: `orson_daily_brief:${todayKey}`,
+        data: {
+          dateKey: todayKey,
+          warningRiskCount: riskSummary.warningFindings.length,
+          watchRiskCount: riskSummary.watchFindings.length,
+          inventoryForecastCount: inventoryForecasts.length,
+          criticalInventoryCount: criticalInventory.length,
+          nearbyDiseaseReportCount: nearbyDiseaseReports.length,
+          topPondRisk: topRisk ? {
+            pondId: topRisk.pondId,
+            pondName: topRisk.pondName,
+            riskId: topRisk.id,
+            severity: topRisk.severity,
+          } : null,
+        },
+      }, 25 * 60 * 60 * 1000);
+      if (created) notificationsCreated += 1;
+    }
+  }
+
+  console.log(`Orson Daily Supervisor created ${notificationsCreated} notifications.`);
+  return { success: true, notificationsCreated };
 });
 
 Object.assign(exports, require("./adminMetrics"));

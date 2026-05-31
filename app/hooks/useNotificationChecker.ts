@@ -5,21 +5,37 @@ import { useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useAssetStore } from '../store/assetStore';
 import { useFeedAdditiveStore } from '../store/feedAdditiveStore';
-import NotificationService from '../services/notificationService';
+import { NotificationService } from '../services/notificationService';
 
 export const useNotificationChecker = () => {
-  const { company } = useAuth();
-  const assetStore = useAssetStore();
-  const feedStore = useFeedAdditiveStore();
+  const { company, isBuyer } = useAuth();
+  const assets = useAssetStore((state) => state.assets);
+  const initializeAssets = useAssetStore((state) => state.initializeForCompany);
+  const cleanupAssets = useAssetStore((state) => state.cleanup);
+  const feeds = useFeedAdditiveStore((state) => state.feeds);
+  const additives = useFeedAdditiveStore((state) => state.additives);
+  const initializeInventory = useFeedAdditiveStore((state) => state.initializeForCompany);
 
   useEffect(() => {
-    if (!company?.id) return;
+    if (!company?.id || isBuyer) return;
+
+    const unsubscribeInventory = initializeInventory(company.id);
+    void initializeAssets(company.id);
+
+    return () => {
+      try { unsubscribeInventory?.(); } catch (error) { console.error('Error cleaning up inventory notification listener:', error); }
+      cleanupAssets();
+    };
+  }, [company?.id, isBuyer, initializeAssets, initializeInventory, cleanupAssets]);
+
+  useEffect(() => {
+    if (!company?.id || isBuyer) return;
 
     // Function to check overdue assets
     const checkOverdueAssets = async () => {
       const now = new Date();
       
-      for (const asset of assetStore.assets) {
+      for (const asset of assets) {
         // Skip if no current holder
         if (!asset.currentHolder) continue;
         
@@ -55,7 +71,7 @@ export const useNotificationChecker = () => {
     // Function to check low stock items
     const checkLowStockItems = async () => {
       // Check feeds
-      for (const feed of feedStore.feeds) {
+      for (const feed of feeds) {
         if (feed.reorderLevel && feed.reorderLevel > 0 && feed.totalStock <= feed.reorderLevel) {
           await NotificationService.createLowStockNotification(
             company.id,
@@ -70,7 +86,7 @@ export const useNotificationChecker = () => {
       }
 
       // Check additives
-      for (const additive of feedStore.additives) {
+      for (const additive of additives) {
         if (additive.reorderLevel && additive.reorderLevel > 0 && additive.totalStock <= additive.reorderLevel) {
           await NotificationService.createLowStockNotification(
             company.id,
@@ -101,7 +117,7 @@ export const useNotificationChecker = () => {
     const interval = setInterval(runChecks, 6 * 60 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [company?.id, assetStore.assets, feedStore.feeds, feedStore.additives]);
+  }, [company?.id, isBuyer, assets, feeds, additives]);
 };
 
 // Alternative: Manual check function you can call from anywhere
