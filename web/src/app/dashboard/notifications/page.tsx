@@ -46,6 +46,10 @@ interface Notification {
   };
 }
 
+const isFirestoreTimestamp = (value: Notification['timestamp']): value is { toDate: () => Date } => {
+  return !!value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function';
+};
+
 /* ─── Components ─────────────────────────────────────────────── */
 
 const NotificationIcon = ({ type, priority, data }: { type: string, priority: string, data?: Notification['data'] }) => {
@@ -161,7 +165,12 @@ export default function NotificationsPage() {
 
   const formatTime = (timestamp: Notification['timestamp']) => {
     if (!timestamp) return '';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = isFirestoreTimestamp(timestamp)
+      ? timestamp.toDate()
+      : timestamp instanceof Date || typeof timestamp === 'string' || typeof timestamp === 'number'
+        ? new Date(timestamp)
+        : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
     const now = new Date();
     const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
     
@@ -372,7 +381,7 @@ export default function NotificationsPage() {
                   {notification.message}
                 </p>
                 
-                {notification.data?.reportId && (
+                {!!notification.data?.reportId && (
                   <button 
                     className="btn-secondary" 
                     style={{ 
