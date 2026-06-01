@@ -54,7 +54,7 @@ export default function AboutPage() {
       <section className="section dark-section">
         <div className="dark-glow"></div>
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
+          <div className="mobile-stack-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
             <div>
               <div className="eyebrow r" style={{ marginBottom: '16px' }}>The Problem</div>
               <h2 className="section-title r d1" style={{ marginBottom: '24px', color: 'var(--white)' }}>
@@ -161,7 +161,7 @@ export default function AboutPage() {
           <p className="r d3" style={{ maxWidth: '480px', margin: '0 auto 48px', color: 'rgba(255,255,255,0.65)' }}>
             Eliminate the noise. Prevent losses. Achieve your goals with the clarity and efficiency your farm deserves.
           </p>
-          <div className="r d4" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <div className="r d4 mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <a href="/auth/join" className="btn-primary">Start for Free</a>
             <a href="/how-it-works" className="btn-outline" style={{ borderColor: 'rgba(255,255,255,0.25)', color: 'rgba(255,255,255,0.8)' }}>See How It Works</a>
           </div>

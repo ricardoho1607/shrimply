@@ -55,7 +55,7 @@ export default function HowItWorksPage() {
 
       {/* PILLAR 1: FIELD & ASSETS */}
       <section className="section" style={{ background: 'var(--white)' }}>
-        <div className="container" style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '80px', alignItems: 'center' }}>
+        <div className="container mobile-stack-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 0.9fr', gap: '80px', alignItems: 'center' }}>
           <div>
             <div className="eyebrow r" style={{ color: 'var(--sky)', marginBottom: '16px' }}>01 / Field Intelligence</div>
             <h2 className="section-title r d1" style={{ marginBottom: '24px' }}>
@@ -120,7 +120,7 @@ export default function HowItWorksPage() {
             </h2>
           </div>
           
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '40px' }} className="r d2">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '40px' }} className="r d2 mobile-stack-grid">
             <div className="feature-card" style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', color: 'white' }}>
               <Users size={24} style={{ color: 'var(--sky)', marginBottom: '20px' }} />
               <h4 style={{ marginBottom: '12px' }}>Role-Based Access</h4>
@@ -146,7 +146,7 @@ export default function HowItWorksPage() {
 
       {/* PILLAR 3: DISEASE MAP */}
       <section className="section" style={{ background: 'var(--white)' }}>
-        <div className="container" style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: '100px', alignItems: 'center' }}>
+        <div className="container mobile-stack-grid" style={{ display: 'grid', gridTemplateColumns: '0.9fr 1.1fr', gap: '100px', alignItems: 'center' }}>
           <div className="r d1">
             <div style={{ position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: '24px', overflow: 'hidden', border: '1px solid var(--slate)', boxShadow: '0 20px 50px rgba(0,0,0,0.1)' }}>
                <img 
@@ -200,7 +200,7 @@ export default function HowItWorksPage() {
             Shrimply doesn't just help you grow. It helps you sell. We connect ready-to-harvest farms with the market's best prices.
           </p>
           
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }} className="r d4">
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }} className="r d4 mobile-stack-grid-compact">
             <div style={{ background: 'white', padding: '32px', borderRadius: '20px', border: '1px solid var(--slate)', textAlign: 'left' }}>
               <ShoppingBag size={24} style={{ color: 'var(--sky)', marginBottom: '20px' }} />
               <h4 style={{ marginBottom: '12px' }}>For Farm Owners</h4>

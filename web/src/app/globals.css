@@ -480,11 +480,36 @@ nav.scrolled {
   nav { padding: 16px 24px; }
   nav div:nth-child(2) { display: none; }
   .features-grid { grid-template-columns: 1fr; }
+  .features-grid > .feature-card { grid-column: auto !important; }
   .stats-band { grid-template-columns: 1fr; }
   .stat-box { border-right: none; border-bottom: 1px solid var(--slate); }
   .stat-box:last-child { border-bottom: none; }
   h1 { font-size: 3.2rem; }
   h2.section-title { font-size: 2.4rem; }
+  .mobile-stack-grid {
+    grid-template-columns: 1fr !important;
+    gap: 40px !important;
+  }
+  .mobile-stack-grid-compact {
+    grid-template-columns: 1fr !important;
+    gap: 24px !important;
+  }
+  .mobile-cta-row {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .mobile-cta-row .btn-primary,
+  .mobile-cta-row .btn-outline {
+    width: 100%;
+    text-align: center;
+  }
+  .site-footer {
+    padding: 64px 24px 36px !important;
+  }
+  .site-footer-grid {
+    grid-template-columns: 1fr !important;
+    gap: 36px !important;
+  }
   .dashboard-hero {
     padding: 20px;
     border-radius: 20px;

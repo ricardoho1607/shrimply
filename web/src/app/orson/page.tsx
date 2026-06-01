@@ -103,7 +103,7 @@ export default function HowItWorksPage() {
 
       {/* Appetite Section */}
       <section className="section">
-        <div className="container" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
+        <div className="container mobile-stack-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '80px', alignItems: 'center' }}>
           <div className="r d1">
             <div style={{ background: 'var(--white)', border: '1px solid var(--slate)', boxShadow: '0 20px 60px rgba(0,0,0,0.05)', padding: '24px', borderRadius: '12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ color: 'var(--ink)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '8px' }}>Real-Time Diagnosis</div>
@@ -158,7 +158,7 @@ export default function HowItWorksPage() {
           <p className="r d3" style={{ maxWidth: '480px', margin: '0 auto 40px' }}>
             Experience the power of biological intelligence today. Start your first pond with Orson.
           </p>
-          <div className="r d4" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
+          <div className="r d4 mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
             <a href="/auth/join" className="btn-primary">Try Shrimply for Free</a>
             <a href="/" className="btn-outline">Back to Home</a>
           </div>

@@ -308,7 +308,7 @@ export default function LandingPage() {
           <p style={{ marginBottom: '40px', maxWidth: '500px', marginLeft: 'auto', marginRight: 'auto', fontWeight: 500, fontSize: '1.05rem' }}>
             Built by farmers, for farmers. Experience the clarity your operation deserves.
           </p>
-          <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
+          <div className="mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
             <Link href="/auth/join" className="btn-primary" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Start Your Free Trial</Link>
             <Link href="/" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download App</Link>
           </div>
