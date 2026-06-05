@@ -25,7 +25,9 @@ import {
   Users,
   Target,
   Database,
-  Layers
+  Layers,
+  FlaskConical,
+  Leaf
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -83,9 +85,25 @@ interface Sampling {
   cumulativeFeedToDate?: number;
 }
 
+type LabReportStatus = {
+  labReportId?: string;
+  reportType?: 'water_quality' | 'plankton' | 'combined';
+  sampleDate?: string;
+  status?: 'good' | 'info' | 'watch' | 'warning' | 'critical';
+  mainIssue?: string;
+  keyRisks?: string[];
+  recommendations?: string[];
+};
+
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  latestLabStatus?: LabReportStatus & {
+    byType?: {
+      water_quality?: LabReportStatus;
+      plankton?: LabReportStatus;
+    };
+  };
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
@@ -118,6 +136,12 @@ const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const getLabStatusStyle = (status?: LabReportStatus['status']) => {
+  if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
+  if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
+  if (status === 'watch') return { label: 'Watch', color: '#0F4C75', bg: '#E0F2FE' };
+  return { label: 'Good', color: '#166534', bg: '#DCFCE7' };
+};
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const getDateOnlyUtcTime = (dateString: string): number => {
@@ -697,6 +721,15 @@ export default function PondDetailClient() {
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   if (!pond) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
+  const latestLabStatus = pond.latestLabStatus;
+  const waterQualityLabStatus = latestLabStatus?.byType?.water_quality
+    ?? (latestLabStatus?.reportType === 'water_quality' || (!latestLabStatus?.reportType && !latestLabStatus?.byType) ? latestLabStatus : undefined);
+  const planktonLabStatus = latestLabStatus?.byType?.plankton
+    ?? (latestLabStatus?.reportType === 'plankton' ? latestLabStatus : undefined);
+  const labStatusCards = [
+    { key: 'water_quality', title: 'Mineral Quality', Icon: Droplets, status: waterQualityLabStatus },
+    { key: 'plankton', title: 'Plankton Quality', Icon: Leaf, status: planktonLabStatus },
+  ].filter((item) => item.status);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -900,6 +933,63 @@ export default function PondDetailClient() {
 
         {/* Right Sidebar */}
         <div className="animate-fade-up animate-delay-3" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <div className="glass-card" style={{ padding: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                  <FlaskConical size={18} />
+                </div>
+                <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Latest Lab Status</h4>
+              </div>
+            </div>
+            {labStatusCards.length === 0 ? (
+              <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 800, lineHeight: 1.45 }}>
+                No confirmed lab warning for this pond.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {labStatusCards.map((item) => {
+                  const statusStyle = getLabStatusStyle(item.status?.status);
+                  const Icon = item.Icon;
+                  return (
+                    <div key={item.key} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                          <Icon size={16} color="var(--primary)" />
+                          <span style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 850 }}>{item.title}</span>
+                        </div>
+                        <span style={{ borderRadius: 999, padding: '5px 9px', background: statusStyle.bg, color: statusStyle.color, fontSize: '0.66rem', fontWeight: 850, flexShrink: 0 }}>
+                          {statusStyle.label}
+                        </span>
+                      </div>
+                      <p style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 800, lineHeight: 1.45 }}>
+                        {item.status?.mainIssue || 'No confirmed lab warning for this pond.'}
+                      </p>
+                      {item.status?.sampleDate && (
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 700, marginTop: '6px' }}>
+                          Last lab: {new Date(item.status.sampleDate).toLocaleDateString()}
+                        </p>
+                      )}
+                      {item.status?.keyRisks && item.status.keyRisks.length > 0 && (
+                        <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                          {item.status.keyRisks.slice(0, 2).map((risk, index) => (
+                            <span key={`${item.key}-${risk}-${index}`} style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 700 }}>• {risk}</span>
+                          ))}
+                        </div>
+                      )}
+                      {item.status?.recommendations?.[0] && (
+                        <div style={{ marginTop: '12px', padding: '10px', borderRadius: '10px', background: '#ffffff', border: '1px solid var(--border)' }}>
+                          <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>Recommended Action</div>
+                          <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.45 }}>{item.status.recommendations[0]}</div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="glass-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '18px' }}>
               <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>

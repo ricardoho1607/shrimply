@@ -270,6 +270,7 @@ export const useFirebaseSync = () => {
                 totalHarvestedBiomass: data.totalHarvestedBiomass || 0,
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,
+                latestLabStatus: data.latestLabStatus,
                 cycleId: data.cycleId,
                 cycleName: data.cycleName,
                 pondCycleId: data.pondCycleId || doc.id,

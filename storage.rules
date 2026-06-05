@@ -1,0 +1,62 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function companyDoc(companyId) {
+      return firestore.get(/databases/(default)/documents/companies/$(companyId));
+    }
+
+    function userDoc() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function labReportDoc(companyId, labReportId) {
+      return firestore.get(/databases/(default)/documents/companies/$(companyId)/labReports/$(labReportId));
+    }
+
+    function isCompanyMember(companyId) {
+      return signedIn()
+        && companyDoc(companyId).data != null
+        && (
+          companyDoc(companyId).data.ownerId == request.auth.uid
+          || request.auth.uid in companyDoc(companyId).data.teamMembers
+        );
+    }
+
+    function userBelongsToCompany(companyId) {
+      return signedIn()
+        && userDoc().data != null
+        && userDoc().data.companyId == companyId;
+    }
+
+    function isCompanyOperator(companyId) {
+      return isCompanyMember(companyId)
+        && (
+          companyDoc(companyId).data.ownerId == request.auth.uid
+          || (
+            userBelongsToCompany(companyId)
+            && userDoc().data.role in ['owner', 'co-owner', 'technician']
+          )
+        );
+    }
+
+    function canWriteLabReportSource(companyId, labReportId) {
+      return labReportDoc(companyId, labReportId).data == null
+        || labReportDoc(companyId, labReportId).data.status != 'confirmed';
+    }
+
+    match /companies/{companyId}/labReports/{labReportId}/source.pdf {
+      allow read: if isCompanyMember(companyId);
+      allow write: if isCompanyOperator(companyId)
+        && canWriteLabReportSource(companyId, labReportId)
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType == 'application/pdf'
+        && request.resource.metadata.companyId == companyId
+        && request.resource.metadata.labReportId == labReportId;
+    }
+  }
+}

@@ -35,6 +35,13 @@ interface PondData {
   area: number; // in hectares
   initialStock: number;
   density: number; // per m²
+  latestLabStatus?: {
+    sampleDate?: string;
+    status?: 'good' | 'info' | 'watch' | 'warning' | 'critical';
+    mainIssue?: string;
+    keyRisks?: string[];
+    recommendations?: string[];
+  };
   isMidcycleBaseline?: boolean;
   baselineDate?: string;
   samplingHistory: SamplingData[];
@@ -418,6 +425,44 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
     `;
   }).join('');
 
+  const labRows = ponds
+    .filter((pond) => pond.latestLabStatus)
+    .map((pond) => {
+      const lab = pond.latestLabStatus;
+      const status = lab?.status === 'info' ? 'good' : lab?.status || 'good';
+      const riskText = (lab?.keyRisks || []).slice(0, 2).join('; ') || lab?.mainIssue || 'No warning-level issue detected';
+      const recommendation = (lab?.recommendations || [])[0] || 'Continue routine monitoring and compare against the next lab result.';
+      return `
+        <tr>
+          <td class="strong">${escapeXml(pond.pondNumber)}</td>
+          <td>${lab?.sampleDate ? formatShortDate(lab.sampleDate) : '-'}</td>
+          <td class="${status === 'critical' ? 'bad' : status === 'warning' || status === 'watch' ? 'watch' : 'good'}">${status.toUpperCase()}</td>
+          <td>${escapeXml(lab?.mainIssue || 'Lab result reviewed')}</td>
+          <td>${escapeXml(riskText)}</td>
+          <td>${escapeXml(recommendation)}</td>
+        </tr>
+      `;
+    }).join('');
+
+  const labAnalysisSection = labRows
+    ? `
+      <div class="lab-section">
+        <div class="analysis-title">Latest Lab Analysis</div>
+        <table class="lab-table">
+          <thead>
+            <tr><th>Pond</th><th>Date</th><th>Status</th><th>Main Issue</th><th>Risks</th><th>Recommended Action</th></tr>
+          </thead>
+          <tbody>${labRows}</tbody>
+        </table>
+      </div>
+    `
+    : `
+      <div class="lab-section">
+        <div class="analysis-title">Latest Lab Analysis</div>
+        <div class="data-quality">No confirmed lab analysis was attached to the selected ponds at export time. This report only reflects operational sampling, feed, mortality, and water quality logs.</div>
+      </div>
+    `;
+
   const midcycleNote = midcyclePonds.length > 0
     ? `<br/><strong>Data Quality:</strong> ${midcyclePonds.map((pond) => `${pond.pondNumber}${pond.baselineDate ? ` baseline ${formatDate(pond.baselineDate)}` : ''}`).join(', ')} ${midcyclePonds.length === 1 ? 'was' : 'were'} onboarded mid-cycle. Pre-onboarding values are estimates, not exact historical logs.`
     : '';
@@ -520,6 +565,10 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
         .analysis-box.risk .analysis-title { color: #B45309; }
         .analysis-list { margin-left: 13px; font-size: 8px; color: #26384A; line-height: 1.35; }
         .analysis-list li { margin-bottom: 5px; }
+        .lab-section { margin-top: 10px; padding: 9px; background: rgba(255, 255, 255, 0.52); border-left: 4px solid #3282B8; }
+        .lab-table { margin-top: 7px; }
+        .lab-table th { font-size: 7px; }
+        .lab-table td { font-size: 6.5px; white-space: normal; line-height: 1.25; text-align: left; padding: 4px; }
         .data-quality { margin-top: 10px; padding: 9px; background: rgba(255, 255, 255, 0.42); border: 0; border-radius: 0; color: #26384A; font-size: 8px; line-height: 1.35; }
         .footer { margin-top: auto; padding-top: 7px; border-top: 1px solid rgba(15, 76, 117, 0.18); display: flex; justify-content: space-between; gap: 10px; color: #4A5568; font-size: 7px; }
       </style>
@@ -605,6 +654,7 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
           <div class="data-quality">
             <strong>Assumptions and Data Quality:</strong> Biomass, survival, and FCR are calculated from the sampling and feed records available at export time. If feed history is incomplete, FCR can appear unrealistically low. Use this report as an operational snapshot and reconcile it against feeding logs, inventory deductions, and harvest records before final cycle decisions.
           </div>
+          ${labAnalysisSection}
           ${renderFooter(2, 2)}
         </div>
       </div>

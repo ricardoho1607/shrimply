@@ -1,7 +1,9 @@
-const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
+const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 admin.initializeApp();
 
@@ -9,6 +11,11 @@ const DAY_MS = 1000 * 60 * 60 * 24;
 const SEVERITY_RANK = { info: 0, watch: 1, warning: 2, critical: 3 };
 const STAFF_ROLES = new Set(["manager", "technician", "admin"]);
 const BIOSECURITY_RISK_IDS = new Set(["low_do", "do_decline", "appetite_drop", "mortality_spike", "unsafe_ph"]);
+const LAB_EXTRACTION_MODEL = "gemini-2.5-flash";
+const LAB_INSIGHT_MODEL = "gemini-2.5-flash-lite";
+const LAB_PDF_EXTRACTION_COOLDOWN_MS = 48 * 60 * 60 * 1000;
+const LAB_PDF_EXTRACTION_PENDING_MS = 10 * 60 * 1000;
+const geminiApiKeySecret = defineSecret("GEMINI_API_KEY");
 
 exports.acceptCompanyInvite = onCall(async (request) => {
   const uid = request.auth?.uid;
@@ -102,6 +109,26 @@ const toNumber = (value) => {
   return null;
 };
 
+const toOptionalText = (value) => {
+  if (Array.isArray(value)) return value.filter(Boolean).map(String).join(", ");
+  if (typeof value === "string" && value.trim() !== "") return value.trim();
+  return null;
+};
+
+const firstDefined = (...values) => values.find((value) => value !== undefined && value !== null && value !== "");
+
+const toMillis = (value) => {
+  if (!value) return null;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime();
+  if (typeof value === "string") {
+    const parsed = new Date(value).getTime();
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return null;
+};
+
 const toDate = (value) => {
   if (!value) return null;
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -117,6 +144,129 @@ const toDate = (value) => {
     return new Date(value.seconds * 1000);
   }
   return null;
+};
+
+const assertCompanyMemberForCallable = async (db, uid, companyId) => {
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+  if (!companyId || typeof companyId !== "string") {
+    throw new HttpsError("invalid-argument", "companyId is required.");
+  }
+
+  const companySnap = await db.collection("companies").doc(companyId).get();
+  if (!companySnap.exists) {
+    throw new HttpsError("not-found", "Company not found.");
+  }
+  const company = companySnap.data() || {};
+  const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
+  if (company.ownerId !== uid && !teamMembers.includes(uid)) {
+    throw new HttpsError("permission-denied", "You do not have access to this company.");
+  }
+  return company;
+};
+
+const getGeminiApiKey = () => {
+  try {
+    return geminiApiKeySecret.value() || process.env.GEMINI_API_KEY || "";
+  } catch (error) {
+    return process.env.GEMINI_API_KEY || "";
+  }
+};
+
+const parseJsonFromModelText = (text) => {
+  const trimmed = String(text || "").trim();
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
+  const jsonText = firstBrace >= 0 && lastBrace >= firstBrace ? candidate.slice(firstBrace, lastBrace + 1) : candidate;
+  return JSON.parse(jsonText);
+};
+
+const getLabUsageTypeKey = (reportType) => (reportType === "plankton" ? "plankton" : "water_quality");
+
+const reserveLabPdfExtraction = async (db, companyId, reportType, labReportId, uid) => {
+  const typeKey = getLabUsageTypeKey(reportType);
+  const usageRef = db.collection("companies").doc(companyId).collection("labUsage").doc("pdfExtraction");
+  const nowMs = Date.now();
+  const nowTimestamp = admin.firestore.Timestamp.fromMillis(nowMs);
+
+  await db.runTransaction(async (transaction) => {
+    const usageSnap = await transaction.get(usageRef);
+    const usage = usageSnap.exists ? usageSnap.data() || {} : {};
+    const typeUsage = usage[typeKey] || {};
+    const resetAtMs = toMillis(typeUsage.resetAt);
+    if (resetAtMs && resetAtMs > nowMs) {
+      throw new HttpsError("resource-exhausted", "PDF extraction cooldown is still active.", {
+        reportType: typeKey,
+        resetAt: new Date(resetAtMs).toISOString(),
+        remainingMs: resetAtMs - nowMs,
+      });
+    }
+
+    const pendingStartedAtMs = toMillis(typeUsage.startedAt);
+    const pendingIsFresh = typeUsage.status === "pending"
+      && typeUsage.pendingLabReportId
+      && typeUsage.pendingLabReportId !== labReportId
+      && pendingStartedAtMs
+      && pendingStartedAtMs > nowMs - LAB_PDF_EXTRACTION_PENDING_MS;
+    if (pendingIsFresh) {
+      throw new HttpsError("resource-exhausted", "Another PDF extraction is already running for this report type.", {
+        reportType: typeKey,
+        pendingLabReportId: typeUsage.pendingLabReportId,
+        resetAt: new Date(pendingStartedAtMs + LAB_PDF_EXTRACTION_PENDING_MS).toISOString(),
+        remainingMs: (pendingStartedAtMs + LAB_PDF_EXTRACTION_PENDING_MS) - nowMs,
+      });
+    }
+
+    transaction.set(usageRef, {
+      [typeKey]: {
+        status: "pending",
+        pendingLabReportId: labReportId,
+        startedAt: nowTimestamp,
+        usedBy: uid || null,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  return { typeKey, usageRef };
+};
+
+const completeLabPdfExtractionUsage = async (usageRef, typeKey, labReportId, uid) => {
+  const nowMs = Date.now();
+  const resetAtMs = nowMs + LAB_PDF_EXTRACTION_COOLDOWN_MS;
+  await usageRef.set({
+    [typeKey]: {
+      status: "cooldown",
+      usedAt: admin.firestore.Timestamp.fromMillis(nowMs),
+      resetAt: admin.firestore.Timestamp.fromMillis(resetAtMs),
+      lastLabReportId: labReportId,
+      usedBy: uid || null,
+      pendingLabReportId: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+  return { resetAt: new Date(resetAtMs).toISOString() };
+};
+
+const clearLabPdfExtractionPending = async (usageRef, typeKey, labReportId) => {
+  if (!usageRef || !typeKey) return;
+  const snap = await usageRef.get();
+  const current = snap.exists ? snap.data()?.[typeKey] : null;
+  if (current?.status !== "pending" || current?.pendingLabReportId !== labReportId) return;
+  await usageRef.set({
+    [typeKey]: {
+      status: "idle",
+      pendingLabReportId: null,
+      resetAt: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
 };
 
 const dayKey = (date = new Date()) => date.toISOString().slice(0, 10);
@@ -347,6 +497,181 @@ const getRiskSignature = (report) => {
   return `${report.pondId}:${highFindings.join("|")}`;
 };
 
+const stableStringify = (value) => {
+  if (Array.isArray(value)) return `[${value.map(stableStringify).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+
+const hashString = (value) => {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash).toString(36);
+};
+
+const getLabReportSourceHash = (report) => hashString(stableStringify({
+  status: report.status,
+  sampleDate: report.sampleDate || null,
+  pondResults: Array.isArray(report.pondResults) ? report.pondResults : [],
+}));
+
+const highestSeverity = (findings) => findings.reduce((highest, finding) => (
+  SEVERITY_RANK[finding.severity] > SEVERITY_RANK[highest] ? finding.severity : highest
+), "info");
+
+const labFinding = (finding) => ({
+  confidence: 0.78,
+  evidence: [],
+  ...finding,
+});
+
+const analyzeLabPondResult = (result, sampleDate) => {
+  const water = result.waterQuality || {};
+  const micro = result.microbiology || {};
+  const plankton = result.plankton || {};
+  const findings = [];
+  const push = (finding) => findings.push(labFinding(finding));
+
+  const no2 = toNumber(water.no2);
+  if (no2 !== null && no2 >= 0.5) {
+    push({
+      id: "lab_no2_high",
+      severity: no2 >= 1.5 ? "critical" : "warning",
+      title: "Nitrite is high",
+      summary: `Lab nitrite is ${round(no2, 3)} ppm.`,
+      evidence: [`NO2 ${round(no2, 3)} ppm.`],
+      recommendation: "Reduce feed pressure, strengthen aeration, and monitor appetite/mortality until nitrite falls.",
+    });
+  }
+
+  const nh4 = toNumber(water.nh4);
+  if (nh4 !== null && nh4 >= 0.5) {
+    push({
+      id: "lab_nh4_high",
+      severity: nh4 >= 1 ? "critical" : "warning",
+      title: "Ammonium is elevated",
+      summary: `Lab NH4 is ${round(nh4, 3)} ppm.`,
+      evidence: [`NH4 ${round(nh4, 3)} ppm.`],
+      recommendation: "Check organic load, feed waste, and biofilter/water exchange conditions before increasing feed.",
+    });
+  }
+
+  const tom = toNumber(water.tom);
+  if (tom !== null && tom > 80) {
+    push({
+      id: "lab_tom_high",
+      severity: tom > 100 ? "warning" : "watch",
+      title: "Organic load is high",
+      summary: `TOM is ${round(tom, 1)} ppm.`,
+      evidence: [`TOM ${round(tom, 1)} ppm.`],
+      recommendation: "Inspect sludge, feed waste, and siphoning schedule because high organic matter can support bacterial pressure.",
+    });
+  }
+
+  const alkalinity = toNumber(water.alkalinityTotal);
+  if (alkalinity !== null && alkalinity < 100) {
+    push({
+      id: "lab_alkalinity_low",
+      severity: "watch",
+      title: "Alkalinity buffer is low",
+      summary: `Total alkalinity is ${round(alkalinity, 1)} ppm.`,
+      evidence: [`Alkalinity ${round(alkalinity, 1)} ppm.`],
+      recommendation: "Monitor pH swing and consider buffering support if pH becomes unstable.",
+    });
+  }
+
+  const vibrioTotal = toNumber(micro.vibrioTotal);
+  const vibrioGreen = toNumber(micro.vibrioGreen);
+  if ((vibrioTotal !== null && vibrioTotal > 250) || (vibrioGreen !== null && vibrioGreen > 0)) {
+    const severity = (vibrioTotal !== null && vibrioTotal > 1000) || (vibrioGreen !== null && vibrioGreen > 100) ? "critical" : "warning";
+    push({
+      id: "lab_vibrio_pressure",
+      severity,
+      title: "Vibrio pressure is elevated",
+      summary: `Vibrio result is above the preferred range${vibrioTotal !== null ? `, total ${round(vibrioTotal, 0)}` : ""}.`,
+      evidence: [`Vibrio total ${vibrioTotal ?? "missing"}, green ${vibrioGreen ?? "missing"}.`],
+      recommendation: "Reduce organic load, watch appetite and mortality closely, and retest if symptoms or poor feeding appear.",
+    });
+  }
+
+  const cyano = toNumber(plankton.cyanophytaPercent);
+  if (cyano !== null && cyano > 10) {
+    push({
+      id: "lab_cyanophyta_high",
+      severity: cyano > 20 ? "warning" : "watch",
+      title: "Blue-green algae is high",
+      summary: `Cyanophyta is ${round(cyano, 1)}% of plankton.`,
+      evidence: [`Cyanophyta ${round(cyano, 1)}%.`],
+      recommendation: "Track pH swing, water color, and appetite because blue-green algae dominance can destabilize the pond.",
+    });
+  }
+
+  const dino = toNumber(plankton.dinoflagellataPercent);
+  if (dino !== null && dino > 5) {
+    push({
+      id: "lab_dinoflagellata_high",
+      severity: "watch",
+      title: "Dinoflagellata is elevated",
+      summary: `Dinoflagellata is ${round(dino, 1)}% of plankton.`,
+      evidence: [`Dinoflagellata ${round(dino, 1)}%.`],
+      recommendation: "Watch pond color and shrimp appetite; avoid aggressive feed increases while plankton balance is unstable.",
+    });
+  }
+
+  const harmfulPlankton = toNumber(plankton.harmfulCellPerMl);
+  const beneficialPlankton = toNumber(plankton.beneficialCellPerMl);
+  const totalPlankton = toNumber(plankton.totalCellPerMl);
+  const harmfulShare = harmfulPlankton !== null && totalPlankton !== null && totalPlankton > 0
+    ? (harmfulPlankton / totalPlankton) * 100
+    : null;
+  if ((harmfulShare !== null && harmfulShare > 30) || (harmfulPlankton !== null && beneficialPlankton !== null && harmfulPlankton > beneficialPlankton)) {
+    push({
+      id: "lab_harmful_plankton_pressure",
+      severity: harmfulShare !== null && harmfulShare > 50 ? "warning" : "watch",
+      title: "Harmful plankton pressure is elevated",
+      summary: harmfulShare !== null
+        ? `Harmful plankton is ${round(harmfulShare, 1)}% of total plankton.`
+        : "Harmful plankton is higher than beneficial plankton.",
+      evidence: [`Beneficial plankton ${beneficialPlankton ?? "missing"}, harmful plankton ${harmfulPlankton ?? "missing"}.`],
+      recommendation: "Track water color, pH swing, and appetite; avoid sudden feed increases while plankton balance is unfavorable.",
+    });
+  }
+
+  const combinedRisk = findings.some((finding) => finding.id === "lab_tom_high")
+    && findings.some((finding) => finding.id === "lab_vibrio_pressure");
+  if (combinedRisk) {
+    push({
+      id: "lab_organic_bacteria_combined",
+      severity: "critical",
+      title: "Organic load may be feeding bacterial pressure",
+      summary: "TOM and Vibrio are both elevated, which increases biological stress risk.",
+      evidence: ["High organic matter and elevated Vibrio were detected in the same lab result."],
+      recommendation: "Prioritize sludge control, conservative feeding, aeration, and short-interval monitoring for this pond.",
+    });
+  }
+
+  const overallSeverity = highestSeverity(findings);
+  const topFinding = findings
+    .filter((finding) => SEVERITY_RANK[finding.severity] >= SEVERITY_RANK.watch)
+    .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0];
+
+  return {
+    pondId: result.pondId || null,
+    pondCode: result.pondCode || "Unnamed pond",
+    sampleDate: sampleDate || null,
+    overallSeverity,
+    mainIssue: topFinding?.title || "Lab result reviewed",
+    keyRisks: findings.map((finding) => finding.title).slice(0, 4),
+    recommendations: findings.map((finding) => finding.recommendation).filter(Boolean).slice(0, 4),
+    findings,
+  };
+};
+
 const shouldCreateNotification = async (companyId, riskSignature) => {
   if (!riskSignature || riskSignature.endsWith(":")) return false;
   const since = admin.firestore.Timestamp.fromMillis(Date.now() - DAY_MS);
@@ -399,6 +724,665 @@ const createProactiveNotification = async (db, notification, lookbackMs = DAY_MS
   });
   return true;
 };
+
+const normalizePondCode = (value) => String(value || "")
+  .toLowerCase()
+  .replace(/^pond\s+/i, "")
+  .replace(/\s+/g, "")
+  .replace(/[^a-z0-9]/g, "");
+
+const buildLabExtractionPrompt = (pondNames, requestedReportType = "water_quality") => {
+  const knownPonds = pondNames.join(", ") || "unknown";
+  if (requestedReportType === "plankton") {
+    return `
+You are extracting a shrimp pond PLANKTON laboratory report for Shrimply.
+Return only valid compact JSON. Do not include markdown.
+
+Known pond names/codes in this farm: ${knownPonds}.
+
+Use this exact compact JSON shape. Do not include waterQuality, microbiology, doc, or transparency fields for plankton reports:
+{
+  "reportType": "plankton",
+  "labName": string | null,
+  "farmName": string | null,
+  "sampleDate": "YYYY-MM-DD" | null,
+  "confidence": number,
+  "warnings": string[],
+  "pondResults": [
+    {
+      "p": string,
+      "t": number | null,
+      "good": number | null,
+      "bad": number | null,
+      "chlC": number | null,
+      "chlP": number | null,
+      "chlS": string | null,
+      "cyaC": number | null,
+      "cyaP": number | null,
+      "cyaS": string | null,
+      "diaC": number | null,
+      "diaP": number | null,
+      "diaS": string | null,
+      "chrC": number | null,
+      "chrP": number | null,
+      "chrS": string | null,
+      "dinC": number | null,
+      "dinP": number | null,
+      "dinS": string | null,
+      "proC": number | null,
+      "proP": number | null,
+      "proS": string | null
+    }
+  ]
+}
+
+Rules:
+- Keep missing numeric values as null, never 0.
+- Preserve pond codes exactly as shown in the PDF.
+- Extract one row per pond.
+- Return minified JSON with compact keys exactly as shown.
+- p = pond code.
+- t = Total Plankton/Jumlah Plankton (Total).
+- good = Plankton Menguntungkan.
+- bad = Plankton Merugikan.
+- chl = Chlorophyta/green algae, cya = Cyanophyta/blue-green algae, dia = diatoms, chr = Chrysophyta/golden-green algae, din = Dinoflagellata, pro = Protozoa.
+- C suffix means raw cell count, P suffix means percentage, S suffix means species names.
+- Green algae = Chlorophyta, blue-green algae = Cyanophyta, diatoms = Diatom/Bacillariophyta, golden-green algae = Chrysophyta/Chrysophyceae, dinoflagellates = Dinoflagellata.
+- Golden-green aliases include Chrysophyta, Chrysophyceae, Chrysophytes, golden algae, golden-brown algae, ganggang keemasan, and ganggang coklat keemasan.
+- For each group, extract the group total/count into CellPerMl, group percentage into Percent, and species/sub-plankton names into Species.
+- Species examples include Chlorella, Pandorina, Tetraselmis, Microcystis, Oscillatoria, Melosira, Nitzschia, Dinobryon, Mallomonas, Gymnodinium.
+- Species fields must be a short comma-separated string, not an array.
+`;
+  }
+
+  return `
+You are extracting shrimp pond laboratory reports for Shrimply.
+Return only valid JSON. Do not include markdown.
+
+This upload was marked as reportType "${requestedReportType}".
+Treat the PDF as one report type only:
+- water_quality means mineral water-quality and microbiology values such as salinity, NH4, NO2, alkalinity, TOM, hardness, Vibrio, and TBC.
+- plankton means plankton count, plankton group totals, and the species listed under each plankton group.
+Extract one row per pond.
+Known pond names/codes in this farm: ${pondNames.join(", ") || "unknown"}.
+
+Use this exact JSON shape:
+{
+  "reportType": "water_quality" | "plankton" | "combined",
+  "labName": string | null,
+  "farmName": string | null,
+  "sampleDate": "YYYY-MM-DD" | null,
+  "confidence": number,
+  "warnings": string[],
+  "pondResults": [
+    {
+      "pondCode": string,
+      "doc": number | null,
+      "transparencyCm": number | null,
+      "waterQuality": {
+        "phCustomer": number | null,
+        "phLab": number | null,
+        "salinityCustomer": number | null,
+        "salinityLab": number | null,
+        "nh4": number | null,
+        "no2": number | null,
+        "alkalinityTotal": number | null,
+        "tom": number | null,
+        "hardnessCa": number | null,
+        "hardnessMg": number | null,
+        "hardnessTotal": number | null
+      },
+      "microbiology": {
+        "vibrioYellow": number | null,
+        "vibrioGreen": number | null,
+        "vibrioTotal": number | null,
+        "tbc": number | null,
+        "tvcTbcRatioPercent": number | null
+      },
+      "plankton": {
+        "totalCellPerMl": number | null,
+        "beneficialCellPerMl": number | null,
+        "harmfulCellPerMl": number | null,
+        "chlorophytaCellPerMl": number | null,
+        "chlorophytaPercent": number | null,
+        "chlorophytaSpecies": string | null,
+        "cyanophytaCellPerMl": number | null,
+        "cyanophytaPercent": number | null,
+        "cyanophytaSpecies": string | null,
+        "diatomCellPerMl": number | null,
+        "diatomPercent": number | null,
+        "diatomSpecies": string | null,
+        "chrysophytaCellPerMl": number | null,
+        "chrysophytaPercent": number | null,
+        "chrysophytaSpecies": string | null,
+        "dinoflagellataCellPerMl": number | null,
+        "dinoflagellataPercent": number | null,
+        "dinoflagellataSpecies": string | null,
+        "protozoaCellPerMl": number | null,
+        "protozoaPercent": number | null,
+        "protozoaSpecies": string | null
+      }
+    }
+  ]
+}
+
+Rules:
+- Keep missing values as null, never 0.
+- Preserve pond codes exactly as shown in the PDF.
+- Return reportType as "${requestedReportType}" unless the PDF clearly cannot match that type.
+- Do not extract pH for lab sampling. Set phCustomer and phLab to null even if the PDF contains pH, because Shrimply tracks pH in the daily water quality log.
+- If reportType is water_quality, extract mineral quality and microbiology fields only; set plankton fields to null.
+- If reportType is plankton, extract plankton fields only; set doc, waterQuality, and microbiology fields to null.
+- For Indonesian headers: Kecerahan = transparencyCm, NH4+ = nh4, NO2 = no2, TOM = tom, Total Plankton/Jumlah Plankton (Total) = totalCellPerMl, Plankton Menguntungkan = beneficialCellPerMl, Plankton Merugikan = harmfulCellPerMl, TBC = tbc.
+- For salinity, Cust/Customer = salinityCustomer, Lab = salinityLab.
+- For hardness, Ca = hardnessCa, Mg = hardnessMg, Total = hardnessTotal.
+- Vibrio Y means yellow, G means green.
+- For plankton group names: green algae = Chlorophyta, blue-green algae = Cyanophyta, diatoms = Diatom/Bacillariophyta, golden-green algae = Chrysophyta/Chrysophyceae, dinoflagellates = Dinoflagellata.
+- Golden-green aliases include Chrysophyta, Chrysophyceae, Chrysophytes, golden algae, golden-brown algae, ganggang keemasan, and ganggang coklat keemasan.
+- For each plankton group, extract the group total/count into the matching CellPerMl field, the group percentage into the matching Percent field, and species/sub-plankton names such as Chlorella, Pandorina, Tetraselmis into the matching Species text field.
+`;
+};
+
+const buildDeterministicLabInsights = (summaries) => {
+  const critical = summaries.filter((summary) => summary.overallSeverity === "critical");
+  const warning = summaries.filter((summary) => summary.overallSeverity === "warning");
+  const watch = summaries.filter((summary) => summary.overallSeverity === "watch");
+  const affected = [...critical, ...warning, ...watch];
+
+  return {
+    ownerSummary: affected.length > 0
+      ? `${affected.length} pond${affected.length === 1 ? "" : "s"} need attention from the latest lab report. Focus first on ${affected.slice(0, 3).map((summary) => summary.pondCode).join(", ")}.`
+      : "The confirmed lab report did not cross Shrimply warning thresholds. Continue routine monitoring and compare against the next lab result.",
+    pondSummaries: summaries.map((summary) => ({
+      pondId: summary.pondId,
+      pondCode: summary.pondCode,
+      status: summary.overallSeverity === "info" ? "good" : summary.overallSeverity,
+      summary: summary.mainIssue,
+      whyItMatters: summary.findings.length > 0
+        ? summary.findings[0].summary
+        : "No warning-level lab issue was detected from the available values.",
+      nextAction: summary.recommendations[0] || "Keep routine water quality and appetite monitoring.",
+    })),
+  };
+};
+
+const buildLabInsightPrompt = (summaries) => `
+You are Orson, Shrimply's aquaculture intelligence assistant.
+Explain this confirmed lab report to a shrimp farm owner in plain operational language.
+Return only valid JSON:
+{
+  "ownerSummary": string,
+  "pondSummaries": [
+    {
+      "pondId": string,
+      "pondCode": string,
+      "status": "good" | "watch" | "warning" | "critical",
+      "summary": string,
+      "whyItMatters": string,
+      "nextAction": string
+    }
+  ]
+}
+
+Rules:
+- Do not invent missing data.
+- Do not claim disease certainty.
+- Explain cause and effect simply.
+- Keep each pond nextAction practical and concise.
+
+Confirmed deterministic findings:
+${JSON.stringify(summaries)}
+`;
+
+const generateLabInsights = async (summaries) => {
+  const fallback = buildDeterministicLabInsights(summaries);
+  const apiKey = getGeminiApiKey();
+  if (!apiKey || summaries.length === 0) {
+    return {
+      ...fallback,
+      model: "deterministic",
+      generatedBy: "deterministic_fallback",
+    };
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: LAB_INSIGHT_MODEL,
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 2048,
+        responseMimeType: "application/json",
+      },
+    });
+    const result = await model.generateContent(buildLabInsightPrompt(summaries));
+    const parsed = parseJsonFromModelText(result.response.text());
+    return {
+      ownerSummary: parsed.ownerSummary || fallback.ownerSummary,
+      pondSummaries: Array.isArray(parsed.pondSummaries) ? parsed.pondSummaries : fallback.pondSummaries,
+      model: LAB_INSIGHT_MODEL,
+      generatedBy: "gemini",
+    };
+  } catch (error) {
+    return {
+      ...fallback,
+      model: "deterministic",
+      generatedBy: "deterministic_fallback",
+      error: error.message || String(error),
+    };
+  }
+};
+
+exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", secrets: [geminiApiKeySecret] }, async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = request.data?.companyId;
+  const labReportId = request.data?.labReportId;
+  if (!labReportId || typeof labReportId !== "string") {
+    throw new HttpsError("invalid-argument", "labReportId is required.");
+  }
+
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new HttpsError("failed-precondition", "Gemini API key is not configured for functions.");
+  }
+
+  const db = admin.firestore();
+  try {
+    await assertCompanyMemberForCallable(db, uid, companyId);
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+    console.error("Lab report extraction permission check failed", {
+      companyId,
+      labReportId,
+      uid,
+      message: error.message || String(error),
+      code: error.code || null,
+    });
+    throw new HttpsError("permission-denied", "The lab extraction service cannot access this company yet. Please try again in a minute or two.");
+  }
+
+  const reportRef = db.collection("companies").doc(companyId).collection("labReports").doc(labReportId);
+  let reportSnap;
+  try {
+    reportSnap = await reportRef.get();
+  } catch (error) {
+    console.error("Lab report draft read failed", {
+      companyId,
+      labReportId,
+      uid,
+      message: error.message || String(error),
+      code: error.code || null,
+    });
+    throw new HttpsError("permission-denied", "The lab extraction service cannot read the uploaded draft yet. Please try again in a minute or two.");
+  }
+  if (!reportSnap.exists) {
+    throw new HttpsError("not-found", "Lab report draft not found.");
+  }
+
+  const report = reportSnap.data() || {};
+  if (report.entryMode !== "pdf_upload") {
+    throw new HttpsError("failed-precondition", "This lab report was not created from a PDF upload.");
+  }
+  if (!report.sourcePdfPath || typeof report.sourcePdfPath !== "string") {
+    throw new HttpsError("failed-precondition", "The uploaded PDF path is missing.");
+  }
+  const expectedPdfPath = `companies/${companyId}/labReports/${labReportId}/source.pdf`;
+  if (report.sourcePdfPath !== expectedPdfPath) {
+    throw new HttpsError("permission-denied", "The uploaded PDF path does not match this lab report.");
+  }
+
+  const sourceHash = report.sourceFileHash || getLabReportSourceHash(report);
+  if (report.extraction?.status === "complete" && report.extraction?.sourceHash === sourceHash && Array.isArray(report.pondResults)) {
+    return { pondResults: report.pondResults, cached: true };
+  }
+
+  const requestedReportType = report.reportType === "plankton" ? "plankton" : "water_quality";
+  const { typeKey: labUsageTypeKey, usageRef: labUsageRef } = await reserveLabPdfExtraction(db, companyId, requestedReportType, labReportId, uid);
+
+  await reportRef.set({
+    extraction: {
+      status: "pending",
+      model: LAB_EXTRACTION_MODEL,
+      sourceHash,
+      startedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  try {
+    const pondsSnap = await db.collection("companies").doc(companyId).collection("ponds").get();
+    const pondOptions = pondsSnap.docs.map((docSnap) => {
+      const pond = docSnap.data() || {};
+      return {
+        pondId: docSnap.id,
+        pondName: pond.pondName || pond.name || docSnap.id,
+        normalized: normalizePondCode(pond.pondName || pond.name || docSnap.id),
+      };
+    });
+
+    const [pdfBuffer] = await admin.storage().bucket().file(report.sourcePdfPath).download();
+    if (pdfBuffer.length > 10 * 1024 * 1024) {
+      throw new Error("PDF is larger than the supported 10 MB limit.");
+    }
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: LAB_EXTRACTION_MODEL,
+      generationConfig: {
+        temperature: 0.1,
+        maxOutputTokens: 16384,
+        responseMimeType: "application/json",
+      },
+    });
+
+    console.log("Lab report extraction started", {
+      companyId,
+      labReportId,
+      pdfBytes: pdfBuffer.length,
+      pondCount: pondOptions.length,
+    });
+
+    const result = await model.generateContent([
+      { text: buildLabExtractionPrompt(pondOptions.map((pond) => pond.pondName), requestedReportType) },
+      {
+        inlineData: {
+          mimeType: "application/pdf",
+          data: pdfBuffer.toString("base64"),
+        },
+      },
+    ]);
+    const rawModelText = result.response.text();
+    const finishReason = result.response.candidates?.[0]?.finishReason || null;
+    let parsed;
+    try {
+      parsed = parseJsonFromModelText(rawModelText);
+    } catch (error) {
+      console.error("Lab report model JSON parse failed", {
+        companyId,
+        labReportId,
+        message: error.message || String(error),
+        rawLength: rawModelText.length,
+        finishReason,
+        rawStart: rawModelText.slice(0, 400),
+        rawEnd: rawModelText.slice(-400),
+      });
+      throw new Error("Gemini returned an incomplete lab extraction. Please retry the upload.");
+    }
+    const warnings = Array.isArray(parsed.warnings) ? parsed.warnings.filter(Boolean).map(String) : [];
+
+    const pondResults = (Array.isArray(parsed.pondResults) ? parsed.pondResults : []).map((row) => {
+      const planktonRow = row.plankton || row;
+      const extractedPondCode = row.pondCode || row.p;
+      const normalizedCode = normalizePondCode(extractedPondCode);
+      const matchedPond = pondOptions.find((pond) => pond.normalized === normalizedCode)
+        || pondOptions.find((pond) => normalizedCode && (pond.normalized.includes(normalizedCode) || normalizedCode.includes(pond.normalized)));
+      if (!matchedPond) {
+        warnings.push(`Could not match extracted pond code "${row.pondCode || "unknown"}" to an existing pond.`);
+      }
+
+      return {
+        pondId: matchedPond?.pondId || "",
+        pondCode: extractedPondCode || matchedPond?.pondName || "Unmatched pond",
+        doc: requestedReportType === "plankton" ? null : toNumber(row.doc),
+        transparencyCm: toNumber(row.transparencyCm),
+        waterQuality: {
+          phCustomer: null,
+          phLab: null,
+          salinityCustomer: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.salinityCustomer),
+          salinityLab: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.salinityLab),
+          nh4: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.nh4),
+          no2: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.no2),
+          alkalinityTotal: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.alkalinityTotal),
+          tom: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.tom),
+          hardnessCa: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessCa),
+          hardnessMg: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessMg),
+          hardnessTotal: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessTotal),
+        },
+        microbiology: {
+          vibrioYellow: requestedReportType === "plankton" ? null : toNumber(row.microbiology?.vibrioYellow),
+          vibrioGreen: requestedReportType === "plankton" ? null : toNumber(row.microbiology?.vibrioGreen),
+          vibrioTotal: requestedReportType === "plankton" ? null : toNumber(row.microbiology?.vibrioTotal),
+          tbc: requestedReportType === "plankton" ? null : toNumber(row.microbiology?.tbc),
+          tvcTbcRatioPercent: requestedReportType === "plankton" ? null : toNumber(row.microbiology?.tvcTbcRatioPercent),
+        },
+        plankton: {
+          totalCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.totalCellPerMl, planktonRow.t)),
+          beneficialCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.beneficialCellPerMl, planktonRow.good)),
+          harmfulCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.harmfulCellPerMl, planktonRow.bad)),
+          chlorophytaCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.chlorophytaCellPerMl, planktonRow.chlC)),
+          chlorophytaPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.chlorophytaPercent, planktonRow.chlP)),
+          chlorophytaSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(planktonRow.chlorophytaSpecies, planktonRow.chlS)),
+          cyanophytaCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.cyanophytaCellPerMl, planktonRow.cyaC)),
+          cyanophytaPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.cyanophytaPercent, planktonRow.cyaP)),
+          cyanophytaSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(planktonRow.cyanophytaSpecies, planktonRow.cyaS)),
+          diatomCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.diatomCellPerMl, planktonRow.diaC)),
+          diatomPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.diatomPercent, planktonRow.diaP)),
+          diatomSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(planktonRow.diatomSpecies, planktonRow.diaS)),
+          chrysophytaCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(
+            planktonRow.chrysophytaCellPerMl,
+            planktonRow.chrysophyceaeCellPerMl,
+            planktonRow.goldenAlgaeCellPerMl,
+            planktonRow.goldenGreenAlgaeCellPerMl,
+            planktonRow.chrC,
+          )),
+          chrysophytaPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(
+            planktonRow.chrysophytaPercent,
+            planktonRow.chrysophyceaePercent,
+            planktonRow.goldenAlgaePercent,
+            planktonRow.goldenGreenAlgaePercent,
+            planktonRow.chrP,
+          )),
+          chrysophytaSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(
+            planktonRow.chrysophytaSpecies,
+            planktonRow.chrysophyceaeSpecies,
+            planktonRow.goldenAlgaeSpecies,
+            planktonRow.goldenGreenAlgaeSpecies,
+            planktonRow.chrS,
+          )),
+          dinoflagellataCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.dinoflagellataCellPerMl, planktonRow.dinC)),
+          dinoflagellataPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.dinoflagellataPercent, planktonRow.dinP)),
+          dinoflagellataSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(planktonRow.dinoflagellataSpecies, planktonRow.dinS)),
+          protozoaCellPerMl: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.protozoaCellPerMl, planktonRow.proC)),
+          protozoaPercent: requestedReportType === "water_quality" ? null : toNumber(firstDefined(planktonRow.protozoaPercent, planktonRow.proP)),
+          protozoaSpecies: requestedReportType === "water_quality" ? null : toOptionalText(firstDefined(planktonRow.protozoaSpecies, planktonRow.proS)),
+        },
+      };
+    });
+
+    await reportRef.set({
+      reportType: requestedReportType,
+      labName: parsed.labName || report.labName || "Uploaded lab report",
+      farmName: parsed.farmName || report.farmName || "",
+      sampleDate: parsed.sampleDate || report.sampleDate || null,
+      status: "extracted",
+      pondResults,
+      extraction: {
+        status: "complete",
+        model: LAB_EXTRACTION_MODEL,
+        sourceHash,
+        confidence: toNumber(parsed.confidence) ?? 0.7,
+        warnings,
+        extractedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    let cooldown = null;
+    try {
+      cooldown = await completeLabPdfExtractionUsage(labUsageRef, labUsageTypeKey, labReportId, uid);
+    } catch (usageError) {
+      console.error("Lab PDF extraction cooldown update failed", {
+        companyId,
+        labReportId,
+        reportType: labUsageTypeKey,
+        message: usageError.message || String(usageError),
+      });
+    }
+
+    return { pondResults, warnings, cached: false, cooldown };
+  } catch (error) {
+    console.error("Lab report extraction failed", {
+      companyId,
+      labReportId,
+      uid,
+      sourcePdfPath: report.sourcePdfPath || null,
+      message: error.message || String(error),
+      code: error.code || null,
+      stack: error.stack || null,
+    });
+    await clearLabPdfExtractionPending(labUsageRef, labUsageTypeKey, labReportId);
+    await reportRef.set({
+      status: "failed",
+      extraction: {
+        status: "failed",
+        model: LAB_EXTRACTION_MODEL,
+        sourceHash,
+        error: error.message || String(error),
+        failedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    throw new HttpsError("internal", "Failed to extract the lab report PDF.", { message: error.message || String(error) });
+  }
+});
+
+exports.processConfirmedLabReport = onDocumentWritten({
+  document: "companies/{companyId}/labReports/{labReportId}",
+  secrets: [geminiApiKeySecret],
+}, async (event) => {
+  const afterSnap = event.data?.after;
+  if (!afterSnap || !afterSnap.exists) return null;
+
+  const report = afterSnap.data() || {};
+  if (report.status !== "confirmed") return null;
+
+  const { companyId, labReportId } = event.params;
+  const sourceHash = getLabReportSourceHash(report);
+  if (report.processing?.status === "complete" && report.processing?.sourceHash === sourceHash) {
+    return { success: true, skipped: true };
+  }
+
+  const db = admin.firestore();
+  const pondResults = Array.isArray(report.pondResults) ? report.pondResults : [];
+  const summaries = pondResults
+    .filter((result) => result && result.pondId)
+    .map((result) => analyzeLabPondResult(result, report.sampleDate));
+  const insights = await generateLabInsights(summaries);
+
+  const batch = db.batch();
+  const criticalCount = summaries.filter((summary) => summary.overallSeverity === "critical").length;
+  const warningCount = summaries.filter((summary) => summary.overallSeverity === "warning").length;
+  const overallStatus = summaries.reduce((highest, summary) => (
+    SEVERITY_RANK[summary.overallSeverity] > SEVERITY_RANK[highest] ? summary.overallSeverity : highest
+  ), "info");
+  const reportType = report.reportType === "plankton" ? "plankton" : "water_quality";
+
+  summaries.forEach((summary) => {
+    const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(summary.pondId);
+    const labSummaryRef = pondRef.collection("labSummaries").doc(labReportId);
+    const displayStatus = summary.overallSeverity === "info" ? "good" : summary.overallSeverity;
+    const payload = {
+      companyId,
+      labReportId,
+      sampleDate: report.sampleDate || null,
+      pondId: summary.pondId,
+      pondCode: summary.pondCode,
+      reportType,
+      status: displayStatus,
+      mainIssue: summary.mainIssue,
+      keyRisks: summary.keyRisks,
+      recommendations: summary.recommendations,
+      findings: summary.findings,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+    const latestTypeStatus = {
+      labReportId,
+      reportType,
+      sampleDate: report.sampleDate || null,
+      status: displayStatus,
+      mainIssue: summary.mainIssue,
+      keyRisks: summary.keyRisks,
+      recommendations: summary.recommendations,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    batch.set(labSummaryRef, payload, { merge: true });
+    batch.set(pondRef, {
+      latestLabStatus: {
+        labReportId,
+        reportType,
+        sampleDate: report.sampleDate || null,
+        status: displayStatus,
+        mainIssue: summary.mainIssue,
+        keyRisks: summary.keyRisks,
+        recommendations: summary.recommendations,
+        byType: {
+          [reportType]: latestTypeStatus,
+        },
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+  });
+
+  batch.set(afterSnap.ref, {
+    processing: {
+      status: "complete",
+      sourceHash,
+      processedAt: admin.firestore.FieldValue.serverTimestamp(),
+    },
+    summary: {
+      overallStatus: overallStatus === "info" ? "good" : overallStatus,
+      warningCount,
+      criticalCount,
+      pondCount: summaries.length,
+    },
+    insights: {
+      status: "complete",
+      sourceHash,
+      model: insights.model,
+      generatedBy: insights.generatedBy,
+      generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      ownerSummary: insights.ownerSummary,
+      pondSummaries: insights.pondSummaries,
+      error: insights.error || null,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  }, { merge: true });
+
+  await batch.commit();
+
+  const notifiableSummaries = summaries.filter((summary) => SEVERITY_RANK[summary.overallSeverity] >= SEVERITY_RANK.warning);
+  await Promise.all(notifiableSummaries.map(async (summary) => {
+    const topFinding = summary.findings
+      .filter((finding) => SEVERITY_RANK[finding.severity] >= SEVERITY_RANK.warning)
+      .sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity])[0];
+    if (!topFinding) return false;
+
+    return createProactiveNotification(db, {
+      companyId,
+      type: "orson_lab_risk",
+      dedupeKey: `lab_${labReportId}_${summary.pondId}_${topFinding.id}`,
+      title: `Orson Lab: ${summary.pondCode} ${topFinding.title}`,
+      message: `${topFinding.summary} ${topFinding.recommendation}`,
+      priority: topFinding.severity === "critical" ? "high" : "medium",
+      data: {
+        pondId: summary.pondId,
+        pondName: summary.pondCode,
+        labReportId,
+        riskId: topFinding.id,
+        severity: topFinding.severity,
+        confidence: topFinding.confidence,
+      },
+    }, 30 * DAY_MS);
+  }));
+
+  return {
+    success: true,
+    pondCount: summaries.length,
+    warningCount,
+    criticalCount,
+  };
+});
 
 const getRecentUsageForecast = (item, type) => {
   const usageHistory = Array.isArray(item.usageHistory) ? item.usageHistory : [];

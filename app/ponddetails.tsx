@@ -85,6 +85,18 @@ const DataRow = React.memo(({
 ));
 DataRow.displayName = 'DataRow';
 
+type PondLabStatus = NonNullable<Pond['latestLabStatus']>;
+
+const getLabStatusStyle = (
+  status: PondLabStatus['status'] | undefined,
+  labels: { critical: string; warning: string; watch: string; good: string },
+) => {
+  if (status === 'critical') return { label: labels.critical, bg: '#fee2e2', color: '#991b1b', icon: 'warning-outline' as const };
+  if (status === 'warning') return { label: labels.warning, bg: '#fef3c7', color: '#92400e', icon: 'alert-circle-outline' as const };
+  if (status === 'watch') return { label: labels.watch, bg: '#e0f2fe', color: '#0F4C75', icon: 'eye-outline' as const };
+  return { label: labels.good, bg: '#dcfce7', color: '#166534', icon: 'checkmark-circle-outline' as const };
+};
+
 const EditInputField = React.memo(({ 
   label, 
   value, 
@@ -579,6 +591,15 @@ export default function PondDetails() {
     totalMortalityWeight,
     pondSamplingData
   } = calculations;
+  const latestLabStatus = pond.latestLabStatus;
+  const waterQualityLabStatus = latestLabStatus?.byType?.water_quality
+    ?? (latestLabStatus?.reportType === 'water_quality' || (!latestLabStatus?.reportType && !latestLabStatus?.byType) ? latestLabStatus : undefined);
+  const planktonLabStatus = latestLabStatus?.byType?.plankton
+    ?? (latestLabStatus?.reportType === 'plankton' ? latestLabStatus : undefined);
+  const labStatusCards = [
+    { key: 'water_quality', title: t.waterQuality.mineralQuality, icon: 'water-outline' as const, status: waterQualityLabStatus },
+    { key: 'plankton', title: t.waterQuality.planktonQuality, icon: 'leaf-outline' as const, status: planktonLabStatus },
+  ].filter((item) => item.status);
 
   return (
     <>
@@ -676,6 +697,62 @@ export default function PondDetails() {
                 />
               </View>
             </View>
+          </View>
+
+          <View style={styles.labStatusCard}>
+            <View style={styles.labStatusHeader}>
+              <View style={styles.labStatusTitleRow}>
+                <Ionicons name="flask-outline" size={18} color="#315f57" />
+                <Text style={styles.labStatusTitle}>{t.waterQuality.labReports}</Text>
+              </View>
+            </View>
+            {labStatusCards.length === 0 ? (
+              <View style={styles.labStatusEmpty}>
+                <Text style={styles.labStatusIssue}>{t.waterQuality.noConfirmedLabWarning}</Text>
+              </View>
+            ) : (
+              <View style={styles.labStatusGrid}>
+                {labStatusCards.map((item) => {
+                  const statusStyle = getLabStatusStyle(item.status?.status, {
+                    critical: t.waterQuality.statusCritical,
+                    warning: t.waterQuality.statusWarning,
+                    watch: t.waterQuality.statusWatch,
+                    good: t.waterQuality.statusGood,
+                  });
+                  return (
+                    <View key={item.key} style={styles.labStatusTypeCard}>
+                      <View style={styles.labStatusTypeHeader}>
+                        <View style={styles.labStatusTitleRow}>
+                          <Ionicons name={item.icon} size={16} color="#315f57" />
+                          <Text style={styles.labStatusTypeTitle}>{item.title}</Text>
+                        </View>
+                        <View style={[styles.labStatusBadge, { backgroundColor: statusStyle.bg }]}>
+                          <Ionicons name={statusStyle.icon} size={13} color={statusStyle.color} />
+                          <Text style={[styles.labStatusBadgeText, { color: statusStyle.color }]}>{statusStyle.label}</Text>
+                        </View>
+                      </View>
+                      <Text style={styles.labStatusIssue}>{item.status?.mainIssue || t.waterQuality.noConfirmedLabWarning}</Text>
+                      {item.status?.sampleDate && (
+                        <Text style={styles.labStatusDate}>{t.waterQuality.lastLab}: {new Date(item.status.sampleDate).toLocaleDateString()}</Text>
+                      )}
+                      {item.status?.keyRisks && item.status.keyRisks.length > 0 && (
+                        <View style={styles.labStatusList}>
+                          {item.status.keyRisks.slice(0, 2).map((risk, index) => (
+                            <Text key={`${item.key}-${risk}-${index}`} style={styles.labStatusListItem}>• {risk}</Text>
+                          ))}
+                        </View>
+                      )}
+                      {item.status?.recommendations?.[0] && (
+                        <View style={styles.labStatusRecommendation}>
+                          <Text style={styles.labStatusRecommendationTitle}>{t.waterQuality.recommendedAction}</Text>
+                          <Text style={styles.labStatusRecommendationText}>{item.status.recommendations[0]}</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
           <TouchableOpacity 
@@ -847,6 +924,24 @@ const styles = StyleSheet.create({
   dataLabel: { fontSize: 13, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
   dataValue: { fontSize: 17, color: '#0d2137', fontWeight: '600' },
   dataUnit: { fontSize: 13, color: '#315f57' },
+  labStatusCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e8f2f9', elevation: 3 },
+  labStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
+  labStatusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  labStatusTitle: { color: '#0d2137', fontSize: 15, fontWeight: '900' },
+  labStatusGrid: { gap: 10 },
+  labStatusTypeCard: { backgroundColor: '#f8fbfd', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#e8f2f9' },
+  labStatusTypeHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 },
+  labStatusTypeTitle: { color: '#0d2137', fontSize: 13, fontWeight: '900' },
+  labStatusEmpty: { backgroundColor: '#f8fbfd', borderRadius: 14, padding: 13, borderWidth: 1, borderColor: '#e8f2f9' },
+  labStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  labStatusBadgeText: { fontSize: 11, fontWeight: '900' },
+  labStatusIssue: { color: '#0d2137', fontSize: 14, fontWeight: '800', lineHeight: 21 },
+  labStatusDate: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', marginTop: 6 },
+  labStatusList: { marginTop: 10, gap: 4 },
+  labStatusListItem: { color: '#315f57', fontSize: 13, fontWeight: '700', lineHeight: 19 },
+  labStatusRecommendation: { marginTop: 12, backgroundColor: '#f4f8fc', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#e8f2f9' },
+  labStatusRecommendationTitle: { color: '#0d2137', fontSize: 11, fontWeight: '900', marginBottom: 4, textTransform: 'uppercase' },
+  labStatusRecommendationText: { color: '#315f57', fontSize: 13, fontWeight: '700', lineHeight: 19 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#315f57', fontSize: 16 },
   moreButton: { padding: 12, backgroundColor: '#dce8f2', borderRadius: 12, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#315f57' },

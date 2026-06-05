@@ -91,9 +91,26 @@ export interface Sampling {
 
 export type CycleStartMode = 'new' | 'midcycle';
 
+export type LabReportStatus = {
+  labReportId?: string;
+  reportType?: 'water_quality' | 'plankton' | 'combined';
+  sampleDate?: string;
+  status?: 'good' | 'info' | 'watch' | 'warning' | 'critical';
+  mainIssue?: string;
+  keyRisks?: string[];
+  recommendations?: string[];
+  updatedAt?: unknown;
+};
+
 export interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
+  latestLabStatus?: LabReportStatus & {
+    byType?: {
+      water_quality?: LabReportStatus;
+      plankton?: LabReportStatus;
+    };
+  };
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: PondCycleStatus; cycleStartedAt?: string; cycleEndedAt?: string; cycleEndedBy?: string; cycleEndReason?: PondCycleEndReason; previousCyclePondId?: string;
   cycleStartMode?: CycleStartMode;

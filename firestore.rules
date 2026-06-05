@@ -268,6 +268,30 @@ service cloud.firestore {
       match /ponds/{pondId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow write: if isCompanyOperator(companyId);
+
+        match /labSummaries/{labReportId} {
+          allow read: if isFounderAdmin() || isCompanyMember(companyId);
+          allow write: if false;
+        }
+      }
+
+      match /labReports/{labReportId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow create: if isCompanyOperator(companyId)
+          && request.resource.data.companyId == companyId
+          && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
+          && request.resource.data.entryMode in ['manual', 'pdf_upload'];
+        allow update: if isCompanyOperator(companyId)
+          && resource.data.status != 'confirmed'
+          && request.resource.data.companyId == companyId
+          && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
+          && request.resource.data.entryMode in ['manual', 'pdf_upload'];
+        allow delete: if isCompanyOwnerRole(companyId);
+      }
+
+      match /labUsage/{usageId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
       }
 
       match /physicalPonds/{physicalPondId} {

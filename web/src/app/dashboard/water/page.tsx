@@ -10,17 +10,21 @@ import {
   Wind,
   X,
   Loader2,
-  Calendar,
   Waves,
-  ArrowRight,
-  ChevronRight,
   History,
-  Info
+  Info,
+  FileText,
+  AlertTriangle,
+  CheckCircle2,
+  ClipboardList,
+  type LucideIcon
 } from 'lucide-react';
 import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDoc } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, addDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { app, auth, db, storage } from '@/lib/firebase';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
@@ -34,46 +38,163 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; supplier: string; samplings: Sampling[];
+  latestLabStatus?: LabStatus;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
 
-const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
-  if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
-  return null;
+type WaterPageView = 'daily' | 'lab';
+type LabReportType = 'water_quality' | 'plankton' | 'combined';
+type LabSeverity = 'good' | 'watch' | 'warning' | 'critical';
+type LabEntryMode = 'manual' | 'pdf_upload';
+type LabPdfUsageType = 'water_quality' | 'plankton';
+
+const getLabReportTypeLabel = (reportType?: LabReportType) => {
+  if (reportType === 'plankton') return 'Plankton Quality';
+  if (reportType === 'combined') return 'Combined Lab Report';
+  return 'Mineral Quality';
 };
 
-const formatSyncStatus = (date: Date | null): string => {
-  if (!date) return 'Sync status unavailable';
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return 'Last synced today';
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
-  return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
-};
+interface LabStatus {
+  labReportId?: string;
+  sampleDate?: string;
+  status?: LabSeverity;
+  mainIssue?: string;
+  keyRisks?: string[];
+  recommendations?: string[];
+  updatedAt?: { toDate?: () => Date; seconds?: number };
+}
+
+interface LabPondResult {
+  pondId: string;
+  pondCode: string;
+  doc?: string;
+  transparencyCm?: string;
+  waterQuality?: {
+    phCustomer?: string;
+    phLab?: string;
+    salinityCustomer?: string;
+    salinityLab?: string;
+    nh4?: string;
+    no2?: string;
+    alkalinityTotal?: string;
+    tom?: string;
+    hardnessCa?: string;
+    hardnessMg?: string;
+    hardnessTotal?: string;
+  };
+  microbiology?: {
+    vibrioYellow?: string;
+    vibrioGreen?: string;
+    vibrioTotal?: string;
+    tbc?: string;
+    tvcTbcRatioPercent?: string;
+  };
+  plankton?: {
+    totalCellPerMl?: string;
+    beneficialCellPerMl?: string;
+    harmfulCellPerMl?: string;
+    chlorophytaCellPerMl?: string;
+    chlorophytaPercent?: string;
+    chlorophytaSpecies?: string;
+    cyanophytaCellPerMl?: string;
+    cyanophytaPercent?: string;
+    cyanophytaSpecies?: string;
+    diatomCellPerMl?: string;
+    diatomPercent?: string;
+    diatomSpecies?: string;
+    chrysophytaCellPerMl?: string;
+    chrysophytaPercent?: string;
+    chrysophytaSpecies?: string;
+    dinoflagellataCellPerMl?: string;
+    dinoflagellataPercent?: string;
+    dinoflagellataSpecies?: string;
+    protozoaCellPerMl?: string;
+    protozoaPercent?: string;
+    protozoaSpecies?: string;
+  };
+}
+
+interface LabReport {
+  id: string;
+  reportType?: LabReportType;
+  entryMode?: LabEntryMode;
+  status?: 'draft' | 'extracted' | 'confirmed' | 'failed';
+  sampleDate?: string;
+  labName?: string;
+  farmName?: string;
+  sourcePdfUrl?: string;
+  sourcePdfPath?: string;
+  originalFileName?: string;
+  sourceFileHash?: string;
+  pondResults?: LabPondResult[];
+  extraction?: {
+    status?: 'not_required' | 'pending' | 'complete' | 'failed';
+    model?: string;
+    sourceHash?: string;
+    confidence?: number;
+    warnings?: string[];
+    error?: string;
+    extractedAt?: { toDate?: () => Date; seconds?: number };
+  };
+  processing?: {
+    status?: 'pending' | 'complete' | 'failed';
+    processedAt?: { toDate?: () => Date; seconds?: number };
+    error?: string;
+  };
+  summary?: {
+    overallStatus?: LabSeverity;
+    warningCount?: number;
+    criticalCount?: number;
+  };
+  insights?: {
+    status?: 'pending' | 'complete' | 'failed';
+    ownerSummary?: string;
+    generatedBy?: string;
+  };
+  createdAt?: { toDate?: () => Date; seconds?: number };
+}
+
+type LabPdfUsage = Partial<Record<LabPdfUsageType, {
+  status?: 'idle' | 'pending' | 'cooldown';
+  resetAt?: unknown;
+  startedAt?: unknown;
+}>>;
+
+const LAB_PDF_PENDING_MS = 10 * 60 * 1000;
+
+interface DashboardUser {
+  uid: string;
+  role?: string;
+  companyId?: string;
+  [key: string]: unknown;
+}
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function WaterQualityPage() {
+  const [activeView, setActiveView] = useState<WaterPageView>('daily');
   const [ponds, setPonds] = useState<Pond[]>([]);
+  const [labReports, setLabReports] = useState<LabReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<DashboardUser | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const [labPdfUsage, setLabPdfUsage] = useState<LabPdfUsage>({});
+  const [labUsageNowMs, setLabUsageNowMs] = useState(() => Date.now());
 
   const [isModalOpen, setModalOpen] = useState(false);
+  const [isLabModalOpen, setLabModalOpen] = useState(false);
+  const [isLabActionModalOpen, setLabActionModalOpen] = useState(false);
+  const [labSubmitting, setLabSubmitting] = useState(false);
+  const [labEntryMode, setLabEntryMode] = useState<LabEntryMode>('manual');
+  const [editingLabReportId, setEditingLabReportId] = useState<string | null>(null);
+  const [labPdfFile, setLabPdfFile] = useState<File | null>(null);
   const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
+  const [expandedLabReportId, setExpandedLabReportId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Form State
@@ -87,6 +208,14 @@ export default function WaterQualityPage() {
     transparency: '',
     salinity: ''
   });
+  const [labForm, setLabForm] = useState({
+    reportType: 'water_quality' as LabReportType,
+    sampleDate: new Date().toISOString().split('T')[0],
+    labName: '',
+    farmName: '',
+  });
+  const [selectedLabPondIds, setSelectedLabPondIds] = useState<string[]>([]);
+  const [labRows, setLabRows] = useState<LabPondResult[]>([]);
   const canEditWater = canEditOperations(user?.role);
 
   useEffect(() => {
@@ -106,7 +235,14 @@ export default function WaterQualityPage() {
               setPonds(data);
               setLoading(false);
             });
-            return () => unsubPonds();
+            const labReportsQuery = query(collection(db, 'companies', cid, 'labReports'), orderBy('sampleDate', 'desc'));
+            const unsubLabReports = onSnapshot(labReportsQuery, (snapshot) => {
+              setLabReports(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LabReport)));
+            });
+            return () => {
+              unsubPonds();
+              unsubLabReports();
+            };
           } else {
             setLoading(false);
           }
@@ -114,6 +250,23 @@ export default function WaterQualityPage() {
       }
     });
     return () => unsubAuth();
+  }, []);
+
+  useEffect(() => {
+    if (!companyId) {
+      return undefined;
+    }
+
+    return onSnapshot(doc(db, 'companies', companyId, 'labUsage', 'pdfExtraction'), (snapshot) => {
+      setLabPdfUsage(snapshot.exists() ? snapshot.data() as LabPdfUsage : {});
+    }, (error) => {
+      console.error('Error loading lab PDF usage:', error);
+    });
+  }, [companyId]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setLabUsageNowMs(Date.now()), 60 * 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
   // ── Sync form data with existing records when pond/date changes ────
@@ -132,6 +285,7 @@ export default function WaterQualityPage() {
     );
 
     if (existing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData(prev => {
         // Only update if the values are actually different to avoid input loops
         if (
@@ -176,7 +330,7 @@ export default function WaterQualityPage() {
 
   const handleAddWQ = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId || !formData.pondId) return;
+    if (!companyId || !formData.pondId || !user) return;
     if (!canEditWater) return;
 
     try {
@@ -254,9 +408,448 @@ export default function WaterQualityPage() {
     }
   };
 
+  const createEmptyLabRow = (pond: Pond): LabPondResult => ({
+    pondId: pond.id,
+    pondCode: pond.pondName,
+    doc: '',
+    transparencyCm: '',
+    waterQuality: {
+      phCustomer: '',
+      phLab: '',
+      salinityCustomer: '',
+      salinityLab: '',
+      nh4: '',
+      no2: '',
+      alkalinityTotal: '',
+      tom: '',
+      hardnessCa: '',
+      hardnessMg: '',
+      hardnessTotal: '',
+    },
+    microbiology: {
+      vibrioYellow: '',
+      vibrioGreen: '',
+      vibrioTotal: '',
+      tbc: '',
+      tvcTbcRatioPercent: '',
+    },
+    plankton: {
+      totalCellPerMl: '',
+      beneficialCellPerMl: '',
+      harmfulCellPerMl: '',
+      chlorophytaCellPerMl: '',
+      chlorophytaPercent: '',
+      chlorophytaSpecies: '',
+      cyanophytaCellPerMl: '',
+      cyanophytaPercent: '',
+      cyanophytaSpecies: '',
+      diatomCellPerMl: '',
+      diatomPercent: '',
+      diatomSpecies: '',
+      chrysophytaCellPerMl: '',
+      chrysophytaPercent: '',
+      chrysophytaSpecies: '',
+      dinoflagellataCellPerMl: '',
+      dinoflagellataPercent: '',
+      dinoflagellataSpecies: '',
+      protozoaCellPerMl: '',
+      protozoaPercent: '',
+      protozoaSpecies: '',
+    },
+  });
+
+  const toggleLabPond = (pond: Pond) => {
+    setSelectedLabPondIds(prev => {
+      const exists = prev.includes(pond.id);
+      const nextIds = exists ? prev.filter(id => id !== pond.id) : [...prev, pond.id];
+      setLabRows(rows => {
+        if (exists) return rows.filter(row => row.pondId !== pond.id);
+        return [...rows, createEmptyLabRow(pond)];
+      });
+      return nextIds;
+    });
+  };
+
+  const updateLabRow = (pondId: string, path: string[], value: string) => {
+    setLabRows(rows => rows.map(row => {
+      if (row.pondId !== pondId) return row;
+      if (path.length === 1) return { ...row, [path[0]]: value };
+      const [section, field] = path as [keyof LabPondResult, string];
+      const sectionValue = row[section];
+      return {
+        ...row,
+        [section]: {
+          ...(typeof sectionValue === 'object' && sectionValue ? sectionValue : {}),
+          [field]: value,
+        },
+      };
+    }));
+  };
+
+  const toOptionalNumber = (value?: string) => {
+    if (value === undefined || value === null || String(value).trim() === '') return null;
+    const parsed = Number(String(value).replace(/,/g, '').replace(/%$/, ''));
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const normalizeLabRow = (row: LabPondResult) => ({
+    pondId: row.pondId,
+    pondCode: row.pondCode,
+    doc: toOptionalNumber(row.doc),
+    transparencyCm: toOptionalNumber(row.transparencyCm),
+    waterQuality: {
+      phCustomer: toOptionalNumber(row.waterQuality?.phCustomer),
+      phLab: toOptionalNumber(row.waterQuality?.phLab),
+      salinityCustomer: toOptionalNumber(row.waterQuality?.salinityCustomer),
+      salinityLab: toOptionalNumber(row.waterQuality?.salinityLab),
+      nh4: toOptionalNumber(row.waterQuality?.nh4),
+      no2: toOptionalNumber(row.waterQuality?.no2),
+      alkalinityTotal: toOptionalNumber(row.waterQuality?.alkalinityTotal),
+      tom: toOptionalNumber(row.waterQuality?.tom),
+      hardnessCa: toOptionalNumber(row.waterQuality?.hardnessCa),
+      hardnessMg: toOptionalNumber(row.waterQuality?.hardnessMg),
+      hardnessTotal: toOptionalNumber(row.waterQuality?.hardnessTotal),
+    },
+    microbiology: {
+      vibrioYellow: toOptionalNumber(row.microbiology?.vibrioYellow),
+      vibrioGreen: toOptionalNumber(row.microbiology?.vibrioGreen),
+      vibrioTotal: toOptionalNumber(row.microbiology?.vibrioTotal),
+      tbc: toOptionalNumber(row.microbiology?.tbc),
+      tvcTbcRatioPercent: toOptionalNumber(row.microbiology?.tvcTbcRatioPercent),
+    },
+    plankton: {
+      totalCellPerMl: toOptionalNumber(row.plankton?.totalCellPerMl),
+      beneficialCellPerMl: toOptionalNumber(row.plankton?.beneficialCellPerMl),
+      harmfulCellPerMl: toOptionalNumber(row.plankton?.harmfulCellPerMl),
+      chlorophytaCellPerMl: toOptionalNumber(row.plankton?.chlorophytaCellPerMl),
+      chlorophytaPercent: toOptionalNumber(row.plankton?.chlorophytaPercent),
+      chlorophytaSpecies: row.plankton?.chlorophytaSpecies?.trim() || null,
+      cyanophytaCellPerMl: toOptionalNumber(row.plankton?.cyanophytaCellPerMl),
+      cyanophytaPercent: toOptionalNumber(row.plankton?.cyanophytaPercent),
+      cyanophytaSpecies: row.plankton?.cyanophytaSpecies?.trim() || null,
+      diatomCellPerMl: toOptionalNumber(row.plankton?.diatomCellPerMl),
+      diatomPercent: toOptionalNumber(row.plankton?.diatomPercent),
+      diatomSpecies: row.plankton?.diatomSpecies?.trim() || null,
+      chrysophytaCellPerMl: toOptionalNumber(row.plankton?.chrysophytaCellPerMl),
+      chrysophytaPercent: toOptionalNumber(row.plankton?.chrysophytaPercent),
+      chrysophytaSpecies: row.plankton?.chrysophytaSpecies?.trim() || null,
+      dinoflagellataCellPerMl: toOptionalNumber(row.plankton?.dinoflagellataCellPerMl),
+      dinoflagellataPercent: toOptionalNumber(row.plankton?.dinoflagellataPercent),
+      dinoflagellataSpecies: row.plankton?.dinoflagellataSpecies?.trim() || null,
+      protozoaCellPerMl: toOptionalNumber(row.plankton?.protozoaCellPerMl),
+      protozoaPercent: toOptionalNumber(row.plankton?.protozoaPercent),
+      protozoaSpecies: row.plankton?.protozoaSpecies?.trim() || null,
+    },
+  });
+
+  const toInputString = (value: unknown) => {
+    if (value === null || value === undefined) return '';
+    return String(value);
+  };
+
+  const denormalizeLabRow = (row: LabPondResult): LabPondResult => ({
+    pondId: row.pondId,
+    pondCode: row.pondCode || ponds.find(pond => pond.id === row.pondId)?.pondName || '',
+    doc: toInputString(row.doc),
+    transparencyCm: toInputString(row.transparencyCm),
+    waterQuality: {
+      phCustomer: toInputString(row.waterQuality?.phCustomer),
+      phLab: toInputString(row.waterQuality?.phLab),
+      salinityCustomer: toInputString(row.waterQuality?.salinityCustomer),
+      salinityLab: toInputString(row.waterQuality?.salinityLab),
+      nh4: toInputString(row.waterQuality?.nh4),
+      no2: toInputString(row.waterQuality?.no2),
+      alkalinityTotal: toInputString(row.waterQuality?.alkalinityTotal),
+      tom: toInputString(row.waterQuality?.tom),
+      hardnessCa: toInputString(row.waterQuality?.hardnessCa),
+      hardnessMg: toInputString(row.waterQuality?.hardnessMg),
+      hardnessTotal: toInputString(row.waterQuality?.hardnessTotal),
+    },
+    microbiology: {
+      vibrioYellow: toInputString(row.microbiology?.vibrioYellow),
+      vibrioGreen: toInputString(row.microbiology?.vibrioGreen),
+      vibrioTotal: toInputString(row.microbiology?.vibrioTotal),
+      tbc: toInputString(row.microbiology?.tbc),
+      tvcTbcRatioPercent: toInputString(row.microbiology?.tvcTbcRatioPercent),
+    },
+    plankton: {
+      totalCellPerMl: toInputString(row.plankton?.totalCellPerMl),
+      beneficialCellPerMl: toInputString(row.plankton?.beneficialCellPerMl),
+      harmfulCellPerMl: toInputString(row.plankton?.harmfulCellPerMl),
+      chlorophytaCellPerMl: toInputString(row.plankton?.chlorophytaCellPerMl),
+      chlorophytaPercent: toInputString(row.plankton?.chlorophytaPercent),
+      chlorophytaSpecies: toInputString(row.plankton?.chlorophytaSpecies),
+      cyanophytaCellPerMl: toInputString(row.plankton?.cyanophytaCellPerMl),
+      cyanophytaPercent: toInputString(row.plankton?.cyanophytaPercent),
+      cyanophytaSpecies: toInputString(row.plankton?.cyanophytaSpecies),
+      diatomCellPerMl: toInputString(row.plankton?.diatomCellPerMl),
+      diatomPercent: toInputString(row.plankton?.diatomPercent),
+      diatomSpecies: toInputString(row.plankton?.diatomSpecies),
+      chrysophytaCellPerMl: toInputString(row.plankton?.chrysophytaCellPerMl),
+      chrysophytaPercent: toInputString(row.plankton?.chrysophytaPercent),
+      chrysophytaSpecies: toInputString(row.plankton?.chrysophytaSpecies),
+      dinoflagellataCellPerMl: toInputString(row.plankton?.dinoflagellataCellPerMl),
+      dinoflagellataPercent: toInputString(row.plankton?.dinoflagellataPercent),
+      dinoflagellataSpecies: toInputString(row.plankton?.dinoflagellataSpecies),
+      protozoaCellPerMl: toInputString(row.plankton?.protozoaCellPerMl),
+      protozoaPercent: toInputString(row.plankton?.protozoaPercent),
+      protozoaSpecies: toInputString(row.plankton?.protozoaSpecies),
+    },
+  });
+
+  const toUsageMillis = (value: unknown) => {
+    if (!value) return null;
+    if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+      const date = value.toDate();
+      return date instanceof Date && !Number.isNaN(date.getTime()) ? date.getTime() : null;
+    }
+    if (typeof value === 'string') {
+      const parsed = new Date(value).getTime();
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return null;
+  };
+
+  const formatRemainingTime = (remainingMs: number) => {
+    const safeMs = Math.max(remainingMs, 0);
+    const totalMinutes = Math.ceil(safeMs / (60 * 1000));
+    const days = Math.floor(totalMinutes / (24 * 60));
+    const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+    const minutes = totalMinutes % 60;
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+  };
+
+  const getPdfActionState = (reportType: LabPdfUsageType) => {
+    const usage = labPdfUsage[reportType] || {};
+    const resetAtMs = toUsageMillis(usage.resetAt);
+    if (resetAtMs && resetAtMs > labUsageNowMs) {
+      return {
+        disabled: true,
+        message: `Available in ${formatRemainingTime(resetAtMs - labUsageNowMs)}`,
+      };
+    }
+    const startedAtMs = toUsageMillis(usage.startedAt);
+    const pendingResetAtMs = usage.status === 'pending' && startedAtMs ? startedAtMs + LAB_PDF_PENDING_MS : null;
+    if (pendingResetAtMs && pendingResetAtMs > labUsageNowMs) {
+      return {
+        disabled: true,
+        message: `Extraction running (${formatRemainingTime(pendingResetAtMs - labUsageNowMs)})`,
+      };
+    }
+    return { disabled: false, message: getLabReportTypeLabel(reportType) };
+  };
+
+  const resetLabModal = () => {
+    setLabEntryMode('manual');
+    setEditingLabReportId(null);
+    setLabPdfFile(null);
+    setSelectedLabPondIds([]);
+    setLabRows([]);
+    setLabForm({
+      reportType: 'water_quality',
+      sampleDate: new Date().toISOString().split('T')[0],
+      labName: '',
+      farmName: '',
+    });
+  };
+
+  const openNewLabReport = (reportType: Exclude<LabReportType, 'combined'> = 'water_quality') => {
+    resetLabModal();
+    setLabForm(prev => ({ ...prev, reportType }));
+    setLabModalOpen(true);
+  };
+
+  const openLabPdfUpload = (reportType: Exclude<LabReportType, 'combined'>) => {
+    const pdfActionState = getPdfActionState(reportType);
+    if (pdfActionState.disabled) {
+      alert(pdfActionState.message);
+      return;
+    }
+    resetLabModal();
+    setLabEntryMode('pdf_upload');
+    setLabForm(prev => ({
+      ...prev,
+      reportType,
+      labName: reportType === 'plankton' ? 'Uploaded plankton report' : 'Uploaded mineral quality report',
+    }));
+    setLabModalOpen(true);
+  };
+
+  const openLabReportReview = (report: LabReport) => {
+    setLabEntryMode(report.entryMode || 'manual');
+    setEditingLabReportId(report.id);
+    setLabPdfFile(null);
+    setLabForm({
+      reportType: report.reportType || 'water_quality',
+      sampleDate: report.sampleDate || new Date().toISOString().split('T')[0],
+      labName: report.labName || '',
+      farmName: report.farmName || '',
+    });
+    const rows = (report.pondResults || []).map(denormalizeLabRow);
+    setSelectedLabPondIds(rows.map(row => row.pondId));
+    setLabRows(rows);
+    setLabModalOpen(true);
+  };
+
+  const getFileHash = async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    const digest = await crypto.subtle.digest('SHA-256', buffer);
+    return Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+  };
+
+  const extractLabReportFromPdf = async (labReportId: string) => {
+    const functions = getFunctions(app);
+    const extract = httpsCallable<{ companyId: string; labReportId: string }, { pondResults?: LabPondResult[] }>(
+      functions,
+      'extractLabReportFromPdf',
+    );
+    return extract({ companyId: companyId || '', labReportId });
+  };
+
+  const handleUploadLabPdf = async () => {
+    if (!companyId || !canEditWater || !user || !labPdfFile) return;
+    const pdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
+    if (pdfActionState.disabled) {
+      alert(pdfActionState.message);
+      return;
+    }
+    if (labPdfFile.type !== 'application/pdf') {
+      alert('Please upload a PDF lab report.');
+      return;
+    }
+
+    setLabSubmitting(true);
+    try {
+      const sourceFileHash = await getFileHash(labPdfFile);
+      const reportRef = await addDoc(collection(db, 'companies', companyId, 'labReports'), {
+        companyId,
+        reportType: labForm.reportType,
+        entryMode: 'pdf_upload',
+        status: 'draft',
+        sampleDate: labForm.sampleDate,
+        labName: labForm.labName.trim() || 'Uploaded lab report',
+        farmName: labForm.farmName.trim() || '',
+        originalFileName: labPdfFile.name,
+        sourceFileHash,
+        pondResults: [],
+        extraction: { status: 'pending', sourceHash: sourceFileHash },
+        insights: { status: 'pending' },
+        processing: { status: 'pending' },
+        createdAt: serverTimestamp(),
+        createdBy: user.uid,
+        updatedAt: serverTimestamp(),
+      });
+
+      const sourcePdfPath = `companies/${companyId}/labReports/${reportRef.id}/source.pdf`;
+      const sourceRef = ref(storage, sourcePdfPath);
+      await uploadBytes(sourceRef, labPdfFile, {
+        contentType: 'application/pdf',
+        customMetadata: { companyId, labReportId: reportRef.id, sourceFileHash },
+      });
+      const sourcePdfUrl = await getDownloadURL(sourceRef);
+
+      await updateDoc(reportRef, {
+        sourcePdfPath,
+        sourcePdfUrl,
+        updatedAt: serverTimestamp(),
+      });
+
+      const result = await extractLabReportFromPdf(reportRef.id);
+      const rows = (result.data.pondResults || []).map(denormalizeLabRow);
+      setEditingLabReportId(reportRef.id);
+      setSelectedLabPondIds(rows.map(row => row.pondId));
+      setLabRows(rows);
+      setLabEntryMode('pdf_upload');
+      alert('PDF extraction finished. Review the table, correct any values, then confirm the report.');
+    } catch (error) {
+      console.error('Error uploading lab PDF:', error);
+      const details = typeof error === 'object' && error && 'details' in error ? error.details as { resetAt?: string } : null;
+      if (details?.resetAt) {
+        const resetAtMs = new Date(details.resetAt).getTime();
+        alert(Number.isNaN(resetAtMs) ? 'Failed to upload or extract the lab report.' : `This PDF extraction is available in ${formatRemainingTime(resetAtMs - Date.now())}.`);
+      } else {
+        alert('Failed to upload or extract the lab report.');
+      }
+    } finally {
+      setLabSubmitting(false);
+    }
+  };
+
+  const handleCreateManualLabReport = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!companyId || !canEditWater || selectedLabPondIds.length === 0 || !user) return;
+    setLabSubmitting(true);
+
+    try {
+      const payload: Record<string, unknown> = {
+        companyId,
+        reportType: labForm.reportType,
+        entryMode: labEntryMode,
+        status: 'confirmed',
+        sampleDate: labForm.sampleDate,
+        labName: labForm.labName.trim() || (labEntryMode === 'pdf_upload' ? 'Uploaded lab report' : 'Farm test kit'),
+        farmName: labForm.farmName.trim() || '',
+        pondResults: labRows.map(normalizeLabRow),
+        insights: { status: 'pending' },
+        processing: { status: 'pending' },
+        updatedAt: serverTimestamp(),
+        confirmedAt: serverTimestamp(),
+        confirmedBy: user.uid,
+      };
+
+      if (labEntryMode === 'manual') {
+        payload.extraction = { status: 'not_required' };
+      }
+
+      if (editingLabReportId) {
+        await updateDoc(doc(db, 'companies', companyId, 'labReports', editingLabReportId), payload);
+      } else {
+        payload.createdAt = serverTimestamp();
+        payload.createdBy = user.uid;
+        await addDoc(collection(db, 'companies', companyId, 'labReports'), payload);
+      }
+
+      setLabModalOpen(false);
+      resetLabModal();
+    } catch (error) {
+      console.error('Error creating lab report:', error);
+      alert('Failed to create lab report.');
+    } finally {
+      setLabSubmitting(false);
+    }
+  };
+
   const filteredPonds = useMemo(() => {
     return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [ponds, searchTerm]);
+
+  const filteredLabReports = useMemo(() => {
+    const term = searchTerm.toLowerCase();
+    return labReports.filter(report => (
+      report.status === 'confirmed'
+      && (
+        (report.labName || '').toLowerCase().includes(term)
+        || (report.farmName || '').toLowerCase().includes(term)
+        || (report.sampleDate || '').toLowerCase().includes(term)
+        || (report.pondResults || []).some(row => (row.pondCode || '').toLowerCase().includes(term))
+      )
+    ));
+  }, [labReports, searchTerm]);
+
+  const getSeverityStyle = (status?: LabSeverity) => {
+    if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
+    if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
+    if (status === 'watch') return { label: 'Watch', color: '#0F4C75', bg: '#E0F2FE' };
+    return { label: 'Good', color: '#166534', bg: '#DCFCE7' };
+  };
+
+  const formatLabValue = (value?: string | number | null, suffix = '') => {
+    if (value === undefined || value === null || value === '') return 'N/A';
+    return `${value}${suffix}`;
+  };
 
   const getLatestWQ = (pond: Pond) => {
     const logs = (pond.samplings || [])
@@ -265,8 +858,93 @@ export default function WaterQualityPage() {
     return logs[0] || null;
   };
 
+  const labGridColumns = useMemo(() => {
+    const baseColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
+      { label: 'DOC', path: ['doc'] },
+    ];
+    const mineralColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
+      { label: 'Transp.', path: ['transparencyCm'] },
+      { label: 'Sal. Cust.', path: ['waterQuality', 'salinityCustomer'] },
+      { label: 'Sal. Lab', path: ['waterQuality', 'salinityLab'] },
+      { label: 'NH4', path: ['waterQuality', 'nh4'] },
+      { label: 'NO2', path: ['waterQuality', 'no2'] },
+      { label: 'Alk.', path: ['waterQuality', 'alkalinityTotal'] },
+      { label: 'TOM', path: ['waterQuality', 'tom'] },
+      { label: 'Ca', path: ['waterQuality', 'hardnessCa'] },
+      { label: 'Mg', path: ['waterQuality', 'hardnessMg'] },
+      { label: 'Hardness', path: ['waterQuality', 'hardnessTotal'] },
+      { label: 'Vib. Y', path: ['microbiology', 'vibrioYellow'] },
+      { label: 'Vib. G', path: ['microbiology', 'vibrioGreen'] },
+      { label: 'Vib. Total', path: ['microbiology', 'vibrioTotal'] },
+      { label: 'TBC', path: ['microbiology', 'tbc'] },
+      { label: 'TVC/TBC %', path: ['microbiology', 'tvcTbcRatioPercent'] },
+    ];
+    const planktonColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
+      { label: 'Total Plankton', path: ['plankton', 'totalCellPerMl'] },
+      { label: 'Good Plankton', path: ['plankton', 'beneficialCellPerMl'] },
+      { label: 'Bad Plankton', path: ['plankton', 'harmfulCellPerMl'] },
+      { label: 'Green Algae Cells', path: ['plankton', 'chlorophytaCellPerMl'] },
+      { label: 'Green Algae %', path: ['plankton', 'chlorophytaPercent'] },
+      { label: 'Green Algae Species', path: ['plankton', 'chlorophytaSpecies'], inputType: 'text' },
+      { label: 'Blue-Green Cells', path: ['plankton', 'cyanophytaCellPerMl'] },
+      { label: 'Blue-Green %', path: ['plankton', 'cyanophytaPercent'] },
+      { label: 'Blue-Green Species', path: ['plankton', 'cyanophytaSpecies'], inputType: 'text' },
+      { label: 'Diatom Cells', path: ['plankton', 'diatomCellPerMl'] },
+      { label: 'Diatom %', path: ['plankton', 'diatomPercent'] },
+      { label: 'Diatom Species', path: ['plankton', 'diatomSpecies'], inputType: 'text' },
+      { label: 'Golden-Green Cells', path: ['plankton', 'chrysophytaCellPerMl'] },
+      { label: 'Golden-Green %', path: ['plankton', 'chrysophytaPercent'] },
+      { label: 'Golden-Green Species', path: ['plankton', 'chrysophytaSpecies'], inputType: 'text' },
+      { label: 'Dino Cells', path: ['plankton', 'dinoflagellataCellPerMl'] },
+      { label: 'Dino %', path: ['plankton', 'dinoflagellataPercent'] },
+      { label: 'Dino Species', path: ['plankton', 'dinoflagellataSpecies'], inputType: 'text' },
+      { label: 'Protozoa Cells', path: ['plankton', 'protozoaCellPerMl'] },
+      { label: 'Protozoa %', path: ['plankton', 'protozoaPercent'] },
+      { label: 'Protozoa Species', path: ['plankton', 'protozoaSpecies'], inputType: 'text' },
+    ];
+    if (labForm.reportType === 'plankton') return planktonColumns;
+    if (labForm.reportType === 'combined') return [...baseColumns, ...mineralColumns, ...planktonColumns];
+    return [...baseColumns, ...mineralColumns];
+  }, [labForm.reportType]);
+
+  const mineralPdfActionState = getPdfActionState('water_quality');
+  const planktonPdfActionState = getPdfActionState('plankton');
+  const activePdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
+
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <div className="glass-card animate-fade-up" style={{ padding: '8px', display: 'inline-flex', gap: '8px', marginBottom: '18px' }}>
+        {([
+          { id: 'daily', label: 'Daily Log', icon: Droplets },
+          { id: 'lab', label: 'Lab Reports', icon: FileText },
+        ] as { id: WaterPageView; label: string; icon: LucideIcon }[]).map(item => {
+          const Icon = item.icon;
+          const active = activeView === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveView(item.id)}
+              style={{
+                border: 'none',
+                borderRadius: '12px',
+                padding: '12px 18px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: active ? 'var(--primary)' : 'transparent',
+                color: active ? '#FFFFFF' : 'var(--text-muted)',
+                fontWeight: 800,
+                cursor: 'pointer',
+                boxShadow: active ? '0 8px 18px rgba(15, 76, 117, 0.18)' : 'none',
+              }}
+            >
+              <Icon size={18} />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
@@ -286,24 +964,38 @@ export default function WaterQualityPage() {
             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
           />
         </div>
-        {canEditWater && (
+        {canEditWater && activeView === 'daily' && (
           <button
-            onClick={() => { setFormData({ ...formData, pondId: '' }); setModalOpen(true); }}
+            onClick={() => {
+              setFormData({ ...formData, pondId: '' });
+              setModalOpen(true);
+            }}
             className="dashboard-action dashboard-action-primary"
           >
             <Plus size={20} strokeWidth={3} />
             <span>New Parameter Log</span>
           </button>
         )}
+        {canEditWater && activeView === 'lab' && (
+          <button
+            type="button"
+            onClick={() => setLabActionModalOpen(true)}
+            className="dashboard-action dashboard-action-primary"
+          >
+            <Plus size={20} strokeWidth={3} />
+            <span>Add Lab Report</span>
+          </button>
+        )}
       </div>
 
-      {/* Pond Grid */}
+      {/* Daily Pond Grid */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>
-      ) : (
+      ) : activeView === 'daily' ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {filteredPonds.map((pond, idx) => {
             const latest = getLatestWQ(pond);
+            const labStyle = getSeverityStyle(pond.latestLabStatus?.status);
             return (
               <div key={pond.id} className={`glass-card animate-fade-up animate-delay-${(idx % 4) + 1}`} style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
@@ -327,6 +1019,20 @@ export default function WaterQualityPage() {
                     <History size={20} />
                   </button>
                 </div>
+
+                {pond.latestLabStatus && (
+                  <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', background: '#FFFFFF' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Latest Lab Status</div>
+                        <div style={{ marginTop: '4px', fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</div>
+                      </div>
+                      <span style={{ borderRadius: 999, padding: '6px 10px', background: labStyle.bg, color: labStyle.color, fontSize: '0.72rem', fontWeight: 800 }}>
+                        {labStyle.label}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ padding: '24px 22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', flex: 1 }}>
                   <div className="wq-metric">
@@ -373,6 +1079,140 @@ export default function WaterQualityPage() {
               </div>
             );
           })}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          {filteredLabReports.map((report, idx) => {
+            const style = getSeverityStyle(report.summary?.overallStatus);
+            const pondCount = report.pondResults?.length || 0;
+            const isExpanded = expandedLabReportId === report.id;
+            return (
+              <div key={report.id} className={`glass-card animate-fade-up animate-delay-${(idx % 4) + 1}`} style={{ padding: '22px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 0.8fr auto', gap: '18px', alignItems: 'center' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <ClipboardList size={19} />
+                      </div>
+                      <div>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 850, color: 'var(--text-primary)' }}>
+                          {report.labName || 'Lab Report'}
+                        </h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 700 }}>
+                          {report.sampleDate ? new Date(report.sampleDate).toLocaleDateString() : 'No sample date'} · {pondCount} pond{pondCount === 1 ? '' : 's'}
+                        </p>
+                      </div>
+                    </div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>
+                      {(report.pondResults || []).map(row => row.pondCode).filter(Boolean).join(', ') || 'No pond rows'}
+                    </div>
+                    {report.insights?.ownerSummary && (
+                      <div style={{ marginTop: '10px', color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 700, lineHeight: 1.5 }}>
+                        {report.insights.ownerSummary}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Report Type</div>
+                    <div style={{ marginTop: 6, fontWeight: 800, color: 'var(--text-primary)' }}>{getLabReportTypeLabel(report.reportType)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Processing</div>
+                    <div style={{ marginTop: 6, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{report.processing?.status || report.status || 'pending'}</div>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
+                    <span style={{ borderRadius: 999, padding: '7px 12px', background: style.bg, color: style.color, fontSize: '0.74rem', fontWeight: 850 }}>
+                      {style.label}
+                    </span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700 }}>
+                      {(report.summary?.warningCount || 0) + (report.summary?.criticalCount || 0)} alert row(s)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setExpandedLabReportId(isExpanded ? null : report.id)}
+                      className="btn-secondary"
+                      style={{ padding: '8px 12px', fontSize: '0.76rem' }}
+                    >
+                      {isExpanded ? 'Hide Details' : 'Details'}
+                    </button>
+                    {canEditWater && report.status !== 'confirmed' && (
+                      <button
+                        type="button"
+                        onClick={() => openLabReportReview(report)}
+                        className="btn-secondary"
+                        style={{ padding: '8px 12px', fontSize: '0.76rem' }}
+                      >
+                        Review & Confirm
+                      </button>
+                    )}
+                    {report.sourcePdfUrl && (
+                      <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontSize: '0.74rem', fontWeight: 800, textDecoration: 'none' }}>
+                        View PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+                {isExpanded && (
+                  <div style={{ marginTop: '18px', borderTop: '1px solid var(--border)', paddingTop: '18px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+                    {(report.pondResults || []).map((row, rowIndex) => {
+                      const water = row.waterQuality || {};
+                      const micro = row.microbiology || {};
+                      const plankton = row.plankton || {};
+                      return (
+                        <div key={`${row.pondId || row.pondCode || rowIndex}-${rowIndex}`} style={{ border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--bg-mid)', padding: '14px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                            <div>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 850 }}>{row.pondCode || `Pond ${rowIndex + 1}`}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 700 }}>{getLabReportTypeLabel(report.reportType)}</div>
+                            </div>
+                            {report.sourcePdfUrl && (
+                              <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 850, textDecoration: 'none' }}>
+                                PDF
+                              </a>
+                            )}
+                          </div>
+                          {report.reportType !== 'plankton' && (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              {[
+                                ['NH4', formatLabValue(water.nh4)],
+                                ['NO2', formatLabValue(water.no2)],
+                                ['Alkalinity', formatLabValue(water.alkalinityTotal)],
+                                ['Ca', formatLabValue(water.hardnessCa)],
+                                ['Mg', formatLabValue(water.hardnessMg)],
+                                ['Hardness', formatLabValue(water.hardnessTotal)],
+                                ['Vibrio', formatLabValue(micro.vibrioTotal)],
+                              ].map(([label, value]) => (
+                                <div key={label} style={{ background: '#fff', borderRadius: '10px', border: '1px solid var(--border)', padding: '10px' }}>
+                                  <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase' }}>{label}</div>
+                                  <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 850, marginTop: '4px' }}>{value}</div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {(report.reportType === 'plankton' || report.reportType === 'combined') && (
+                            <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid var(--border)', padding: '10px' }}>
+                              <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase' }}>Plankton</div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 850, marginTop: '4px' }}>{formatLabValue(plankton.totalCellPerMl)} cells/ml</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, marginTop: '6px', lineHeight: 1.45 }}>
+                                Green {formatLabValue(plankton.chlorophytaPercent, '%')} · Blue-green {formatLabValue(plankton.cyanophytaPercent, '%')} · Golden {formatLabValue(plankton.chrysophytaPercent, '%')}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          {filteredLabReports.length === 0 && (
+            <div className="glass-card" style={{ textAlign: 'center', padding: '70px 24px' }}>
+              <FileText size={44} color="var(--text-faint)" style={{ marginBottom: '16px' }} />
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 850, color: 'var(--text-primary)', marginBottom: '8px' }}>No lab reports yet</h3>
+              <p style={{ color: 'var(--text-muted)', fontWeight: 650 }}>Add a manual report or upload a lab PDF for assisted extraction and review.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -434,6 +1274,273 @@ export default function WaterQualityPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LAB REPORT ACTION MODAL ───────────────────── */}
+      {isLabActionModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2900, background: 'rgba(15, 23, 42, 0.38)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
+            <div style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'var(--bg-mid)' }}>
+              <div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 850 }}>Add Lab Report</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginTop: '4px', fontWeight: 650 }}>Upload a PDF or enter results manually.</p>
+              </div>
+              <button onClick={() => setLabActionModalOpen(false)} className="icon-btn-modern">
+                <X size={22} />
+              </button>
+            </div>
+            <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div>
+                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Upload PDF</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button
+                    type="button"
+                    disabled={mineralPdfActionState.disabled}
+                    onClick={() => {
+                      setLabActionModalOpen(false);
+                      openLabPdfUpload('water_quality');
+                    }}
+                    className="btn-secondary"
+                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start', opacity: mineralPdfActionState.disabled ? 0.48 : 1, cursor: mineralPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
+                  >
+                    <FileText size={18} />
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                      <span>Mineral PDF</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{mineralPdfActionState.message}</span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={planktonPdfActionState.disabled}
+                    onClick={() => {
+                      setLabActionModalOpen(false);
+                      openLabPdfUpload('plankton');
+                    }}
+                    className="btn-secondary"
+                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start', opacity: planktonPdfActionState.disabled ? 0.48 : 1, cursor: planktonPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
+                  >
+                    <FileText size={18} />
+                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                      <span>Plankton PDF</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{planktonPdfActionState.message}</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+              <div>
+                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Manual Entry</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabActionModalOpen(false);
+                      openNewLabReport('water_quality');
+                    }}
+                    className="btn-secondary"
+                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start' }}
+                  >
+                    <Plus size={18} />
+                    <span>Manual Mineral</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabActionModalOpen(false);
+                      openNewLabReport('plankton');
+                    }}
+                    className="btn-secondary"
+                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start' }}
+                  >
+                    <Plus size={18} />
+                    <span>Manual Plankton</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LAB REPORT MODAL ───────────────────────────────── */}
+      {isLabModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '26px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+              <div>
+                <h2 style={{ fontSize: '1.45rem', fontWeight: 850 }}>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 650 }}>Enter results manually or upload a lab PDF, then review before confirmation.</p>
+              </div>
+              <button onClick={() => setLabModalOpen(false)} className="icon-btn-modern">
+                <X size={24} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateManualLabReport} style={{ padding: '26px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="form-label">Entry Mode</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                    {([
+                      ['manual', 'Manual'],
+                      ['pdf_upload', 'PDF'],
+                    ] as [LabEntryMode, string][]).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        disabled={Boolean(editingLabReportId)}
+                        onClick={() => setLabEntryMode(mode)}
+                        style={{
+                          padding: '13px 10px',
+                          borderRadius: '12px',
+                          border: labEntryMode === mode ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: labEntryMode === mode ? 'var(--primary-dim)' : '#FFFFFF',
+                          color: labEntryMode === mode ? 'var(--primary)' : 'var(--text-muted)',
+                          fontWeight: 850,
+                          cursor: editingLabReportId ? 'default' : 'pointer',
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="form-label">Report Type</label>
+                  <select value={labForm.reportType} onChange={e => setLabForm({ ...labForm, reportType: e.target.value as LabReportType })} className="form-input">
+                    {labForm.reportType === 'combined' && <option value="combined">Combined Lab Report</option>}
+                    <option value="water_quality">Mineral Quality</option>
+                    <option value="plankton">Plankton</option>
+                  </select>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="form-label">Sample Date</label>
+                  <input type="date" required value={labForm.sampleDate} onChange={e => setLabForm({ ...labForm, sampleDate: e.target.value })} className="form-input" />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label className="form-label">Lab Name</label>
+                  <input value={labForm.labName} onChange={e => setLabForm({ ...labForm, labName: e.target.value })} placeholder="Farm kit / lab name" className="form-input" />
+                </div>
+              </div>
+
+              {labEntryMode === 'pdf_upload' && !editingLabReportId && (
+                <div style={{ border: '1px solid var(--border)', borderRadius: '16px', padding: '18px', background: 'var(--bg-mid)', display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'center' }}>
+                  <div>
+                    <label className="form-label">Upload Lab PDF</label>
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      onChange={e => setLabPdfFile(e.target.files?.[0] || null)}
+                      style={{ display: 'block', marginTop: '10px', fontWeight: 700 }}
+                    />
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650, marginTop: '8px' }}>
+                      The PDF is saved to Firebase Storage. Gemini extraction creates a draft table only; it does not confirm the report.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={labSubmitting || !labPdfFile || activePdfActionState.disabled}
+                    onClick={handleUploadLabPdf}
+                    className="btn-primary"
+                    style={{ padding: '14px 18px', borderRadius: '14px', fontWeight: 850, opacity: labSubmitting || !labPdfFile || activePdfActionState.disabled ? 0.6 : 1 }}
+                  >
+                    {labSubmitting ? 'Extracting...' : activePdfActionState.disabled ? activePdfActionState.message : 'Upload & Extract'}
+                  </button>
+                </div>
+              )}
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                  <div>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 850 }}>Included Ponds</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>Select every pond covered by this lab report.</p>
+                  </div>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.82rem' }}>{selectedLabPondIds.length} selected</span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+                  {ponds.map(pond => {
+                    const selected = selectedLabPondIds.includes(pond.id);
+                    return (
+                      <button
+                        key={pond.id}
+                        type="button"
+                        onClick={() => toggleLabPond(pond)}
+                        style={{
+                          padding: '12px 14px',
+                          borderRadius: '12px',
+                          border: selected ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: selected ? 'var(--primary-dim)' : '#FFFFFF',
+                          color: selected ? 'var(--primary)' : 'var(--text-primary)',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <span>{pond.pondName}</span>
+                        {selected && <CheckCircle2 size={16} />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {labRows.length > 0 && (
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+                    <AlertTriangle size={18} color="var(--primary)" />
+                    <h3 style={{ fontSize: '1rem', fontWeight: 850 }}>Bulk Result Grid</h3>
+                  </div>
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: labForm.reportType === 'plankton' ? '2200px' : labForm.reportType === 'combined' ? '2800px' : '1280px' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--bg-mid)' }}>
+                          {['Pond', ...labGridColumns.map(column => column.label)].map(label => (
+                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 850, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{label}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {labRows.map(row => (
+                          <tr key={row.pondId}>
+                            <td style={{ padding: '8px', fontWeight: 850, minWidth: 90 }}>{row.pondCode}</td>
+                            {labGridColumns.map(({ path, inputType = 'number' }) => {
+                              const sectionValue = row[path[0] as keyof LabPondResult];
+                              const value = path.length === 1
+                                ? (sectionValue as string | undefined)
+                                : (typeof sectionValue === 'object' && sectionValue ? (sectionValue as Record<string, string | undefined>)[path[1]] : undefined);
+                              return (
+                                <td key={path.join('.')} style={{ padding: '6px', borderTop: '1px solid var(--border)' }}>
+                                  <input
+                                    type={inputType}
+                                    step={inputType === 'number' ? '0.01' : undefined}
+                                    value={value || ''}
+                                    onChange={e => updateLabRow(row.pondId, path, e.target.value)}
+                                    style={{ width: inputType === 'text' ? '170px' : '86px', padding: '8px', borderRadius: '9px', border: '1px solid var(--border)', fontWeight: 700 }}
+                                  />
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '22px' }}>
+                <button type="button" onClick={() => setLabModalOpen(false)} style={{
+                  flex: 1, padding: '15px', borderRadius: '14px', border: '1px solid var(--border)',
+                  background: 'transparent', fontWeight: 750, cursor: 'pointer'
+                }}>Cancel</button>
+                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="btn-primary" style={{ flex: 1, padding: '15px', borderRadius: '14px', fontWeight: 850, opacity: labSubmitting || selectedLabPondIds.length === 0 ? 0.6 : 1 }}>
+                  {labSubmitting ? 'Saving...' : 'Confirm Lab Report'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -57,6 +57,13 @@ interface Pond {
   baselineEstimatedPopulation?: number;
   baselineSurvivalRate?: number;
   baselineCumulativeFeed?: number;
+  latestLabStatus?: {
+    sampleDate?: string;
+    status?: 'good' | 'info' | 'watch' | 'warning' | 'critical';
+    mainIssue?: string;
+    keyRisks?: string[];
+    recommendations?: string[];
+  };
 }
 
 /* ─── Robust Calculation Utilities (Mobile + Web Parity) ──── */
@@ -271,6 +278,26 @@ const generateShrimpReportHTML = (data: any, t: any): string => {
     </tr>
   `).join('');
 
+  const labRows = ponds
+    .filter((pond: Pond) => pond.latestLabStatus)
+    .map((pond: Pond) => {
+      const lab = pond.latestLabStatus;
+      const status = lab?.status === 'info' ? 'good' : lab?.status || 'good';
+      const color = status === 'critical' ? '#C0392B' : status === 'warning' || status === 'watch' ? '#B45309' : '#2D7A4F';
+      const risks = (lab?.keyRisks || []).slice(0, 2).join('; ') || lab?.mainIssue || 'No warning-level issue detected';
+      const recommendation = (lab?.recommendations || [])[0] || 'Continue routine monitoring and compare against the next lab result.';
+      return `
+        <tr>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; font-weight: 700;">${pond.pondName}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${lab?.sampleDate || '-'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; color: ${color}; font-weight: 800;">${status.toUpperCase()}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${lab?.mainIssue || 'Lab result reviewed'}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${risks}</td>
+          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${recommendation}</td>
+        </tr>
+      `;
+    }).join('');
+
   return `
     <!DOCTYPE html>
     <html>
@@ -290,6 +317,17 @@ const generateShrimpReportHTML = (data: any, t: any): string => {
           <strong>Data Quality Note:</strong> ${midcyclePonds.map((pond: Pond) => `${pond.pondName}${pond.baselineDate ? ` baseline ${pond.baselineDate}` : ''}`).join(', ')} ${midcyclePonds.length === 1 ? 'was' : 'were'} onboarded mid-cycle. Pre-onboarding feed, survival, and biomass values are estimates, not exact historical logs.
         </div>
       ` : ''}
+      <div style="margin-top: 16px; padding: 12px; background: #F8FAFC; border: 1px solid #BBE1FA; border-radius: 8px;">
+        <h2 style="font-size: 14px; margin: 0 0 10px; color: #0F4C75;">Latest Lab Analysis</h2>
+        ${labRows ? `
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #E0F2FE; color: #0F4C75;">
+              <tr><th>Pond</th><th>Date</th><th>Status</th><th>Main Issue</th><th>Risks</th><th>Recommended Action</th></tr>
+            </thead>
+            <tbody>${labRows}</tbody>
+          </table>
+        ` : '<p style="margin: 0; color: #475569;">No confirmed lab analysis was attached to the selected ponds at export time.</p>'}
+      </div>
       <div style="margin-top: 20px; text-align: center;"><img src="${chartUrl}" style="width: 100%; max-height: 300px; object-fit: contain;" /></div>
     </body>
     </html>
