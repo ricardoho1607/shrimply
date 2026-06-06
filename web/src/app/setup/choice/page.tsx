@@ -1,7 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Building2, Search, ArrowRight, Rocket, UserPlus } from 'lucide-react';
+import { Building2, Search, ArrowLeft, ArrowRight, Rocket, UserPlus } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
@@ -10,9 +10,10 @@ import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/Pe
 
 export default function SetupChoicePage() {
   const isReady = useOnboardingGuard('setup');
-  const { user } = useAuth();
+  const { user, resetRoleSelection } = useAuth();
   const router = useRouter();
   const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
+  const [changingRole, setChangingRole] = React.useState(false);
 
   const isBuyer = user?.role === 'buyer';
   const isStaffRole = ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user?.role || '');
@@ -46,6 +47,20 @@ export default function SetupChoicePage() {
     return true;
   });
 
+  const handleChangeRole = async () => {
+    if (changingRole) return;
+    setChangingRole(true);
+
+    try {
+      await resetRoleSelection();
+      router.replace(ROUTES.roleSelection);
+    } catch (error: unknown) {
+      console.error('Failed to change role:', error);
+      alert(error instanceof Error ? error.message : 'Failed to change role');
+      setChangingRole(false);
+    }
+  };
+
   if (!isReady) return <OnboardingLoading />;
   if (pendingRequestLoading) return <OnboardingLoading />;
   if (pendingRequest && user?.role !== 'buyer') return <PendingJoinRequestScreen request={pendingRequest} />;
@@ -60,6 +75,30 @@ export default function SetupChoicePage() {
       alignItems: 'center'
     }}>
       <div style={{ maxWidth: '800px', width: '100%', textAlign: 'center', marginBottom: '60px' }}>
+        <button
+          type="button"
+          onClick={handleChangeRole}
+          disabled={changingRole}
+          style={{
+            margin: '0 auto 28px',
+            padding: '12px 16px',
+            borderRadius: '999px',
+            border: '1px solid var(--border)',
+            background: '#FFFFFF',
+            color: 'var(--text-primary)',
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: changingRole ? 'not-allowed' : 'pointer',
+            opacity: changingRole ? 0.7 : 1,
+            boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
+          }}
+        >
+          <ArrowLeft size={16} />
+          {changingRole ? 'Changing role...' : 'Change role'}
+        </button>
         <h1 style={{ fontSize: '42px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '16px' }}>
           Finalize Your Setup
         </h1>

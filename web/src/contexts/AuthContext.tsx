@@ -15,7 +15,7 @@ import {
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  arrayUnion, serverTimestamp, onSnapshot, addDoc, writeBatch
+  arrayUnion, serverTimestamp, onSnapshot, addDoc, writeBatch, deleteField
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
@@ -112,6 +112,7 @@ interface AuthContextType {
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: UserRole) => Promise<void>;
+  resetRoleSelection: () => Promise<void>;
   completeCompanySetup: (companyData: CompanySetupData) => Promise<void>;
   requestToJoinCompany: (request: { companyId: string; requestedRole: StaffRole; message?: string }) => Promise<void>;
   searchCompanies: (searchTerm: string) => Promise<CompanySearchResult[]>;
@@ -300,6 +301,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser({ ...user, role, lastActive: new Date().toISOString() });
   };
 
+  const resetRoleSelection = async () => {
+    if (!user || user.companyId || user.hasCompletedSetup) return;
+    await updateDoc(doc(db, 'users', user.uid), {
+      role: deleteField(),
+      lastActive: serverTimestamp(),
+    });
+    setUser({ ...user, role: undefined, lastActive: new Date().toISOString() });
+  };
+
   const completeCompanySetup = async (companyData: CompanySetupData) => {
     if (!user) return;
     if (user.role !== 'owner') throw new Error('Only owners can set up a company');
@@ -459,6 +469,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     resetPassword,
     signOut,
     completeRoleSelection,
+    resetRoleSelection,
     completeCompanySetup,
     requestToJoinCompany,
     searchCompanies,

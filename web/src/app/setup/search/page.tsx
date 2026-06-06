@@ -1,17 +1,20 @@
 "use client";
 
 import React, { useRef, useState } from 'react';
-import { Search, Building2, UserPlus, Info, CheckCircle2 } from 'lucide-react';
+import { Search, Building2, UserPlus, Info, CheckCircle2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
+import { ROUTES } from '@/config/routes';
 
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
 
 export default function CompanySearchPage() {
   const isReady = useOnboardingGuard('setup');
   const { user, searchCompanies, requestToJoinCompany } = useAuth();
+  const router = useRouter();
   const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string; memberCount?: number }>>([]);
@@ -83,6 +86,28 @@ export default function CompanySearchPage() {
       alignItems: 'center'
     }}>
       <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
+        <button
+          type="button"
+          onClick={() => router.push(ROUTES.setupChoice)}
+          style={{
+            margin: '0 auto 28px',
+            padding: '12px 16px',
+            borderRadius: '999px',
+            border: '1px solid var(--border)',
+            background: '#FFFFFF',
+            color: 'var(--text-primary)',
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
+          }}
+        >
+          <ArrowLeft size={16} />
+          Back to setup options
+        </button>
         <div style={{
           width: '80px', height: '80px', borderRadius: '24px',
           background: 'var(--gradient-dim)',

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -56,216 +56,123 @@ export default function JoinPage() {
     }
   };
 
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    background: '#F8FAFC',
-    border: '1px solid var(--border)',
-    borderRadius: '14px',
-    padding: '14px 18px',
-    outline: 'none',
-    fontSize: '15px',
-    transition: 'all 0.2s',
-    color: 'var(--text-primary)',
-    fontFamily: 'inherit'
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: '12px',
-    fontWeight: 700,
-    letterSpacing: '0.05em',
-    textTransform: 'uppercase',
-    color: 'var(--text-muted)',
-    marginLeft: '4px'
-  };
-
   return (
-    <main style={{
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '40px 24px',
-      position: 'relative',
-      overflow: 'hidden',
-      background: '#f4f8fc',
-      color: 'var(--text-primary)'
-    }}>
-      
+    <main className="auth-shell">
+      <div className="auth-frame">
+        <section className="auth-brand-panel" aria-label="Shrimply signup">
+          <Link href={ROUTES.auth} className="auth-back">
+            <ArrowLeft size={16} />
+            Back to Login
+          </Link>
 
-      {/* Noise Overlay */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 0, opacity: 0.18,
-        backgroundImage: "url(\"data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg'><filter id='noiseFilter'><feTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23noiseFilter)'/></svg>\")"
-      }} />
-      
-      {/* Light Glow */}
-      <div style={{
-        position: 'absolute', top: '-10%', left: '-10%', width: '50%', height: '50%',
-        background: 'radial-gradient(circle, rgba(26,184,232,0.06) 0%, transparent 70%)',
-        pointerEvents: 'none', zIndex: 0
-      }} />
-
-      <div style={{ zIndex: 10, width: '100%', maxWidth: '480px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        
-        <Link href={ROUTES.auth} style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '8px',
-          color: 'var(--text-muted)',
-          fontSize: '14px',
-          fontWeight: 600,
-          transition: 'color 0.2s',
-          alignSelf: 'flex-start',
-          marginBottom: '8px'
-        }}
-        onMouseEnter={e => (e.currentTarget.style.color = 'var(--primary)')}
-        onMouseLeave={e => (e.currentTarget.style.color = 'var(--text-muted)')}
-        >
-          <ArrowLeft size={16} />
-          Back to Login
-        </Link>
-
-        <div className="glass-card animate-fade-up" style={{
-          padding: '48px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '32px',
-          background: '#FFFFFF',
-          borderRadius: '32px',
-          boxShadow: '0 20px 40px rgba(0,0,0,0.04), 0 1px 3px rgba(0,0,0,0.02)'
-        }}>
-          <div style={{ textAlign: 'center' }}>
-            <img 
+          <div className="brand-lockup">
+            <img
               src="/assets/shrimplylogoweb.webp"
               width="500"
               height="160"
-              alt="Shrimply" 
-              style={{ height: '64px', width: 'auto', margin: '0 auto 20px', filter: 'drop-shadow(0 10px 20px rgba(15,76,117,0.1))' }} 
+              alt="Shrimply"
+              className="auth-logo"
             />
-            <h3 style={{ fontSize: '28px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '8px' }}>Join the Revolution</h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-muted)' }}>Start scaling your farm with Shrimply today.</p>
+            <div>
+              <p className="auth-kicker">Shrimply account setup</p>
+              <h1 className="auth-title">Create your Shrimply workspace.</h1>
+            </div>
           </div>
 
-          <form onSubmit={handleJoin} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="join-name" style={labelStyle}>Full Name</label>
-              <input 
-                id="join-name"
-                type="text" 
-                autoComplete="name"
-                style={inputStyle}
-                onFocus={e => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.background = '#FFFFFF';
-                  e.currentTarget.style.boxShadow = '0 0 0 4px rgba(50, 130, 184, 0.08)';
-                }}
-                onBlur={e => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.background = '#F8FAFC';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                placeholder="John Doe"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
+          <div className="auth-proof-row">
+            <div>
+              <span>Setup</span>
+              <strong>Choose your role</strong>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="join-email" style={labelStyle}>Email Address</label>
-              <input 
-                id="join-email"
-                type="email" 
-                autoComplete="email"
-                style={inputStyle}
-                onFocus={e => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.background = '#FFFFFF';
-                  e.currentTarget.style.boxShadow = '0 0 0 4px rgba(50, 130, 184, 0.08)';
-                }}
-                onBlur={e => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.background = '#F8FAFC';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                placeholder="john@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+            <div>
+              <span>Connect</span>
+              <strong>Create or join</strong>
             </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="join-password" style={labelStyle}>Password</label>
-              <input 
-                id="join-password"
-                type="password" 
-                autoComplete="new-password"
-                style={inputStyle}
-                onFocus={e => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.background = '#FFFFFF';
-                  e.currentTarget.style.boxShadow = '0 0 0 4px rgba(50, 130, 184, 0.08)';
-                }}
-                onBlur={e => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.background = '#F8FAFC';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+            <div>
+              <span>Secure</span>
+              <strong>Firebase auth</strong>
             </div>
+          </div>
+        </section>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label htmlFor="join-confirm-password" style={labelStyle}>Confirm Password</label>
-              <input 
-                id="join-confirm-password"
-                type="password" 
-                autoComplete="new-password"
-                style={inputStyle}
-                onFocus={e => {
-                  e.currentTarget.style.borderColor = 'var(--accent)';
-                  e.currentTarget.style.background = '#FFFFFF';
-                  e.currentTarget.style.boxShadow = '0 0 0 4px rgba(50, 130, 184, 0.08)';
-                }}
-                onBlur={e => {
-                  e.currentTarget.style.borderColor = 'var(--border)';
-                  e.currentTarget.style.background = '#F8FAFC';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-                placeholder="••••••••"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-              />
+        <section className="auth-form-panel" aria-label="Create account form">
+          <div className="form-heading">
+            <div className="secure-badge">
+              <ShieldCheck size={16} />
+              Account setup
             </div>
+            <h2>Create account</h2>
+            <p>Start with your user profile, then choose how you operate in Shrimply.</p>
+          </div>
 
-            {error && (
-              <div style={{
-                padding: '12px',
-                borderRadius: '10px',
-                background: 'rgba(239, 68, 68, 0.05)',
-                border: '1px solid rgba(239, 68, 68, 0.1)',
-                color: '#ef4444',
-                fontSize: '12px',
-                textAlign: 'center',
-                fontWeight: 600
-              }}>
-                {error}
+          <form onSubmit={handleJoin} className="auth-form">
+            <div className="field-group">
+              <label htmlFor="join-name">Full Name</label>
+              <div className="input-wrap">
+                <User size={18} />
+                <input
+                  id="join-name"
+                  type="text"
+                  autoComplete="name"
+                  placeholder="John Doe"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                />
               </div>
-            )}
+            </div>
 
-            <button 
-              type="submit" 
-              disabled={loading}
-              className="btn-primary"
-              style={{ padding: '16px', borderRadius: '14px', fontSize: '15px', width: '100%', gap: '10px', marginTop: '8px' }}
-            >
+            <div className="field-group">
+              <label htmlFor="join-email">Email Address</label>
+              <div className="input-wrap">
+                <Mail size={18} />
+                <input
+                  id="join-email"
+                  type="email"
+                  autoComplete="email"
+                  placeholder="john@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="join-password">Password</label>
+              <div className="input-wrap">
+                <Lock size={18} />
+                <input
+                  id="join-password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Create a password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="field-group">
+              <label htmlFor="join-confirm-password">Confirm Password</label>
+              <div className="input-wrap">
+                <Lock size={18} />
+                <input
+                  id="join-confirm-password"
+                  type="password"
+                  autoComplete="new-password"
+                  placeholder="Confirm your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {error && <div className="auth-alert error" role="alert">{error}</div>}
+
+            <button type="submit" disabled={loading} className="auth-submit">
               {loading ? 'Creating Account...' : (
                 <>
                   Join Shrimply
@@ -275,24 +182,341 @@ export default function JoinPage() {
             </button>
           </form>
 
-          <div style={{ textAlign: 'center', fontSize: '13px', color: 'var(--text-muted)' }}>
+          <div className="auth-divider" />
+
+          <div className="auth-join">
             Already have an account?{' '}
-            <Link href={inviteToken ? `${ROUTES.auth}?token=${encodeURIComponent(inviteToken)}` : ROUTES.auth} style={{ fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' }}>
+            <Link href={inviteToken ? `${ROUTES.auth}?token=${encodeURIComponent(inviteToken)}` : ROUTES.auth}>
               Log in
             </Link>
           </div>
-        </div>
+
+          <p className="auth-footnote">Securely powered by Firebase Enterprise.</p>
+        </section>
       </div>
-      
-      <footer style={{ marginTop: '40px', color: 'var(--text-faint)', fontSize: '11px', textAlign: 'center', fontWeight: 500 }}>
-        Securely powered by Firebase Enterprise.<br />
-        &copy; 2026 Shrimply Tech. All rights reserved.
-      </footer>
 
       <style jsx>{`
-        @media (max-width: 480px) {
-          div[style*="grid-template-columns: 1fr 1fr"] {
-            grid-template-columns: 1fr !important;
+        .auth-shell {
+          min-height: 100vh;
+          background: linear-gradient(180deg, #f8fafc 0%, #eef5fa 100%);
+          color: var(--text-primary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px;
+        }
+
+        .auth-frame {
+          width: min(1120px, 100%);
+          min-height: 720px;
+          display: grid;
+          grid-template-columns: minmax(0, 1.05fr) minmax(400px, 0.95fr);
+          background: #ffffff;
+          border: 1px solid var(--shell-border);
+          border-radius: 24px;
+          overflow: hidden;
+          box-shadow: 0 24px 70px rgba(15, 76, 117, 0.13);
+        }
+
+        .auth-brand-panel {
+          position: relative;
+          padding: 42px;
+          background: linear-gradient(145deg, #ffffff 0%, #f4f8fc 54%, #e8f2f9 100%);
+          color: var(--text-primary);
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          overflow: hidden;
+        }
+
+        .auth-brand-panel::after {
+          content: '';
+          position: absolute;
+          inset: auto -20% -22% -20%;
+          height: 42%;
+          background: linear-gradient(90deg, rgba(187, 225, 250, 0.32), rgba(50, 130, 184, 0.08));
+          transform: skewY(-7deg);
+        }
+
+        .auth-back {
+          position: relative;
+          z-index: 1;
+          width: fit-content;
+          align-self: flex-start;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 0;
+          color: var(--text-muted);
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1;
+          transition: color 0.2s;
+        }
+
+        .auth-back:hover {
+          color: var(--primary);
+        }
+
+        .brand-lockup {
+          position: relative;
+          z-index: 1;
+          max-width: 500px;
+          display: flex;
+          flex-direction: column;
+          gap: 42px;
+        }
+
+        .auth-logo {
+          width: 214px;
+          height: auto;
+          filter: drop-shadow(0 10px 20px rgba(15, 76, 117, 0.1));
+        }
+
+        .auth-kicker {
+          color: var(--accent);
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: 0.14em;
+          text-transform: uppercase;
+          margin-bottom: 18px;
+        }
+
+        .auth-title {
+          font-family: var(--jakarta);
+          color: var(--text-primary);
+          font-size: clamp(2.35rem, 4vw, 4.4rem);
+          line-height: 1.02;
+          letter-spacing: 0;
+          font-weight: 780;
+          max-width: 560px;
+        }
+
+        .auth-proof-row {
+          position: relative;
+          z-index: 1;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+
+        .auth-proof-row div {
+          border-top: 1px solid var(--shell-border);
+          padding-top: 16px;
+        }
+
+        .auth-proof-row span {
+          display: block;
+          color: var(--text-muted);
+          font-size: 11px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          line-height: 1.2;
+          margin-bottom: 8px;
+        }
+
+        .auth-proof-row strong {
+          color: var(--text-primary);
+          font-size: 15px;
+          line-height: 1.25;
+        }
+
+        .auth-form-panel {
+          padding: 52px 58px;
+          display: flex;
+          flex-direction: column;
+          justify-content: center;
+        }
+
+        .form-heading {
+          margin-bottom: 28px;
+        }
+
+        .secure-badge {
+          width: fit-content;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border-radius: 999px;
+          background: var(--primary-dim);
+          color: var(--primary);
+          font-size: 12px;
+          font-weight: 800;
+          margin-bottom: 22px;
+        }
+
+        .form-heading h2 {
+          color: var(--text-primary);
+          font-size: 34px;
+          line-height: 1.1;
+          letter-spacing: 0;
+          font-weight: 820;
+          margin-bottom: 10px;
+        }
+
+        .form-heading p {
+          color: var(--text-muted);
+          font-size: 15px;
+          line-height: 1.55;
+        }
+
+        .auth-form {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+        }
+
+        .field-group {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .field-group label {
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 800;
+        }
+
+        .input-wrap {
+          height: 52px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 0 16px;
+          background: #f8fafc;
+          border: 1px solid var(--shell-border);
+          border-radius: 14px;
+          color: var(--text-muted);
+          transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+        }
+
+        .input-wrap:focus-within {
+          background: #ffffff;
+          border-color: rgba(50, 130, 184, 0.72);
+          box-shadow: 0 0 0 4px rgba(50, 130, 184, 0.1);
+        }
+
+        .input-wrap input {
+          width: 100%;
+          height: 100%;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: var(--text-primary);
+          font: inherit;
+          font-size: 15px;
+          min-width: 0;
+        }
+
+        .input-wrap input::placeholder {
+          color: rgba(100, 116, 139, 0.62);
+        }
+
+        .auth-alert {
+          padding: 12px 14px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.45;
+        }
+
+        .auth-alert.error {
+          background: #fff5f4;
+          border: 1px solid #ffd4cf;
+          color: #b42318;
+        }
+
+        .auth-submit {
+          height: 54px;
+          border-radius: 14px;
+          background: var(--primary);
+          color: #ffffff;
+          font-size: 14px;
+          font-weight: 850;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 10px;
+          cursor: pointer;
+          box-shadow: 0 16px 34px rgba(15, 76, 117, 0.22);
+          transition: transform 0.2s, background 0.2s, box-shadow 0.2s;
+          margin-top: 4px;
+        }
+
+        .auth-submit:hover:not(:disabled) {
+          transform: translateY(-1px);
+          background: #0d4266;
+          box-shadow: 0 18px 40px rgba(15, 76, 117, 0.28);
+        }
+
+        .auth-divider {
+          height: 1px;
+          background: var(--shell-border);
+          margin: 24px 0 20px;
+        }
+
+        .auth-join {
+          color: var(--text-muted);
+          font-size: 14px;
+          text-align: center;
+        }
+
+        .auth-join a {
+          color: var(--primary);
+          font-weight: 850;
+        }
+
+        .auth-footnote {
+          color: var(--text-faint);
+          font-size: 12px;
+          text-align: center;
+          margin-top: 18px;
+          line-height: 1.5;
+        }
+
+        @media (max-width: 880px) {
+          .auth-shell {
+            padding: 18px;
+            align-items: flex-start;
+          }
+
+          .auth-frame {
+            min-height: auto;
+            grid-template-columns: 1fr;
+            border-radius: 20px;
+          }
+
+          .auth-brand-panel {
+            padding: 28px;
+            gap: 42px;
+          }
+
+          .brand-lockup {
+            gap: 28px;
+          }
+
+          .auth-logo {
+            width: 176px;
+          }
+
+          .auth-title {
+            font-size: 2.35rem;
+          }
+
+          .auth-proof-row {
+            grid-template-columns: 1fr;
+            gap: 14px;
+          }
+
+          .auth-form-panel {
+            padding: 32px 24px;
+          }
+
+          .form-heading h2 {
+            font-size: 28px;
           }
         }
       `}</style>
