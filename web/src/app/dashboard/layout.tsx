@@ -7,7 +7,6 @@ import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { useUnreadNotificationsCount } from '@/hooks/useDashboardData';
 import {
   LayoutDashboard,
   Waves,
@@ -18,7 +17,6 @@ import {
   Menu,
   X,
   Bell,
-  Search,
   ChevronRight,
   Droplets,
   Store,
@@ -26,9 +24,9 @@ import {
   Wallet,
   FileText,
   Box,
-  HelpCircle,
   ChevronDown,
   Loader2,
+  CalendarDays,
 } from 'lucide-react';
 
 /* ─── Navigation Config ─────────────────────────────────────── */
@@ -81,9 +79,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
-  const isAdminRoute = pathname?.startsWith('/dashboard/admin') ?? false;
-  const unreadCount = useUnreadNotificationsCount({ enabled: !isAdminRoute });
   const navigation = NAV_STRUCTURE(t);
+  const todayLabel = new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(new Date());
   const isMechanic = user?.role === 'mechanic';
   const visibleNavigation = isMechanic ? {
     management: navigation.management.filter((item) => ['/dashboard', '/dashboard/ponds'].includes(item.href)),
@@ -446,37 +448,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{
-              background: '#FFF', border: '1px solid var(--border)',
-              borderRadius: '12px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px',
-              width: '300px',
-              boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)'
-            }} className="mobile-trigger-hide">
-              <Search size={18} color="var(--text-muted)" />
-              <input
-                type="text"
-                placeholder="Search anything..."
-                style={{ background: 'transparent', border: 'none', fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)', outline: 'none', width: '100%' }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FFF', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', position: 'relative', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
-                <Bell size={20} />
-                {unreadCount > 0 && (
-                  <span style={{
-                    position: 'absolute', top: '-5px', right: '-5px', background: '#ef4444', color: 'white',
-                    fontSize: '0.65rem', fontWeight: 700, minWidth: '18px', height: '18px', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid white'
-                  }}>
-                    {unreadCount}
-                  </span>
-                )}
-              </button>
-              <button style={{ width: '44px', height: '44px', borderRadius: '12px', background: '#FFF', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
-                <HelpCircle size={20} />
-              </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div className="dashboard-header-date mobile-trigger-hide" title={todayLabel}>
+              <CalendarDays size={17} />
+              <span>{todayLabel}</span>
             </div>
 
             <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 8px' }} />

@@ -404,89 +404,88 @@ export default function AssetInventoryPage() {
   }
 
   return (
-    <div className="dashboard-page">
-      <div className="dashboard-action-row">
-        {canManageAssets && (
-          <button className="btn-primary" onClick={() => handleOpenModal('add')}>
-            <Plus size={20} />
-            {t.asset.addAsset}
-          </button>
-        )}
-      </div>
+    <div className="dashboard-page-relaxed">
+      <div className="dashboard-inline-toolbar">
+        <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
+          {[
+            { id: 'dashboard', label: t.asset.dashboard, icon: Briefcase },
+            { id: 'all', label: t.asset.allAssets, icon: Construction }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`}
+            >
+              <tab.icon size={18} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border)' }}>
-        {[
-          { id: 'dashboard', label: t.asset.dashboard, icon: Briefcase },
-          { id: 'all', label: t.asset.allAssets, icon: Construction }
-        ].map(tab => (
-          <button 
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              padding: '12px 24px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'transparent',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',
-              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              fontSize: '14px',
-              cursor: 'pointer'
-            }}
-          >
-            <tab.icon size={18} />
-            {tab.label}
-          </button>
-        ))}
+        <div className="dashboard-action-row">
+          {canManageAssets && (
+            <button
+              className="dashboard-action dashboard-action-primary"
+              onClick={() => handleOpenModal('add')}
+              style={{
+                minHeight: '44px',
+                fontSize: '13px',
+                fontWeight: 850,
+                letterSpacing: '0',
+                textTransform: 'none'
+              }}
+            >
+              <Plus size={18} />
+              {t.asset.addAsset}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Content */}
       <div style={{ flex: 1 }}>
         {activeTab === 'dashboard' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             {/* Metrics Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '24px' }}>
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+            <div className="dashboard-kpi-grid">
+              <div className="glass-card dashboard-kpi-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
                     <Construction size={20} />
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.asset.totalAssets}</span>
+                  <span className="dashboard-kpi-label">{t.asset.totalAssets}</span>
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800 }}>{metrics.totalAssets}</div>
+                <div className="dashboard-kpi-value">{metrics.totalAssets}</div>
               </div>
 
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div className="glass-card dashboard-kpi-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
                     <AlertCircle size={20} />
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.asset.needsMaintenance}</span>
+                  <span className="dashboard-kpi-label">{t.asset.needsMaintenance}</span>
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800 }}>{metrics.needsMaintenance}</div>
+                <div className="dashboard-kpi-value">{metrics.needsMaintenance}</div>
               </div>
 
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div className="glass-card dashboard-kpi-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(243, 156, 18, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f39c12', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
                     <User size={20} />
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.asset.checkedOut}</span>
+                  <span className="dashboard-kpi-label">{t.asset.checkedOut}</span>
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800 }}>{metrics.checkedOut}</div>
+                <div className="dashboard-kpi-value">{metrics.checkedOut}</div>
               </div>
 
-              <div className="glass-card" style={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+              <div className="glass-card dashboard-kpi-card">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
                   <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60', border: '1px solid rgba(39, 174, 96, 0.2)' }}>
                     <DollarSign size={20} />
                   </div>
-                  <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.asset.totalMaintenanceCost}</span>
+                  <span className="dashboard-kpi-label">{t.asset.totalMaintenanceCost}</span>
                 </div>
-                <div style={{ fontSize: '28px', fontWeight: 800 }}>{formatCurrency(metrics.totalMaintCost)}</div>
+                <div className="dashboard-kpi-value">{formatCurrency(metrics.totalMaintCost)}</div>
               </div>
             </div>
 
@@ -524,9 +523,9 @@ export default function AssetInventoryPage() {
 
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             {/* Toolbar */}
-            <div className="glass-card" style={{ padding: '16px', display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="glass-card dashboard-toolbar-card" style={{ background: 'white', flexWrap: 'wrap' }}>
               <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
                 <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
                 <input 
@@ -539,13 +538,14 @@ export default function AssetInventoryPage() {
                   }}
                 />
               </div>
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', padding: '5px', background: 'var(--bg-mid)', borderRadius: '14px', border: '1px solid var(--border)' }}>
                 <button 
                   onClick={() => setCategoryFilter(null)}
                   style={{ 
                     padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, 
-                    background: !categoryFilter ? 'var(--primary)' : 'var(--bg-mid)',
-                    color: !categoryFilter ? '#FFF' : 'var(--text-muted)',
+                    background: !categoryFilter ? '#FFF' : 'transparent',
+                    color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
+                    boxShadow: !categoryFilter ? '0 4px 12px rgba(15, 76, 117, 0.07)' : 'none',
                     border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                   }}
                 >All</button>
@@ -555,8 +555,9 @@ export default function AssetInventoryPage() {
                     onClick={() => setCategoryFilter(cat)}
                     style={{ 
                       padding: '8px 16px', borderRadius: '10px', fontSize: '13px', fontWeight: 600, 
-                      background: categoryFilter === cat ? 'var(--primary)' : 'var(--bg-mid)',
-                      color: categoryFilter === cat ? '#FFF' : 'var(--text-muted)',
+                      background: categoryFilter === cat ? '#FFF' : 'transparent',
+                      color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
+                      boxShadow: categoryFilter === cat ? '0 4px 12px rgba(15, 76, 117, 0.07)' : 'none',
                       border: 'none', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap'
                     }}
                   >{cat}</button>
@@ -565,7 +566,7 @@ export default function AssetInventoryPage() {
             </div>
 
             {/* List */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '18px' }}>
               {filteredAssets.map(asset => (
                 <div key={asset.id} className="glass-card" style={{ 
                   background: asset.condition === 'Needs Repair' ? 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)' : 'var(--bg-card)', 
@@ -577,13 +578,13 @@ export default function AssetInventoryPage() {
                   border: asset.condition === 'Needs Repair' ? '1px solid #FECACA' : '1px solid var(--border)',
                   borderLeft: asset.condition === 'Needs Repair' ? '6px solid #e74c3c' : '1px solid var(--border)'
                 }}>
-                  <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                        <Construction size={24} />
+                  <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ display: 'flex', gap: '14px' }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)', flexShrink: 0 }}>
+                        <Construction size={21} />
                       </div>
                       <div>
-                        <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{asset.name}</h3>
+                        <h3 style={{ fontSize: '17px', fontWeight: 850 }}>{asset.name}</h3>
                         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{asset.category} {asset.serialNumber ? `• SN: ${asset.serialNumber}` : ''}</p>
                         <div style={{ fontSize: '12px', fontWeight: 800, marginTop: '4px', color: asset.condition === 'Needs Repair' ? '#991B1B' : '#27ae60' }}>
                           {asset.condition}
@@ -598,14 +599,14 @@ export default function AssetInventoryPage() {
                     </div>
                   </div>
 
-                  <div style={{ padding: '16px 24px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-mid)', fontSize: '13px' }}>
+                  <div style={{ padding: '13px 20px', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-mid)', fontSize: '13px' }}>
                     {asset.currentHolder ? <User size={14} color="var(--primary)" /> : <Home size={14} color="var(--text-faint)" />}
                     <span style={{ fontWeight: 600, color: asset.currentHolder ? 'var(--primary)' : 'var(--text-faint)' }}>
                       {asset.currentHolder || 'In Storage'}
                     </span>
                   </div>
 
-                  <div style={{ padding: '20px 24px', display: 'flex', gap: '12px' }}>
+                  <div style={{ padding: '16px 20px', display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                     {canManageAssets && (
                       <button className="btn-primary" style={{ flex: 1, borderRadius: '10px', padding: '10px' }} onClick={() => handleOpenModal('transfer', asset)}>
                         <ArrowRightLeft size={16} /> Transfer

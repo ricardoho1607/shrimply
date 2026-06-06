@@ -865,10 +865,10 @@ export default function PondDetailClient() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '28px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '22px', alignItems: 'start' }}>
 
         {/* Left Content */}
-        <div className="animate-fade-up animate-delay-2" style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+        <div className="animate-fade-up animate-delay-2" style={{ display: 'contents' }}>
 
           {/* Growth Chart Section */}
           <div className="glass-card" style={{ padding: '24px' }}>
@@ -932,7 +932,7 @@ export default function PondDetailClient() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="animate-fade-up animate-delay-3" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div className="animate-fade-up animate-delay-3" style={{ display: 'contents' }}>
           <div className="glass-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

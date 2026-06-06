@@ -18,7 +18,6 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import Link from 'next/link';
 import {
   collection,
   query,
@@ -395,12 +394,10 @@ export default function FeedRecordsPage() {
                     <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(15, 76, 117, 0.08)' }}>
                       <ClipboardList size={20} />
                     </div>
-                    <Link href={`/dashboard/ponds/${pond.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      <div>
-                        <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{pond.pondName}</h3>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
-                      </div>
-                    </Link>
+                    <div>
+                      <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{pond.pondName}</h3>
+                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setSelectedPondForHistory(pond)}

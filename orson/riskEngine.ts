@@ -1,9 +1,11 @@
 import type {
+  OrsonLabStatusLevel,
   OrsonPondMetrics,
   OrsonRiskFinding,
   OrsonRiskReport,
   OrsonRiskSeverity,
 } from './types';
+import { evaluateCrossParameterRules } from './knowledge/evaluateCrossParameterRules';
 
 const severityRank: Record<OrsonRiskSeverity, number> = {
   info: 0,
@@ -29,9 +31,40 @@ const confidenceFromCompleteness = (base: number, score: number) => round(Math.m
 
 const createFinding = (finding: OrsonRiskFinding): OrsonRiskFinding => finding;
 
+const severityFromLabStatus = (status: OrsonLabStatusLevel | null): OrsonRiskSeverity | null => {
+  if (status === 'critical') return 'critical';
+  if (status === 'warning') return 'warning';
+  if (status === 'watch') return 'watch';
+  return null;
+};
+
 export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Date()): OrsonRiskReport => {
-  const findings: OrsonRiskFinding[] = [];
+  const findings: OrsonRiskFinding[] = [...evaluateCrossParameterRules(metrics)];
   const dataScore = metrics.dataCompleteness.score;
+  const labSeverity = severityFromLabStatus(metrics.labContext.worstStatus);
+
+  if (labSeverity) {
+    const latestLab = metrics.labContext.latest ?? metrics.labContext.byType[0] ?? null;
+    const labLabel = latestLab?.reportType ? `${latestLab.reportType.replace(/_/g, ' ')} lab` : 'Latest lab report';
+    const issue = latestLab?.mainIssue ?? metrics.labContext.unresolvedRisks[0] ?? 'A lab result needs attention.';
+    const evidence = [
+      latestLab?.sampleDate ? `Sample date: ${latestLab.sampleDate}` : null,
+      latestLab?.status ? `Lab status: ${latestLab.status}` : null,
+      ...metrics.labContext.unresolvedRisks.slice(0, 3).map((risk) => `Lab risk: ${risk}`),
+    ].filter((item): item is string => Boolean(item));
+
+    findings.push(createFinding({
+      id: 'lab_report_risk',
+      severity: labSeverity,
+      confidence: 0.9,
+      title: 'Lab report needs attention',
+      summary: `${labLabel} is marked ${metrics.labContext.worstStatus}: ${issue}`,
+      evidence,
+      recommendation: metrics.labContext.recommendations[0] ??
+        'Treat the confirmed lab finding as high-confidence context and compare it with the latest water quality, growth, appetite, and mortality trends.',
+      metricRefs: ['labContext'],
+    }));
+  }
 
   if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 4) {
     findings.push(createFinding({
@@ -181,6 +214,9 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
         evidence: [
           `Smoothed ADG: ${metrics.smoothedAdgGPerDay} g/day`,
           `Expected baseline: ${round(expectedAdg, 2)} g/day`,
+          ...(metrics.labContext.unresolvedRisks.length > 0
+            ? [`Recent lab context: ${metrics.labContext.unresolvedRisks.slice(0, 2).join('; ')}`]
+            : []),
         ],
         recommendation: 'Review feed conversion, water stability, and sampling consistency before adjusting feed upward.',
         metricRefs: ['smoothedAdgGPerDay', 'currentDoc'],

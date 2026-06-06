@@ -9,6 +9,26 @@ export interface OrsonNormalizedFeedData {
   inventoryFeedId: string | null;
 }
 
+export type OrsonLabStatusLevel = 'good' | 'info' | 'watch' | 'warning' | 'critical';
+
+export interface OrsonLabStatusSummary {
+  labReportId: string | null;
+  reportType: string | null;
+  sampleDate: string | null;
+  status: OrsonLabStatusLevel | null;
+  mainIssue: string | null;
+  keyRisks: string[];
+  recommendations: string[];
+}
+
+export interface OrsonLabContext {
+  latest: OrsonLabStatusSummary | null;
+  byType: OrsonLabStatusSummary[];
+  unresolvedRisks: string[];
+  recommendations: string[];
+  worstStatus: OrsonLabStatusLevel | null;
+}
+
 export type OrsonRecordKind = 'sampling' | 'water_quality' | 'feed' | 'harvest' | 'unknown';
 
 export interface OrsonNormalizedRecord {
@@ -55,6 +75,7 @@ export interface OrsonNormalizedPond {
   baselineSource: string | null;
   supplier: string | null;
   cycleStatus: 'active' | 'ended';
+  labContext: OrsonLabContext;
   records: OrsonNormalizedRecord[];
   missingFields: string[];
 }
@@ -134,6 +155,7 @@ export interface OrsonPondMetrics {
   salinityTrend: OrsonTrendResult;
   appetiteTrend: OrsonTrendResult;
   mortalityTrend: OrsonTrendResult;
+  labContext: OrsonLabContext;
   dataCompleteness: OrsonDataCompleteness;
 }
 
@@ -152,6 +174,8 @@ export type OrsonRiskId =
   | 'biomass_model_disagreement'
   | 'mortality_spike'
   | 'salinity_shock'
+  | 'lab_report_risk'
+  | 'cross_parameter_risk'
   | 'missing_data';
 
 export interface OrsonRiskFinding {
@@ -204,8 +228,35 @@ export interface OrsonPromptPondPayload {
   operationalFeedKg: number;
   dataAssumptions: string[];
   dataCompletenessScore: number;
+  phSwingLatest: OrsonNumber;
+  doMinimumLatest: OrsonNumber;
+  salinityTrend: OrsonTrendResult;
+  labContext: OrsonLabContext;
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
-  findings: Array<Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>>;
+  findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>[];
+}
+
+export type OrsonQuestionIntent =
+  | 'parameter_control'
+  | 'feed'
+  | 'growth'
+  | 'water_quality'
+  | 'lab'
+  | 'harvest'
+  | 'biomass'
+  | 'survival'
+  | 'risk'
+  | 'summary'
+  | 'general';
+
+export interface OrsonQuestionFocus {
+  intent: OrsonQuestionIntent;
+  focusedPondName: string | null;
+  focusedPondId: string | null;
+  requestedParameter: string | null;
+  requestedDirection: 'increase' | 'decrease' | 'stabilize' | null;
+  isPondSpecific: boolean;
+  shouldSummarize: boolean;
 }
 
 export interface OrsonPromptPackage {
@@ -214,6 +265,7 @@ export interface OrsonPromptPackage {
   userMessage: string;
   cacheKey: string | null;
   isFarmSpecific: boolean;
+  questionFocus: OrsonQuestionFocus;
 }
 
 export interface OrsonHarvestProjectionInput {

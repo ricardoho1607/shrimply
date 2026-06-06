@@ -404,158 +404,145 @@ export default function InventoryFeedsPage() {
   }
 
   return (
-    <div className="dashboard-page-relaxed" style={{ paddingBottom: '40px' }}>
+    <div className="dashboard-page-relaxed" style={{ paddingBottom: '32px' }}>
+      <div className="dashboard-inline-toolbar animate-fade-up">
+        <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
+          {[
+            { id: 'dashboard', label: t.inventory.dashboard, icon: LayoutDashboard },
+            { id: 'feed', label: t.inventory.feeds, icon: Box },
+            { id: 'additive', label: t.inventory.additives, icon: FlaskConical }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as any)}
+              className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`}
+            >
+              <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-      {canEditInventory && (
-      <div className="dashboard-action-row animate-fade-up">
-          <button
-            className="btn-secondary"
-            onClick={() => { setItemType('feed'); handleOpenModal('add'); }}
-            style={{
-              background: 'white',
-              border: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-card)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}
-          >
-            <Plus size={18} />
-            {t.inventory.addFeed}
-          </button>
-          <button
-            className="btn-primary"
-            onClick={() => { setItemType('additive'); handleOpenModal('add'); }}
-            style={{
-              boxShadow: 'var(--shadow-glow)',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}
-          >
-            <FlaskConical size={18} />
-            {t.inventory.addAdditive}
-          </button>
-      </div>
-      )}
-
-      {/* Modern Tabs Navigation */}
-      <div style={{
-        display: 'flex',
-        gap: '12px',
-        padding: '6px',
-        background: 'var(--bg-mid)',
-        borderRadius: '24px',
-        width: 'fit-content',
-        border: '1px solid var(--border)',
-        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
-      }} className="animate-fade-up">
-        {[
-          { id: 'dashboard', label: t.inventory.dashboard, icon: LayoutDashboard },
-          { id: 'feed', label: t.inventory.feeds, icon: Box },
-          { id: 'additive', label: t.inventory.additives, icon: FlaskConical }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            style={{
-              padding: '12px 24px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: activeTab === tab.id ? 'white' : 'transparent',
-              border: 'none',
-              borderRadius: '18px',
-              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-              fontWeight: activeTab === tab.id ? 800 : 700,
-              fontSize: '14px',
-              cursor: 'pointer',
-              boxShadow: activeTab === tab.id ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-            }}
-          >
-            <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
-            {tab.label}
-          </button>
-        ))}
+        {canEditInventory && (
+          <div className="dashboard-action-row">
+            <button
+              className="dashboard-action dashboard-action-secondary"
+              onClick={() => { setItemType('feed'); handleOpenModal('add'); }}
+              style={{
+                background: 'white',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-card)',
+                minHeight: '44px',
+                fontSize: '13px',
+                fontWeight: 850,
+                letterSpacing: '0',
+                textTransform: 'none',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              <Plus size={18} />
+              {t.inventory.addFeed}
+            </button>
+            <button
+              className="dashboard-action dashboard-action-primary"
+              onClick={() => { setItemType('additive'); handleOpenModal('add'); }}
+              style={{
+                boxShadow: 'var(--shadow-glow)',
+                minHeight: '44px',
+                fontSize: '13px',
+                fontWeight: 850,
+                letterSpacing: '0',
+                textTransform: 'none',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              }}
+            >
+              <FlaskConical size={18} />
+              {t.inventory.addAdditive}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Main Content Area */}
       <div style={{ flex: 1 }}>
         {activeTab === 'dashboard' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
             {/* High-Impact Metrics Grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px' }}>
-              <div className="glass-card animate-fade-up" style={{ padding: '32px', position: 'relative', overflow: 'hidden' }}>
+            <div className="dashboard-kpi-grid">
+              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <Box size={120} />
+                  <Box size={72} />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                    <Box size={24} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
+                    <Box size={20} />
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.inventory.feedStock}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedStock}</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                  <span style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  <span style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
                     {metrics.totalFeedStock.toLocaleString()}
                   </span>
-                  <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-muted)' }}>kg</span>
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>kg</span>
                 </div>
               </div>
 
-              <div className="glass-card animate-fade-up" style={{ padding: '32px', position: 'relative', overflow: 'hidden', animationDelay: '0.1s' }}>
+              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.1s' }}>
                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <FlaskConical size={120} color="#f39c12" />
+                  <FlaskConical size={72} color="#f39c12" />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(243, 156, 18, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f39c12', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
-                    <FlaskConical size={24} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(243, 156, 18, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f39c12', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
+                    <FlaskConical size={20} />
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.inventory.additiveValue}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.additiveValue}</span>
                 </div>
-                <div style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
                   {formatCurrency(metrics.totalAdditiveValue)}
                 </div>
               </div>
 
-              <div className="glass-card animate-fade-up" style={{ padding: '32px', position: 'relative', overflow: 'hidden', animationDelay: '0.2s' }}>
+              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.2s' }}>
                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <Wallet size={120} color="#27ae60" />
+                  <Wallet size={72} color="#27ae60" />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60', border: '1px solid rgba(39, 174, 96, 0.2)' }}>
-                    <Wallet size={24} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60', border: '1px solid rgba(39, 174, 96, 0.2)' }}>
+                    <Wallet size={20} />
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.inventory.feedStockValue}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedStockValue}</span>
                 </div>
-                <div style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
                   {formatCurrency(metrics.feedStockValue)}
                 </div>
               </div>
 
-              <div className="glass-card animate-fade-up" style={{ padding: '32px', position: 'relative', overflow: 'hidden', animationDelay: '0.3s' }}>
+              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.3s' }}>
                 <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <ShoppingBag size={120} color="#e74c3c" />
+                  <ShoppingBag size={72} color="#e74c3c" />
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '24px' }}>
-                  <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
-                    <ShoppingBag size={24} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
+                    <ShoppingBag size={20} />
                   </div>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.inventory.feedCost}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedCost}</span>
                 </div>
-                <div style={{ fontSize: '42px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
                   {formatCurrency(metrics.totalFeedCost)}
                 </div>
               </div>
             </div>
 
             {/* Split View: Alerts and Transactions */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '32px' }}>
+            <div className="dashboard-report-grid">
 
               {/* Critical Alerts Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '22px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
-                      <AlertCircle size={22} />
+                  <h2 style={{ fontSize: '18px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
+                      <AlertCircle size={19} />
                     </div>
                     Stock Status Alerts
                   </h2>
@@ -574,9 +561,9 @@ export default function InventoryFeedsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {metrics.lowStockItems.length === 0 ? (
-                    <div className="glass-card" style={{ padding: '60px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
-                      <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: 'rgba(39, 174, 96, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
-                        <Waves size={32} />
+                    <div className="glass-card" style={{ padding: '28px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(39, 174, 96, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
+                        <Waves size={24} />
                       </div>
                       <div>
                         <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>Optimal Stock Levels</h3>
@@ -590,9 +577,9 @@ export default function InventoryFeedsPage() {
                       alignItems: 'center',
                       justifyContent: 'space-between',
                       background: 'rgba(231, 76, 60, 0.02)',
-                      border: '1px solid rgba(231, 76, 60, 0.15)',
+                      border: '1px solid rgba(231, 76, 60, 0.12)',
                       animationDelay: `${i * 0.05}s`,
-                      borderLeft: '6px solid #e74c3c'
+                      boxShadow: '0 10px 28px rgba(231, 76, 60, 0.06)'
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
                         <div style={{
@@ -603,7 +590,7 @@ export default function InventoryFeedsPage() {
                           <AlertCircle size={24} />
                         </div>
                         <div>
-                          <div style={{ fontWeight: 900, fontSize: '18px', color: 'var(--text-primary)' }}>{item.itemName}</div>
+                          <div style={{ fontWeight: 900, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Box size={14} />
                             Critical: {item.totalStock.toLocaleString()} {item.unit} remaining
@@ -618,11 +605,13 @@ export default function InventoryFeedsPage() {
                             fontSize: '13px',
                             fontWeight: 900,
                             background: '#e74c3c',
-                            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.3)'
+                            letterSpacing: '0',
+                            textTransform: 'none',
+                            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.18)'
                           }}
                           onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
                         >
-                          RESTOCK NOW
+                          Restock now
                         </button>
                       )}
                     </div>
@@ -631,11 +620,11 @@ export default function InventoryFeedsPage() {
               </div>
 
               {/* Transaction Ledger */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '22px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                      <History size={22} />
+                  <h2 style={{ fontSize: '18px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
+                      <History size={19} />
                     </div>
                     Recent Transactions
                   </h2>
@@ -663,21 +652,21 @@ export default function InventoryFeedsPage() {
                     .filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))
                     .map((tx, i) => (
                     <div key={tx.id} className="glass-card animate-fade-up" style={{
-                      padding: '24px', display: 'flex', alignItems: 'center', gap: '20px', background: 'white',
+                      padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', background: 'white',
                       animationDelay: `${i * 0.05}s`, transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
                       <div style={{
-                        width: '52px', height: '52px', borderRadius: '16px',
+                        width: '42px', height: '42px', borderRadius: '12px',
                         background: tx.type === 'Stock In' ? 'rgba(39, 174, 96, 0.08)' : 'rgba(231, 76, 60, 0.08)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c',
                         border: '1px solid currentColor',
                         opacity: 0.9
                       }}>
-                        {tx.type === 'Stock In' ? <ArrowDownCircle size={24} /> : <ArrowUpCircle size={24} />}
+                        {tx.type === 'Stock In' ? <ArrowDownCircle size={20} /> : <ArrowUpCircle size={20} />}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 900, fontSize: '17px', color: 'var(--text-primary)' }}>{tx.name}</div>
+                        <div style={{ fontWeight: 900, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span style={{ color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c' }}>{tx.type}</span>
                           <span style={{ opacity: 0.3 }}>•</span>
@@ -685,7 +674,7 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '22px', color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c', letterSpacing: '-0.02em' }}>
+                        <div style={{ fontWeight: 900, fontSize: '18px', color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c', letterSpacing: '0' }}>
                           {tx.type === 'Stock In' ? '+' : '-'}{tx.quantity.toLocaleString()}
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
@@ -697,10 +686,10 @@ export default function InventoryFeedsPage() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
             {/* Advanced Search and Filtering */}
-            <div className="glass-card animate-fade-up" style={{ padding: '24px', background: 'white', display: 'flex', gap: '24px', alignItems: 'center' }}>
+            <div className="glass-card dashboard-toolbar-card animate-fade-up" style={{ background: 'white' }}>
               <div style={{ position: 'relative', flex: 1 }}>
                 <Search size={20} style={{ position: 'absolute', left: '18px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
                 <input
@@ -710,10 +699,10 @@ export default function InventoryFeedsPage() {
                   style={{
                     background: 'var(--bg-mid)',
                     border: '1px solid var(--border)',
-                    borderRadius: '16px',
-                    padding: '16px 20px 16px 52px',
+                    borderRadius: '12px',
+                    padding: '12px 16px 12px 46px',
                     width: '100%',
-                    fontSize: '16px',
+                    fontSize: '14px',
                     outline: 'none',
                     fontWeight: 700,
                     color: 'var(--text-primary)',
@@ -722,11 +711,11 @@ export default function InventoryFeedsPage() {
                   }}
                 />
               </div>
-              <div style={{ display: 'flex', gap: '8px', padding: '6px', background: 'var(--bg-mid)', borderRadius: '18px', border: '1px solid var(--border)' }}>
+              <div style={{ display: 'flex', gap: '6px', padding: '5px', background: 'var(--bg-mid)', borderRadius: '14px', border: '1px solid var(--border)', overflowX: 'auto' }}>
                 <button
                   onClick={() => setCategoryFilter(null)}
                   style={{
-                    padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800,
+                    padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
                     background: !categoryFilter ? 'white' : 'transparent',
                     color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -738,7 +727,7 @@ export default function InventoryFeedsPage() {
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
                     style={{
-                      padding: '10px 20px', borderRadius: '12px', fontSize: '13px', fontWeight: 800,
+                      padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
                       background: categoryFilter === cat ? 'white' : 'transparent',
                       color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -751,14 +740,14 @@ export default function InventoryFeedsPage() {
 
             {/* Dynamic Inventory Grid */}
             {filteredItems.length === 0 ? (
-              <div className="glass-card animate-fade-up" style={{ padding: '120px 40px', background: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ width: '100px', height: '100px', borderRadius: '32px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '32px', border: '1px solid var(--border)' }}>
-                  <Box size={48} />
+              <div className="glass-card animate-fade-up" style={{ padding: '56px 28px', background: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ width: '72px', height: '72px', borderRadius: '22px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '22px', border: '1px solid var(--border)' }}>
+                  <Box size={34} />
                 </div>
-                <h2 style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '12px', letterSpacing: '-0.02em' }}>
+                <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '10px', letterSpacing: '0' }}>
                   {activeTab === 'feed' ? t.inventory.noFeedItems : t.inventory.noAdditives}
                 </h2>
-                <p style={{ color: 'var(--text-muted)', marginBottom: '40px', fontWeight: 600, fontSize: '16px', maxWidth: '400px', lineHeight: 1.6 }}>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '26px', fontWeight: 600, fontSize: '14px', maxWidth: '400px', lineHeight: 1.6 }}>
                   {activeTab === 'feed' ? t.inventory.addFeedToStart : t.inventory.addAdditivesToStart}
                 </p>
                 {canEditInventory && (
@@ -773,7 +762,7 @@ export default function InventoryFeedsPage() {
                 )}
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: '32px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
                 {filteredItems.map((item, idx) => {
                   const isLow = (item.reorderLevel || 0) > 0 && item.totalStock <= (item.reorderLevel || 0);
                   const lastPrice = item.stockInHistory?.[item.stockInHistory.length - 1]?.price || 0;
@@ -793,12 +782,12 @@ export default function InventoryFeedsPage() {
                       transform: 'translateZ(0)',
                       transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
-                      <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: isLow ? 'rgba(231, 76, 60, 0.03)' : 'linear-gradient(to bottom, var(--bg-mid), white)' }}>
-                        <div style={{ display: 'flex', gap: '20px' }}>
+                      <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: isLow ? 'rgba(231, 76, 60, 0.03)' : 'linear-gradient(to bottom, var(--bg-mid), white)' }}>
+                        <div style={{ display: 'flex', gap: '14px' }}>
                           <div style={{
-                            width: '64px',
-                            height: '64px',
-                            borderRadius: '20px',
+                            width: '48px',
+                            height: '48px',
+                            borderRadius: '14px',
                             background: 'white',
                             display: 'flex',
                             alignItems: 'center',
@@ -807,10 +796,10 @@ export default function InventoryFeedsPage() {
                             border: '1px solid var(--border)',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.06)'
                           }}>
-                            {activeTab === 'feed' ? <Box size={32} /> : <FlaskConical size={32} />}
+                            {activeTab === 'feed' ? <Box size={24} /> : <FlaskConical size={24} />}
                           </div>
                           <div>
-                            <h3 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{item.itemName}</h3>
+                            <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.itemName}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
                               <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700 }}>{item.brand || 'No Brand'}</span>
                               <span style={{ opacity: 0.2, fontWeight: 900 }}>•</span>
@@ -845,11 +834,11 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '32px', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '24px' }}>
+                      <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '16px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.stock}</span>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ fontSize: '32px', fontWeight: 900, color: isLow ? '#e74c3c' : 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                            <span style={{ fontSize: '26px', fontWeight: 900, color: isLow ? '#e74c3c' : 'var(--text-primary)', letterSpacing: '0' }}>
                               {item.totalStock.toLocaleString()}
                             </span>
                             <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-muted)' }}>{item.unit}</span>
@@ -872,7 +861,7 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '18px 32px', display: 'flex', gap: '32px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)' }}>
+                      <div style={{ padding: '14px 20px', display: 'flex', gap: '18px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#27ae60', fontWeight: 800, fontSize: '13px' }}>
                           <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ArrowDownCircle size={14} />
@@ -888,24 +877,24 @@ export default function InventoryFeedsPage() {
                       </div>
 
                       {canEditInventory && (
-                        <div style={{ padding: '28px 32px', display: 'flex', gap: '16px', background: 'white', borderTop: '1px solid var(--border)' }}>
+                        <div style={{ padding: '18px 20px', display: 'flex', gap: '12px', background: 'white', borderTop: '1px solid var(--border)' }}>
                           <button
                             className="btn-primary"
-                            style={{ flex: 1.6, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', boxShadow: '0 4px 15px var(--primary-dim)' }}
+                            style={{ flex: 1.6, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', boxShadow: '0 4px 15px var(--primary-dim)' }}
                             onClick={() => handleOpenModal('stockIn', item, activeTab)}
                           >
                             <Plus size={18} /> {t.inventory.stockIn}
                           </button>
                           <button
                             className="btn-secondary"
-                            style={{ flex: 1, borderRadius: '16px', padding: '16px', fontWeight: 900, fontSize: '14px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
+                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
                             onClick={() => handleOpenModal('usage', item, activeTab)}
                           >
                             <ArrowUpCircle size={18} /> {t.inventory.use}
                           </button>
                           <button
                             className="btn-secondary"
-                            style={{ width: '56px', height: '56px', padding: '0', borderRadius: '16px', background: 'white', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            style={{ width: '46px', height: '46px', padding: '0', borderRadius: '12px', background: 'white', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                             onClick={() => handleOpenModal('editReorder', item, activeTab)}
                             title="Threshold Settings"
                           >

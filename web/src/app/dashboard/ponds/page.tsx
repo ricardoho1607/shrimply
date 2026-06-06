@@ -1,15 +1,15 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { 
-  Plus, 
-  Waves, 
-  Search, 
+import {
+  Plus,
+  Waves,
+  Search,
   Archive,
   RotateCcw,
-  Calendar, 
-  Scale, 
-  Users, 
+  Calendar,
+  Scale,
+  Users,
   X,
   Loader2,
   ArrowRight,
@@ -78,6 +78,8 @@ interface PhysicalPond {
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
 
+type InactivePondOption = PhysicalPond | Pond;
+
 const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
@@ -104,41 +106,18 @@ const removeUndefinedFields = (value: unknown): unknown => {
   }, {} as Record<string, unknown>);
 };
 
-const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
-  if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
-  return null;
-};
-
-const formatSyncStatus = (date: Date | null): string => {
-  if (!date) return 'Sync status unavailable';
-  const now = new Date();
-  const sameDay = date.toDateString() === now.toDateString();
-  if (sameDay) return 'Last synced today';
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
-  return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
-};
-
 export default function PondsPage() {
   const { t } = useLanguage();
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   const { data: physicalPonds, loading: physicalPondsLoading } = useCompanyPhysicalPonds<PhysicalPond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
-  
+
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [cycleNameDraft, setCycleNameDraft] = useState('');
-  
+
   // Form State
   const [formData, setFormData] = useState({
     pondName: '',
@@ -194,6 +173,8 @@ export default function PondsPage() {
       : [],
     [activeFarmCycle, ponds]
   );
+  const activePondCount = activeCyclePonds.length;
+  const endedPondCount = useMemo(() => ponds.filter((pond) => getCycleStatus(pond) === 'ended').length, [ponds]);
 
   useEffect(() => {
     setCycleNameDraft(activeFarmCycle?.cycleName || '');
@@ -576,107 +557,104 @@ export default function PondsPage() {
     if (!normalizedSearch) return statusFiltered;
     return statusFiltered.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
   }, [ponds, debouncedSearchTerm, cycleFilter]);
-  const filteredPhysicalPonds = useMemo(() => {
+  const inactivePondOptions = useMemo<InactivePondOption[]>(() => {
+    const activeNames = new Set(ponds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
+    const physicalOptions = physicalPonds.filter((pond) => !activeNames.has(getPhysicalPondKey(pond.pondName)));
+    const physicalNames = new Set(physicalOptions.map((pond) => getPhysicalPondKey(pond.pondName)));
+    const legacyEndedOptions = ponds
+      .filter((pond) => getCycleStatus(pond) === 'ended')
+      .filter((pond) => !activeNames.has(getPhysicalPondKey(pond.pondName)))
+      .filter((pond) => !physicalNames.has(getPhysicalPondKey(pond.pondName)))
+      .reduce<Pond[]>((unique, pond) => {
+        const key = getPhysicalPondKey(pond.pondName);
+        if (!unique.some((item) => getPhysicalPondKey(item.pondName) === key)) unique.push(pond);
+        return unique;
+      }, []);
+
+    return [...physicalOptions, ...legacyEndedOptions];
+  }, [physicalPonds, ponds]);
+  const filteredPhysicalPonds = useMemo<InactivePondOption[]>(() => {
     if (cycleFilter !== 'inactive') return [];
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
-    const activeNames = new Set(ponds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
-    return physicalPonds
-      .filter((pond) => pond.status !== 'active' && !activeNames.has(getPhysicalPondKey(pond.pondName)))
+    return inactivePondOptions
       .filter((pond) => !normalizedSearch || pond.pondName.toLowerCase().includes(normalizedSearch));
-  }, [cycleFilter, debouncedSearchTerm, physicalPonds, ponds]);
+  }, [cycleFilter, debouncedSearchTerm, inactivePondOptions]);
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="glass-card animate-fade-up" style={{ padding: '26px', display: 'flex', flexDirection: 'column', gap: '22px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-          <div>
-            <div style={{ fontSize: '11px', fontWeight: 900, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '6px' }}>
-              Current Cycle
-            </div>
-            <h2 style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
-              {activeFarmCycle?.cycleName || 'No active cycle'}
-            </h2>
-            <p style={{ color: 'var(--text-muted)', marginTop: '8px', fontSize: '14px', fontWeight: 600 }}>
-              {activeFarmCycle
-                ? 'New ponds are added to this cycle until it is ended.'
-                : `Add a pond to create Cycle ${cycles.length + 1}.`}
-            </p>
+      <div className="glass-card animate-fade-up" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <RotateCcw size={17} />
           </div>
-          <div style={{
-            padding: '8px 14px',
-            borderRadius: '10px',
-            background: activeFarmCycle ? 'var(--primary-dim)' : 'var(--bg-mid)',
-            color: activeFarmCycle ? 'var(--primary)' : 'var(--text-muted)',
-            fontSize: '12px',
-            fontWeight: 900,
-            textTransform: 'uppercase',
-          }}>
-            {activeFarmCycle?.status || 'waiting'}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                Current Cycle
+              </span>
+              <span style={{
+                padding: '3px 8px',
+                borderRadius: '999px',
+                background: activeFarmCycle ? 'var(--primary-dim)' : 'var(--bg-mid)',
+                color: activeFarmCycle ? 'var(--primary)' : 'var(--text-muted)',
+                fontSize: '0.66rem',
+                fontWeight: 900,
+                textTransform: 'uppercase',
+              }}>
+                {activeFarmCycle?.status || 'waiting'}
+              </span>
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {activeFarmCycle?.cycleName || `Cycle ${cycles.length + 1} not started`}
+            </div>
           </div>
         </div>
 
-        {activeFarmCycle ? (
-          <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
-              <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>Included ponds</div>
-                <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{activeCyclePonds.length}</div>
-              </div>
-              <div style={{ padding: '16px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>Stocking start</div>
-                <div style={{ fontSize: '16px', fontWeight: 900, color: 'var(--text-primary)' }}>{activeFarmCycle.stockingStartDate || activeFarmCycle.plannedStartDate || '-'}</div>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-              {activeCyclePonds.length === 0 ? (
-                <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>No ponds attached yet.</span>
-              ) : activeCyclePonds.map((pond) => (
-                <span key={pond.id} style={{ padding: '7px 11px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '12px', fontWeight: 800 }}>
-                  {pond.pondName}
-                </span>
-              ))}
-            </div>
-
-            {canEditPonds && (
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                <input
-                  value={cycleNameDraft}
-                  onChange={(event) => setCycleNameDraft(event.target.value)}
-                  placeholder="Cycle name"
-                  style={{
-                    flex: '1 1 260px',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-mid)',
-                    color: 'var(--text-primary)',
-                    fontWeight: 700,
-                    outline: 'none',
-                  }}
-                />
-                <button type="button" className="btn-secondary" onClick={handleRenameCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
-                  <Save size={17} /> Rename
-                </button>
-                <button type="button" className="btn-primary" onClick={handleCloseFarmCycle} style={{ padding: '12px 16px', borderRadius: '12px', fontWeight: 800 }}>
-                  <Lock size={17} /> End Cycle
-                </button>
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ padding: '18px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>
-            Cycle management will appear here after the first pond is added.
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
+            <Waves size={15} color="var(--primary)" />
+            {activeCyclePonds.length} pond{activeCyclePonds.length === 1 ? '' : 's'}
           </div>
-        )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
+            <Calendar size={15} color="var(--primary)" />
+            {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}
+          </div>
+          {canEditPonds && activeFarmCycle && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <input
+                value={cycleNameDraft}
+                onChange={(event) => setCycleNameDraft(event.target.value)}
+                placeholder="Cycle name"
+                aria-label="Cycle name"
+                style={{
+                  width: '160px',
+                  padding: '8px 10px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-mid)',
+                  color: 'var(--text-primary)',
+                  fontSize: '0.78rem',
+                  fontWeight: 750,
+                  outline: 'none',
+                }}
+              />
+              <button type="button" onClick={handleRenameCycle} title="Rename cycle" className="icon-btn-modern" style={{ width: '34px', height: '34px' }}>
+                <Save size={15} />
+              </button>
+              <button type="button" onClick={handleCloseFarmCycle} title="End cycle" className="icon-btn-modern" style={{ width: '34px', height: '34px', color: '#e74c3c' }}>
+                <Lock size={15} />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
-      
+
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-          <input 
-            placeholder={t.ponds.searchPlaceholder || "Search ponds by name..."} 
+          <input
+            placeholder={t.ponds.searchPlaceholder || "Search ponds by name..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -688,35 +666,35 @@ export default function PondsPage() {
             onBlur={e => e.target.style.borderColor = 'var(--border)'}
           />
         </div>
-        <div style={{ display: 'flex', gap: '10px', background: 'var(--bg-mid)', padding: '6px', borderRadius: '14px', border: '1px solid var(--border)' }}>
-          <button onClick={() => setCycleFilter('active')} style={{ 
-            padding: '8px 20px', borderRadius: '10px', background: 'var(--glass-bg)', 
+        <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-mid)', padding: '5px', borderRadius: '14px', border: '1px solid var(--border)' }}>
+          <button onClick={() => setCycleFilter('active')} style={{
+            padding: '8px 14px', borderRadius: '10px', background: cycleFilter === 'active' ? 'var(--glass-bg)' : 'transparent',
             border: '1px solid var(--border)', fontSize: '13px', fontWeight: 700,
             color: cycleFilter === 'active' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'active' ? 'var(--shadow-card)' : 'none',
             opacity: cycleFilter === 'active' ? 1 : 0.75,
           }}>
-            {t.ponds.active || 'Active'}
+            {t.ponds.active || 'Active'} <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{activePondCount}</span>
           </button>
           <button onClick={() => setCycleFilter('inactive')} style={{
-            padding: '8px 20px', borderRadius: '10px',
+            padding: '8px 14px', borderRadius: '10px',
             background: cycleFilter === 'inactive' ? 'var(--glass-bg)' : 'transparent',
             border: cycleFilter === 'inactive' ? '1px solid var(--border)' : 'none',
             fontSize: '13px', fontWeight: 700,
             color: cycleFilter === 'inactive' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'inactive' ? 'var(--shadow-card)' : 'none',
           }}>
-            {t.ponds.inactive || 'Inactive'}
+            {t.ponds.inactive || 'Inactive'} <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{inactivePondOptions.length}</span>
           </button>
-          <button onClick={() => setCycleFilter('ended')} style={{ 
-            padding: '8px 20px', borderRadius: '10px',
+          <button onClick={() => setCycleFilter('ended')} style={{
+            padding: '8px 14px', borderRadius: '10px',
             background: cycleFilter === 'ended' ? 'var(--glass-bg)' : 'transparent',
             border: cycleFilter === 'ended' ? '1px solid var(--border)' : 'none',
             fontSize: '13px', fontWeight: 700,
             color: cycleFilter === 'ended' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'ended' ? 'var(--shadow-card)' : 'none',
           }}>
-            Ended
+            Ended <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{endedPondCount}</span>
           </button>
         </div>
         {canEditPonds && (
@@ -734,8 +712,8 @@ export default function PondsPage() {
         </div>
       ) : filteredPonds.length === 0 && filteredPhysicalPonds.length === 0 ? (
         <div className="glass-card animate-fade-up animate-delay-2" style={{ padding: '80px 40px', textAlign: 'center' }}>
-          <div style={{ 
-            width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary-dim)', 
+          <div style={{
+            width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary-dim)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
             margin: '0 auto 24px'
           }}>
@@ -754,19 +732,23 @@ export default function PondsPage() {
         </div>
       ) : (
         <div className="animate-fade-up animate-delay-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
-          {filteredPhysicalPonds.map(pond => (
-            <div key={`physical-${pond.id}`} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          {filteredPhysicalPonds.map(pond => {
+            const isLegacyEnded = 'cycleStatus' in pond;
+            return (
+            <div key={`${isLegacyEnded ? 'legacy' : 'physical'}-${pond.id}`} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{
-                    width: '46px', height: '46px', borderRadius: '12px', background: 'var(--gradient-dim)',
+                    width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
                   }}>
-                    <Waves size={22} />
+                    <Waves size={20} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '1.12rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Idle pond</p>
+                    <h3 style={{ fontSize: '1.02rem', fontWeight: 850, letterSpacing: '0' }}>{pond.pondName}</h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                      {isLegacyEnded ? 'Previous cycle ended' : 'Ready for next cycle'}
+                    </p>
                   </div>
                 </div>
                 {canEditPonds && (
@@ -782,7 +764,7 @@ export default function PondsPage() {
                   </button>
                 )}
               </div>
-              <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+              <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -792,18 +774,19 @@ export default function PondsPage() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-muted)' }}>No active cycle</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 850, color: 'var(--primary)' }}>Inactive</span>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
           {filteredPonds.map(pond => (
-            <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '330px' }}>
+              <div style={{ padding: '22px', minHeight: '106px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '14px' }}>
                 <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{ 
-                    width: '46px', height: '46px', borderRadius: '12px', background: 'var(--gradient-dim)', 
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' 
+                  <div style={{
+                    width: '46px', height: '46px', borderRadius: '12px', background: 'var(--gradient-dim)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
                   }}>
                     <Waves size={22} />
                   </div>
@@ -865,8 +848,8 @@ export default function PondsPage() {
                 </div>
                 )}
               </div>
-              
-              <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+
+              <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', flex: '1 1 auto' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -897,13 +880,13 @@ export default function PondsPage() {
                 </div>
               </div>
 
-              <div style={{ padding: '16px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ padding: '16px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                   {t.ponds.lastSampled || 'Last sampled'}: <span style={{ color: 'var(--text-faint)' }}>{t.ponds.never || 'Never'}</span>
                 </span>
                 <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
-                  <button style={{ 
-                    background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800, 
+                  <button style={{
+                    background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800,
                     fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
                     transition: 'all 0.2s'
                   }} onMouseEnter={e => e.currentTarget.style.gap = '10px'} onMouseLeave={e => e.currentTarget.style.gap = '6px'}>
@@ -923,8 +906,8 @@ export default function PondsPage() {
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
         }}>
-          <div className="glass-card animate-fade-up" style={{ 
-            width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', 
+          <div className="glass-card animate-fade-up" style={{
+            width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0',
             overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)'
           }}>
             <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -932,11 +915,11 @@ export default function PondsPage() {
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{t.ponds.addNew || 'Add New Pond'}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Create a physical pond placeholder. Start cycle details are added separately.</p>
               </div>
-              <button 
-                onClick={() => setModalOpen(false)} 
-                style={{ 
-                  background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', 
-                  padding: '10px', cursor: 'pointer', transition: 'all 0.2s' 
+              <button
+                onClick={() => setModalOpen(false)}
+                style={{
+                  background: 'var(--bg-mid)', border: 'none', borderRadius: '12px',
+                  padding: '10px', cursor: 'pointer', transition: 'all 0.2s'
                 }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--border)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-mid)'}
@@ -949,12 +932,12 @@ export default function PondsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
-                  <input 
-                    required placeholder={t.ponds.pondNamePlaceholder || "e.g. Pond Alpha 1"} 
+                  <input
+                    required placeholder={t.ponds.pondNamePlaceholder || "e.g. Pond Alpha 1"}
                     value={formData.pondName}
                     onChange={e => setFormData({...formData, pondName: e.target.value})}
-                    style={{ 
-                      padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
+                    style={{
+                      padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
                       background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600,
                       transition: 'all 0.2s'
                     }}
@@ -962,16 +945,16 @@ export default function PondsPage() {
                     onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.background = 'var(--bg-mid)'; }}
                   />
                 </div>
-                
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.area || 'Pond Area'} (m²)</label>
-                  <input 
-                    required type="number" placeholder="1000" 
+                  <input
+                    required type="number" placeholder="1000"
                     value={formData.pondArea}
                     onChange={e => setFormData({...formData, pondArea: e.target.value})}
-                    style={{ 
-                      padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', 
-                      background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600 
+                    style={{
+                      padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)',
+                      background: 'var(--bg-mid)', outline: 'none', fontSize: '1rem', fontWeight: 600
                     }}
                     onFocus={e => { e.target.style.borderColor = 'var(--primary)'; e.target.style.background = '#FFF'; }}
                     onBlur={e => { e.target.style.borderColor = 'var(--border)'; e.target.style.background = 'var(--bg-mid)'; }}
@@ -981,9 +964,9 @@ export default function PondsPage() {
               </div>
 
               <div style={{ marginTop: '12px', display: 'flex', gap: '20px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ 
-                  flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', 
-                  background: 'transparent', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' 
+                <button type="button" onClick={() => setModalOpen(false)} style={{
+                  flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
+                  background: 'transparent', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
                 }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-mid)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   {t.common.cancel || 'Cancel'}
                 </button>
@@ -1165,7 +1148,7 @@ export default function PondsPage() {
         </div>
       )}
 
-      <ConfirmationModal 
+      <ConfirmationModal
         isOpen={deleteConfirm.isOpen}
         title="Delete Pond?"
         message={t.ponds.deleteConfirm}

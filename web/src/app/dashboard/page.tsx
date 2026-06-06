@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { 
-  Plus, 
+  Plus,
   Waves, 
   Scale, 
   Users, 
@@ -24,8 +24,7 @@ import {
   Thermometer,
   Utensils,
   ShoppingBag,
-  Check,
-  FileText
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { doc, deleteDoc } from 'firebase/firestore';
@@ -34,10 +33,12 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  useCompanyCycles,
   useCompanyPonds,
   useMarketplaceListings,
   useMonitoredCompanies,
 } from '@/hooks/useDashboardData';
+import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface FeedData {
@@ -71,6 +72,8 @@ interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
+  cycleId?: string;
+  cycleStatus?: 'active' | 'ended';
   baselineDate?: string;
   baselineDoc?: number;
   baselineEstimatedPopulation?: number;
@@ -78,6 +81,11 @@ interface Pond {
   baselineCumulativeFeed?: number;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
+}
+
+interface FarmCycle {
+  id: string;
+  status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
 }
 
 const toFiniteNumber = (value: unknown): number => {
@@ -120,49 +128,6 @@ const getPondBaselinePopulation = (pond: Pick<Pond, 'initialPopulation' | 'basel
   if (samplingSurvival > 0 && pond.initialPopulation > 0) return Math.round((pond.initialPopulation * samplingSurvival) / 100);
 
   return null;
-};
-
-const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.toDate === 'function') {
-    const parsed = value.toDate();
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.seconds === 'number') {
-    return new Date(value.seconds * 1000);
-  }
-  return null;
-};
-
-const formatSyncStatus = (date: Date | null): string => {
-  if (!date) return 'Sync status unavailable';
-
-  const now = new Date();
-  const isSameDay =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-
-  if (isSameDay) return 'Last synced today';
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  const isYesterday =
-    date.getFullYear() === yesterday.getFullYear() &&
-    date.getMonth() === yesterday.getMonth() &&
-    date.getDate() === yesterday.getDate();
-
-  if (isYesterday) return 'Last synced yesterday';
-
-  return `Last synced ${new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-  }).format(date)}`;
 };
 
 /* ─── Calculation Utilities ─────────────────────────────────── */
@@ -236,7 +201,7 @@ const calculateMetrics = (pond: Pond) => {
   const lastRecordedMBW = [...sorted].reverse().find(s => s.mbw > 0)?.mbw || pond.initialWeight || 0.5;
   population = Math.max(0, population - (pond.totalHarvestedPopulation || 0));
   const biomass = (population * lastRecordedMBW) / 1000;
-  const sr = (population / pond.initialPopulation) * 100;
+  const sr = pond.initialPopulation > 0 ? (population / pond.initialPopulation) * 100 : 0;
   const doc = getPondCurrentDoc(pond);
   const size = lastRecordedMBW > 0 ? Math.round(1000 / lastRecordedMBW) : 0;
 
@@ -670,14 +635,16 @@ export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
+  const { data: cycles } = useCompanyCycles<FarmCycle>();
   const userData = user;
   const loading = authLoading || !userData || (userData.role !== 'buyer' && pondsLoading);
+  const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
 
   const totalMetrics = useMemo(() => {
     let currentBiomass = 0; let currentSR = 0; let currentPop = 0;
     let prevBiomass = 0; let prevSR = 0; let prevPop = 0;
 
-    ponds.forEach(pond => {
+    activePonds.forEach(pond => {
       const samplings = pond.samplings || [];
       const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const m = calculateMetrics(pond);
@@ -704,7 +671,7 @@ export default function DashboardPage() {
           pPop = Math.max(0, pond.initialPopulation - totalMortalityBefore);
         }
         prevBiomass += (pPop * (prevSampling.mbw || 0)) / 1000;
-        prevSR += (pPop / pond.initialPopulation) * 100;
+        prevSR += pond.initialPopulation > 0 ? (pPop / pond.initialPopulation) * 100 : 0;
         prevPop += pPop;
       } else {
         prevBiomass += (pond.initialPopulation * (pond.initialWeight || 0.5)) / 1000;
@@ -712,7 +679,7 @@ export default function DashboardPage() {
       }
     });
 
-    const activeCount = ponds.filter(p => (p.totalHarvestedPopulation || 0) < (p.initialPopulation * 0.9)).length;
+    const activeCount = activePonds.length;
     const avgSR = activeCount > 0 ? (currentSR / activeCount) : 0;
     const oldAvgSR = activeCount > 0 ? (prevSR / activeCount) : 0;
     const biomassTrend = prevBiomass > 0 ? ((currentBiomass - prevBiomass) / prevBiomass) * 100 : 0;
@@ -720,30 +687,12 @@ export default function DashboardPage() {
     const popTrend = prevPop > 0 ? ((currentPop - prevPop) / prevPop) * 100 : 0;
 
     return { biomass: currentBiomass, population: currentPop, sr: avgSR, activeCount, biomassTrend, srTrend, popTrend };
-  }, [ponds]);
+  }, [activePonds]);
 
-  const firstName = useMemo(() => {
-    return userData?.name?.trim()?.split(' ')[0] || 'Captain';
-  }, [userData]);
-
-  const dashboardDateLabel = useMemo(() => {
-    return new Intl.DateTimeFormat(undefined, {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    }).format(new Date());
-  }, []);
-
-  const lastSyncedLabel = useMemo(() => {
-    const latestSync = ponds.reduce<Date | null>((latest, pond) => {
-      const candidate = getTimestampDate(pond.updatedAt) || getTimestampDate(pond.createdAt);
-      if (!candidate) return latest;
-      if (!latest || candidate.getTime() > latest.getTime()) return candidate;
-      return latest;
-    }, null);
-
-    return formatSyncStatus(latestSync);
-  }, [ponds]);
+  const averageActivePondMetric = (selector: (pond: Pond) => number, fallback: number) => {
+    if (activePonds.length === 0) return fallback;
+    return activePonds.reduce((acc, pond) => acc + selector(pond), 0) / activePonds.length;
+  };
 
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -755,30 +704,6 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-page">
-      
-      {/* Header */}
-      <div className="dashboard-hero animate-fade-up">
-        <div className="dashboard-hero-copy">
-          <div className="dashboard-hero-title-row">
-            <h1 className="dashboard-hero-title">Welcome back, {firstName}</h1>
-            <span className="dashboard-hero-date">{dashboardDateLabel}</span>
-          </div>
-        </div>
-        <div className="dashboard-hero-actions">
-          <Link href="/dashboard/reports/shrimp">
-            <button className="dashboard-action dashboard-action-secondary">
-              <FileText size={18} strokeWidth={2.2} />
-              <span>View Reports</span>
-            </button>
-          </Link>
-          <Link href="/dashboard/ponds">
-            <button className="dashboard-action dashboard-action-primary">
-              <Plus size={20} strokeWidth={3} />
-              <span>New Pond</span>
-            </button>
-          </Link>
-        </div>
-      </div>
 
       {/* Summary Row */}
       <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
@@ -800,7 +725,7 @@ export default function DashboardPage() {
                 background: 'var(--primary-dim)', color: 'var(--primary)', padding: '4px 12px', 
                 borderRadius: '100px', fontSize: '0.8rem', fontWeight: 650, border: '1px solid var(--border)' 
               }}>
-                {ponds.length} ponds
+                {activePonds.length} ponds
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
@@ -853,7 +778,7 @@ export default function DashboardPage() {
               gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr', 
               gap: viewMode === 'grid' ? '32px' : '0' 
             }}>
-              {ponds.map((pond, idx) => {
+              {activePonds.map((pond, idx) => {
                 const m = calculateMetrics(pond);
                 return viewMode === 'grid' ? (
                   <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} t={t} />
@@ -938,34 +863,34 @@ export default function DashboardPage() {
               {[
                 { 
                   label: 'pH Level', 
-                  value: (ponds.reduce((acc, p) => {
+                  value: averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return acc + (m?.ph || 7.7);
-                  }, 0) / (ponds.length || 1)).toFixed(1), 
+                    return m?.ph || 7.7;
+                  }, 7.7).toFixed(1),
                   icon: Activity 
                 },
                 { 
                   label: 'Transparency', 
-                  value: `${(ponds.reduce((acc, p) => {
+                  value: `${averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return acc + (m?.transparency || 35);
-                  }, 0) / (ponds.length || 1)).toFixed(0)}cm`, 
+                    return m?.transparency || 35;
+                  }, 35).toFixed(0)}cm`,
                   icon: Droplets 
                 },
                 { 
                   label: 'Temperature', 
-                  value: `${(ponds.reduce((acc, p) => {
+                  value: `${averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return acc + (m?.temperature || 28.5);
-                  }, 0) / (ponds.length || 1)).toFixed(1)}°C`, 
+                    return m?.temperature || 28.5;
+                  }, 28.5).toFixed(1)}°C`,
                   icon: Thermometer 
                 },
                 { 
                   label: 'Daily Feed Usage', 
-                  value: `${(ponds.reduce((acc, p) => {
+                  value: `${averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return acc + (m?.dailyFeed || 120);
-                  }, 0) / (ponds.length || 1)).toFixed(0)}kg`, 
+                    return m?.dailyFeed || 120;
+                  }, 120).toFixed(0)}kg`,
                   icon: Utensils 
                 }
               ].map((item, i) => (

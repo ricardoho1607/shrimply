@@ -17,9 +17,10 @@ import {
   AlertTriangle,
   CheckCircle2,
   ClipboardList,
+  ChevronDown,
+  ExternalLink,
   type LucideIcon
 } from 'lucide-react';
-import Link from 'next/link';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, addDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -195,6 +196,7 @@ export default function WaterQualityPage() {
   const [labPdfFile, setLabPdfFile] = useState<File | null>(null);
   const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
   const [expandedLabReportId, setExpandedLabReportId] = useState<string | null>(null);
+  const [expandedLabDateKeys, setExpandedLabDateKeys] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Form State
@@ -839,6 +841,37 @@ export default function WaterQualityPage() {
     ));
   }, [labReports, searchTerm]);
 
+  const groupedLabReports = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; timestamp: number; reports: LabReport[] }>();
+
+    filteredLabReports.forEach((report) => {
+      const parsedDate = report.sampleDate ? new Date(report.sampleDate) : null;
+      const hasValidDate = parsedDate && !Number.isNaN(parsedDate.getTime());
+      const key = hasValidDate ? parsedDate.toISOString().split('T')[0] : 'no-date';
+      const existing = groups.get(key);
+      const group = existing || {
+        key,
+        label: hasValidDate
+          ? parsedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
+          : 'No sample date',
+        timestamp: hasValidDate ? parsedDate.getTime() : 0,
+        reports: [],
+      };
+      group.reports.push(report);
+      groups.set(key, group);
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.timestamp - a.timestamp);
+  }, [filteredLabReports]);
+
+  const toggleLabDateGroup = (dateKey: string) => {
+    setExpandedLabDateKeys((current) =>
+      current.includes(dateKey)
+        ? current.filter((key) => key !== dateKey)
+        : [...current, dateKey]
+    );
+  };
+
   const getSeverityStyle = (status?: LabSeverity) => {
     if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
     if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
@@ -913,7 +946,7 @@ export default function WaterQualityPage() {
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="glass-card animate-fade-up" style={{ padding: '8px', display: 'inline-flex', gap: '8px', marginBottom: '18px' }}>
+      <div className="glass-card animate-fade-up" style={{ padding: '5px', display: 'inline-flex', gap: '4px', marginBottom: '6px', width: 'fit-content', alignSelf: 'flex-start', borderRadius: '12px' }}>
         {([
           { id: 'daily', label: 'Daily Log', icon: Droplets },
           { id: 'lab', label: 'Lab Reports', icon: FileText },
@@ -927,19 +960,20 @@ export default function WaterQualityPage() {
               onClick={() => setActiveView(item.id)}
               style={{
                 border: 'none',
-                borderRadius: '12px',
-                padding: '12px 18px',
+                borderRadius: '9px',
+                padding: '8px 12px',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '10px',
+                gap: '7px',
                 background: active ? 'var(--primary)' : 'transparent',
                 color: active ? '#FFFFFF' : 'var(--text-muted)',
                 fontWeight: 800,
+                fontSize: '0.82rem',
                 cursor: 'pointer',
                 boxShadow: active ? '0 8px 18px rgba(15, 76, 117, 0.18)' : 'none',
               }}
             >
-              <Icon size={18} />
+              <Icon size={15} />
               {item.label}
             </button>
           );
@@ -1003,14 +1037,12 @@ export default function WaterQualityPage() {
                     <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
                       <Waves size={20} />
                     </div>
-                    <Link href={`/dashboard/ponds/${pond.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                      <div>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>
-                          {latest ? `UPDATED ${new Date(latest.date).toLocaleDateString()}` : 'NO DATA LOGGED'}
-                        </p>
-                      </div>
-                    </Link>
+                    <div>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>
+                        {latest ? `UPDATED ${new Date(latest.date).toLocaleDateString()}` : 'NO DATA LOGGED'}
+                      </p>
+                    </div>
                   </div>
                   <button
                     onClick={() => setSelectedPondForHistory(pond)}
@@ -1082,13 +1114,49 @@ export default function WaterQualityPage() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          {filteredLabReports.map((report, idx) => {
-            const style = getSeverityStyle(report.summary?.overallStatus);
-            const pondCount = report.pondResults?.length || 0;
-            const isExpanded = expandedLabReportId === report.id;
-            return (
-              <div key={report.id} className={`glass-card animate-fade-up animate-delay-${(idx % 4) + 1}`} style={{ padding: '22px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 0.8fr auto', gap: '18px', alignItems: 'center' }}>
+          {groupedLabReports.map((group, groupIndex) => (
+            <section key={group.key} className={`animate-fade-up animate-delay-${(groupIndex % 4) + 1}`} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => toggleLabDateGroup(group.key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '14px',
+                  padding: '14px 16px',
+                  borderRadius: '14px',
+                  border: '1px solid var(--border)',
+                  background: '#FFFFFF',
+                  cursor: 'pointer',
+                  boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)',
+                  textAlign: 'left',
+                }}
+              >
+                <div>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>{group.label}</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 700, marginTop: '2px' }}>
+                    {group.reports.length} confirmed report{group.reports.length === 1 ? '' : 's'}
+                  </p>
+                </div>
+                <ChevronDown
+                  size={18}
+                  color="var(--primary)"
+                  style={{
+                    flexShrink: 0,
+                    transition: 'transform 0.2s ease',
+                    transform: expandedLabDateKeys.includes(group.key) ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                />
+              </button>
+
+              {expandedLabDateKeys.includes(group.key) && group.reports.map((report) => {
+                const style = getSeverityStyle(report.summary?.overallStatus);
+                const pondCount = report.pondResults?.length || 0;
+                const isExpanded = expandedLabReportId === report.id;
+                return (
+                  <div key={report.id} className="glass-card" style={{ padding: '18px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) auto', gap: '16px', alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
                       <div style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1103,8 +1171,40 @@ export default function WaterQualityPage() {
                         </p>
                       </div>
                     </div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>
-                      {(report.pondResults || []).map(row => row.pondCode).filter(Boolean).join(', ') || 'No pond rows'}
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {(report.pondResults || []).slice(0, 8).map((row, rowIndex) => {
+                        const relatedPond = ponds.find((pond) =>
+                          pond.id === row.pondId ||
+                          pond.pondName.toLowerCase() === (row.pondCode || '').toLowerCase()
+                        );
+                        const rowStyle = getSeverityStyle(relatedPond?.latestLabStatus?.status || report.summary?.overallStatus);
+                        return (
+                          <span
+                            key={`${row.pondId || row.pondCode || rowIndex}-status`}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '5px 9px',
+                              borderRadius: '999px',
+                              background: rowStyle.bg,
+                              color: rowStyle.color,
+                              fontSize: '0.7rem',
+                              fontWeight: 850,
+                            }}
+                          >
+                            {row.pondCode || `Pond ${rowIndex + 1}`} · {rowStyle.label}
+                          </span>
+                        );
+                      })}
+                      {(report.pondResults || []).length > 8 && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 800, padding: '5px 0' }}>
+                          +{(report.pondResults || []).length - 8} more
+                        </span>
+                      )}
+                      {(report.pondResults || []).length === 0 && (
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>No pond rows</span>
+                      )}
                     </div>
                     {report.insights?.ownerSummary && (
                       <div style={{ marginTop: '10px', color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 700, lineHeight: 1.5 }}>
@@ -1146,7 +1246,24 @@ export default function WaterQualityPage() {
                       </button>
                     )}
                     {report.sourcePdfUrl && (
-                      <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--primary)', fontSize: '0.74rem', fontWeight: 800, textDecoration: 'none' }}>
+                      <a
+                        href={report.sourcePdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          color: 'var(--primary)',
+                          fontSize: '0.74rem',
+                          fontWeight: 850,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '5px',
+                          padding: '6px 9px',
+                          borderRadius: '9px',
+                          background: 'var(--primary-dim)',
+                        }}
+                      >
+                        <ExternalLink size={13} />
                         View PDF
                       </a>
                     )}
@@ -1166,7 +1283,8 @@ export default function WaterQualityPage() {
                               <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 700 }}>{getLabReportTypeLabel(report.reportType)}</div>
                             </div>
                             {report.sourcePdfUrl && (
-                              <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 850, textDecoration: 'none' }}>
+                              <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 850, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                                <ExternalLink size={12} />
                                 PDF
                               </a>
                             )}
@@ -1203,9 +1321,11 @@ export default function WaterQualityPage() {
                     })}
                   </div>
                 )}
-              </div>
-            );
-          })}
+                  </div>
+                );
+              })}
+            </section>
+          ))}
           {filteredLabReports.length === 0 && (
             <div className="glass-card" style={{ textAlign: 'center', padding: '70px 24px' }}>
               <FileText size={44} color="var(--text-faint)" style={{ marginBottom: '16px' }} />
@@ -1547,21 +1667,21 @@ export default function WaterQualityPage() {
 
       {/* ── LOG MODAL ────────────────────────────────────────── */}
       {isModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '640px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
-            <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
+          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)', flexShrink: 0 }}>
               <div>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Log Parameters</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 600 }}>Sync environmental data with Orson AI.</p>
+                <h2 style={{ fontSize: '1.18rem', fontWeight: 850 }}>Log Parameters</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '3px', fontWeight: 650 }}>Sync environmental readings with Orson AI.</p>
               </div>
               <button onClick={() => setModalOpen(false)} className="icon-btn-modern">
-                <X size={24} />
+                <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleAddWQ} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+            <form onSubmit={handleAddWQ} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+              <div style={{ padding: '20px 22px', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minHeight: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">Target Pond</label>
                   <select
                     required
@@ -1574,48 +1694,48 @@ export default function WaterQualityPage() {
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">Sampling Date</label>
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">Salinity (PPT)</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.salinity} onChange={e => setFormData({...formData, salinity: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">pH (Morning)</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.phMorning} onChange={e => setFormData({...formData, phMorning: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">pH (Evening)</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.phEvening} onChange={e => setFormData({...formData, phEvening: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">DO (Morning) mg/L</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.doMorning} onChange={e => setFormData({...formData, doMorning: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">DO (Evening) mg/L</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.doEvening} onChange={e => setFormData({...formData, doEvening: e.target.value})} className="form-input" />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">Transparency (CM)</label>
                   <input type="number" placeholder="0" value={formData.transparency} onChange={e => setFormData({...formData, transparency: e.target.value})} className="form-input" />
                 </div>
               </div>
 
-              <div style={{ marginTop: '12px', display: 'flex', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
+              <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', padding: '16px 22px', background: '#FFFFFF', flexShrink: 0 }}>
                 <button type="button" onClick={() => setModalOpen(false)} style={{
-                  flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
+                  flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 700, cursor: 'pointer'
                 }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', fontWeight: 800 }}>Save Log Entry</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '13px', borderRadius: '12px', fontWeight: 800 }}>Save Log Entry</button>
               </div>
             </form>
           </div>

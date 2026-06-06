@@ -22,6 +22,7 @@ import { useGemini } from '@/hooks/useGemini';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { calculateOrsonHarvestProjection } from '../../../../../orson/harvestProjection';
+import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Pond {
@@ -31,7 +32,13 @@ interface Pond {
   initialPopulation: number;
   initialWeight?: number;
   samplings: any[];
+  cycleId?: string;
   cycleStatus?: 'active' | 'ended';
+}
+
+interface FarmCycle {
+  id: string;
+  status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
 }
 
 export default function HarvestProjectionsPage() {
@@ -43,6 +50,7 @@ export default function HarvestProjectionsPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
+  const [cycles, setCycles] = useState<FarmCycle[]>([]);
   
   // Assumptions
   const [daysToHarvest, setDaysToHarvest] = useState('14');
@@ -84,10 +92,8 @@ export default function HarvestProjectionsPage() {
     const q = query(collection(db, 'companies', company.id, 'ponds'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snapshot) => {
       const pondData = snapshot.docs
-        .map(d => ({ id: d.id, ...d.data() } as Pond))
-        .filter(pond => pond.cycleStatus !== 'ended');
+        .map(d => ({ id: d.id, ...d.data() } as Pond));
       setPonds(pondData);
-      if (pondData.length > 0 && !selectedPondId) setSelectedPondId(pondData[0].id);
       setLoading(false);
     }, (error) => {
       console.error("Error fetching ponds in projections:", error);
@@ -96,7 +102,21 @@ export default function HarvestProjectionsPage() {
     return () => unsub();
   }, [company?.id]);
 
-  const selectedPond = useMemo(() => ponds.find(p => p.id === selectedPondId), [ponds, selectedPondId]);
+  useEffect(() => {
+    if (!company?.id) return;
+    const q = query(collection(db, 'companies', company.id, 'cycles'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setCycles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FarmCycle)));
+    }, (error) => {
+      console.error("Error fetching cycles in projections:", error);
+    });
+    return () => unsub();
+  }, [company?.id]);
+
+  const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
+  const selectedPond = useMemo(() => {
+    return activePonds.find(p => p.id === selectedPondId) || activePonds[0] || null;
+  }, [activePonds, selectedPondId]);
 
   const projection = useMemo(() => {
     if (!selectedPond) return null;
@@ -136,7 +156,7 @@ Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.sum
 Give a concise recommendation based on Orson's structured projection risk.`;
 
     try {
-      const response = await sendMessage(prompt, ponds, {
+      const response = await sendMessage(prompt, activePonds, {
         companyId: company?.id,
         aiFunction: 'projection',
       });
@@ -266,7 +286,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
               <Waves size={20} color="var(--primary)" /> 1. {t.forms.selectPond}
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              {ponds.map(p => (
+              {activePonds.map(p => (
                 <button
                   key={p.id}
                   onClick={() => { setSelectedPondId(p.id); setInsight(null); }}
@@ -274,8 +294,8 @@ Give a concise recommendation based on Orson's structured projection risk.`;
                     padding: '8px 16px',
                     borderRadius: '20px',
                     border: 'none',
-                    background: selectedPondId === p.id ? 'var(--primary)' : 'var(--bg-mid)',
-                    color: selectedPondId === p.id ? '#FFF' : 'var(--text-muted)',
+                    background: selectedPond?.id === p.id ? 'var(--primary)' : 'var(--bg-mid)',
+                    color: selectedPond?.id === p.id ? '#FFF' : 'var(--text-muted)',
                     fontSize: '13px',
                     fontWeight: 600,
                     cursor: 'pointer',

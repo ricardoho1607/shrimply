@@ -528,6 +528,7 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     salinityTrend,
     appetiteTrend,
     mortalityTrend,
+    labContext: pond.labContext,
     dataCompleteness: calculateDataCompleteness(pond),
   };
 };

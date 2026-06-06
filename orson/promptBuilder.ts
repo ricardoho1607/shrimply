@@ -4,12 +4,17 @@ import {
   ORSON_STANDARD_RESPONSE_SHAPE,
   ORSON_UNSUPPORTED_CLAIMS,
 } from './sourceOfTruth';
+import { selectOrsonKnowledge } from './knowledge/knowledgeSelector';
+import type { SelectedKnowledge } from './knowledge/knowledgeTypes';
 import type {
   Orson72HourOutlook,
   OrsonPondMetrics,
   OrsonPromptPackage,
   OrsonPromptPondPayload,
+  OrsonQuestionFocus,
+  OrsonQuestionIntent,
   OrsonRiskReport,
+  OrsonRiskSeverity,
 } from './types';
 
 const FARM_SPECIFIC_PATTERNS = [
@@ -36,6 +41,41 @@ const GENERAL_AQUACULTURE_PATTERNS = [
   /\bdefinition\b/i,
   /\bgeneral\b/i,
 ];
+
+const SUMMARY_PATTERNS = [
+  /\banaly[sz]e\b/i,
+  /\boverview\b/i,
+  /\bsummary\b/i,
+  /\breport\b/i,
+  /\bstatus\b/i,
+  /\bhow\s+(is|are)\b/i,
+  /\bcheck\b/i,
+];
+
+const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
+  { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
+  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\banco\b/i, /\btray\b/i, /\bappetite\b/i, /\bfcr\b/i] },
+  { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
+  { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
+  { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
+  { intent: 'biomass', patterns: [/\bbiomass\b/i, /\bpopulation\b/i, /\bstock(ing)?\b/i] },
+  { intent: 'survival', patterns: [/\bsurvival\b/i, /\bmortality\b/i, /\bdead\b/i] },
+  { intent: 'risk', patterns: [/\brisk\b/i, /\bproblem\b/i, /\bwarning\b/i, /\bcritical\b/i, /\balert\b/i] },
+];
+
+const PARAMETER_PATTERNS: { key: string; patterns: RegExp[] }[] = [
+  { key: 'dissolved_oxygen', patterns: [/\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i] },
+  { key: 'ph', patterns: [/\bph\b/i] },
+  { key: 'ammonia', patterns: [/\bammonia\b/i, /\bnh3\b/i, /\bnh4\b/i, /\btan\b/i] },
+  { key: 'nitrite', patterns: [/\bnitrite\b/i, /\bno2\b/i] },
+  { key: 'salinity', patterns: [/\bsalinity\b/i, /\bsalt\b/i] },
+  { key: 'alkalinity', patterns: [/\balkalinity\b/i, /\bkh\b/i, /\bbuffer(ing)?\b/i] },
+  { key: 'plankton_transparency', patterns: [/\bplankton\b/i, /\btransparency\b/i, /\bwater\s+color\b/i, /\bbloom\b/i, /\balgae\b/i] },
+];
+
+const DECREASE_PATTERNS = [/\bdecrease\b/i, /\blower\b/i, /\breduce\b/i, /\bbring\s+down\b/i, /\btoo\s+high\b/i, /\bhigh\b/i];
+const INCREASE_PATTERNS = [/\bincrease\b/i, /\braise\b/i, /\bbring\s+up\b/i, /\btoo\s+low\b/i, /\blow\b/i];
+const STABILIZE_PATTERNS = [/\bstabili[sz]e\b/i, /\bbalance\b/i, /\bcontrol\b/i, /\bfix\b/i, /\bmanage\b/i, /\badjust\b/i];
 
 export const ORSON_MODEL_TIMEOUT_MS = 25000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
@@ -64,6 +104,97 @@ const hashString = (value: string): string => {
     hash = (hash * 33) ^ value.charCodeAt(index);
   }
   return (hash >>> 0).toString(36);
+};
+
+const normalizeSearchText = (value: string | null | undefined): string => {
+  return ` ${String(value ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()} `;
+};
+
+const includesSearchTerm = (haystack: string, needle: string | null | undefined): boolean => {
+  const normalizedNeedle = normalizeSearchText(needle).trim();
+  if (!normalizedNeedle) return false;
+  return haystack.includes(` ${normalizedNeedle} `);
+};
+
+const severityRank: Record<OrsonRiskSeverity, number> = {
+  info: 0,
+  watch: 1,
+  warning: 2,
+  critical: 3,
+};
+
+const getHighestPayloadSeverity = (payload: OrsonPromptPondPayload): number => {
+  return payload.findings.reduce((highest, finding) => {
+    return Math.max(highest, severityRank[finding.severity]);
+  }, 0);
+};
+
+export const inferOrsonQuestionIntent = (question: string): OrsonQuestionIntent => {
+  if (detectRequestedParameter(question) && detectRequestedDirection(question)) return 'parameter_control';
+  for (const topic of TOPIC_PATTERNS) {
+    if (topic.patterns.some((pattern) => pattern.test(question))) return topic.intent;
+  }
+  if (SUMMARY_PATTERNS.some((pattern) => pattern.test(question))) return 'summary';
+  return 'general';
+};
+
+const detectRequestedParameter = (question: string): string | null => {
+  const match = PARAMETER_PATTERNS.find((parameter) => parameter.patterns.some((pattern) => pattern.test(question)));
+  return match?.key ?? null;
+};
+
+const detectRequestedDirection = (question: string): OrsonQuestionFocus['requestedDirection'] => {
+  if (DECREASE_PATTERNS.some((pattern) => pattern.test(question))) return 'decrease';
+  if (INCREASE_PATTERNS.some((pattern) => pattern.test(question))) return 'increase';
+  if (STABILIZE_PATTERNS.some((pattern) => pattern.test(question))) return 'stabilize';
+  return null;
+};
+
+export const buildOrsonQuestionFocus = (
+  question: string,
+  payloads: OrsonPromptPondPayload[],
+): OrsonQuestionFocus => {
+  const normalizedQuestion = normalizeSearchText(question);
+  const focusedPayload = payloads.find((payload) => {
+    return includesSearchTerm(normalizedQuestion, payload.pondName) ||
+      includesSearchTerm(normalizedQuestion, payload.pondId);
+  }) ?? null;
+  const intent = inferOrsonQuestionIntent(question);
+  const requestedParameter = detectRequestedParameter(question);
+  const requestedDirection = detectRequestedDirection(question);
+
+  return {
+    intent,
+    focusedPondName: focusedPayload?.pondName ?? null,
+    focusedPondId: focusedPayload?.pondId ?? null,
+    requestedParameter,
+    requestedDirection,
+    isPondSpecific: focusedPayload !== null,
+    shouldSummarize: intent === 'summary' || /\banaly[sz]e\b/i.test(question),
+  };
+};
+
+const orderPayloadsForQuestion = (
+  payloads: OrsonPromptPondPayload[],
+  focus: OrsonQuestionFocus,
+): OrsonPromptPondPayload[] => {
+  if (!focus.isPondSpecific) return payloads;
+
+  const focused = payloads.find((payload) => {
+    return payload.pondName === focus.focusedPondName || payload.pondId === focus.focusedPondId;
+  });
+  if (!focused) return payloads;
+
+  const supporting = payloads
+    .filter((payload) => payload !== focused)
+    .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
+    .slice(0, 2);
+
+  return [focused, ...supporting];
 };
 
 export const isFarmSpecificQuestion = (question: string): boolean => {
@@ -112,6 +243,10 @@ export const buildOrsonPromptPayload = (
     operationalFeedKg: metrics.operationalFeedKg,
     dataAssumptions: metrics.dataAssumptions,
     dataCompletenessScore: metrics.dataCompleteness.score,
+    phSwingLatest: metrics.phSwingLatest,
+    doMinimumLatest: metrics.doMinimumLatest,
+    salinityTrend: metrics.salinityTrend,
+    labContext: metrics.labContext,
     outlook: {
       direction: outlook.direction,
       level: outlook.level,
@@ -141,13 +276,24 @@ export const buildOrsonSystemInstruction = (): string => {
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
     '- Do not invent measurements, disease diagnoses, pathogen results, or lab data.',
     '- If a measurement is missing or confidence is low, say so clearly.',
+    '- Treat confirmed lab report findings as higher-confidence context than daily field logs, and call out contradictions instead of smoothing them over.',
     '- If data_assumptions mention mid-cycle onboarding, state that pre-onboarding values are estimates and avoid treating them as exact historical records.',
+    '',
+    'ANSWER ROUTING:',
+    '- Answer the user question directly in the first sentence.',
+    '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
+    '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
+    '- If ORSON SELECTED KNOWLEDGE is present, use it to give practical farm actions, not generic definitions.',
+    '- For parameter-control questions, structure the answer as: immediate action, why it works, what to monitor next, and safety caution.',
+    '- Do not repeat the pond summary unless the user asks for overview, status, summary, report, or analysis.',
+    '- If the available payload cannot answer the exact question, say what is missing and give the closest supported answer.',
     '',
     'RESPONSE PRINCIPLES:',
     ...Object.values(ORSON_RESPONSE_PRINCIPLES).map((principle) => `- ${principle}`),
     '',
     'STANDARD RESPONSE SHAPE:',
     ...ORSON_STANDARD_RESPONSE_SHAPE.map((step, index) => `${index + 1}. ${step}`),
+    '- Use this full shape only for broad analysis or status questions. For narrow questions, use a direct answer with 1-3 supporting bullets.',
     '',
     'UNSUPPORTED CLAIMS:',
     ...Object.values(ORSON_UNSUPPORTED_CLAIMS).map((claim) => `- ${claim}`),
@@ -157,10 +303,15 @@ export const buildOrsonSystemInstruction = (): string => {
     '- Use short bullets when listing risks.',
     '- Keep routine answers under 5 sentences unless the user asks for detail.',
     '- Prioritize critical and warning findings before watch/info findings.',
+    '- Do not provide exact chemical dose rates unless the app payload includes pond volume, product concentration, and farm protocol.',
   ].join('\n');
 };
 
-export const buildOrsonPromptContext = (payloads: OrsonPromptPondPayload[]): string => {
+export const buildOrsonPromptContext = (
+  payloads: OrsonPromptPondPayload[],
+  questionFocus: OrsonQuestionFocus,
+  selectedKnowledge: SelectedKnowledge,
+): string => {
   const compactPayloads = payloads.map((payload) => ({
     pond: payload.pondName,
     doc: payload.currentDoc,
@@ -176,11 +327,61 @@ export const buildOrsonPromptContext = (payloads: OrsonPromptPondPayload[]): str
     operational_feed_kg: payload.operationalFeedKg,
     data_assumptions: payload.dataAssumptions,
     data_completeness_pct: round(payload.dataCompletenessScore * 100, 0),
+    water_metrics: {
+      ph_swing_latest: payload.phSwingLatest,
+      do_minimum_latest_mg_l: payload.doMinimumLatest,
+      salinity_trend: payload.salinityTrend,
+    },
+    lab_context: {
+      latest: payload.labContext.latest,
+      by_type: payload.labContext.byType,
+      unresolved_risks: payload.labContext.unresolvedRisks,
+      recommendations: payload.labContext.recommendations,
+      worst_status: payload.labContext.worstStatus,
+    },
     outlook: payload.outlook,
     findings: payload.findings,
   }));
 
-  return `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads, null, 2)}`;
+  return [
+    'ORSON QUESTION FOCUS:',
+    JSON.stringify({
+      intent: questionFocus.intent,
+      focused_pond: questionFocus.focusedPondName,
+      requested_parameter: questionFocus.requestedParameter,
+      requested_direction: questionFocus.requestedDirection,
+      is_pond_specific: questionFocus.isPondSpecific,
+      should_summarize: questionFocus.shouldSummarize,
+    }, null, 2),
+    '',
+    'ORSON SELECTED KNOWLEDGE:',
+    JSON.stringify({
+      parameter_guidance: selectedKnowledge.parameterGuidance.map((guidance) => ({
+        id: guidance.id,
+        label: guidance.label,
+        target: guidance.target,
+        warning: guidance.warning,
+        critical: guidance.critical,
+        evidence_base: guidance.evidenceBase,
+        actions: guidance.actions,
+        monitor: guidance.monitor,
+        cautions: guidance.cautions,
+      })),
+      cross_parameter_rules: selectedKnowledge.crossParameterRules.map((rule) => ({
+        id: rule.id,
+        label: rule.label,
+        severity: rule.severity,
+        conditions: rule.conditions,
+        could_lead_to: rule.couldLeadTo,
+        actions: rule.actions,
+        cautions: rule.cautions,
+      })),
+      missing_data_questions: selectedKnowledge.missingDataQuestions,
+      source_labels: selectedKnowledge.sourceLabels,
+    }, null, 2),
+    '',
+    `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads, null, 2)}`,
+  ].join('\n');
 };
 
 export const buildOrsonPromptPackage = (params: {
@@ -194,13 +395,21 @@ export const buildOrsonPromptPackage = (params: {
     params.reports[index],
     params.outlooks[index],
   ));
+  const questionFocus = buildOrsonQuestionFocus(params.userMessage, payloads);
+  const orderedPayloads = orderPayloadsForQuestion(payloads, questionFocus);
+  const selectedKnowledge = selectOrsonKnowledge({
+    userMessage: params.userMessage,
+    questionFocus,
+    metrics: params.metrics,
+  });
 
   return {
     systemInstruction: buildOrsonSystemInstruction(),
-    context: buildOrsonPromptContext(payloads),
+    context: buildOrsonPromptContext(orderedPayloads, questionFocus, selectedKnowledge),
     userMessage: params.userMessage,
-    cacheKey: buildOrsonCacheKey(params.userMessage, payloads),
+    cacheKey: buildOrsonCacheKey(params.userMessage, orderedPayloads),
     isFarmSpecific: isFarmSpecificQuestion(params.userMessage),
+    questionFocus,
   };
 };
 

@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  Plus, 
-  Wallet, 
-  Search, 
-  Scale, 
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Plus,
+  Wallet,
+  Search,
+  Scale,
   DollarSign,
   X,
   Loader2,
@@ -101,10 +101,11 @@ export default function HarvestPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  
+
   const [isModalOpen, setModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  
+  const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
+
   // Form State
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
@@ -214,7 +215,7 @@ export default function HarvestPage() {
         updatedAt: serverTimestamp(),
         updatedBy: user.uid
       });
-      
+
       setModalOpen(false);
       setFormData({
         date: new Date().toISOString().split('T')[0],
@@ -259,31 +260,50 @@ export default function HarvestPage() {
     }
   };
 
+  const activePondIds = useMemo(() => new Set(ponds.map((pond) => pond.id)), [ponds]);
+
+  const isCurrentCycleHarvest = useCallback((harvest: HarvestRecord) => {
+    if (harvest.ponds.some((pond) => activePondIds.has(pond.pondId))) return true;
+    return Boolean(harvest.cycleId && ponds.some((pond) => pond.cycleId === harvest.cycleId));
+  }, [activePondIds, ponds]);
+
+  const visibleHarvestRecords = useMemo(() => {
+    return harvestRecords.filter((harvest) =>
+      harvestFilter === 'current' ? isCurrentCycleHarvest(harvest) : !isCurrentCycleHarvest(harvest)
+    );
+  }, [harvestFilter, harvestRecords, isCurrentCycleHarvest]);
+
   const filteredRecords = useMemo(() => {
-    return harvestRecords.filter(r => 
+    return visibleHarvestRecords.filter(r =>
       r.ponds.some(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()))
     );
-  }, [harvestRecords, searchTerm]);
+  }, [visibleHarvestRecords, searchTerm]);
 
   const totalRevenue = useMemo(() => {
-    return harvestRecords.reduce((total, record) => {
+    return visibleHarvestRecords.reduce((total, record) => {
       return total + record.ponds.reduce((pondTotal, p) => {
         const main = (parseFloat(p.biomass) || 0) * (parseFloat(p.price) || 0);
         const sub = (parseFloat(p.subBiomass) || 0) * (parseFloat(p.subPrice) || 0);
         return pondTotal + main + sub;
       }, 0);
     }, 0);
-  }, [harvestRecords]);
+  }, [visibleHarvestRecords]);
+
+  const totalBiomass = useMemo(() => {
+    return visibleHarvestRecords.reduce((acc, r) =>
+      acc + r.ponds.reduce((pAcc, p) => pAcc + (parseFloat(p.biomass) || 0) + (parseFloat(p.subBiomass) || 0), 0)
+    , 0);
+  }, [visibleHarvestRecords]);
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      
+
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up">
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-          <input 
-            placeholder="Search by pond name..." 
+          <input
+            placeholder="Search by pond name..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ padding: '10px 16px 10px 40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', fontSize: '14px', outline: 'none' }}
@@ -308,20 +328,50 @@ export default function HarvestPage() {
           <div style={{ color: '#0d2137', marginBottom: '10px' }}><Scale size={22} /></div>
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Harvested Biomass</div>
           <div style={{ fontSize: '21px', fontWeight: 800 }}>
-            {harvestRecords.reduce((acc, r) => acc + r.ponds.reduce((pAcc, p) => pAcc + (parseFloat(p.biomass) || 0) + (parseFloat(p.subBiomass) || 0), 0), 0).toLocaleString()} <span style={{ fontSize: '13px' }}>kg</span>
+            {totalBiomass.toLocaleString()} <span style={{ fontSize: '13px' }}>kg</span>
           </div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#3282B8', marginBottom: '10px' }}><History size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Cycles Completed</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>{harvestRecords.length}</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{harvestFilter === 'current' ? 'Current Cycle Records' : 'Historical Records'}</div>
+          <div style={{ fontSize: '21px', fontWeight: 800 }}>{visibleHarvestRecords.length}</div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="glass-card" style={{ padding: '24px', background: '#FFFFFF' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '18px' }}>Harvest History</h3>
+          <div>
+            <h3 style={{ fontSize: '18px' }}>{harvestFilter === 'current' ? 'Current Cycle Harvests' : 'Harvest History'}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
+              {harvestFilter === 'current'
+                ? `${ponds.length} active pond${ponds.length === 1 ? '' : 's'} available for harvest`
+                : 'Completed or inactive cycle harvest records'}
+            </p>
+          </div>
+          <div style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+            {[
+              { key: 'current' as const, label: 'Current Cycle' },
+              { key: 'history' as const, label: 'History' },
+            ].map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setHarvestFilter(item.key)}
+                style={{
+                  padding: '9px 14px',
+                  borderRadius: '9px',
+                  background: harvestFilter === item.key ? '#fff' : 'transparent',
+                  color: harvestFilter === item.key ? 'var(--primary)' : 'var(--text-muted)',
+                  fontSize: '13px',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  boxShadow: harvestFilter === item.key ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {loading ? (
@@ -329,7 +379,7 @@ export default function HarvestPage() {
         ) : filteredRecords.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
             <Wallet size={48} style={{ opacity: 0.1, margin: '0 auto 16px' }} />
-            <p>No harvest records found.</p>
+            <p>{harvestFilter === 'current' ? 'No current cycle harvest records found.' : 'No historical harvest records found.'}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -344,7 +394,7 @@ export default function HarvestPage() {
                     <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
                   )}
                 </div>
-                
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                   {record.ponds.map((p, idx) => (
                     <div key={idx} style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)' }}>
@@ -392,8 +442,8 @@ export default function HarvestPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>Select Pond</label>
-                  <select 
-                    required 
+                  <select
+                    required
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}
@@ -424,7 +474,7 @@ export default function HarvestPage() {
                       <input required type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
-                  
+
                   <div style={{ height: '1px', background: 'var(--border)' }} />
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>

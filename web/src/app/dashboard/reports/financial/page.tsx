@@ -537,36 +537,48 @@ export default function FinancialReportsPage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page">
-      <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: '32px' }}>
+    <div className="dashboard-page-relaxed">
+      <div className="glass-card" style={{ padding: '20px 22px', background: '#FFF', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <FileText size={21} />
+          </div>
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Reports</div>
+            <h1 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: 0 }}>Financial Reports</h1>
+          </div>
+        </div>
+      </div>
+
+      <div className="dashboard-report-grid">
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           
           {/* Report Type Grid */}
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '20px' }}>Select Report Type</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>Select Report Type</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               {REPORT_TYPES.map((type) => (
                 <div 
                   key={type.id}
                   onClick={() => setSelectedReport(type.id)}
                   className="glass-card"
                   style={{ 
-                    padding: '24px', 
+                    padding: '18px',
                     cursor: 'pointer',
-                    border: selectedReport === type.id ? `2px solid ${type.color}` : '2px solid transparent',
+                    border: selectedReport === type.id ? `1px solid ${type.color}` : '1px solid var(--border)',
                     background: selectedReport === type.id ? `${type.color}10` : '#FFF',
                     position: 'relative'
                   }}
                 >
-                  <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: `${type.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <type.icon size={24} color={type.color} />
+                  <div style={{ width: '38px', height: '38px', borderRadius: '11px', background: `${type.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}>
+                    <type.icon size={20} color={type.color} />
                   </div>
-                  <div style={{ fontWeight: 800, fontSize: '16px' }}>{type.name}</div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{type.desc}</div>
+                  <div style={{ fontWeight: 850, fontSize: '15px' }}>{type.name}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px', lineHeight: 1.45 }}>{type.desc}</div>
                   {selectedReport === type.id && (
-                    <div style={{ position: 'absolute', top: '16px', right: '16px' }}>
-                      <CheckCircle2 size={20} color={type.color} />
+                    <div style={{ position: 'absolute', top: '14px', right: '14px' }}>
+                      <CheckCircle2 size={18} color={type.color} />
                     </div>
                   )}
                 </div>
@@ -576,23 +588,14 @@ export default function FinancialReportsPage() {
 
           {/* Period Selection */}
           <div>
-            <h2 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '20px' }}>Select Period</h2>
-            <div style={{ display: 'flex', gap: '8px', background: '#FFF', padding: '8px', borderRadius: '16px', border: '1px solid var(--border)' }}>
+            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>Select Period</h2>
+            <div className="dashboard-segmented-tabs" style={{ width: '100%' }}>
               {PERIOD_OPTIONS.map(period => (
                 <button
                   key={period}
                   onClick={() => setSelectedPeriod(period)}
-                  style={{ 
-                    flex: 1, 
-                    padding: '10px', 
-                    borderRadius: '12px', 
-                    border: 'none',
-                    fontSize: '13px',
-                    fontWeight: 600,
-                    background: selectedPeriod === period ? 'var(--primary)' : 'transparent',
-                    color: selectedPeriod === period ? '#FFF' : 'var(--text-muted)',
-                    transition: 'all 0.2s'
-                  }}
+                  className={`dashboard-segmented-tab ${selectedPeriod === period ? 'active' : ''}`}
+                  style={{ flex: 1 }}
                 >
                   {period}
                 </button>
@@ -601,7 +604,7 @@ export default function FinancialReportsPage() {
           </div>
 
           {selectedReport === 'cogs' && (
-            <div className="glass-card" style={{ padding: '24px', background: '#FFF' }}>
+            <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px' }}>Inventory Adjustment</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div>
@@ -631,12 +634,12 @@ export default function FinancialReportsPage() {
         </div>
 
         {/* Preview & Export */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          <div className="glass-card" style={{ background: '#FFF', padding: '32px', position: 'sticky', top: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <FileText size={24} color="var(--primary)" />
-              <h2 style={{ fontSize: '20px', fontWeight: 800 }}>Report Preview</h2>
+          <div className="glass-card" style={{ background: '#FFF', padding: '22px', position: 'sticky', top: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+              <FileText size={21} color="var(--primary)" />
+              <h2 style={{ fontSize: '18px', fontWeight: 850 }}>Report Preview</h2>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -654,7 +657,7 @@ export default function FinancialReportsPage() {
               </div>
             </div>
 
-            <div style={{ marginTop: '32px', padding: '16px', background: 'var(--bg-mid)', borderRadius: '16px', display: 'flex', gap: '12px', marginBottom: '32px' }}>
+            <div style={{ marginTop: '24px', padding: '14px', background: 'var(--bg-mid)', borderRadius: '14px', display: 'flex', gap: '12px', marginBottom: '24px' }}>
               <AlertCircle size={20} color="var(--primary)" style={{ flexShrink: 0 }} />
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>
                 Your PDF will be generated using the professional multi-step format from the mobile application.
@@ -665,7 +668,7 @@ export default function FinancialReportsPage() {
               className="btn-primary" 
               onClick={selectedReport === 'harvest-projections' ? () => router.push('/dashboard/projections') : handleExport}
               disabled={exportLoading}
-              style={{ width: '100%', padding: '16px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}
+              style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}
             >
               {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
               <span style={{ fontWeight: 700 }}>{exportLoading ? 'Generating PDF...' : selectedReport === 'harvest-projections' ? 'Go to Projections' : 'Download Statement'}</span>

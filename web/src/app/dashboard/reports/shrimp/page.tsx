@@ -22,6 +22,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 
 /* ─── Types ─────────────────────────────────────────────────── */
 interface Sampling {
@@ -50,6 +51,8 @@ interface Pond {
   initialWeight?: number;
   density?: number;
   samplings: Sampling[];
+  cycleId?: string;
+  cycleStatus?: 'active' | 'ended';
   cycleStartMode?: 'new' | 'midcycle';
   baselineDate?: string;
   baselineDoc?: number;
@@ -66,6 +69,11 @@ interface Pond {
   };
 }
 
+interface FarmCycle {
+  id: string;
+  status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+}
+
 /* ─── Robust Calculation Utilities (Mobile + Web Parity) ──── */
 
 const toFiniteNumber = (value: unknown): number => {
@@ -75,6 +83,61 @@ const toFiniteNumber = (value: unknown): number => {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+type GrowthPoint = {
+  x: number;
+  y: number;
+};
+
+type GrowthSeries = {
+  label: string;
+  color: string;
+  data: GrowthPoint[];
+};
+
+const getValidDateTime = (date?: string): number | null => {
+  if (!date) return null;
+  const timestamp = new Date(date).getTime();
+  return Number.isFinite(timestamp) ? timestamp : null;
+};
+
+const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
+  const colors = ['#0F4C75', '#3282B8', '#10B981', '#F59E0B', '#6366F1', '#E74C3C'];
+
+  return ponds
+    .map((pond, idx) => {
+      const samplingDates = (pond.samplings || [])
+        .map((sampling) => getValidDateTime(sampling.date))
+        .filter((timestamp): timestamp is number => timestamp !== null);
+      const startTime = getValidDateTime(pond.docStart) || getValidDateTime(pond.baselineDate) || Math.min(...samplingDates);
+
+      if (!Number.isFinite(startTime)) {
+        return { label: pond.pondName, color: colors[idx % colors.length], data: [] };
+      }
+
+      const data = (pond.samplings || [])
+        .map((sampling) => {
+          const samplingTime = getValidDateTime(sampling.date);
+          const mbw = toFiniteNumber(sampling.mbw || sampling.abw);
+          if (samplingTime === null || mbw <= 0) return null;
+          return {
+            x: Math.max(0, Math.floor((samplingTime - startTime) / DAY_MS)),
+            y: mbw
+          };
+        })
+        .filter((point): point is GrowthPoint => point !== null)
+        .sort((a, b) => a.x - b.x);
+
+      return {
+        label: pond.pondName,
+        color: colors[idx % colors.length],
+        data
+      };
+    })
+    .filter((series) => series.data.length > 0);
+};
 
 const getSamplingFeedAmount = (sampling: Pick<Sampling, 'feed' | 'feedData'>): number => {
   const samplingFeed = toFiniteNumber(sampling.feed);
@@ -254,6 +317,104 @@ const getGlobalAverages = (ponds: Pond[]) => {
   };
 };
 
+const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
+  const points = series.flatMap((item) => item.data);
+
+  if (!points.length) {
+    return (
+      <div style={{
+        height: '260px',
+        borderRadius: '12px',
+        border: '1px solid var(--border)',
+        background: 'var(--bg-mid)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: 'var(--text-muted)',
+        fontWeight: 700,
+        textAlign: 'center',
+        padding: '24px'
+      }}>
+        No growth sampling data yet.
+      </div>
+    );
+  }
+
+  const width = 760;
+  const height = 300;
+  const left = 54;
+  const right = 18;
+  const top = 22;
+  const bottom = 44;
+  const plotWidth = width - left - right;
+  const plotHeight = height - top - bottom;
+  const minX = Math.min(...points.map((point) => point.x));
+  const maxX = Math.max(...points.map((point) => point.x));
+  const minY = Math.min(...points.map((point) => point.y));
+  const maxY = Math.max(...points.map((point) => point.y));
+  const xSpan = Math.max(1, maxX - minX);
+  const yPadding = Math.max(1, (maxY - minY) * 0.15);
+  const yMin = Math.max(0, minY - yPadding);
+  const yMax = maxY + yPadding;
+  const ySpan = Math.max(1, yMax - yMin);
+  const xScale = (x: number) => left + ((x - minX) / xSpan) * plotWidth;
+  const yScale = (y: number) => top + (1 - ((y - yMin) / ySpan)) * plotHeight;
+  const yTicks = [0, 0.5, 1].map((ratio) => yMin + ySpan * ratio);
+  const xTicks = [minX, Math.round(minX + xSpan / 2), maxX];
+
+  return (
+    <div>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Growth trajectory chart" style={{ width: '100%', display: 'block', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF' }}>
+        <rect x="0" y="0" width={width} height={height} fill="#FFFFFF" />
+        {yTicks.map((tick) => {
+          const y = yScale(tick);
+          return (
+            <g key={`y-${tick}`}>
+              <line x1={left} x2={width - right} y1={y} y2={y} stroke="#E5EEF5" strokeWidth="1" />
+              <text x={left - 10} y={y + 4} textAnchor="end" fontSize="11" fontWeight="700" fill="#7A8EA3">{tick.toFixed(1)}</text>
+            </g>
+          );
+        })}
+        {xTicks.map((tick) => {
+          const x = xScale(tick);
+          return (
+            <g key={`x-${tick}`}>
+              <line x1={x} x2={x} y1={top} y2={height - bottom} stroke="#F1F5F9" strokeWidth="1" />
+              <text x={x} y={height - 18} textAnchor="middle" fontSize="11" fontWeight="700" fill="#7A8EA3">DOC {tick}</text>
+            </g>
+          );
+        })}
+        <line x1={left} x2={width - right} y1={height - bottom} y2={height - bottom} stroke="#C7D7E4" strokeWidth="1.5" />
+        <line x1={left} x2={left} y1={top} y2={height - bottom} stroke="#C7D7E4" strokeWidth="1.5" />
+        <text x="14" y="22" fontSize="11" fontWeight="800" fill="#7A8EA3">MBW (g)</text>
+
+        {series.map((item) => {
+          const path = item.data.map((point) => `${xScale(point.x)},${yScale(point.y)}`).join(' ');
+          return (
+            <g key={item.label}>
+              {item.data.length > 1 && (
+                <polyline points={path} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+              )}
+              {item.data.map((point, index) => (
+                <circle key={`${item.label}-${point.x}-${index}`} cx={xScale(point.x)} cy={yScale(point.y)} r="4" fill="#FFFFFF" stroke={item.color} strokeWidth="3" />
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 16px', marginTop: '12px' }}>
+        {series.map((item) => (
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>
+            <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: item.color }} />
+            {item.label}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 /* ─── PDF Generation HTML Template ────────────────────────── */
 const generateShrimpReportHTML = (data: any, t: any): string => {
   const { farmName, technician, reportPeriod, companyName, ponds, chartUrl } = data;
@@ -328,7 +489,7 @@ const generateShrimpReportHTML = (data: any, t: any): string => {
           </table>
         ` : '<p style="margin: 0; color: #475569;">No confirmed lab analysis was attached to the selected ponds at export time.</p>'}
       </div>
-      <div style="margin-top: 20px; text-align: center;"><img src="${chartUrl}" style="width: 100%; max-height: 300px; object-fit: contain;" /></div>
+      ${chartUrl ? `<div style="margin-top: 20px; text-align: center;"><img src="${chartUrl}" style="width: 100%; max-height: 300px; object-fit: contain;" /></div>` : ''}
     </body>
     </html>
   `;
@@ -341,6 +502,7 @@ export default function ShrimpReportsPage() {
   const [exportLoading, setExportLoading] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [company, setCompany] = useState<any>(null);
+  const [cycles, setCycles] = useState<FarmCycle[]>([]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -375,39 +537,51 @@ export default function ShrimpReportsPage() {
     return () => unsub();
   }, [company?.id]);
 
-  const global = useMemo(() => getGlobalAverages(ponds), [ponds]);
+  useEffect(() => {
+    if (!company?.id) return;
+    const q = query(collection(db, 'companies', company.id, 'cycles'), orderBy('createdAt', 'asc'));
+    const unsub = onSnapshot(q, (snapshot) => {
+      setCycles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FarmCycle)));
+    }, (error) => {
+      console.error("Error fetching cycles:", error);
+    });
+    return () => unsub();
+  }, [company?.id]);
+
+  const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
+  const global = useMemo(() => getGlobalAverages(activePonds), [activePonds]);
+  const growthSeries = useMemo(() => buildGrowthSeries(activePonds), [activePonds]);
 
   const chartUrl = useMemo(() => {
-    if (ponds.length === 0) return null;
-    const datasets = ponds.map((pond, idx) => {
-      const docStart = new Date(pond.docStart);
-      return {
-        label: pond.pondName,
-        borderColor: ['#0F4C75', '#3282B8', '#10B981', '#F59E0B', '#6366F1'][idx % 5],
-        data: (pond.samplings || [])
-          .filter((s) => !isBaselineSampling(s))
-          .map(s => {
-            const val = s.mbw || s.abw || 0;
-            return { 
-              x: Math.floor((new Date(s.date).getTime() - docStart.getTime()) / (1000*60*60*24)), 
-              y: val 
-            };
-          })
-          .filter(d => d.y > 0)
-          .sort((a,b) => a.x - b.x),
-        fill: false, showLine: true
-      };
-    });
-    const chartConfig = { type: 'scatter', data: { datasets }, options: { title: { display: true, text: 'Growth Trajectory' } } };
+    if (growthSeries.length === 0) return null;
+    const datasets = growthSeries.map((series) => ({
+      label: series.label,
+      borderColor: series.color,
+      backgroundColor: series.color,
+      data: series.data,
+      fill: false,
+      showLine: true
+    }));
+    const chartConfig = {
+      type: 'scatter',
+      data: { datasets },
+      options: {
+        title: { display: true, text: 'Growth Trajectory' },
+        scales: {
+          xAxes: [{ scaleLabel: { display: true, labelString: 'DOC' } }],
+          yAxes: [{ scaleLabel: { display: true, labelString: 'MBW (g)' }, ticks: { beginAtZero: true } }]
+        }
+      }
+    };
     return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=350&bkg=white`;
-  }, [ponds]);
+  }, [growthSeries]);
 
   const handleGenerateReport = async () => {
     setExportLoading(true);
     try {
       // @ts-ignore
       const html2pdf = (await import('html2pdf.js')).default;
-      const html = generateShrimpReportHTML({ farmName: ponds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds, chartUrl }, t);
+      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartUrl }, t);
       const element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);
@@ -419,65 +593,66 @@ export default function ShrimpReportsPage() {
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', paddingBottom: '60px' }}>
+    <div className="dashboard-page-relaxed" style={{ paddingBottom: '40px' }}>
       
-      {/* Header */}
-      <div style={{ 
-        background: 'var(--gradient)', 
-        borderRadius: '32px', 
-        padding: '48px', 
-        color: '#FFFFFF', 
-        display: 'flex', 
-        justifyContent: 'space-between', 
+      <div className="glass-card" style={{
+        background: '#FFFFFF',
+        border: '1px solid var(--border)',
+        borderRadius: '18px',
+        padding: '20px 22px',
+        display: 'flex',
+        justifyContent: 'space-between',
         alignItems: 'center',
-        boxShadow: '0 20px 40px rgba(15, 76, 117, 0.15)'
+        gap: '16px',
+        flexWrap: 'wrap'
       }}>
         <div>
-          <h1 style={{ fontSize: '40px', fontWeight: 900, marginBottom: '12px', color: '#FFFFFF' }}>Shrimp Production Audit</h1>
-          <p style={{ fontSize: '18px', color: '#FFFFFF', opacity: 1, fontWeight: 500 }}>Performance analytics across all active production ponds.</p>
+          <div style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Reports</div>
+          <h1 style={{ fontSize: '22px', fontWeight: 900, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: 0 }}>Shrimp Production Audit</h1>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>Performance analytics across all active production ponds.</p>
         </div>
-        <button className="btn-secondary" onClick={handleGenerateReport} disabled={exportLoading} style={{ padding: '16px 32px', borderRadius: '20px', fontWeight: 800 }}>
-          {exportLoading ? <Loader2 size={22} className="animate-spin" /> : 'Export Audit PDF'}
+        <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 800 }}>
+          {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
         </button>
       </div>
 
       {/* Global Metrics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '24px' }}>
+      <div className="dashboard-kpi-grid">
         {[
           { label: 'Avg Body Weight', value: `${global.avgABW.toFixed(2)}g`, icon: Scale, color: 'var(--primary)', bg: 'var(--primary-dim)' },
           { label: 'Growth Rate (ADG)', value: `${global.avgADG.toFixed(2)}g`, icon: Activity, color: '#27AE60', bg: '#E8F7EE' },
           { label: 'Avg FCR', value: global.avgFCR.toFixed(2), icon: Zap, color: '#F39C12', bg: '#FFF9EB' },
           { label: 'Total Biomass', value: `${Math.round(global.totalBiomass)}kg`, icon: Target, color: '#E74C3C', bg: '#FEF2F2' },
         ].map((item, i) => (
-          <div key={i} className="glass-card" style={{ padding: '28px', background: '#FFF', display: 'flex', alignItems: 'center', gap: '20px', border: '1px solid var(--border)' }}>
-            <div style={{ width: '56px', height: '56px', borderRadius: '18px', background: item.bg, color: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><item.icon size={28} /></div>
+          <div key={i} className="glass-card dashboard-kpi-card" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: item.bg, color: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><item.icon size={21} /></div>
             <div>
-              <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{item.label}</div>
-              <div style={{ fontSize: '24px', fontWeight: 900 }}>{item.value}</div>
+              <div className="dashboard-kpi-label">{item.label}</div>
+              <div className="dashboard-kpi-value">{item.value}</div>
             </div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '32px' }}>
-        <div className="glass-card" style={{ padding: '32px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 900, marginBottom: '32px' }}><TrendingUp size={22} /> Growth Trajectory</h2>
-          {chartUrl ? <img src={chartUrl} style={{ width: '100%', borderRadius: '16px' }} alt="Chart" /> : <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No data.</div>}
+      <div className="dashboard-report-grid">
+        <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} /> Growth Trajectory</h2>
+          <GrowthTrajectoryChart series={growthSeries} />
         </div>
 
-        <div className="glass-card" style={{ padding: '32px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '20px', fontWeight: 900, marginBottom: '32px' }}><Waves size={22} /> Pond Status</h2>
+        <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
+          <h2 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> Pond Status</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {global.stats.map((s: any) => (
-              <div key={s.pondName} style={{ padding: '20px', borderRadius: '20px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+              <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
                   <div><div style={{ fontSize: '16px', fontWeight: 800 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>
-                  <div style={{ fontSize: '11px', fontWeight: 900, color: s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 12px', borderRadius: '30px' }}>{s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL'}</div>
+                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 900, color: s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL'}</div>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center' }}>
-                  <div><div style={{ fontSize: '10px' }}>ABW</div><div style={{ fontSize: '15px', fontWeight: 800 }}>{s.mbw.toFixed(2)}g</div></div>
-                  <div><div style={{ fontSize: '10px' }}>SIZE</div><div style={{ fontSize: '15px', fontWeight: 800 }}>{s.size}</div></div>
-                  <div><div style={{ fontSize: '10px' }}>SR</div><div style={{ fontSize: '15px', fontWeight: 800 }}>{s.sr.toFixed(1)}%</div></div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', gap: '8px' }}>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>ABW</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.mbw.toFixed(2)}g</div></div>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>SIZE</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.size}</div></div>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>SR</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.sr.toFixed(1)}%</div></div>
                 </div>
               </div>
             ))}

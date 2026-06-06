@@ -9,12 +9,11 @@ import {
   type OrsonAiFunction,
   isOrsonDailyLimitError,
   reserveOrsonRequest,
-} from '../../../orson/aiUsage';
+} from '@/lib/orsonAiUsage';
 import {
   cleanOrsonResponse,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
-  ORSON_RESPONSE_TIMEOUT_MS,
 } from '../../../orson/promptBuilder';
 
 // Types for the chat history
@@ -32,7 +31,7 @@ export const useGemini = () => {
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
   
-  const chatSessionRef = useRef<any>(null);
+  const chatSessionRef = useRef<unknown>(null);
   const latestRequestId = useRef(0);
 
   const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
@@ -80,7 +79,7 @@ export const useGemini = () => {
 
   const sendMessage = async (
     userMessage: string,
-    allPonds: any[],
+    allPonds: object[],
     options: { companyId?: string; aiFunction?: OrsonAiFunction } = {},
   ) => {
     const requestId = latestRequestId.current + 1;
@@ -94,7 +93,7 @@ export const useGemini = () => {
         return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
 
-      const analysis = buildOrsonAnalysis(allPonds, userMessage);
+      const analysis = buildOrsonAnalysis(allPonds as Parameters<typeof buildOrsonAnalysis>[0], userMessage);
       void createRiskNotifications(options.companyId, analysis);
 
       const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
@@ -115,18 +114,14 @@ export const useGemini = () => {
         },
       });
 
-      const result: any = await withTimeout(
+      const result = await withTimeout(
         model.generateContent(`${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`),
         ORSON_MODEL_TIMEOUT_MS,
         'Orson is taking too long to respond. Please try again.'
       );
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
 
-      const response: any = await withTimeout(
-        result.response,
-        ORSON_RESPONSE_TIMEOUT_MS,
-        'Orson received your question but the response took too long. Please try again.'
-      );
+      const response = result.response;
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
       const text = cleanOrsonResponse(response.text());
 
@@ -146,13 +141,15 @@ export const useGemini = () => {
       }
       return text;
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Orson Error:", err);
       if (latestRequestId.current === requestId) {
         setLoading(false);
       }
 
-      if (err.message?.includes("429")) {
+      const errorMessage = err instanceof Error ? err.message : '';
+
+      if (errorMessage.includes("429")) {
         setError("Daily limit reached.");
         return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
       }

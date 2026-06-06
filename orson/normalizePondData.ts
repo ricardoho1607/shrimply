@@ -1,4 +1,7 @@
 import type {
+  OrsonLabContext,
+  OrsonLabStatusLevel,
+  OrsonLabStatusSummary,
   OrsonNormalizeOptions,
   OrsonNormalizedFeedData,
   OrsonNormalizedPond,
@@ -13,6 +16,22 @@ type RawPond = Record<string, any>;
 const DAY_MS = 1000 * 60 * 60 * 24;
 
 const EMPTY_VALUES = new Set(['', 'n/a', 'na', 'null', 'undefined', '--', '-']);
+
+const LAB_STATUS_RANK: Record<OrsonLabStatusLevel, number> = {
+  good: 0,
+  info: 0,
+  watch: 1,
+  warning: 2,
+  critical: 3,
+};
+
+const EMPTY_LAB_CONTEXT: OrsonLabContext = {
+  latest: null,
+  byType: [],
+  unresolvedRisks: [],
+  recommendations: [],
+  worstStatus: null,
+};
 
 const toNumber = (value: unknown): OrsonNumber => {
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -48,6 +67,43 @@ const firstString = (...values: unknown[]): string | null => {
   return null;
 };
 
+const stringArray = (value: unknown, limit = 4): string[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => toStringOrNull(item))
+    .filter((item): item is string => item !== null)
+    .slice(0, limit);
+};
+
+const uniqueStrings = (values: string[], limit = 5): string[] => {
+  const seen = new Set<string>();
+  const unique: string[] = [];
+
+  for (const value of values) {
+    const key = value.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(value);
+    if (unique.length >= limit) break;
+  }
+
+  return unique;
+};
+
+const normalizeLabStatusLevel = (value: unknown): OrsonLabStatusLevel | null => {
+  const status = toStringOrNull(value)?.toLowerCase();
+  if (
+    status === 'good' ||
+    status === 'info' ||
+    status === 'watch' ||
+    status === 'warning' ||
+    status === 'critical'
+  ) {
+    return status;
+  }
+  return null;
+};
+
 const normalizeDateString = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) {
     const raw = value.trim();
@@ -67,6 +123,79 @@ const normalizeDateString = (value: unknown): string | null => {
   }
 
   return null;
+};
+
+const normalizeLabStatus = (value: unknown): OrsonLabStatusSummary | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as RawPond;
+
+  const summary: OrsonLabStatusSummary = {
+    labReportId: firstString(raw.labReportId, raw.reportId, raw.id),
+    reportType: firstString(raw.reportType, raw.type),
+    sampleDate: normalizeDateString(raw.sampleDate ?? raw.date),
+    status: normalizeLabStatusLevel(raw.status),
+    mainIssue: firstString(raw.mainIssue, raw.summary, raw.issue),
+    keyRisks: stringArray(raw.keyRisks, 4),
+    recommendations: stringArray(raw.recommendations, 3),
+  };
+
+  const hasContent = summary.labReportId ||
+    summary.reportType ||
+    summary.sampleDate ||
+    summary.status ||
+    summary.mainIssue ||
+    summary.keyRisks.length > 0 ||
+    summary.recommendations.length > 0;
+
+  return hasContent ? summary : null;
+};
+
+const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
+  const latestLabStatus = pond.latestLabStatus;
+  const latest = normalizeLabStatus(latestLabStatus);
+  const typedStatuses: OrsonLabStatusSummary[] = [];
+
+  if (latestLabStatus && typeof latestLabStatus === 'object') {
+    const byType = (latestLabStatus as RawPond).byType;
+    if (byType && typeof byType === 'object') {
+      Object.values(byType as Record<string, unknown>).forEach((value) => {
+        const normalized = normalizeLabStatus(value);
+        if (normalized) typedStatuses.push(normalized);
+      });
+    }
+  }
+
+  const allStatuses = [...typedStatuses];
+  if (latest) {
+    const hasDuplicate = allStatuses.some((status) => {
+      if (latest.labReportId && status.labReportId === latest.labReportId) return true;
+      return Boolean(latest.reportType && status.reportType === latest.reportType && status.sampleDate === latest.sampleDate);
+    });
+    if (!hasDuplicate) allStatuses.unshift(latest);
+  }
+
+  if (!latest && allStatuses.length === 0) return EMPTY_LAB_CONTEXT;
+
+  const worstStatus = allStatuses.reduce<OrsonLabStatusLevel | null>((worst, status) => {
+    if (!status.status) return worst;
+    if (!worst) return status.status;
+    return LAB_STATUS_RANK[status.status] > LAB_STATUS_RANK[worst] ? status.status : worst;
+  }, null);
+
+  const riskyStatuses = allStatuses.filter((status) => {
+    return status.status === 'watch' || status.status === 'warning' || status.status === 'critical';
+  });
+
+  return {
+    latest,
+    byType: allStatuses.slice(0, 3),
+    unresolvedRisks: uniqueStrings(riskyStatuses.flatMap((status) => [
+      ...(status.mainIssue ? [status.mainIssue] : []),
+      ...status.keyRisks,
+    ]), 5),
+    recommendations: uniqueStrings(allStatuses.flatMap((status) => status.recommendations), 3),
+    worstStatus,
+  };
 };
 
 const toTimestampMs = (dateString: string | null): number | null => {
@@ -227,6 +356,7 @@ export const normalizePondData = (
     baselineSource: firstString(pond.baselineSource),
     supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
+    labContext: normalizeLabContext(pond),
     records,
     missingFields: [],
   };
