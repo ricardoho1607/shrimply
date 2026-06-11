@@ -6,6 +6,7 @@ const configDir = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   output: 'export',
+  allowedDevOrigins: ['127.0.0.1'],
   turbopack: {
     root: resolve(configDir, '..'),
   },

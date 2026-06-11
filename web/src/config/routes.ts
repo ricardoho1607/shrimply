@@ -1,3 +1,5 @@
+import { resourceArticles } from "@/data/resourceLibrary";
+
 export const ROUTES = {
   home: "/",
   auth: "/auth",
@@ -13,7 +15,24 @@ export const ROUTES = {
   dashboardPonds: "/dashboard/ponds",
   dashboardWater: "/dashboard/water",
   dashboardFeed: "/dashboard/feed",
-  publicPages: ["/", "/about", "/how-it-works", "/orson", "/auth", "/auth/join"],
+  publicPages: [
+    "/",
+    "/about",
+    "/how-it-works",
+    "/resources",
+    "/orson",
+    "/auth",
+    "/auth/join",
+    "/shrimp-farm-management-software",
+    "/vannamei-shrimp-farming-app",
+    "/features/feed-inventory",
+    "/features/water-quality-monitoring",
+    "/features/growth-sampling",
+    "/features/shrimp-harvest-tracking",
+    "/features/shrimp-farm-finance",
+    "/features/disease-alerts",
+    ...resourceArticles.map(article => `/resources/${article.slug}`),
+  ],
   privatePrefixes: ["/dashboard", "/roleselection", "/setup"],
 } as const;
 

@@ -15,6 +15,9 @@ export const metadata: Metadata = {
   description: SITE_CONFIG.description,
   applicationName: SITE_CONFIG.name,
   keywords: [...SITE_CONFIG.keywords],
+  authors: [{ name: "Shrimply Technologies" }],
+  creator: "Shrimply Technologies",
+  publisher: "Shrimply Technologies",
   openGraph: {
     title: SITE_CONFIG.title,
     description: SITE_CONFIG.description,
@@ -36,6 +39,22 @@ export const metadata: Metadata = {
     title: SITE_CONFIG.title,
     description: SITE_CONFIG.description,
     images: [SITE_CONFIG.ogImage.path],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  verification: {
+    other: {
+      "msvalidate.01": "0AB9EEC142DFB0FE255B043BB8171B6E",
+    },
   },
   icons: {
     icon: SITE_CONFIG.icons.favicon,

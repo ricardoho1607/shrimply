@@ -1135,3 +1135,19 @@ nav.scrolled {
     min-height: 48px;
   }
 }
+
+@media (max-width: 1040px) {
+  .resource-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .resource-card-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .resource-stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+}

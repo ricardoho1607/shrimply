@@ -8,6 +8,7 @@ import { Menu, X } from 'lucide-react';
 const navItems = [
   { href: '/', label: 'Home' },
   { href: '/how-it-works', label: 'How It Works' },
+  { href: '/resources', label: 'Resources' },
   { href: '/about', label: 'About' },
   { href: '/#download', label: 'Download App' },
 ];
@@ -26,10 +27,6 @@ export default function Navbar() {
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!menuOpen) return;

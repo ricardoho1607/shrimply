@@ -24,7 +24,6 @@ export default function Footer() {
             Product
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Link href="/#platform" style={{ fontSize: '0.94rem' }}>Features</Link>
             <Link href="/how-it-works" style={{ fontSize: '0.94rem' }}>How It Works</Link>
             <Link href="/auth" style={{ fontSize: '0.94rem' }}>App</Link>
           </div>
@@ -35,9 +34,9 @@ export default function Footer() {
             Company
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <Link href="/resources" style={{ fontSize: '0.94rem' }}>Education Hub</Link>
             <Link href="/about" style={{ fontSize: '0.94rem' }}>About</Link>
             <Link href="/auth" style={{ fontSize: '0.94rem' }}>Contact</Link>
-            <Link href="/#" style={{ fontSize: '0.94rem' }}>Privacy</Link>
           </div>
         </div>
       </div>

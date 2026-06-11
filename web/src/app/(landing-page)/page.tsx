@@ -77,7 +77,7 @@ export default function LandingPage() {
           }}>
             <div className="app-title-bar">
               <div className="app-dot red"></div><div className="app-dot yel"></div><div className="app-dot grn"></div>
-              <div className="app-url">shrimply.tech/dashboard</div>
+              <div className="app-url">shrimplytech.com/dashboard</div>
             </div>
             <div className="db-layout">
               <div className="db-sidebar">
