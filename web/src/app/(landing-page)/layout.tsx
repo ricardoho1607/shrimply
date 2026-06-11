@@ -47,6 +47,16 @@ const softwareJsonLd = {
   ],
 };
 
+const websiteJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  name: SITE_CONFIG.name,
+  url: canonicalUrl("/"),
+  description: SITE_CONFIG.description,
+  inLanguage: "en",
+  hasPart: canonicalUrl("/resources"),
+};
+
 export default function LandingPageLayout({ children }: { children: ReactNode }) {
   return (
     <>
@@ -59,6 +69,11 @@ export default function LandingPageLayout({ children }: { children: ReactNode })
         id="shrimply-software-json-ld"
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
+      />
+      <Script
+        id="shrimply-website-json-ld"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
       />
       {children}
     </>

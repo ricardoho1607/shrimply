@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Cursor from "@/components/Cursor";
@@ -12,6 +13,31 @@ type ResourcePageProps = {
   params: Promise<{
     slug: string;
   }>;
+};
+
+const stripSubtitle = (title: string) => title.split(":")[0];
+
+const buildArticleFaqs = (article: NonNullable<ReturnType<typeof getResourceArticle>>) => {
+  const topic = stripSubtitle(article.title).toLowerCase();
+  const primaryTag = article.tags?.[0] ?? article.section.toLowerCase();
+  const firstSection = article.sections[0];
+
+  return [
+    {
+      question: `What is ${topic}?`,
+      answer: firstSection
+        ? `${firstSection.body[0]} ${article.takeaways[0]}`
+        : article.description,
+    },
+    {
+      question: `Why does ${primaryTag} matter for shrimp farmers?`,
+      answer: article.takeaways.join(" "),
+    },
+    {
+      question: `What should farmers review when managing ${primaryTag}?`,
+      answer: article.checklist.join(" "),
+    },
+  ];
 };
 
 export function generateStaticParams() {
@@ -72,6 +98,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
   const relatedArticles = resourceArticles
     .filter(item => item.section === article.section && item.slug !== article.slug)
     .slice(0, 2);
+  const faqs = buildArticleFaqs(article);
 
   const jsonLd = {
     "@context": "https://schema.org",
@@ -99,6 +126,42 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     datePublished: article.publishedAt,
     image: article.image ? `${SITE_CONFIG.url}${article.image.src}` : undefined,
   };
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map(faq => ({
+      "@type": "Question",
+      name: faq.question,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: faq.answer,
+      },
+    })),
+  };
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: canonicalUrl("/"),
+      },
+      {
+        "@type": "ListItem",
+        position: 2,
+        name: "Resources",
+        item: canonicalUrl("/resources"),
+      },
+      {
+        "@type": "ListItem",
+        position: 3,
+        name: article.title,
+        item: canonicalUrl(`/resources/${article.slug}`),
+      },
+    ],
+  };
 
   return (
     <main>
@@ -107,6 +170,14 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
       />
 
       <article style={{ background: "var(--off-white)" }}>
@@ -127,7 +198,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
               <span className="eyebrow" style={{ color: "var(--blue)" }}>Farm management guide</span>
             </div>
             {article.image ? (
-              <img
+              <Image
                 src={article.image.src}
                 alt={article.image.alt}
                 width={article.image.width}
@@ -191,6 +262,20 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                       <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{item}</li>
                     ))}
                   </ul>
+                </section>
+
+                <section style={{ marginTop: "56px" }}>
+                  <div className="eyebrow" style={{ marginBottom: "18px" }}>Common Questions</div>
+                  <div style={{ display: "grid", gap: "18px" }}>
+                    {faqs.map(faq => (
+                      <div key={faq.question} style={{ borderTop: "1px solid var(--slate)", paddingTop: "18px" }}>
+                        <h2 className="feature-title" style={{ fontSize: "1.25rem", marginBottom: "10px" }}>
+                          {faq.question}
+                        </h2>
+                        <p style={{ color: "var(--ocean)", fontWeight: 500 }}>{faq.answer}</p>
+                      </div>
+                    ))}
+                  </div>
                 </section>
 
                 <section style={{ marginTop: "56px" }}>

@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import type { ResourceArticle } from "@/data/resourceLibrary";
 
@@ -138,7 +139,7 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
               }}
             >
               {article.image ? (
-                <img
+                <Image
                   src={article.image.src}
                   alt={article.image.alt}
                   width={article.image.width}

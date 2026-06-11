@@ -22,6 +22,21 @@ export default function robots(): MetadataRoute.Robots {
         allow: "/",
         disallow: [...ROUTES.privatePrefixes],
       },
+      {
+        userAgent: "GPTBot",
+        allow: "/",
+        disallow: [...ROUTES.privatePrefixes],
+      },
+      {
+        userAgent: "PerplexityBot",
+        allow: "/",
+        disallow: [...ROUTES.privatePrefixes],
+      },
+      {
+        userAgent: "ClaudeBot",
+        allow: "/",
+        disallow: [...ROUTES.privatePrefixes],
+      },
     ],
     sitemap: `${SITE_CONFIG.url}/sitemap.xml`,
   };
