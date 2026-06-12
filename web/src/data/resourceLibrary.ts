@@ -84,6 +84,31 @@ const sources = {
     publisher: "Fish and Shellfish Immunology Reports",
     url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10082739/",
   },
+  wfsMultifactorialReview: {
+    title: "White Feces Syndrome, A Multifactorial Syndrome of Cultured Shrimp: A Mini Review",
+    publisher: "Fishes",
+    url: "https://www.mdpi.com/2410-3888/7/6/339",
+  },
+  wfsExperimentalReproduction: {
+    title: "Experimental Reproduction of White Feces Syndrome in Whiteleg Shrimp, Penaeus vannamei",
+    publisher: "PLOS ONE",
+    url: "https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0261289",
+  },
+  wfdBacterialCommunities: {
+    title: "Structure and Co-Occurrence Patterns of Bacterial Communities Associated with White Faeces Disease Outbreaks in Pacific White-Leg Shrimp",
+    publisher: "Scientific Reports",
+    url: "https://www.nature.com/articles/s41598-020-68891-6",
+  },
+  wfsDesignedProbiotics: {
+    title: "Rationally Designed Probiotics Prevent Shrimp White Feces Syndrome via the Probiotics-Gut Microbiome-Immunity Axis",
+    publisher: "npj Biofilms and Microbiomes",
+    url: "https://www.nature.com/articles/s41522-024-00509-5",
+  },
+  probioticAmmoniaShrimpPonds: {
+    title: "Effects of Probiotics on Ammonia Degradation in Vitro and in Pacific White Shrimp Ponds",
+    publisher: "Responsible Seafood Advocate",
+    url: "https://www.globalseafood.org/advocate/effects-of-probiotics-on-ammonia-degradation-in-vitro-and-in-pacific-white-shrimp-ponds/",
+  },
   profitabilityReview: {
     title: "Comparative Analysis of Profitability and Resource Use Efficiency Between Penaeus monodon and Litopenaeus vannamei in India",
     publisher: "Aquaculture Reports",
@@ -563,6 +588,110 @@ export const resourceArticles: ResourceArticle[] = [
       "Review mortality trends with water quality and appetite.",
     ],
     sources: [sources.faoVannamei, sources.worldfishDisease, sources.faoRecords],
+  },
+  {
+    slug: "white-feces-disease-shrimp",
+    section: "Water, Health, and Risk",
+    label: "Disease Risk",
+    title: "White Feces Disease in Shrimp: Causes, Treatment Response, and Long-Term Prevention",
+    description: "A deep dive into shrimp white feces disease or white feces syndrome, including signs, pond parameters, EHP and Vibrio risk, treatment response, Bacillus probiotics, and prevention.",
+    readTime: "9 min read",
+    tags: ["white feces disease", "WFD", "WFS", "EHP", "Vibrio", "Bacillus", "probiotics"],
+    publishedAt: "2026-06-12",
+    image: {
+      src: "/resources/images/white-feces-disease-wfd-shrimp-guide.png",
+      alt: "White feces disease WFD shrimp farming guide showing symptoms, EHP and Vibrio risk factors, pond water parameters, immediate response, and prevention steps",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Disease Alerts", href: "/features/disease-alerts" },
+    takeaways: [
+      "White feces disease is better treated as a multifactorial gut-health and pond-stability problem, not a single-pathogen event.",
+      "High organic load, feed waste, unstable pH or alkalinity, low dissolved oxygen, ammonia or nutrient buildup, EHP, Vibrio, and gut dysbiosis can work together.",
+      "Long-term prevention depends on clean pond preparation, strong seed screening, stable water quality, careful feeding, biosecurity, and routine use of proven probiotics or feed additives.",
+    ],
+    sections: [
+      {
+        heading: "What WFD actually is",
+        body: [
+          "White feces disease, often called white feces syndrome, is recognized on farms when white fecal strings float on the pond surface or appear in feed trays. Affected shrimp may show a pale or empty gut, yellow-white intestinal tract, weak appetite, slow growth, size variation, soft shell, chronic mortality, and poor FCR.",
+          "The important point for farm teams is that WFD is a syndrome, not a simple diagnosis from one visual sign. Research reviews describe it as multifactorial. Different studies connect WFD or WFS with EHP, Vibrio species, gut microbiome imbalance, damaged hepatopancreas tissue, pond bacterial shifts, and deteriorating water quality.",
+          "That means a farm response should not stop at naming the disease. The manager needs to ask: what changed in appetite, feed waste, water quality, organic load, pond bottom condition, Vibrio pressure, EHP risk, and recent biosecurity?",
+        ],
+      },
+      {
+        heading: "Why one cause is rarely enough",
+        body: [
+          "A PLOS ONE infection study reproduced WFS in whiteleg shrimp when shrimp were pre-infected with EHP and then challenged with a particular Vibrio parahaemolyticus isolate. The authors concluded that the result showed a synergistic relationship between EHP and the Vibrio isolate.",
+          "That finding is useful for farms because it explains why some ponds with EHP do not always show WFD, and why some Vibrio counts alone do not predict the whole problem. The disease expression can depend on the condition of the shrimp gut, hepatopancreas, pond environment, and microbial community at the same time.",
+          "More recent probiotic research also supports the co-infection and microbiome view. A 2024 npj Biofilms and Microbiomes paper validated a three-Vibrio pathogen cocktail in WFS etiology and tested a designed probiotic mix including Bacillus subtilis as part of the prevention strategy.",
+        ],
+      },
+      {
+        heading: "Parameters and pond conditions that raise WFD risk",
+        body: [
+          "Farmers should watch WFD risk through the pond trend, not only a single water test. Research on bacterial communities during WFD outbreaks found disease events coincided with sudden water-parameter changes, pond bacterial shifts, and appetite decline two to three days before visible disease.",
+          "The most important parameters to review are dissolved oxygen, pH, alkalinity, temperature, salinity, ammonia, nitrite, phosphate, turbidity, suspended solids, organic matter, feed tray leftovers, and Vibrio pressure. In the same Scientific Reports study, healthy and diseased pond separation was influenced by presumptive pathogenic Vibrio, ammonium, phosphate, pH, temperature, and turbidity, while nitrite, nitrate, reactive silicate, and salinity also contributed to pond differences.",
+          "Low oxygen and weak buffering make the situation worse. The paper also notes earlier reports where dissolved oxygen below 3.0 mg/L and alkalinity below 80 ppm were associated with peak mortality during WFD outbreaks. For practical management, farms should not wait until DO is critically low; appetite drops, cloudy water, rising organic load, or unstable pH should trigger review earlier.",
+        ],
+      },
+      {
+        heading: "Immediate response when white feces appear",
+        body: [
+          "First, confirm the pattern. Check multiple pond areas and feed trays, sample shrimp for gut condition, compare appetite against the previous three to five days, and record mortality. If diagnostic support is available, test for EHP and relevant Vibrio instead of relying on visual signs only.",
+          "Second, reduce the pond stress load. Adjust feeding based on tray response, remove excess organic material where the farm system allows it, strengthen aeration, stabilize alkalinity and pH carefully, and review ammonia and nitrite. Avoid aggressive chemical action that shocks shrimp or collapses the pond microbial balance.",
+          "Third, isolate the risk operationally. Keep equipment, nets, siphon tools, boots, and personnel movement controlled between affected and unaffected ponds. WFD material and fecal strings can carry microbial risk, so pond-to-pond transfer through tools or water handling should be treated seriously.",
+        ],
+      },
+      {
+        heading: "Treatment support: what is realistic",
+        body: [
+          "There is no responsible one-step cure for WFD that should be promised across all farms. A realistic treatment response supports the shrimp gut, lowers pathogen pressure, improves water stability, and removes the management conditions that allowed the outbreak to expand.",
+          "A practical support program may include feed reduction during weak appetite, gut-support feed additives, vitamin or immunostimulant support where already approved by the farm veterinarian or technical advisor, water-quality correction, pond-bottom management, and probiotic use. The exact product, dose, and timing should follow local regulation, label instructions, and professional diagnosis.",
+          "Antibiotics should not be used casually. WFD is not always a simple bacterial infection, and antibiotic misuse can damage farm credibility, residue compliance, pond microbiota, and future disease control. If antibiotics are considered, that decision should come from diagnostic evidence and local veterinary guidance.",
+        ],
+      },
+      {
+        heading: "Bacillus and probiotic prevention",
+        body: [
+          "Bacillus-based probiotics are useful because they can support pond microbial stability and organic matter processing, and some strains can directly antagonize pathogens. The important word is strain. A product should be selected for evidence, viability, storage quality, and farm fit, not just because the label says probiotic.",
+          "A 2024 designed-probiotic WFS study used a mix that included Bacillus subtilis along with Ruegeria, Nioella, and Streptomyces strains. The authors reported protection through gut microbiome stability, pathogen antagonism, and shrimp immune pathway activation. This does not mean every Bacillus product will prevent WFD, but it supports the long-term strategy of building a more resilient gut and pond microbiome.",
+          "Separate pond-water probiotic work in Pacific white shrimp ponds found that probiotic water additives reduced ammonia and total Vibrio counts while improving dissolved oxygen under minimum-water-exchange conditions. That aligns with the farm logic: probiotics work best as part of a prevention program before the pond becomes overloaded, not as a last-minute rescue after appetite has already crashed.",
+        ],
+      },
+      {
+        heading: "Long-term prevention plan",
+        body: [
+          "Prevention starts before stocking. Use clean pond preparation, remove sludge, dry and disinfect where appropriate, screen post-larvae for major pathogens including EHP when available, and avoid stocking seed with weak gut condition or unknown health status.",
+          "During culture, keep feeding disciplined. Use feed trays, avoid pushing feed when appetite drops, record feed by pond, and compare feed response with DO, pH, ammonia, nitrite, and weather. Overfeeding is one of the fastest ways to create the organic load that favors microbial instability.",
+          "Build a routine WFD risk review. At least weekly, review appetite, white feces observations, gut color, soft shell, mortality, growth, FCR movement, DO, pH, alkalinity, ammonia, nitrite, salinity, turbidity, and recent probiotic or additive use. The goal is early correction while shrimp are still eating, not a late response after growth has stalled.",
+        ],
+      },
+      {
+        heading: "How Shrimply records help",
+        body: [
+          "WFD is exactly the kind of problem that becomes clearer when pond records are connected. Feed logs show whether appetite dropped before white feces appeared. Water-quality trends show whether pH, DO, ammonia, nitrite, or turbidity shifted. Sampling shows whether MBW and ADG slowed. Mortality logs show whether the issue is chronic or acute.",
+          "For Orson AI and disease alerts, the strongest input is not one note that says WFD. The useful input is the last several water-quality records, sampling results, feed tray observations, mortality entries, feed changes, and treatments. That gives the farm a better chance of separating a gut-health problem from a water-quality problem, a feed-management problem, or a biosecurity failure.",
+        ],
+      },
+    ],
+    checklist: [
+      "Check white fecal strings, pale gut, appetite drop, soft shell, mortality, MBW slowdown, and FCR movement together.",
+      "Review DO, pH, alkalinity, ammonia, nitrite, phosphate, turbidity, salinity, temperature, organic load, and feed tray leftovers.",
+      "Test for EHP and relevant Vibrio where diagnostic support is available.",
+      "Reduce feed during weak appetite and correct water quality gradually.",
+      "Strengthen aeration, pond-bottom management, and equipment biosecurity.",
+      "Use Bacillus or multi-strain probiotics as a planned prevention tool, not only as a crisis response.",
+      "Record every action so the next pond review can compare response against appetite, water quality, growth, and mortality.",
+    ],
+    sources: [
+      sources.wfsMultifactorialReview,
+      sources.wfsExperimentalReproduction,
+      sources.wfdBacterialCommunities,
+      sources.wfsDesignedProbiotics,
+      sources.probioticAmmoniaShrimpPonds,
+      sources.probioticsReview,
+    ],
   },
   {
     slug: "shrimp-harvest-tracking",

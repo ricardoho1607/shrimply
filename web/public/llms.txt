@@ -23,6 +23,7 @@ Shrimply is shrimp farm management software for vannamei farms and aquaculture t
 - Water quality trends: https://www.shrimplytech.com/resources/water-quality-trends
 - Shrimp disease alerts: https://www.shrimplytech.com/resources/shrimp-disease-alerts
 - Shrimp mortality tracking: https://www.shrimplytech.com/resources/shrimp-mortality-tracking
+- White feces disease in shrimp: https://www.shrimplytech.com/resources/white-feces-disease-shrimp
 - Shrimp harvest tracking: https://www.shrimplytech.com/resources/shrimp-harvest-tracking
 - Shrimp farm COGS: https://www.shrimplytech.com/resources/shrimp-farm-cogs
 - Shrimp farm cash flow: https://www.shrimplytech.com/resources/shrimp-farm-cash-flow
