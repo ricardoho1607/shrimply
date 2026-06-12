@@ -221,7 +221,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
         <section className="section" style={{ paddingTop: "72px", background: "var(--white)" }}>
           <div className="container" style={{ maxWidth: "1120px" }}>
             <div className="mobile-stack-grid" style={{ display: "grid", gridTemplateColumns: "0.34fr 0.66fr", gap: "72px", alignItems: "start" }}>
-              <aside style={{ position: "sticky", top: "110px" }}>
+              <aside className="resource-article-takeaways" style={{ position: "sticky", top: "110px" }}>
                 <div style={{ background: "var(--off-white)", border: "1px solid var(--slate)", borderRadius: "16px", padding: "28px" }}>
                   <div className="eyebrow" style={{ marginBottom: "18px" }}>Key Takeaways</div>
                   <ul style={{ display: "grid", gap: "14px", listStyle: "none" }}>

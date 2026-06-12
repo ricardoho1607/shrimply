@@ -609,6 +609,10 @@ nav.scrolled {
     grid-template-columns: 1fr !important;
     gap: 40px !important;
   }
+  .resource-article-takeaways {
+    position: static !important;
+    top: auto !important;
+  }
   .mobile-stack-grid-compact {
     grid-template-columns: 1fr !important;
     gap: 24px !important;
