@@ -71,6 +71,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.cacheKey === null, 'does not cache farm-specific answers by default');
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');
   assert(farmPackage.systemInstruction.includes('Do not invent measurements'), 'guards against invented measurements');
+  assert(farmPackage.systemInstruction.includes('reply in that same language'), 'keeps replies in the user question language');
   assert(farmPackage.context.includes('ORSON RISK PAYLOAD'), 'builds payload context');
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');

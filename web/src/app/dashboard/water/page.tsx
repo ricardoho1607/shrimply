@@ -27,7 +27,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app, auth, db, storage } from '@/lib/firebase';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
@@ -271,7 +271,7 @@ export default function WaterQualityPage() {
     return () => window.clearInterval(interval);
   }, []);
 
-  // ── Sync form data with existing records when pond/date changes ────
+  // -- Sync form data with existing records when pond/date changes ----
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
 
@@ -494,55 +494,69 @@ export default function WaterQualityPage() {
     return Number.isFinite(parsed) ? parsed : null;
   };
 
-  const normalizeLabRow = (row: LabPondResult) => ({
-    pondId: row.pondId,
-    pondCode: row.pondCode,
-    doc: toOptionalNumber(row.doc),
-    transparencyCm: toOptionalNumber(row.transparencyCm),
-    waterQuality: {
-      phCustomer: toOptionalNumber(row.waterQuality?.phCustomer),
-      phLab: toOptionalNumber(row.waterQuality?.phLab),
-      salinityCustomer: toOptionalNumber(row.waterQuality?.salinityCustomer),
-      salinityLab: toOptionalNumber(row.waterQuality?.salinityLab),
-      nh4: toOptionalNumber(row.waterQuality?.nh4),
-      no2: toOptionalNumber(row.waterQuality?.no2),
-      alkalinityTotal: toOptionalNumber(row.waterQuality?.alkalinityTotal),
-      tom: toOptionalNumber(row.waterQuality?.tom),
-      hardnessCa: toOptionalNumber(row.waterQuality?.hardnessCa),
-      hardnessMg: toOptionalNumber(row.waterQuality?.hardnessMg),
-      hardnessTotal: toOptionalNumber(row.waterQuality?.hardnessTotal),
-    },
-    microbiology: {
-      vibrioYellow: toOptionalNumber(row.microbiology?.vibrioYellow),
-      vibrioGreen: toOptionalNumber(row.microbiology?.vibrioGreen),
-      vibrioTotal: toOptionalNumber(row.microbiology?.vibrioTotal),
-      tbc: toOptionalNumber(row.microbiology?.tbc),
-      tvcTbcRatioPercent: toOptionalNumber(row.microbiology?.tvcTbcRatioPercent),
-    },
-    plankton: {
-      totalCellPerMl: toOptionalNumber(row.plankton?.totalCellPerMl),
-      beneficialCellPerMl: toOptionalNumber(row.plankton?.beneficialCellPerMl),
-      harmfulCellPerMl: toOptionalNumber(row.plankton?.harmfulCellPerMl),
-      chlorophytaCellPerMl: toOptionalNumber(row.plankton?.chlorophytaCellPerMl),
-      chlorophytaPercent: toOptionalNumber(row.plankton?.chlorophytaPercent),
-      chlorophytaSpecies: row.plankton?.chlorophytaSpecies?.trim() || null,
-      cyanophytaCellPerMl: toOptionalNumber(row.plankton?.cyanophytaCellPerMl),
-      cyanophytaPercent: toOptionalNumber(row.plankton?.cyanophytaPercent),
-      cyanophytaSpecies: row.plankton?.cyanophytaSpecies?.trim() || null,
-      diatomCellPerMl: toOptionalNumber(row.plankton?.diatomCellPerMl),
-      diatomPercent: toOptionalNumber(row.plankton?.diatomPercent),
-      diatomSpecies: row.plankton?.diatomSpecies?.trim() || null,
-      chrysophytaCellPerMl: toOptionalNumber(row.plankton?.chrysophytaCellPerMl),
-      chrysophytaPercent: toOptionalNumber(row.plankton?.chrysophytaPercent),
-      chrysophytaSpecies: row.plankton?.chrysophytaSpecies?.trim() || null,
-      dinoflagellataCellPerMl: toOptionalNumber(row.plankton?.dinoflagellataCellPerMl),
-      dinoflagellataPercent: toOptionalNumber(row.plankton?.dinoflagellataPercent),
-      dinoflagellataSpecies: row.plankton?.dinoflagellataSpecies?.trim() || null,
-      protozoaCellPerMl: toOptionalNumber(row.plankton?.protozoaCellPerMl),
-      protozoaPercent: toOptionalNumber(row.plankton?.protozoaPercent),
-      protozoaSpecies: row.plankton?.protozoaSpecies?.trim() || null,
-    },
-  });
+  const getPlanktonCellCount = (cellValue: string | undefined, percentValue: string | undefined, totalCellPerMl: number | null) => {
+    const enteredCellCount = toOptionalNumber(cellValue);
+    if (enteredCellCount !== null) return enteredCellCount;
+
+    const percent = toOptionalNumber(percentValue);
+    if (totalCellPerMl === null || percent === null) return null;
+
+    return Math.round((totalCellPerMl * percent) / 100);
+  };
+
+  const normalizeLabRow = (row: LabPondResult) => {
+    const totalCellPerMl = toOptionalNumber(row.plankton?.totalCellPerMl);
+
+    return {
+      pondId: row.pondId,
+      pondCode: row.pondCode,
+      doc: toOptionalNumber(row.doc),
+      transparencyCm: toOptionalNumber(row.transparencyCm),
+      waterQuality: {
+        phCustomer: toOptionalNumber(row.waterQuality?.phCustomer),
+        phLab: toOptionalNumber(row.waterQuality?.phLab),
+        salinityCustomer: toOptionalNumber(row.waterQuality?.salinityCustomer),
+        salinityLab: toOptionalNumber(row.waterQuality?.salinityLab),
+        nh4: toOptionalNumber(row.waterQuality?.nh4),
+        no2: toOptionalNumber(row.waterQuality?.no2),
+        alkalinityTotal: toOptionalNumber(row.waterQuality?.alkalinityTotal),
+        tom: toOptionalNumber(row.waterQuality?.tom),
+        hardnessCa: toOptionalNumber(row.waterQuality?.hardnessCa),
+        hardnessMg: toOptionalNumber(row.waterQuality?.hardnessMg),
+        hardnessTotal: toOptionalNumber(row.waterQuality?.hardnessTotal),
+      },
+      microbiology: {
+        vibrioYellow: toOptionalNumber(row.microbiology?.vibrioYellow),
+        vibrioGreen: toOptionalNumber(row.microbiology?.vibrioGreen),
+        vibrioTotal: toOptionalNumber(row.microbiology?.vibrioTotal),
+        tbc: toOptionalNumber(row.microbiology?.tbc),
+        tvcTbcRatioPercent: toOptionalNumber(row.microbiology?.tvcTbcRatioPercent),
+      },
+      plankton: {
+        totalCellPerMl,
+        beneficialCellPerMl: toOptionalNumber(row.plankton?.beneficialCellPerMl),
+        harmfulCellPerMl: toOptionalNumber(row.plankton?.harmfulCellPerMl),
+        chlorophytaCellPerMl: getPlanktonCellCount(row.plankton?.chlorophytaCellPerMl, row.plankton?.chlorophytaPercent, totalCellPerMl),
+        chlorophytaPercent: toOptionalNumber(row.plankton?.chlorophytaPercent),
+        chlorophytaSpecies: row.plankton?.chlorophytaSpecies?.trim() || null,
+        cyanophytaCellPerMl: getPlanktonCellCount(row.plankton?.cyanophytaCellPerMl, row.plankton?.cyanophytaPercent, totalCellPerMl),
+        cyanophytaPercent: toOptionalNumber(row.plankton?.cyanophytaPercent),
+        cyanophytaSpecies: row.plankton?.cyanophytaSpecies?.trim() || null,
+        diatomCellPerMl: getPlanktonCellCount(row.plankton?.diatomCellPerMl, row.plankton?.diatomPercent, totalCellPerMl),
+        diatomPercent: toOptionalNumber(row.plankton?.diatomPercent),
+        diatomSpecies: row.plankton?.diatomSpecies?.trim() || null,
+        chrysophytaCellPerMl: getPlanktonCellCount(row.plankton?.chrysophytaCellPerMl, row.plankton?.chrysophytaPercent, totalCellPerMl),
+        chrysophytaPercent: toOptionalNumber(row.plankton?.chrysophytaPercent),
+        chrysophytaSpecies: row.plankton?.chrysophytaSpecies?.trim() || null,
+        dinoflagellataCellPerMl: getPlanktonCellCount(row.plankton?.dinoflagellataCellPerMl, row.plankton?.dinoflagellataPercent, totalCellPerMl),
+        dinoflagellataPercent: toOptionalNumber(row.plankton?.dinoflagellataPercent),
+        dinoflagellataSpecies: row.plankton?.dinoflagellataSpecies?.trim() || null,
+        protozoaCellPerMl: getPlanktonCellCount(row.plankton?.protozoaCellPerMl, row.plankton?.protozoaPercent, totalCellPerMl),
+        protozoaPercent: toOptionalNumber(row.plankton?.protozoaPercent),
+        protozoaSpecies: row.plankton?.protozoaSpecies?.trim() || null,
+      },
+    };
+  };
 
   const toInputString = (value: unknown) => {
     if (value === null || value === undefined) return '';
@@ -1336,7 +1350,7 @@ export default function WaterQualityPage() {
         </div>
       )}
 
-      {/* ── HISTORY DRAWER ────────────────────────────── */}
+      {/* -- HISTORY DRAWER ------------------------------ */}
       {selectedPondForHistory && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'flex-end' }}>
           <div className="drawer-content animate-slide-left">
@@ -1398,7 +1412,7 @@ export default function WaterQualityPage() {
         </div>
       )}
 
-      {/* ── LAB REPORT ACTION MODAL ───────────────────── */}
+      {/* -- LAB REPORT ACTION MODAL --------------------- */}
       {isLabActionModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2900, background: 'rgba(15, 23, 42, 0.38)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
@@ -1483,7 +1497,7 @@ export default function WaterQualityPage() {
         </div>
       )}
 
-      {/* ── LAB REPORT MODAL ───────────────────────────────── */}
+      {/* -- LAB REPORT MODAL --------------------------------- */}
       {isLabModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
@@ -1665,7 +1679,7 @@ export default function WaterQualityPage() {
         </div>
       )}
 
-      {/* ── LOG MODAL ────────────────────────────────────────── */}
+      {/* -- LOG MODAL ------------------------------------------ */}
       {isModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
           <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
