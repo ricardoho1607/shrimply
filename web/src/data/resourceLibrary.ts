@@ -109,6 +109,36 @@ const sources = {
     publisher: "Responsible Seafood Advocate",
     url: "https://www.globalseafood.org/advocate/effects-of-probiotics-on-ammonia-degradation-in-vitro-and-in-pacific-white-shrimp-ponds/",
   },
+  woahEhpDiseaseCard: {
+    title: "Infection with Enterocytozoon hepatopenaei (EHP)",
+    publisher: "World Organisation for Animal Health",
+    url: "https://www.woah.org/app/uploads/2022/11/a-woah-ehp-disease-card-sept-2022.pdf",
+  },
+  nacaEhpControl: {
+    title: "Urgent Appeal to Control Spread of the Shrimp Microsporidian Parasite Enterocytozoon hepatopenaei",
+    publisher: "Network of Aquaculture Centres in Asia-Pacific",
+    url: "https://enaca.org/?id=101",
+  },
+  ehpDiagnosisReview: {
+    title: "Enterocytozoon hepatopenaei Infection in Shrimp: Diagnosis, Interventions, and Food Safety Guidelines",
+    publisher: "Microorganisms",
+    url: "https://www.mdpi.com/2076-2607/12/1/21",
+  },
+  ehpQpcrDetection: {
+    title: "Quantification of Enterocytozoon hepatopenaei (EHP) in Penaeid Shrimps Using TaqMan Probe-Based Quantitative PCR",
+    publisher: "Pathogens",
+    url: "https://www.mdpi.com/2076-0817/8/4/233",
+  },
+  ehpMicrobiomeProgression: {
+    title: "The Emerging Pathogen Enterocytozoon hepatopenaei Drives a Degenerative Cyclic Pattern in the Hepatopancreas Microbiome",
+    publisher: "Scientific Reports",
+    url: "https://www.nature.com/articles/s41598-022-19127-2",
+  },
+  ehpFarmManagementInterview: {
+    title: "Robins McIntosh on Everything You Need to Know About EHP and Shrimp Farming, Part 2",
+    publisher: "Responsible Seafood Advocate",
+    url: "https://www.globalseafood.org/advocate/robins-mcintosh-on-everything-you-need-to-know-about-ehp-and-shrimp-farming-part-2/",
+  },
   profitabilityReview: {
     title: "Comparative Analysis of Profitability and Resource Use Efficiency Between Penaeus monodon and Litopenaeus vannamei in India",
     publisher: "Aquaculture Reports",
@@ -690,6 +720,111 @@ export const resourceArticles: ResourceArticle[] = [
       sources.wfdBacterialCommunities,
       sources.wfsDesignedProbiotics,
       sources.probioticAmmoniaShrimpPonds,
+      sources.probioticsReview,
+    ],
+  },
+  {
+    slug: "ehp-shrimp-disease",
+    section: "Water, Health, and Risk",
+    label: "Disease Risk",
+    title: "EHP in Shrimp Farming: Why Growth Slows and How Farms Prevent Recurrence",
+    description: "A practical guide to Enterocytozoon hepatopenaei in vannamei shrimp, including signs, PCR confirmation, pond risk parameters, treatment reality, Bacillus support, and long-term prevention.",
+    readTime: "9 min read",
+    tags: ["EHP", "Enterocytozoon hepatopenaei", "PCR", "hepatopancreas", "growth retardation", "Bacillus", "biosecurity"],
+    publishedAt: "2026-06-13",
+    image: {
+      src: "/resources/images/ehp-shrimp-disease-guide.png",
+      alt: "EHP shrimp farming guide showing growth lag, PCR confirmation, pond spore control, risk factors, immediate response, and long-term biosecurity prevention",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Disease Alerts", href: "/features/disease-alerts" },
+    takeaways: [
+      "EHP is a microsporidian parasite of the hepatopancreas that usually causes chronic growth loss, uneven size, poor FCR, and weaker harvest value rather than sudden mass mortality.",
+      "Visual signs are not enough. Suspected EHP should be confirmed with PCR, histology, or qualified lab testing while the farm reviews MBW, ADG, FCR, feed response, and pond history.",
+      "There is no reliable in-pond cure once EHP is established, so prevention depends on screened PL, pond-bottom hygiene, sludge control, clean water movement, dedicated tools, and strict biosecurity.",
+    ],
+    sections: [
+      {
+        heading: "What EHP actually is",
+        body: [
+          "EHP stands for Enterocytozoon hepatopenaei. It is a spore-forming microsporidian parasite that infects the shrimp hepatopancreas, the organ responsible for digestion, nutrient absorption, and much of the animal's production performance.",
+          "The practical farm impact is often slow and expensive. EHP may not cause obvious mass mortality, but infected ponds can show retarded growth, uneven shrimp sizes, poor feed conversion, weak harvest value, and a cycle that becomes harder to predict.",
+          "EHP should also be separated from a simple water-quality problem. Poor water does not create EHP from nothing, but stress, organic load, and weak pond-bottom condition can make an infected pond perform worse and can hide the real cause if growth records are not reviewed carefully.",
+        ],
+      },
+      {
+        heading: "What farmers usually see",
+        body: [
+          "The most common warning sign is a pond that stops gaining weight as expected. MBW may move slowly, ADG may flatten, feed response may weaken, and size variation can become more obvious at sampling or harvest.",
+          "Some ponds show pale or empty gut, soft shell, poor appetite, or white fecal strings, but these signs are not consistent enough to diagnose EHP by sight. The WOAH disease card notes that external signs are often absent except for growth retardation over time, while white feces can appear in some cases and not others.",
+          "That is why the farm should treat EHP suspicion as a trend problem. A single observation is weak. A pattern across MBW, ADG, FCR, appetite, pond history, and lab results is much stronger.",
+        ],
+      },
+      {
+        heading: "How EHP spreads",
+        body: [
+          "EHP spreads through spores and horizontal transmission. Research and disease guidance describe spread through cohabitation, cannibalism, infected shrimp populations, contaminated pond environments, and potentially risky live or fresh feeds used in broodstock systems.",
+          "For grow-out farms, the highest practical risks are infected PL, ponds with previous EHP history, sludge and sediment that are not handled properly, shared nets or siphon tools, uncontrolled water movement, and weak separation between affected and unaffected ponds.",
+          "Because spores can persist in the farm environment, prevention has to include both animal movement and pond-bottom management. It is not enough to only change feed additives if infected material, sludge, tools, or water are still moving risk between ponds.",
+        ],
+      },
+      {
+        heading: "Parameters and records that expose EHP risk",
+        body: [
+          "EHP is best detected in farm records by comparing growth expectation against reality. Review MBW, ADG, size variation, FCR, feed tray response, survival, stocking source, PL batch, pond history, and previous disease notes.",
+          "Water-quality parameters still matter, but mainly because they explain stress and pond stability. Dissolved oxygen, pH, alkalinity, salinity, temperature, ammonia, nitrite, turbidity, and organic load should be reviewed alongside growth records, not used as a replacement for diagnosis.",
+          "A pond with stable water but poor growth may still have EHP. A pond with EHP plus unstable water, heavy sludge, or weak appetite can lose performance faster. The decision should come from the whole pond picture.",
+        ],
+      },
+      {
+        heading: "Diagnosis and immediate response",
+        body: [
+          "Confirm EHP with diagnostic testing where available. Molecular methods such as PCR, nested PCR, qPCR, LAMP, and related assays are used for confirmation, while histology or in situ hybridization may show infection in hepatopancreatic tissue.",
+          "While waiting for results, control spread. Stop unnecessary movement of shrimp, water, sludge, nets, boots, trays, and tools from suspect ponds to clean ponds. Keep sampling tools pond-specific where possible and record who entered which pond.",
+          "Operationally, the farm should review the harvest plan, feeding plan, pond-bottom condition, and recent sampling trend. The goal is to contain the risk, protect unaffected ponds, and avoid wasting feed on a biomass projection that is no longer realistic.",
+        ],
+      },
+      {
+        heading: "Treatment reality",
+        body: [
+          "EHP should not be sold to farmers as a disease with a simple pond-level cure. Current guidance and reviews focus on prevention, diagnosis, disinfection, biosecurity, and pathogen-free broodstock or PL because no reliable in-pond treatment consistently clears infected shrimp.",
+          "Antibiotics are not an EHP solution. EHP is a microsporidian parasite, not a normal bacterial disease, and casual antibiotic use can create residue, compliance, microbiome, and resistance problems without solving the underlying infection.",
+          "Supportive feed additives can still have a role. Bacillus and other probiotics may support gut condition, water quality, organic matter processing, immune status, and microbial balance. They should be used as part of prevention and resilience planning, not described as a cure that removes EHP from infected hepatopancreas tissue.",
+        ],
+      },
+      {
+        heading: "Long-term prevention plan",
+        body: [
+          "Prevention starts before stocking. Use EHP-screened broodstock and post-larvae where possible, keep hatchery and PL batch records, and avoid stocking seed with unknown health status into ponds with a previous EHP problem.",
+          "After an infected or suspected cycle, treat the pond as a spore-risk environment. Remove sludge, dry pond bottoms where the system allows it, disinfect according to qualified technical guidance, manage reservoirs and canals carefully, and do not rush re-stocking just because the water looks clear.",
+          "During the cycle, maintain biosecurity discipline. Use dedicated pond tools, control people and equipment movement, prevent cross-contamination from sludge or harvest handling, monitor growth weekly, and use probiotics or Bacillus programs as a stability tool before the pond becomes overloaded.",
+        ],
+      },
+      {
+        heading: "How Shrimply records help",
+        body: [
+          "EHP becomes easier to manage when the farm can connect stocking source, pond history, sampling records, MBW, ADG, FCR, feed response, mortality, water quality, disease notes, lab results, and treatment actions in one place.",
+          "For Orson AI and disease alerts, the useful input is not only one note that says EHP. The useful input is the last three to five sampling and water-quality records, feed response, mortality trend, pond history, PL source, and any PCR result. That context helps separate normal growth variation from a serious recurring disease pattern.",
+        ],
+      },
+    ],
+    checklist: [
+      "Screen PL batches for EHP by PCR where diagnostic access is available.",
+      "Record hatchery, PL batch, stocking date, pond history, and previous EHP or WFD notes.",
+      "Track MBW, ADG, size variation, FCR, feed tray response, and appetite every cycle.",
+      "Confirm suspected EHP with PCR, histology, or qualified lab testing instead of visual signs only.",
+      "Stop movement of tools, shrimp, sludge, water, boots, and harvest equipment from suspect ponds to clean ponds.",
+      "Remove sludge, dry pond bottoms, disinfect, and fallow high-risk ponds according to technical guidance after affected cycles.",
+      "Use Bacillus or other probiotics as supportive gut and pond-stability tools, not as a cure for EHP.",
+    ],
+    sources: [
+      sources.woahEhpDiseaseCard,
+      sources.nacaEhpControl,
+      sources.ehpDiagnosisReview,
+      sources.ehpQpcrDetection,
+      sources.ehpMicrobiomeProgression,
+      sources.ehpFarmManagementInterview,
       sources.probioticsReview,
     ],
   },

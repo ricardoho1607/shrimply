@@ -11,7 +11,7 @@ export type SeoPage = {
   lastModified: string;
 };
 
-export const PUBLIC_SITE_LAST_MODIFIED = "2026-06-12";
+export const PUBLIC_SITE_LAST_MODIFIED = "2026-06-13";
 
 export const canonicalUrl = (path: string) => {
   const siteUrl = SITE_CONFIG.url.replace(/\/$/, "");
