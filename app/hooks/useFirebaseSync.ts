@@ -1,18 +1,15 @@
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
 import { useEffect, useCallback, useState, useRef } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   doc, 
   collection, 
   onSnapshot, 
-  setDoc, 
-  updateDoc, 
-  deleteDoc, 
   serverTimestamp,
   writeBatch,
   query,
   orderBy,
   getDoc,
-  addDoc,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
@@ -75,6 +72,7 @@ const removeUndefinedFields = (value: any): any => {
 
 export const useFirebaseSync = () => {
   const { user, company } = useAuth();
+  const pendingStorageKey = user?.uid && company?.id ? `shrimply:pending-sync:${user.uid}:${company.id}` : null;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: false,
     isSyncing: false,
@@ -82,26 +80,75 @@ export const useFirebaseSync = () => {
   });
   
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
+  const [pendingStorageReady, setPendingStorageReady] = useState(false);
   const [unsubscribeCallbacks, setUnsubscribeCallbacks] = useState<(() => void)[]>([]);
+  const pendingChangesRef = useRef<PendingChange[]>([]);
   
   // Track current company to detect account switches
   const currentCompanyRef = useRef<string | null>(null);
   const listenersSetUp = useRef(false);
   const initialLoadComplete = useRef(false);
 
-  // Monitor network status
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: any) => {
-      const isOnline = state.isConnected === true;
-      setSyncStatus(prev => ({ ...prev, isOnline }));
-      
-      if (isOnline && pendingChanges.length > 0) {
-        setTimeout(() => syncPendingChanges(), 1000);
-      }
-    });
+    pendingChangesRef.current = pendingChanges;
+    setSyncStatus(prev => (
+      prev.pendingChanges === pendingChanges.length
+        ? prev
+        : { ...prev, pendingChanges: pendingChanges.length }
+    ));
+  }, [pendingChanges]);
 
-    return unsubscribe;
-  }, [pendingChanges.length]);
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadPendingChanges = async () => {
+      setPendingStorageReady(false);
+
+      if (!pendingStorageKey) {
+        setPendingChanges([]);
+        setPendingStorageReady(true);
+        return;
+      }
+
+      try {
+        const raw = await AsyncStorage.getItem(pendingStorageKey);
+        if (cancelled) return;
+        const parsed = raw ? JSON.parse(raw) : [];
+        const restoredChanges = Array.isArray(parsed) ? parsed : [];
+        setPendingChanges(restoredChanges);
+      } catch (error) {
+        console.error('Error loading pending sync queue:', error);
+        if (!cancelled) setPendingChanges([]);
+      } finally {
+        if (!cancelled) setPendingStorageReady(true);
+      }
+    };
+
+    loadPendingChanges();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingStorageKey]);
+
+  useEffect(() => {
+    if (!pendingStorageKey || !pendingStorageReady) return;
+
+    const persistPendingChanges = async () => {
+      try {
+        if (pendingChanges.length === 0) {
+          await AsyncStorage.removeItem(pendingStorageKey);
+        } else {
+          await AsyncStorage.setItem(pendingStorageKey, JSON.stringify(pendingChanges));
+        }
+      } catch (error) {
+        console.error('Error saving pending sync queue:', error);
+        setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
+      }
+    };
+
+    persistPendingChanges();
+  }, [pendingChanges, pendingStorageKey, pendingStorageReady]);
 
   // Clean up listeners when company changes (account switch)
   useEffect(() => {
@@ -365,6 +412,8 @@ export const useFirebaseSync = () => {
 
       for (const change of changes) {
         try {
+          let didProcess = false;
+
           if (change.type === 'pond') {
             const pondRef = doc(db, 'companies', company.id, 'ponds', change.data.id);
             
@@ -379,8 +428,10 @@ export const useFirebaseSync = () => {
                 })
               };
               batch.set(pondRef, pondData, { merge: change.action === 'update' });
+              didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(pondRef);
+              didProcess = true;
             }
           } 
           else if (change.type === 'physicalPond') {
@@ -396,8 +447,10 @@ export const useFirebaseSync = () => {
                 }),
               };
               batch.set(physicalPondRef, physicalPondData, { merge: change.action === 'update' });
+              didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(physicalPondRef);
+              didProcess = true;
             }
           }
           else if (change.type === 'cycle') {
@@ -413,8 +466,10 @@ export const useFirebaseSync = () => {
                 }),
               };
               batch.set(cycleRef, cycleData, { merge: change.action === 'update' });
+              didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(cycleRef);
+              didProcess = true;
             }
           }
           else if (change.type === 'harvest') {
@@ -430,8 +485,10 @@ export const useFirebaseSync = () => {
                 createdBy: user.uid
               };
               batch.set(harvestRef, harvestData);
+              didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(harvestRef);
+              didProcess = true;
             }
           }
           else if (change.type === 'sampling' && change.pondId) {
@@ -458,10 +515,11 @@ export const useFirebaseSync = () => {
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid
               });
+              didProcess = true;
             }
           }
           
-          processedChanges.push(change.id);
+          if (didProcess) processedChanges.push(change.id);
         } catch (error) {
           console.error(`Error processing change ${change.id}:`, error);
         }
@@ -483,7 +541,11 @@ export const useFirebaseSync = () => {
     };
 
     setPendingChanges(prev => [...prev, pendingChange]);
-    setSyncStatus(prev => ({ ...prev, pendingChanges: prev.pendingChanges + 1 }));
+
+    if (!syncStatus.isOnline) {
+      setSyncStatus(prev => ({ ...prev, error: undefined }));
+      return;
+    }
 
     commitChanges([pendingChange])
       .then((processedChanges) => {
@@ -492,7 +554,6 @@ export const useFirebaseSync = () => {
         setPendingChanges(prev => prev.filter(c => !processedChanges.includes(c.id)));
         setSyncStatus(prev => ({
           ...prev,
-          pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
           lastSync: new Date(),
           error: undefined,
         }));
@@ -503,7 +564,7 @@ export const useFirebaseSync = () => {
           error: 'Sync failed. Please try again.',
         }));
       });
-  }, [commitChanges]);
+  }, [commitChanges, syncStatus.isOnline]);
 
   // Sync pending changes to Firebase
   const syncPendingChanges = useCallback(async () => {
@@ -533,6 +594,26 @@ export const useFirebaseSync = () => {
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
   }, [commitChanges, company?.id, user, pendingChanges, syncStatus.isSyncing]);
+
+  // Monitor network status after the sync callback is available.
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener((state: any) => {
+      const isOnline = state.isConnected === true;
+      setSyncStatus(prev => ({ ...prev, isOnline }));
+
+      if (isOnline && pendingChangesRef.current.length > 0) {
+        setTimeout(() => syncPendingChanges(), 1000);
+      }
+    });
+
+    return unsubscribe;
+  }, [syncPendingChanges]);
+
+  useEffect(() => {
+    if (pendingStorageReady && syncStatus.isOnline && !syncStatus.isSyncing && pendingChanges.length > 0) {
+      syncPendingChanges();
+    }
+  }, [pendingStorageReady, pendingChanges.length, syncPendingChanges, syncStatus.isOnline, syncStatus.isSyncing]);
 
   // Sync methods
   const syncPond = useCallback((action: 'create' | 'update' | 'delete', pond: Pond) => {

@@ -255,12 +255,12 @@ export const buildOrsonPromptPayload = (
       topReason: outlook.topReason,
       nextAction: outlook.nextAction,
     },
-    findings: report.findings.slice(0, 5).map((finding) => ({
+    findings: report.findings.slice(0, 4).map((finding) => ({
       id: finding.id,
       severity: finding.severity,
       confidence: finding.confidence,
       summary: finding.summary,
-      evidence: finding.evidence.slice(0, 3),
+      evidence: finding.evidence.slice(0, 2),
       recommendation: finding.recommendation,
     })),
   };

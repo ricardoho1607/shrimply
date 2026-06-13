@@ -24,16 +24,15 @@ import {
   orderBy,
   onSnapshot,
   doc,
-  updateDoc,
   serverTimestamp,
-  getDoc,
   runTransaction,
   arrayUnion,
   Timestamp
 } from 'firebase/firestore';
+import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface FeedData {
   ancoPercentage: string;
   totalDailyFeed: string;
@@ -60,6 +59,26 @@ interface Pond {
   cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
+}
+
+interface FeedUsage {
+  id?: string;
+  date?: string;
+  quantity?: number | string;
+  unitPrice?: number | string;
+  totalCost?: number | string;
+  pondId?: string;
+  notes?: string;
+}
+
+interface InventoryFeed {
+  id: string;
+  feedName?: string;
+  brand?: string;
+  unit?: string;
+  totalStock?: number;
+  totalCost?: number;
+  usageHistory?: FeedUsage[];
 }
 
 const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
@@ -91,13 +110,13 @@ const canEditOperations = (role?: string) => role === 'owner' || role === 'co-ow
 export default function FeedRecordsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<{ uid: string; role?: string } | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
+  const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
 
   // Form State
   const [formData, setFormData] = useState<FeedData & { pondId: string; date: string }>({
@@ -117,7 +136,10 @@ export default function FeedRecordsPage() {
       if (firebaseUser) {
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const userData = uDoc.data();
-          setUser({ uid: firebaseUser.uid, ...userData });
+          setUser({
+            uid: firebaseUser.uid,
+            role: typeof userData?.role === 'string' ? userData.role : undefined,
+          });
           const cid = userData?.companyId;
           setCompanyId(cid);
           if (cid) {
@@ -132,8 +154,8 @@ export default function FeedRecordsPage() {
 
             // Fetch Inventory Feeds
             const qFeeds = query(collection(db, 'companies', cid, 'feeds'), orderBy('feedName', 'asc'));
-            const unsubFeeds = onSnapshot(qFeeds, (snapshot: any) => {
-              setInventoryFeeds(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() })));
+            const unsubFeeds = onSnapshot(qFeeds, (snapshot) => {
+              setInventoryFeeds(snapshot.docs.map((feedDoc) => ({ id: feedDoc.id, ...feedDoc.data() } as InventoryFeed)));
             });
 
             return () => {
@@ -149,7 +171,7 @@ export default function FeedRecordsPage() {
     return () => unsubAuth();
   }, []);
 
-  // ── Sync form data with existing records when pond/date changes ────
+  // -- Sync form data with existing records when pond/date changes ----
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
 
@@ -159,6 +181,7 @@ export default function FeedRecordsPage() {
     if (existing?.feedData) {
       // Data exists for this day, pre-fill the form
       const data = existing.feedData;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormData(prev => ({
         ...prev,
         ...data,
@@ -188,20 +211,23 @@ export default function FeedRecordsPage() {
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
-      const pondDoc = await getDoc(pondRef);
+      const requestedFeedId = formData.inventoryFeedId || '';
+      const feedAmount = parseFloat(formData.totalDailyFeed) || 0;
 
-      if (pondDoc.exists()) {
+      await runTransaction(db, async (transaction) => {
+        const pondDoc = await transaction.get(pondRef);
+        if (!pondDoc.exists()) throw new Error('Pond record not found');
+
         const pondData = pondDoc.data();
         const samplings = [...(pondData.samplings || [])];
         const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
         const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
 
-        const feedAmount = parseFloat(formData.totalDailyFeed) || 0;
         const feedData = {
           ancoPercentage: formData.ancoPercentage,
           totalDailyFeed: formData.totalDailyFeed,
-          inventoryFeedId: formData.inventoryFeedId || null,
+          inventoryFeedId: requestedFeedId || null,
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -235,81 +261,89 @@ export default function FeedRecordsPage() {
           });
         }
 
-        // 1. Update Pond Record
-        await updateDoc(pondRef, {
+        const feedIds = Array.from(new Set([previousInventoryFeedId, requestedFeedId].filter(Boolean)));
+        const feedSnapshots = new Map<string, DocumentSnapshot<DocumentData>>();
+        for (const feedId of feedIds) {
+          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
+          feedSnapshots.set(feedId, await transaction.get(feedRef));
+        }
+
+        const getFeedScreenUsageTotal = (feedId: string) => {
+          const feedDoc = feedSnapshots.get(feedId);
+          if (!feedDoc?.exists()) return 0;
+          const data = feedDoc.data() as InventoryFeed;
+          return (data.usageHistory || [])
+            .filter((usage) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
+            .reduce((sum: number, usage) => sum + (Number(usage.quantity) || 0), 0);
+        };
+
+        const adjustFeedUsage = (feedId: string, quantityDelta: number) => {
+          if (!feedId || !Number.isFinite(quantityDelta) || quantityDelta === 0) return;
+
+          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
+          const feedDoc = feedSnapshots.get(feedId);
+          if (!feedDoc?.exists()) {
+            throw new Error('Selected feed inventory item was not found.');
+          }
+
+          const currentFeedData = feedDoc.data() as InventoryFeed;
+          const currentStock = Number(currentFeedData.totalStock) || 0;
+          const currentCost = Number(currentFeedData.totalCost) || 0;
+          if (quantityDelta > 0 && quantityDelta > currentStock) {
+            throw new Error('Insufficient stock');
+          }
+
+          const matchingUsage = (currentFeedData.usageHistory || [])
+            .filter((usage) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
+            .slice()
+            .reverse()
+            .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
+          const historicalUnitPrice = matchingUsage
+            ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
+            : 0;
+          const unitPrice = currentStock > 0 ? currentCost / currentStock : historicalUnitPrice;
+          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+            throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
+          }
+
+          transaction.update(feedRef, {
+            totalStock: Math.max(0, currentStock - quantityDelta),
+            totalCost: quantityDelta > 0
+              ? Math.max(0, currentCost - (quantityDelta * unitPrice))
+              : currentCost + (Math.abs(quantityDelta) * unitPrice),
+            usageHistory: arrayUnion({
+              id: `usage-${formData.pondId}-${formData.date}-${Date.now()}`,
+              date: formData.date,
+              quantity: quantityDelta,
+              unitPrice,
+              totalCost: quantityDelta * unitPrice,
+              pondId: formData.pondId,
+              cycleId: pondData.cycleId,
+              cycleName: pondData.cycleName,
+              pondCycleId: pondData.pondCycleId || formData.pondId,
+              notes: `Daily feed for pond: ${pondData.pondName}`,
+              createdAt: Timestamp.now()
+            }),
+            lastUpdated: serverTimestamp()
+          });
+        };
+
+        if (previousInventoryFeedId && previousInventoryFeedId !== requestedFeedId) {
+          const previousDeducted = getFeedScreenUsageTotal(previousInventoryFeedId);
+          adjustFeedUsage(previousInventoryFeedId, -previousDeducted);
+        }
+
+        if (requestedFeedId) {
+          const alreadyDeducted = getFeedScreenUsageTotal(requestedFeedId);
+          adjustFeedUsage(requestedFeedId, feedAmount - alreadyDeducted);
+        }
+
+        transaction.update(pondRef, {
           samplings,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid
         });
-
-        const getFeedScreenUsageTotal = async (feedId: string) => {
-          const feedDoc = await getDoc(doc(db, 'companies', companyId, 'feeds', feedId));
-          if (!feedDoc.exists()) return 0;
-          return ((feedDoc.data() as any).usageHistory || [])
-            .filter((usage: any) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
-            .reduce((sum: number, usage: any) => sum + (Number(usage.quantity) || 0), 0);
-        };
-
-        const adjustFeedUsage = async (feedId: string, quantityDelta: number) => {
-          if (!feedId || !Number.isFinite(quantityDelta) || quantityDelta === 0) return;
-          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
-          await runTransaction(db, async (transaction: any) => {
-            const feedDoc = await transaction.get(feedRef);
-            if (!feedDoc.exists()) return;
-
-            const feedData = feedDoc.data() as any;
-            const currentStock = feedData.totalStock || 0;
-            const currentCost = feedData.totalCost || 0;
-            if (quantityDelta > 0 && quantityDelta > currentStock) {
-              throw new Error('Insufficient stock');
-            }
-            const matchingUsage = (feedData.usageHistory || [])
-              .filter((usage: any) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
-              .slice()
-              .reverse()
-              .find((usage: any) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
-            const historicalUnitPrice = matchingUsage
-              ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
-              : 0;
-            const unitPrice = currentStock > 0 ? currentCost / currentStock : historicalUnitPrice;
-            if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
-              throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
-            }
-            const newStock = Math.max(0, currentStock - quantityDelta);
-
-            transaction.update(feedRef, {
-              totalStock: newStock,
-              totalCost: quantityDelta > 0
-                ? Math.max(0, currentCost - (quantityDelta * unitPrice))
-                : currentCost + (Math.abs(quantityDelta) * unitPrice),
-              usageHistory: arrayUnion({
-                id: `usage-${Date.now()}`,
-                date: formData.date,
-                quantity: quantityDelta,
-                unitPrice,
-                totalCost: quantityDelta * unitPrice,
-                pondId: formData.pondId,
-                cycleId: pondData.cycleId,
-                cycleName: pondData.cycleName,
-                pondCycleId: pondData.pondCycleId || formData.pondId,
-                notes: `Daily feed for pond: ${pondData.pondName}`,
-                createdAt: Timestamp.now()
-              }),
-              lastUpdated: serverTimestamp()
-            });
-          });
-        };
-
-        // 2. Adjust inventory by the edit delta so resaving a feed day does not double-deduct stock.
-        if (previousInventoryFeedId && previousInventoryFeedId !== formData.inventoryFeedId) {
-          const previousDeducted = await getFeedScreenUsageTotal(previousInventoryFeedId);
-          await adjustFeedUsage(previousInventoryFeedId, -previousDeducted);
-        }
-
-        if (formData.inventoryFeedId) {
-          const alreadyDeducted = await getFeedScreenUsageTotal(formData.inventoryFeedId);
-          await adjustFeedUsage(formData.inventoryFeedId, feedAmount - alreadyDeducted);
-        }
+      });
 
         setModalOpen(false);
         setFormData({
@@ -322,10 +356,9 @@ export default function FeedRecordsPage() {
           anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
           anco6: '', anco7: '', anco8: '', anco9: '', anco10: ''
         });
-      }
     } catch (error) {
       console.error('Error adding feed record:', error);
-      alert('Failed to update feed record.');
+      alert(error instanceof Error ? error.message : 'Failed to update feed record.');
     }
   };
 
@@ -447,7 +480,8 @@ export default function FeedRecordsPage() {
                           <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center' }}>F{fNum}</div>
                           <div style={{ display: 'flex', gap: '4px' }}>
                             {[fNum*2-1, fNum*2].map(tNum => {
-                              const val = (latest as any)?.[`anco${tNum}`];
+                              const ancoKey = `anco${tNum}` as keyof FeedData;
+                              const val = latest?.[ancoKey];
                               const isFinished = val === '100';
                               const hasData = val !== undefined && val !== '';
                               return (
@@ -488,7 +522,7 @@ export default function FeedRecordsPage() {
         </div>
       )}
 
-      {/* ── HISTORY DRAWER ────────────────────────────────── */}
+      {/* -- HISTORY DRAWER ---------------------------------- */}
       {selectedPondForHistory && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'flex-end' }}>
           <div style={{ width: '100%', maxWidth: '560px', background: '#FFFFFF', height: '100vh', boxShadow: '-10px 0 50px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', animation: 'drawerSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
@@ -519,20 +553,26 @@ export default function FeedRecordsPage() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
-                        {[1, 2, 3, 4, 5].map(n => (
-                          <div key={n} style={{ textAlign: 'center', padding: '10px 8px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 72px', minWidth: '72px', maxWidth: '92px' }}>
-                            <div style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-faint)', marginBottom: '6px', letterSpacing: '0.02em' }}>F{n} TRAYS</div>
-                            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
-                              <span style={{ fontSize: '11px', fontWeight: 900, color: (log.feedData as any)[`anco${n*2-1}`] === '100' ? '#22c55e' : '#f59e0b' }}>
-                                {(log.feedData as any)[`anco${n*2-1}`] || '-'}%
-                              </span>
-                              <span style={{ color: 'var(--border)', fontWeight: 300 }}>|</span>
-                              <span style={{ fontSize: '11px', fontWeight: 900, color: (log.feedData as any)[`anco${n*2}`] === '100' ? '#22c55e' : '#f59e0b' }}>
-                                {(log.feedData as any)[`anco${n*2}`] || '-'}%
-                              </span>
+                        {[1, 2, 3, 4, 5].map(n => {
+                          const firstAncoKey = `anco${n*2-1}` as keyof FeedData;
+                          const secondAncoKey = `anco${n*2}` as keyof FeedData;
+                          const firstAncoValue = log.feedData?.[firstAncoKey] || '-';
+                          const secondAncoValue = log.feedData?.[secondAncoKey] || '-';
+                          return (
+                            <div key={n} style={{ textAlign: 'center', padding: '10px 8px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 72px', minWidth: '72px', maxWidth: '92px' }}>
+                              <div style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-faint)', marginBottom: '6px', letterSpacing: '0.02em' }}>F{n} TRAYS</div>
+                              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
+                                <span style={{ fontSize: '11px', fontWeight: 900, color: firstAncoValue === '100' ? '#22c55e' : '#f59e0b' }}>
+                                  {firstAncoValue}%
+                                </span>
+                                <span style={{ color: 'var(--border)', fontWeight: 300 }}>|</span>
+                                <span style={{ fontSize: '11px', fontWeight: 900, color: secondAncoValue === '100' ? '#22c55e' : '#f59e0b' }}>
+                                  {secondAncoValue}%
+                                </span>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', background: 'var(--primary-dim)', borderRadius: '12px', border: '1px solid var(--border)' }}>
                         <TrendingUp size={16} color="var(--primary)" />
@@ -549,7 +589,7 @@ export default function FeedRecordsPage() {
         </div>
       )}
 
-      {/* ── LOG MODAL ────────────────────────────────────── */}
+      {/* -- LOG MODAL -------------------------------------- */}
       {isModalOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
           <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '650px', background: '#FFFFFF', padding: '0', overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
@@ -615,33 +655,40 @@ export default function FeedRecordsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feeding Amounts (kg)</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>F{n}</span>
-                        <input type="number" placeholder="0" value={(formData as any)[`feed${n}`] || ''} onChange={e => {
-                          const newF = { ...formData, [`feed${n}`]: e.target.value };
-                          const total = [newF.feed1 || '', newF.feed2 || '', newF.feed3 || '', newF.feed4 || '', newF.feed5 || ''].reduce((s,v) => s + (parseFloat(v) || 0), 0);
-                          setFormData({ ...newF, totalDailyFeed: total.toFixed(2) });
-                        }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }} />
-                      </div>
-                    ))}
+                    {[1, 2, 3, 4, 5].map(n => {
+                      const feedKey = `feed${n}` as keyof FeedData;
+                      return (
+                        <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>F{n}</span>
+                          <input type="number" placeholder="0" value={formData[feedKey] || ''} onChange={e => {
+                            const newF = { ...formData, [feedKey]: e.target.value };
+                            const total = [newF.feed1 || '', newF.feed2 || '', newF.feed3 || '', newF.feed4 || '', newF.feed5 || ''].reduce((s,v) => s + (parseFloat(v) || 0), 0);
+                            setFormData({ ...newF, totalDailyFeed: total.toFixed(2) });
+                          }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }} />
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Observations (%)</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
-                    {[1, 2, 3, 4, 5].map(n => (
-                      <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>Tr {n*2-1}/{n*2}</span>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <input placeholder="100" value={(formData as any)[`anco${n*2-1}`] || ''} onChange={e => setFormData({...formData, [`anco${n*2-1}`]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
-                            <input placeholder="100" value={(formData as any)[`anco${n*2}`] || ''} onChange={e => setFormData({...formData, [`anco${n*2}`]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
+                    {[1, 2, 3, 4, 5].map(n => {
+                      const firstAncoKey = `anco${n*2-1}` as keyof FeedData;
+                      const secondAncoKey = `anco${n*2}` as keyof FeedData;
+                      return (
+                        <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>Tr {n*2-1}/{n*2}</span>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <input placeholder="100" value={formData[firstAncoKey] || ''} onChange={e => setFormData({...formData, [firstAncoKey]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
+                              <input placeholder="100" value={formData[secondAncoKey] || ''} onChange={e => setFormData({...formData, [secondAncoKey]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>

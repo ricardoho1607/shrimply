@@ -23,8 +23,15 @@ import {
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
+import {
+  DAY_MS,
+  calculatePondMetricsWithHarvest,
+  getSamplingMbw,
+  isBaselineSampling,
+  toFiniteNumber,
+} from '../../../../../../shared/pondCalculations';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface Sampling {
   id: string;
   date: string;
@@ -74,17 +81,7 @@ interface FarmCycle {
   status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
 }
 
-/* ─── Robust Calculation Utilities (Mobile + Web Parity) ──── */
-
-const toFiniteNumber = (value: unknown): number => {
-  const parsed = typeof value === 'number' ? value : Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
-  Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
-
-const DAY_MS = 1000 * 60 * 60 * 24;
+/* --- Robust Calculation Utilities (Mobile + Web Parity) ---- */
 
 type GrowthPoint = {
   x: number;
@@ -139,160 +136,36 @@ const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
     .filter((series) => series.data.length > 0);
 };
 
-const getSamplingFeedAmount = (sampling: Pick<Sampling, 'feed' | 'feedData'>): number => {
-  const samplingFeed = toFiniteNumber(sampling.feed);
-  if (samplingFeed > 0) return samplingFeed;
-  return toFiniteNumber(sampling.feedData?.totalDailyFeed);
-};
-
-const getPondCurrentDoc = (pond: Pick<Pond, 'docStart' | 'baselineDate' | 'baselineDoc'>): number => {
-  const docFromStart = Math.floor((Date.now() - new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24));
-  const baselineDoc = toFiniteNumber(pond.baselineDoc);
-  const baselineDate = pond.baselineDate ? new Date(pond.baselineDate) : null;
-  if (baselineDoc > 0 && baselineDate && !Number.isNaN(baselineDate.getTime())) {
-    const daysSinceBaseline = Math.floor((Date.now() - baselineDate.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.max(0, baselineDoc + Math.max(0, daysSinceBaseline));
-  }
-  return Math.max(0, Number.isFinite(docFromStart) ? docFromStart : 0);
-};
-
-const getPondBaselineFeed = (pond: Pick<Pond, 'baselineCumulativeFeed' | 'samplings'>): number => {
-  const pondLevelFeed = toFiniteNumber(pond.baselineCumulativeFeed);
-  if (pondLevelFeed > 0) return pondLevelFeed;
-
-  return (pond.samplings || [])
-    .filter(isBaselineSampling)
-    .reduce((maxFeed, sampling) => Math.max(maxFeed, toFiniteNumber(sampling.cumulativeFeedToDate) || getSamplingFeedAmount(sampling)), 0);
-};
-
-const getPondOperationalFeed = (pond: Pick<Pond, 'samplings'>): number => {
-  const operationalSamplings = (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling));
-  const feedManagementFeed = operationalSamplings
-    .filter((sampling) => sampling.feedData)
-    .reduce((total, sampling) => total + getSamplingFeedAmount(sampling), 0);
-  const samplingFeed = operationalSamplings
-    .filter((sampling) => Number(sampling.mbw || sampling.abw) > 0 || Number(sampling.mortality) > 0 || Number(sampling.feed) > 0)
-    .reduce((total, sampling) => total + toFiniteNumber(sampling.feed), 0);
-
-  return feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
-};
-
-const getPondTotalFeedConsumed = (pond: Pick<Pond, 'baselineCumulativeFeed' | 'samplings'>): number =>
-  getPondBaselineFeed(pond) + getPondOperationalFeed(pond);
-
-const getPondBaselinePopulation = (pond: Pick<Pond, 'initialPopulation' | 'initialStock' | 'baselineEstimatedPopulation' | 'baselineSurvivalRate' | 'samplings'>): number | null => {
-  const initialPop = pond.initialPopulation || pond.initialStock || 0;
-  const estimatedPopulation = toFiniteNumber(pond.baselineEstimatedPopulation);
-  if (estimatedPopulation > 0) return estimatedPopulation;
-
-  const survivalRate = toFiniteNumber(pond.baselineSurvivalRate);
-  if (survivalRate > 0 && initialPop > 0) return Math.round((initialPop * survivalRate) / 100);
-
-  const baselineSampling = (pond.samplings || []).find(isBaselineSampling);
-  const samplingPopulation = toFiniteNumber(baselineSampling?.estimatedPopulation);
-  if (samplingPopulation > 0) return samplingPopulation;
-
-  const samplingSurvival = toFiniteNumber(baselineSampling?.estimatedSurvivalRate);
-  if (samplingSurvival > 0 && initialPop > 0) return Math.round((initialPop * samplingSurvival) / 100);
-
-  return null;
-};
-
 const calculatePondStats = (pond: Pond) => {
   const samplings = pond.samplings || [];
   // Sort by date ascending to correctly identify latest/previous
   const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const operationalSorted = sorted.filter((sampling) => !isBaselineSampling(sampling));
+  const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
   
-  // Normalize latest sampling data (checking for mbw and abw)
-  const latestRaw = operationalSorted[operationalSorted.length - 1] || {};
-  const latest = {
-    mbw: latestRaw.mbw || latestRaw.abw || 0,
-    mortality: latestRaw.mortality || 0,
-    feed: latestRaw.feed || (latestRaw.feedData?.totalDailyFeed ? parseFloat(latestRaw.feedData.totalDailyFeed) : 0),
-    date: latestRaw.date || new Date().toISOString()
-  };
-
   const previousRaw = operationalSorted[operationalSorted.length - 2] || null;
   const previous = previousRaw ? {
-    mbw: previousRaw.mbw || previousRaw.abw || 0,
+    mbw: getSamplingMbw(previousRaw),
     date: previousRaw.date
   } : null;
 
   // Normalize pond base data (checking for mobile field names)
   const initialPop = pond.initialPopulation || pond.initialStock || 0;
-  const initialW = pond.initialWeight || 0.5;
-  const docStart = new Date(pond.docStart);
-  const docDays = getPondCurrentDoc(pond);
-  
-  // Find latest valid MBW across history (handling records without MBW updates)
-  const lastRecordedMBW = [...operationalSorted].reverse().find(s => (s.mbw || s.abw || 0) > 0);
-  const currentMBW = lastRecordedMBW ? (lastRecordedMBW.mbw || lastRecordedMBW.abw) : (pond.baselineMbw || initialW);
-
-  // 1. Calculate Population & Survival Rate (SR)
-  const baselinePopulation = getPondBaselinePopulation(pond);
-  const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;
-  const totalMortality = sorted
-    .filter((s) => !isBaselineSampling(s))
-    .reduce((sum, s) => sum + (s.mortality || 0), 0);
-  const postBaselineMortality = sorted
-    .filter((s) => !isBaselineSampling(s) && (!baselineTime || new Date(s.date).getTime() >= baselineTime))
-    .reduce((sum, s) => sum + (s.mortality || 0), 0);
-  const population = Math.max(0, baselinePopulation !== null ? baselinePopulation - postBaselineMortality : initialPop - totalMortality);
-  const sr = initialPop > 0 ? (population / initialPop) * 100 : 0;
-  
-  // 2. Calculate Biomass (kg)
-  const biomass = (population * (currentMBW || 0)) / 1000;
-  
-  // 3. Calculate Size (pcs/kg)
-  const size = (currentMBW || 0) > 0 ? Math.round(1000 / (currentMBW || 1)) : 0;
-  
-  // 4. Calculate ADG (Average Daily Growth)
-  const validSamplings = operationalSorted.filter(s => (s.mbw || s.abw || 0) > 0);
-  const baselineSampling = sorted.filter(isBaselineSampling).reverse()[0];
-  let adg = 0;
-  if (validSamplings.length) {
-    const currentSampling = validSamplings[validSamplings.length - 1];
-    const currentSamplingTime = new Date(currentSampling.date).getTime();
-    const baselineSamplingTime = baselineSampling ? new Date(baselineSampling.date).getTime() : Number.NaN;
-    const validBaselineSampling = baselineSampling &&
-      Number.isFinite(baselineSamplingTime) &&
-      baselineSamplingTime < currentSamplingTime
-      ? baselineSampling
-      : undefined;
-    const previousSampling = [...validSamplings]
-      .reverse()
-      .find((sample) => new Date(sample.date).getTime() < currentSamplingTime) || validBaselineSampling;
-    const currentWeight = currentSampling.mbw || currentSampling.abw || 0;
-    const previousWeight = previousSampling?.mbw || previousSampling?.abw || initialW;
-    const previousDate = previousSampling?.date || pond.docStart;
-    const daysDiff = (currentSamplingTime - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24);
-    if (daysDiff > 0) {
-      adg = (currentWeight - previousWeight) / daysDiff;
-    }
-  }
-
-  // 5. Calculate FCR (Feed Conversion Ratio)
-  const totalFeed = getPondTotalFeedConsumed(pond);
-  
-  const initialBiomass = (initialPop * initialW) / 1000;
-  const biomassGain = biomass - initialBiomass;
-  const fcr = biomassGain > 0 ? totalFeed / biomassGain : 0;
 
   return {
     pondName: pond.pondName,
-    doc: docDays,
-    population,
-    biomass,
-    sr,
-    mbw: currentMBW,
+    doc: biologicalMetrics.doc,
+    population: biologicalMetrics.currentPopulation,
+    biomass: biologicalMetrics.currentBiomass,
+    sr: biologicalMetrics.adjustedSR,
+    mbw: biologicalMetrics.latestMbw,
     prevMbw: previous?.mbw || 0,
-    size,
-    adg,
-    fcr,
-    totalFeed,
-    mortality: totalMortality,
-    mortalityPct: (totalMortality / (initialPop || 1)) * 100
+    size: biologicalMetrics.size,
+    adg: biologicalMetrics.adg,
+    fcr: biologicalMetrics.biomassGainFCR,
+    totalFeed: biologicalMetrics.totalFeedConsumed,
+    mortality: biologicalMetrics.totalMortality,
+    mortalityPct: (biologicalMetrics.totalMortality / (initialPop || 1)) * 100
   };
 };
 
@@ -415,7 +288,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
   );
 };
 
-/* ─── PDF Generation HTML Template ────────────────────────── */
+/* --- PDF Generation HTML Template -------------------------- */
 const generateShrimpReportHTML = (data: any, t: any): string => {
   const { farmName, technician, reportPeriod, companyName, ponds, chartUrl } = data;
   const global = getGlobalAverages(ponds);

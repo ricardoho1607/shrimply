@@ -9,22 +9,14 @@ import type {
   OrsonSurvivalAssumption,
   OrsonTrendResult,
 } from './types';
-
-const FEED_RATE_TABLE = [
-  { mbwG: 0.01, ratePercent: null },
-  { mbwG: 0.65, ratePercent: null },
-  { mbwG: 1.65, ratePercent: 6.5 },
-  { mbwG: 3, ratePercent: 6.5 },
-  { mbwG: 5, ratePercent: 5.5 },
-  { mbwG: 7.5, ratePercent: 4.2 },
-  { mbwG: 10.5, ratePercent: 3.6 },
-  { mbwG: 14, ratePercent: 3.3 },
-  { mbwG: 17.5, ratePercent: 3.1 },
-  { mbwG: 21, ratePercent: 2.9 },
-  { mbwG: 25, ratePercent: 2.7 },
-  { mbwG: 29, ratePercent: 2.5 },
-  { mbwG: 33, ratePercent: 2.3 },
-];
+import {
+  calculatePondMetricsWithHarvest,
+  detectFeedBiomassMismatchInsight,
+  getFeedRateFromMbw,
+  getPondBaselineFeed,
+  getPondOperationalFeed,
+  type SharedPond,
+} from '../shared/pondCalculations';
 
 const hasNumber = (value: OrsonNumber): value is number => value !== null && Number.isFinite(value);
 
@@ -38,7 +30,7 @@ const round = (value: number, decimals = 3): number => {
 const recordsWith = (
   pond: OrsonNormalizedPond,
   selector: (record: OrsonNormalizedRecord) => OrsonNumber,
-): Array<{ record: OrsonNormalizedRecord; value: number }> => {
+): { record: OrsonNormalizedRecord; value: number }[] => {
   return pond.records
     .map((record) => ({ record, value: selector(record) }))
     .filter((point): point is { record: OrsonNormalizedRecord; value: number } => hasNumber(point.value));
@@ -52,45 +44,15 @@ const latestWith = (
   return points.length > 0 ? points[points.length - 1] : null;
 };
 
-const sumPositive = (
-  pond: OrsonNormalizedPond,
-  selector: (record: OrsonNormalizedRecord) => OrsonNumber,
-): number => {
-  return recordsWith(pond, selector).reduce((sum, point) => {
-    return point.value > 0 ? sum + point.value : sum;
-  }, 0);
-};
-
 const minNumber = (...values: OrsonNumber[]): OrsonNumber => {
   const valid = values.filter(hasNumber);
   if (valid.length === 0) return null;
   return Math.min(...valid);
 };
 
-const averageNumber = (...values: OrsonNumber[]): OrsonNumber => {
-  const valid = values.filter(hasNumber);
-  if (valid.length === 0) return null;
-  return valid.reduce((sum, value) => sum + value, 0) / valid.length;
-};
-
 export const getFeedRatePercentFromMbw = (mbwG: OrsonNumber): OrsonNumber => {
-  if (!hasNumber(mbwG) || mbwG <= 0) return null;
-  if (mbwG > 33) return 2.1;
-
-  for (let index = 0; index < FEED_RATE_TABLE.length - 1; index += 1) {
-    const current = FEED_RATE_TABLE[index];
-    const next = FEED_RATE_TABLE[index + 1];
-
-    if (current.ratePercent === null) continue;
-    if (mbwG <= current.mbwG) return current.ratePercent;
-
-    if (mbwG >= current.mbwG && mbwG <= next.mbwG && next.ratePercent !== null) {
-      const ratio = (mbwG - current.mbwG) / (next.mbwG - current.mbwG);
-      return round(current.ratePercent + ratio * (next.ratePercent - current.ratePercent), 3);
-    }
-  }
-
-  return FEED_RATE_TABLE[FEED_RATE_TABLE.length - 1].ratePercent;
+  const feedRate = hasNumber(mbwG) ? getFeedRateFromMbw(mbwG) : null;
+  return hasNumber(feedRate) ? round(feedRate) : null;
 };
 
 export const calculateDoc = (docStartTimestampMs: number | null, targetTimestampMs: number | null): number | null => {
@@ -99,7 +61,7 @@ export const calculateDoc = (docStartTimestampMs: number | null, targetTimestamp
 };
 
 export const calculateTrend = (
-  points: Array<{ timestampMs: number | null; value: OrsonNumber }>,
+  points: { timestampMs: number | null; value: OrsonNumber }[],
 ): OrsonTrendResult => {
   const valid = points.filter(
     (point): point is { timestampMs: number; value: number } => point.timestampMs !== null && hasNumber(point.value),
@@ -136,7 +98,7 @@ export const calculateTrend = (
 
 const calculateAdg = (
   pond: OrsonNormalizedPond,
-  mbwPoints: Array<{ record: OrsonNormalizedRecord; value: number }>,
+  mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): OrsonNumber => {
   if (mbwPoints.length >= 2) {
     const previous = mbwPoints[mbwPoints.length - 2];
@@ -158,7 +120,7 @@ const calculateAdg = (
 
 const calculateSmoothedAdg = (
   pond: OrsonNormalizedPond,
-  mbwPoints: Array<{ record: OrsonNormalizedRecord; value: number }>,
+  mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): OrsonNumber => {
   const recent = mbwPoints.slice(-4);
   if (recent.length >= 2) {
@@ -174,7 +136,7 @@ const calculateSmoothedAdg = (
 };
 
 const detectMbwOutliers = (
-  mbwPoints: Array<{ record: OrsonNormalizedRecord; value: number }>,
+  mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): string[] => {
   if (mbwPoints.length < 3) return [];
 
@@ -321,27 +283,54 @@ const biomassRangeFromPopulationRange = (
   };
 };
 
+const toSharedPond = (pond: OrsonNormalizedPond): SharedPond => ({
+  docStart: pond.docStartDate,
+  baselineDate: pond.baselineDate,
+  baselineDoc: pond.baselineDoc,
+  baselineMbw: pond.baselineMbwG,
+  initialPopulation: pond.initialPopulation,
+  initialWeight: pond.initialWeightG,
+  baselineEstimatedPopulation: pond.baselineEstimatedPopulation,
+  baselineSurvivalRate: pond.baselineSurvivalRate,
+  baselineCumulativeFeed: pond.baselineCumulativeFeedKg,
+  totalHarvestedPopulation: pond.totalHarvestedPopulation,
+  totalHarvestedBiomass: pond.totalHarvestedBiomassKg,
+  samplings: pond.records.map((record) => ({
+    id: record.id ?? undefined,
+    date: record.date ?? undefined,
+    mbw: record.mbwG,
+    mortality: record.mortalityCount,
+    feed: record.feedKg,
+    feedData: record.feedData
+      ? {
+          totalDailyFeed: record.feedData.totalDailyFeedKg,
+        }
+      : null,
+    isBaselineEstimate: record.isBaselineEstimate,
+    source: record.isBaselineEstimate ? 'midcycle_onboarding' : null,
+    cumulativeFeedToDate: record.isBaselineEstimate ? record.feedKg : null,
+  })),
+});
+
 const calculateFeedBiomassModel = (params: {
   pond: OrsonNormalizedPond;
   latestMbwG: OrsonNumber;
-  estimatedCurrentPopulation: OrsonNumber;
   estimatedBiomassKg: OrsonNumber;
-  totalFeedKg: number;
   totalMortalityCount: number;
   harvestedPopulation: number;
   appetiteTrend: OrsonTrendResult;
   doMinimumLatest: OrsonNumber;
+  sharedPond: SharedPond;
 }): OrsonFeedBiomassModel => {
   const {
     pond,
     latestMbwG,
-    estimatedCurrentPopulation,
     estimatedBiomassKg,
-    totalFeedKg,
     totalMortalityCount,
     harvestedPopulation,
     appetiteTrend,
     doMinimumLatest,
+    sharedPond,
   } = params;
 
   const latestFeedRecord = latestWith(pond, (record) => record.isBaselineEstimate ? null : positive(record.feedKg));
@@ -377,13 +366,9 @@ const calculateFeedBiomassModel = (params: {
   if (hasNumber(feedPressureRatio) && feedPressureRatio < 0.75) {
     warnings.push('Logged feed is lower than expected for the estimated biomass; survival or MBW may be overestimated.');
   }
-  if (hasNumber(feedBasedPopulation) && hasNumber(estimatedCurrentPopulation)) {
-    const differenceRatio = estimatedCurrentPopulation > 0
-      ? Math.abs(feedBasedPopulation - estimatedCurrentPopulation) / estimatedCurrentPopulation
-      : 0;
-    if (differenceRatio > 0.35) {
-      warnings.push('Feed-based population and mortality-based population disagree by more than 35%.');
-    }
+  const feedBiomassInsight = detectFeedBiomassMismatchInsight(sharedPond);
+  if (feedBiomassInsight?.latest) {
+    warnings.push(`Feed-based biomass and record biomass disagree by ${feedBiomassInsight.latest.differencePercent.toFixed(0)}% across ${feedBiomassInsight.requiredRecords} recent records.`);
   }
   if (survivalAssumption.confidence === 'low') {
     warnings.push(survivalAssumption.reason);
@@ -404,28 +389,23 @@ const calculateFeedBiomassModel = (params: {
 };
 
 export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetrics => {
+  const sharedPond = toSharedPond(pond);
+  const sharedMetrics = calculatePondMetricsWithHarvest(sharedPond);
   const mbwPoints = recordsWith(pond, (record) => positive(record.mbwG));
   const latestMbw = mbwPoints.length > 0 ? mbwPoints[mbwPoints.length - 1] : null;
-  const latestMbwG = latestMbw?.value ?? pond.initialWeightG;
-  const baselineRecordFeedKg = sumPositive(pond, (record) => record.isBaselineEstimate ? record.feedKg : null);
-  const baselineFeedKg = positive(pond.baselineCumulativeFeedKg) ?? baselineRecordFeedKg;
-  const operationalFeedKg = sumPositive(pond, (record) => record.isBaselineEstimate ? null : record.feedKg);
-  const totalFeedKg = baselineFeedKg + operationalFeedKg;
-  const totalMortalityCount = sumPositive(pond, (record) => record.isBaselineEstimate ? null : record.mortalityCount);
+  const latestMbwG = sharedMetrics.latestMbw;
+  const baselineFeedKg = getPondBaselineFeed(sharedPond);
+  const totalFeedKg = sharedMetrics.totalFeedConsumed;
+  const operationalFeedKg = getPondOperationalFeed(sharedPond);
+  const totalMortalityCount = sharedMetrics.totalMortality;
   const harvestedPopulation = positive(pond.totalHarvestedPopulation) ?? 0;
-  const harvestedBiomassKg = positive(pond.totalHarvestedBiomassKg) ?? 0;
-  const baselinePopulation = positive(pond.baselineEstimatedPopulation) ??
-    (hasNumber(pond.baselineSurvivalRate) && hasNumber(pond.initialPopulation)
-      ? (pond.initialPopulation * pond.baselineSurvivalRate) / 100
-      : null);
+  const estimatedCurrentPopulation = sharedMetrics.currentPopulation;
 
-  const estimatedCurrentPopulation = hasNumber(baselinePopulation)
-    ? Math.max(0, baselinePopulation - totalMortalityCount - harvestedPopulation)
-    : hasNumber(pond.initialPopulation)
-      ? Math.max(0, pond.initialPopulation - totalMortalityCount - harvestedPopulation)
-      : null;
-
-  const hasMidcycleBaseline = pond.cycleStartMode === 'midcycle' || Boolean(pond.baselineDate) || baselineFeedKg > 0 || hasNumber(baselinePopulation);
+  const hasMidcycleBaseline = pond.cycleStartMode === 'midcycle' ||
+    Boolean(pond.baselineDate) ||
+    baselineFeedKg > 0 ||
+    hasNumber(pond.baselineEstimatedPopulation) ||
+    hasNumber(pond.baselineSurvivalRate);
   const dataAssumptions = hasMidcycleBaseline
     ? [
         `This pond was onboarded mid-cycle${pond.baselineDate ? ` on ${pond.baselineDate}` : ''}. Pre-onboarding feed, survival, and biomass are user-provided estimates.`,
@@ -433,24 +413,18 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
       ]
     : [];
 
-  const estimatedSurvivalPercent = hasNumber(estimatedCurrentPopulation) && hasNumber(pond.initialPopulation) && pond.initialPopulation > 0
-    ? round((estimatedCurrentPopulation / pond.initialPopulation) * 100, 2)
-    : null;
-
-  const estimatedBiomassKg = hasNumber(estimatedCurrentPopulation) && hasNumber(latestMbwG)
-    ? round((estimatedCurrentPopulation * latestMbwG) / 1000, 2)
-    : null;
+  const estimatedSurvivalPercent = round(sharedMetrics.adjustedSR, 2);
+  const estimatedBiomassKg = round(sharedMetrics.currentBiomass, 2);
 
   const initialBiomassKg = hasNumber(pond.initialPopulation) && hasNumber(pond.initialWeightG)
     ? (pond.initialPopulation * pond.initialWeightG) / 1000
     : null;
 
   const biomassGainKg = hasNumber(estimatedBiomassKg) && hasNumber(initialBiomassKg)
-    ? round(Math.max(0, estimatedBiomassKg + harvestedBiomassKg - initialBiomassKg), 2)
+    ? round(Math.max(0, estimatedBiomassKg + (positive(pond.totalHarvestedBiomassKg) ?? 0) - initialBiomassKg), 2)
     : null;
 
-  const usableFeedKg = Math.max(0, totalFeedKg - (positive(pond.totalHarvestedFeedKg) ?? 0));
-  const fcr = hasNumber(biomassGainKg) && biomassGainKg > 0 ? round(usableFeedKg / biomassGainKg, 3) : null;
+  const fcr = round(sharedMetrics.biomassGainFCR);
 
   const latestWq = latestWith(pond, (record) => minNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening));
   const phSwingLatest = latestWq ? (() => {
@@ -490,13 +464,12 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
   const feedBiomassModel = calculateFeedBiomassModel({
     pond,
     latestMbwG,
-    estimatedCurrentPopulation,
     estimatedBiomassKg,
-    totalFeedKg,
     totalMortalityCount,
     harvestedPopulation,
     appetiteTrend,
     doMinimumLatest: roundedDoMinimumLatest,
+    sharedPond,
   });
 
   return {

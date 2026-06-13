@@ -6,17 +6,11 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { usePondStore, type Pond, getPondBaselinePopulation, getPondCurrentDoc, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, getPondCurrentDoc, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
+import { DAY_MS, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
 
 const isAndroid = Platform.OS === 'android';
-
-const toFiniteNumber = (value: unknown): number => {
-  const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(',', '.'));
-  return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const getSamplingMbw = (sampling: any): number => toFiniteNumber(sampling?.mbw ?? sampling?.abw);
 
 export default function ShrimpReportsScreen() {
   const router = useRouter();
@@ -52,39 +46,32 @@ export default function ShrimpReportsScreen() {
     const operationalSamplings = (pond.samplings || [])
       .filter((sampling) => !isBaselineSampling(sampling))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedSamplings = [...(pond.samplings || [])].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const growthSamplings = operationalSamplings.filter((sampling) => getSamplingMbw(sampling) > 0);
 
     return growthSamplings
       .map((sampling, index, allSamplings) => {
-        const samplingDoc = Math.floor((new Date(sampling.date).getTime() - new Date(pond.docStart).getTime()) / (1000 * 60 * 60 * 24));
         const samplingTime = new Date(sampling.date).getTime();
-        const previousSampling = [...allSamplings]
-          .reverse()
-          .find((item) => new Date(item.date).getTime() < samplingTime) || null;
+        const samplingsToDate = sortedSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime);
+        const metricsToDate = calculatePondMetricsWithHarvest({ ...pond, samplings: samplingsToDate });
+        const samplingDoc = Math.floor((samplingTime - new Date(pond.docStart).getTime()) / DAY_MS);
         const currentMbw = getSamplingMbw(sampling);
-        const previousWeight = getSamplingMbw(previousSampling) || toFiniteNumber(pond.initialWeight) || 0.5;
-        const previousDate = previousSampling?.date || pond.docStart;
-        const daysDiff = Math.floor((new Date(sampling.date).getTime() - new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24));
-        const adg = daysDiff > 0 ? (currentMbw - previousWeight) / daysDiff : 0;
-        const samplingsToDate = operationalSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime);
-        const cumulativeMortality = samplingsToDate.reduce((sum, s) => sum + toFiniteNumber(s.mortality), 0);
-        const cumulativeFeed = getPondTotalFeedConsumed({ ...pond, samplings: samplingsToDate });
-        const baselinePopulation = getPondBaselinePopulation({ ...pond, samplings: samplingsToDate });
-        const baselineTime = pond.baselineDate ? new Date(pond.baselineDate).getTime() : 0;
-        const postBaselineMortality = samplingsToDate
-          .filter((s) => !isBaselineSampling(s) && (!baselineTime || new Date(s.date).getTime() >= baselineTime))
-          .reduce((sum, s) => sum + s.mortality, 0);
-        const currentPopulation = baselinePopulation !== null
-          ? baselinePopulation - postBaselineMortality
-          : pond.initialPopulation - cumulativeMortality;
-        const biomass = (currentPopulation * currentMbw) / 1000;
-        const sr = pond.initialPopulation > 0 ? (currentPopulation / pond.initialPopulation) * 100 : 0;
-        const size = currentMbw > 0 ? 1000 / currentMbw : 0;
-        const fcr = index === allSamplings.length - 1 ? pondMetrics.adjustedFCR : biomass > 0 ? cumulativeFeed / biomass : 0;
-        const mortalityPercentage = pond.initialPopulation > 0 ? (cumulativeMortality / pond.initialPopulation) * 100 : 0;
+        const fcr = index === allSamplings.length - 1 ? pondMetrics.adjustedFCR : metricsToDate.adjustedFCR;
+        const mortalityPercentage = pond.initialPopulation > 0 ? (metricsToDate.totalMortality / pond.initialPopulation) * 100 : 0;
         return {
-          samplingNumber: index + 1, samplingDate: sampling.date, doc: samplingDoc, mbw: currentMbw, abw: currentMbw, adg, size, sr, biomass,
-          feedCumulative: cumulativeFeed, fcr, mortality: toFiniteNumber(sampling.mortality), mortalityPercentage,
+          samplingNumber: index + 1,
+          samplingDate: sampling.date,
+          doc: samplingDoc,
+          mbw: currentMbw,
+          abw: currentMbw,
+          adg: metricsToDate.adg,
+          size: currentMbw > 0 ? 1000 / currentMbw : 0,
+          sr: metricsToDate.adjustedSR,
+          biomass: metricsToDate.currentBiomass,
+          feedCumulative: metricsToDate.totalFeedConsumed,
+          fcr,
+          mortality: toFiniteNumber(sampling.mortality),
+          mortalityPercentage,
         };
       });
   };

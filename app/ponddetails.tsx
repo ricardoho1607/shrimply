@@ -10,6 +10,7 @@ import {
 import { usePondStore, type Pond, type Sampling, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
+import { detectFeedBiomassMismatchInsight, getSamplingMbw } from '../shared/pondCalculations';
 import { 
   collection, 
   query, 
@@ -315,22 +316,14 @@ export default function PondDetails() {
     const getLatestSamplingData = () => 
       getPondSamplingData()
         .filter((s: Sampling) => 
-          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
+          (getSamplingMbw(s) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
         )
         .sort((a: Sampling, b: Sampling) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         )[0] || null;
 
-    const getTotalMortality = () =>
-      getPondSamplingData()
-        .filter((s: Sampling) => 
-          (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-        )
-        .reduce((total: number, sample: Sampling) => 
-          total + sample.mortality, 0
-        );
-
     const harvestAdjustedMetrics = calculatePondMetricsWithHarvest(pond);
+    const feedBiomassInsight = detectFeedBiomassMismatchInsight(pond);
 
     const calculateSize = (mbw: number) => (1000 / mbw).toFixed(0);
 
@@ -409,15 +402,16 @@ export default function PondDetails() {
 
     const latestSampling = getLatestSamplingData();
     const doc = getPondCurrentDoc(pond);
-    const totalMortality = getTotalMortality();
+    const totalMortality = harvestAdjustedMetrics.totalMortality;
     
     const currentPopulation = harvestAdjustedMetrics.currentPopulation;
     const estBiomass = harvestAdjustedMetrics.currentBiomass;
     const sr = harvestAdjustedMetrics.adjustedSR.toFixed(1);
-    const size = latestSampling ? calculateSize(latestSampling.mbw) : '0';
-    const { last: lastADG, average: avgADG } = getADGData();
+    const size = harvestAdjustedMetrics.latestMbw > 0 ? calculateSize(harvestAdjustedMetrics.latestMbw) : '0';
+    const { average: avgADG } = getADGData();
+    const lastADG = harvestAdjustedMetrics.adg;
 
-    const totalFeed = getTotalFeedData();
+    const totalFeed = harvestAdjustedMetrics.totalFeedConsumed || getTotalFeedData();
     
     const fcr = latestSampling 
       ? harvestAdjustedMetrics.adjustedFCR.toFixed(2) 
@@ -428,20 +422,14 @@ export default function PondDetails() {
     
     const mortalityPieces = latestSampling?.mortality || 0;
     const mortalityWeight = latestSampling 
-      ? (latestSampling.mortality * latestSampling.mbw) / 1000 
+      ? (latestSampling.mortality * getSamplingMbw(latestSampling)) / 1000
       : 0;
       
-    const totalMortalityWeight = getPondSamplingData()
-      .filter((s: Sampling) => 
-        (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-      )
-      .reduce((total: number, s: Sampling) => 
-        total + (s.mortality * s.mbw) / 1000, 0
-      );
+    const totalMortalityWeight = harvestAdjustedMetrics.totalMortalityWeight;
 
     const pondSamplingData = getPondSamplingData()
       .filter((s: Sampling) => 
-        (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
+        (getSamplingMbw(s) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
       )
       .sort((a: Sampling, b: Sampling) => 
         new Date(b.date).getTime() - new Date(a.date).getTime()
@@ -462,7 +450,8 @@ export default function PondDetails() {
       mortalityPieces,
       mortalityWeight,
       totalMortalityWeight,
-      pondSamplingData
+      pondSamplingData,
+      feedBiomassInsight
     };
   }, [pond, calculatePondMetricsWithHarvest]);
 
@@ -589,7 +578,8 @@ export default function PondDetails() {
     mortalityPieces,
     mortalityWeight,
     totalMortalityWeight,
-    pondSamplingData
+    pondSamplingData,
+    feedBiomassInsight
   } = calculations;
   const latestLabStatus = pond.latestLabStatus;
   const waterQualityLabStatus = latestLabStatus?.byType?.water_quality
@@ -698,6 +688,25 @@ export default function PondDetails() {
               </View>
             </View>
           </View>
+
+          {feedBiomassInsight?.latest && (
+            <View style={styles.feedInsightStrip}>
+              <View style={styles.feedInsightIcon}>
+                <Ionicons name="analytics-outline" size={18} color="#92400e" />
+              </View>
+              <View style={styles.feedInsightContent}>
+                <Text style={styles.feedInsightTitle}>Feed response needs review</Text>
+                <Text style={styles.feedInsightText}>
+                  Feed-based biomass differs from records across {feedBiomassInsight.requiredRecords} recent records.
+                </Text>
+                <View style={styles.feedInsightStats}>
+                  <Text style={styles.feedInsightStat}>Records {feedBiomassInsight.latest.recordBiomassKg.toFixed(1)} kg</Text>
+                  <Text style={styles.feedInsightStat}>Feed est. {feedBiomassInsight.latest.feedBasedBiomassKg.toFixed(1)} kg</Text>
+                  <Text style={styles.feedInsightStat}>{feedBiomassInsight.latest.differencePercent.toFixed(0)}% diff</Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           <View style={styles.labStatusCard}>
             <View style={styles.labStatusHeader}>
@@ -924,6 +933,13 @@ const styles = StyleSheet.create({
   dataLabel: { fontSize: 13, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
   dataValue: { fontSize: 17, color: '#0d2137', fontWeight: '600' },
   dataUnit: { fontSize: 13, color: '#315f57' },
+  feedInsightStrip: { flexDirection: 'row', gap: 12, backgroundColor: '#fffbeb', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#fde68a', marginBottom: 12 },
+  feedInsightIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: '#fef3c7', alignItems: 'center', justifyContent: 'center' },
+  feedInsightContent: { flex: 1, gap: 5 },
+  feedInsightTitle: { color: '#78350f', fontSize: 14, fontWeight: '900' },
+  feedInsightText: { color: '#92400e', fontSize: 12, fontWeight: '700', lineHeight: 17 },
+  feedInsightStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  feedInsightStat: { color: '#78350f', fontSize: 11, fontWeight: '900', backgroundColor: '#fef3c7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 },
   labStatusCard: { backgroundColor: '#FFFFFF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#e8f2f9', elevation: 3 },
   labStatusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
   labStatusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

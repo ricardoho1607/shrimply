@@ -42,19 +42,11 @@ interface LocationCoordinates {
 }
 
 export default function CompanySetupScreen() {
-  const { company, completeCompanySetup, loading, refreshUserData } = useAuth();
+  const { company, completeCompanySetup, loading, refreshUserData, signOut } = useAuth();
   const params = useLocalSearchParams();
   const router = useRouter();
   const { t } = useLanguage();
   const isEditMode = params.edit === 'true';
-
-  if (isEditMode && !company) {
-    return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
-        <ActivityIndicator size="large" color="#0d2137" />
-      </View>
-    );
-  }
 
   const [formData, setFormData] = useState<CompanyData>({
     companyName: '',
@@ -108,6 +100,15 @@ export default function CompanySetupScreen() {
     (key: keyof CompanyData, value: any) => setFormData(prev => ({ ...prev, [key]: value })),
     []
   );
+
+  const handleSignOut = useCallback(async () => {
+    try {
+      await signOut();
+      router.replace('/auth');
+    } catch {
+      Alert.alert(t.messages.error, t.sidebar.signOutFailed);
+    }
+  }, [router, signOut, t]);
 
   // Get current location coordinates
   const getCurrentLocation = async () => {
@@ -225,7 +226,7 @@ export default function CompanySetupScreen() {
                         state: address?.region || '',
                         country: address?.country || '',
                       };
-                    } catch (geocodeError) {
+                    } catch {
                       // If geocoding fails, just use coordinates
                       locationData = {
                         address: formData.primaryLocation,
@@ -442,6 +443,14 @@ export default function CompanySetupScreen() {
     [formData.businessSize, updateForm]
   );
 
+  if (isEditMode && !company) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
+        <ActivityIndicator size="large" color="#0d2137" />
+      </View>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -455,6 +464,12 @@ export default function CompanySetupScreen() {
           <Text style={styles.subtitle}>
             {isEditMode ? t.companySetup.editSubtitle : t.companySetup.subtitle}
           </Text>
+          {!isEditMode && (
+            <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
+              <Ionicons name="log-out-outline" size={18} color="#e74c3c" />
+              <Text style={styles.logoutButtonText}>{t.sidebar.signOut}</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={styles.form}>
@@ -580,6 +595,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: Platform.OS === 'android' ? 18 : 20,
     lineHeight: Platform.OS === 'android' ? 20 : 22,
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Platform.OS === 'android' ? 12 : 14,
+    paddingVertical: Platform.OS === 'android' ? 8 : 9,
+    paddingHorizontal: Platform.OS === 'android' ? 12 : 14,
+    borderRadius: Platform.OS === 'android' ? 10 : 12,
+    borderWidth: 1,
+    borderColor: '#FECDCA',
+    backgroundColor: '#FEF3F2',
+  },
+  logoutButtonText: {
+    color: '#e74c3c',
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    fontWeight: '700',
   },
   form: {
     gap: Platform.OS === 'android' ? 22 : 24,
