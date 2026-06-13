@@ -139,6 +139,36 @@ const sources = {
     publisher: "Responsible Seafood Advocate",
     url: "https://www.globalseafood.org/advocate/robins-mcintosh-on-everything-you-need-to-know-about-ehp-and-shrimp-farming-part-2/",
   },
+  woahWssvManual: {
+    title: "Infection with White Spot Syndrome Virus",
+    publisher: "World Organisation for Animal Health",
+    url: "https://www.woah.org/fileadmin/Home/eng/Health_standards/aahm/current/2.2.08_WSSV.pdf",
+  },
+  wssvWaterTransmission: {
+    title: "The Way of Water: Unravelling White Spot Syndrome Virus (WSSV) Transmission Dynamics in Shrimp Aquaculture",
+    publisher: "Viruses",
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10534367/",
+  },
+  wssvBiologyDiagnosis: {
+    title: "Biology, Host Range, Pathogenesis and Diagnosis of White Spot Syndrome Virus",
+    publisher: "Indian Journal of Virology",
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC3550756/",
+  },
+  wssvMolecularDetection: {
+    title: "A Review on Molecular Detection Techniques of White Spot Syndrome Virus",
+    publisher: "Aquaculture Reports",
+    url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC10029913/",
+  },
+  wssvCfspFactSheet: {
+    title: "White Spot Disease",
+    publisher: "Center for Food Security and Public Health",
+    url: "https://www.cfsph.iastate.edu/Factsheets/pdfs/white-spot-disease.pdf",
+  },
+  wssvTransmissionDynamics: {
+    title: "Analyzing Transmission Dynamics of White Spot Syndrome Virus in Pacific White Shrimp",
+    publisher: "Responsible Seafood Advocate",
+    url: "https://www.globalseafood.org/advocate/analyzing-transmission-dynamics-of-white-spot-syndrome-virus-in-pacific-white-shrimp/",
+  },
   profitabilityReview: {
     title: "Comparative Analysis of Profitability and Resource Use Efficiency Between Penaeus monodon and Litopenaeus vannamei in India",
     publisher: "Aquaculture Reports",
@@ -826,6 +856,112 @@ export const resourceArticles: ResourceArticle[] = [
       sources.ehpMicrobiomeProgression,
       sources.ehpFarmManagementInterview,
       sources.probioticsReview,
+    ],
+  },
+  {
+    slug: "white-spot-syndrome-virus-shrimp",
+    section: "Water, Health, and Risk",
+    label: "Disease Risk",
+    title: "White Spot Syndrome Virus in Shrimp: Fast Response, Risk Parameters, and Long-Term Prevention",
+    description: "A practical guide to WSSV in vannamei shrimp, including early signs, rapid mortality risk, pond parameters, PCR confirmation, emergency response, and biosecurity prevention.",
+    readTime: "9 min read",
+    tags: ["WSSV", "white spot syndrome virus", "white spot disease", "PCR", "mortality", "biosecurity", "shrimp disease"],
+    publishedAt: "2026-06-13",
+    image: {
+      src: "/resources/images/white-spot-syndrome-virus-wssv-shrimp-guide.png",
+      alt: "White spot syndrome virus WSSV shrimp farming guide showing early detection, PCR confirmation, pond-to-pond containment, risk parameters, and prevention steps",
+      width: 1671,
+      height: 941,
+    },
+    relatedFeature: { label: "Disease Alerts", href: "/features/disease-alerts" },
+    takeaways: [
+      "WSSV is one of the fastest-moving viral diseases in shrimp farming and can cause severe pond losses if response is delayed.",
+      "White spots may appear, but farms should not wait for perfect visual signs. Sudden appetite drop, abnormal swimming, rising mortality, and PCR confirmation matter more.",
+      "There is no reliable in-pond cure for WSSV, so the correct response is rapid containment, movement control, lab testing, emergency harvest review, and strict prevention for future cycles.",
+    ],
+    sections: [
+      {
+        heading: "What WSSV actually is",
+        body: [
+          "White Spot Syndrome Virus, or WSSV, is a highly contagious viral pathogen of shrimp and other crustaceans. It affects penaeid shrimp including vannamei and is treated globally as one of the most serious disease threats in shrimp aquaculture.",
+          "WSSV is different from slow-growth problems such as EHP. A farm may see weak appetite, abnormal behavior, and rising mortality over a short period, which makes speed of response more important than waiting for a perfect visual diagnosis.",
+          "Because WSSV can move through animals, water, equipment, and crustacean carriers, every suspected case should be treated as both a pond-health problem and a biosecurity problem.",
+        ],
+      },
+      {
+        heading: "What farmers usually see",
+        body: [
+          "Early field signs can include sudden appetite drop, lethargy, shrimp gathering near pond edges, surface swimming, reddish discoloration, loose shell, and rapid mortality. White spots under the carapace may appear, but they are not always obvious in vannamei.",
+          "That means farms should not wait for white spots before escalating. Appetite collapse and abnormal mortality are often more useful operational signals, especially when they appear together with recent weather stress, water instability, or nearby outbreak risk.",
+          "WSSV can resemble other acute disease events, so visual signs should trigger containment and testing rather than a final diagnosis by eye.",
+        ],
+      },
+      {
+        heading: "Parameters and conditions that raise risk",
+        body: [
+          "The most important pond conditions to review are temperature stress, salinity shifts, unstable pH, low dissolved oxygen, high organic load, heavy sludge, recent rain or weather shock, and sudden changes in water exchange.",
+          "These parameters do not create the virus from nothing, but they can stress shrimp, weaken pond stability, increase exposure pressure, and make a viral outbreak easier to miss until mortality accelerates.",
+          "Farm teams should also review incoming water source, wild crustaceans, crabs, birds, shared equipment, harvest gear, staff movement, and nearby outbreak history. In WSSV prevention, pond biology and farm movement control are part of the same system.",
+        ],
+      },
+      {
+        heading: "Diagnosis and confirmation",
+        body: [
+          "WSSV should be confirmed with PCR or another approved diagnostic method where available. WOAH diagnostic guidance covers molecular and histological approaches because visual signs alone are not specific enough for confident diagnosis.",
+          "A practical farm response should collect the right samples quickly, record the pond and time of observation, and connect the lab result back to mortality, appetite, water quality, weather, and recent pond movement records.",
+          "If the farm has access to rapid screening, suspected ponds should be tested before movement decisions are relaxed. A negative or unclear result should still be interpreted with the full pond history and advice from qualified aquatic animal health support.",
+        ],
+      },
+      {
+        heading: "Immediate response when WSSV is suspected",
+        body: [
+          "Notify the farm lead immediately, isolate the suspect pond operationally, and stop unnecessary movement of water, shrimp, sludge, nets, trays, boots, harvest tools, vehicles, and staff from the suspect pond to clean ponds.",
+          "Review mortality speed, shrimp size, buyer options, local rules, and food safety requirements before considering emergency harvest. Emergency harvest is a business and biosecurity decision, not a casual pond-management step.",
+          "Record every action: when appetite dropped, when mortality began, which tools entered the pond, whether water was moved, what tests were sent, and what containment steps were applied. In WSSV, the response timeline matters.",
+        ],
+      },
+      {
+        heading: "Treatment reality",
+        body: [
+          "There is no dependable in-pond cure for WSSV. Antibiotics do not treat viruses, and casual antibiotic use can create residue, compliance, microbiome, and resistance problems without addressing the infection.",
+          "Probiotics, vitamins, minerals, and immunostimulants may support general shrimp condition or pond stability, but they should not be presented as a cure for WSSV. Once a pond is strongly suspected, containment and protection of other ponds matter more than rescue claims.",
+          "The most responsible plan is fast detection, strict movement control, lab confirmation, careful harvest decision-making, and prevention before the next cycle.",
+        ],
+      },
+      {
+        heading: "Long-term prevention plan",
+        body: [
+          "Prevention starts before stocking. Use PCR-screened PL, verify hatchery biosecurity, avoid risky seed sources, and keep batch records so any later outbreak can be traced back to stocking source and pond history.",
+          "Control the water and carrier pathway. Treat or disinfect inlet water where practical, control crabs and wild crustaceans, reduce bird access, screen reservoirs where needed, and avoid moving untreated water from high-risk areas into culture ponds.",
+          "Keep pond-level biosecurity simple and strict: dedicated tools by pond or zone, controlled staff movement, disinfected harvest gear, clean boots and vehicles, careful sludge handling, and clear rules for what happens when mortality rises.",
+        ],
+      },
+      {
+        heading: "How Shrimply records help",
+        body: [
+          "WSSV response depends on time. Shrimply helps connect mortality, appetite, feed response, water quality, sampling, pond notes, weather-related observations, lab results, treatments, and biosecurity actions in one operating record.",
+          "For Orson AI and disease alerts, the useful input is the last several water-quality records, feed tray or appetite notes, mortality entries, sampling records, recent pond-to-pond movement, and any PCR result. That context helps the farm act faster and protects unaffected ponds from avoidable exposure.",
+        ],
+      },
+    ],
+    checklist: [
+      "Watch sudden appetite drop, abnormal swimming, reddish body, weak shrimp, loose shell, and rising mortality.",
+      "Do not wait for visible white spots before escalating a suspected WSSV event.",
+      "Confirm suspected cases with PCR or approved lab testing where available.",
+      "Stop movement of tools, water, shrimp, sludge, harvest equipment, boots, vehicles, and people from suspect ponds to clean ponds.",
+      "Review emergency harvest only with farm leadership, buyer requirements, and local compliance in mind.",
+      "Use PCR-screened PL, verified hatchery sources, treated inlet water, and stronger reservoir control.",
+      "Control crabs, wild crustaceans, birds, shared equipment, and staff movement as part of routine WSSV prevention.",
+      "Keep pond-specific records of mortality, appetite, water quality, lab results, and response actions.",
+    ],
+    sources: [
+      sources.woahWssvManual,
+      sources.wssvWaterTransmission,
+      sources.wssvBiologyDiagnosis,
+      sources.wssvMolecularDetection,
+      sources.wssvCfspFactSheet,
+      sources.wssvTransmissionDynamics,
+      sources.worldfishDisease,
     ],
   },
   {
