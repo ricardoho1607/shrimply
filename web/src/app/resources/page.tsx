@@ -16,6 +16,7 @@ const collectionPageJsonLd = {
   name: "Shrimp Farming Resources",
   description: page!.description,
   url: canonicalUrl("/resources"),
+  dateModified: page!.lastModified,
   isPartOf: {
     "@type": "WebSite",
     name: SITE_CONFIG.name,

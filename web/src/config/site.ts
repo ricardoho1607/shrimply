@@ -24,6 +24,8 @@ export const SITE_CONFIG = {
   },
   icons: {
     favicon: "/favicon.ico",
-    apple: "/shrimplylogo_v2.png",
+    favicon48: "/favicon-48x48.png",
+    icon192: "/icon-192.png",
+    apple: "/apple-touch-icon.png",
   },
 } as const;

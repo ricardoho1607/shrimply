@@ -124,6 +124,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     about: [article.section, "Shrimp farming", "Vannamei shrimp farming", "Aquaculture management"],
     keywords: article.tags,
     datePublished: article.publishedAt,
+    dateModified: article.publishedAt,
     image: article.image ? `${SITE_CONFIG.url}${article.image.src}` : undefined,
   };
   const faqJsonLd = {

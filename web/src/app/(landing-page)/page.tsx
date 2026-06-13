@@ -16,8 +16,6 @@ import {
   TrendingUp, 
   BarChart3,
   Cpu,
-  Smartphone,
-  ChevronRight,
   Zap,
   Layers,
   RefreshCcwDot,
@@ -55,7 +53,7 @@ export default function LandingPage() {
             <em>Under Control.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.76s', maxWidth: '420px', marginBottom: '40px', fontWeight: 500 }}>
-            Harness Orson AI to detect biological risk patterns, optimize feeding, and protect your pond's yield.
+            Harness Orson AI to detect biological risk patterns, optimize feeding, and protect your pond&apos;s yield.
           </p>
           <div className="animate-hero" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
             <Link href="/how-it-works" className="btn-primary">See the Platform</Link>
@@ -206,24 +204,24 @@ export default function LandingPage() {
       {/* STATS BAND */}
       <section className="stats-band">
         <div className="stat-box r d1">
-          <div className="stat-num">15<span style={{ color: 'var(--sky)' }}>%</span></div>
-          <div className="stat-lbl">Avg yield increase</div>
-          <div className="stat-desc" style={{ fontWeight: 500 }}>Proven across our enterprise clients.</div>
+          <div className="stat-num">01</div>
+          <div className="stat-lbl">Farm records</div>
+          <div className="stat-desc" style={{ fontWeight: 500 }}>Ponds, feed, water, sampling, harvests, and finance in one workspace.</div>
         </div>
         <div className="stat-box r d2">
-          <div className="stat-num">72<span style={{ color: 'var(--sky)' }}>h</span></div>
-          <div className="stat-lbl">Advance warning</div>
-          <div className="stat-desc" style={{ fontWeight: 500 }}>Spot biological risk before it becomes expensive.</div>
+          <div className="stat-num">02</div>
+          <div className="stat-lbl">Risk signals</div>
+          <div className="stat-desc" style={{ fontWeight: 500 }}>Connect appetite, growth, mortality, and water-quality movement.</div>
         </div>
         <div className="stat-box r d3">
-          <div className="stat-num">90<span style={{ color: 'var(--sky)' }}>%</span></div>
-          <div className="stat-lbl">Time saved</div>
-          <div className="stat-desc" style={{ fontWeight: 500 }}>Automated reporting and logs.</div>
+          <div className="stat-num">03</div>
+          <div className="stat-lbl">Reports</div>
+          <div className="stat-desc" style={{ fontWeight: 500 }}>Generate shrimp, cash flow, COGS, P&L, and projection reports.</div>
         </div>
         <div className="stat-box r d4">
-          <div className="stat-num">24<span style={{ color: 'var(--sky)' }}>/7</span></div>
-          <div className="stat-lbl">AI Monitoring</div>
-          <div className="stat-desc" style={{ fontWeight: 500 }}>Continuous water checks.</div>
+          <div className="stat-num">04</div>
+          <div className="stat-lbl">Orson AI</div>
+          <div className="stat-desc" style={{ fontWeight: 500 }}>Interpret recent pond, feed, sampling, and water-quality history.</div>
         </div>
       </section>
 
@@ -271,7 +269,7 @@ export default function LandingPage() {
               Your AI aquaculture consultant. <em>Always on call.</em>
             </h2>
             <p style={{ color: 'rgba(255,255,255,0.7)', maxWidth: '440px', fontSize: '1.05rem', fontWeight: 500, marginBottom: '24px' }}>
-              Orson isn't just a chatbot. He's an expert system providing biological advice that helps you save money and increase survival rates.
+              Orson is not just a chatbot. It is an expert system that turns farm records into practical biological context for pond decisions.
             </p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '32px' }}>
@@ -292,7 +290,7 @@ export default function LandingPage() {
             <Link href="/orson" className="btn-primary" style={{ padding: '16px 36px', display: 'inline-block' }}>Learn How Orson Works</Link>
           </div>
           <div className="r d3 chat-container" style={{ maxWidth: '100%' }}>
-            <div className="chat-bubble bubble-user" style={{ animationDelay: '1.5s' }}>How's Pond A1 looking today?</div>
+            <div className="chat-bubble bubble-user" style={{ animationDelay: '1.5s' }}>How&apos;s Pond A1 looking today?</div>
             <div className="chat-bubble bubble-orson" style={{ animationDelay: '3s' }}>Pond A1 is stable. However, DO levels dipped slightly at 4 AM. Increase aeration by 15% for the next 2 hours.</div>
             <div className="chat-bubble bubble-user" style={{ animationDelay: '6s' }}>Is B2 overfeeding?</div>
             <div className="chat-bubble bubble-orson" style={{ animationDelay: '7.5s' }}>Feed pressure is above the biomass estimate. Hold the next increase and verify tray clearance before feeding up.</div>
