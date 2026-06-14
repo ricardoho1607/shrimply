@@ -40,9 +40,8 @@ interface FeedData {
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
-  feed1?: string; feed2?: string; feed3?: string; feed4?: string; feed5?: string;
-  anco1?: string; anco2?: string; anco3?: string; anco4?: string; anco5?: string;
-  anco6?: string; anco7?: string; anco8?: string; anco9?: string; anco10?: string;
+  feed1?: string; feed2?: string; feed3?: string; feed4?: string;
+  anco1?: string; anco2?: string; anco3?: string; anco4?: string;
 }
 
 interface Sampling {
@@ -125,16 +124,32 @@ export default function FeedRecordsPage() {
     date: new Date().toISOString().split('T')[0],
     totalDailyFeed: '',
     ancoPercentage: '',
-    feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
-    anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
-    anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
+    feed1: '', feed2: '', feed3: '', feed4: '',
+    anco1: '', anco2: '', anco3: '', anco4: '',
   });
   const canEditFeed = canEditOperations(user?.role);
 
   useEffect(() => {
+    let unsubUser: (() => void) | null = null;
+    let unsubPonds: (() => void) | null = null;
+    let unsubFeeds: (() => void) | null = null;
+    let currentCompanyId: string | null = null;
+
+    const cleanCompanyListeners = () => {
+      if (unsubPonds) unsubPonds();
+      if (unsubFeeds) unsubFeeds();
+      unsubPonds = null;
+      unsubFeeds = null;
+    };
+
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (unsubUser) unsubUser();
+      cleanCompanyListeners();
+      unsubUser = null;
+      currentCompanyId = null;
+
       if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
+        unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const userData = uDoc.data();
           setUser({
             uid: firebaseUser.uid,
@@ -142,9 +157,11 @@ export default function FeedRecordsPage() {
           });
           const cid = userData?.companyId;
           setCompanyId(cid);
-          if (cid) {
+          if (cid && cid !== currentCompanyId) {
+            cleanCompanyListeners();
+            currentCompanyId = cid;
             const q = query(collection(db, 'companies', cid, 'ponds'), orderBy('createdAt', 'desc'));
-            const unsubPonds = onSnapshot(q, (snapshot) => {
+            unsubPonds = onSnapshot(q, (snapshot) => {
               const data = snapshot.docs
                 .map(doc => ({ id: doc.id, ...doc.data() } as Pond))
                 .filter(pond => pond.cycleStatus !== 'ended');
@@ -154,21 +171,32 @@ export default function FeedRecordsPage() {
 
             // Fetch Inventory Feeds
             const qFeeds = query(collection(db, 'companies', cid, 'feeds'), orderBy('feedName', 'asc'));
-            const unsubFeeds = onSnapshot(qFeeds, (snapshot) => {
+            unsubFeeds = onSnapshot(qFeeds, (snapshot) => {
               setInventoryFeeds(snapshot.docs.map((feedDoc) => ({ id: feedDoc.id, ...feedDoc.data() } as InventoryFeed)));
             });
-
-            return () => {
-              unsubPonds();
-              unsubFeeds();
-            };
           } else {
-            setLoading(false);
+            if (!cid) {
+              cleanCompanyListeners();
+              currentCompanyId = null;
+              setPonds([]);
+              setInventoryFeeds([]);
+              setLoading(false);
+            }
           }
         });
+      } else {
+        setUser(null);
+        setCompanyId(null);
+        setPonds([]);
+        setInventoryFeeds([]);
+        setLoading(false);
       }
     });
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      if (unsubUser) unsubUser();
+      cleanCompanyListeners();
+    };
   }, []);
 
   // -- Sync form data with existing records when pond/date changes ----
@@ -197,9 +225,8 @@ export default function FeedRecordsPage() {
         inventoryFeedId: '',
         totalDailyFeed: '',
         ancoPercentage: '',
-        feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
-        anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
-        anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
+        feed1: '', feed2: '', feed3: '', feed4: '',
+        anco1: '', anco2: '', anco3: '', anco4: '',
       }));
     }
   }, [formData.pondId, formData.date, isModalOpen, ponds]);
@@ -233,12 +260,8 @@ export default function FeedRecordsPage() {
           pondCycleId: pondData.pondCycleId || formData.pondId,
           anco1: formData.anco1, anco2: formData.anco2,
           anco3: formData.anco3, anco4: formData.anco4,
-          anco5: formData.anco5, anco6: formData.anco6,
-          anco7: formData.anco7, anco8: formData.anco8,
-          anco9: formData.anco9, anco10: formData.anco10,
           feed1: formData.feed1, feed2: formData.feed2,
           feed3: formData.feed3, feed4: formData.feed4,
-          feed5: formData.feed5,
         };
 
         if (existingIndex >= 0) {
@@ -352,9 +375,8 @@ export default function FeedRecordsPage() {
           date: new Date().toISOString().split('T')[0],
           totalDailyFeed: '',
           ancoPercentage: '',
-          feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
-          anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
-          anco6: '', anco7: '', anco8: '', anco9: '', anco10: ''
+          feed1: '', feed2: '', feed3: '', feed4: '',
+          anco1: '', anco2: '', anco3: '', anco4: ''
         });
     } catch (error) {
       console.error('Error adding feed record:', error);
@@ -399,9 +421,8 @@ export default function FeedRecordsPage() {
                 date: new Date().toISOString().split('T')[0],
                 totalDailyFeed: '',
                 ancoPercentage: '',
-                feed1: '', feed2: '', feed3: '', feed4: '', feed5: '',
-                anco1: '', anco2: '', anco3: '', anco4: '', anco5: '',
-                anco6: '', anco7: '', anco8: '', anco9: '', anco10: '',
+                feed1: '', feed2: '', feed3: '', feed4: '',
+                anco1: '', anco2: '', anco3: '', anco4: '',
               });
               setModalOpen(true);
             }}
@@ -468,37 +489,33 @@ export default function FeedRecordsPage() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Monitoring (F1 - F5)</span>
+                      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Monitoring (4 trays)</span>
                       <div style={{ display: 'flex', gap: '4px' }}>
                         <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#22c55e' }}></div>
                         <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#f59e0b' }}></div>
                       </div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '10px' }}>
-                      {[1, 2, 3, 4, 5].map(fNum => (
-                        <div key={fNum} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center' }}>F{fNum}</div>
-                          <div style={{ display: 'flex', gap: '4px' }}>
-                            {[fNum*2-1, fNum*2].map(tNum => {
-                              const ancoKey = `anco${tNum}` as keyof FeedData;
-                              const val = latest?.[ancoKey];
-                              const isFinished = val === '100';
-                              const hasData = val !== undefined && val !== '';
-                              return (
-                                <div key={tNum}
-                                  style={{
-                                    flex: 1, height: '8px', borderRadius: '4px',
-                                    background: isFinished ? '#22c55e' : (hasData ? '#f59e0b' : 'var(--bg-mid)'),
-                                    border: '1px solid var(--border)',
-                                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                                  }}
-                                  title={`Feeding ${fNum}, Tray ${tNum % 2 === 0 ? 2 : 1}: ${val || '0'}%`}
-                                />
-                              );
-                            })}
-                          </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                      {[1, 2, 3, 4].map(trayNum => {
+                        const ancoKey = `anco${trayNum}` as keyof FeedData;
+                        const val = latest?.[ancoKey];
+                        const isFinished = val === '100';
+                        const hasData = val !== undefined && val !== '';
+                        return (
+                        <div key={trayNum} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center' }}>T{trayNum}</div>
+                          <div
+                            style={{
+                              height: '8px', borderRadius: '4px',
+                              background: isFinished ? '#22c55e' : (hasData ? '#f59e0b' : 'var(--bg-mid)'),
+                              border: '1px solid var(--border)',
+                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                            }}
+                            title={`Tray ${trayNum}: ${val || '0'}%`}
+                          />
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -553,23 +570,15 @@ export default function FeedRecordsPage() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
-                        {[1, 2, 3, 4, 5].map(n => {
-                          const firstAncoKey = `anco${n*2-1}` as keyof FeedData;
-                          const secondAncoKey = `anco${n*2}` as keyof FeedData;
-                          const firstAncoValue = log.feedData?.[firstAncoKey] || '-';
-                          const secondAncoValue = log.feedData?.[secondAncoKey] || '-';
+                        {[1, 2, 3, 4].map(n => {
+                          const ancoKey = `anco${n}` as keyof FeedData;
+                          const ancoValue = log.feedData?.[ancoKey] || '-';
                           return (
                             <div key={n} style={{ textAlign: 'center', padding: '10px 8px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 72px', minWidth: '72px', maxWidth: '92px' }}>
-                              <div style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-faint)', marginBottom: '6px', letterSpacing: '0.02em' }}>F{n} TRAYS</div>
-                              <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', alignItems: 'center' }}>
-                                <span style={{ fontSize: '11px', fontWeight: 900, color: firstAncoValue === '100' ? '#22c55e' : '#f59e0b' }}>
-                                  {firstAncoValue}%
-                                </span>
-                                <span style={{ color: 'var(--border)', fontWeight: 300 }}>|</span>
-                                <span style={{ fontSize: '11px', fontWeight: 900, color: secondAncoValue === '100' ? '#22c55e' : '#f59e0b' }}>
-                                  {secondAncoValue}%
-                                </span>
-                              </div>
+                              <div style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-faint)', marginBottom: '6px', letterSpacing: '0.02em' }}>TRAY {n}</div>
+                              <span style={{ fontSize: '11px', fontWeight: 900, color: ancoValue === '100' ? '#22c55e' : '#f59e0b' }}>
+                                {ancoValue}%
+                              </span>
                             </div>
                           );
                         })}
@@ -654,15 +663,15 @@ export default function FeedRecordsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feeding Amounts (kg)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '12px' }}>
-                    {[1, 2, 3, 4, 5].map(n => {
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                    {[1, 2, 3, 4].map(n => {
                       const feedKey = `feed${n}` as keyof FeedData;
                       return (
                         <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>F{n}</span>
                           <input type="number" placeholder="0" value={formData[feedKey] || ''} onChange={e => {
                             const newF = { ...formData, [feedKey]: e.target.value };
-                            const total = [newF.feed1 || '', newF.feed2 || '', newF.feed3 || '', newF.feed4 || '', newF.feed5 || ''].reduce((s,v) => s + (parseFloat(v) || 0), 0);
+                            const total = [newF.feed1 || '', newF.feed2 || '', newF.feed3 || '', newF.feed4 || ''].reduce((s,v) => s + (parseFloat(v) || 0), 0);
                             setFormData({ ...newF, totalDailyFeed: total.toFixed(2) });
                           }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }} />
                         </div>
@@ -673,18 +682,14 @@ export default function FeedRecordsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Observations (%)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '14px' }}>
-                    {[1, 2, 3, 4, 5].map(n => {
-                      const firstAncoKey = `anco${n*2-1}` as keyof FeedData;
-                      const secondAncoKey = `anco${n*2}` as keyof FeedData;
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+                    {[1, 2, 3, 4].map(n => {
+                      const ancoKey = `anco${n}` as keyof FeedData;
                       return (
                         <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>Tr {n*2-1}/{n*2}</span>
-                            <div style={{ display: 'flex', gap: '6px' }}>
-                              <input placeholder="100" value={formData[firstAncoKey] || ''} onChange={e => setFormData({...formData, [firstAncoKey]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
-                              <input placeholder="100" value={formData[secondAncoKey] || ''} onChange={e => setFormData({...formData, [secondAncoKey]: e.target.value})} style={{ width: '50%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
-                            </div>
+                            <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>Tray {n}</span>
+                            <input placeholder="100" value={formData[ancoKey] || ''} onChange={e => setFormData({...formData, [ancoKey]: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
                           </div>
                         </div>
                       );

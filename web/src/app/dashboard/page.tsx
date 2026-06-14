@@ -102,12 +102,19 @@ const calculateMetrics = (pond: Pond) => {
   const latestValid = getLatestValidMbwSampling(pond);
   const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
 
-    const phM = parseFloat(latest.phMorning || '0');
-    const phE = parseFloat(latest.phEvening || '0');
-    const ph = phM > 0 && phE > 0 ? (phM + phE) / 2 : (phM || phE || 7.7);
-    const transparency = parseFloat(latest.transparency || '35');
-    const temperature = parseFloat(latest.temp || '28.5');
-    const dailyFeed = latest.feed || parseFloat(latest.feedData?.totalDailyFeed || '120');
+    const phM = parseFloat(latest.phMorning || '');
+    const phE = parseFloat(latest.phEvening || '');
+    const validPhM = Number.isFinite(phM) && phM > 0 ? phM : null;
+    const validPhE = Number.isFinite(phE) && phE > 0 ? phE : null;
+    const ph = validPhM && validPhE ? (validPhM + validPhE) / 2 : (validPhM ?? validPhE);
+    const transparencyValue = parseFloat(latest.transparency || '');
+    const temperatureValue = parseFloat(latest.temp || '');
+    const feedDataValue = parseFloat(latest.feedData?.totalDailyFeed || '');
+    const dailyFeed = latest.feed && latest.feed > 0
+      ? latest.feed
+      : Number.isFinite(feedDataValue) && feedDataValue > 0
+        ? feedDataValue
+        : null;
 
     return {
       biomass: biologicalMetrics.currentBiomass,
@@ -120,8 +127,8 @@ const calculateMetrics = (pond: Pond) => {
       latest,
       latestValid,
       ph,
-      transparency,
-      temperature,
+      transparency: Number.isFinite(transparencyValue) && transparencyValue > 0 ? transparencyValue : null,
+      temperature: Number.isFinite(temperatureValue) && temperatureValue > 0 ? temperatureValue : null,
       dailyFeed
     };
   };
@@ -551,9 +558,12 @@ export default function DashboardPage() {
     return { biomass: currentBiomass, population: currentPop, sr: avgSR, activeCount, biomassTrend, srTrend, popTrend };
   }, [activePonds]);
 
-  const averageActivePondMetric = (selector: (pond: Pond) => number, fallback: number) => {
-    if (activePonds.length === 0) return fallback;
-    return activePonds.reduce((acc, pond) => acc + selector(pond), 0) / activePonds.length;
+  const averageActivePondMetric = (selector: (pond: Pond) => number | null | undefined) => {
+    const values = activePonds
+      .map(selector)
+      .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+    if (values.length === 0) return null;
+    return values.reduce((acc, value) => acc + value, 0) / values.length;
   };
 
   if (loading) return (
@@ -725,34 +735,46 @@ export default function DashboardPage() {
               {[
                 { 
                   label: 'pH Level', 
-                  value: averageActivePondMetric((p) => {
+                  value: (() => {
+                    const average = averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return m?.ph || 7.7;
-                  }, 7.7).toFixed(1),
+                    return m?.ph;
+                    });
+                    return average === null ? '--' : average.toFixed(1);
+                  })(),
                   icon: Activity 
                 },
                 { 
                   label: 'Transparency', 
-                  value: `${averageActivePondMetric((p) => {
+                  value: (() => {
+                    const average = averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return m?.transparency || 35;
-                  }, 35).toFixed(0)}cm`,
+                    return m?.transparency;
+                    });
+                    return average === null ? '--' : `${average.toFixed(0)}cm`;
+                  })(),
                   icon: Droplets 
                 },
                 { 
                   label: 'Temperature', 
-                  value: `${averageActivePondMetric((p) => {
+                  value: (() => {
+                    const average = averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return m?.temperature || 28.5;
-                  }, 28.5).toFixed(1)}°C`,
+                    return m?.temperature;
+                    });
+                    return average === null ? '--' : `${average.toFixed(1)}°C`;
+                  })(),
                   icon: Thermometer 
                 },
                 { 
                   label: 'Daily Feed Usage', 
-                  value: `${averageActivePondMetric((p) => {
+                  value: (() => {
+                    const average = averageActivePondMetric((p) => {
                     const m = calculateMetrics(p);
-                    return m?.dailyFeed || 120;
-                  }, 120).toFixed(0)}kg`,
+                    return m?.dailyFeed;
+                    });
+                    return average === null ? '--' : `${average.toFixed(0)}kg`;
+                  })(),
                   icon: Utensils 
                 }
               ].map((item, i) => (

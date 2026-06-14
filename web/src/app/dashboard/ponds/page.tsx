@@ -25,7 +25,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyCycles, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
@@ -95,6 +95,14 @@ const getDateOnlyUtcTime = (dateString: string): number => {
 
 const calculateDocFromDates = (startDate: string, baselineDate: string): number =>
   Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
+
+const getLatestSamplingDate = (samplings: Sampling[] = []): string | null => {
+  const latestSampling = samplings
+    .filter((sampling) => sampling.date && !sampling.isBaselineEstimate && sampling.source !== 'midcycle_onboarding')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+
+  return latestSampling?.date || null;
+};
 
 const removeUndefinedFields = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(removeUndefinedFields);
@@ -530,11 +538,6 @@ export default function PondsPage() {
     }
   };
 
-  const handleDeletePond = async (pondId: string) => {
-    if (!canEditPonds) return;
-    setDeleteConfirm({ isOpen: true, id: pondId });
-  };
-
   const confirmDelete = async () => {
     if (!deleteConfirm.id || !companyId) return;
     if (!canEditPonds) return;
@@ -882,7 +885,7 @@ export default function PondsPage() {
 
               <div style={{ padding: '16px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {t.ponds.lastSampled || 'Last sampled'}: <span style={{ color: 'var(--text-faint)' }}>{t.ponds.never || 'Never'}</span>
+                  {t.ponds.lastSampled || 'Last sampled'}: <span style={{ color: 'var(--text-faint)' }}>{getLatestSamplingDate(pond.samplings) ? new Date(getLatestSamplingDate(pond.samplings) as string).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : (t.ponds.never || 'Never')}</span>
                 </span>
                 <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
                   <button style={{
@@ -899,7 +902,7 @@ export default function PondsPage() {
         </div>
       )}
 
-      {/* ── MODAL ───────────────────────────────────────────── */}
+      {/* -- MODAL --------------------------------------------- */}
       {isModalOpen && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 1000,

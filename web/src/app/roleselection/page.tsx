@@ -10,7 +10,8 @@ import {
   Wrench,
   CheckCircle2, 
   ArrowRight,
-  HelpCircle
+  HelpCircle,
+  LogOut
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -32,11 +33,12 @@ type RoleOption = {
 
 export default function RoleSelectionPage() {
   const isReady = useOnboardingGuard('role');
-  const { completeRoleSelection } = useAuth();
+  const { completeRoleSelection, signOut } = useAuth();
   const router = useRouter();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
 
   const roles: RoleOption[] = [
     {
@@ -141,6 +143,16 @@ export default function RoleSelectionPage() {
     }
   };
 
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
   if (!isReady) return <OnboardingLoading />;
 
   return (
@@ -153,6 +165,29 @@ export default function RoleSelectionPage() {
       alignItems: 'center'
     }}>
       <div style={{ maxWidth: '1000px', width: '100%', textAlign: 'center', marginBottom: '60px' }}>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          style={{
+            margin: '0 auto 24px',
+            padding: '12px 16px',
+            borderRadius: '999px',
+            border: '1px solid #FECDCA',
+            background: '#FEF3F2',
+            color: '#B42318',
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            cursor: signingOut ? 'not-allowed' : 'pointer',
+            opacity: signingOut ? 0.7 : 1,
+          }}
+        >
+          <LogOut size={16} />
+          {signingOut ? (t.common.loading || 'Loading...') : (t.sidebar.signOut || 'Sign Out')}
+        </button>
         <img
           src="/assets/logo.webp"
           width="500"

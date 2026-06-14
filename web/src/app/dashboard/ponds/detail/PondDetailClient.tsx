@@ -273,6 +273,7 @@ export default function PondDetailClient() {
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeletingPond, setIsDeletingPond] = useState(false);
   const [isEndCycleOpen, setEndCycleOpen] = useState(false);
   const [endCycleForm, setEndCycleForm] = useState({
     cycleEndedAt: new Date().toISOString().split('T')[0],
@@ -301,36 +302,68 @@ export default function PondDetailClient() {
   });
 
   useEffect(() => {
+    let unsubUser: (() => void) | null = null;
+    let unsubPond: (() => void) | null = null;
+    let unsubCycles: (() => void) | null = null;
+    let currentCompanyId: string | null = null;
+
+    const cleanCompanyListeners = () => {
+      if (unsubPond) unsubPond();
+      if (unsubCycles) unsubCycles();
+      unsubPond = null;
+      unsubCycles = null;
+    };
+
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      if (unsubUser) unsubUser();
+      cleanCompanyListeners();
+      unsubUser = null;
+      currentCompanyId = null;
+
       if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
+        unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const userData = uDoc.data();
           const cid = userData?.companyId;
           setUserRole(userData?.role);
           setCompanyId(cid);
-          if (cid) {
+          if (cid && cid !== currentCompanyId) {
+            cleanCompanyListeners();
+            currentCompanyId = cid;
             // Listen to Pond
-            const unsubPond = onSnapshot(doc(db, 'companies', cid, 'ponds', id as string), (snapshot) => {
+            unsubPond = onSnapshot(doc(db, 'companies', cid, 'ponds', id as string), (snapshot) => {
               if (snapshot.exists()) {
                 setPond({ id: snapshot.id, ...snapshot.data() } as Pond);
+              } else {
+                setPond(null);
               }
               setLoading(false);
             });
 
             const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
-            const unsubCycles = onSnapshot(qCycles, (snapshot: any) => {
+            unsubCycles = onSnapshot(qCycles, (snapshot: any) => {
               setCycles(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() } as FarmCycle)));
             });
-
-            return () => {
-              unsubPond();
-              unsubCycles();
-            };
+          } else if (!cid) {
+            cleanCompanyListeners();
+            currentCompanyId = null;
+            setPond(null);
+            setCycles([]);
+            setLoading(false);
           }
         });
+      } else {
+        setPond(null);
+        setCycles([]);
+        setCompanyId(null);
+        setUserRole(undefined);
+        setLoading(false);
       }
     });
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      if (unsubUser) unsubUser();
+      cleanCompanyListeners();
+    };
   }, [id]);
   const canEditPond = canEditOperations(userRole);
 
@@ -394,6 +427,23 @@ export default function PondDetailClient() {
     } catch (error) {
       console.error('Error ending cycle:', error);
       alert('Failed to end cycle.');
+    }
+  };
+
+  const handleDeletePond = async () => {
+    if (!companyId || !pond || !canEditPond || isDeletingPond) return;
+    const confirmed = window.confirm(`Delete ${pond.pondName}? This permanently removes this pond cycle and its sampling history.`);
+    if (!confirmed) return;
+
+    setIsDeletingPond(true);
+    try {
+      await deleteDoc(doc(db, 'companies', companyId, 'ponds', pond.id));
+      router.push('/dashboard/ponds');
+    } catch (error) {
+      console.error('Error deleting pond:', error);
+      alert('Failed to delete pond.');
+    } finally {
+      setIsDeletingPond(false);
     }
   };
 
@@ -962,10 +1012,16 @@ export default function PondDetailClient() {
               <span style={{ fontSize: '1rem', fontWeight: 800 }}>Danger Zone</span>
             </div>
             <p style={{ fontSize: '0.8rem', marginBottom: '24px', opacity: 0.8, lineHeight: 1.6 }}>
-              Deleting this pond will permanently remove all associated sampling and water records from the Orson AI ecosystem.
+              Deleting this pond will permanently remove this pond cycle and its sampling history from the Orson AI ecosystem.
             </p>
-            <button className="btn-secondary" style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', background: 'transparent' }}>
-              Delete Asset
+            <button
+              type="button"
+              onClick={handleDeletePond}
+              disabled={!canEditPond || isDeletingPond}
+              className="btn-secondary"
+              style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', background: 'transparent', opacity: isDeletingPond ? 0.65 : 1, cursor: isDeletingPond ? 'not-allowed' : 'pointer' }}
+            >
+              {isDeletingPond ? 'Deleting...' : 'Delete Pond'}
             </button>
           </div>
         </div>
