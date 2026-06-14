@@ -22,6 +22,10 @@ type SnapshotState<T> = {
 
 const EMPTY_CONSTRAINTS: QueryConstraint[] = [];
 
+const deferStateUpdate = (callback: () => void) => {
+  queueMicrotask(callback);
+};
+
 export function useCompanyId() {
   const { user, company } = useAuth();
   return {
@@ -55,12 +59,21 @@ function useCompanySubcollection<T>(
   });
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!companyId) {
-      setState({ data: [], loading: false, error: null });
-      return;
+      deferIfActive(() => setState({ data: [], loading: false, error: null }));
+      return () => {
+        isActive = false;
+      };
     }
 
-    setState((previous) => ({ ...previous, loading: true, error: null }));
+    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
 
     const ref = collection(db, 'companies', companyId, collectionName);
     const q = constraints.length > 0 ? query(ref, ...constraints) : query(ref);
@@ -79,7 +92,10 @@ function useCompanySubcollection<T>(
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [companyId, collectionName, constraints]);
 
   return { ...state, ...dashboardContext };
@@ -109,12 +125,21 @@ export function useCompanyMembers<T>() {
   });
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!companyId) {
-      setState({ data: [], loading: false, error: null });
-      return;
+      deferIfActive(() => setState({ data: [], loading: false, error: null }));
+      return () => {
+        isActive = false;
+      };
     }
 
-    setState((previous) => ({ ...previous, loading: true, error: null }));
+    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
 
     const membersQuery = query(collection(db, 'users'), where('companyId', '==', companyId));
     const unsubscribe = onSnapshot(
@@ -132,7 +157,10 @@ export function useCompanyMembers<T>() {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [companyId]);
 
   return { ...state, companyId };
@@ -146,18 +174,31 @@ export function useFinanceRecords<TExpense, TRevenue>() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!companyId) {
-      setExpenses([]);
-      setRevenues([]);
-      setLoading(false);
-      setError(null);
-      return;
+      deferIfActive(() => {
+        setExpenses([]);
+        setRevenues([]);
+        setLoading(false);
+        setError(null);
+      });
+      return () => {
+        isActive = false;
+      };
     }
 
     let receivedExpenses = false;
     let receivedRevenues = false;
-    setLoading(true);
-    setError(null);
+    deferIfActive(() => {
+      setLoading(true);
+      setError(null);
+    });
 
     const expensesQuery = query(
       collection(db, 'companies', companyId, 'expenses'),
@@ -203,6 +244,7 @@ export function useFinanceRecords<TExpense, TRevenue>() {
     );
 
     return () => {
+      isActive = false;
       unsubExpenses();
       unsubRevenues();
     };
@@ -220,12 +262,21 @@ export function useCompanyNotifications<T>() {
   });
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!companyId) {
-      setState({ data: [], loading: false, error: null });
-      return;
+      deferIfActive(() => setState({ data: [], loading: false, error: null }));
+      return () => {
+        isActive = false;
+      };
     }
 
-    setState((previous) => ({ ...previous, loading: true, error: null }));
+    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
 
     const notificationsQuery = query(
       collection(db, 'notifications'),
@@ -247,7 +298,10 @@ export function useCompanyNotifications<T>() {
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [companyId]);
 
   return { ...state, companyId };
@@ -268,7 +322,14 @@ function useTopLevelCollection<T>(
   });
 
   useEffect(() => {
-    setState((previous) => ({ ...previous, loading: true, error: null }));
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
+    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
 
     const ref = collection(db, collectionName);
     const q = constraints.length > 0 ? query(ref, ...constraints) : query(ref);
@@ -287,7 +348,10 @@ function useTopLevelCollection<T>(
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [collectionName, constraints]);
 
   return state;
@@ -394,20 +458,33 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!companyId) {
-      setFeeds([]);
-      setAdditives([]);
-      setPonds([]);
-      setLoading(false);
-      setError(null);
-      return;
+      deferIfActive(() => {
+        setFeeds([]);
+        setAdditives([]);
+        setPonds([]);
+        setLoading(false);
+        setError(null);
+      });
+      return () => {
+        isActive = false;
+      };
     }
 
     let receivedFeeds = false;
     let receivedAdditives = false;
     let receivedPonds = false;
-    setLoading(true);
-    setError(null);
+    deferIfActive(() => {
+      setLoading(true);
+      setError(null);
+    });
 
     const markReady = () => {
       if (receivedFeeds && receivedAdditives && receivedPonds) setLoading(false);
@@ -467,6 +544,7 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
     );
 
     return () => {
+      isActive = false;
       unsubFeeds();
       unsubAdditives();
       unsubPonds();
@@ -482,9 +560,18 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
   const enabled = options.enabled ?? true;
 
   useEffect(() => {
+    let isActive = true;
+    const deferIfActive = (callback: () => void) => {
+      deferStateUpdate(() => {
+        if (isActive) callback();
+      });
+    };
+
     if (!enabled || !user?.uid) {
-      setCount(0);
-      return;
+      deferIfActive(() => setCount(0));
+      return () => {
+        isActive = false;
+      };
     }
 
     const unreadQuery = query(
@@ -501,7 +588,10 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      isActive = false;
+      unsubscribe();
+    };
   }, [enabled, user?.uid]);
 
   return count;

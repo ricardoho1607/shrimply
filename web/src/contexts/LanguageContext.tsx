@@ -22,17 +22,19 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [t, setT] = useState<Translations>(translations[defaultLanguage]);
 
   useEffect(() => {
-    const storedLang = localStorage.getItem('@language');
-    if (storedLang && (translations as any)[storedLang]) {
-      setCurrentLanguage(storedLang as Language);
-      setT((translations as any)[storedLang] as Translations);
-    } else {
-      const deviceLocale = navigator.language.split('-')[0] as Language;
-      if ((translations as any)[deviceLocale]) {
-        setCurrentLanguage(deviceLocale);
-        setT((translations as any)[deviceLocale] as Translations);
+    queueMicrotask(() => {
+      const storedLang = localStorage.getItem('@language');
+      if (storedLang && (translations as any)[storedLang]) {
+        setCurrentLanguage(storedLang as Language);
+        setT((translations as any)[storedLang] as Translations);
+      } else {
+        const deviceLocale = navigator.language.split('-')[0] as Language;
+        if ((translations as any)[deviceLocale]) {
+          setCurrentLanguage(deviceLocale);
+          setT((translations as any)[deviceLocale] as Translations);
+        }
       }
-    }
+    });
   }, []);
 
   const setLanguage = async (lang: Language) => {

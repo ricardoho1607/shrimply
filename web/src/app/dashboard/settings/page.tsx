@@ -122,20 +122,22 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (user) {
-      setUserForm({ name: user.name || '', phone: user.phone || '' });
+      queueMicrotask(() => setUserForm({ name: user.name || '', phone: user.phone || '' }));
     }
   }, [user?.name, user?.phone]);
 
   useEffect(() => {
     if (!company) return;
-    setCompanyForm({ 
-      companyName: company.companyName || '', 
-      farmType: company.farmType || '', 
-      location: getLocationValue(company),
-      businessSize: company.businessSize || 'medium',
-      description: company.description || '',
-      contactPhone: company.contactPhone || '',
-      isPublicProfile: company.isPublicProfile ?? true,
+    queueMicrotask(() => {
+      setCompanyForm({
+        companyName: company.companyName || '',
+        farmType: company.farmType || '',
+        location: getLocationValue(company),
+        businessSize: company.businessSize || 'medium',
+        description: company.description || '',
+        contactPhone: company.contactPhone || '',
+        isPublicProfile: company.isPublicProfile ?? true,
+      });
     });
   }, [company]);
 

@@ -29,7 +29,7 @@ import {
   CalendarDays,
 } from 'lucide-react';
 
-/* ─── Navigation Config ─────────────────────────────────────── */
+/* --- Navigation Config --------------------------------------- */
 
 const NAV_STRUCTURE = (t: any) => ({
   management: [
@@ -160,7 +160,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [isAuthenticated, needsRoleSelection, needsSetup, loading, router]);
 
   useEffect(() => {
-    setSidebarOpen(false);
+    queueMicrotask(() => setSidebarOpen(false));
   }, [pathname]);
 
   const handleSignOut = async () => {

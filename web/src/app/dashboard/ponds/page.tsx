@@ -185,7 +185,7 @@ export default function PondsPage() {
   const endedPondCount = useMemo(() => ponds.filter((pond) => getCycleStatus(pond) === 'ended').length, [ponds]);
 
   useEffect(() => {
-    setCycleNameDraft(activeFarmCycle?.cycleName || '');
+    queueMicrotask(() => setCycleNameDraft(activeFarmCycle?.cycleName || ''));
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
   const ensureActiveCycle = async (stockingDate: string) => {

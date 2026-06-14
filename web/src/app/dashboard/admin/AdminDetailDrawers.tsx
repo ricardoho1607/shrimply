@@ -142,8 +142,10 @@ export function CompanyDetailDrawer({ company, onClose }: { company: CompanyMetr
       : 'This company has meaningful setup progress. Review whether they are ready for a demo, feedback call, or paid conversion conversation.';
 
   useEffect(() => {
-    setNote(readNotes()[company.id] || '');
-    setSaved(false);
+    queueMicrotask(() => {
+      setNote(readNotes()[company.id] || '');
+      setSaved(false);
+    });
   }, [company.id]);
 
   const handleSave = () => {

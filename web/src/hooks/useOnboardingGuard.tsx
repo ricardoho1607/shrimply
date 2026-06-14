@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
@@ -11,44 +11,37 @@ type OnboardingStage = "role" | "setup";
 export function useOnboardingGuard(stage: OnboardingStage) {
   const { isAuthenticated, needsRoleSelection, needsSetup, loading } = useAuth();
   const router = useRouter();
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (loading) return;
 
     if (!isAuthenticated) {
-      setReady(false);
       router.replace(ROUTES.auth);
       return;
     }
 
     if (stage === "role") {
       if (!needsRoleSelection) {
-        setReady(false);
         router.replace(needsSetup ? ROUTES.setupChoice : ROUTES.dashboard);
         return;
       }
 
-      setReady(true);
       return;
     }
 
     if (needsRoleSelection) {
-      setReady(false);
       router.replace(ROUTES.roleSelection);
       return;
     }
 
     if (!needsSetup) {
-      setReady(false);
       router.replace(ROUTES.dashboard);
-      return;
     }
-
-    setReady(true);
   }, [isAuthenticated, loading, needsRoleSelection, needsSetup, router, stage]);
 
-  return ready;
+  if (loading || !isAuthenticated) return false;
+  if (stage === "role") return needsRoleSelection;
+  return !needsRoleSelection && needsSetup;
 }
 
 export function OnboardingLoading() {

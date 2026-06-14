@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { 
   Search, 
   MapPin, 
@@ -42,9 +42,45 @@ export default function SuppliersPage() {
   });
   const [isUpdating, setIsUpdating] = useState(false);
 
+  const fetchCompanies = useCallback(async (search: string = '') => {
+    const requestId = latestSearchId.current + 1;
+    latestSearchId.current = requestId;
+    setSearching(true);
+    setError(null);
+    try {
+      const q = query(collection(db, 'companies'), where('isPublicProfile', '==', true));
+      // Firestore doesn't support complex text search well without Algolia,
+      // so we'll fetch public ones and filter in memory for now if search term exists.
+      const snapshot = await withTimeout(getDocs(q), 12000, 'Supplier search is taking too long. Please try again.');
+      if (latestSearchId.current !== requestId) return;
+      let data: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+      if (search) {
+        data = data.filter(c =>
+          c.companyName?.toLowerCase().includes(search.toLowerCase()) ||
+          c.location?.toLowerCase().includes(search.toLowerCase())
+        );
+      }
+
+      setCompanies(data);
+    } catch (error: unknown) {
+      if (latestSearchId.current === requestId) {
+        const message = getErrorMessage(error, 'Unable to load suppliers right now.');
+        console.error('Error fetching companies:', error);
+        setError(message);
+        setCompanies([]);
+      }
+    } finally {
+      if (latestSearchId.current === requestId) {
+        setLoading(false);
+        setSearching(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     // Initial fetch of public companies
-    fetchCompanies();
+    queueMicrotask(() => fetchCompanies());
     
     // Listen to monitored companies
     if (user?.uid) {
@@ -55,7 +91,7 @@ export default function SuppliersPage() {
       });
       return () => unsub();
     }
-  }, [user]);
+  }, [fetchCompanies, user]);
 
   // Fetch pond counts when companies list changes
   useEffect(() => {
@@ -78,42 +114,6 @@ export default function SuppliersPage() {
       fetchCounts();
     }
   }, [companies]);
-
-  const fetchCompanies = async (search: string = '') => {
-    const requestId = latestSearchId.current + 1;
-    latestSearchId.current = requestId;
-    setSearching(true);
-    setError(null);
-    try {
-      let q = query(collection(db, 'companies'), where('isPublicProfile', '==', true));
-      // Firestore doesn't support complex text search well without Algolia, 
-      // so we'll fetch public ones and filter in memory for now if search term exists.
-      const snapshot = await withTimeout(getDocs(q), 12000, 'Supplier search is taking too long. Please try again.');
-      if (latestSearchId.current !== requestId) return;
-      let data: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      
-      if (search) {
-        data = data.filter(c => 
-          c.companyName?.toLowerCase().includes(search.toLowerCase()) || 
-          c.location?.toLowerCase().includes(search.toLowerCase())
-        );
-      }
-      
-      setCompanies(data);
-    } catch (error: unknown) {
-      if (latestSearchId.current === requestId) {
-        const message = getErrorMessage(error, 'Unable to load suppliers right now.');
-        console.error('Error fetching companies:', error);
-        setError(message);
-        setCompanies([]);
-      }
-    } finally {
-      if (latestSearchId.current === requestId) {
-        setLoading(false);
-        setSearching(false);
-      }
-    }
-  };
 
   const handleMonitor = async (company: any) => {
     if (!user) return;

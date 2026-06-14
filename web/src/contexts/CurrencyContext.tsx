@@ -110,18 +110,20 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
 
   // Load currency settings from storage on mount
   useEffect(() => {
-    const storedCurrency = localStorage.getItem('@currency');
-    const storedAutoSync = localStorage.getItem('@currencyAutoSync');
+    queueMicrotask(() => {
+      const storedCurrency = localStorage.getItem('@currency');
+      const storedAutoSync = localStorage.getItem('@currencyAutoSync');
 
-    if (storedCurrency && CURRENCIES[storedCurrency as Currency]) {
-      const currency = storedCurrency as Currency;
-      setCurrentCurrency(currency);
-      setCurrencyConfig(CURRENCIES[currency]);
-    }
+      if (storedCurrency && CURRENCIES[storedCurrency as Currency]) {
+        const currency = storedCurrency as Currency;
+        setCurrentCurrency(currency);
+        setCurrencyConfig(CURRENCIES[currency]);
+      }
 
-    if (storedAutoSync !== null) {
-      setAutoSyncEnabledState(storedAutoSync === 'true');
-    }
+      if (storedAutoSync !== null) {
+        setAutoSyncEnabledState(storedAutoSync === 'true');
+      }
+    });
   }, []);
 
   // Sync with Firestore (Parity with Mobile)
