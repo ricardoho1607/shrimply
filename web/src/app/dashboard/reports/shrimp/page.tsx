@@ -39,7 +39,7 @@ interface Sampling {
   abw?: number; // Mobile parity
   mortality?: number;
   feed?: number;
-  feedData?: any;
+  feedData?: Record<string, unknown>;
   isBaselineEstimate?: boolean;
   source?: string;
   estimatedPopulation?: number;
@@ -81,6 +81,17 @@ interface FarmCycle {
   status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
 }
 
+interface DashboardUser {
+  uid: string;
+  name?: string;
+  companyId?: string;
+}
+
+interface Company {
+  id: string;
+  companyName?: string;
+}
+
 /* --- Robust Calculation Utilities (Mobile + Web Parity) ---- */
 
 type GrowthPoint = {
@@ -93,6 +104,28 @@ type GrowthSeries = {
   color: string;
   data: GrowthPoint[];
 };
+
+type PondStats = ReturnType<typeof calculatePondStats>;
+
+interface ShrimpReportExportData {
+  farmName?: string;
+  technician?: string;
+  companyName?: string;
+  ponds: Pond[];
+  chartUrl: string | null;
+}
+
+type TranslationDictionary = Record<string, unknown>;
+
+type Html2PdfWorker = {
+  from: (element: HTMLElement) => {
+    set: (options: unknown) => {
+      save: () => Promise<void>;
+    };
+  };
+};
+
+type Html2PdfFactory = () => Html2PdfWorker;
 
 const getValidDateTime = (date?: string): number | null => {
   if (!date) return null;
@@ -140,10 +173,10 @@ const calculatePondStats = (pond: Pond) => {
   const samplings = pond.samplings || [];
   // Sort by date ascending to correctly identify latest/previous
   const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  const operationalSorted = sorted.filter((sampling) => !isBaselineSampling(sampling));
+  const growthSorted = sorted.filter((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
   const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
   
-  const previousRaw = operationalSorted[operationalSorted.length - 2] || null;
+  const previousRaw = growthSorted[growthSorted.length - 2] || null;
   const previous = previousRaw ? {
     mbw: getSamplingMbw(previousRaw),
     date: previousRaw.date
@@ -289,13 +322,13 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 };
 
 /* --- PDF Generation HTML Template -------------------------- */
-const generateShrimpReportHTML = (data: any, t: any): string => {
-  const { farmName, technician, reportPeriod, companyName, ponds, chartUrl } = data;
+const generateShrimpReportHTML = (data: ShrimpReportExportData, t: TranslationDictionary): string => {
+  const { farmName, technician, companyName, ponds, chartUrl } = data;
   const global = getGlobalAverages(ponds);
   const stats = global.stats || [];
   const midcyclePonds = ponds.filter((pond: Pond) => pond.baselineDate || pond.cycleStartMode === 'midcycle');
 
-  const pondRows = stats.map((s: any, index: number) => `
+  const pondRows = stats.map((s: PondStats, index: number) => `
     <tr style="${index % 2 === 0 ? 'background-color: #F8FAFB;' : ''}">
       <td style="padding: 12px 4px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.pondName}</td>
       <td style="padding: 12px 4px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.doc}</td>
@@ -373,8 +406,8 @@ export default function ShrimpReportsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
-  const [user, setUser] = useState<any>(null);
-  const [company, setCompany] = useState<any>(null);
+  const [user, setUser] = useState<DashboardUser | null>(null);
+  const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
 
   useEffect(() => {
@@ -452,8 +485,7 @@ export default function ShrimpReportsPage() {
   const handleGenerateReport = async () => {
     setExportLoading(true);
     try {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default;
+      const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
       const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartUrl }, t);
       const element = document.createElement('div');
       element.innerHTML = html;
@@ -516,7 +548,7 @@ export default function ShrimpReportsPage() {
         <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
           <h2 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> Pond Status</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {global.stats.map((s: any) => (
+            {global.stats.map((s: PondStats) => (
               <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
                   <div><div style={{ fontSize: '16px', fontWeight: 800 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>

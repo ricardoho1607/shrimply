@@ -103,7 +103,6 @@ export default {
       },
       expoPublic: {
         GOOGLE_PLACES: process.env.EXPO_PUBLIC_GOOGLE_PLACES_API_KEY,
-        GEMINI_API_KEY: process.env.EXPO_PUBLIC_GEMINI_API_KEY,
         FIREBASE_STORAGE_BUCKET: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
       },
     },

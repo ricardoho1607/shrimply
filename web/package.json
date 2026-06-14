@@ -9,7 +9,6 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@google/generative-ai": "^0.24.1",
     "firebase": "^12.12.1",
     "html2pdf.js": "^0.14.0",
     "lucide-react": "^1.8.0",

@@ -17,6 +17,7 @@ import { usePondStore, isPondCycleActive } from './store/pondStore';
 import { useGemini } from './hooks/useGemini';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useAuth } from '../context/AuthContext';
 import { calculateOrsonHarvestProjection } from '../orson/harvestProjection';
 import type { OrsonHarvestProjection } from '../orson/types';
 
@@ -28,6 +29,7 @@ export default function HarvestProjectionScreen() {
   const { sendMessage, loading: aiLoading } = useGemini();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
+  const { company } = useAuth();
 
   const [selectedPondId, setSelectedPondId] = useState<string | null>(activePonds.length > 0 ? activePonds[0].id : null);
   const [daysToHarvest, setDaysToHarvest] = useState('14');
@@ -94,9 +96,12 @@ Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.sum
 Give a concise recommendation based on Orson's structured projection risk.`;
 
     try {
-      const response = await sendMessage(prompt, activePonds);
+      const response = await sendMessage(prompt, activePonds, {
+        companyId: company?.id,
+        aiFunction: 'projection',
+      });
       setInsight(response);
-    } catch (err) {
+    } catch {
       setInsight(t.harvestProjectionScreen?.orsonUnavailable || "Orson is currently unavailable to provide an analysis.");
     }
   };

@@ -3,8 +3,6 @@ import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, S
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system/legacy';
 import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
@@ -15,6 +13,7 @@ import app, { db, storage } from '../../config/firebase';
 
 interface MobileLabReport {
   id: string;
+  companyId?: string;
   status?: 'draft' | 'extracted' | 'confirmed' | 'failed';
   entryMode?: 'manual' | 'pdf_upload';
   reportType?: 'water_quality' | 'plankton' | 'combined';
@@ -40,6 +39,7 @@ type LabPdfUsage = Partial<Record<LabPdfUsageType, {
 }>>;
 
 const LAB_PDF_PENDING_MS = 10 * 60 * 1000;
+const MAX_LAB_PDF_BYTES = 10 * 1024 * 1024;
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const waitForNativePickerWindow = () => new Promise<void>((resolve) => {
@@ -50,6 +50,24 @@ const waitForNativePickerWindow = () => new Promise<void>((resolve) => {
 
 const isDocumentPickerBusyError = (error: unknown) => (
   error instanceof Error && error.message.includes('Different document picking in progress')
+);
+
+const loadLabPdfPickerTools = async () => {
+  const [DocumentPicker, FileSystem] = await Promise.all([
+    import('expo-document-picker'),
+    import('expo-file-system/legacy'),
+  ]);
+
+  if (typeof DocumentPicker.getDocumentAsync !== 'function' || typeof FileSystem.getInfoAsync !== 'function') {
+    throw new Error('Lab PDF picker tools are unavailable.');
+  }
+
+  return { DocumentPicker, FileSystem };
+};
+
+const isPdfAsset = (asset: { name?: string | null; mimeType?: string | null }) => (
+  asset.mimeType === 'application/pdf'
+  || (!asset.mimeType && !!asset.name?.toLowerCase().endsWith('.pdf'))
 );
 
 const Input = React.memo(function Input({ label, value, onChange, placeholder = "" }: any) {
@@ -375,6 +393,7 @@ export default function WaterQualityScreen() {
 
     try {
       if (!pickerReserved) labPickerLockRef.current = true;
+      const { DocumentPicker, FileSystem } = await loadLabPdfPickerTools();
       await waitForNativePickerWindow();
       let result;
       try {
@@ -395,13 +414,23 @@ export default function WaterQualityScreen() {
 
       if (result.canceled || !result.assets?.[0]) return;
       const asset = result.assets[0];
-      if (asset.mimeType && asset.mimeType !== 'application/pdf') {
+      if (!isPdfAsset(asset)) {
+        Alert.alert(t.waterQuality.invalidPdfTitle, t.waterQuality.invalidPdfMessage);
+        return;
+      }
+
+      const fileInfo = await FileSystem.getInfoAsync(asset.uri, { md5: true });
+      if (!fileInfo.exists) {
+        Alert.alert(t.waterQuality.invalidPdfTitle, t.waterQuality.invalidPdfMessage);
+        return;
+      }
+      const pickedFileSize = typeof fileInfo.size === 'number' ? fileInfo.size : asset.size;
+      if (typeof pickedFileSize === 'number' && pickedFileSize > MAX_LAB_PDF_BYTES) {
         Alert.alert(t.waterQuality.invalidPdfTitle, t.waterQuality.invalidPdfMessage);
         return;
       }
 
       setIsLabUploading(true);
-      const fileInfo = await FileSystem.getInfoAsync(asset.uri, { md5: true });
       const sourceFileHash = ('md5' in fileInfo && fileInfo.md5) ? fileInfo.md5 : `${asset.name}-${asset.size || Date.now()}`;
       const reportRef = await addDoc(collection(db, 'companies', company.id, 'labReports'), {
         companyId: company.id,
@@ -439,8 +468,24 @@ export default function WaterQualityScreen() {
       });
 
       const functions = getFunctions(app);
-      const extract = httpsCallable<{ companyId: string; labReportId: string }, unknown>(functions, 'extractLabReportFromPdf');
-      await extract({ companyId: company.id, labReportId: reportRef.id });
+      const extract = httpsCallable<{ companyId: string; labReportId: string }, { pondResults?: MobileLabReport['pondResults']; warnings?: string[] }>(functions, 'extractLabReportFromPdf');
+      const extractionResult = await extract({ companyId: company.id, labReportId: reportRef.id });
+      if (Array.isArray(extractionResult.data?.pondResults)) {
+        setSelectedLabReport({
+          id: reportRef.id,
+          companyId: company.id,
+          reportType,
+          entryMode: 'pdf_upload',
+          status: 'extracted',
+          sampleDate: new Date().toISOString().split('T')[0],
+          labName: reportType === 'plankton' ? t.waterQuality.uploadedPlanktonReport : t.waterQuality.uploadedMineralReport,
+          originalFileName: asset.name || 'lab-report.pdf',
+          sourcePdfPath,
+          sourcePdfUrl,
+          pondResults: extractionResult.data.pondResults,
+          extraction: { status: 'complete', warnings: extractionResult.data.warnings || [] },
+        });
+      }
       Alert.alert(t.waterQuality.labUploadCompleteTitle, t.waterQuality.labUploadCompleteMessage);
     } catch (error) {
       console.error('Error uploading lab PDF:', error);
@@ -606,14 +651,15 @@ export default function WaterQualityScreen() {
 
   const handleConfirmLabReport = useCallback(async () => {
     if (!company?.id || !user || !selectedLabReport || isConfirmingLab) return;
-    if (selectedLabReport.status !== 'extracted') {
+    const reportToConfirm = labReports.find(report => report.id === selectedLabReport.id) || selectedLabReport;
+    if (reportToConfirm.status !== 'extracted') {
       Alert.alert(t.waterQuality.labNotReadyTitle, t.waterQuality.labNotReadyMessage);
       return;
     }
 
     try {
       setIsConfirmingLab(true);
-      await updateDoc(doc(db, 'companies', company.id, 'labReports', selectedLabReport.id), {
+      await updateDoc(doc(db, 'companies', company.id, 'labReports', reportToConfirm.id), {
         status: 'confirmed',
         insights: { status: 'pending' },
         processing: { status: 'pending' },
@@ -629,7 +675,7 @@ export default function WaterQualityScreen() {
     } finally {
       setIsConfirmingLab(false);
     }
-  }, [company?.id, user, selectedLabReport, isConfirmingLab, t]);
+  }, [company?.id, user, selectedLabReport, isConfirmingLab, labReports, t]);
 
   const mineralPdfActionState = getPdfActionState('water_quality');
   const planktonPdfActionState = getPdfActionState('plankton');

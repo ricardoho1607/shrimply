@@ -134,3 +134,45 @@ export const runDoc11To30SurvivalRefinementSelfTest = () => {
 
   return metrics;
 };
+
+export const runBiologyParityFallbackSelfTest = () => {
+  const pond = normalizePondData(
+    {
+      id: 'pond-c3',
+      pondName: 'C3',
+      pondArea: 1000,
+      density: 100,
+      initialPopulation: 100000,
+      docStart: '2026-01-01',
+      totalHarvestedPopulation: 12000,
+      samplings: [
+        {
+          id: 's1',
+          date: '2026-01-11',
+          mbw: 2,
+          mortality: 1000,
+          feed: 15,
+        },
+        {
+          id: 's2',
+          date: '2026-01-18',
+          mbw: 0,
+          mortality: 500,
+          feed: 20,
+        },
+      ],
+    },
+    { now: new Date('2026-01-19T00:00:00Z') },
+  );
+
+  const metrics = calculatePondMetrics(pond);
+
+  assert(metrics.latestMbwG === 2, 'looks back to latest valid MBW when newest sampling MBW is zero');
+  assert(metrics.adgGPerDay === 0.15, 'uses 0.5g initial-weight fallback for single-sampling ADG');
+  assert(metrics.smoothedAdgGPerDay === 0.15, 'uses shared ADG fallback for smoothed ADG with one valid MBW point');
+  assert(metrics.totalMortalityCount === 1500, 'counts mortality from records after the latest valid MBW');
+  assert(metrics.estimatedCurrentPopulation === 86500, 'subtracts cumulative mortality and harvested population');
+  assert(metrics.estimatedBiomassKg === 173, 'uses looked-back MBW with harvest-adjusted current population');
+
+  return metrics;
+};

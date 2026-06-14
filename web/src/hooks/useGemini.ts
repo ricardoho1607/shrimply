@@ -1,11 +1,10 @@
 import { useState, useRef } from 'react';
-import { GoogleGenerativeAI } from '@google/generative-ai';
-import { db } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app, db } from '@/lib/firebase';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import NotificationService from '@/lib/notificationService';
 import { buildOrsonAnalysis } from '../../../orson/pipeline';
 import {
-  ORSON_GEMINI_MODEL,
   type OrsonAiFunction,
   isOrsonDailyLimitError,
   reserveOrsonRequest,
@@ -33,8 +32,6 @@ export const useGemini = () => {
   
   const chatSessionRef = useRef<unknown>(null);
   const latestRequestId = useRef(0);
-
-  const API_KEY = process.env.NEXT_PUBLIC_GEMINI_API_KEY || '';
 
   const getCachedResponse = (cacheKey: string | null) => {
     try {
@@ -104,26 +101,24 @@ export const useGemini = () => {
 
       await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat');
 
-      const genAI = new GoogleGenerativeAI(API_KEY);
-      const model = genAI.getGenerativeModel({
-        model: ORSON_GEMINI_MODEL,
-        systemInstruction: analysis.promptPackage.systemInstruction,
-        generationConfig: {
-          temperature: 0.5,
-          maxOutputTokens: 512,
-        },
-      });
+      const functions = getFunctions(app);
+      const generateOrsonResponse = httpsCallable<
+        { companyId?: string; systemInstruction: string; prompt: string },
+        { text?: string }
+      >(functions, 'generateOrsonResponse');
 
       const result = await withTimeout(
-        model.generateContent(`${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`),
+        generateOrsonResponse({
+          companyId: options.companyId,
+          systemInstruction: analysis.promptPackage.systemInstruction,
+          prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+        }),
         ORSON_MODEL_TIMEOUT_MS,
         'Orson is taking too long to respond. Please try again.'
       );
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
 
-      const response = result.response;
-      if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
-      const text = cleanOrsonResponse(response.text());
+      const text = cleanOrsonResponse(result.data.text || '');
 
       saveToCache(analysis.promptPackage.cacheKey, text);
 

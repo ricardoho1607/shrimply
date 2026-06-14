@@ -174,6 +174,42 @@ const getGeminiApiKey = () => {
   }
 };
 
+exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApiKeySecret] }, async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
+  const systemInstruction = typeof request.data?.systemInstruction === "string" ? request.data.systemInstruction : "";
+  const prompt = typeof request.data?.prompt === "string" ? request.data.prompt : "";
+
+  const db = admin.firestore();
+  await assertCompanyMemberForCallable(db, uid, companyId);
+
+  if (!systemInstruction.trim() || !prompt.trim()) {
+    throw new HttpsError("invalid-argument", "Orson prompt data is required.");
+  }
+
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new HttpsError("failed-precondition", "GEMINI_API_KEY is not configured for Orson.");
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: LAB_INSIGHT_MODEL,
+      systemInstruction,
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 512,
+      },
+    });
+    const result = await model.generateContent(prompt);
+    return { text: result.response.text() };
+  } catch (error) {
+    console.error("Orson response generation failed:", error);
+    throw new HttpsError("internal", "Orson could not generate a response right now.");
+  }
+});
+
 const parseJsonFromModelText = (text) => {
   const trimmed = String(text || "").trim();
   const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);

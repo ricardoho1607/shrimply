@@ -10,6 +10,7 @@ import type {
   OrsonTrendResult,
 } from './types';
 import {
+  calculateAdg as calculateSharedAdg,
   calculatePondMetricsWithHarvest,
   detectFeedBiomassMismatchInsight,
   getFeedRateFromMbw,
@@ -96,30 +97,8 @@ export const calculateTrend = (
   };
 };
 
-const calculateAdg = (
-  pond: OrsonNormalizedPond,
-  mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
-): OrsonNumber => {
-  if (mbwPoints.length >= 2) {
-    const previous = mbwPoints[mbwPoints.length - 2];
-    const latest = mbwPoints[mbwPoints.length - 1];
-    if (previous.record.timestampMs !== null && latest.record.timestampMs !== null) {
-      const days = Math.max(1, (latest.record.timestampMs - previous.record.timestampMs) / (1000 * 60 * 60 * 24));
-      return round((latest.value - previous.value) / days);
-    }
-  }
-
-  const first = mbwPoints[0];
-  if (first && pond.docStartTimestampMs !== null && first.record.timestampMs !== null && hasNumber(pond.initialWeightG)) {
-    const days = Math.max(1, (first.record.timestampMs - pond.docStartTimestampMs) / (1000 * 60 * 60 * 24));
-    return round((first.value - pond.initialWeightG) / days);
-  }
-
-  return null;
-};
-
 const calculateSmoothedAdg = (
-  pond: OrsonNormalizedPond,
+  sharedPond: SharedPond,
   mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): OrsonNumber => {
   const recent = mbwPoints.slice(-4);
@@ -132,7 +111,7 @@ const calculateSmoothedAdg = (
     }
   }
 
-  return calculateAdg(pond, mbwPoints);
+  return round(calculateSharedAdg(sharedPond));
 };
 
 const detectMbwOutliers = (
@@ -478,8 +457,8 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     currentDoc: pond.currentDoc,
     latestMbwG: hasNumber(latestMbwG) ? round(latestMbwG) : null,
     latestMbwDate: latestMbw?.record.date ?? null,
-    adgGPerDay: calculateAdg(pond, mbwPoints),
-    smoothedAdgGPerDay: calculateSmoothedAdg(pond, mbwPoints),
+    adgGPerDay: round(calculateSharedAdg(sharedPond)),
+    smoothedAdgGPerDay: calculateSmoothedAdg(sharedPond, mbwPoints),
     mbwOutlierDates: detectMbwOutliers(mbwPoints),
     totalFeedKg: round(totalFeedKg, 2),
     baselineFeedKg: round(baselineFeedKg, 2),

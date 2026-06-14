@@ -115,11 +115,9 @@ export default function ShrimpReportsScreen() {
   const getPondStats = (pond: Pond) => {
     const doc = getPondCurrentDoc(pond);
     const metrics = calculatePondMetricsWithHarvest(pond);
-    const latestSampling = pond.samplings.filter(s => getSamplingMbw(s) > 0)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     return {
       doc, currentPopulation: metrics.currentPopulation, biomass: metrics.currentBiomass, sr: metrics.adjustedSR,
-      latestMBW: getSamplingMbw(latestSampling), samplingCount: pond.samplings.filter(s => getSamplingMbw(s) > 0).length,
+      latestMBW: metrics.latestMbw, samplingCount: pond.samplings.filter(s => getSamplingMbw(s) > 0).length,
     };
   };
 
