@@ -30,7 +30,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDebouncedValue, useFinanceRecords } from '@/hooks/useDashboardData';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface Transaction {
   id: string;
   date: string;

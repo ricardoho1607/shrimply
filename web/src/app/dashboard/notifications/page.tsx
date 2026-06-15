@@ -30,7 +30,7 @@ import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyNotifications } from '@/hooks/useDashboardData';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 
 interface Notification {
   id: string;
@@ -50,7 +50,7 @@ const isFirestoreTimestamp = (value: Notification['timestamp']): value is { toDa
   return !!value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function';
 };
 
-/* ─── Components ─────────────────────────────────────────────── */
+/* --- Components ----------------------------------------------- */
 
 const NotificationIcon = ({ type, priority, data }: { type: string, priority: string, data?: Notification['data'] }) => {
   const getIconColor = () => {

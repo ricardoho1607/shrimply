@@ -32,7 +32,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 interface PriceList {
   size20?: number; size30?: number; size40?: number; size50?: number;
   size60?: number; size70?: number; size80?: number; size90?: number;

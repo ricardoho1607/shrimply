@@ -23,7 +23,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyPonds, useFinanceRecords } from '@/hooks/useDashboardData';
 
-/* ─── Types ─────────────────────────────────────────────── */
+/* --- Types ----------------------------------------------- */
 interface Expense {
   id: string;
   amount: number;
@@ -58,7 +58,7 @@ interface FinancialData {
   netProfit: number;
 }
 
-/* ─── Helper Functions ──────────────────────────────────── */
+/* --- Helper Functions ------------------------------------ */
 
 const formatDate = (dateStr: string): string => {
   const date = new Date(dateStr);
@@ -69,7 +69,7 @@ const formatDate = (dateStr: string): string => {
   });
 };
 
-/* ─── HTML Generators (1:1 Mobile Parity) ─────────────── */
+/* --- HTML Generators (1:1 Mobile Parity) --------------- */
 const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number) => string, currencyCode: string): string => {
   const { 
     period, startDate, endDate, companyName, totalRevenue, revenueBreakdown,

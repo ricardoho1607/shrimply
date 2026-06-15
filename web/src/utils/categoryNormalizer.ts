@@ -8,7 +8,7 @@
  */
 
 export const CATEGORY_NORMALIZER: Record<string, string> = {
-  // ── Expense categories ──────────────────────────────────────────────
+  // -- Expense categories ----------------------------------------------
   // Feed
   'Feed': 'Feed',
   'Pakan': 'Feed',
@@ -70,7 +70,7 @@ export const CATEGORY_NORMALIZER: Record<string, string> = {
   'Pemeliharaan': 'Maintenance',
   '维护': 'Maintenance',
 
-  // ── Revenue categories ───────────────────────────────────────────────
+  // -- Revenue categories -----------------------------------------------
   // Shrimp Sales
   'Shrimp Sales': 'Shrimp Sales',
   'Penjualan Udang': 'Shrimp Sales',

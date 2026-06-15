@@ -40,7 +40,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 
-/* ─── Types ─────────────────────────────────────────────────── */
+/* --- Types --------------------------------------------------- */
 
 interface StockHistory {
   id: string;
@@ -911,7 +911,7 @@ export default function InventoryFeedsPage() {
         )}
       </div>
 
-      {/* ── MODERNIZED MODALS ───────────────────────────────────────────── */}
+      {/* -- MODERNIZED MODALS --------------------------------------------- */}
       {isModalOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000,
