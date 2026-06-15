@@ -27,34 +27,55 @@ import {
   ChevronDown,
   Loader2,
   CalendarDays,
+  type LucideIcon,
 } from 'lucide-react';
 
 /* --- Navigation Config --------------------------------------- */
 
-const NAV_STRUCTURE = (t: any) => ({
+type TranslationSection = Record<string, string | undefined>;
+type DashboardTranslations = {
+  auth: TranslationSection;
+  finance: TranslationSection;
+  financialReports: TranslationSection;
+  nav: TranslationSection;
+  sidebar: TranslationSection;
+};
+type NavChild = { label: string; href: string };
+type BaseNavItem = {
+  label: string;
+  icon: LucideIcon;
+};
+type NavLinkItem = BaseNavItem & { href: string; id?: never; children?: never };
+type NavGroupItem = BaseNavItem & { id: string; children: NavChild[]; href?: never };
+type NavItem = NavLinkItem | NavGroupItem;
+type NavigationGroups = Record<'management' | 'appServices' | 'business' | 'system', NavItem[]>;
+
+const getString = (value: unknown, fallback: string) => (typeof value === 'string' && value.trim() ? value : fallback);
+
+const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
   management: [
-    { label: t.nav.home || 'Home', icon: LayoutDashboard, href: '/dashboard' },
-    { label: t.nav.ponds || 'Ponds', icon: Waves, href: '/dashboard/ponds' },
-    { label: t.nav.waterQuality || 'Water Quality', icon: Droplets, href: '/dashboard/water' },
-    { label: t.nav.feed || 'Feed', icon: History, href: '/dashboard/feed' },
-    { label: t.nav.harvest || 'Harvest', icon: Wallet, href: '/dashboard/harvest' },
+    { label: getString(t.nav.home, 'Home'), icon: LayoutDashboard, href: '/dashboard' },
+    { label: getString(t.nav.ponds, 'Ponds'), icon: Waves, href: '/dashboard/ponds' },
+    { label: getString(t.nav.waterQuality, 'Water Quality'), icon: Droplets, href: '/dashboard/water' },
+    { label: getString(t.nav.feed, 'Feed'), icon: History, href: '/dashboard/feed' },
+    { label: getString(t.nav.harvest, 'Harvest'), icon: Wallet, href: '/dashboard/harvest' },
   ],
   appServices: [
-    { label: t.nav.marketplace || 'Marketplace', icon: Store, href: '/dashboard/marketplace' },
-    { label: t.nav.diseaseReport || 'Disease Report', icon: Map, href: '/dashboard/disease' },
-    { label: t.sidebar.aiAssistant || 'Orson AI', icon: BrainCircuit, href: '/dashboard/ai' },
-    { label: t.nav.notifications || 'Notifications', icon: Bell, href: '/dashboard/notifications' },
+    { label: getString(t.nav.marketplace, 'Marketplace'), icon: Store, href: '/dashboard/marketplace' },
+    { label: getString(t.nav.diseaseReport, 'Disease Report'), icon: Map, href: '/dashboard/disease' },
+    { label: getString(t.sidebar.aiAssistant, 'Orson AI'), icon: BrainCircuit, href: '/dashboard/ai' },
+    { label: getString(t.nav.notifications, 'Notifications'), icon: Bell, href: '/dashboard/notifications' },
   ],
   business: [
-    { label: t.finance.title || 'Finance', icon: Wallet, href: '/dashboard/finance' },
+    { label: getString(t.finance.title, 'Finance'), icon: Wallet, href: '/dashboard/finance' },
     {
       label: 'Reports',
       icon: FileText,
       id: 'reports',
       children: [
-        { label: t.financialReports.title || 'Financial Reports', href: '/dashboard/reports/financial' },
-        { label: t.nav.shrimpReports || 'Shrimp Reports', href: '/dashboard/reports/shrimp' },
-        { label: t.financialReports.harvestProjection || 'Harvest Projections', href: '/dashboard/projections' },
+        { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
+        { label: getString(t.nav.shrimpReports, 'Shrimp Reports'), href: '/dashboard/reports/shrimp' },
+        { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), href: '/dashboard/projections' },
       ]
     },
     {
@@ -62,18 +83,18 @@ const NAV_STRUCTURE = (t: any) => ({
       icon: Box,
       id: 'inventory',
       children: [
-        { label: t.nav.inventoryFeeds || 'Feeds & Additives', href: '/dashboard/inventory/feeds' },
-        { label: t.nav.inventoryAssets || 'Assets', href: '/dashboard/inventory/assets' },
+        { label: getString(t.nav.inventoryFeeds, 'Feeds & Additives'), href: '/dashboard/inventory/feeds' },
+        { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
       ]
     },
   ],
   system: [
-    { label: t.nav.settings || 'Settings', icon: Settings, href: '/dashboard/settings' },
+    { label: getString(t.nav.settings, 'Settings'), icon: Settings, href: '/dashboard/settings' },
   ]
 });
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { t } = useLanguage();
+  const { t } = useLanguage() as { t: DashboardTranslations };
   const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
@@ -87,16 +108,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     year: 'numeric',
   }).format(new Date());
   const isMechanic = user?.role === 'mechanic';
+  const isNavLink = (item: NavItem): item is NavLinkItem => 'href' in item;
+  const isNavGroup = (item: NavItem): item is NavGroupItem => Array.isArray((item as { children?: NavChild[] }).children);
   const visibleNavigation = isMechanic ? {
-    management: navigation.management.filter((item) => ['/dashboard', '/dashboard/ponds'].includes(item.href)),
-    appServices: navigation.appServices.filter((item) => ['/dashboard/ai', '/dashboard/notifications'].includes(item.href)),
+    management: navigation.management.filter((item): item is NavLinkItem => isNavLink(item) && ['/dashboard', '/dashboard/ponds'].includes(item.href)),
+    appServices: navigation.appServices.filter((item): item is NavLinkItem => isNavLink(item) && ['/dashboard/ai', '/dashboard/notifications'].includes(item.href)),
     business: [
       {
         label: 'Inventory',
         icon: Box,
         id: 'inventory',
         children: [
-          { label: t.nav.inventoryAssets || 'Assets', href: '/dashboard/inventory/assets' },
+          { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
         ],
       },
     ],
@@ -112,15 +135,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const currentNavMeta = (() => {
     for (const [groupKey, items] of Object.entries(visibleNavigation)) {
-      for (const item of items as any[]) {
-        if (item.href && pathname === item.href) {
+      for (const item of items) {
+        if (isNavLink(item) && pathname === item.href) {
           return {
             section: sectionLabels[groupKey] || groupKey,
             title: item.label,
           };
         }
-        if (item.children) {
-          const matchingChild = item.children.find((child: any) => pathname === child.href);
+        if (isNavGroup(item)) {
+          const matchingChild = item.children.find((child) => pathname === child.href);
           if (matchingChild) {
             return {
               section: sectionLabels[groupKey] || groupKey,
@@ -177,6 +200,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Loader2 className="animate-spin" size={48} color="var(--primary)" />
     </div>
   );
+
+  if (pathname?.startsWith('/dashboard/admin')) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="dashboard-saas" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
@@ -304,8 +331,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <div style={{ fontSize: '0.68rem', fontWeight: 650, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
-              {items.map((item: any) => {
-                if (item.children) {
+              {items.map((item) => {
+                const ItemIcon = item.icon;
+                if (isNavGroup(item)) {
                   const isExpanded = expandedGroups.includes(item.id);
                   return (
                     <div key={item.label} style={{ display: 'flex', flexDirection: 'column' }}>
@@ -331,7 +359,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                         onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <item.icon size={20} color="#94a3b8" strokeWidth={2} />
+                          <ItemIcon size={20} color="#94a3b8" strokeWidth={2} />
                           <span>{item.label}</span>
                         </div>
                         <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
@@ -339,7 +367,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
                       {isExpanded && (
                         <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '32px', marginTop: '4px', gap: '4px' }}>
-                          {item.children.map((child: any) => {
+                          {item.children.map((child) => {
                             const isChildActive = pathname === child.href;
                             return (
                               <Link
@@ -385,7 +413,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       transition: 'all 0.2s'
                     }}
                   >
-                    <item.icon size={20} color={isActive ? '#1e293b' : '#94a3b8'} strokeWidth={isActive ? 2.5 : 2} />
+                    <ItemIcon size={20} color={isActive ? '#1e293b' : '#94a3b8'} strokeWidth={isActive ? 2.5 : 2} />
                     <span>{item.label}</span>
                   </Link>
                 );
@@ -406,7 +434,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             }}
           >
             <LogOut size={20} strokeWidth={2.5} />
-            <span>{(t.auth as any).signOut || 'Logout'}</span>
+            <span>{getString(t.auth.signOut, 'Logout')}</span>
           </button>
         </div>
       </aside>
@@ -459,7 +487,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
                 <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{(company as any)?.role || (user as any)?.role || 'Farmer'}</div>
+                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
               </div>
               <div style={{
                 width: '44px', height: '44px', borderRadius: '12px', background: 'var(--gradient)',

@@ -87,14 +87,22 @@ const countOptionalCollection = async (db, collectionName, since) => {
   }
 };
 
+const isOwnerRole = (role) => role === "owner" || role === "co-owner";
+const isStaffRole = (role) => ["technician", "manager", "admin", "mechanic"].includes(role);
+const isActiveCycleStatus = (status) => ["planning", "stocking", "active"].includes(String(status || "").toLowerCase());
+const isActivePondCycle = (pond) => String(pond.cycleStatus || "active").toLowerCase() !== "ended";
+
 const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
   const rows = [];
   let totalPonds = 0;
 
   for (const companyDoc of companiesSnapshot.docs) {
     const company = companyDoc.data() || {};
-    const [pondCount, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
-      getSnapshotSize(companyDoc.ref.collection("ponds")),
+    const [pondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+      companyDoc.ref.collection("ponds").get().catch((error) => {
+        console.warn(`Admin metrics skipped ${companyDoc.ref.path}/ponds:`, error.message);
+        return { docs: [], size: 0 };
+      }),
       companyDoc.ref.collection("cycles").get().catch((error) => {
         console.warn(`Admin metrics skipped ${companyDoc.ref.path}/cycles:`, error.message);
         return { docs: [] };
@@ -103,12 +111,15 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       getSnapshotSize(companyDoc.ref.collection("additives")),
     ]);
 
+    const pondCount = pondsSnapshot.size;
     totalPonds += pondCount;
 
-    const activeCycleCount = cyclesSnapshot.docs.filter((cycleDoc) => {
+    const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
       const cycle = cycleDoc.data() || {};
-      return String(cycle.status || "").toLowerCase() === "active";
+      return isActiveCycleStatus(cycle.status);
     }).length;
+    const activePondDocs = pondsSnapshot.docs.filter((pondDoc) => isActivePondCycle(pondDoc.data() || {})).length;
+    const activeCycleCount = Math.max(activeCycleDocs, activePondDocs);
 
     const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
     const owner = usersById.get(company.ownerId) || null;
@@ -348,8 +359,8 @@ exports.getAdminMetrics = onCall(async (request) => {
     const role = user.role || "unknown";
     roleBreakdown[role] = (roleBreakdown[role] || 0) + 1;
     if (role === "buyer") buyers += 1;
-    if (role === "owner") owners += 1;
-    if (["technician", "manager", "admin"].includes(role)) staff += 1;
+    if (isOwnerRole(role)) owners += 1;
+    if (isStaffRole(role)) staff += 1;
 
     const joinedAt = toDate(user.joinedDate || user.createdAt);
     if (joinedAt && joinedAt >= since) {

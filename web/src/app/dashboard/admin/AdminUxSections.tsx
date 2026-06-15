@@ -171,7 +171,7 @@ export function CompanyTableControls({
   onSortChange: (value: string) => void;
 }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 1fr) 180px 190px', gap: '12px', marginBottom: '18px' }}>
+    <div className="admin-company-controls" style={{ display: 'grid', gap: '12px', marginBottom: '18px' }}>
       <label style={{ position: 'relative' }}>
         <Search size={17} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
         <input

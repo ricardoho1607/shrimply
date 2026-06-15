@@ -70,6 +70,10 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
       });
   }, [companies, search, sort, statusFilter]);
 
+  const inspectCompany = (company: CompanyMetric) => {
+    onSelectCompany(company);
+  };
+
   return (
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', marginBottom: '22px' }}>
@@ -105,7 +109,19 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
               {visibleCompanies.map((company) => {
                 const health = getCompanyHealth(company);
                 return (
-                  <tr key={company.id} onClick={() => onSelectCompany(company)} style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer' }}>
+                  <tr
+                    key={company.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => inspectCompany(company)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        inspectCompany(company);
+                      }
+                    }}
+                    style={{ borderBottom: '1px solid var(--border)', cursor: 'pointer', outlineColor: 'var(--primary)' }}
+                  >
                     <td style={{ padding: '16px 10px' }}>
                       <div style={{ color: 'var(--text-primary)', fontWeight: 760 }}>{company.companyName}</div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>

@@ -16,7 +16,6 @@ import {
   FileText,
   Loader2,
   Mail,
-  MessageSquareText,
   RefreshCcw,
   ShieldCheck,
   Store,
@@ -192,6 +191,11 @@ const getCollectionSize = async (...segments: string[]) => {
   }
 };
 
+const isOwnerRole = (role: string) => role === 'owner' || role === 'co-owner';
+const isStaffRole = (role: string) => ['technician', 'manager', 'admin', 'mechanic'].includes(role);
+const isActiveCycleStatus = (status: unknown) => ['planning', 'stocking', 'active'].includes(String(status || '').toLowerCase());
+const isActivePondCycle = (pond: Record<string, unknown>) => String(pond.cycleStatus || 'active').toLowerCase() !== 'ended';
+
 const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMetrics> => {
   const since = startOfPeriod(periodDays);
   const [usersSnapshot, companiesSnapshot] = await Promise.all([
@@ -220,8 +224,8 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
     const role = user.role || 'unknown';
     roleBreakdown[role] = (roleBreakdown[role] || 0) + 1;
     if (role === 'buyer') buyers += 1;
-    if (role === 'owner' || role === 'co-owner') owners += 1;
-    if (['technician', 'manager', 'admin', 'mechanic'].includes(role)) staff += 1;
+    if (isOwnerRole(role)) owners += 1;
+    if (isStaffRole(role)) staff += 1;
 
     const joinedAt = toDate(user.joinedDate || user.createdAt);
     if (joinedAt && joinedAt >= since) {
@@ -237,18 +241,24 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
   let totalPonds = 0;
   const companies = await Promise.all(companiesSnapshot.docs.map(async (companyDoc) => {
     const company = companyDoc.data();
-    const [pondCount, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
-      getCollectionSize('companies', companyDoc.id, 'ponds'),
+    const [pondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+      getDocs(collection(db, 'companies', companyDoc.id, 'ponds')).catch(() => ({ docs: [], size: 0 })),
       getDocs(collection(db, 'companies', companyDoc.id, 'cycles')).catch(() => ({ docs: [] })),
       getCollectionSize('companies', companyDoc.id, 'feeds'),
       getCollectionSize('companies', companyDoc.id, 'additives'),
     ]);
+    const pondCount = pondsSnapshot.size;
     totalPonds += pondCount;
 
-    const activeCycleCount = cyclesSnapshot.docs.filter((cycleDoc) => {
+    const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
       const cycle = typeof cycleDoc.data === 'function' ? cycleDoc.data() : {};
-      return String(cycle.status || '').toLowerCase() === 'active';
+      return isActiveCycleStatus(cycle.status);
     }).length;
+    const activePondDocs = pondsSnapshot.docs.filter((pondDoc) => {
+      const pond = typeof pondDoc.data === 'function' ? pondDoc.data() : {};
+      return isActivePondCycle(pond);
+    }).length;
+    const activeCycleCount = Math.max(activeCycleDocs, activePondDocs);
     const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
     const owner = usersById.get(company.ownerId) || null;
 
@@ -438,6 +448,9 @@ function AdminShellStyles() {
       .shrimply-admin-shell.admin-shell-no-inspector {
         grid-template-columns: 210px minmax(0, 1fr);
       }
+      .admin-inspector-backdrop {
+        display: none;
+      }
       .shrimply-admin-sidebar {
         background: #f8fafc;
         color: #fff;
@@ -466,6 +479,13 @@ function AdminShellStyles() {
         align-items: center;
         gap: 10px;
         padding: 0 4px 24px;
+        min-width: 0;
+      }
+      .admin-sidebar-links {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1;
         min-width: 0;
       }
       .shrimply-admin-main {
@@ -633,6 +653,9 @@ function AdminShellStyles() {
       .admin-grid-gap {
         gap: var(--admin-gap) !important;
       }
+      .admin-company-controls {
+        grid-template-columns: minmax(220px, 1fr) 180px 190px;
+      }
       .admin-founder-summary {
         margin-bottom: 0;
       }
@@ -657,8 +680,21 @@ function AdminShellStyles() {
         .shrimply-admin-shell.admin-shell-no-inspector {
           grid-template-columns: 190px minmax(0, 1fr);
         }
+        .admin-inspector-backdrop {
+          display: block;
+          position: fixed;
+          inset: 0;
+          z-index: 1250;
+          background: rgba(15, 23, 42, 0.28);
+        }
         .shrimply-admin-panel {
-          display: none;
+          position: fixed;
+          top: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 1260;
+          width: min(420px, calc(100vw - 24px));
+          box-shadow: -24px 0 58px rgba(15, 23, 42, 0.18);
         }
         .admin-metric-grid {
           grid-template-columns: repeat(3, minmax(150px, 1fr));
@@ -667,6 +703,12 @@ function AdminShellStyles() {
           grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         }
         .admin-founder-summary > div:first-child {
+          grid-column: 1 / -1;
+        }
+        .admin-company-controls {
+          grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.45fr);
+        }
+        .admin-company-controls label:first-child {
           grid-column: 1 / -1;
         }
       }
@@ -692,6 +734,7 @@ function AdminShellStyles() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 8px;
+          flex: none;
         }
         .shrimply-admin-main {
           padding: 18px 14px 28px;
@@ -715,6 +758,12 @@ function AdminShellStyles() {
         .admin-founder-summary > div:first-child {
           grid-column: auto;
         }
+        .admin-company-controls {
+          grid-template-columns: 1fr;
+        }
+        .admin-company-controls label:first-child {
+          grid-column: auto;
+        }
       }
     `}</style>
   );
@@ -735,7 +784,7 @@ function AdminSidebar({ activeTab, onChange, userName }: { activeTab: AdminTab; 
         <div className="admin-sidebar-logo">
           <img src="/shrimplylogo_v2.webp" alt="Shrimply" style={{ height: 36, width: 'auto', maxWidth: '100%', filter: 'brightness(0) invert(1)' }} />
         </div>
-        <div className="admin-sidebar-links" style={{ display: 'flex', flexDirection: 'column', gap: 8, flex: 1, minWidth: 0 }}>
+        <div className="admin-sidebar-links">
           {items.map((item) => {
             const Icon = item.icon;
             return (
@@ -936,7 +985,8 @@ function AdminInspectorPanel({
         <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.84rem', fontWeight: 700 }}>{recommendedAction}</p>
         {company.ownerEmail && (
           <a href={`mailto:${company.ownerEmail}`} className="dashboard-action dashboard-action-primary" style={{ marginTop: 14, textDecoration: 'none', display: 'inline-flex' }}>
-            <span>Send team invite</span>
+            <Mail size={14} />
+            <span>Email owner</span>
           </a>
         )}
       </section>
@@ -978,17 +1028,6 @@ function AdminInspectorPanel({
             </div>
           ))}
         </div>
-      </section>
-
-      <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, color: 'var(--text-primary)', fontWeight: 760, fontSize: '0.86rem' }}>
-          <MessageSquareText size={16} />
-          Admin note
-        </div>
-        <textarea placeholder="Add a note about this company..." style={{ width: '100%', minHeight: 92, border: '1px solid var(--border)', borderRadius: 7, padding: 12, resize: 'vertical', outline: 'none', font: 'inherit', color: 'var(--text-primary)' }} />
-        <button className="dashboard-action dashboard-action-primary" type="button" style={{ marginTop: 12, marginLeft: 'auto' }}>
-          <span>Save note</span>
-        </button>
       </section>
 
     </aside>
@@ -1089,14 +1128,17 @@ export default function HiddenAdminPage() {
     const link = document.createElement('a');
     link.href = url;
     link.download = `shrimply-admin-companies-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.style.display = 'none';
+    document.body.appendChild(link);
     link.click();
+    document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
   const hardDeleteCompany = useCallback(async (company: CompanyMetric) => {
     if (!isAllowed || deletingCompanyId) return;
-    const confirmed = window.confirm(`Permanently delete ${company.companyName}? This will wipe the company, linked company records, linked user Firestore docs, and matching Auth users. This cannot be undone.`);
-    if (!confirmed) return;
+    const typedName = window.prompt(`Type "${company.companyName}" to permanently delete this company, linked company records, linked user Firestore docs, and matching Auth users.`);
+    if (typedName !== company.companyName) return;
 
     setDeletingCompanyId(company.id);
     setError(null);
@@ -1117,8 +1159,9 @@ export default function HiddenAdminPage() {
   }, [deletingCompanyId, isAllowed, loadMetrics]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadMetrics();
+    queueMicrotask(() => {
+      void loadMetrics();
+    });
   }, [loadMetrics]);
 
   if (!isAllowed) {
@@ -1239,13 +1282,16 @@ export default function HiddenAdminPage() {
       </main>
 
       {(selectedCompany || selectedUser) && (
-        <AdminInspectorPanel
-          company={selectedCompany}
-          user={selectedUser}
-          deletingCompanyId={deletingCompanyId}
-          onHardDeleteCompany={hardDeleteCompany}
-          onClose={clearSelection}
-        />
+        <>
+          <button className="admin-inspector-backdrop" type="button" aria-label="Close details" onClick={clearSelection} />
+          <AdminInspectorPanel
+            company={selectedCompany}
+            user={selectedUser}
+            deletingCompanyId={deletingCompanyId}
+            onHardDeleteCompany={hardDeleteCompany}
+            onClose={clearSelection}
+          />
+        </>
       )}
     </div>
   );
