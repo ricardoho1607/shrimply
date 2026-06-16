@@ -144,8 +144,10 @@ export default function PondManagementScreen() {
     physicalPonds,
     cycles,
     addPhysicalPond,
+    deletePhysicalPond,
     addPond, 
     updatePond,
+    deletePond,
     addSampling, 
     endPondCycle, 
     updateFarmCycle,
@@ -682,6 +684,69 @@ export default function PondManagementScreen() {
     );
   }, [canEditPonds, endPondCycle, t, user?.uid]);
 
+  const handleDeletePond = useCallback((pond: Pond) => {
+    if (!canEditPonds) {
+      Alert.alert(
+        t.home.permissionDenied,
+        t.home.onlyTechniciansCanDelete,
+        [{ text: t.actions.confirm }]
+      );
+      return;
+    }
+
+    if (isPondCycleActive(pond)) {
+      Alert.alert(
+        t.farmCycle.endCycleTitle,
+        t.farmCycle.endPondCycleMessage.replace('{{pondName}}', pond.pondName),
+        [{ text: t.actions.confirm }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      t.home.deletePond,
+      `${t.messages.deletePondConfirm} ${pond.pondName}? ${t.messages.deletePondWarning}`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: t.actions.delete,
+          style: 'destructive',
+          onPress: () => {
+            deletePond(pond.id);
+            Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
+          },
+        },
+      ]
+    );
+  }, [canEditPonds, deletePond, t]);
+
+  const handleDeletePhysicalPond = useCallback((pond: PhysicalPond) => {
+    if (!canEditPonds) {
+      Alert.alert(
+        t.home.permissionDenied,
+        t.home.onlyTechniciansCanDelete,
+        [{ text: t.actions.confirm }]
+      );
+      return;
+    }
+
+    Alert.alert(
+      t.home.deletePond,
+      `${t.messages.deletePondConfirm} ${pond.pondName}?`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: t.actions.delete,
+          style: 'destructive',
+          onPress: () => {
+            deletePhysicalPond(pond.id);
+            Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
+          },
+        },
+      ]
+    );
+  }, [canEditPonds, deletePhysicalPond, t]);
+
   const handleRenameFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;
     const nextName = cycleNameDraft.trim();
@@ -955,6 +1020,19 @@ export default function PondManagementScreen() {
                 >
                   <Ionicons name={isPondCycleActive(pond) ? "archive-outline" : "time-outline"} size={18} color={isPondCycleActive(pond) ? "#315f57" : "#6b8aa0"} />
                 </TouchableOpacity>
+                {!isPondCycleActive(pond) && (
+                  <TouchableOpacity
+                    style={styles.deletePondButton}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleDeletePond(pond);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t.home.deletePond} ${pond.pondName}`}
+                  >
+                    <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                  </TouchableOpacity>
+                )}
               </>
             )}
           </View>
@@ -1027,6 +1105,7 @@ export default function PondManagementScreen() {
     getLastADG, 
     getDOCColor, 
     handleEndPondCycle, 
+    handleDeletePond,
     openBaselineEditModal,
     router, 
     canEditPonds, 
@@ -1445,6 +1524,19 @@ export default function PondManagementScreen() {
                     <TouchableOpacity style={styles.editButton}>
                       <Ionicons name="play-outline" size={18} color="#315f57" />
                     </TouchableOpacity>
+                    {canEditPonds && (
+                      <TouchableOpacity
+                        style={styles.deletePondButton}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          handleDeletePhysicalPond(pond);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${t.home.deletePond} ${pond.pondName}`}
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
                 <View style={styles.pondDetails}>
@@ -2073,6 +2165,15 @@ const styles = StyleSheet.create({
     borderRadius: 8, 
     borderWidth: 1, 
     borderColor: 'rgba(231, 76, 60, 0.3)' 
+  },
+
+  deletePondButton: {
+    padding: Platform.OS === 'android' ? 6 : 8,
+    marginLeft: 8,
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(231, 76, 60, 0.3)',
   },
 
   baselineEditButton: {

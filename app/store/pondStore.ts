@@ -145,6 +145,7 @@ interface PondStore {
   closeFarmCycle: (cycleId: string, closedAt: string) => void;
   addPhysicalPond: (pond: PhysicalPond) => void;
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
+  deletePhysicalPond: (pondId: string) => void;
   addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
@@ -296,6 +297,21 @@ export const usePondStore = create<PondStore>()(
         state.firebaseSync?.syncPhysicalPond?.('update', updatedPond);
       },
 
+      deletePhysicalPond: (pondId) => {
+        const state = get();
+        const pondToDelete = state.physicalPonds.find((pond) => pond.id === pondId);
+        if (!pondToDelete) return;
+        if (pondToDelete.status === 'active' || pondToDelete.activePondId) {
+          console.warn(`Skipped deleting ${pondToDelete.pondName}: active physical ponds must be ended first.`);
+          return;
+        }
+
+        set((state) => ({
+          physicalPonds: state.physicalPonds.filter((pond) => pond.id !== pondId),
+        }));
+        state.firebaseSync?.syncPhysicalPond?.('delete', pondToDelete);
+      },
+
       addPond: (pond) => {
         const state = get();
         const pondKey = getPhysicalPondKey(pond.pondName);
@@ -354,8 +370,28 @@ export const usePondStore = create<PondStore>()(
       deletePond: (pondId) => {
         const state = get();
         const pondToDelete = state.ponds.find(p => p.id === pondId);
-        set((state) => ({ ponds: state.ponds.filter((pond) => pond.id !== pondId) }));
-        if (pondToDelete) state.firebaseSync?.syncPond('delete', pondToDelete);
+        if (!pondToDelete) return;
+        if (isPondCycleActive(pondToDelete)) {
+          console.warn(`Skipped deleting ${pondToDelete.pondName}: active pond cycles must be ended first.`);
+          return;
+        }
+
+        const linkedPhysicalPond = state.physicalPonds.find((physicalPond) =>
+          physicalPond.activePondId === pondId ||
+          (isPondCycleActive(pondToDelete) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pondToDelete.pondName))
+        );
+        const updatedPhysicalPond = linkedPhysicalPond
+          ? { ...linkedPhysicalPond, status: 'idle' as const, activePondId: undefined }
+          : undefined;
+
+        set((state) => ({
+          ponds: state.ponds.filter((pond) => pond.id !== pondId),
+          physicalPonds: updatedPhysicalPond
+            ? state.physicalPonds.map((physicalPond) => physicalPond.id === updatedPhysicalPond.id ? updatedPhysicalPond : physicalPond)
+            : state.physicalPonds,
+        }));
+        state.firebaseSync?.syncPond('delete', pondToDelete);
+        if (updatedPhysicalPond) state.firebaseSync?.syncPhysicalPond?.('update', updatedPhysicalPond);
       },
 
       updatePond: (pondId, updates) => {
