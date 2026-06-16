@@ -1358,9 +1358,6 @@ export default function PondManagementScreen() {
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
-        <View style={styles.otaTestBanner}>
-          <Text style={styles.otaTestBannerText}>OTA TEST 16 Jun</Text>
-        </View>
         <View style={[
           styles.cycleManagerCard,
           !cycleManagerExpanded && styles.cycleManagerCardCollapsed
@@ -1750,25 +1747,6 @@ const styles = StyleSheet.create({
   container: { 
     flex: 1, 
     backgroundColor: '#f4f8fc' 
-  },
-
-  otaTestBanner: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#BBE1FA',
-    borderColor: '#3282B8',
-    borderRadius: 8,
-    borderWidth: 1,
-    marginHorizontal: Platform.OS === 'android' ? 16 : 20,
-    marginTop: Platform.OS === 'android' ? 40 : 50,
-    marginBottom: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-
-  otaTestBannerText: {
-    color: '#0F4C75',
-    fontSize: 12,
-    fontWeight: '800',
   },
   
   scrollContent: { 
