@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, 
@@ -730,6 +730,31 @@ export default function PondManagementScreen() {
       return;
     }
 
+    if (!company?.id) {
+      Alert.alert(t.messages.error, t.messages.dataNotFound);
+      return;
+    }
+
+    if (pond.status === 'active' || pond.activePondId) {
+      Alert.alert(
+        t.farmCycle.endCycleTitle,
+        t.farmCycle.endPondCycleMessage.replace('{{pondName}}', pond.pondName),
+        [{ text: t.actions.confirm }]
+      );
+      return;
+    }
+
+    const persistDeletePhysicalPond = async () => {
+      try {
+        deletePhysicalPond(pond.id);
+        await deleteDoc(doc(db, 'companies', company.id, 'physicalPonds', pond.id));
+        Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
+      } catch (error) {
+        console.error('Failed to delete physical pond:', error);
+        Alert.alert(t.messages.error, t.messages.networkError);
+      }
+    };
+
     Alert.alert(
       t.home.deletePond,
       `${t.messages.deletePondConfirm} ${pond.pondName}?`,
@@ -739,13 +764,12 @@ export default function PondManagementScreen() {
           text: t.actions.delete,
           style: 'destructive',
           onPress: () => {
-            deletePhysicalPond(pond.id);
-            Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
+            void persistDeletePhysicalPond();
           },
         },
       ]
     );
-  }, [canEditPonds, deletePhysicalPond, t]);
+  }, [canEditPonds, company?.id, deletePhysicalPond, t]);
 
   const handleRenameFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;
