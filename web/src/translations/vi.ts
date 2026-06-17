@@ -476,7 +476,14 @@ companySetup: {
     plValueHint: 'Trọng lượng PL ban đầu tính bằng gam. Thường là PL10-PL12.',
     plSupplier: 'Nhà cung cấp PL',
     plSupplierPlaceholder: 'vd: CP Prima, Charoen Pokphand',
-    deleteConfirm: 'Bạn có chắc chắn muốn xóa ao này? Hành động này không thể hoàn tác.'
+    deleteConfirm: 'Bạn có chắc chắn muốn xóa ao này? Hành động này không thể hoàn tác.',
+    deletePond: 'Xóa ao',
+    deleteInactiveTitle: 'Xóa ao không hoạt động?',
+    deleteInactiveConfirm: 'Xóa {{pondName}}? Thao tác này sẽ xóa ao vật lý không hoạt động và không thể hoàn tác.',
+    deleteEndedTitle: 'Xóa bản ghi vụ đã kết thúc?',
+    deleteEndedConfirm: 'Xóa {{pondName}}? Thao tác này sẽ xóa vĩnh viễn bản ghi vụ đã kết thúc và lịch sử lấy mẫu.',
+    activeDeleteBlocked: 'Hãy kết thúc vụ đang hoạt động của ao này trước khi xóa.',
+    deleteSuccess: 'Xóa ao thành công.'
   },
   midcycleOnboarding: {
     cycleQuestion: 'Vụ này bắt đầu như thế nào?',

@@ -468,7 +468,14 @@ companySetup: {
     plValueHint: 'Initial PL weight in grams. Usually PL10-PL12.',
     plSupplier: 'PL Supplier',
     plSupplierPlaceholder: 'e.g. CP Prima, Charoen Pokphand',
-    deleteConfirm: 'Are you sure you want to delete this pond? This action cannot be undone.'
+    deleteConfirm: 'Are you sure you want to delete this pond? This action cannot be undone.',
+    deletePond: 'Delete Pond',
+    deleteInactiveTitle: 'Delete inactive pond?',
+    deleteInactiveConfirm: 'Delete {{pondName}}? This removes the inactive physical pond placeholder and cannot be undone.',
+    deleteEndedTitle: 'Delete ended pond record?',
+    deleteEndedConfirm: 'Delete {{pondName}}? This permanently removes this ended cycle record and its sampling history.',
+    activeDeleteBlocked: 'End the active cycle for this pond before deleting it.',
+    deleteSuccess: 'Pond deleted successfully.'
   },
   midcycleOnboarding: {
     cycleQuestion: 'How is this cycle starting?',

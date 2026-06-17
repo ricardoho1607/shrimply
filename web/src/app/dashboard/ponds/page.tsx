@@ -16,10 +16,11 @@ import {
   Lock,
   Save,
   Shrimp,
-  Pencil
+  Pencil,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -79,9 +80,16 @@ interface PhysicalPond {
 }
 
 type InactivePondOption = PhysicalPond | Pond;
+type DeleteTarget = {
+  isOpen: boolean;
+  id: string | null;
+  type: 'physical' | 'cycle' | null;
+  pondName?: string;
+};
 
 const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
+const isPhysicalPondActive = (pond: PhysicalPond) => pond.status === 'active' || Boolean(pond.activePondId);
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
@@ -142,9 +150,10 @@ export default function PondsPage() {
     baselineCumulativeFeed: ''
   });
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; id: string | null }>({
+  const [deleteConfirm, setDeleteConfirm] = useState<DeleteTarget>({
     isOpen: false,
-    id: null
+    id: null,
+    type: null,
   });
   const [endCyclePond, setEndCyclePond] = useState<Pond | null>(null);
   const [endCycleForm, setEndCycleForm] = useState({
@@ -289,11 +298,14 @@ export default function PondsPage() {
         pondArea: Number(formData.pondArea),
         status: 'idle',
         createdAt: serverTimestamp(),
-        createdBy: user.uid
+        createdBy: user.uid,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
       };
 
       await addDoc(collection(db, 'companies', companyId, 'physicalPonds'), removeUndefinedFields(pondData));
       setModalOpen(false);
+      setCycleFilter('inactive');
       setFormData({
         pondName: '',
         pondArea: '',
@@ -538,13 +550,96 @@ export default function PondsPage() {
     }
   };
 
+  const openDeletePhysicalPond = (pond: PhysicalPond) => {
+    if (!canEditPonds) {
+      alert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
+      return;
+    }
+
+    if (isPhysicalPondActive(pond)) {
+      alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+      return;
+    }
+
+    setDeleteConfirm({
+      isOpen: true,
+      id: pond.id,
+      type: 'physical',
+      pondName: pond.pondName,
+    });
+  };
+
+  const openDeleteCyclePond = (pond: Pond) => {
+    if (!canEditPonds) {
+      alert(t.home?.onlyTechniciansCanDelete || 'Only technicians, owners, and co-owners can delete ponds.');
+      return;
+    }
+
+    if (isActiveCycle(pond)) {
+      alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+      return;
+    }
+
+    setDeleteConfirm({
+      isOpen: true,
+      id: pond.id,
+      type: 'cycle',
+      pondName: pond.pondName,
+    });
+  };
+
   const confirmDelete = async () => {
-    if (!deleteConfirm.id || !companyId) return;
+    if (!deleteConfirm.id || !deleteConfirm.type || !companyId || !user) return;
     if (!canEditPonds) return;
     setIsDeleting(true);
     try {
-      await deleteDoc(doc(db, 'companies', companyId, 'ponds', deleteConfirm.id));
-      setDeleteConfirm({ isOpen: false, id: null });
+      if (deleteConfirm.type === 'physical') {
+        const physicalPond = physicalPonds.find((pond) => pond.id === deleteConfirm.id);
+
+        if (!physicalPond) {
+          alert(t.messages?.dataNotFound || 'Pond data not found.');
+          return;
+        }
+
+        if (isPhysicalPondActive(physicalPond)) {
+          alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+          return;
+        }
+
+        await deleteDoc(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id));
+      } else {
+        const pond = ponds.find((item) => item.id === deleteConfirm.id);
+
+        if (!pond) {
+          alert(t.messages?.dataNotFound || 'Pond data not found.');
+          return;
+        }
+
+        if (isActiveCycle(pond)) {
+          alert(t.ponds?.activeDeleteBlocked || 'End the active cycle for this pond before deleting it.');
+          return;
+        }
+
+        const linkedPhysicalPond = physicalPonds.find((physicalPond) =>
+          physicalPond.activePondId === pond.id ||
+          (!isPhysicalPondActive(physicalPond) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pond.pondName))
+        );
+
+        const batch = writeBatch(db);
+        batch.delete(doc(db, 'companies', companyId, 'ponds', pond.id));
+        if (linkedPhysicalPond?.activePondId === pond.id) {
+          batch.update(doc(db, 'companies', companyId, 'physicalPonds', linkedPhysicalPond.id), {
+            status: 'idle',
+            activePondId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+          });
+        }
+        await batch.commit();
+      }
+
+      setDeleteConfirm({ isOpen: false, id: null, type: null });
+      alert(t.ponds?.deleteSuccess || 'Pond deleted successfully.');
     } catch (error) {
       console.error('Error deleting pond:', error);
       alert(t.messages.error || 'Failed to delete pond.');
@@ -562,7 +657,9 @@ export default function PondsPage() {
   }, [ponds, debouncedSearchTerm, cycleFilter]);
   const inactivePondOptions = useMemo<InactivePondOption[]>(() => {
     const activeNames = new Set(ponds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
-    const physicalOptions = physicalPonds.filter((pond) => !activeNames.has(getPhysicalPondKey(pond.pondName)));
+    const physicalOptions = physicalPonds.filter((pond) =>
+      !isPhysicalPondActive(pond) && !activeNames.has(getPhysicalPondKey(pond.pondName))
+    );
     const physicalNames = new Set(physicalOptions.map((pond) => getPhysicalPondKey(pond.pondName)));
     const legacyEndedOptions = ponds
       .filter((pond) => getCycleStatus(pond) === 'ended')
@@ -582,6 +679,14 @@ export default function PondsPage() {
     return inactivePondOptions
       .filter((pond) => !normalizedSearch || pond.pondName.toLowerCase().includes(normalizedSearch));
   }, [cycleFilter, debouncedSearchTerm, inactivePondOptions]);
+  const deletePondName = deleteConfirm.pondName || t.ponds?.pondName || 'this pond';
+  const deleteTitle = deleteConfirm.type === 'physical'
+    ? (t.ponds?.deleteInactiveTitle || 'Delete inactive pond?')
+    : (t.ponds?.deleteEndedTitle || 'Delete ended pond record?');
+  const deleteMessageTemplate = deleteConfirm.type === 'physical'
+    ? (t.ponds?.deleteInactiveConfirm || 'Delete {{pondName}}? This removes the inactive physical pond placeholder and cannot be undone.')
+    : (t.ponds?.deleteEndedConfirm || 'Delete {{pondName}}? This permanently removes this ended cycle record and its sampling history.');
+  const deleteMessage = deleteMessageTemplate.replace('{{pondName}}', deletePondName);
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -755,16 +860,28 @@ export default function PondsPage() {
                   </div>
                 </div>
                 {canEditPonds && (
-                  <button
-                    onClick={() => openStartCycle(pond)}
-                    title="Start cycle"
-                    style={{
-                      background: 'var(--bg-mid)', border: 'none', color: '#3282B8',
-                      cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                    }}
-                  >
-                    <RotateCcw size={18} />
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => openStartCycle(pond)}
+                      title="Start cycle"
+                      style={{
+                        background: 'var(--bg-mid)', border: 'none', color: '#3282B8',
+                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
+                      }}
+                    >
+                      <RotateCcw size={18} />
+                    </button>
+                    <button
+                      onClick={() => isLegacyEnded ? openDeleteCyclePond(pond as Pond) : openDeletePhysicalPond(pond as PhysicalPond)}
+                      title={t.ponds?.deletePond || 'Delete pond'}
+                      style={{
+                        background: 'rgba(231, 76, 60, 0.1)', border: 'none', color: '#e74c3c',
+                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 )}
               </div>
               <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
@@ -848,6 +965,27 @@ export default function PondsPage() {
                   >
                     {isActiveCycle(pond) ? <Archive size={18} /> : <RotateCcw size={18} />}
                   </button>
+                  {!isActiveCycle(pond) && (
+                    <button
+                      onClick={() => openDeleteCyclePond(pond)}
+                      title={t.ponds?.deletePond || 'Delete pond'}
+                      style={{
+                        background: 'rgba(231, 76, 60, 0.1)', border: 'none', color: '#e74c3c',
+                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.background = 'rgba(231, 76, 60, 0.16)';
+                        e.currentTarget.style.transform = 'scale(1.05)';
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.background = 'rgba(231, 76, 60, 0.1)';
+                        e.currentTarget.style.transform = 'scale(1)';
+                      }}
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
                 </div>
                 )}
               </div>
@@ -1153,11 +1291,11 @@ export default function PondsPage() {
 
       <ConfirmationModal
         isOpen={deleteConfirm.isOpen}
-        title="Delete Pond?"
-        message={t.ponds.deleteConfirm}
-        confirmText="Delete Pond"
+        title={deleteTitle}
+        message={deleteMessage}
+        confirmText={t.ponds?.deletePond || 'Delete Pond'}
         onConfirm={confirmDelete}
-        onCancel={() => setDeleteConfirm({ isOpen: false, id: null })}
+        onCancel={() => setDeleteConfirm({ isOpen: false, id: null, type: null })}
         isLoading={isDeleting}
       />
     </div>

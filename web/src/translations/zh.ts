@@ -504,7 +504,14 @@ companySetup: {
     plValueHint: 'PL 初始重量（克）。通常为 PL10-PL12。',
     plSupplier: 'PL 供应商',
     plSupplierPlaceholder: '例如：CP Prima, Charoen Pokphand',
-    deleteConfirm: '您确定要删除此池塘吗？此操作无法撤销。'
+    deleteConfirm: '您确定要删除此池塘吗？此操作无法撤销。',
+    deletePond: '删除池塘',
+    deleteInactiveTitle: '删除未激活池塘？',
+    deleteInactiveConfirm: '删除 {{pondName}}？这会移除未激活的实体池塘占位记录，且无法撤销。',
+    deleteEndedTitle: '删除已结束周期记录？',
+    deleteEndedConfirm: '删除 {{pondName}}？这会永久删除该已结束周期记录及其采样历史。',
+    activeDeleteBlocked: '请先结束该池塘的活跃周期，然后再删除。',
+    deleteSuccess: '池塘删除成功。'
   },
   midcycleOnboarding: {
     cycleQuestion: '这个养殖周期如何开始？',

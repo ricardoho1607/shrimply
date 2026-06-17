@@ -476,7 +476,14 @@ companySetup: {
     plValueHint: 'น้ำหนัก PL เริ่มต้นเป็นกรัม ปกติคือ PL10-PL12',
     plSupplier: 'ผู้จัดหา PL',
     plSupplierPlaceholder: 'เช่น CP Prima, Charoen Pokphand',
-    deleteConfirm: 'คุณแน่ใจหรือไม่ว่าต้องการลบบ่อนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้'
+    deleteConfirm: 'คุณแน่ใจหรือไม่ว่าต้องการลบบ่อนี้? การดำเนินการนี้ไม่สามารถย้อนกลับได้',
+    deletePond: 'ลบบ่อ',
+    deleteInactiveTitle: 'ลบบ่อที่ไม่ใช้งาน?',
+    deleteInactiveConfirm: 'ลบ {{pondName}} หรือไม่? การดำเนินการนี้จะลบข้อมูลบ่อจริงที่ไม่ใช้งานและไม่สามารถย้อนกลับได้',
+    deleteEndedTitle: 'ลบบันทึกรอบที่สิ้นสุด?',
+    deleteEndedConfirm: 'ลบ {{pondName}} หรือไม่? การดำเนินการนี้จะลบบันทึกรอบที่สิ้นสุดและประวัติการเก็บตัวอย่างอย่างถาวร',
+    activeDeleteBlocked: 'โปรดสิ้นสุดรอบการเลี้ยงที่ใช้งานอยู่ของบ่อนี้ก่อนลบ',
+    deleteSuccess: 'ลบบ่อเรียบร้อยแล้ว'
   },
   midcycleOnboarding: {
     cycleQuestion: 'รอบนี้เริ่มอย่างไร?',

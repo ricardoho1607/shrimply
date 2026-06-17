@@ -466,7 +466,14 @@ companySetup: {
     plValueHint: 'Berat awal benur dalam gram. Biasanya PL10-PL12.',
     plSupplier: 'Pemasok Benur',
     plSupplierPlaceholder: 'mis. CP Prima, Charoen Pokphand',
-    deleteConfirm: 'Apakah Anda yakin ingin menghapus kolam ini? Tindakan ini tidak dapat dibatalkan.'
+    deleteConfirm: 'Apakah Anda yakin ingin menghapus kolam ini? Tindakan ini tidak dapat dibatalkan.',
+    deletePond: 'Hapus Kolam',
+    deleteInactiveTitle: 'Hapus kolam tidak aktif?',
+    deleteInactiveConfirm: 'Hapus {{pondName}}? Ini akan menghapus placeholder kolam fisik yang tidak aktif dan tidak dapat dibatalkan.',
+    deleteEndedTitle: 'Hapus catatan siklus selesai?',
+    deleteEndedConfirm: 'Hapus {{pondName}}? Ini akan menghapus permanen catatan siklus selesai beserta riwayat samplingnya.',
+    activeDeleteBlocked: 'Akhiri siklus aktif untuk kolam ini sebelum menghapusnya.',
+    deleteSuccess: 'Kolam berhasil dihapus.'
   },
   midcycleOnboarding: {
     cycleQuestion: 'Bagaimana siklus ini dimulai?',
