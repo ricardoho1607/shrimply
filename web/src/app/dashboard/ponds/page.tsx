@@ -20,7 +20,7 @@ import {
   Trash2
 } from 'lucide-react';
 import Link from 'next/link';
-import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, doc, addDoc, serverTimestamp, deleteDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -161,6 +161,7 @@ export default function PondsPage() {
     cycleEndReason: 'harvested' as 'harvested' | 'disease' | 'reset' | 'other',
   });
   const [startCyclePond, setStartCyclePond] = useState<(Pond | PhysicalPond) | null>(null);
+  const [pendingPhysicalPonds, setPendingPhysicalPonds] = useState<PhysicalPond[]>([]);
   const [startCycleForm, setStartCycleForm] = useState({
     density: '',
     docStart: new Date().toISOString().split('T')[0],
@@ -181,6 +182,39 @@ export default function PondsPage() {
     baselineSurvivalRate: '',
     baselineCumulativeFeed: ''
   });
+
+  const allPhysicalPonds = useMemo(() => {
+    if (pendingPhysicalPonds.length === 0) return physicalPonds;
+
+    const serverIds = new Set(physicalPonds.map((pond) => pond.id));
+    const serverNames = new Set(physicalPonds.map((pond) => getPhysicalPondKey(pond.pondName)));
+    const unconfirmedPonds = pendingPhysicalPonds.filter((pond) =>
+      !serverIds.has(pond.id) && !serverNames.has(getPhysicalPondKey(pond.pondName))
+    );
+
+    return [...physicalPonds, ...unconfirmedPonds];
+  }, [pendingPhysicalPonds, physicalPonds]);
+
+  useEffect(() => {
+    if (pendingPhysicalPonds.length === 0 || physicalPonds.length === 0) return;
+
+    let isActive = true;
+    const serverIds = new Set(physicalPonds.map((pond) => pond.id));
+    const serverNames = new Set(physicalPonds.map((pond) => getPhysicalPondKey(pond.pondName)));
+
+    queueMicrotask(() => {
+      if (!isActive) return;
+      setPendingPhysicalPonds((pending) =>
+        pending.filter((pond) =>
+          !serverIds.has(pond.id) && !serverNames.has(getPhysicalPondKey(pond.pondName))
+        )
+      );
+    });
+
+    return () => {
+      isActive = false;
+    };
+  }, [pendingPhysicalPonds.length, physicalPonds]);
 
   const activeFarmCycle = useMemo(() => cycles.find(isOpenFarmCycle), [cycles]);
   const canEditPonds = canEditOperations(user?.role);
@@ -284,18 +318,27 @@ export default function PondsPage() {
     if (!canEditPonds) return;
 
     try {
-      const pondKey = getPhysicalPondKey(formData.pondName);
-      const alreadyExists = physicalPonds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey) ||
+      const pondName = formData.pondName.trim();
+      const pondArea = Number(formData.pondArea);
+      const pondKey = getPhysicalPondKey(pondName);
+      const alreadyExists = allPhysicalPonds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey) ||
         ponds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey);
 
       if (alreadyExists) {
-        alert(`${formData.pondName} already exists. Use Start Cycle to begin production for this pond.`);
+        alert(`${pondName} already exists. Use Start Cycle to begin production for this pond.`);
         return;
       }
 
+      const physicalPondRef = doc(collection(db, 'companies', companyId, 'physicalPonds'));
+      const pendingPond: PhysicalPond = {
+        id: physicalPondRef.id,
+        pondName,
+        pondArea,
+        status: 'idle',
+      };
       const pondData = {
-        pondName: formData.pondName,
-        pondArea: Number(formData.pondArea),
+        pondName,
+        pondArea,
         status: 'idle',
         createdAt: serverTimestamp(),
         createdBy: user.uid,
@@ -303,7 +346,7 @@ export default function PondsPage() {
         updatedBy: user.uid,
       };
 
-      await addDoc(collection(db, 'companies', companyId, 'physicalPonds'), removeUndefinedFields(pondData));
+      setPendingPhysicalPonds((pending) => [...pending, pendingPond]);
       setModalOpen(false);
       setCycleFilter('inactive');
       setFormData({
@@ -320,8 +363,13 @@ export default function PondsPage() {
         baselineSurvivalRate: '',
         baselineCumulativeFeed: ''
       });
+      await setDoc(physicalPondRef, removeUndefinedFields(pondData) as Record<string, unknown>);
     } catch (error) {
       console.error('Error adding pond:', error);
+      const failedPondKey = getPhysicalPondKey(formData.pondName);
+      setPendingPhysicalPonds((pending) =>
+        pending.filter((pond) => getPhysicalPondKey(pond.pondName) !== failedPondKey)
+      );
       alert(t.messages.error || 'Failed to add pond. Please check your connection.');
     }
   };
@@ -594,7 +642,7 @@ export default function PondsPage() {
     setIsDeleting(true);
     try {
       if (deleteConfirm.type === 'physical') {
-        const physicalPond = physicalPonds.find((pond) => pond.id === deleteConfirm.id);
+        const physicalPond = allPhysicalPonds.find((pond) => pond.id === deleteConfirm.id);
 
         if (!physicalPond) {
           alert(t.messages?.dataNotFound || 'Pond data not found.');
@@ -620,7 +668,7 @@ export default function PondsPage() {
           return;
         }
 
-        const linkedPhysicalPond = physicalPonds.find((physicalPond) =>
+        const linkedPhysicalPond = allPhysicalPonds.find((physicalPond) =>
           physicalPond.activePondId === pond.id ||
           (!isPhysicalPondActive(physicalPond) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pond.pondName))
         );
@@ -657,7 +705,7 @@ export default function PondsPage() {
   }, [ponds, debouncedSearchTerm, cycleFilter]);
   const inactivePondOptions = useMemo<InactivePondOption[]>(() => {
     const activeNames = new Set(ponds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
-    const physicalOptions = physicalPonds.filter((pond) =>
+    const physicalOptions = allPhysicalPonds.filter((pond) =>
       !isPhysicalPondActive(pond) && !activeNames.has(getPhysicalPondKey(pond.pondName))
     );
     const physicalNames = new Set(physicalOptions.map((pond) => getPhysicalPondKey(pond.pondName)));
@@ -672,7 +720,7 @@ export default function PondsPage() {
       }, []);
 
     return [...physicalOptions, ...legacyEndedOptions];
-  }, [physicalPonds, ponds]);
+  }, [allPhysicalPonds, ponds]);
   const filteredPhysicalPonds = useMemo<InactivePondOption[]>(() => {
     if (cycleFilter !== 'inactive') return [];
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
