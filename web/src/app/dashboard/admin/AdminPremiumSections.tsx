@@ -11,6 +11,7 @@ type CompanyMetric = {
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;
+  aiRequestCount: number;
 };
 
 type AdminUser = {
@@ -128,9 +129,7 @@ export function ActivationFunnel({ metrics }: { metrics: AdminMetricsLike }) {
   const companiesWithPonds = metrics.companies.filter((company) => company.pondCount > 0).length;
   const configuredCompanies = metrics.companies.filter((company) => company.pondCount > 0 && (company.activeCycleCount > 0 || company.feedItemCount + company.additiveItemCount > 0)).length;
   const roleSelected = metrics.totals.buyers + metrics.totals.owners + metrics.totals.staff;
-  const usedOrsonOrApi = metrics.totals.aiRequests + metrics.totals.apiRequests > 0
-    ? Math.max(1, Math.min(configuredCompanies || companiesWithPonds, metrics.totals.companies))
-    : 0;
+  const companiesUsingAi = metrics.companies.filter((company) => company.aiRequestCount > 0).length;
 
   const funnel = [
     { label: 'Signed up', value: metrics.totals.users },
@@ -138,7 +137,7 @@ export function ActivationFunnel({ metrics }: { metrics: AdminMetricsLike }) {
     { label: 'Created company', value: metrics.totals.companies },
     { label: 'Added pond', value: companiesWithPonds },
     { label: 'Configured ops', value: configuredCompanies },
-    { label: 'Used AI/API', value: usedOrsonOrApi },
+    { label: 'Used Orson AI', value: companiesUsingAi },
   ];
   const base = Math.max(funnel[0].value, 1);
 

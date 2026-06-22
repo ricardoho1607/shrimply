@@ -58,6 +58,7 @@ type CompanyMetric = {
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;
+  aiRequestCount: number;
   createdAt: string | null;
 };
 
@@ -181,6 +182,23 @@ const sumAiUsageFromFirestore = async (since: Date) => {
   }
 };
 
+const getAiUsageValue = (data: Record<string, unknown>) => {
+  const functions = data.functions && typeof data.functions === 'object' ? data.functions as Record<string, unknown> : {};
+  return Object.values(functions).reduce<number>((sum, current) => (
+    typeof current === 'number' && Number.isFinite(current) ? sum + current : sum
+  ), 0);
+};
+
+const sumCompanyAiUsage = async (companyId: string) => {
+  try {
+    const snapshot = await getDocs(collection(db, 'companies', companyId, 'aiUsage'));
+    return snapshot.docs.reduce((total, item) => total + getAiUsageValue(item.data()), 0);
+  } catch (error) {
+    console.warn(`Admin metrics fallback skipped companies/${companyId}/aiUsage:`, error);
+    return 0;
+  }
+};
+
 const getCollectionSize = async (...segments: string[]) => {
   try {
     const snapshot = await getDocs(collection(db, segments.join('/')));
@@ -218,6 +236,24 @@ const countUniqueCompanyPonds = (
   return pondNames.size + unnamedPonds;
 };
 
+const countLinkedCompanyUsers = (
+  companyId: string,
+  company: Record<string, unknown>,
+  usersById: Map<string, Record<string, unknown>>,
+) => {
+  const userIds = new Set<string>();
+  if (typeof company.ownerId === 'string' && company.ownerId) userIds.add(company.ownerId);
+  if (Array.isArray(company.teamMembers)) {
+    company.teamMembers.forEach((userId) => {
+      if (typeof userId === 'string' && userId) userIds.add(userId);
+    });
+  }
+  usersById.forEach((adminUser, userId) => {
+    if (adminUser.companyId === companyId) userIds.add(userId);
+  });
+  return userIds.size;
+};
+
 const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMetrics> => {
   const since = startOfPeriod(periodDays);
   const [usersSnapshot, companiesSnapshot] = await Promise.all([
@@ -225,7 +261,7 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
     getDocs(collection(db, 'companies')),
   ]);
 
-  const usersById = new Map<string, { email?: string }>();
+  const usersById = new Map<string, Record<string, unknown>>();
   const dailyNewUsers = new Map<string, number>();
   const roleBreakdown: Record<string, number> = {};
   let newUsers = 0;
@@ -263,12 +299,13 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
   let totalPonds = 0;
   const companies = await Promise.all(companiesSnapshot.docs.map(async (companyDoc) => {
     const company = companyDoc.data();
-    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount, aiRequestCount] = await Promise.all([
       getDocs(collection(db, 'companies', companyDoc.id, 'ponds')).catch(() => ({ docs: [], size: 0 })),
       getDocs(collection(db, 'companies', companyDoc.id, 'physicalPonds')).catch(() => ({ docs: [], size: 0 })),
       getDocs(collection(db, 'companies', companyDoc.id, 'cycles')).catch(() => ({ docs: [] })),
       getCollectionSize('companies', companyDoc.id, 'feeds'),
       getCollectionSize('companies', companyDoc.id, 'additives'),
+      sumCompanyAiUsage(companyDoc.id),
     ]);
     const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
@@ -282,20 +319,21 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
       return isActivePondCycle(pond);
     }).length;
     const activeCycleCount = Math.max(activeCycleDocs, activePondDocs);
-    const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
+    const teamMembersCount = countLinkedCompanyUsers(companyDoc.id, company, usersById);
     const owner = usersById.get(company.ownerId) || null;
 
     return {
       id: companyDoc.id,
       companyName: company.companyName || company.businessName || 'Unnamed company',
-      ownerEmail: owner?.email || company.ownerEmail || '',
+      ownerEmail: typeof owner?.email === 'string' ? owner.email : company.ownerEmail || '',
       farmType: company.farmType || company.businessType || '',
       businessSize: company.businessSize || '',
-      teamMembersCount: teamMembers.length,
+      teamMembersCount,
       pondCount,
       activeCycleCount,
       feedItemCount,
       additiveItemCount,
+      aiRequestCount,
       createdAt: toIso(company.createdAt),
     };
   }));
@@ -931,9 +969,6 @@ function AdminInspectorPanel({
   }
 
   const health = getCompanyHealth(company);
-  const inventoryCompleteness = company.feedItemCount + company.additiveItemCount > 0 ? 85 : company.pondCount > 0 ? 32 : 0;
-  const profileCompleteness = company.pondCount > 0 && company.ownerEmail ? 98 : company.ownerEmail ? 64 : 28;
-  const marketplaceSpend = (company.feedItemCount + company.additiveItemCount) * 120;
   const recommendedAction = company.pondCount === 0
     ? 'Invite the owner to complete setup by adding their first pond.'
     : company.activeCycleCount === 0
@@ -1018,7 +1053,7 @@ function AdminInspectorPanel({
         <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 10px' }}>Company details</h3>
         {[
           ['Owner', company.ownerEmail || 'Unavailable'],
-          ['Industry', company.farmType || 'Grow-out Farming'],
+          ['Industry', company.farmType || 'Unavailable'],
           ['Size', company.businessSize || 'Unavailable'],
           ['Member since', formatDate(company.createdAt)],
           ['Active cycles', company.activeCycleCount],
@@ -1037,10 +1072,10 @@ function AdminInspectorPanel({
           {[
             ['Ponds', company.pondCount],
             ['Team', company.teamMembersCount],
-            ['Inventory', `${inventoryCompleteness}%`],
-            ['AI/API', company.activeCycleCount * 52],
-            ['Spend', `$${(marketplaceSpend / 1000).toFixed(1)}k`],
-            ['Profile', `${profileCompleteness}%`],
+            ['Feed items', company.feedItemCount],
+            ['Additives', company.additiveItemCount],
+            ['Active cycles', company.activeCycleCount],
+            ['AI requests', company.aiRequestCount],
           ].map(([label, value]) => (
             <div key={label}>
               <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
@@ -1133,7 +1168,7 @@ export default function HiddenAdminPage() {
   const exportCompaniesCsv = () => {
     if (!metrics) return;
     const rows = [
-      ['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory items', 'Active cycles', 'Created'],
+      ['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory items', 'Active cycles', 'AI requests', 'Created'],
       ...metrics.companies.map((company) => [
         company.companyName,
         company.ownerEmail || 'Unavailable',
@@ -1142,6 +1177,7 @@ export default function HiddenAdminPage() {
         String(company.teamMembersCount),
         String(company.feedItemCount + company.additiveItemCount),
         String(company.activeCycleCount),
+        String(company.aiRequestCount),
         formatDate(company.createdAt),
       ]),
     ];

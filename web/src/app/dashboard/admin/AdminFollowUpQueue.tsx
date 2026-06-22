@@ -15,6 +15,7 @@ type CompanyMetric = {
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;
+  aiRequestCount: number;
   createdAt: string | null;
 };
 

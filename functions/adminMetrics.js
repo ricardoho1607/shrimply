@@ -78,6 +78,27 @@ const sumAiUsage = async (db, since) => {
   return { total, period };
 };
 
+const getAiUsageValue = (data) => {
+  const functions = data.functions && typeof data.functions === "object" ? data.functions : {};
+  return Object.values(functions).reduce((sum, current) => (
+    typeof current === "number" && Number.isFinite(current) ? sum + current : sum
+  ), 0);
+};
+
+const sumCompanyAiUsage = async (companyRef) => {
+  try {
+    const snapshot = await companyRef.collection("aiUsage").get();
+    let total = 0;
+    snapshot.forEach((doc) => {
+      total += getAiUsageValue(doc.data() || {});
+    });
+    return total;
+  } catch (error) {
+    console.warn(`Admin metrics skipped ${companyRef.path}/aiUsage:`, error.message);
+    return 0;
+  }
+};
+
 const countOptionalCollection = async (db, collectionName, since) => {
   try {
     return await countDocsSince(db.collection(collectionName), since);
@@ -111,13 +132,25 @@ const countUniqueCompanyPonds = (pondDocs, physicalPondDocs) => {
   return pondNames.size + unnamedPonds;
 };
 
+const countLinkedCompanyUsers = (companyId, company, usersById) => {
+  const userIds = new Set();
+  if (company.ownerId) userIds.add(company.ownerId);
+  if (Array.isArray(company.teamMembers)) {
+    company.teamMembers.forEach((userId) => userId && userIds.add(userId));
+  }
+  usersById.forEach((user, userId) => {
+    if (user?.companyId === companyId) userIds.add(userId);
+  });
+  return userIds.size;
+};
+
 const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
   const rows = [];
   let totalPonds = 0;
 
   for (const companyDoc of companiesSnapshot.docs) {
     const company = companyDoc.data() || {};
-    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount, aiRequestCount] = await Promise.all([
       companyDoc.ref.collection("ponds").get().catch((error) => {
         console.warn(`Admin metrics skipped ${companyDoc.ref.path}/ponds:`, error.message);
         return { docs: [], size: 0 };
@@ -132,6 +165,7 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       }),
       getSnapshotSize(companyDoc.ref.collection("feeds")),
       getSnapshotSize(companyDoc.ref.collection("additives")),
+      sumCompanyAiUsage(companyDoc.ref),
     ]);
 
     const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
@@ -144,7 +178,7 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
     const activePondDocs = pondsSnapshot.docs.filter((pondDoc) => isActivePondCycle(pondDoc.data() || {})).length;
     const activeCycleCount = Math.max(activeCycleDocs, activePondDocs);
 
-    const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
+    const teamMembersCount = countLinkedCompanyUsers(companyDoc.id, company, usersById);
     const owner = usersById.get(company.ownerId) || null;
 
     rows.push({
@@ -153,11 +187,12 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       ownerEmail: owner?.email || company.ownerEmail || "",
       farmType: company.farmType || company.businessType || "",
       businessSize: company.businessSize || "",
-      teamMembersCount: teamMembers.length,
+      teamMembersCount,
       pondCount,
       activeCycleCount,
       feedItemCount,
       additiveItemCount,
+      aiRequestCount,
       createdAt: toIso(company.createdAt),
     });
   }

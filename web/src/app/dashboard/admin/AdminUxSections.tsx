@@ -31,6 +31,7 @@ type AdminMetricsSummary = {
     activeCycleCount: number;
     feedItemCount: number;
     additiveItemCount: number;
+    aiRequestCount: number;
   }>;
 };
 
