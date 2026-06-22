@@ -13,6 +13,8 @@ type CompanyMetric = {
   businessSize: string;
   teamMembersCount: number;
   pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;
@@ -101,7 +103,7 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                {['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory', 'Created'].map((heading) => (
+                {['Company', 'Owner', 'Status', 'Ponds', 'Active', 'Inactive', 'Team', 'Inventory', 'Created'].map((heading) => (
                   <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 760 }}>{heading}</th>
                 ))}
               </tr>
@@ -134,6 +136,8 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
                       </span>
                     </td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.pondCount}</td>
+                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.activePondCount}</td>
+                    <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.inactivePondCount}</td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-primary)', fontWeight: 760 }}>{company.teamMembersCount}</td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{company.feedItemCount + company.additiveItemCount} items</td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 700 }}>{formatDate(company.createdAt)}</td>

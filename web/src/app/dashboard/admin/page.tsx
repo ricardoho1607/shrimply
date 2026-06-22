@@ -55,6 +55,8 @@ type CompanyMetric = {
   businessSize: string;
   teamMembersCount: number;
   pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;
@@ -215,12 +217,15 @@ const isActiveCycleStatus = (status: unknown) => ['planning', 'stocking', 'activ
 const isActivePondCycle = (pond: Record<string, unknown>) => String(pond.cycleStatus || 'active').toLowerCase() !== 'ended';
 const getPhysicalPondKey = (pondName: unknown) => String(pondName || '').trim().toLowerCase();
 
-const countUniqueCompanyPonds = (
+const getCompanyPondCounts = (
   pondDocs: Array<{ data?: () => Record<string, unknown> }>,
   physicalPondDocs: Array<{ data?: () => Record<string, unknown> }>,
 ) => {
   const pondNames = new Set<string>();
+  const activePondNames = new Set<string>();
+  const inactivePondNames = new Set<string>();
   let unnamedPonds = 0;
+  let activeUnnamedPonds = 0;
   const countPond = (pond: Record<string, unknown>) => {
     const key = getPhysicalPondKey(pond.pondName);
     if (key) {
@@ -230,10 +235,31 @@ const countUniqueCompanyPonds = (
     }
   };
 
-  physicalPondDocs.forEach((pondDoc) => countPond(typeof pondDoc.data === 'function' ? pondDoc.data() : {}));
-  pondDocs.forEach((pondDoc) => countPond(typeof pondDoc.data === 'function' ? pondDoc.data() : {}));
+  physicalPondDocs.forEach((pondDoc) => {
+    const pond = typeof pondDoc.data === 'function' ? pondDoc.data() : {};
+    countPond(pond);
+    const key = getPhysicalPondKey(pond.pondName);
+    const isActivePhysicalPond = pond.status === 'active' || Boolean(pond.activePondId);
+    if (key && !isActivePhysicalPond) inactivePondNames.add(key);
+  });
+  pondDocs.forEach((pondDoc) => {
+    const pond = typeof pondDoc.data === 'function' ? pondDoc.data() : {};
+    countPond(pond);
+    const key = getPhysicalPondKey(pond.pondName);
+    if (isActivePondCycle(pond)) {
+      if (key) activePondNames.add(key);
+      else activeUnnamedPonds += 1;
+    } else if (key) {
+      inactivePondNames.add(key);
+    }
+  });
+  activePondNames.forEach((pondName) => inactivePondNames.delete(pondName));
 
-  return pondNames.size + unnamedPonds;
+  const pondCount = pondNames.size + unnamedPonds;
+  const activePondCount = activePondNames.size + activeUnnamedPonds;
+  const inactivePondCount = Math.max(pondCount - activePondCount, inactivePondNames.size);
+
+  return { pondCount, activePondCount, inactivePondCount };
 };
 
 const countLinkedCompanyUsers = (
@@ -307,7 +333,7 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
       getCollectionSize('companies', companyDoc.id, 'additives'),
       sumCompanyAiUsage(companyDoc.id),
     ]);
-    const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
+    const { pondCount, activePondCount, inactivePondCount } = getCompanyPondCounts(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
 
     const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
@@ -330,6 +356,8 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
       businessSize: company.businessSize || '',
       teamMembersCount,
       pondCount,
+      activePondCount,
+      inactivePondCount,
       activeCycleCount,
       feedItemCount,
       additiveItemCount,
@@ -478,12 +506,15 @@ function MetricLine({ label, value }: { label: string; value: number }) {
 }
 
 function MetricCards({ metrics, period }: { metrics: AdminMetrics; period: Period }) {
+  const activePonds = metrics.companies.reduce((sum, company) => sum + company.activePondCount, 0);
+  const inactivePonds = metrics.companies.reduce((sum, company) => sum + company.inactivePondCount, 0);
+
   return (
     <div className="admin-metric-grid">
       <MetricCard label={`New users, ${period} days`} value={formatNumber(metrics.period.newUsers)} helper={`${formatNumber(metrics.period.activeUsers)} active users in the same period`} icon={Users} />
       <MetricCard label="Total users" value={formatNumber(metrics.totals.users)} helper={`${formatNumber(metrics.totals.buyers)} buyers, ${formatNumber(metrics.totals.owners)} owners, ${formatNumber(metrics.totals.staff)} staff/admin users`} icon={ShieldCheck} />
       <MetricCard label="Companies" value={formatNumber(metrics.totals.companies)} helper={`${formatNumber(metrics.period.newCompanies)} new companies in the selected period`} icon={Building2} />
-      <MetricCard label="Ponds" value={formatNumber(metrics.totals.ponds)} helper="Total pond records across all companies" icon={Waves} />
+      <MetricCard label="Ponds" value={formatNumber(metrics.totals.ponds)} helper={`${formatNumber(activePonds)} active, ${formatNumber(inactivePonds)} inactive physical ponds`} icon={Waves} />
       <MetricCard label="Marketplace" value={formatNumber(metrics.totals.marketplaceListings)} helper="Active and historical marketplace listing records" icon={Store} />
       <MetricCard label="AI/API requests" value={formatNumber(metrics.period.aiRequests + metrics.period.apiRequests + metrics.period.requestLogs)} helper={`${formatNumber(metrics.period.aiRequests)} AI requests in this period`} icon={Zap} />
     </div>
@@ -1071,10 +1102,11 @@ function AdminInspectorPanel({
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {[
             ['Ponds', company.pondCount],
+            ['Active', company.activePondCount],
+            ['Inactive', company.inactivePondCount],
             ['Team', company.teamMembersCount],
             ['Feed items', company.feedItemCount],
             ['Additives', company.additiveItemCount],
-            ['Active cycles', company.activeCycleCount],
             ['AI requests', company.aiRequestCount],
           ].map(([label, value]) => (
             <div key={label}>
@@ -1168,12 +1200,14 @@ export default function HiddenAdminPage() {
   const exportCompaniesCsv = () => {
     if (!metrics) return;
     const rows = [
-      ['Company', 'Owner', 'Status', 'Ponds', 'Team', 'Inventory items', 'Active cycles', 'AI requests', 'Created'],
+      ['Company', 'Owner', 'Status', 'Ponds', 'Active ponds', 'Inactive ponds', 'Team', 'Inventory items', 'Active cycles', 'AI requests', 'Created'],
       ...metrics.companies.map((company) => [
         company.companyName,
         company.ownerEmail || 'Unavailable',
         getCompanyHealth(company).label,
         String(company.pondCount),
+        String(company.activePondCount),
+        String(company.inactivePondCount),
         String(company.teamMembersCount),
         String(company.feedItemCount + company.additiveItemCount),
         String(company.activeCycleCount),

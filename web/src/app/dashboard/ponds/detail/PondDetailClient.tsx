@@ -46,7 +46,8 @@ import {
   Timestamp,
   addDoc,
   getDocs,
-  where
+  where,
+  writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
@@ -142,6 +143,7 @@ const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
 const getLabStatusStyle = (status?: LabReportStatus['status']) => {
   if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
   if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
@@ -415,7 +417,16 @@ export default function PondDetailClient() {
     if (!companyId || !pond) return;
     if (!canEditPond) return;
     try {
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+      const physicalPondsByActiveId = await getDocs(query(
+        collection(db, 'companies', companyId, 'physicalPonds'),
+        where('activePondId', '==', pond.id)
+      ));
+      const physicalPondsByName = await getDocs(query(
+        collection(db, 'companies', companyId, 'physicalPonds'),
+        where('pondName', '==', pond.pondName)
+      ));
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'companies', companyId, 'ponds', pond.id), {
         cycleStatus: 'ended',
         cycleEndedAt: endCycleForm.cycleEndedAt,
         cycleEndReason: endCycleForm.cycleEndReason,
@@ -423,6 +434,24 @@ export default function PondDetailClient() {
         updatedAt: serverTimestamp(),
         updatedBy: auth.currentUser?.uid || '',
       });
+      const releasedPhysicalPondIds = new Set<string>();
+      [...physicalPondsByActiveId.docs, ...physicalPondsByName.docs].forEach((physicalPondDoc) => {
+        if (releasedPhysicalPondIds.has(physicalPondDoc.id)) return;
+        const physicalPond = physicalPondDoc.data();
+        if (
+          physicalPond.activePondId === pond.id ||
+          (physicalPond.status === 'active' && getPhysicalPondKey(physicalPond.pondName || '') === getPhysicalPondKey(pond.pondName))
+        ) {
+          releasedPhysicalPondIds.add(physicalPondDoc.id);
+          batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPondDoc.id), {
+            status: 'idle',
+            activePondId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: auth.currentUser?.uid || '',
+          });
+        }
+      });
+      await batch.commit();
       setEndCycleOpen(false);
     } catch (error) {
       console.error('Error ending cycle:', error);

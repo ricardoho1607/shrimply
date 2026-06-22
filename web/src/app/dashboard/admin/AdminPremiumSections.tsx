@@ -8,6 +8,8 @@ type CompanyMetric = {
   companyName: string;
   ownerEmail: string;
   pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;

@@ -74,7 +74,7 @@ interface PhysicalPond {
   pondName: string;
   pondArea: number;
   status?: 'idle' | 'active';
-  activePondId?: string;
+  activePondId?: string | null;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -286,7 +286,8 @@ export default function PondsPage() {
     if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
 
     try {
-      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
         status: 'closed',
         closedAt: today,
         stockingEndDate: activeFarmCycle.stockingEndDate || today,
@@ -294,16 +295,34 @@ export default function PondsPage() {
         updatedBy: user.uid,
       });
 
-      await Promise.all(activeCyclePonds.filter(isActiveCycle).map((pond) =>
-        updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+      const activePondsToEnd = activeCyclePonds.filter(isActiveCycle);
+      const activePondIds = new Set(activePondsToEnd.map((pond) => pond.id));
+      const activePondNames = new Set(activePondsToEnd.map((pond) => getPhysicalPondKey(pond.pondName)));
+      activePondsToEnd.forEach((pond) => {
+        batch.update(doc(db, 'companies', companyId, 'ponds', pond.id), {
           cycleStatus: 'ended',
           cycleEndedAt: today,
           cycleEndReason: 'harvested',
           cycleEndedBy: user.uid,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
-        })
-      ));
+        });
+      });
+      allPhysicalPonds
+        .filter((physicalPond) =>
+          (physicalPond.activePondId && activePondIds.has(physicalPond.activePondId)) ||
+          (isPhysicalPondActive(physicalPond) && activePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
+        )
+        .forEach((physicalPond) => {
+          batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
+            status: 'idle',
+            activePondId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+          });
+        });
+
+      await batch.commit();
 
       setCycleFilter('ended');
     } catch (error) {
@@ -378,7 +397,8 @@ export default function PondsPage() {
     if (!companyId || !user || !endCyclePond) return;
     if (!canEditPonds) return;
     try {
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', endCyclePond.id), {
+      const batch = writeBatch(db);
+      batch.update(doc(db, 'companies', companyId, 'ponds', endCyclePond.id), {
         cycleStatus: 'ended',
         cycleEndedAt: endCycleForm.cycleEndedAt,
         cycleEndReason: endCycleForm.cycleEndReason,
@@ -386,6 +406,20 @@ export default function PondsPage() {
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
       });
+      allPhysicalPonds
+        .filter((physicalPond) =>
+          physicalPond.activePondId === endCyclePond.id ||
+          (isPhysicalPondActive(physicalPond) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(endCyclePond.pondName))
+        )
+        .forEach((physicalPond) => {
+          batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
+            status: 'idle',
+            activePondId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+          });
+        });
+      await batch.commit();
       setEndCyclePond(null);
       setEndCycleForm({
         cycleEndedAt: new Date().toISOString().split('T')[0],

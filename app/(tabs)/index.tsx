@@ -801,6 +801,8 @@ export default function PondManagementScreen() {
       createdBy: cycle.createdBy || user.uid,
     }, { merge: true });
 
+    const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
+    const cyclePondNames = new Set(cyclePonds.map((pond) => getPhysicalPondKey(pond.pondName)));
     cyclePonds.forEach((pond) => {
       const pondRef = doc(db, 'companies', company.id, 'ponds', pond.id);
       batch.set(pondRef, {
@@ -815,9 +817,22 @@ export default function PondManagementScreen() {
         updatedBy: user.uid,
       }, { merge: true });
     });
+    physicalPonds
+      .filter((physicalPond) =>
+        (physicalPond.activePondId && cyclePondIds.has(physicalPond.activePondId)) ||
+        (physicalPond.status === 'active' && cyclePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
+      )
+      .forEach((physicalPond) => {
+        batch.set(doc(db, 'companies', company.id, 'physicalPonds', physicalPond.id), {
+          status: 'idle',
+          activePondId: null,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        }, { merge: true });
+      });
 
     await batch.commit();
-  }, [company?.id, user?.uid]);
+  }, [company?.id, physicalPonds, user?.uid]);
 
   const handleCloseFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;

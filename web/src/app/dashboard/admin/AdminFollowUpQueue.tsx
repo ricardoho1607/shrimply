@@ -12,6 +12,8 @@ type CompanyMetric = {
   businessSize: string;
   teamMembersCount: number;
   pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
   activeCycleCount: number;
   feedItemCount: number;
   additiveItemCount: number;

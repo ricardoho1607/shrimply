@@ -114,9 +114,12 @@ const isActiveCycleStatus = (status) => ["planning", "stocking", "active"].inclu
 const isActivePondCycle = (pond) => String(pond.cycleStatus || "active").toLowerCase() !== "ended";
 const getPhysicalPondKey = (pondName) => String(pondName || "").trim().toLowerCase();
 
-const countUniqueCompanyPonds = (pondDocs, physicalPondDocs) => {
+const getCompanyPondCounts = (pondDocs, physicalPondDocs) => {
   const pondNames = new Set();
+  const activePondNames = new Set();
+  const inactivePondNames = new Set();
   let unnamedPonds = 0;
+  let activeUnnamedPonds = 0;
   const countPond = (pond) => {
     const key = getPhysicalPondKey(pond.pondName);
     if (key) {
@@ -126,10 +129,32 @@ const countUniqueCompanyPonds = (pondDocs, physicalPondDocs) => {
     }
   };
 
-  physicalPondDocs.forEach((pondDoc) => countPond(pondDoc.data() || {}));
-  pondDocs.forEach((pondDoc) => countPond(pondDoc.data() || {}));
+  physicalPondDocs.forEach((pondDoc) => {
+    const pond = pondDoc.data() || {};
+    countPond(pond);
+    const key = getPhysicalPondKey(pond.pondName);
+    const isActivePhysicalPond = pond.status === "active" || Boolean(pond.activePondId);
+    if (key && !isActivePhysicalPond) inactivePondNames.add(key);
+  });
+  pondDocs.forEach((pondDoc) => {
+    const pond = pondDoc.data() || {};
+    countPond(pond);
+    const key = getPhysicalPondKey(pond.pondName);
+    if (isActivePondCycle(pond)) {
+      if (key) activePondNames.add(key);
+      else activeUnnamedPonds += 1;
+    } else if (key) {
+      inactivePondNames.add(key);
+    }
+  });
 
-  return pondNames.size + unnamedPonds;
+  activePondNames.forEach((pondName) => inactivePondNames.delete(pondName));
+
+  const pondCount = pondNames.size + unnamedPonds;
+  const activePondCount = activePondNames.size + activeUnnamedPonds;
+  const inactivePondCount = Math.max(pondCount - activePondCount, inactivePondNames.size);
+
+  return { pondCount, activePondCount, inactivePondCount };
 };
 
 const countLinkedCompanyUsers = (companyId, company, usersById) => {
@@ -168,7 +193,7 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       sumCompanyAiUsage(companyDoc.ref),
     ]);
 
-    const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
+    const { pondCount, activePondCount, inactivePondCount } = getCompanyPondCounts(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
 
     const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
@@ -189,6 +214,8 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       businessSize: company.businessSize || "",
       teamMembersCount,
       pondCount,
+      activePondCount,
+      inactivePondCount,
       activeCycleCount,
       feedItemCount,
       additiveItemCount,

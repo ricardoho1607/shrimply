@@ -271,7 +271,7 @@ export const useFirebaseSync = () => {
                 pondName: data.pondName || '',
                 pondArea: data.pondArea || 0,
                 status: data.status === 'active' ? 'active' : 'idle',
-                activePondId: data.activePondId,
+                activePondId: data.activePondId || null,
                 createdAt: data.createdAt,
                 updatedAt: data.updatedAt,
                 createdBy: data.createdBy,

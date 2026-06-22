@@ -28,6 +28,8 @@ type AdminMetricsSummary = {
   companies: Array<{
     id: string;
     pondCount: number;
+    activePondCount: number;
+    inactivePondCount: number;
     activeCycleCount: number;
     feedItemCount: number;
     additiveItemCount: number;

@@ -53,7 +53,7 @@ export interface PhysicalPond {
   pondName: string;
   pondArea: number;
   status?: 'idle' | 'active';
-  activePondId?: string;
+  activePondId?: string | null;
   createdAt?: any;
   updatedAt?: any;
   createdBy?: string;
@@ -260,15 +260,29 @@ export const usePondStore = create<PondStore>()(
             cycleEndedAt: closedAt,
             cycleEndReason: pond.cycleEndReason || 'harvested',
           }));
+        const endedPondIds = new Set(endedPonds.map((pond) => pond.id));
+        const endedPondNames = new Set(endedPonds.map((pond) => getPhysicalPondKey(pond.pondName)));
+        const releasedPhysicalPonds = state.physicalPonds
+          .filter((physicalPond) =>
+            (physicalPond.activePondId && endedPondIds.has(physicalPond.activePondId)) ||
+            (physicalPond.status === 'active' && endedPondNames.has(getPhysicalPondKey(physicalPond.pondName)))
+          )
+          .map((physicalPond) => ({ ...physicalPond, status: 'idle' as const, activePondId: null }));
 
         set((state) => ({
           cycles: cycleToClose
             ? state.cycles.map((cycle) => cycle.id === cycleId ? closedCycle : cycle)
             : [...state.cycles, closedCycle],
           ponds: state.ponds.map((pond) => endedPonds.find((endedPond) => endedPond.id === pond.id) || pond),
+          physicalPonds: releasedPhysicalPonds.length > 0
+            ? state.physicalPonds.map((physicalPond) =>
+                releasedPhysicalPonds.find((released) => released.id === physicalPond.id) || physicalPond
+              )
+            : state.physicalPonds,
         }));
         state.firebaseSync?.syncCycle?.('update', closedCycle);
         endedPonds.forEach((pond) => state.firebaseSync?.syncPond('update', pond));
+        releasedPhysicalPonds.forEach((physicalPond) => state.firebaseSync?.syncPhysicalPond?.('update', physicalPond));
       },
 
       addPhysicalPond: (pond) => {
@@ -381,7 +395,7 @@ export const usePondStore = create<PondStore>()(
           (isPondCycleActive(pondToDelete) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pondToDelete.pondName))
         );
         const updatedPhysicalPond = linkedPhysicalPond
-          ? { ...linkedPhysicalPond, status: 'idle' as const, activePondId: undefined }
+          ? { ...linkedPhysicalPond, status: 'idle' as const, activePondId: null }
           : undefined;
 
         set((state) => ({
@@ -421,11 +435,22 @@ export const usePondStore = create<PondStore>()(
           cycleEndedBy: endedBy,
           cycleEndReason: reason,
         });
+        const linkedPhysicalPond = state.physicalPonds.find((physicalPond) =>
+          physicalPond.activePondId === pondId ||
+          (physicalPond.status === 'active' && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pondToEnd.pondName))
+        );
+        const releasedPhysicalPond = linkedPhysicalPond
+          ? { ...linkedPhysicalPond, status: 'idle' as const, activePondId: null }
+          : undefined;
 
         set((state) => ({
-          ponds: state.ponds.map((pond) => pond.id === pondId ? endedPond : pond)
+          ponds: state.ponds.map((pond) => pond.id === pondId ? endedPond : pond),
+          physicalPonds: releasedPhysicalPond
+            ? state.physicalPonds.map((physicalPond) => physicalPond.id === releasedPhysicalPond.id ? releasedPhysicalPond : physicalPond)
+            : state.physicalPonds,
         }));
         state.firebaseSync?.syncPond('update', endedPond);
+        if (releasedPhysicalPond) state.firebaseSync?.syncPhysicalPond?.('update', releasedPhysicalPond);
       },
 
       addHarvestRecord: (record) => {
