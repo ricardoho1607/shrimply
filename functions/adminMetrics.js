@@ -91,6 +91,25 @@ const isOwnerRole = (role) => role === "owner" || role === "co-owner";
 const isStaffRole = (role) => ["technician", "manager", "admin", "mechanic"].includes(role);
 const isActiveCycleStatus = (status) => ["planning", "stocking", "active"].includes(String(status || "").toLowerCase());
 const isActivePondCycle = (pond) => String(pond.cycleStatus || "active").toLowerCase() !== "ended";
+const getPhysicalPondKey = (pondName) => String(pondName || "").trim().toLowerCase();
+
+const countUniqueCompanyPonds = (pondDocs, physicalPondDocs) => {
+  const pondNames = new Set();
+  let unnamedPonds = 0;
+  const countPond = (pond) => {
+    const key = getPhysicalPondKey(pond.pondName);
+    if (key) {
+      pondNames.add(key);
+    } else {
+      unnamedPonds += 1;
+    }
+  };
+
+  physicalPondDocs.forEach((pondDoc) => countPond(pondDoc.data() || {}));
+  pondDocs.forEach((pondDoc) => countPond(pondDoc.data() || {}));
+
+  return pondNames.size + unnamedPonds;
+};
 
 const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
   const rows = [];
@@ -98,9 +117,13 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
 
   for (const companyDoc of companiesSnapshot.docs) {
     const company = companyDoc.data() || {};
-    const [pondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
       companyDoc.ref.collection("ponds").get().catch((error) => {
         console.warn(`Admin metrics skipped ${companyDoc.ref.path}/ponds:`, error.message);
+        return { docs: [], size: 0 };
+      }),
+      companyDoc.ref.collection("physicalPonds").get().catch((error) => {
+        console.warn(`Admin metrics skipped ${companyDoc.ref.path}/physicalPonds:`, error.message);
         return { docs: [], size: 0 };
       }),
       companyDoc.ref.collection("cycles").get().catch((error) => {
@@ -111,7 +134,7 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
       getSnapshotSize(companyDoc.ref.collection("additives")),
     ]);
 
-    const pondCount = pondsSnapshot.size;
+    const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
 
     const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {

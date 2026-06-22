@@ -195,6 +195,28 @@ const isOwnerRole = (role: string) => role === 'owner' || role === 'co-owner';
 const isStaffRole = (role: string) => ['technician', 'manager', 'admin', 'mechanic'].includes(role);
 const isActiveCycleStatus = (status: unknown) => ['planning', 'stocking', 'active'].includes(String(status || '').toLowerCase());
 const isActivePondCycle = (pond: Record<string, unknown>) => String(pond.cycleStatus || 'active').toLowerCase() !== 'ended';
+const getPhysicalPondKey = (pondName: unknown) => String(pondName || '').trim().toLowerCase();
+
+const countUniqueCompanyPonds = (
+  pondDocs: Array<{ data?: () => Record<string, unknown> }>,
+  physicalPondDocs: Array<{ data?: () => Record<string, unknown> }>,
+) => {
+  const pondNames = new Set<string>();
+  let unnamedPonds = 0;
+  const countPond = (pond: Record<string, unknown>) => {
+    const key = getPhysicalPondKey(pond.pondName);
+    if (key) {
+      pondNames.add(key);
+    } else {
+      unnamedPonds += 1;
+    }
+  };
+
+  physicalPondDocs.forEach((pondDoc) => countPond(typeof pondDoc.data === 'function' ? pondDoc.data() : {}));
+  pondDocs.forEach((pondDoc) => countPond(typeof pondDoc.data === 'function' ? pondDoc.data() : {}));
+
+  return pondNames.size + unnamedPonds;
+};
 
 const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMetrics> => {
   const since = startOfPeriod(periodDays);
@@ -241,13 +263,14 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
   let totalPonds = 0;
   const companies = await Promise.all(companiesSnapshot.docs.map(async (companyDoc) => {
     const company = companyDoc.data();
-    const [pondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
+    const [pondsSnapshot, physicalPondsSnapshot, cyclesSnapshot, feedItemCount, additiveItemCount] = await Promise.all([
       getDocs(collection(db, 'companies', companyDoc.id, 'ponds')).catch(() => ({ docs: [], size: 0 })),
+      getDocs(collection(db, 'companies', companyDoc.id, 'physicalPonds')).catch(() => ({ docs: [], size: 0 })),
       getDocs(collection(db, 'companies', companyDoc.id, 'cycles')).catch(() => ({ docs: [] })),
       getCollectionSize('companies', companyDoc.id, 'feeds'),
       getCollectionSize('companies', companyDoc.id, 'additives'),
     ]);
-    const pondCount = pondsSnapshot.size;
+    const pondCount = countUniqueCompanyPonds(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
 
     const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
