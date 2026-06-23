@@ -1155,3 +1155,923 @@ nav.scrolled {
     grid-template-columns: 1fr !important;
   }
 }
+
+
+/* --- Shrimp Farm Management SEO Landing ----------------- */
+.seo-hero {
+  background: var(--off-white);
+  min-height: 92vh;
+}
+
+.seo-hero-copy {
+  padding-top: 118px;
+  padding-bottom: 42px;
+  padding-right: 44px;
+}
+
+.seo-hero h1 {
+  font-size: clamp(3.2rem, 5.1vw, 5.35rem);
+}
+
+.seo-hero-intro {
+  max-width: 540px;
+  margin-bottom: 40px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.seo-hero-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.seo-hero-visual {
+  min-height: 92vh;
+}
+
+.seo-dashboard {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  width: min(88%, 720px);
+  height: auto;
+  min-height: 520px;
+  transform: translate(-50%, -50%);
+  animation: appSlide 1.1s cubic-bezier(0.25, 1, 0.5, 1) forwards 0.45s;
+  opacity: 0;
+}
+
+.seo-db-main {
+  gap: 14px;
+  padding: 18px;
+}
+
+.seo-db-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  opacity: 0;
+  animation: fup 0.8s forwards 0.95s;
+}
+
+.seo-db-header span,
+.seo-metric span,
+.seo-alert-card span,
+.seo-ops-header span {
+  display: block;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.seo-db-header strong,
+.seo-ops-header strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--white);
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.seo-status-pill {
+  flex-shrink: 0;
+  border: 1px solid rgba(26, 184, 232, 0.22);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(26, 184, 232, 0.1);
+  color: var(--sky);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.seo-metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  opacity: 0;
+  animation: fup 0.8s forwards 1.12s;
+}
+
+.seo-metric,
+.seo-alert-card {
+  border: 1px solid rgba(26, 184, 232, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+}
+
+.seo-metric strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.seo-pond-card {
+  opacity: 0;
+  animation: fup 0.8s forwards 1.28s;
+}
+
+.seo-alert-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  opacity: 0;
+  animation: fup 0.8s forwards 1.44s;
+}
+
+.seo-alert-card strong {
+  display: block;
+  margin-top: 7px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.seo-alert-card svg {
+  color: var(--sky);
+  flex-shrink: 0;
+}
+
+.seo-workflows {
+  background: var(--white);
+}
+
+.seo-section-heading {
+  max-width: 760px;
+  margin: 0 auto 72px;
+  text-align: center;
+}
+
+.seo-section-heading .eyebrow {
+  margin-bottom: 16px;
+}
+
+.seo-feature-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.seo-card-label {
+  margin-bottom: 24px;
+  color: var(--sky);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.seo-platform-section {
+  padding-top: 150px;
+  padding-bottom: 150px;
+}
+
+.seo-dark-copy {
+  max-width: 500px;
+  margin-bottom: 30px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.seo-check-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 560px;
+  margin-bottom: 34px;
+}
+
+.seo-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.seo-check span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sky);
+  box-shadow: 0 0 20px rgba(26, 184, 232, 0.4);
+  flex-shrink: 0;
+}
+
+.seo-dark-button {
+  display: inline-block;
+}
+
+.seo-ops-panel {
+  border: 1px solid rgba(26, 184, 232, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 36px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+}
+
+.seo-ops-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.seo-ops-header svg,
+.seo-ops-list svg {
+  color: var(--sky);
+  flex-shrink: 0;
+}
+
+.seo-ops-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.seo-ops-list div {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 16px;
+}
+
+.seo-ops-list span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.seo-faq-section {
+  background: var(--white);
+}
+
+.seo-faq-grid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 70px;
+  align-items: start;
+}
+
+.seo-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.seo-faq-list details {
+  border: 1px solid var(--slate);
+  background: var(--off-white);
+  padding: 20px 24px;
+}
+
+.seo-faq-list summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.seo-faq-list p {
+  margin-top: 14px;
+  font-weight: 500;
+}
+
+.seo-final-cta {
+  background: var(--off-white);
+  text-align: center;
+}
+
+.seo-final-cta .container {
+  max-width: 760px;
+}
+
+.seo-final-cta h2 {
+  margin-bottom: 24px;
+}
+
+.seo-final-cta p {
+  max-width: 560px;
+  margin: 0 auto 38px;
+  color: var(--muted);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.seo-final-cta .mobile-cta-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+@media (max-width: 992px) {
+  .seo-hero-visual {
+    min-height: 620px;
+  }
+
+  .seo-dashboard {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(100%, 720px);
+    transform: none;
+    animation-name: fup;
+  }
+
+  .seo-check-grid,
+  .seo-faq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .seo-hero-copy {
+    padding-right: 24px;
+  }
+
+  .seo-hero-visual {
+    min-height: auto;
+    padding: 48px 18px;
+  }
+
+  .seo-dashboard {
+    min-height: 0;
+    width: 100%;
+  }
+
+  .seo-db-main {
+    padding: 12px;
+  }
+
+  .seo-metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  .seo-db-header,
+  .seo-alert-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .seo-platform-section {
+    padding-top: 90px;
+    padding-bottom: 90px;
+  }
+
+  .seo-ops-panel {
+    padding: 24px;
+  }
+
+  .seo-faq-list summary {
+    font-size: 1.16rem;
+  }
+}
+
+
+/* --- Vannamei Shrimp Farming SEO Landing ---------------- */
+.van-hero {
+  min-height: 92vh;
+  background: var(--off-white);
+}
+
+.van-hero-copy {
+  padding-top: 108px;
+  padding-bottom: 30px;
+  padding-right: 44px;
+}
+
+.van-hero h1 {
+  font-size: clamp(3rem, 4.5vw, 4.85rem);
+}
+
+.van-hero-intro {
+  max-width: 560px;
+  margin-bottom: 40px;
+  color: var(--muted);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+.van-hero-actions {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.van-hero-visual {
+  min-height: 92vh;
+}
+
+.van-device-stage {
+  position: absolute;
+  top: 55%;
+  left: 50%;
+  width: min(90%, 760px);
+  height: 480px;
+  transform: translate(-50%, -50%);
+  opacity: 0;
+  animation: vanStageIn 1s forwards 0.45s;
+}
+
+.van-web-panel {
+  position: absolute;
+  top: 22px;
+  right: 0;
+  width: 82%;
+  height: 400px;
+  overflow: hidden;
+  border: 1px solid rgba(26, 184, 232, 0.18);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 40px 120px rgba(0, 0, 0, 0.48), 0 0 0 1px rgba(26, 184, 232, 0.08);
+}
+
+.van-web-body {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  height: calc(100% - 32px);
+}
+
+.van-sidebar {
+  height: 100%;
+}
+
+.van-web-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+}
+
+.van-web-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+}
+
+.van-web-header span,
+.van-metric-grid span,
+.van-phone-top span,
+.van-phone-card span,
+.van-phone-grid span,
+.van-analysis-header span {
+  display: block;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.van-web-header strong,
+.van-analysis-header strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--white);
+  font-family: var(--serif);
+  font-size: 1.3rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.van-sync-pill {
+  flex-shrink: 0;
+  border: 1px solid rgba(26, 184, 232, 0.22);
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: rgba(26, 184, 232, 0.1);
+  color: var(--sky);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.van-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.van-metric-grid div,
+.van-growth-card {
+  border: 1px solid rgba(26, 184, 232, 0.09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 14px;
+}
+
+.van-metric-grid strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.van-growth-card {
+  flex: 1;
+  min-height: 170px;
+}
+
+.van-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.van-card-title svg {
+  color: var(--sky);
+}
+
+.van-bars {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  align-items: end;
+  height: 110px;
+  margin-top: 20px;
+}
+
+.van-bars span {
+  display: block;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, var(--sky), var(--blue));
+  box-shadow: 0 10px 30px rgba(26, 184, 232, 0.24);
+}
+
+.van-phone {
+  position: absolute;
+  left: 0;
+  bottom: 6px;
+  width: 226px;
+  height: 414px;
+  border: 1px solid rgba(26, 184, 232, 0.2);
+  border-radius: 32px;
+  background: linear-gradient(160deg, rgba(13, 33, 55, 0.96), rgba(7, 20, 32, 0.98));
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.45);
+  padding: 14px;
+}
+
+.van-phone-speaker {
+  width: 58px;
+  height: 5px;
+  margin: 2px auto 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.van-phone-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.van-phone-top {
+  border: 1px solid rgba(26, 184, 232, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 16px;
+}
+
+.van-phone-top strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--white);
+  font-family: var(--serif);
+  font-size: 1.32rem;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.van-phone-card,
+.van-phone-grid div {
+  border: 1px solid rgba(26, 184, 232, 0.09);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 12px;
+}
+
+.van-phone-card.active {
+  background: rgba(26, 184, 232, 0.12);
+}
+
+.van-phone-card div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.van-phone-card svg,
+.van-phone-grid svg {
+  color: var(--sky);
+}
+
+.van-phone-card strong,
+.van-phone-grid strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--white);
+  font-family: var(--mono);
+  font-size: 0.86rem;
+}
+
+.van-phone-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.van-workflows {
+  background: var(--white);
+}
+
+.van-section-heading {
+  max-width: 760px;
+  margin: 0 auto 72px;
+  text-align: center;
+}
+
+.van-section-heading .eyebrow {
+  margin-bottom: 16px;
+}
+
+.van-feature-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.van-card-label {
+  margin-bottom: 24px;
+  color: var(--sky);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.van-dark-section {
+  padding-top: 150px;
+  padding-bottom: 150px;
+}
+
+.van-dark-copy {
+  max-width: 500px;
+  margin-bottom: 30px;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.van-check-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-width: 560px;
+  margin-bottom: 34px;
+}
+
+.van-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.van-check span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--sky);
+  box-shadow: 0 0 20px rgba(26, 184, 232, 0.4);
+  flex-shrink: 0;
+}
+
+.van-analysis-panel {
+  border: 1px solid rgba(26, 184, 232, 0.1);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 36px;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+}
+
+.van-analysis-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.van-analysis-header svg,
+.van-analysis-list svg {
+  color: var(--sky);
+  flex-shrink: 0;
+}
+
+.van-analysis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.van-analysis-list div {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 16px;
+}
+
+.van-analysis-list span {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.van-faq-section {
+  background: var(--white);
+}
+
+.van-faq-grid {
+  display: grid;
+  grid-template-columns: 0.85fr 1.15fr;
+  gap: 70px;
+  align-items: start;
+}
+
+.van-faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.van-faq-list details {
+  border: 1px solid var(--slate);
+  background: var(--off-white);
+  padding: 20px 24px;
+}
+
+.van-faq-list summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-family: var(--serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.van-faq-list p {
+  margin-top: 14px;
+  font-weight: 500;
+}
+
+.van-final-cta {
+  background: var(--off-white);
+  text-align: center;
+}
+
+.van-final-cta .container {
+  max-width: 760px;
+}
+
+.van-final-cta h2 {
+  margin-bottom: 24px;
+}
+
+.van-final-cta p {
+  max-width: 560px;
+  margin: 0 auto 38px;
+  color: var(--muted);
+  font-size: 1.02rem;
+  font-weight: 500;
+}
+
+.van-final-cta .mobile-cta-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+@keyframes vanStageIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 14px));
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%);
+  }
+}
+
+@media (max-width: 992px) {
+  .van-hero-visual {
+    min-height: 620px;
+  }
+
+  .van-device-stage {
+    position: relative;
+    top: auto;
+    left: auto;
+    width: min(100%, 760px);
+    margin: 0 auto;
+    transform: none;
+    animation-name: fup;
+  }
+
+  .van-check-grid,
+  .van-faq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .van-hero-copy {
+    padding-right: 24px;
+  }
+
+  .van-hero-visual {
+    min-height: 560px;
+    padding: 46px 18px;
+  }
+
+  .van-device-stage {
+    height: 470px;
+  }
+
+  .van-web-panel {
+    right: -24px;
+    width: 96%;
+    height: 360px;
+    opacity: 0.62;
+  }
+
+  .van-phone {
+    left: 0;
+    bottom: 0;
+    width: 218px;
+    height: 420px;
+  }
+
+  .van-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .van-dark-section {
+    padding-top: 90px;
+    padding-bottom: 90px;
+  }
+
+  .van-analysis-panel {
+    padding: 24px;
+  }
+
+  .van-faq-list summary {
+    font-size: 1.16rem;
+  }
+}
