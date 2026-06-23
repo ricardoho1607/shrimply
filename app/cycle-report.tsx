@@ -3,7 +3,6 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -11,7 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -402,16 +401,18 @@ export default function CycleReportScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <View style={styles.container}>
-        <View style={[styles.header, { paddingTop: (Platform.OS === 'android' ? insets.top + 10 : insets.top + 12) }]}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#0d2137" />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>{resolvedCycleId ? t.cycleReport.title : t.cycleReport.archiveTitle}</Text>
-            <Text style={styles.headerSub}>{report?.cycle.cycleName || t.cycleReport.archiveSubtitle}</Text>
+        <SafeAreaView style={styles.topSafeArea}>
+          <View style={styles.header}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={24} color="#0d2137" />
+            </TouchableOpacity>
+            <View style={styles.headerCenter}>
+              <Text style={styles.headerTitle}>{resolvedCycleId ? t.cycleReport.title : t.cycleReport.archiveTitle}</Text>
+              <Text style={styles.headerSub}>{report?.cycle.cycleName || t.cycleReport.archiveSubtitle}</Text>
+            </View>
+            <View style={styles.backButton} />
           </View>
-          <View style={styles.backButton} />
-        </View>
+        </SafeAreaView>
 
         {hasFinanceAccess && resolvedCycleId && (
           <View style={styles.tabBar}>
@@ -445,6 +446,7 @@ export default function CycleReportScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

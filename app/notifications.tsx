@@ -2,11 +2,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
-  ActivityIndicator, FlatList, RefreshControl, Platform, Alert
+  ActivityIndicator, FlatList, RefreshControl, Alert
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { db } from '../config/firebase';
@@ -36,7 +36,6 @@ interface Notification {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const { t } = useLanguage();
   
@@ -176,39 +175,40 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      {/* Updated Header with Clear Button */}
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        
-        <Text style={styles.headerTitle}>{t.notifications?.title || 'Notifications'}</Text>
-        
-        <View style={styles.headerRightActions}>
-          {notifications.length > 0 && (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={confirmClearAll}
-              accessibilityRole="button"
-              accessibilityLabel="Clear all notifications"
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="trash-outline" size={22} color="#e74c3c" />
-            </TouchableOpacity>
-          )}
-          {unreadCount > 0 && (
-            <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
-              <Text style={styles.markAllText}>{t.notifications?.markAllRead || 'Read'}</Text>
-            </TouchableOpacity>
-          )}
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+
+          <Text style={styles.headerTitle}>{t.notifications?.title || 'Notifications'}</Text>
+
+          <View style={styles.headerRightActions}>
+            {notifications.length > 0 && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={confirmClearAll}
+                accessibilityRole="button"
+                accessibilityLabel="Clear all notifications"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="trash-outline" size={22} color="#e74c3c" />
+              </TouchableOpacity>
+            )}
+            {unreadCount > 0 && (
+              <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
+                <Text style={styles.markAllText}>{t.notifications?.markAllRead || 'Read'}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
 
       <View style={styles.filterContainer}>
         <TouchableOpacity
@@ -266,6 +266,7 @@ export default function NotificationsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F5F5F5' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

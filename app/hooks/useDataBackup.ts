@@ -14,12 +14,19 @@ export const useDataBackup = () => {
     if (firebaseSync.syncPond && firebaseSync.syncSampling && firebaseSync.syncHarvestRecord) {
       pondStore.setFirebaseSync({
         syncPond: firebaseSync.syncPond,
+        syncPhysicalPond: firebaseSync.syncPhysicalPond,
         syncSampling: firebaseSync.syncSampling,
         syncHarvestRecord: firebaseSync.syncHarvestRecord,
         syncCycle: firebaseSync.syncCycle,
       });
     }
-  }, [firebaseSync.syncPond, firebaseSync.syncSampling, firebaseSync.syncHarvestRecord, firebaseSync.syncCycle]);
+  }, [
+    firebaseSync.syncPond,
+    firebaseSync.syncPhysicalPond,
+    firebaseSync.syncSampling,
+    firebaseSync.syncHarvestRecord,
+    firebaseSync.syncCycle,
+  ]);
 
   // Auto-restore when user logs in (now handled by real-time listeners) - FIXED: removed store lengths from dependencies
   useEffect(() => {

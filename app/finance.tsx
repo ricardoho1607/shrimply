@@ -4,9 +4,9 @@ import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
 import {
   FlatList, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator,
-  Modal, SafeAreaView, Dimensions, Switch, Platform, StatusBar,
+  Modal, Dimensions, Switch, Platform, StatusBar,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { PieChart } from 'react-native-chart-kit';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -35,7 +35,6 @@ type FormData = {
 
 export default function FinancePage() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
@@ -569,38 +568,38 @@ export default function FinancePage() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <View style={[styles.header, { 
-        paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 
-      }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.headerButton}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#2C3E50" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
-        <View style={styles.headerActions}>
-          <TouchableOpacity onPress={() => {
-              resetForm();
-              setFormType('revenue');
-              setFormData(prev => ({ ...prev, category: REVENUE_CATEGORIES[0] }));
-              setShowForm(true);
-            }} style={styles.addButtonIcon}>
-            <Ionicons name="arrow-down-circle" size={28} color="#27AE60" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.headerButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#2C3E50" />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => {
-              resetForm();
-              setFormType('expense');
-              setFormData(prev => ({ ...prev, category: CATEGORIES[0] }));
-              setShowForm(true);
-            }} style={styles.addButtonIcon}>
-            <Ionicons name="arrow-up-circle" size={28} color="#E74C3C" />
-          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
+          <View style={styles.headerActions}>
+            <TouchableOpacity onPress={() => {
+                resetForm();
+                setFormType('revenue');
+                setFormData(prev => ({ ...prev, category: REVENUE_CATEGORIES[0] }));
+                setShowForm(true);
+              }} style={styles.addButtonIcon}>
+              <Ionicons name="arrow-down-circle" size={28} color="#27AE60" />
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => {
+                resetForm();
+                setFormType('expense');
+                setFormData(prev => ({ ...prev, category: CATEGORIES[0] }));
+                setShowForm(true);
+              }} style={styles.addButtonIcon}>
+              <Ionicons name="arrow-up-circle" size={28} color="#E74C3C" />
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
+      </SafeAreaView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.periodContainer}>

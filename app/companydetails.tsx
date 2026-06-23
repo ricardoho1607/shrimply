@@ -1,9 +1,9 @@
 // app/companydetails.tsx - Android Optimized with Safe Area
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLanguage } from '../context/LanguageContext';
@@ -36,7 +36,6 @@ type RoleKey = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buye
 
 export default function CompanyDetailsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { user, company, getTeamMembers, getCompanyLocationString, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember } = useAuth();
   
@@ -299,25 +298,27 @@ export default function CompanyDetailsScreen() {
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.companyDetails.title}</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} disabled={refreshing}>
-          {refreshing ? (
-            <ActivityIndicator size="small" color="#0d2137" />
-          ) : (
-            <Ionicons name="refresh" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
-          )}
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.companyDetails.title}</Text>
+          <TouchableOpacity style={styles.refreshButton} onPress={onRefresh} disabled={refreshing}>
+            {refreshing ? (
+              <ActivityIndicator size="small" color="#0d2137" />
+            ) : (
+              <Ionicons name="refresh" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
+            )}
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       <ScrollView 
         style={styles.scrollView} 
@@ -617,6 +618,7 @@ const RoleCard = React.memo(({ roleKey, role, filled, members, onRemoveMember, i
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 

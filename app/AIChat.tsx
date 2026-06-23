@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGemini } from './hooks/useGemini';
 import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
@@ -152,27 +152,28 @@ export default function AIChat() {
     <View style={styles.fullContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      {/* Header with minimized gap */}
-      <View style={[styles.header, { paddingTop: Platform.OS === 'ios' ? Math.min(insets.top, 16) : 12 }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={styles.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        
-        <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle}>Orson AI</Text>
-          <Text style={styles.headerSubtitle}>{activePonds.length} Active Ponds Connected</Text>
-        </View>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
 
-        <TouchableOpacity onPress={confirmClearChat} style={styles.headerSide}>
-          <Ionicons name="trash-outline" size={20} color="#0d2137" />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.headerCenter}>
+            <Text style={styles.headerTitle}>Orson AI</Text>
+            <Text style={styles.headerSubtitle}>{activePonds.length} Active Ponds Connected</Text>
+          </View>
+
+          <TouchableOpacity onPress={confirmClearChat} style={styles.headerSide}>
+            <Ionicons name="trash-outline" size={20} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -246,6 +247,7 @@ export default function AIChat() {
 
 const styles = StyleSheet.create({
   fullContainer: { flex: 1, backgroundColor: '#dce8f2' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   flex: { flex: 1, backgroundColor: '#f4f8fc' },
   header: {
     flexDirection: 'row',

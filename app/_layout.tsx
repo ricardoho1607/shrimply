@@ -12,6 +12,7 @@ import { useEffect } from 'react';
 import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 'react-native';
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
 import { useNotificationChecker } from './hooks/useNotificationChecker';
+import { useMobileActivityTracker } from './hooks/useMobileActivityTracker';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 let hasCheckedForStartupUpdate = false;
@@ -60,6 +61,7 @@ function RootLayoutNav() {
   const homePath = isBuyer ? '/indexbuyer' : '/';
 
   useNotificationChecker();
+  useMobileActivityTracker();
 
   useEffect(() => {
     if (loading || !rootNavigationState?.key) return;

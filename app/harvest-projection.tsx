@@ -10,9 +10,9 @@ import {
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePondStore, isPondCycleActive } from './store/pondStore';
 import { useGemini } from './hooks/useGemini';
 import { useLanguage } from '../context/LanguageContext';
@@ -23,7 +23,6 @@ import type { OrsonHarvestProjection } from '../orson/types';
 
 export default function HarvestProjectionScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { ponds } = usePondStore();
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { sendMessage, loading: aiLoading } = useGemini();
@@ -107,14 +106,16 @@ Give a concise recommendation based on Orson's structured projection risk.`;
   };
 
   return (
-    <View style={[styles.container, { paddingTop: Platform.OS === 'ios' ? insets.top : 12 }]}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.push('/financial-reports')} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.harvestProjectionScreen?.title || 'Harvest Projections'}</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <View style={styles.container}>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.push('/financial-reports')} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.harvestProjectionScreen?.title || 'Harvest Projections'}</Text>
+          <View style={{ width: 24 }} />
+        </View>
+      </SafeAreaView>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -269,6 +270,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#FFFFFF' },
   header: { flexDirection: 'row', alignItems: 'center', padding: 16, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderColor: '#E2E8F0' },
   backBtn: { padding: 4 },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: '#0d2137' },

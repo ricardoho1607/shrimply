@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { usePondStore, type Pond, getPondCurrentDoc, isBaselineSampling, isPondCycleActive } from './store/pondStore';
@@ -14,7 +14,6 @@ const isAndroid = Platform.OS === 'android';
 
 export default function ShrimpReportsScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
@@ -171,19 +170,21 @@ export default function ShrimpReportsScreen() {
   return (
     <View style={s.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <View style={[s.header, { paddingTop: (isAndroid ? insets.top + 10 : insets.top + 12) }]}>
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={s.backButton}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={s.headerTitle}>{t.shrimpReports?.title || 'Shrimp Reports'}</Text>
-        <View style={s.placeholder} />
-      </View>
+      <SafeAreaView style={s.topSafeArea}>
+        <View style={s.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={s.backButton}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={s.headerTitle}>{t.shrimpReports?.title || 'Shrimp Reports'}</Text>
+          <View style={s.placeholder} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView style={s.content}>
         <View style={s.section}>
@@ -248,6 +249,7 @@ export default function ShrimpReportsScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: isAndroid ? 14 : 16, 
     paddingBottom: isAndroid ? 7 : 8, backgroundColor: '#dce8f2', borderBottomWidth: 1, borderBottomColor: '#dce8f2' },
   backButton: { padding: 8, marginLeft: -4 },

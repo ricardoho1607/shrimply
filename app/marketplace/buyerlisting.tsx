@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { FlatList, View, Text, TouchableOpacity, StyleSheet, StatusBar, RefreshControl, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMarketplaceStore, type BuyerListing } from '../store/marketplaceStore';
 import { useAuth } from '../../context/AuthContext';
 
@@ -97,7 +97,6 @@ const MyListingCard = React.memo(({ listing, onViewDetails, onDelete, getSellerR
 
 const MyListingsScreen = () => {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const { buyerListings, deleteBuyerListing, getSellerResponsesForListing, switchAccount } = useMarketplaceStore();
   
@@ -172,27 +171,29 @@ const MyListingsScreen = () => {
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Listings</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => router.push('/marketplace/create-buyer-listing')}
-          accessibilityRole="button"
-          accessibilityLabel="Create buyer listing"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="add" size={24} color="#0d2137" />
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>My Listings</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => router.push('/marketplace/create-buyer-listing')}
+            accessibilityRole="button"
+            accessibilityLabel="Create buyer listing"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="add" size={24} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       <View style={styles.container}>
         <View style={styles.summaryBar}>
@@ -254,6 +255,7 @@ const MyListingsScreen = () => {
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 

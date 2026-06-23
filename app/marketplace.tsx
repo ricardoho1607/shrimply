@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   FlatList, View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, 
-  RefreshControl, Alert, Switch, Platform, Modal, ActivityIndicator, TextInput 
+  RefreshControl, Alert, Switch, Platform, Modal, ActivityIndicator, TextInput
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMarketplaceStore, type BuyerListing } from './store/marketplaceStore';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -286,7 +286,6 @@ const ListingDetailModal = React.memo(({ visible, listing, onClose, t }: any) =>
 
 const MarketplaceScreen = () => {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { company } = useAuth();
   const { t } = useLanguage();
   const { 
@@ -428,31 +427,31 @@ const MarketplaceScreen = () => {
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      <View style={[styles.header, { 
-        paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 
-      }]}>
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={handleBack} 
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.MarketplaceScreen.title}</Text>
-        <TouchableOpacity 
-          style={styles.addButton} 
-          onPress={handleCreateListing} 
-          accessibilityRole="button"
-          accessibilityLabel="Create marketplace listing"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="add" size={24} color="#0d2137" />
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={handleBack}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.MarketplaceScreen.title}</Text>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleCreateListing}
+            accessibilityRole="button"
+            accessibilityLabel="Create marketplace listing"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="add" size={24} color="#0d2137" />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
 
       <View style={styles.container}>
         <LocationFilterControls 
@@ -554,6 +553,7 @@ const MarketplaceScreen = () => {
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   container: { flex: 1, backgroundColor: '#f4f8fc' },
   header: { 
     flexDirection: 'row', 

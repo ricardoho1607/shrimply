@@ -14,7 +14,7 @@ import {
   Dimensions,
   ActivityIndicator,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
@@ -68,7 +68,6 @@ const SHRIMP_SIZES = [
 
 const CreateBuyerListingScreen = () => {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { currencyConfig } = useCurrency();
@@ -268,19 +267,21 @@ const CreateBuyerListingScreen = () => {
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
-      <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t.CreateBuyerListingScreen.createBuyingRequest}</Text>
-        <View style={styles.placeholder} />
-      </View>
+      <SafeAreaView style={styles.topSafeArea}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t.CreateBuyerListingScreen.createBuyingRequest}</Text>
+          <View style={styles.placeholder} />
+        </View>
+      </SafeAreaView>
 
       <ScrollView 
         style={styles.formContainer} 
@@ -553,6 +554,7 @@ const Input = ({ label, value, onChangeText, placeholder, keyboardType = 'defaul
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#FFFFFF' },
   header: { 
     flexDirection: 'row', 
     alignItems: 'center', 

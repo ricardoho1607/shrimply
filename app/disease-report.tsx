@@ -8,7 +8,7 @@ import {
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from '../components/MapWrapper';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import * as Location from 'expo-location';
@@ -524,7 +524,6 @@ export default function DiseaseReportScreen() {
 
   const renderHeader = () => (
     <Header 
-      insets={insets} 
       title={labels.title} 
       onBack={() => router.back()} 
       onReport={() => setShowReportModal(true)}
@@ -661,28 +660,30 @@ export default function DiseaseReportScreen() {
 
 // --- Sub-components ---
 
-const Header = React.memo(({ insets, title, onBack, onReport }: any) => (
-  <View style={[styles.header, { paddingTop: Platform.OS === 'android' ? insets.top + 10 : insets.top + 12 }]}>
-    <TouchableOpacity
-      style={styles.backButton}
-      onPress={onBack}
-      accessibilityRole="button"
-      accessibilityLabel="Go back"
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-    >
-      <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
-    </TouchableOpacity>
-    <Text style={styles.headerTitle}>{title}</Text>
-    <TouchableOpacity
-      style={styles.legendButton}
-      onPress={onReport}
-      accessibilityRole="button"
-      accessibilityLabel="Report disease outbreak"
-      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-    >
-      <Ionicons name="add-circle" size={Platform.OS === 'android' ? 28 : 32} color="#e74c3c" />
-    </TouchableOpacity>
-  </View>
+const Header = React.memo(({ title, onBack, onReport }: any) => (
+  <SafeAreaView style={styles.topSafeArea}>
+    <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={onBack}
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="arrow-back" size={Platform.OS === 'android' ? 22 : 24} color="#0d2137" />
+      </TouchableOpacity>
+      <Text style={styles.headerTitle}>{title}</Text>
+      <TouchableOpacity
+        style={styles.legendButton}
+        onPress={onReport}
+        accessibilityRole="button"
+        accessibilityLabel="Report disease outbreak"
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons name="add-circle" size={Platform.OS === 'android' ? 28 : 32} color="#e74c3c" />
+      </TouchableOpacity>
+    </View>
+  </SafeAreaView>
 ));
 Header.displayName = 'Header';
 
@@ -1084,6 +1085,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F5F5F5',
   },
+  topSafeArea: { backgroundColor: '#dce8f2' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',

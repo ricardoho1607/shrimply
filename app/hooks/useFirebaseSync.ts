@@ -70,6 +70,34 @@ const removeUndefinedFields = (value: any): any => {
   }, {} as Record<string, any>);
 };
 
+const applyPendingPhysicalPondChanges = (
+  serverPhysicalPonds: PhysicalPond[],
+  pendingChanges: PendingChange[]
+): PhysicalPond[] => {
+  const merged = new Map(serverPhysicalPonds.map((pond) => [pond.id, pond]));
+
+  pendingChanges
+    .filter((change) => change.type === 'physicalPond')
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .forEach((change) => {
+      const pond = change.data as PhysicalPond | undefined;
+      if (!pond?.id) return;
+
+      if (change.action === 'delete') {
+        merged.delete(pond.id);
+        return;
+      }
+
+      merged.set(pond.id, {
+        ...merged.get(pond.id),
+        ...pond,
+        status: pond.status === 'active' ? 'active' : 'idle',
+      });
+    });
+
+  return Array.from(merged.values());
+};
+
 export const useFirebaseSync = () => {
   const { user, company } = useAuth();
   const pendingStorageKey = user?.uid && company?.id ? `shrimply:pending-sync:${user.uid}:${company.id}` : null;
@@ -278,7 +306,12 @@ export const useFirebaseSync = () => {
                 updatedBy: data.updatedBy,
               });
             });
-            usePondStore.setState({ physicalPonds: serverPhysicalPonds });
+            usePondStore.setState({
+              physicalPonds: applyPendingPhysicalPondChanges(
+                serverPhysicalPonds,
+                pendingChangesRef.current
+              ),
+            });
           } catch (error) {
             console.error('Error processing physical ponds snapshot:', error);
             setSyncStatus(prev => ({ ...prev, error: 'Error processing physical pond data' }));
@@ -540,7 +573,8 @@ export const useFirebaseSync = () => {
       timestamp: Date.now()
     };
 
-    setPendingChanges(prev => [...prev, pendingChange]);
+    pendingChangesRef.current = [...pendingChangesRef.current, pendingChange];
+    setPendingChanges(pendingChangesRef.current);
 
     if (!syncStatus.isOnline) {
       setSyncStatus(prev => ({ ...prev, error: undefined }));

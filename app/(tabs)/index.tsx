@@ -2,7 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
-import { deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, where, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, 
@@ -36,6 +36,31 @@ interface FormData {
   feed: string; 
   samplingDate: Date;
 }
+
+interface UserActivityDailySummary {
+  id: string;
+  userId: string;
+  userName: string;
+  role?: string | null;
+  totalSeconds: number;
+  sessionCount: number;
+  lastSeenAt: Date | null;
+}
+
+const ACTIVITY_ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+
+const toActivityDate = (value: unknown): Date | null => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+};
 
 const DetailItem = ({ 
   iconName, 
@@ -138,6 +163,7 @@ export default function PondManagementScreen() {
   const { t } = useLanguage();
   const { user, company } = useAuth();
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canViewActivity = Platform.OS !== 'web' && ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
   
   const { 
     ponds, 
@@ -173,6 +199,7 @@ export default function PondManagementScreen() {
   const [cycleNameDraft, setCycleNameDraft] = useState('');
   const [cycleManagerExpanded, setCycleManagerExpanded] = useState(false);
   const [editingBaselinePondId, setEditingBaselinePondId] = useState<string | null>(null);
+  const [activitySummaries, setActivitySummaries] = useState<UserActivityDailySummary[]>([]);
   const [formData, setFormData] = useState<FormData>({
     pondName: '', 
     pondArea: '', 
@@ -362,6 +389,47 @@ export default function PondManagementScreen() {
   );
 
   useEffect(() => {
+    if (!canViewActivity || !company?.id) {
+      setActivitySummaries([]);
+      return;
+    }
+
+    const todayKey = formatLocalDateKey(new Date());
+    const activityQuery = query(
+      collection(db, 'companies', company.id, 'userActivityDaily'),
+      where('dateKey', '==', todayKey)
+    );
+
+    const unsubscribe = onSnapshot(activityQuery, (snapshot) => {
+      const summaries = snapshot.docs
+        .map((summaryDoc) => {
+          const data = summaryDoc.data();
+          return {
+            id: summaryDoc.id,
+            userId: typeof data.userId === 'string' ? data.userId : summaryDoc.id,
+            userName: typeof data.userName === 'string' && data.userName.trim() ? data.userName : t.activityTracker.unknownUser,
+            role: typeof data.role === 'string' ? data.role : null,
+            totalSeconds: typeof data.totalSeconds === 'number' && Number.isFinite(data.totalSeconds) ? data.totalSeconds : 0,
+            sessionCount: typeof data.sessionCount === 'number' && Number.isFinite(data.sessionCount) ? data.sessionCount : 0,
+            lastSeenAt: toActivityDate(data.lastSeenAt),
+          };
+        })
+        .sort((first, second) => {
+          const secondSeen = second.lastSeenAt?.getTime() ?? 0;
+          const firstSeen = first.lastSeenAt?.getTime() ?? 0;
+          return secondSeen - firstSeen;
+        });
+
+      setActivitySummaries(summaries);
+    }, (error) => {
+      console.log('Failed to load activity summaries:', error);
+      setActivitySummaries([]);
+    });
+
+    return unsubscribe;
+  }, [canViewActivity, company?.id, formatLocalDateKey, t.activityTracker.unknownUser]);
+
+  useEffect(() => {
     setCycleNameDraft(activeFarmCycle?.cycleName || '');
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
@@ -493,6 +561,7 @@ export default function PondManagementScreen() {
     });
 
     closeModal();
+    setCycleFilter('inactive');
     Alert.alert(t.messages.success, t.home.pondAddedSuccess);
   }, [addPhysicalPond, canEditPonds, closeModal, formData, physicalPonds, ponds, t]);
 
@@ -1151,6 +1220,107 @@ export default function PondManagementScreen() {
     t
   ]);
 
+  const activityTotals = useMemo(() => {
+    const nowMs = Date.now();
+    return activitySummaries.reduce((totals, summary) => {
+      const lastSeenMs = summary.lastSeenAt?.getTime() ?? 0;
+      const isActive = lastSeenMs > 0 && nowMs - lastSeenMs <= ACTIVITY_ACTIVE_WINDOW_MS;
+
+      return {
+        totalSeconds: totals.totalSeconds + summary.totalSeconds,
+        activeUsers: totals.activeUsers + (isActive ? 1 : 0),
+      };
+    }, { totalSeconds: 0, activeUsers: 0 });
+  }, [activitySummaries]);
+
+  const formatActivityDuration = useCallback((seconds: number) => {
+    if (!Number.isFinite(seconds) || seconds <= 0) return `0${t.activityTracker.hoursShort}`;
+
+    const hours = seconds / 3600;
+    if (hours >= 1) {
+      return `${hours.toFixed(hours >= 10 ? 0 : 1)}${t.activityTracker.hoursShort}`;
+    }
+
+    return `${Math.max(1, Math.round(seconds / 60))}${t.activityTracker.minutesShort}`;
+  }, [t.activityTracker.hoursShort, t.activityTracker.minutesShort]);
+
+  const formatLastSeen = useCallback((date: Date | null) => {
+    if (!date) return t.activityTracker.noLastSeen;
+
+    const diffMinutes = Math.max(0, Math.floor((Date.now() - date.getTime()) / 60000));
+    if (diffMinutes < 1) return t.activityTracker.justNow;
+    if (diffMinutes < 60) {
+      return t.activityTracker.minutesAgo.replace('{{count}}', String(diffMinutes));
+    }
+
+    return t.activityTracker.hoursAgo.replace('{{count}}', String(Math.floor(diffMinutes / 60)));
+  }, [t.activityTracker.hoursAgo, t.activityTracker.justNow, t.activityTracker.minutesAgo, t.activityTracker.noLastSeen]);
+
+  const renderActivitySummary = useMemo(() => {
+    if (!canViewActivity) return null;
+
+    const topSummaries = activitySummaries.slice(0, 4);
+
+    return (
+      <View style={styles.activityCard}>
+        <View style={styles.activityHeader}>
+          <View>
+            <Text style={styles.activityEyebrow}>{t.activityTracker.eyebrow}</Text>
+            <Text style={styles.activityTitle}>{t.activityTracker.title}</Text>
+          </View>
+          <View style={styles.activityIcon}>
+            <Ionicons name="time-outline" size={22} color="#0d2137" />
+          </View>
+        </View>
+
+        <View style={styles.activityStatsRow}>
+          <View style={styles.activityStat}>
+            <Text style={styles.activityStatValue}>{formatActivityDuration(activityTotals.totalSeconds)}</Text>
+            <Text style={styles.activityStatLabel}>{t.activityTracker.staffHoursToday}</Text>
+          </View>
+          <View style={styles.activityStat}>
+            <Text style={styles.activityStatValue}>{activityTotals.activeUsers}</Text>
+            <Text style={styles.activityStatLabel}>{t.activityTracker.activeNow}</Text>
+          </View>
+        </View>
+
+        {topSummaries.length > 0 ? (
+          <View style={styles.activityList}>
+            {topSummaries.map((summary) => (
+              <View key={summary.id} style={styles.activityRow}>
+                <View style={styles.activityAvatar}>
+                  <Ionicons name="person-outline" size={16} color="#0d2137" />
+                </View>
+                <View style={styles.activityUserInfo}>
+                  <Text style={styles.activityUserName} numberOfLines={1}>{summary.userName}</Text>
+                  <Text style={styles.activityUserMeta} numberOfLines={1}>
+                    {(summary.role || t.activityTracker.unknownRole).toString()} | {formatLastSeen(summary.lastSeenAt)}
+                  </Text>
+                </View>
+                <Text style={styles.activityUserTime}>{formatActivityDuration(summary.totalSeconds)}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.activityEmptyText}>{t.activityTracker.noActivityToday}</Text>
+        )}
+      </View>
+    );
+  }, [
+    activitySummaries,
+    activityTotals.activeUsers,
+    activityTotals.totalSeconds,
+    canViewActivity,
+    formatActivityDuration,
+    formatLastSeen,
+    t.activityTracker.activeNow,
+    t.activityTracker.eyebrow,
+    t.activityTracker.noActivityToday,
+    t.activityTracker.staffHoursToday,
+    t.activityTracker.title,
+    t.activityTracker.unknownRole,
+  ]);
+
   const renderPondForm = useMemo(() => (
     <>
       <Text style={styles.inputHint}>
@@ -1592,7 +1762,8 @@ export default function PondManagementScreen() {
           data={visiblePonds}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <PondCard pond={item} />}
-          contentContainerStyle={styles.scrollContent} 
+          ListHeaderComponent={renderActivitySummary}
+          contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             cycleFilter === 'inactive' && idlePhysicalPonds.length > 0 ? null :
@@ -1611,7 +1782,7 @@ export default function PondManagementScreen() {
 
         {canEditPonds && (
           <TouchableOpacity 
-            style={styles.floatingButton} 
+            style={styles.floatingButton}
             onPress={() => setMenuModalVisible(true)}
           >
             <Ionicons name="add" size={28} color="#fff" />
@@ -1792,6 +1963,113 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 16 : 20, 
     paddingTop: Platform.OS === 'android' ? 8 : 12, 
     paddingBottom: 100 
+  },
+
+  activityCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: Platform.OS === 'android' ? 14 : 16,
+    marginBottom: Platform.OS === 'android' ? 12 : 16,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    shadowColor: '#315f57',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
+    elevation: 3,
+  },
+  activityHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  activityEyebrow: {
+    color: '#6b8aa0',
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  activityTitle: {
+    color: '#0d2137',
+    fontSize: 17,
+    fontWeight: '900',
+    marginTop: 3,
+  },
+  activityIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dce8f2',
+  },
+  activityStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  activityStat: {
+    flex: 1,
+    backgroundColor: '#f4f8fc',
+    borderRadius: 12,
+    padding: 12,
+  },
+  activityStatValue: {
+    color: '#0d2137',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  activityStatLabel: {
+    color: '#6b8aa0',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  activityList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  activityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+  },
+  activityAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#eef6fb',
+  },
+  activityUserInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  activityUserName: {
+    color: '#0d2137',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  activityUserMeta: {
+    color: '#6b8aa0',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  activityUserTime: {
+    color: '#315f57',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  activityEmptyText: {
+    color: '#6b8aa0',
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 12,
   },
 
   cycleManagerCard: {
