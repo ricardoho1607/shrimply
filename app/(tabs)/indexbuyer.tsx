@@ -7,7 +7,6 @@ import {
   FlatList,
   Modal,
   Platform,
-  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -17,7 +16,6 @@ import {
 } from 'react-native';
 import { db } from '../../config/firebase';
 import { useAuth } from '../../context/AuthContext';
-import { useLanguage } from '../../context/LanguageContext';
 import { useBuyerStore, type MonitoredCompany } from '../store/buyerStore';
 
 interface CompanyMetrics {
@@ -33,6 +31,32 @@ interface CompanyMetrics {
   businessSize?: string;
   contactPhone?: string;
 }
+
+const asFiniteNumber = (value: unknown, fallback = 0): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const formatBusinessSize = (value: unknown): string | undefined => {
+  if (typeof value !== 'string' || !value) return undefined;
+  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+};
+
+const buildPublicCompanyMetrics = (companyId: string, data: Record<string, any>): CompanyMetrics => ({
+  id: companyId,
+  companyName: data.companyName || 'Unknown Company',
+  location: typeof data.primaryLocation === 'string'
+    ? data.primaryLocation
+    : data.primaryLocation?.address || data.location || 'Unknown Location',
+  farmType: data.farmType,
+  businessSize: formatBusinessSize(data.businessSize),
+  contactPhone: data.contactPhone,
+  totalPonds: asFiniteNumber(data.publicPondCount ?? data.pondCount),
+  averageDOC: asFiniteNumber(data.publicAverageDOC ?? data.averageDOC ?? data.avgDOC),
+  averageSize: asFiniteNumber(data.publicAverageSize ?? data.averageSize ?? data.avgSize),
+  averageBiomass: asFiniteNumber(data.publicAverageBiomass ?? data.averageBiomass ?? data.totalBiomass),
+  distance: 0,
+});
 
 const DetailItem = ({ 
   iconName, 
@@ -58,8 +82,7 @@ const DetailItem = ({
 };
 
 export default function BuyerHomeScreen() {
-  const { t } = useLanguage();
-  const { user, company } = useAuth(); // ADDED: company from useAuth
+  const { user, company } = useAuth();
   
   const {
     monitoredCompanies,
@@ -87,92 +110,10 @@ export default function BuyerHomeScreen() {
   // Fetch metrics for monitored companies
   const fetchCompanyMetrics = useCallback(async (companyId: string): Promise<CompanyMetrics | null> => {
     try {
-      const companyDoc = await getDocs(query(collection(db, 'companies'), where('__name__', '==', companyId)));
+      const companyDoc = await getDocs(query(collection(db, 'publicCompanyProfiles'), where('companyId', '==', companyId)));
       if (companyDoc.empty) return null;
       
-      const data = companyDoc.docs[0].data();
-      
-      const pondsRef = collection(db, 'companies', companyId, 'ponds');
-      const pondsSnapshot = await getDocs(pondsRef);
-      
-      let totalPonds = pondsSnapshot.size;
-      let totalDOC = 0;
-      let totalSize = 0;
-      let sumOfBiomass = 0;
-      let pondsWithBiomass = 0;
-      let validPondsForSize = 0;
-      let validPondsForDOC = 0;
-      
-      pondsSnapshot.forEach((pondDoc) => {
-        const pond = pondDoc.data();
-        
-        // Calculate DOC
-        if (pond.docStart) {
-          const docStartDate = new Date(pond.docStart).getTime();
-          const now = Date.now();
-          const doc = Math.floor((now - docStartDate) / (1000 * 60 * 60 * 24));
-          if (doc >= 0) {
-            totalDOC += doc;
-            validPondsForDOC++;
-          }
-        }
-        
-        // Get size and biomass from latest sampling
-        if (pond.samplings && Array.isArray(pond.samplings) && pond.samplings.length > 0) {
-          const validSamplings = pond.samplings.filter((s: any) => s.mbw && s.mbw > 0);
-          
-          if (validSamplings.length > 0) {
-            const sortedSamplings = [...validSamplings].sort((a: any, b: any) => 
-              new Date(b.date).getTime() - new Date(a.date).getTime()
-            );
-            const latestSampling = sortedSamplings[0];
-            
-            // Calculate size (pieces per kg)
-            totalSize += (1000 / latestSampling.mbw);
-            validPondsForSize++;
-            
-            // Calculate biomass for this pond
-            const initialPopulation = pond.initialPopulation || 0;
-            const harvestedPopulation = pond.totalHarvestedPopulation || 0;
-            let totalMortality = 0;
-            
-            pond.samplings.forEach((s: any) => {
-              if (s.mortality && s.mortality > 0) {
-                totalMortality += Number(s.mortality);
-              }
-            });
-            
-            const currentPopulation = Math.max(0, initialPopulation - harvestedPopulation - totalMortality);
-            const pondBiomass = (currentPopulation * latestSampling.mbw) / 1000;
-            
-            // Only add if biomass is positive
-            if (pondBiomass > 0) {
-              sumOfBiomass += pondBiomass;
-              pondsWithBiomass++;
-            }
-          }
-        }
-      });
-      
-      const formattedBusinessSize = data.businessSize 
-        ? data.businessSize.charAt(0).toUpperCase() + data.businessSize.slice(1).toLowerCase()
-        : undefined;
-      
-      return {
-        id: companyId,
-        companyName: data.companyName || 'Unknown Company',
-        location: typeof data.primaryLocation === 'string' 
-          ? data.primaryLocation 
-          : data.primaryLocation?.address || 'Unknown Location',
-        farmType: data.farmType,
-        businessSize: formattedBusinessSize,
-        contactPhone: data.contactPhone,
-        totalPonds: totalPonds,
-        averageDOC: validPondsForDOC > 0 ? Math.round(totalDOC / validPondsForDOC) : 0,
-        averageSize: validPondsForSize > 0 ? Math.round(totalSize / validPondsForSize) : 0,
-        averageBiomass: totalPonds > 0 ? sumOfBiomass / totalPonds : 0,
-        distance: 0,
-      };
+      return buildPublicCompanyMetrics(companyId, companyDoc.docs[0].data());
     } catch (error) {
       console.error('Error fetching company metrics:', error);
       return null;
@@ -204,7 +145,7 @@ export default function BuyerHomeScreen() {
   const fetchPublicCompanies = useCallback(async () => {
     setIsLoadingCompanies(true);
     try {
-      const companiesRef = collection(db, 'companies');
+      const companiesRef = collection(db, 'publicCompanyProfiles');
       const q = query(companiesRef, where('isPublicProfile', '==', true));
       const querySnapshot = await getDocs(q);
       
@@ -214,84 +155,7 @@ export default function BuyerHomeScreen() {
         const data = doc.data();
         const companyId = doc.id;
         
-        const pondsRef = collection(db, 'companies', companyId, 'ponds');
-        const pondsSnapshot = await getDocs(pondsRef);
-        
-        let totalPonds = pondsSnapshot.size;
-        let totalDOC = 0;
-        let totalSize = 0;
-        let totalBiomass = 0;
-        let pondsWithBiomass = 0;
-        let validPondsForSize = 0;
-        let validPondsForDOC = 0;
-        
-        pondsSnapshot.forEach((pondDoc) => {
-          const pond = pondDoc.data();
-          
-          if (pond.docStart) {
-            const docStartDate = new Date(pond.docStart).getTime();
-            const now = Date.now();
-            const doc = Math.floor((now - docStartDate) / (1000 * 60 * 60 * 24));
-            if (doc >= 0) {
-              totalDOC += doc;
-              validPondsForDOC++;
-            }
-          }
-          
-          if (pond.samplings && Array.isArray(pond.samplings) && pond.samplings.length > 0) {
-            const validSamplings = pond.samplings.filter((s: any) => s.mbw && s.mbw > 0);
-            
-            if (validSamplings.length > 0) {
-              const sortedSamplings = [...validSamplings].sort((a: any, b: any) => 
-                new Date(b.date).getTime() - new Date(a.date).getTime()
-              );
-              const latestSampling = sortedSamplings[0];
-              
-              totalSize += (1000 / latestSampling.mbw);
-              validPondsForSize++;
-              
-              const initialPopulation = pond.initialPopulation || 0;
-              const harvestedPopulation = pond.totalHarvestedPopulation || 0;
-              
-              let totalMortality = 0;
-              if (pond.samplings && Array.isArray(pond.samplings)) {
-                pond.samplings.forEach((s: any) => {
-                  if (s.mortality && s.mortality > 0) {
-                    totalMortality += Number(s.mortality);
-                  }
-                });
-              }
-              
-              const currentPopulation = Math.max(0, initialPopulation - harvestedPopulation - totalMortality);
-              
-              if (currentPopulation > 0 && latestSampling.mbw > 0) {
-                const pondBiomass = (currentPopulation * latestSampling.mbw) / 1000;
-                totalBiomass += pondBiomass;
-                pondsWithBiomass++;
-              }
-            }
-          }
-        });
-        
-        const formattedBusinessSize = data.businessSize 
-          ? data.businessSize.charAt(0).toUpperCase() + data.businessSize.slice(1).toLowerCase()
-          : undefined;
-        
-        companies.push({
-          id: companyId,
-          companyName: data.companyName || 'Unknown Company',
-          location: typeof data.primaryLocation === 'string' 
-            ? data.primaryLocation 
-            : data.primaryLocation?.address || 'Unknown Location',
-          farmType: data.farmType,
-          businessSize: formattedBusinessSize,
-          contactPhone: data.contactPhone,
-          totalPonds: totalPonds,
-          averageDOC: validPondsForDOC > 0 ? Math.round(totalDOC / validPondsForDOC) : 0,
-          averageSize: validPondsForSize > 0 ? Math.round(totalSize / validPondsForSize) : 0,
-          averageBiomass: pondsWithBiomass > 0 ? totalBiomass / pondsWithBiomass : 0,
-          distance: 0,
-        });
+        companies.push(buildPublicCompanyMetrics(companyId, data));
       }
       
       setAvailableCompanies(companies);
@@ -565,7 +429,7 @@ export default function BuyerHomeScreen() {
               </View>
               <Text style={styles.deleteModalTitle}>Remove Supplier</Text>
               <Text style={styles.deleteModalMessage}>
-                Are you sure you want to stop monitoring "{companyToDelete?.companyName}"?
+                Are you sure you want to stop monitoring {companyToDelete?.companyName}?
               </Text>
               <Text style={styles.deleteModalWarning}>
                 You can add them back anytime from the search.
@@ -637,7 +501,7 @@ export default function BuyerHomeScreen() {
                         {searchQuery ? 'No companies match your search' : 'No public companies available'}
                       </Text>
                       <Text style={styles.noResultsSubtext}>
-                        Companies must enable "Public Profile" to appear here
+                        Companies must enable Public Profile to appear here
                       </Text>
                     </View>
                   }

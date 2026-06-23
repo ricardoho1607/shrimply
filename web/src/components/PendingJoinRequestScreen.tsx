@@ -66,7 +66,7 @@ export function usePendingJoinRequest(userId?: string) {
 
       if (!companyName && companyId) {
         try {
-          const companyDoc = await getDoc(doc(db, 'companies', companyId));
+          const companyDoc = await getDoc(doc(db, 'publicCompanyProfiles', companyId));
           const company = companyDoc.exists() ? companyDoc.data() : null;
           companyName = typeof company?.companyName === 'string' ? company.companyName : companyId;
         } catch {

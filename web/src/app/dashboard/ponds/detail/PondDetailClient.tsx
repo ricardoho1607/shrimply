@@ -45,6 +45,7 @@ import {
   arrayUnion,
   Timestamp,
   addDoc,
+  getDoc,
   getDocs,
   where,
   writeBatch
@@ -494,6 +495,7 @@ export default function PondDetailClient() {
         return;
       }
 
+      const newCyclePondRef = doc(collection(db, 'companies', companyId, 'ponds'));
       const initialPopulation = Number(pond.pondArea) * Number(startCycleForm.density);
       const initialWeight = parseFloat(startCycleForm.plValue) / 10;
       const activeCycle = cycles.find(isOpenFarmCycle);
@@ -512,7 +514,30 @@ export default function PondDetailClient() {
         });
         cycleForPond = { id: cycleRef.id, cycleName, status: 'stocking', plannedStartDate: startCycleForm.docStart, stockingStartDate: startCycleForm.docStart };
       }
-      const newDoc = await addDoc(collection(db, 'companies', companyId, 'ponds'), {
+
+      const physicalPondIdsToActivate = new Set<string>();
+      if (pond.previousCyclePondId) {
+        const physicalPondById = await getDoc(doc(db, 'companies', companyId, 'physicalPonds', pond.previousCyclePondId));
+        const physicalPondData = physicalPondById.exists() ? physicalPondById.data() : null;
+        if (physicalPondData && (!physicalPondData.activePondId || physicalPondData.activePondId === pond.id)) {
+          physicalPondIdsToActivate.add(physicalPondById.id);
+        }
+      }
+
+      const physicalPondsByName = await getDocs(query(
+        collection(db, 'companies', companyId, 'physicalPonds'),
+        where('pondName', '==', pond.pondName)
+      ));
+      physicalPondsByName.docs.forEach((physicalPondDoc) => {
+        const physicalPond = physicalPondDoc.data();
+        if (!physicalPond.activePondId || physicalPond.activePondId === pond.id) {
+          physicalPondIdsToActivate.add(physicalPondDoc.id);
+        }
+      });
+
+      const batch = writeBatch(db);
+      batch.set(newCyclePondRef, {
+        id: newCyclePondRef.id,
         pondName: pond.pondName,
         pondArea: Number(pond.pondArea),
         density: Number(startCycleForm.density),
@@ -527,14 +552,24 @@ export default function PondDetailClient() {
         totalHarvestedFeed: 0,
         cycleId: cycleForPond.id,
         cycleName: cycleForPond.cycleName,
+        pondCycleId: newCyclePondRef.id,
         cycleStatus: 'active',
         cycleStartedAt: startCycleForm.docStart,
         previousCyclePondId: pond.id,
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser?.uid || '',
       });
+      physicalPondIdsToActivate.forEach((physicalPondId) => {
+        batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPondId), {
+          status: 'active',
+          activePondId: newCyclePondRef.id,
+          updatedAt: serverTimestamp(),
+          updatedBy: auth.currentUser?.uid || '',
+        });
+      });
+      await batch.commit();
       setStartCycleOpen(false);
-      router.push(`/dashboard/ponds/detail?id=${newDoc.id}`);
+      router.push(`/dashboard/ponds/detail?id=${newCyclePondRef.id}`);
     } catch (error) {
       console.error('Error starting cycle:', error);
       alert('Failed to start new cycle.');

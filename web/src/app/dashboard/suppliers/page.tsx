@@ -4,17 +4,13 @@ import React, { useCallback, useRef, useState, useEffect } from 'react';
 import { 
   Search, 
   MapPin, 
-  Users, 
   Waves, 
   Plus, 
   Check, 
   Loader2,
   ShieldCheck,
-  Star,
-  ChevronRight,
   TrendingUp,
   Activity,
-  AlertCircle
 } from 'lucide-react';
 import { collection, query, where, getDocs, doc, setDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -23,20 +19,38 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 
+type PublicSupplierProfile = {
+  id: string;
+  companyId?: string;
+  companyName?: string;
+  location?: string;
+  primaryLocation?: { address?: string };
+  farmType?: string;
+  businessSize?: string;
+  contactPhone?: string;
+  isVerified?: boolean;
+  publicPondCount?: number;
+  pondCount?: number;
+  publicAverageDOC?: number;
+  avgDOC?: number;
+  publicAverageSize?: number;
+  avgSize?: number;
+  publicAverageBiomass?: number;
+  totalBiomass?: number;
+};
+
 export default function SuppliersPage() {
   const { user } = useAuth();
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
-  const [companies, setCompanies] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<PublicSupplierProfile[]>([]);
   const [monitoredIds, setMonitoredIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestSearchId = useRef(0);
 
-  const [pondCounts, setPondCounts] = useState<Record<string, number>>({});
-
-  const [monitorConfirm, setMonitorConfirm] = useState<{ isOpen: boolean; company: any | null }>({
+  const [monitorConfirm, setMonitorConfirm] = useState<{ isOpen: boolean; company: PublicSupplierProfile | null }>({
     isOpen: false,
     company: null
   });
@@ -48,12 +62,15 @@ export default function SuppliersPage() {
     setSearching(true);
     setError(null);
     try {
-      const q = query(collection(db, 'companies'), where('isPublicProfile', '==', true));
+      const q = query(collection(db, 'publicCompanyProfiles'), where('isPublicProfile', '==', true));
       // Firestore doesn't support complex text search well without Algolia,
       // so we'll fetch public ones and filter in memory for now if search term exists.
       const snapshot = await withTimeout(getDocs(q), 12000, 'Supplier search is taking too long. Please try again.');
       if (latestSearchId.current !== requestId) return;
-      let data: any[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      let data: PublicSupplierProfile[] = snapshot.docs.map(doc => {
+        const profile = doc.data();
+        return { id: profile.companyId || doc.id, ...profile };
+      });
 
       if (search) {
         data = data.filter(c =>
@@ -93,29 +110,7 @@ export default function SuppliersPage() {
     }
   }, [fetchCompanies, user]);
 
-  // Fetch pond counts when companies list changes
-  useEffect(() => {
-    const fetchCounts = async () => {
-      const counts: Record<string, number> = { ...pondCounts };
-      for (const company of companies) {
-        if (counts[company.id] === undefined) {
-          try {
-            const pondSnap = await getDocs(collection(db, 'companies', company.id, 'ponds'));
-            counts[company.id] = pondSnap.size;
-          } catch (e) {
-            counts[company.id] = 0;
-          }
-        }
-      }
-      setPondCounts(counts);
-    };
-
-    if (companies.length > 0) {
-      fetchCounts();
-    }
-  }, [companies]);
-
-  const handleMonitor = async (company: any) => {
+  const handleMonitor = async (company: PublicSupplierProfile) => {
     if (!user) return;
     const isMonitored = monitoredIds.has(company.id);
     
@@ -126,8 +121,12 @@ export default function SuppliersPage() {
 
     try {
       await withTimeout(setDoc(doc(db, 'users', user.uid, 'monitoredCompanies', company.id), {
-        companyName: company.companyName,
+        companyName: company.companyName || 'Unknown Company',
         location: company.location || company.primaryLocation?.address || t.buyer.unknownLocation || 'Unknown Location',
+        avgDOC: company.publicAverageDOC || company.avgDOC || 0,
+        avgSize: company.publicAverageSize || company.avgSize || 0,
+        totalBiomass: company.publicAverageBiomass || company.totalBiomass || 0,
+        pondCount: company.publicPondCount || company.pondCount || 0,
         monitoredAt: new Date().toISOString(),
       }), 12000, 'Updating monitoring status is taking too long. Please try again.');
     } catch (error: unknown) {
@@ -220,7 +219,7 @@ export default function SuppliersPage() {
                   <Activity size={12} />
                   {t.buyer.ponds}
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 800 }}>{pondCounts[company.id] ?? '...'}</div>
+                <div style={{ fontSize: '15px', fontWeight: 800 }}>{company.publicPondCount || company.pondCount || 0}</div>
               </div>
             </div>
 

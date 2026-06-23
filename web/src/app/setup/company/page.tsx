@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { Building2, Rocket, ArrowRight, ShieldCheck, Phone, MapPin, Info } from 'lucide-react';
+import { Building2, Rocket, Phone, MapPin, ArrowLeft, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
@@ -10,9 +10,10 @@ import { ROUTES } from '@/config/routes';
 
 export default function CompanySetupPage() {
   const isReady = useOnboardingGuard('setup');
-  const { completeCompanySetup, loading } = useAuth();
+  const { completeCompanySetup, loading, signOut } = useAuth();
   const router = useRouter();
   const [formData, setFormData] = useState(DEFAULT_COMPANY_SETUP);
+  const [signingOut, setSigningOut] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +22,16 @@ export default function CompanySetupPage() {
       router.push(ROUTES.dashboard);
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to set up company');
+    }
+  };
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
     }
   };
 
@@ -60,6 +71,51 @@ export default function CompanySetupPage() {
       alignItems: 'center'
     }}>
       <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px' }}>
+          <button
+            type="button"
+            onClick={() => router.push(ROUTES.setupChoice)}
+            style={{
+              padding: '12px 16px',
+              borderRadius: '999px',
+              border: '1px solid var(--border)',
+              background: '#FFFFFF',
+              color: 'var(--text-primary)',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
+            }}
+          >
+            <ArrowLeft size={16} />
+            Back to setup options
+          </button>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            style={{
+              padding: '12px 16px',
+              borderRadius: '999px',
+              border: '1px solid #FECDCA',
+              background: '#FEF3F2',
+              color: '#B42318',
+              fontWeight: 700,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              cursor: signingOut ? 'not-allowed' : 'pointer',
+              opacity: signingOut ? 0.7 : 1,
+            }}
+          >
+            <LogOut size={16} />
+            {signingOut ? 'Signing out...' : 'Sign Out'}
+          </button>
+        </div>
         <div style={{
           width: '80px', height: '80px', borderRadius: '24px',
           background: 'var(--gradient-dim)',

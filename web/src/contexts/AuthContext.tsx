@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
+import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -324,6 +325,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createdAt: serverTimestamp(),
       };
       await setDoc(companyRef, newCompany);
+      await syncPublicCompanyProfile(companyRef.id, newCompany);
       await updateDoc(doc(db, 'users', user.uid), {
         companyId: companyRef.id,
         hasCompletedSetup: true,
@@ -372,25 +374,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const normalizedSearch = searchTerm.trim().toLowerCase();
     if (!normalizedSearch) return [];
 
-    const [searchableSnapshot, publicSnapshot] = await Promise.all([
-      getDocs(query(collection(db, 'companies'), where('isSearchable', '==', true))),
-      getDocs(query(collection(db, 'companies'), where('isPublicProfile', '==', true))),
-    ]);
+    const publicSnapshot = await getDocs(query(collection(db, 'publicCompanyProfiles'), where('isPublicProfile', '==', true)));
     const farms: CompanySearchResult[] = [];
     const seenCompanyIds = new Set<string>();
 
-    [...searchableSnapshot.docs, ...publicSnapshot.docs].forEach((companyDoc) => {
+    publicSnapshot.docs.forEach((companyDoc) => {
       if (seenCompanyIds.has(companyDoc.id)) return;
       seenCompanyIds.add(companyDoc.id);
-      const data = companyDoc.data() as Company;
+      const data = companyDoc.data() as Partial<Company> & { companyId?: string; location?: string };
       if (!data.companyName?.toLowerCase().includes(normalizedSearch)) return;
       farms.push({
-        id: companyDoc.id,
+        id: data.companyId || companyDoc.id,
         companyName: data.companyName,
-        primaryLocation: data.primaryLocation || undefined,
+        primaryLocation: data.primaryLocation || data.location || undefined,
         farmType: data.farmType,
         businessSize: data.businessSize,
-        memberCount: Array.isArray(data.teamMembers) ? data.teamMembers.length : 0,
+        memberCount: 0,
       });
     });
     return farms;

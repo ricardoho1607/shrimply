@@ -53,6 +53,14 @@ service cloud.firestore {
       return !(key in data) || data[key] is bool;
     }
 
+    function validOptionalNumber(data, key) {
+      return !(key in data) || data[key] is number;
+    }
+
+    function validOptionalTimestamp(data, key) {
+      return !(key in data) || data[key] is timestamp;
+    }
+
     function validRoleValue(value) {
       return value == null || value in ['owner', 'co-owner', 'manager', 'technician', 'admin', 'buyer', 'mechanic'];
     }
@@ -281,6 +289,322 @@ service cloud.firestore {
         && data.sessionCount <= resource.data.sessionCount + 1;
     }
 
+    function validNotificationCreate(data) {
+      return data.keys().hasOnly([
+          'companyId',
+          'userId',
+          'type',
+          'title',
+          'message',
+          'timestamp',
+          'read',
+          'priority',
+          'data',
+          'icon',
+          'color',
+          'isOrson',
+          'dedupeKey',
+          'riskSignature',
+          'pondId',
+          'pondName',
+          'orsonRiskReport',
+          'evidence',
+          'confidence'
+        ])
+        && validNonEmptyString(data.companyId)
+        && data.type in [
+          'disease_alert',
+          'system',
+          'team',
+          'buyer',
+          'feed_low_stock',
+          'asset_overdue',
+          'orson_risk',
+          'orson_daily_brief',
+          'inventory_forecast',
+          'orson_biosecurity'
+        ]
+        && validOptionalString(data, 'title', 240)
+        && validOptionalString(data, 'message', 1000)
+        && data.timestamp is timestamp
+        && data.read is bool
+        && data.priority in ['high', 'medium', 'low']
+        && (!('data' in data) || data.data is map)
+        && validOptionalString(data, 'icon', 80)
+        && validOptionalString(data, 'color', 40)
+        && validOptionalBoolean(data, 'isOrson')
+        && validOptionalString(data, 'dedupeKey', 240)
+        && validOptionalString(data, 'riskSignature', 240)
+        && validOptionalNullableString(data, 'pondId', 160)
+        && validOptionalString(data, 'pondName', 200)
+        && (!('evidence' in data) || data.evidence is list)
+        && validOptionalNumber(data, 'confidence')
+        && (
+          !('userId' in data)
+          || (
+            data.userId is string
+            && exists(/databases/$(database)/documents/users/$(data.userId))
+            && get(/databases/$(database)/documents/users/$(data.userId)).data.companyId == data.companyId
+          )
+        );
+    }
+
+    function validNotificationReadUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['read'])
+        && request.resource.data.read is bool;
+    }
+
+    function validDiseaseReportLocation(location) {
+      return location is map
+        && location.keys().hasOnly(['address', 'latitude', 'longitude'])
+        && validOptionalString(location, 'address', 500)
+        && location.latitude is number
+        && location.latitude >= -90
+        && location.latitude <= 90
+        && location.longitude is number
+        && location.longitude >= -180
+        && location.longitude <= 180;
+    }
+
+    function validDiseaseReportCreate(data) {
+      return data.keys().hasOnly([
+          'companyId',
+          'companyName',
+          'location',
+          'diseaseType',
+          'diseaseName',
+          'severity',
+          'color',
+          'affectedPonds',
+          'estimatedLoss',
+          'symptoms',
+          'actionsTaken',
+          'reportDate',
+          'status',
+          'notificationRadius',
+          'createdAt',
+          'updatedAt'
+        ])
+        && validNonEmptyString(data.companyId)
+        && isCompanyMember(data.companyId)
+        && validOptionalString(data, 'companyName', 200)
+        && validDiseaseReportLocation(data.location)
+        && validNonEmptyString(data.diseaseType)
+        && validOptionalString(data, 'diseaseName', 200)
+        && data.severity in ['low', 'medium', 'high', 'critical']
+        && validOptionalString(data, 'color', 40)
+        && data.affectedPonds is int
+        && data.affectedPonds >= 0
+        && validOptionalString(data, 'estimatedLoss', 200)
+        && validNonEmptyString(data.symptoms)
+        && validOptionalString(data, 'actionsTaken', 2000)
+        && data.reportDate is timestamp
+        && data.status == 'active'
+        && data.notificationRadius in [10, 25, 50, 100]
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function validDiseaseReportStatusUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt'])
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.status in ['contained', 'resolved']
+        && request.resource.data.updatedAt is timestamp;
+    }
+
+    function validPublicCompanyProfile(data, companyId) {
+      return data.keys().hasOnly([
+          'companyId',
+          'companyName',
+          'location',
+          'country',
+          'farmType',
+          'businessSize',
+          'description',
+          'contactPhone',
+          'isPublicProfile',
+          'publicPondCount',
+          'publicAverageDOC',
+          'publicAverageSize',
+          'publicAverageBiomass',
+          'updatedAt'
+        ])
+        && data.companyId == companyId
+        && validNonEmptyString(data.companyName)
+        && validOptionalString(data, 'location', 300)
+        && validOptionalString(data, 'country', 120)
+        && validOptionalString(data, 'farmType', 120)
+        && validOptionalString(data, 'businessSize', 120)
+        && validOptionalString(data, 'description', 2000)
+        && validOptionalString(data, 'contactPhone', 40)
+        && data.isPublicProfile is bool
+        && data.updatedAt is timestamp
+        && (!('publicPondCount' in data) || (data.publicPondCount is number && data.publicPondCount >= 0))
+        && (!('publicAverageDOC' in data) || (data.publicAverageDOC is number && data.publicAverageDOC >= 0))
+        && (!('publicAverageSize' in data) || (data.publicAverageSize is number && data.publicAverageSize >= 0))
+        && (!('publicAverageBiomass' in data) || (data.publicAverageBiomass is number && data.publicAverageBiomass >= 0));
+    }
+
+    function marketplaceListingDoc(listingId) {
+      return get(/databases/$(database)/documents/marketplace_listings/$(listingId));
+    }
+
+    function marketplaceListingExists(listingId) {
+      return listingId is string
+        && exists(/databases/$(database)/documents/marketplace_listings/$(listingId));
+    }
+
+    function validMarketplacePriceList(value) {
+      return value is map
+        && value.keys().hasOnly([
+          'size20',
+          'size30',
+          'size40',
+          'size50',
+          'size60',
+          'size70',
+          'size80',
+          'size90',
+          'size100',
+          'size100Plus'
+        ]);
+    }
+
+    function validOptionalMarketplacePriceList(data, key) {
+      return !(key in data) || validMarketplacePriceList(data[key]);
+    }
+
+    function validMarketplaceListingPayload(data) {
+      return data.keys().hasOnly([
+          'companyId',
+          'companyName',
+          'buyerName',
+          'contactPhone',
+          'contactEmail',
+          'deliveryLocation',
+          'city',
+          'latitude',
+          'longitude',
+          'country',
+          'priceList',
+          'paymentMethod',
+          'topDays',
+          'additionalNotes',
+          'postedDate',
+          'expiryDate',
+          'viewCount',
+          'status',
+          'userId',
+          'createdBy',
+          'createdAt',
+          'updatedAt'
+        ])
+        && validNonEmptyString(data.companyId)
+        && validOptionalString(data, 'companyName', 200)
+        && validOptionalString(data, 'buyerName', 200)
+        && validOptionalString(data, 'contactPhone', 80)
+        && validOptionalString(data, 'contactEmail', 200)
+        && validOptionalString(data, 'deliveryLocation', 500)
+        && validOptionalString(data, 'city', 160)
+        && validOptionalString(data, 'country', 120)
+        && validOptionalMarketplacePriceList(data, 'priceList')
+        && data.paymentMethod in ['cash', 'top']
+        && validOptionalNumber(data, 'topDays')
+        && validOptionalString(data, 'additionalNotes', 2000)
+        && validOptionalString(data, 'postedDate', 80)
+        && validOptionalString(data, 'expiryDate', 80)
+        && validOptionalNumber(data, 'latitude')
+        && validOptionalNumber(data, 'longitude')
+        && data.viewCount is int
+        && data.viewCount >= 0
+        && data.status in ['active', 'expired']
+        && data.userId is string
+        && data.createdBy is string
+        && validOptionalTimestamp(data, 'createdAt')
+        && validOptionalTimestamp(data, 'updatedAt');
+    }
+
+    function isMarketplaceListingOwner(data) {
+      return data.userId == request.auth.uid
+        || data.createdBy == request.auth.uid
+        || isCompanyOwnerRole(data.companyId);
+    }
+
+    function validMarketplaceListingCreate(data) {
+      return validMarketplaceListingPayload(data)
+        && isCompanyMember(data.companyId)
+        && data.userId == request.auth.uid
+        && data.createdBy == request.auth.uid
+        && data.viewCount == 0
+        && data.status == 'active';
+    }
+
+    function validMarketplaceListingUpdate() {
+      return validMarketplaceListingPayload(request.resource.data)
+        && isMarketplaceListingOwner(resource.data)
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    function validMarketplaceViewCountUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
+        && resource.data.viewCount is int
+        && request.resource.data.viewCount == resource.data.viewCount + 1;
+    }
+
+    function validMarketplaceResponsePayload(data) {
+      return data.keys().hasOnly([
+          'listingId',
+          'sellerId',
+          'sellerName',
+          'sellerCompany',
+          'message',
+          'proposedPrice',
+          'contactPhone',
+          'contactEmail',
+          'responseDate',
+          'status',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.listingId is string
+        && data.sellerId is string
+        && validOptionalString(data, 'sellerName', 200)
+        && validOptionalString(data, 'sellerCompany', 200)
+        && validOptionalString(data, 'message', 2000)
+        && validOptionalMarketplacePriceList(data, 'proposedPrice')
+        && validOptionalString(data, 'contactPhone', 80)
+        && validOptionalString(data, 'contactEmail', 200)
+        && validOptionalString(data, 'responseDate', 80)
+        && data.status in ['pending', 'accepted', 'rejected']
+        && validOptionalTimestamp(data, 'createdAt')
+        && validOptionalTimestamp(data, 'updatedAt');
+    }
+
+    function validMarketplaceResponseCreate(data) {
+      return validMarketplaceResponsePayload(data)
+        && marketplaceListingExists(data.listingId)
+        && isCompanyMember(data.sellerId)
+        && marketplaceListingDoc(data.listingId).data.companyId != data.sellerId
+        && marketplaceListingDoc(data.listingId).data.status == 'active'
+        && data.status == 'pending';
+    }
+
+    function isMarketplaceResponseBuyer(data) {
+      return marketplaceListingExists(data.listingId)
+        && isCompanyMember(marketplaceListingDoc(data.listingId).data.companyId);
+    }
+
+    function validMarketplaceResponseStatusUpdate() {
+      return validMarketplaceResponsePayload(request.resource.data)
+        && isMarketplaceResponseBuyer(resource.data)
+        && request.resource.data.listingId == resource.data.listingId
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
     match /users/{userId} {
       allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
       allow read: if signedIn() && (
@@ -345,8 +669,6 @@ service cloud.firestore {
         && request.resource.data.teamMembers.hasAny([request.auth.uid]);
       allow read: if signedIn() && (
         isFounderAdmin()
-        || resource.data.isSearchable == true
-        || resource.data.isPublicProfile == true
         || resource.data.ownerId == request.auth.uid
         || resource.data.teamMembers.hasAny([request.auth.uid])
       );
@@ -466,6 +788,18 @@ service cloud.firestore {
       }
     }
 
+    match /publicCompanyProfiles/{companyId} {
+      allow read: if signedIn() && (
+        isFounderAdmin()
+        || resource.data.isPublicProfile == true
+        || isCompanyMember(companyId)
+      );
+      allow create, update: if signedIn()
+        && isCompanyManager(companyId)
+        && validPublicCompanyProfile(request.resource.data, companyId);
+      allow delete: if signedIn() && isCompanyManager(companyId);
+    }
+
     match /joinRequests/{requestId} {
       allow create: if signedIn() && validJoinRequestCreate(request.resource.data);
       allow read: if signedIn() && (
@@ -478,43 +812,48 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow create: if signedIn()
+        && isCompanyMember(request.resource.data.companyId)
+        && validNotificationCreate(request.resource.data);
       allow read: if signedIn() && (
         isFounderAdmin()
         || isCompanyMember(resource.data.companyId)
       );
-      allow update, delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow update: if signedIn()
+        && isCompanyMember(resource.data.companyId)
+        && validNotificationReadUpdate();
+      allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
     }
 
     match /diseaseReports/{reportId} {
       allow read: if signedIn();
-      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
-      allow update, delete: if signedIn() && isCompanyManager(resource.data.companyId);
+      allow create: if signedIn() && validDiseaseReportCreate(request.resource.data);
+      allow update: if signedIn()
+        && isCompanyManager(resource.data.companyId)
+        && validDiseaseReportStatusUpdate();
+      allow delete: if signedIn() && isCompanyManager(resource.data.companyId);
     }
 
     match /marketplace_listings/{listingId} {
       allow read: if signedIn();
-      allow create: if signedIn() && isCompanyMember(request.resource.data.companyId);
+      allow create: if signedIn() && validMarketplaceListingCreate(request.resource.data);
       allow update: if signedIn() && (
-        isCompanyMember(resource.data.companyId)
-        || (
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
-          && resource.data.viewCount is int
-          && request.resource.data.viewCount == resource.data.viewCount + 1
-        )
+        validMarketplaceListingUpdate()
+        || validMarketplaceViewCountUpdate()
       );
-      allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
+      allow delete: if signedIn() && isMarketplaceListingOwner(resource.data);
     }
 
     match /marketplace_responses/{responseId} {
       allow read: if signedIn() && (
         isCompanyMember(resource.data.sellerId)
-        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+        || isMarketplaceResponseBuyer(resource.data)
       );
-      allow create: if signedIn() && isCompanyMember(request.resource.data.sellerId);
-      allow update, delete: if signedIn() && (
+      allow create: if signedIn() && validMarketplaceResponseCreate(request.resource.data);
+      allow update: if signedIn() && validMarketplaceResponseStatusUpdate();
+      allow delete: if signedIn() && (
         isCompanyMember(resource.data.sellerId)
-        || isCompanyMember(get(/databases/$(database)/documents/marketplace_listings/$(resource.data.listingId)).data.companyId)
+        || isMarketplaceResponseBuyer(resource.data)
       );
     }
 

@@ -30,7 +30,7 @@ interface LocationCoordinates {
 }
 
 export default function BuyerSetupScreen() {
-  const { user, refreshUserData } = useAuth();
+  const { user, refreshUserData, signOut } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
   const [formData, setFormData] = useState<FormData>({
@@ -42,9 +42,23 @@ export default function BuyerSetupScreen() {
   const [locationCoordinates, setLocationCoordinates] = useState<LocationCoordinates | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
 
   const updateField = (key: keyof FormData, value: string) => 
     setFormData(prev => ({ ...prev, [key]: value }));
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+      router.replace('/auth');
+    } catch {
+      Alert.alert(t.buyerSetup.error, t.sidebar.signOutFailed);
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   // Get current location coordinates
   const getCurrentLocation = async () => {
@@ -324,14 +338,29 @@ export default function BuyerSetupScreen() {
         showsVerticalScrollIndicator={false} 
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity 
-          style={styles.backButton} 
-          onPress={() => router.back()} 
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Ionicons name="arrow-back" size={24} color="#315f57" />
-          <Text style={styles.backButtonText}>{t.buyerSetup.back}</Text>
-        </TouchableOpacity>
+        <View style={styles.topActions}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color="#315f57" />
+            <Text style={styles.backButtonText}>{t.buyerSetup.back}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.logoutButton}
+            onPress={handleSignOut}
+            disabled={signingOut}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            {signingOut ? (
+              <ActivityIndicator size="small" color="#e74c3c" />
+            ) : (
+              <Ionicons name="log-out-outline" size={20} color="#e74c3c" />
+            )}
+            <Text style={styles.logoutButtonText}>{t.sidebar.signOut}</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.header}>
           <View style={styles.headerIcon}>
@@ -383,8 +412,11 @@ export default function BuyerSetupScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fc' },
   scrollContent: { padding: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 18 : 20, paddingBottom: Platform.OS === 'android' ? 36 : 40 },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 18 : 20, paddingVertical: Platform.OS === 'android' ? 7 : 8 },
+  topActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  backButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 7 : 8 },
   backButtonText: { fontSize: Platform.OS === 'android' ? 15 : 16, color: '#315f57', marginLeft: Platform.OS === 'android' ? 7 : 8, fontWeight: '600' },
+  logoutButton: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Platform.OS === 'android' ? 7 : 8, paddingHorizontal: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#FECDCA', backgroundColor: '#FEF3F2' },
+  logoutButtonText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '700' },
   header: { alignItems: 'center', marginBottom: Platform.OS === 'android' ? 36 : 40 },
   headerIcon: { 
     width: Platform.OS === 'android' ? 76 : 80, 

@@ -117,6 +117,69 @@ export const prepareCOGSData = (
   };
 };
 
+const buildCOGSReportAnalysis = (data: COGSData) => {
+  const costEntries = Object.entries(data.categoryBreakdown || {})
+    .filter(([, amount]) => Number.isFinite(amount) && amount > 0)
+    .sort(([, a], [, b]) => b - a);
+  const largestCost = costEntries[0];
+  const largestCostShare = largestCost && data.totalCOGS > 0 ? (largestCost[1] / data.totalCOGS) * 100 : 0;
+  const directCostInput = data.purchases + data.directLabor + data.directMaterials;
+  const inventoryOffset = data.closingInventory > 0 && directCostInput > 0
+    ? (data.closingInventory / (data.openingInventory + directCostInput)) * 100
+    : 0;
+
+  const executiveSummary = [
+    `Total COGS for the selected period is ${formatCurrency(data.totalCOGS, data.currencyCode, data.currencySymbol)} against revenue of ${formatCurrency(data.revenue, data.currencyCode, data.currencySymbol)}.`,
+    data.grossProfit >= 0
+      ? `Gross profit is ${formatCurrency(data.grossProfit, data.currencyCode, data.currencySymbol)}, with a gross margin of ${data.grossProfitMargin.toFixed(2)}%.`
+      : `The report shows a gross loss of ${formatCurrency(Math.abs(data.grossProfit), data.currencyCode, data.currencySymbol)}, so direct production costs exceeded recorded revenue.`,
+  ];
+
+  if (largestCost) {
+    executiveSummary.push(`${largestCost[0]} is the largest direct cost category, representing ${largestCostShare.toFixed(1)}% of recorded COGS.`);
+  } else {
+    executiveSummary.push('No detailed direct-cost category breakdown was available for this export.');
+  }
+
+  const riskAssessment = [
+    data.revenue <= 0
+      ? 'Revenue is missing or zero, so gross margin cannot be used as a reliable profitability indicator.'
+      : data.grossProfitMargin < 0
+        ? 'Gross margin is negative. Review whether feed, seed, additive, labour, or inventory costs are being recorded against the correct cycle and period.'
+        : data.grossProfitMargin < 20
+          ? 'Gross margin is thin. Feed efficiency, stocking outcome, and harvest yield should be reviewed before the next purchasing decision.'
+          : 'Gross margin is positive for this period, but it should still be compared with biomass, harvest yield, and feed conversion before judging cycle efficiency.',
+    largestCost && largestCostShare >= 60
+      ? `${largestCost[0]} is highly concentrated within COGS. This creates cost-driver risk if the category increases or is not matched by harvest output.`
+      : 'No single direct-cost category exceeds the high concentration threshold from the available breakdown.',
+    data.closingInventory <= 0
+      ? 'Closing inventory is zero or missing. Confirm that remaining feed and materials were counted before using this report as a final COGS result.'
+      : `Closing inventory offsets ${inventoryOffset.toFixed(1)}% of goods available for sale, reducing the cost assigned to this period.`,
+  ];
+
+  const recommendations = [
+    largestCost
+      ? `Review ${largestCost[0]} because it is the largest COGS driver and has the strongest effect on gross margin.`
+      : 'Add cost categories for feed, additives, seed, labour, and materials so the next COGS report can identify the main production cost driver.',
+    data.revenue > 0 && data.grossProfitMargin < 20
+      ? 'Compare COGS against harvest biomass and FCR before increasing stocking density or feed purchases for the next cycle.'
+      : 'Continue reconciling direct costs against harvest volume so cost per kg can be evaluated once harvest data is complete.',
+    'Reconcile inventory stock-in, usage, and closing count before treating COGS as final.',
+  ];
+
+  const dataQualityNotes = [
+    'COGS is calculated from opening inventory, purchases, direct labour, direct materials, and closing inventory available at export time.',
+    data.revenue <= 0
+      ? 'Revenue was not available, so gross profit and margin are limited as performance indicators.'
+      : 'Revenue is included for gross profit context; this report does not replace the Profit and Loss report.',
+    costEntries.length === 0
+      ? 'Detailed direct-cost categories were not available, limiting cost-driver analysis.'
+      : 'Category percentages are based on the available COGS breakdown and may exclude uncategorised costs.',
+  ];
+
+  return { executiveSummary, riskAssessment, recommendations, dataQualityNotes };
+};
+
 const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string => {
   const { 
     startDate, 
@@ -131,10 +194,14 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
     revenue,
     grossProfit,
     grossProfitMargin,
-    categoryBreakdown
+    categoryBreakdown,
+    currencyCode,
+    currencySymbol
   } = data;
 
   const goodsAvailable = openingInventory + purchases + directLabor + directMaterials;
+  const reportAnalysis = buildCOGSReportAnalysis(data);
+  const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol);
 
   return `
     <!DOCTYPE html>
@@ -203,6 +270,16 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
         .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 15px; margin-top: 30px; border-radius: 0; }
         .summary-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
         .summary-item.highlight { font-weight: 700; font-size: 16px; color: #2C3E50; border-top: 2px solid #BDC3C7; margin-top: 10px; padding-top: 12px; }
+        .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
+        .analysis-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #0F4C75; padding: 13px; border-radius: 0; }
+        .analysis-box.risk { border-left-color: #F59E0B; }
+        .analysis-box.recommendation { border-left-color: #27AE60; }
+        .analysis-box.quality { border-left-color: #64748B; grid-column: 1 / -1; }
+        .analysis-title { font-size: 12px; font-weight: 800; color: #0F4C75; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+        .analysis-box.risk .analysis-title { color: #B45309; }
+        .analysis-box.recommendation .analysis-title { color: #166534; }
+        .analysis-list { padding-left: 16px; font-size: 11px; line-height: 1.45; color: #2C3E50; }
+        .analysis-list li { margin-bottom: 5px; }
         .breakdown-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #ECF0F1; }
         .breakdown-item:last-child { border-bottom: none; }
         .percentage { font-size: 12px; color: #95A5A6; margin-left: 8px; }
@@ -232,41 +309,41 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
         <div class="line-item category">
           <span>Opening Inventory</span>
           <div>
-            <span class="amount">${formatCurrency(openingInventory)}</span>
-            <span class="currency">IDR</span>
+            <span class="amount">${money(openingInventory)}</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item subcategory">
           <span>Add: Purchases (Feed & Materials)</span>
-          <span class="amount">${formatCurrency(purchases)}</span>
+          <span class="amount">${money(purchases)}</span>
         </div>
         <div class="line-item subcategory">
           <span>Add: Direct Labor</span>
-          <span class="amount">${formatCurrency(directLabor)}</span>
+          <span class="amount">${money(directLabor)}</span>
         </div>
         <div class="line-item subcategory">
           <span>Add: Direct Materials (Pond Additives)</span>
-          <span class="amount">${formatCurrency(directMaterials)}</span>
+          <span class="amount">${money(directMaterials)}</span>
         </div>
         <div class="line-item subtotal">
           <span>Goods Available for Sale</span>
           <div>
-            <span class="amount">${formatCurrency(goodsAvailable)}</span>
-            <span class="currency">IDR</span>
+            <span class="amount">${money(goodsAvailable)}</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item category">
           <span>Less: Closing Inventory</span>
           <div>
-            <span class="amount negative">(${formatCurrency(closingInventory)})</span>
-            <span class="currency">IDR</span>
+            <span class="amount negative">(${money(closingInventory)})</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item total">
           <span>Total Cost of Goods Sold</span>
           <div>
-            <span class="amount negative">${formatCurrency(totalCOGS)}</span>
-            <span class="currency">IDR</span>
+            <span class="amount negative">${money(totalCOGS)}</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
       </div>
@@ -276,22 +353,22 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
         <div class="line-item category">
           <span>Total Revenue</span>
           <div>
-            <span class="amount positive">${formatCurrency(revenue)}</span>
-            <span class="currency">IDR</span>
+            <span class="amount positive">${money(revenue)}</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item category">
           <span>Less: Cost of Goods Sold</span>
           <div>
-            <span class="amount negative">(${formatCurrency(totalCOGS)})</span>
-            <span class="currency">IDR</span>
+            <span class="amount negative">(${money(totalCOGS)})</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item ${grossProfit >= 0 ? 'gross-profit' : 'gross-loss'}">
           <span>Gross ${grossProfit >= 0 ? 'Profit' : 'Loss'}</span>
           <div>
-            <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(grossProfit))}</span>
-            <span class="currency">IDR</span>
+            <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
+            <span class="currency">${currencyCode || 'IDR'}</span>
           </div>
         </div>
         <div class="line-item category">
@@ -311,7 +388,7 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
                 <div class="breakdown-item">
                   <span>${category}</span>
                   <span>
-                    ${formatCurrency(amount)}
+                    ${money(amount)}
                     <span class="percentage">(${percentage}%)</span>
                   </span>
                 </div>
@@ -324,19 +401,46 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
       <div class="summary-box">
         <div class="summary-item">
           <span>Total Revenue:</span>
-          <span class="amount positive">Rp ${formatCurrency(revenue)}</span>
+          <span class="amount positive">${money(revenue)}</span>
         </div>
         <div class="summary-item">
           <span>Cost of Goods Sold:</span>
-          <span class="amount negative">Rp ${formatCurrency(totalCOGS)}</span>
+          <span class="amount negative">${money(totalCOGS)}</span>
         </div>
         <div class="summary-item highlight">
           <span>${grossProfit >= 0 ? 'Gross Profit:' : 'Gross Loss:'}</span>
-          <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">Rp ${formatCurrency(Math.abs(grossProfit))}</span>
+          <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
         </div>
         <div class="summary-item">
           <span>Gross Profit Margin:</span>
           <span class="amount ${grossProfitMargin >= 0 ? 'positive' : 'negative'}">${grossProfitMargin.toFixed(2)}%</span>
+        </div>
+      </div>
+
+      <div class="analysis-grid">
+        <div class="analysis-box">
+          <div class="analysis-title">Executive Summary</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box risk">
+          <div class="analysis-title">Risk Assessment</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box recommendation">
+          <div class="analysis-title">Recommendations</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.recommendations.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
+        </div>
+        <div class="analysis-box quality">
+          <div class="analysis-title">Assumptions and Data Quality</div>
+          <ul class="analysis-list">
+            ${reportAnalysis.dataQualityNotes.map((item) => `<li>${item}</li>`).join('')}
+          </ul>
         </div>
       </div>
       

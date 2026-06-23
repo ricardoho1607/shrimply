@@ -15,10 +15,9 @@ import * as Location from 'expo-location';
 import { calculateDistance } from './utils/locationUtils';
 import { db } from '../config/firebase';
 import { 
-  collection, addDoc, query, where, onSnapshot, orderBy,
+  collection, addDoc, query, onSnapshot, orderBy,
   Timestamp, updateDoc, doc,
 } from 'firebase/firestore';
-import NotificationService from './services/notificationService';
 
 const { width, height } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -27,7 +26,6 @@ interface DiseaseReport {
   id: string;
   companyId: string;
   companyName: string;
-  reporterName: string;
   location: { address: string; latitude: number; longitude: number };
   diseaseType: string;
   diseaseName: string;
@@ -60,7 +58,7 @@ const DISEASE_TYPES_CONFIG = [
 export default function DiseaseReportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, company } = useAuth();
+  const { company } = useAuth();
   const { t } = useLanguage();
   const mapRef = useRef<MapView>(null);
 
@@ -378,8 +376,6 @@ export default function DiseaseReportScreen() {
       const reportData = {
         companyId: company?.id || '',
         companyName: company?.companyName || 'Unknown Farm',
-        reporterName: user?.name || 'Anonymous',
-        reporterEmail: user?.email || '',
         location: { address: locationAddress, ...currentLocation! },
         diseaseType: formData.selectedDisease,
         diseaseName: diseaseInfo?.name || '',
@@ -396,23 +392,8 @@ export default function DiseaseReportScreen() {
         updatedAt: Timestamp.now(),
       };
       
-      const docRef = await addDoc(collection(db, 'diseaseReports'), reportData);
-      
-      try {
-        const notificationCount = await NotificationService.createDiseaseAlertNotifications(reportData, docRef.id);
-        Alert.alert(
-          labels.reportSubmitted,
-          notificationCount > 0 
-            ? `${labels.reportSubmitted}\n\nNotifications sent to ${notificationCount} nearby farms within ${formData.notificationRadius} km.`
-            : labels.reportSubmitted
-        );
-      } catch (notificationError) {
-        console.error('Error sending notifications:', notificationError);
-        Alert.alert(
-          labels.reportSubmitted,
-          `${labels.reportSubmitted}\n\nWarning: Some notifications may not have been sent.`
-        );
-      }
+      await addDoc(collection(db, 'diseaseReports'), reportData);
+      Alert.alert(labels.reportSubmitted, labels.reportSubmitted);
       
       setShowReportModal(false);
       resetForm();

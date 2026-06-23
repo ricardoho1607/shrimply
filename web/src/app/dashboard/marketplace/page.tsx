@@ -39,6 +39,10 @@ interface PriceList {
   size100?: number; size100Plus?: number;
 }
 
+type PriceListKey = keyof PriceList;
+
+const priceListKeyForSize = (size: number): PriceListKey => `size${size}` as PriceListKey;
+
 interface BuyerListing {
   id: string; companyId: string; companyName: string; buyerName: string;
   contactPhone: string; contactEmail: string; deliveryLocation: string;
@@ -48,6 +52,26 @@ interface BuyerListing {
   viewCount: number; status: 'active' | 'expired';
   userId?: string;
 }
+
+interface ListingFormState {
+  buyerName: string;
+  city: string;
+  deliveryLocation: string;
+  paymentMethod: 'cash' | 'top';
+  topDays: string;
+  additionalNotes: string;
+  priceList: PriceList;
+}
+
+const emptyListingForm: ListingFormState = {
+  buyerName: '',
+  city: '',
+  deliveryLocation: '',
+  paymentMethod: 'cash',
+  topDays: '',
+  additionalNotes: '',
+  priceList: {},
+};
 
 export default function MarketplacePage() {
   const { t } = useLanguage();
@@ -70,15 +94,7 @@ export default function MarketplacePage() {
 
   // Create Listing State
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [newListing, setNewListing] = useState({
-    buyerName: '',
-    city: '',
-    deliveryLocation: '',
-    paymentMethod: 'cash' as 'cash' | 'top',
-    topDays: '' as any,
-    additionalNotes: '',
-    priceList: {} as any
-  });
+  const [newListing, setNewListing] = useState<ListingFormState>(emptyListingForm);
 
   // Removed local auth effect as we use AuthContext now
 
@@ -138,12 +154,13 @@ export default function MarketplacePage() {
       
       // Note: In a production app, you might want to also delete associated 
       // documents in 'marketplace_responses' if they exist.
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const firebaseError = error as { code?: string; message?: string };
       console.error("Error deleting listing:", error);
-      if (error.code === 'permission-denied') {
+      if (firebaseError.code === 'permission-denied') {
         alert("Permission Denied: You do not have authority to delete this listing. Please check your Firestore rules.");
       } else {
-        alert("Failed to delete listing: " + (error.message || "Unknown error"));
+        alert("Failed to delete listing: " + (firebaseError.message || "Unknown error"));
       }
     } finally {
       setIsSubmitting(false);
@@ -157,7 +174,7 @@ export default function MarketplacePage() {
       city: listing.city,
       deliveryLocation: listing.deliveryLocation,
       paymentMethod: listing.paymentMethod,
-      topDays: listing.topDays || '',
+      topDays: listing.topDays ? String(listing.topDays) : '',
       additionalNotes: listing.additionalNotes || '',
       priceList: { ...listing.priceList }
     });
@@ -193,16 +210,25 @@ export default function MarketplacePage() {
         Object.entries(newListing.priceList).filter(([_, v]) => v !== undefined && v !== null && v !== 0)
       );
 
+      const topDays = Number(newListing.topDays);
+      if (newListing.paymentMethod === 'top' && (!Number.isFinite(topDays) || topDays <= 0)) {
+        alert("Please enter valid TOP days.");
+        return;
+      }
+
       const listingData = {
-        ...newListing,
+        buyerName: newListing.buyerName,
+        city: newListing.city,
+        deliveryLocation: newListing.deliveryLocation,
+        paymentMethod: newListing.paymentMethod,
+        ...(newListing.paymentMethod === 'top' ? { topDays } : {}),
+        additionalNotes: newListing.additionalNotes,
         priceList: sanitizedPriceList,
       };
 
       if (editingId) {
         await updateDoc(doc(db, 'marketplace_listings', editingId), {
           ...listingData,
-          userId: user.uid,
-          createdBy: user.uid,
           updatedAt: serverTimestamp()
         });
       } else {
@@ -232,10 +258,7 @@ export default function MarketplacePage() {
 
       setPostModalOpen(false);
       setEditingId(null);
-      setNewListing({
-        buyerName: '', city: '', deliveryLocation: '', paymentMethod: 'cash', topDays: '' as any, additionalNotes: '',
-        priceList: {}
-      });
+      setNewListing(emptyListingForm);
     } catch (error) {
       console.error("Error saving listing:", error);
       alert("Failed to save listing. Make sure all price fields are valid numbers.");
@@ -252,10 +275,7 @@ export default function MarketplacePage() {
         <button 
           onClick={() => {
             setEditingId(null);
-            setNewListing({
-              buyerName: '', city: '', deliveryLocation: '', paymentMethod: 'cash', topDays: '' as any, additionalNotes: '',
-              priceList: {}
-            });
+            setNewListing(emptyListingForm);
             setPostModalOpen(true);
           }}
           className="btn-primary" 
@@ -378,12 +398,15 @@ export default function MarketplacePage() {
                   </div>
 
                   <div style={{ background: 'var(--bg-mid)', borderRadius: '12px', padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '16px' }}>
-                    {[30, 40, 50].map(size => (
-                      <div key={size} style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{t.shrimp.size} {size}</div>
-                        <div style={{ fontSize: '13px', fontWeight: 800 }}>{(listing.priceList as any)[`size${size}`] ? formatCurrency((listing.priceList as any)[`size${size}`]) : '--'}</div>
-                      </div>
-                    ))}
+                    {[30, 40, 50].map(size => {
+                      const price = listing.priceList[priceListKeyForSize(size)];
+                      return (
+                        <div key={size} style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{t.shrimp.size} {size}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 800 }}>{price ? formatCurrency(price) : '--'}</div>
+                        </div>
+                      );
+                    })}
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '11px', color: 'var(--text-faint)' }}>
@@ -491,7 +514,7 @@ export default function MarketplacePage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.paymentMethod}</label>
-                  <select value={newListing.paymentMethod} onChange={e => setNewListing({...newListing, paymentMethod: e.target.value as any})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}>
+                  <select value={newListing.paymentMethod} onChange={e => setNewListing({...newListing, paymentMethod: e.target.value as 'cash' | 'top'})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}>
                     <option value="cash">{t.CreateBuyerListingScreen.cashOnDelivery}</option>
                     <option value="top">{t.CreateBuyerListingScreen.termsOfPayment}</option>
                   </select>
@@ -499,7 +522,7 @@ export default function MarketplacePage() {
                 {newListing.paymentMethod === 'top' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.topDays}</label>
-                    <input type="number" value={newListing.topDays} onChange={e => setNewListing({...newListing, topDays: e.target.value as any})} placeholder="e.g. 7" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+                    <input type="number" value={newListing.topDays} onChange={e => setNewListing({...newListing, topDays: e.target.value})} placeholder="e.g. 7" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                   </div>
                 )}
               </div>
@@ -517,12 +540,12 @@ export default function MarketplacePage() {
                         type="number" 
                         step="0.01"
                         placeholder="0.00"
-                        value={newListing.priceList[`size${size}`] ?? ''} 
+                        value={newListing.priceList[priceListKeyForSize(size)] ?? ''}
                         onChange={e => {
                           const val = e.target.value;
                           setNewListing({
                             ...newListing, 
-                            priceList: { ...newListing.priceList, [`size${size}`]: val === '' ? undefined : parseFloat(val) }
+                            priceList: { ...newListing.priceList, [priceListKeyForSize(size)]: val === '' ? undefined : parseFloat(val) }
                           });
                         }} 
                         style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontSize: '13px' }} 
@@ -612,7 +635,7 @@ export default function MarketplacePage() {
                     </thead>
                     <tbody>
                       {[20, 30, 40, 50, 60, 70, 80, 90, 100].map(size => {
-                        const price = (selectedListing.priceList as any)[`size${size}`];
+                        const price = selectedListing.priceList[priceListKeyForSize(size)];
                         if (!price) return null;
                         return (
                           <tr key={size} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>

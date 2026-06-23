@@ -26,6 +26,20 @@ const deferStateUpdate = (callback: () => void) => {
   queueMicrotask(callback);
 };
 
+type MonitoredCompanyDocument = {
+  id: string;
+  avgDOC?: number;
+  avgSize?: number;
+  totalBiomass?: number;
+  pondCount?: number;
+  [key: string]: unknown;
+};
+
+const asFiniteNumber = (value: unknown, fallback = 0) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 export function useCompanyId() {
   const { user, company } = useAuth();
   return {
@@ -379,50 +393,16 @@ export function useMonitoredCompanies<T>() {
       monitoredQuery,
       async (snapshot) => {
         try {
-          const monitored = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-          const companies = await Promise.all(
-            monitored.map(async (company: any) => {
-              const pondsSnap = await getDocs(collection(db, 'companies', company.id, 'ponds'));
-              let totalDOC = 0;
-              let totalSize = 0;
-              let totalBiomass = 0;
-              let validPondsForDOC = 0;
-              let validPondsForSize = 0;
-
-              pondsSnap.forEach((pondDoc) => {
-                const pond = pondDoc.data();
-                if (pond.docStart) {
-                  const docValue = Math.floor((Date.now() - new Date(pond.docStart).getTime()) / 86400000);
-                  if (docValue >= 0) {
-                    totalDOC += docValue;
-                    validPondsForDOC += 1;
-                  }
-                }
-
-                const validSamplings = (pond.samplings || [])
-                  .filter((sampling: any) => sampling.mbw > 0)
-                  .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-                if (validSamplings.length > 0) {
-                  const latest = validSamplings[0];
-                  totalSize += 1000 / latest.mbw;
-                  validPondsForSize += 1;
-                  const mortality = (pond.samplings || []).reduce((sum: number, sampling: any) => sum + (sampling.mortality || 0), 0);
-                  const population = (pond.initialPopulation || 0) - (pond.totalHarvestedPopulation || 0) - mortality;
-                  const biomass = (Math.max(0, population) * latest.mbw) / 1000;
-                  if (biomass > 0) totalBiomass += biomass;
-                }
-              });
-
-              return {
-                ...company,
-                avgDOC: validPondsForDOC > 0 ? Math.round(totalDOC / validPondsForDOC) : 0,
-                avgSize: validPondsForSize > 0 ? Math.round(totalSize / validPondsForSize) : 0,
-                totalBiomass,
-                pondCount: pondsSnap.size,
-              } as T;
-            })
-          );
+          const companies = snapshot.docs.map((item) => {
+            const company = { id: item.id, ...item.data() } as MonitoredCompanyDocument;
+            return {
+              ...company,
+              avgDOC: asFiniteNumber(company.avgDOC),
+              avgSize: asFiniteNumber(company.avgSize),
+              totalBiomass: asFiniteNumber(company.totalBiomass),
+              pondCount: asFiniteNumber(company.pondCount),
+            } as T;
+          });
 
           if (!cancelled) {
             setState({ data: companies, loading: false, error: null });
@@ -555,7 +535,7 @@ export function useInventoryFeeds<TFeed, TAdditive, TPond>() {
 }
 
 export function useUnreadNotificationsCount(options: { enabled?: boolean } = {}) {
-  const { user } = useAuth();
+  const { company } = useAuth();
   const [count, setCount] = useState(0);
   const enabled = options.enabled ?? true;
 
@@ -567,7 +547,7 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
       });
     };
 
-    if (!enabled || !user?.uid) {
+    if (!enabled || !company?.id) {
       deferIfActive(() => setCount(0));
       return () => {
         isActive = false;
@@ -576,7 +556,7 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
 
     const unreadQuery = query(
       collection(db, 'notifications'),
-      where('userId', '==', user.uid),
+      where('companyId', '==', company.id),
       where('read', '==', false)
     );
     const unsubscribe = onSnapshot(
@@ -592,7 +572,7 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
       isActive = false;
       unsubscribe();
     };
-  }, [enabled, user?.uid]);
+  }, [enabled, company?.id]);
 
   return count;
 }

@@ -1,4 +1,4 @@
-const { onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
+const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("firebase-functions/v2/firestore");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
@@ -1493,6 +1493,96 @@ const getNearbyActiveDiseaseReports = async (db, companyId, companyLocation) => 
   });
   return nearby.sort((a, b) => a.distanceKm - b.distanceKm);
 };
+
+const diseaseAlertTitle = (diseaseName, distance) => {
+  const roundedDistance = Math.round(distance * 10) / 10;
+  return `Disease Alert: ${diseaseName || "Nearby outbreak"} (${roundedDistance} km away)`;
+};
+
+const diseaseAlertMessage = (report, distance) => {
+  const roundedDistance = Math.round(distance * 10) / 10;
+  const diseaseName = report.diseaseName || "A disease outbreak";
+  const reporterCompany = report.companyName || "A nearby farm";
+  const locationName = report.location?.address || "a nearby area";
+  return `${diseaseName} was reported by ${reporterCompany} near ${locationName}, about ${roundedDistance} km from your farm. Review biosecurity and monitor ponds closely.`;
+};
+
+const diseaseAlertPriority = (distance, severity) => {
+  if (severity === "critical" || distance <= 10) return "high";
+  if (severity === "high" || severity === "warning" || distance <= 25) return "medium";
+  return "low";
+};
+
+/**
+ * Sends immediate nearby farm notifications after a disease report is created.
+ * This must run server-side because clients should not read all company locations
+ * or write notifications into other companies.
+ */
+exports.notifyNearbyFarmsOnDiseaseReport = onDocumentCreated("diseaseReports/{reportId}", async (event) => {
+  const report = event.data?.data() || {};
+  const { reportId } = event.params;
+
+  if (!report.companyId || !isValidLocation(report.location)) {
+    console.log(`Disease report ${reportId} skipped notification fan-out: missing companyId or location.`);
+    return { success: true, notificationsCreated: 0, skipped: true };
+  }
+
+  const db = admin.firestore();
+  const radiusKm = toNumber(report.notificationRadius) || 50;
+  const companiesSnapshot = await db.collection("companies").get();
+  let batch = db.batch();
+  let batchWrites = 0;
+  let notificationsCreated = 0;
+
+  const commitBatch = async () => {
+    if (batchWrites === 0) return;
+    await batch.commit();
+    batch = db.batch();
+    batchWrites = 0;
+  };
+
+  for (const companyDoc of companiesSnapshot.docs) {
+    const companyId = companyDoc.id;
+    const company = companyDoc.data() || {};
+    if (companyId === report.companyId || !isValidLocation(company.primaryLocation)) continue;
+
+    const distance = distanceKm(report.location, company.primaryLocation);
+    if (distance > radiusKm) continue;
+
+    const notificationRef = db.collection("notifications").doc();
+    const roundedDistance = Math.round(distance * 10) / 10;
+    batch.set(notificationRef, {
+      companyId,
+      type: "disease_alert",
+      title: diseaseAlertTitle(report.diseaseName, distance),
+      message: diseaseAlertMessage(report, distance),
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+      priority: diseaseAlertPriority(distance, report.severity),
+      dedupeKey: `disease_alert:${reportId}`,
+      data: {
+        reportId,
+        diseaseType: report.diseaseType || "unknown",
+        diseaseName: report.diseaseName || "Disease report",
+        distance: roundedDistance,
+        severity: report.severity || "medium",
+        location: report.location.address || "",
+        reporterCompany: report.companyName || "Nearby farm",
+      },
+    });
+    batchWrites += 1;
+    notificationsCreated += 1;
+
+    if (batchWrites >= 450) {
+      await commitBatch();
+    }
+  }
+
+  await commitBatch();
+
+  console.log(`Disease report ${reportId} created ${notificationsCreated} nearby farm notifications.`);
+  return { success: true, notificationsCreated };
+});
 
 const summarizePondRisks = (pondsSnapshot) => {
   const reports = [];

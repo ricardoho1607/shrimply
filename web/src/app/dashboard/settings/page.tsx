@@ -23,6 +23,7 @@ import {
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import Link from 'next/link';
 import { db } from '@/lib/firebase';
+import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -216,6 +217,10 @@ export default function SettingsPage() {
             teamMembers: [user.uid],
             createdAt: serverTimestamp(),
           });
+          await syncPublicCompanyProfile(targetCompanyId, {
+            ...companyData,
+            id: targetCompanyId,
+          });
           
           // Link it to the user
           await updateDoc(doc(db, 'users', user.uid), {
@@ -224,6 +229,10 @@ export default function SettingsPage() {
         } else {
           // Update existing company record
           await updateDoc(doc(db, 'companies', targetCompanyId), companyData);
+          await syncPublicCompanyProfile(targetCompanyId, {
+            ...companyData,
+            id: targetCompanyId,
+          });
         }
       }
       setSuccess(true);

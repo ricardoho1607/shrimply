@@ -7,12 +7,7 @@ import {
   CircleDollarSign, 
   BarChart3, 
   Download, 
-  Calendar,
   Loader2,
-  ChevronRight,
-  PieChart,
-  Wallet,
-  ArrowRight,
   CheckCircle2,
   AlertCircle,
   FileText
@@ -21,7 +16,7 @@ import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { useRouter } from 'next/navigation';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCompanyPonds, useFinanceRecords } from '@/hooks/useDashboardData';
+import { useFinanceRecords } from '@/hooks/useDashboardData';
 
 /* --- Types ----------------------------------------------- */
 interface Expense {
@@ -41,7 +36,6 @@ interface Revenue {
 }
 
 interface FinancialData {
-  period: string;
   startDate: string;
   endDate: string;
   companyName: string;
@@ -53,10 +47,61 @@ interface FinancialData {
   totalOPEX: number;
   opexBreakdown: Record<string, number>;
   operatingIncome: number;
-  totalOtherExpenses: number;
-  otherExpenseBreakdown: Record<string, number>;
   netProfit: number;
 }
+
+interface CashFlowReportData {
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  openingBalance: number;
+  operating: {
+    cashFromSales: number;
+    cashFromCustomers: number;
+    paymentToSuppliers: number;
+    paymentForExpenses: number;
+  };
+  investing: {
+    purchaseOfAssets: number;
+    saleOfAssets: number;
+  };
+  financing: {
+    loansReceived: number;
+    loanRepayments: number;
+    ownerWithdrawals: number;
+  };
+}
+
+interface COGSReportData {
+  startDate: string;
+  endDate: string;
+  companyName: string;
+  openingInventory: number;
+  purchases: number;
+  directLabor: number;
+  directMaterials: number;
+  closingInventory: number;
+  revenue: number;
+  totalCOGS: number;
+  grossProfit: number;
+  grossProfitMargin: number;
+}
+
+interface Html2PdfOptions {
+  margin: [number, number, number, number];
+  filename: string;
+  image: { type: 'jpeg'; quality: number };
+  html2canvas: { scale: number; useCORS: boolean };
+  jsPDF: { unit: 'mm'; format: 'a4'; orientation: 'portrait' };
+}
+
+interface Html2PdfWorker {
+  from: (element: HTMLElement) => Html2PdfWorker;
+  set: (options: Html2PdfOptions) => Html2PdfWorker;
+  save: () => Promise<void>;
+}
+
+type Html2PdfFactory = () => Html2PdfWorker;
 
 /* --- Helper Functions ------------------------------------ */
 
@@ -72,9 +117,9 @@ const formatDate = (dateStr: string): string => {
 /* --- HTML Generators (1:1 Mobile Parity) --------------- */
 const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number) => string, currencyCode: string): string => {
   const { 
-    period, startDate, endDate, companyName, totalRevenue, revenueBreakdown,
+    startDate, endDate, companyName, totalRevenue, revenueBreakdown,
     totalCOGS, cogsBreakdown, grossProfit, totalOPEX, opexBreakdown,
-    operatingIncome, totalOtherExpenses, otherExpenseBreakdown, netProfit
+    operatingIncome, netProfit
   } = data;
 
   return `
@@ -190,7 +235,7 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
   `;
 };
 
-const generateCashFlowHTML = (data: any, formatCurrency: (v: number) => string): string => {
+const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: number) => string): string => {
   const { startDate, endDate, companyName, openingBalance, operating, investing, financing } = data;
   const netOperating = operating.cashFromSales + operating.cashFromCustomers - operating.paymentToSuppliers - operating.paymentForExpenses;
   const netInvesting = investing.saleOfAssets - investing.purchaseOfAssets;
@@ -261,7 +306,7 @@ const generateCashFlowHTML = (data: any, formatCurrency: (v: number) => string):
   `;
 };
 
-const generateCOGSHTML = (data: any, formatCurrency: (v: number) => string): string => {
+const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => string): string => {
   const { startDate, endDate, companyName, openingInventory, purchases, directLabor, directMaterials, closingInventory, revenue, totalCOGS, grossProfit, grossProfitMargin } = data;
   return `
     <!DOCTYPE html>
@@ -304,7 +349,7 @@ const generateCOGSHTML = (data: any, formatCurrency: (v: number) => string): str
         <div class="line-item"><span>Opening Inventory</span><span class="amount">${formatCurrency(openingInventory)}</span></div>
         <div class="line-item"><span>Add: Purchases (Feed & Materials)</span><span class="amount">${formatCurrency(purchases)}</span></div>
         <div class="line-item"><span>Add: Direct Labor</span><span class="amount">${formatCurrency(directLabor)}</span></div>
-        <div class="line-item subtotal"><span>Goods Available for Sale</span><span class="amount">${formatCurrency(openingInventory + purchases + directLabor)}</span></div>
+        <div class="line-item subtotal"><span>Goods Available for Sale</span><span class="amount">${formatCurrency(openingInventory + purchases + directLabor + directMaterials)}</span></div>
         <div class="line-item"><span>Less: Closing Inventory</span><span class="amount negative">(${formatCurrency(closingInventory)})</span></div>
         <div class="line-item total"><span>Total Cost of Goods Sold</span><span class="amount negative">${formatCurrency(totalCOGS)}</span></div>
       </div>
@@ -322,58 +367,6 @@ const generateCOGSHTML = (data: any, formatCurrency: (v: number) => string): str
   `;
 };
 
-const generateProjectionHTML = (data: any, formatCurrency: (v: number) => string): string => {
-  const { pondName, currentDOC, futureDOC, currentMBW, projectedMBW, projectedBiomass, projectedRevenue, projectedProfit, insight } = data;
-  return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
-        .header { margin-bottom: 30px; }
-        .title { font-size: 32px; font-weight: 700; color: #E74C3C; margin-bottom: 8px; }
-        .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; font-weight: 600; }
-        .divider { height: 3px; background: linear-gradient(to right, #E74C3C, #F39C12); margin: 20px 0; border-radius: 2px; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; }
-        .card { background: #F8FAFB; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #E74C3C; }
-        .label { font-size: 10px; color: #64748B; text-transform: uppercase; margin-bottom: 4px; }
-        .value { font-size: 20px; font-weight: 700; color: #2C3E50; }
-        .financial-card { background: #F0F9FF; padding: 25px; border-radius: 12px; border-left: 5px solid #3282B8; margin-bottom: 25px; }
-        .profit { color: #10B981; font-size: 36px; font-weight: 900; }
-        .orson-box { background: #FFFBEA; border: 1px solid #FDE68A; padding: 20px; border-radius: 12px; margin-top: 30px; }
-        .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #64748B; }
-      </style>
-    </head>
-    <body>
-      <div class="header">
-        <div class="title">Harvest Projection Audit</div>
-        <div class="company-name">Pond: ${pondName}</div>
-        <div style="font-size: 14px; color: #4A5568;">Generated on ${new Date().toLocaleDateString()}</div>
-      </div>
-      <div class="divider"></div>
-      <div class="grid">
-        <div class="card"><div class="label">Harvest DOC</div><div class="value">${futureDOC}</div></div>
-        <div class="card"><div class="label">Projected MBW</div><div class="value">${projectedMBW.toFixed(1)}g</div></div>
-        <div class="card"><div class="label">Projected Biomass</div><div class="value">${projectedBiomass.toFixed(0)} kg</div></div>
-      </div>
-      <div class="financial-card">
-        <div class="label">Projected Gross Revenue</div>
-        <div class="value" style="font-size: 28px; margin-bottom: 15px;">${formatCurrency(projectedRevenue)}</div>
-        <div class="label">Projected Net Profit (After Future Feed)</div>
-        <div class="profit">${formatCurrency(projectedProfit)}</div>
-      </div>
-      <div class="orson-box">
-        <div style="font-weight: 800, color: #92400E; margin-bottom: 8px;">Orson AI Risk Analysis:</div>
-        <div style="font-style: italic; color: #451a03;">"${insight || 'No AI analysis performed for this projection.'}"</div>
-      </div>
-      <div class="footer">This is a biological projection based on current growth rates (ADG 0.2g). Actual results may vary.</div>
-    </body>
-    </html>
-  `;
-};
-
 export default function FinancialReportsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
   const router = useRouter();
@@ -382,8 +375,7 @@ export default function FinancialReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
   const [exportLoading, setExportLoading] = useState(false);
   const { expenses, revenues, loading: financeLoading } = useFinanceRecords<Expense, Revenue>();
-  const { data: ponds, loading: pondsLoading } = useCompanyPonds<any>('asc');
-  const loading = authLoading || financeLoading || pondsLoading;
+  const loading = authLoading || financeLoading;
 
   // COGS Inventory State
   const [openingInventory, setOpeningInventory] = useState(0);
@@ -400,7 +392,8 @@ export default function FinancialReportsPage() {
 
   const getDateRange = () => {
     const now = new Date();
-    let startDate: Date, endDate: Date = now;
+    let startDate: Date;
+    const endDate: Date = now;
 
     if (selectedPeriod === 'Today') {
       startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -429,8 +422,7 @@ export default function FinancialReportsPage() {
   const handleExport = async () => {
     setExportLoading(true);
     try {
-      // @ts-ignore
-      const html2pdf = (await import('html2pdf.js')).default;
+      const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
       
       let html = '';
       let fileName = '';
@@ -451,7 +443,6 @@ export default function FinancialReportsPage() {
         const totalOPEX = opexExp.reduce((s, e) => s + e.amount, 0);
 
         const data: FinancialData = {
-          period: selectedPeriod,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
           companyName: company?.companyName || 'My Farm',
@@ -463,8 +454,6 @@ export default function FinancialReportsPage() {
           totalOPEX,
           opexBreakdown,
           operatingIncome: totalRev - totalCOGS - totalOPEX,
-          totalOtherExpenses: 0,
-          otherExpenseBreakdown: {},
           netProfit: totalRev - totalCOGS - totalOPEX
         };
         html = generateProfitLossHTML(data, formatCurrency, currencyConfig.code);
@@ -472,6 +461,7 @@ export default function FinancialReportsPage() {
       } else if (selectedReport === 'cash-flow') {
         const operating = {
           cashFromSales: filteredRevenues.reduce((s, r) => s + r.amount, 0),
+          cashFromCustomers: 0,
           paymentToSuppliers: filteredExpenses.filter(e => ['Feed', 'Additives'].includes(normalizeCategory(e.category))).reduce((s, e) => s + e.amount, 0),
           paymentForExpenses: filteredExpenses.filter(e => !['Feed', 'Additives'].includes(normalizeCategory(e.category))).reduce((s, e) => s + e.amount, 0)
         };
@@ -516,7 +506,7 @@ export default function FinancialReportsPage() {
       element.innerHTML = html;
       document.body.appendChild(element);
 
-      const opt = {
+      const opt: Html2PdfOptions = {
         margin: [15, 15, 15, 15] as [number, number, number, number],
         filename: fileName,
         image: { type: 'jpeg' as const, quality: 0.98 },

@@ -25,6 +25,7 @@ import firebaseApp, { auth, db } from '../config/firebase';
 import { LocationData } from '../app/services/googlePlacesService'
 import { useBuyerStore } from '../app/store/buyerStore';
 import { usePondStore } from '../app/store/pondStore';
+import { syncPublicCompanyProfile } from '../app/utils/publicCompanyProfile';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 
@@ -534,6 +535,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Save to Firestore
     await setDoc(companyRef, newCompany);
+    await syncPublicCompanyProfile(companyRef.id, newCompany);
 
     // Update user document
     await updateDoc(doc(db, 'users', user.uid), {
@@ -593,13 +595,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
     if (!searchTerm.trim()) return [];
     try {
-      const companiesQuery = query(collection(db, 'companies'), where('isSearchable', '==', true));
+      const companiesQuery = query(collection(db, 'publicCompanyProfiles'), where('isPublicProfile', '==', true));
       const companiesSnapshot = await getDocs(companiesQuery);
       const results: CompanySearchResult[] = [];
 
-      companiesSnapshot.forEach((doc) => {
-        const companyData = doc.data() as Company;
-        if (companyData.companyName.toLowerCase().includes(searchTerm.toLowerCase())) {
+      companiesSnapshot.forEach((profileDoc) => {
+        const companyData = profileDoc.data() as Partial<Company> & {
+          companyId?: string;
+          location?: string;
+          publicMemberCount?: number;
+        };
+        const companyName = typeof companyData.companyName === 'string' ? companyData.companyName : '';
+        if (companyName.toLowerCase().includes(searchTerm.toLowerCase())) {
           let region = '', country = '';
           if (companyData.locationData) {
             region = companyData.locationData.state || companyData.locationData.city || '';
@@ -608,11 +615,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const parts = companyData.primaryLocation.split(',');
             region = parts[0]?.trim() || '';
             country = parts[parts.length - 1]?.trim() || '';
+          } else if (companyData.location) {
+            const parts = companyData.location.split(',');
+            region = parts[0]?.trim() || '';
+            country = companyData.country || parts[parts.length - 1]?.trim() || '';
           }
           results.push({
-            id: companyData.id, companyName: companyData.companyName, region, country,
-            farmType: companyData.farmType, businessSize: companyData.businessSize,
-            memberCount: companyData.teamMembers?.length || 0,
+            id: companyData.companyId || profileDoc.id, companyName, region, country,
+            farmType: companyData.farmType || '', businessSize: companyData.businessSize || '',
+            memberCount: companyData.publicMemberCount || 0,
             logo: companyData.logo, logoUrl: companyData.logoUrl,
           });
         }

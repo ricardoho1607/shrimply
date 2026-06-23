@@ -20,6 +20,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as Location from 'expo-location';
 import { useLanguage } from '../context/LanguageContext';
+import { syncPublicCompanyProfile } from './utils/publicCompanyProfile';
 
 interface CompanyData {
   companyName: string;
@@ -299,7 +300,7 @@ export default function CompanySetupScreen() {
 
       if (isEditMode && company) {
         // Update existing company
-        await updateDoc(doc(db, 'companies', company.id), {
+        const companyUpdate = {
           companyName: formData.companyName,
           primaryLocation: cleanedLocationData,
           country: country || company.country || '',
@@ -308,7 +309,9 @@ export default function CompanySetupScreen() {
           description: formData.description,
           contactPhone: formData.contactPhone,
           isPublicProfile: formData.isPublicProfile,
-        });
+        };
+        await updateDoc(doc(db, 'companies', company.id), companyUpdate);
+        await syncPublicCompanyProfile(company.id, companyUpdate);
         console.log('Company updated successfully');
         Alert.alert(t.messages.success, t.companySetup.updateSuccess);
         router.back();
