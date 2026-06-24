@@ -5,7 +5,7 @@ export default {
     slug: 'investashrimp',
     version: '3.1.0',
     orientation: 'portrait',
-    icon: './assets/images/Shrimply2Logo.png',
+    icon: './assets/images/app-icon.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
     runtimeVersion: '3.1.0',
@@ -30,7 +30,7 @@ export default {
       package: 'com.shrimply.tech.investashrimp',
       googleServicesFile: './google-services.json',
       adaptiveIcon: {
-        foregroundImage: './assets/images/Shrimply2Logo.png',
+        foregroundImage: './assets/images/adaptive-icon.png',
         backgroundColor: '#ffffff',
       },
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'CAMERA'],
