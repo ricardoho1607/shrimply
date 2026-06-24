@@ -1,5 +1,5 @@
 // app/settings.tsx - Optimized with consistent Android styles
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Switch, ActivityIndicator, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
 import { format } from 'date-fns';
 import { useDataBackup } from './hooks/useDataBackup';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -21,11 +23,46 @@ const AVAILABLE_LANGUAGES = [
   { code: 'vi', name: 'Vietnamese', flag: '🇻🇳', nativeName: 'Tiếng Việt' }
 ];
 
+interface ActivitySummary {
+  totalSeconds: number;
+  lastSeenAt: Date | null;
+}
+
+const ACTIVITY_ACTIVE_WINDOW_MS = 5 * 60 * 1000;
+
+const formatLocalDateKey = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toActivityDate = (value: unknown): Date | null => {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  return null;
+};
+
+const formatActivityHours = (seconds: number): string => {
+  if (!Number.isFinite(seconds) || seconds <= 0) return '0h';
+  const hours = seconds / 3600;
+  if (hours >= 1) return `${hours.toFixed(hours >= 10 ? 0 : 1)}h`;
+  return `${Math.max(1, Math.round(seconds / 60))}m`;
+};
+
 export default function Settings() {
   const router = useRouter();
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, currencyConfig, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
+  const canViewActivity = Platform.OS !== 'web' && ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
   const [showLanguageOptions, setShowLanguageOptions] = useState(false);
   const [showCurrencyOptions, setShowCurrencyOptions] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -36,6 +73,46 @@ export default function Settings() {
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
+  const [activitySummaries, setActivitySummaries] = useState<ActivitySummary[]>([]);
+
+  useEffect(() => {
+    if (!canViewActivity || !company?.id) {
+      setActivitySummaries([]);
+      return;
+    }
+
+    const activityQuery = query(
+      collection(db, 'companies', company.id, 'userActivityDaily'),
+      where('dateKey', '==', formatLocalDateKey(new Date()))
+    );
+
+    const unsubscribe = onSnapshot(activityQuery, (snapshot) => {
+      setActivitySummaries(snapshot.docs.map((summaryDoc) => {
+        const data = summaryDoc.data();
+        return {
+          totalSeconds: typeof data.totalSeconds === 'number' && Number.isFinite(data.totalSeconds) ? data.totalSeconds : 0,
+          lastSeenAt: toActivityDate(data.lastSeenAt),
+        };
+      }));
+    }, (error) => {
+      console.log('Failed to load settings activity summary:', error);
+      setActivitySummaries([]);
+    });
+
+    return unsubscribe;
+  }, [canViewActivity, company?.id]);
+
+  const activityStatusLine = useMemo(() => {
+    const nowMs = Date.now();
+    const totalSeconds = activitySummaries.reduce((sum, summary) => sum + summary.totalSeconds, 0);
+    const activeNow = activitySummaries.filter((summary) => {
+      const lastSeenMs = summary.lastSeenAt?.getTime() ?? 0;
+      return lastSeenMs > 0 && nowMs - lastSeenMs <= ACTIVITY_ACTIVE_WINDOW_MS;
+    }).length;
+
+    if (activitySummaries.length === 0) return t.activityTracker?.noActivityToday || 'No mobile activity tracked today.';
+    return `${activeNow} active now · ${formatActivityHours(totalSeconds)} today`;
+  }, [activitySummaries, t.activityTracker?.noActivityToday]);
 
   const handleLanguageSelect = async (languageCode: string) => {
     try {
@@ -377,6 +454,14 @@ export default function Settings() {
                   trackColor={{ false: '#dbe7df', true: '#315f57' }} thumbColor={notificationsEnabled ? '#FFFFFF' : '#f4f8fc'} />
               }
             />
+            {canViewActivity && (
+              <SettingItem
+                icon="time-outline"
+                title={t.activityTracker?.title || 'Team activity'}
+                subtitle={activityStatusLine}
+                showArrow={false}
+              />
+            )}
           </View>
 
           <View style={styles.section}>
