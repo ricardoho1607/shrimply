@@ -5,12 +5,14 @@ import { useLanguage } from './LanguageContext';
 import { useCurrency } from './CurrencyContext';
 
 export const LanguageCurrencySync = () => {
-  const { currentLanguage } = useLanguage();
-  const { syncCurrencyWithLanguage } = useCurrency();
+  const { currentLanguage, isLanguageLoaded } = useLanguage();
+  const { syncCurrencyWithLanguage, isCurrencyLoaded } = useCurrency();
 
   useEffect(() => {
+    if (!isLanguageLoaded || !isCurrencyLoaded) return;
     syncCurrencyWithLanguage(currentLanguage);
-  }, [currentLanguage, syncCurrencyWithLanguage]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentLanguage, isLanguageLoaded, isCurrencyLoaded]);
 
   return null;
 };

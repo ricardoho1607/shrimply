@@ -13,6 +13,7 @@ type LanguageContextType = {
   currentLanguage: Language;  // ✅ Changed from `language: string`
   setLanguage: (lang: Language) => Promise<void>;  // ✅ Changed to accept Language and return Promise
   t: Translations;  // ✅ Removed DeepPartial - not needed here
+  isLanguageLoaded: boolean;
 };
 
 const defaultLanguage: Language = 'en';
@@ -21,6 +22,7 @@ const defaultLanguage: Language = 'en';
 const LanguageContext = createContext<LanguageContextType>({
   currentLanguage: defaultLanguage,
   t: translations.en,
+  isLanguageLoaded: true,
   setLanguage: async () => {},
 });
 
@@ -28,6 +30,7 @@ const LanguageContext = createContext<LanguageContextType>({
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [currentLanguage, setCurrentLanguage] = useState<Language>(defaultLanguage);
   const [t, setT] = useState<Translations>(translations[defaultLanguage]);
+  const [isLanguageLoaded, setIsLanguageLoaded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -45,6 +48,8 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.error('Failed to load language from storage:', error);
+      } finally {
+        setIsLanguageLoaded(true);
       }
     })();
   }, []);
@@ -61,7 +66,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage }}>
+    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage, isLanguageLoaded }}>
       {children}
     </LanguageContext.Provider>
   );

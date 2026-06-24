@@ -1,9 +1,6 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
 import { Language } from '../translations';
 
 // Supported currencies
@@ -87,6 +84,7 @@ type CurrencyContextType = {
   autoSyncEnabled: boolean;
   setAutoSyncEnabled: (enabled: boolean) => Promise<void>;
   syncCurrencyWithLanguage: (language: Language) => Promise<void>;
+  isCurrencyLoaded: boolean;
 };
 
 const defaultCurrency: Currency = 'IDR';
@@ -100,6 +98,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   autoSyncEnabled: true,
   setAutoSyncEnabled: async () => {},
   syncCurrencyWithLanguage: async () => {},
+  isCurrencyLoaded: true,
 });
 
 // Provider component
@@ -107,6 +106,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
   const [currentCurrency, setCurrentCurrency] = useState<Currency>(defaultCurrency);
   const [autoSyncEnabled, setAutoSyncEnabledState] = useState(true);
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyConfig>(CURRENCIES[defaultCurrency]);
+  const [isCurrencyLoaded, setIsCurrencyLoaded] = useState(false);
 
   // Load currency settings from storage on mount
   useEffect(() => {
@@ -123,39 +123,23 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
       if (storedAutoSync !== null) {
         setAutoSyncEnabledState(storedAutoSync === 'true');
       }
+      setIsCurrencyLoaded(true);
     });
   }, []);
 
-  // Sync with Firestore (Parity with Mobile)
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        const unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          if (uDoc.exists()) {
-            const data = uDoc.data();
-            if (data.currency && CURRENCIES[data.currency as Currency]) {
-              const currency = data.currency as Currency;
-              setCurrentCurrency(currency);
-              setCurrencyConfig(CURRENCIES[currency]);
-              localStorage.setItem('@currency', currency);
-            }
-          }
-        }, (error) => {
-          console.error("Currency Firestore Sync Error:", error);
-        });
-        return () => unsubUser();
-      }
-    });
-    return () => unsubAuth();
-  }, []);
+  const applyCurrency = (currency: Currency) => {
+    setCurrentCurrency(currency);
+    setCurrencyConfig(CURRENCIES[currency]);
+    localStorage.setItem('@currency', currency);
+  };
 
   // Set currency
   const setCurrency = async (currency: Currency) => {
     if (!CURRENCIES[currency]) return;
-    
-    setCurrentCurrency(currency);
-    setCurrencyConfig(CURRENCIES[currency]);
-    localStorage.setItem('@currency', currency);
+
+    applyCurrency(currency);
+    setAutoSyncEnabledState(false);
+    localStorage.setItem('@currencyAutoSync', 'false');
   };
 
   // Set auto-sync enabled
@@ -169,7 +153,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
     if (!autoSyncEnabled) return;
 
     const newCurrency = LANGUAGE_TO_CURRENCY[language] || defaultCurrency;
-    await setCurrency(newCurrency);
+    applyCurrency(newCurrency);
   };
 
   // Format currency with proper separators and symbol
@@ -217,6 +201,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
         autoSyncEnabled,
         setAutoSyncEnabled,
         syncCurrencyWithLanguage,
+        isCurrencyLoaded,
       }}
     >
       {children}

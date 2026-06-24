@@ -7,6 +7,7 @@ type LanguageContextType = {
   currentLanguage: Language;
   setLanguage: (lang: Language) => Promise<void>;
   t: Translations;
+  isLanguageLoaded: boolean;
 };
 
 const defaultLanguage: Language = 'en';
@@ -14,12 +15,14 @@ const defaultLanguage: Language = 'en';
 const LanguageContext = createContext<LanguageContextType>({
   currentLanguage: defaultLanguage,
   t: translations.en,
+  isLanguageLoaded: true,
   setLanguage: async () => {},
 });
 
 export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   const [currentLanguage, setCurrentLanguage] = useState<Language>(defaultLanguage);
   const [t, setT] = useState<Translations>(translations[defaultLanguage]);
+  const [isLanguageLoaded, setIsLanguageLoaded] = useState(false);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -34,6 +37,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
           setT((translations as any)[deviceLocale] as Translations);
         }
       }
+      setIsLanguageLoaded(true);
     });
   }, []);
 
@@ -45,7 +49,7 @@ export const LanguageProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage }}>
+    <LanguageContext.Provider value={{ currentLanguage, t, setLanguage, isLanguageLoaded }}>
       {children}
     </LanguageContext.Provider>
   );

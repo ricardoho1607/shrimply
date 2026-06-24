@@ -5,14 +5,15 @@ import { useLanguage } from './LanguageContext';
 import { useCurrency } from './CurrencyContext';
 
 export const LanguageCurrencySync = ({ children }: { children: React.ReactNode }) => {
-  const { currentLanguage } = useLanguage();
-  const { syncCurrencyWithLanguage } = useCurrency();
+  const { currentLanguage, isLanguageLoaded } = useLanguage();
+  const { syncCurrencyWithLanguage, isCurrencyLoaded } = useCurrency();
 
   useEffect(() => {
+    if (!isLanguageLoaded || !isCurrencyLoaded) return;
     // Sync currency when language changes
     syncCurrencyWithLanguage(currentLanguage);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentLanguage]);
+  }, [currentLanguage, isLanguageLoaded, isCurrencyLoaded]);
 
   return <>{children}</>;
 };

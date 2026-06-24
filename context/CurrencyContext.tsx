@@ -84,6 +84,7 @@ type CurrencyContextType = {
   autoSyncEnabled: boolean;
   setAutoSyncEnabled: (enabled: boolean) => Promise<void>;
   syncCurrencyWithLanguage: (language: Language) => Promise<void>;
+  isCurrencyLoaded: boolean;
 };
 
 const defaultCurrency: Currency = 'IDR';
@@ -97,6 +98,7 @@ const CurrencyContext = createContext<CurrencyContextType>({
   autoSyncEnabled: true,
   setAutoSyncEnabled: async () => {},
   syncCurrencyWithLanguage: async () => {},
+  isCurrencyLoaded: true,
 });
 
 // Provider component
@@ -104,6 +106,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
   const [currentCurrency, setCurrentCurrency] = useState<Currency>(defaultCurrency);
   const [autoSyncEnabled, setAutoSyncEnabledState] = useState(true);
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyConfig>(CURRENCIES[defaultCurrency]);
+  const [isCurrencyLoaded, setIsCurrencyLoaded] = useState(false);
 
   // Load currency settings from storage on mount
   useEffect(() => {
@@ -125,19 +128,26 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
         }
       } catch (error) {
         console.error('Failed to load currency settings from storage:', error);
+      } finally {
+        setIsCurrencyLoaded(true);
       }
     })();
   }, []);
 
+  const applyCurrency = async (currency: Currency) => {
+    setCurrentCurrency(currency);
+    setCurrencyConfig(CURRENCIES[currency]);
+    await AsyncStorage.setItem('@currency', currency);
+  };
+
   // Set currency
   const setCurrency = async (currency: Currency) => {
     if (!CURRENCIES[currency]) return;
-    
-    setCurrentCurrency(currency);
-    setCurrencyConfig(CURRENCIES[currency]);
-    
+
     try {
-      await AsyncStorage.setItem('@currency', currency);
+      await applyCurrency(currency);
+      setAutoSyncEnabledState(false);
+      await AsyncStorage.setItem('@currencyAutoSync', 'false');
     } catch (error) {
       console.error('Failed to save currency to storage:', error);
     }
@@ -158,7 +168,11 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
     if (!autoSyncEnabled) return;
 
     const newCurrency = LANGUAGE_TO_CURRENCY[language] || defaultCurrency;
-    await setCurrency(newCurrency);
+    try {
+      await applyCurrency(newCurrency);
+    } catch (error) {
+      console.error('Failed to sync currency with language:', error);
+    }
   };
 
   // Format currency with proper separators and symbol
@@ -206,6 +220,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
         autoSyncEnabled,
         setAutoSyncEnabled,
         syncCurrencyWithLanguage,
+        isCurrencyLoaded,
       }}
     >
       {children}
