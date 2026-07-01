@@ -1,10 +1,8 @@
-"use client";
-
-import React, { useEffect } from 'react';
 import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import Cursor from '@/components/Cursor';
+import RevealOnScroll from '@/components/RevealOnScroll';
 import { 
   LayoutGrid, 
   Activity, 
@@ -23,24 +21,9 @@ import {
 } from 'lucide-react';
 
 export default function LandingPage() {
-  useEffect(() => {
-    // Intersection Observer for Reveal Animations
-    const observer = new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if (e.isIntersecting) {
-          e.target.classList.add('v');
-          observer.unobserve(e.target);
-        }
-      });
-    }, { threshold: 0.1, rootMargin: '0px 0px -30px 0px' });
-
-    document.querySelectorAll('.r, .stat-box').forEach(el => observer.observe(el));
-    
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <main>
+      <RevealOnScroll />
       <Cursor />
       <Navbar />
 
@@ -49,11 +32,11 @@ export default function LandingPage() {
         <div className="hero-left">
           <div className="eyebrow animate-hero" style={{ animationDelay: '0.3s' }}>Aquaculture Intelligence Platform</div>
           <h1 className="animate-hero" style={{ animationDelay: '0.52s', margin: '24px 0' }}>
-            Your Pond. <br />
-            <em>Under Control.</em>
+            Shrimp Farm Management Software <br />
+            <em>for ponds under control.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.76s', maxWidth: '420px', marginBottom: '40px', fontWeight: 500 }}>
-            Harness Orson AI to detect biological risk patterns, optimize feeding, and protect your pond&apos;s yield.
+            Track ponds, feed inventory, water quality, growth sampling, harvests, finance, and Orson AI risk signals in one shrimp farm platform.
           </p>
           <div className="animate-hero" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
             <Link href="/how-it-works" className="btn-primary">See the Platform</Link>

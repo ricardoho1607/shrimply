@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import AppProviders from '@/components/AppProviders';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -93,7 +94,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
   ]
 });
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage() as { t: DashboardTranslations };
   const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading } = useAuth();
   const pathname = usePathname();
@@ -513,5 +514,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
     </div>
+  );
+}
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AppProviders>
+      <DashboardLayoutShell>{children}</DashboardLayoutShell>
+    </AppProviders>
   );
 }

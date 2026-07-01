@@ -3,6 +3,19 @@
   "buildCommand": "npm --prefix web run build",
   "outputDirectory": "web/out",
   "cleanUrls": true,
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [
+        {
+          "type": "host",
+          "value": "shrimplytech.com"
+        }
+      ],
+      "destination": "https://www.shrimplytech.com/:path*",
+      "permanent": true
+    }
+  ],
   "headers": [
     {
       "source": "/auth",

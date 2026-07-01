@@ -3,6 +3,24 @@
 import React from 'react';
 import Link from 'next/link';
 
+const productLinks = [
+  { href: '/shrimp-farm-management-software', label: 'Farm Software' },
+  { href: '/vannamei-shrimp-farming-app', label: 'Vannamei App' },
+  { href: '/features/feed-inventory', label: 'Feed Inventory' },
+  { href: '/features/water-quality-monitoring', label: 'Water Quality' },
+  { href: '/features/growth-sampling', label: 'Growth Sampling' },
+  { href: '/features/shrimp-harvest-tracking', label: 'Harvest Tracking' },
+  { href: '/features/shrimp-farm-finance', label: 'Farm Finance' },
+  { href: '/features/disease-alerts', label: 'Disease Alerts' },
+];
+
+const companyLinks = [
+  { href: '/resources', label: 'Education Hub' },
+  { href: '/about', label: 'About' },
+  { href: '/how-it-works', label: 'How It Works' },
+  { href: '/orson', label: 'Orson AI' },
+];
+
 export default function Footer() {
   return (
     <footer className="site-footer" style={{ background: 'linear-gradient(160deg, var(--navy) 0%, var(--deep) 100%)', padding: '80px 52px 44px', color: 'var(--muted)' }}>
@@ -24,8 +42,11 @@ export default function Footer() {
             Product
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Link href="/how-it-works" style={{ fontSize: '0.94rem' }}>How It Works</Link>
-            <Link href="/auth" style={{ fontSize: '0.94rem' }}>App</Link>
+            {productLinks.map(link => (
+              <Link href={link.href} style={{ fontSize: '0.94rem' }} key={link.href}>
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
         
@@ -34,9 +55,11 @@ export default function Footer() {
             Company
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <Link href="/resources" style={{ fontSize: '0.94rem' }}>Education Hub</Link>
-            <Link href="/about" style={{ fontSize: '0.94rem' }}>About</Link>
-            <Link href="/auth" style={{ fontSize: '0.94rem' }}>Contact</Link>
+            {companyLinks.map(link => (
+              <Link href={link.href} style={{ fontSize: '0.94rem' }} key={link.href}>
+                {link.label}
+              </Link>
+            ))}
           </div>
         </div>
       </div>

@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { LanguageProvider } from "@/contexts/LanguageContext";
-import { CurrencyProvider } from "@/contexts/CurrencyContext";
-import { AuthProvider } from "@/contexts/AuthContext";
-import { LanguageCurrencySync } from "@/contexts/LanguageCurrencySync";
 import { SITE_CONFIG } from "@/config/site";
 
 export const metadata: Metadata = {
@@ -75,16 +71,9 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>
-        <LanguageProvider>
-          <CurrencyProvider>
-            <AuthProvider>
-              <LanguageCurrencySync />
-              <div className="main-container">
-                {children}
-              </div>
-            </AuthProvider>
-          </CurrencyProvider>
-        </LanguageProvider>
+        <div className="main-container">
+          {children}
+        </div>
       </body>
     </html>
   );
