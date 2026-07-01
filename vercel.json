@@ -5,15 +5,15 @@
   "cleanUrls": true,
   "redirects": [
     {
-      "source": "/:path*",
+      "source": "/(.*)",
       "has": [
         {
           "type": "host",
           "value": "shrimplytech.com"
         }
       ],
-      "destination": "https://www.shrimplytech.com/:path*",
-      "permanent": true
+      "destination": "https://www.shrimplytech.com/$1",
+      "statusCode": 301
     }
   ],
   "headers": [
