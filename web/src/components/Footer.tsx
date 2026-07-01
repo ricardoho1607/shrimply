@@ -6,12 +6,6 @@ import Link from 'next/link';
 const productLinks = [
   { href: '/shrimp-farm-management-software', label: 'Farm Software' },
   { href: '/vannamei-shrimp-farming-app', label: 'Vannamei App' },
-  { href: '/features/feed-inventory', label: 'Feed Inventory' },
-  { href: '/features/water-quality-monitoring', label: 'Water Quality' },
-  { href: '/features/growth-sampling', label: 'Growth Sampling' },
-  { href: '/features/shrimp-harvest-tracking', label: 'Harvest Tracking' },
-  { href: '/features/shrimp-farm-finance', label: 'Farm Finance' },
-  { href: '/features/disease-alerts', label: 'Disease Alerts' },
 ];
 
 const companyLinks = [
