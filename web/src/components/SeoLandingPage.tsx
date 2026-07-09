@@ -57,7 +57,7 @@ export default function SeoLandingPage({
     "@type": "SoftwareApplication",
     name: `Shrimply ${eyebrow}`,
     applicationCategory: "BusinessApplication",
-    operatingSystem: "Web, iOS, Android",
+    operatingSystem: "Web, Android",
     description: intro,
     url: pageUrl,
     isPartOf: {

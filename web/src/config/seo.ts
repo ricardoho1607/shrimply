@@ -11,7 +11,7 @@ export type SeoPage = {
   lastModified: string;
 };
 
-export const PUBLIC_SITE_LAST_MODIFIED = "2026-06-13";
+export const PUBLIC_SITE_LAST_MODIFIED = "2026-07-09";
 
 export const canonicalUrl = (path: string) => {
   const siteUrl = SITE_CONFIG.url.replace(/\/$/, "");
@@ -186,7 +186,7 @@ export const resourceSeoPages: SeoPage[] = resourceArticles.map(article => ({
   description: article.description,
   priority: 0.72,
   changeFrequency: "monthly",
-  lastModified: article.publishedAt ?? PUBLIC_SITE_LAST_MODIFIED,
+  lastModified: article.updatedAt ?? article.publishedAt ?? PUBLIC_SITE_LAST_MODIFIED,
 }));
 
 export const sitemapPages = [...coreSeoPages, ...featureSeoPages, ...resourceSeoPages];

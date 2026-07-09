@@ -24,7 +24,7 @@ const softwareJsonLd = {
   "@type": "SoftwareApplication",
   name: "Shrimply",
   applicationCategory: "BusinessApplication",
-  operatingSystem: "Web, iOS, Android",
+  operatingSystem: "Web, Android",
   url: canonicalUrl("/"),
   image: `${SITE_CONFIG.url}${SITE_CONFIG.ogImage.path}`,
   description: SITE_CONFIG.description,

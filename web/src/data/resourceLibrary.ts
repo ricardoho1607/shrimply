@@ -13,6 +13,7 @@ export type ResourceArticle = {
   readTime: string;
   tags?: string[];
   publishedAt?: string;
+  updatedAt?: string;
   image?: {
     src: string;
     alt: string;
@@ -339,18 +340,19 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "fcr-shrimp-farming",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
-    title: "FCR in Shrimp Farming: How to Use Feed Conversion Ratio Correctly",
-    description: "Understand shrimp feed conversion ratio, why FCR matters, what can distort it, and how farms can use better records to reduce feed waste.",
+    title: "Improving FCR in Shrimp Farming: How to Use Feed Conversion Ratio Correctly",
+    description: "Understand shrimp feed conversion ratio, why FCR matters, what can distort it, and how farms can improve FCR with better feed, biomass, mortality, and harvest records.",
     readTime: "7 min read",
-    tags: ["FCR", "feed conversion ratio", "feed waste", "biomass", "partial harvest"],
+    tags: ["FCR", "improving FCR", "feed conversion ratio", "feed waste", "biomass", "partial harvest"],
     publishedAt: "2026-06-08",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-fcr-feed-conversion-ratio-farming.jpg",
       alt: "Shrimp farmer calculating FCR with feed conversion ratio formula, feed used, biomass gain, water quality, appetite, and weekly FCR review",
       width: 1535,
       height: 1024,
     },
-    relatedFeature: { label: "Education Hub", href: "/resources" },
+    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
     takeaways: [
       "FCR compares feed used against biomass gained, but bad records can make it misleading.",
       "Mortality, partial harvests, sampling quality, and feed stock errors all affect FCR.",
@@ -382,7 +384,7 @@ export const resourceArticles: ResourceArticle[] = [
       {
         heading: "How to use FCR every week",
         body: [
-          "Use FCR as a question generator. If FCR is rising, check appetite, tray returns, DO, ammonia, nitrite, mortality, and recent sampling accuracy. If FCR improves sharply, check whether biomass or harvest records are complete before assuming performance improved.",
+          "Use FCR as a question generator. If FCR is rising, check appetite, tray returns, DO, ammonia, nitrite, mortality, and recent sampling accuracy. Improving FCR in shrimp farming usually comes from tighter feed records, better biomass estimates, cleaner tray interpretation, and earlier response to water-quality stress. If FCR improves sharply, check whether biomass or harvest records are complete before assuming performance improved.",
         ],
       },
     ],
@@ -403,13 +405,14 @@ export const resourceArticles: ResourceArticle[] = [
     readTime: "6 min read",
     tags: ["feed inventory", "stockout", "reorder", "feed batch", "feed cost"],
     publishedAt: "2026-06-08",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-feed-inventory-control-farm-software.jpg",
       alt: "Shrimp farm feed inventory control board showing stock on hand, feed issued by pond, weekly stock count, feed batches, and storage records",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Education Hub", href: "/resources" },
+    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
     takeaways: [
       "Feed inventory is both a cost-control and production-control system.",
       "Stockouts can disrupt feeding rhythm, while overstocking can create storage and quality risk.",
@@ -454,13 +457,14 @@ export const resourceArticles: ResourceArticle[] = [
     readTime: "6 min read",
     tags: ["feed tray", "appetite", "anco", "feed response", "water quality"],
     publishedAt: "2026-06-08",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-feed-tray-observation-vannamei-pond.png",
       alt: "Shrimp farmer checking a feed tray in a vannamei shrimp pond to monitor appetite and feed consumption",
       width: 1448,
       height: 1086,
     },
-    relatedFeature: { label: "Education Hub", href: "/resources" },
+    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
     takeaways: [
       "Feed trays help farms observe appetite instead of guessing.",
       "Tray results should be connected to water quality, weather, molting, and disease signals.",
@@ -653,11 +657,12 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "white-feces-disease-shrimp",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
-    title: "White Feces Disease in Shrimp: Causes, Treatment Response, and Long-Term Prevention",
-    description: "A deep dive into shrimp white feces disease or white feces syndrome, including signs, pond parameters, EHP and Vibrio risk, treatment response, Bacillus probiotics, and prevention.",
+    title: "White Feces Disease in Shrimp (WFD): Causes, Response, and Prevention",
+    description: "A deep dive into shrimp white feces disease, WFD, or white feces syndrome, including signs, pond parameters, EHP and Vibrio risk, treatment response, Bacillus probiotics, and prevention.",
     readTime: "9 min read",
     tags: ["white feces disease", "WFD", "WFS", "EHP", "Vibrio", "Bacillus", "probiotics"],
     publishedAt: "2026-06-12",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/white-feces-disease-wfd-shrimp-guide.png",
       alt: "White feces disease WFD shrimp farming guide showing symptoms, EHP and Vibrio risk factors, pond water parameters, immediate response, and prevention steps",
@@ -758,10 +763,11 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Water, Health, and Risk",
     label: "Disease Risk",
     title: "EHP in Shrimp Farming: Why Growth Slows and How Farms Prevent Recurrence",
-    description: "A practical guide to Enterocytozoon hepatopenaei in vannamei shrimp, including signs, PCR confirmation, pond risk parameters, treatment reality, Bacillus support, and long-term prevention.",
+    description: "A practical guide to EHP management in vannamei shrimp, including Enterocytozoon hepatopenaei signs, PCR confirmation, pond risk parameters, treatment reality, Bacillus support, and long-term prevention.",
     readTime: "9 min read",
     tags: ["EHP", "Enterocytozoon hepatopenaei", "PCR", "hepatopancreas", "growth retardation", "Bacillus", "biosecurity"],
     publishedAt: "2026-06-13",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/ehp-shrimp-disease-guide.png",
       alt: "EHP shrimp farming guide showing growth lag, PCR confirmation, pond spore control, risk factors, immediate response, and long-term biosecurity prevention",
@@ -862,11 +868,12 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "white-spot-syndrome-virus-shrimp",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
-    title: "White Spot Syndrome Virus in Shrimp: Fast Response, Risk Parameters, and Long-Term Prevention",
-    description: "A practical guide to WSSV in vannamei shrimp, including early signs, rapid mortality risk, pond parameters, PCR confirmation, emergency response, and biosecurity prevention.",
+    title: "WSSV in Shrimp: White Spot Syndrome Virus Response and Prevention",
+    description: "A practical guide to WSSV in shrimp and white spot syndrome virus in vannamei, including early signs, rapid mortality risk, pond parameters, PCR confirmation, emergency response, and biosecurity prevention.",
     readTime: "9 min read",
     tags: ["WSSV", "white spot syndrome virus", "white spot disease", "PCR", "mortality", "biosecurity", "shrimp disease"],
     publishedAt: "2026-06-13",
+    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/white-spot-syndrome-virus-wssv-shrimp-guide.png",
       alt: "White spot syndrome virus WSSV shrimp farming guide showing early detection, PCR confirmation, pond-to-pond containment, risk parameters, and prevention steps",

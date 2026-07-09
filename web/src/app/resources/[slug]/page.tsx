@@ -159,7 +159,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     keywords: article.tags,
     relatedLink: relatedInternalLinks.map(link => canonicalUrl(link.href)),
     datePublished: article.publishedAt,
-    dateModified: article.publishedAt,
+    dateModified: article.updatedAt ?? article.publishedAt,
     image: article.image ? `${SITE_CONFIG.url}${article.image.src}` : undefined,
   };
   const faqJsonLd = {

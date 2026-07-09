@@ -10,7 +10,7 @@ const softwareApplicationJsonLd = {
   "@type": "SoftwareApplication",
   name: "Shrimply",
   applicationCategory: "BusinessApplication",
-  operatingSystem: "Web, iOS, Android",
+  operatingSystem: "Web, Android",
   description: page?.description,
   url: canonicalUrl("/vannamei-shrimp-farming-app"),
   offers: {
