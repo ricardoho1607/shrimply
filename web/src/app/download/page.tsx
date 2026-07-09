@@ -139,7 +139,7 @@ function StatusLine({
 }) {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0, 1fr)", gap: "14px", alignItems: "start", padding: "16px", background: "var(--white)", border: "1px solid var(--slate)", borderRadius: "14px" }}>
-      <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "var(--accent)", color: "var(--blue)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: "44px", height: "44px", borderRadius: "12px", background: "var(--blue)", color: "var(--white)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 10px 22px rgba(15, 76, 117, 0.18)" }}>
         <Icon size={22} />
       </div>
       <div>
