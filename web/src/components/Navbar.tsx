@@ -10,7 +10,7 @@ const navItems = [
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/resources', label: 'Resources' },
   { href: '/about', label: 'About' },
-  { href: '/#download', label: 'Download App' },
+  { href: '/download', label: 'Download App' },
 ];
 
 export default function Navbar() {
@@ -49,7 +49,6 @@ export default function Navbar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
-    if (href.startsWith('/#')) return false;
     return pathname === href;
   };
 

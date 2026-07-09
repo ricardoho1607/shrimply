@@ -103,6 +103,14 @@ export const coreSeoPages: SeoPage[] = [
     changeFrequency: "monthly",
     lastModified: PUBLIC_SITE_LAST_MODIFIED,
   },
+  {
+    path: "/download",
+    title: "Download Shrimply Android App | Closed Testing Access",
+    description: "Request access to the Shrimply Android app closed testing track. Shrimply is currently available only for approved Android testers.",
+    priority: 0.86,
+    changeFrequency: "weekly",
+    lastModified: PUBLIC_SITE_LAST_MODIFIED,
+  },
 ];
 
 export const featureSeoPages: SeoPage[] = [

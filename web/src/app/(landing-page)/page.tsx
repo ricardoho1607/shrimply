@@ -291,7 +291,7 @@ export default function LandingPage() {
           </p>
           <div className="mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
             <Link href="/auth/join" className="btn-primary" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Start Your Free Trial</Link>
-            <Link href="/" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download App</Link>
+            <Link href="/download" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download App</Link>
           </div>
         </div>
       </section>

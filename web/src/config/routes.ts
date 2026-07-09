@@ -19,6 +19,7 @@ export const ROUTES = {
     "/",
     "/about",
     "/how-it-works",
+    "/download",
     "/resources",
     "/orson",
     "/auth",

@@ -880,6 +880,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /testerRequests/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
     match /{path=**}/aiUsage/{usageDateId} {
       allow read: if isFounderAdmin();
       allow write: if false;

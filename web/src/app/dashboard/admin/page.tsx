@@ -18,6 +18,7 @@ import {
   Mail,
   RefreshCcw,
   ShieldCheck,
+  Smartphone,
   Store,
   Trash2,
   UserRoundCheck,
@@ -111,6 +112,25 @@ type AdminMetrics = {
   roleBreakdown: Record<string, number>;
   recentUsers: AdminUser[];
   companies: CompanyMetric[];
+};
+
+type TesterRequest = {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  role: string;
+  country: string;
+  androidDevice: string;
+  reason: string;
+  status: string;
+  platform: string;
+  releaseTrack: string;
+  requestCount: number;
+  createdAt: string | null;
+  lastRequestedAt: string | null;
+  emailDeliveryStatus: string;
+  emailDeliveryReason: string;
 };
 
 const ADMIN_EMAILS = ['ricardofransiskusho@gmail.com'];
@@ -454,6 +474,42 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
     recentUsers,
     companies,
   };
+};
+
+const getTesterRequestsFromFirestore = async (): Promise<TesterRequest[]> => {
+  try {
+    const snapshot = await getDocs(collection(db, 'testerRequests'));
+    return snapshot.docs
+      .map((requestDoc) => {
+        const request = requestDoc.data();
+        const emailDelivery = request.emailDelivery && typeof request.emailDelivery === 'object'
+          ? request.emailDelivery as Record<string, unknown>
+          : {};
+
+        return {
+          id: requestDoc.id,
+          name: typeof request.name === 'string' ? request.name : '',
+          email: typeof request.email === 'string' ? request.email : '',
+          company: typeof request.company === 'string' ? request.company : '',
+          role: typeof request.role === 'string' ? request.role : '',
+          country: typeof request.country === 'string' ? request.country : '',
+          androidDevice: typeof request.androidDevice === 'string' ? request.androidDevice : '',
+          reason: typeof request.reason === 'string' ? request.reason : '',
+          status: typeof request.status === 'string' ? request.status : 'pending',
+          platform: typeof request.platform === 'string' ? request.platform : 'android',
+          releaseTrack: typeof request.releaseTrack === 'string' ? request.releaseTrack : 'closed_testing',
+          requestCount: typeof request.requestCount === 'number' ? request.requestCount : 1,
+          createdAt: toIso(request.createdAt),
+          lastRequestedAt: toIso(request.lastRequestedAt || request.updatedAt || request.createdAt),
+          emailDeliveryStatus: typeof emailDelivery.status === 'string' ? emailDelivery.status : 'unknown',
+          emailDeliveryReason: typeof emailDelivery.reason === 'string' ? emailDelivery.reason : '',
+        };
+      })
+      .sort((a, b) => new Date(b.lastRequestedAt || b.createdAt || 0).getTime() - new Date(a.lastRequestedAt || a.createdAt || 0).getTime());
+  } catch (error) {
+    console.warn('Admin tester requests unavailable:', error);
+    return [];
+  }
 };
 
 const formatDate = (value?: string | null) => {
@@ -868,6 +924,7 @@ function AdminSidebar({ activeTab, onChange, userName }: { activeTab: AdminTab; 
     { id: 'users', label: 'Users', icon: Users },
     { id: 'usage', label: 'Usage', icon: Zap },
     { id: 'followUp', label: 'Follow-Up', icon: UserRoundCheck },
+    { id: 'testers', label: 'Testers', icon: Smartphone },
   ];
 
   return (
@@ -1124,6 +1181,95 @@ function AdminInspectorPanel({
   );
 }
 
+function TesterRequestsPanel({ requests }: { requests: TesterRequest[] }) {
+  const pendingCount = requests.filter(request => request.status === 'pending').length;
+  const sentEmailCount = requests.filter(request => request.emailDeliveryStatus === 'sent').length;
+
+  return (
+    <div className="glass-card" style={{ padding: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '18px', marginBottom: '22px', flexWrap: 'wrap' }}>
+        <div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+            <Smartphone size={15} />
+            Android closed testing
+          </div>
+          <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.18rem', fontWeight: 760 }}>Tester access requests</h2>
+          <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontWeight: 650, fontSize: '0.86rem' }}>
+            {formatNumber(requests.length)} total requests, {formatNumber(pendingCount)} pending, {formatNumber(sentEmailCount)} email notifications sent.
+          </p>
+        </div>
+        <Link href="/download" className="dashboard-action dashboard-action-secondary" style={{ textDecoration: 'none' }}>
+          <Smartphone size={16} />
+          <span>View public page</span>
+        </Link>
+      </div>
+
+      {requests.length === 0 ? (
+        <EmptyState message="No Android tester requests yet." />
+      ) : (
+        <div style={{ display: 'grid', gap: '14px' }}>
+          {requests.map((request) => (
+            <article key={request.id} className="admin-card" style={{ padding: '18px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '18px', alignItems: 'start' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
+                  <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 800 }}>{request.name || 'Unnamed requester'}</h3>
+                  <span style={{ borderRadius: 999, padding: '4px 8px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 800 }}>
+                    {request.platform || 'android'}
+                  </span>
+                  <span style={{ borderRadius: 999, padding: '4px 8px', background: request.emailDeliveryStatus === 'sent' ? '#dcfce7' : '#fef3c7', color: request.emailDeliveryStatus === 'sent' ? '#166534' : '#92400e', fontSize: '0.68rem', fontWeight: 800 }}>
+                    Email {request.emailDeliveryStatus}
+                  </span>
+                </div>
+                <div style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.82rem', wordBreak: 'break-word', marginBottom: '10px' }}>
+                  {request.email || 'Email unavailable'}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: request.reason ? '12px' : 0 }}>
+                  <TesterMini label="Company" value={request.company || 'Not provided'} />
+                  <TesterMini label="Role" value={request.role || 'Not provided'} />
+                  <TesterMini label="Country" value={request.country || 'Not provided'} />
+                  <TesterMini label="Device" value={request.androidDevice || 'Not provided'} />
+                </div>
+                {request.reason ? (
+                  <p style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 650, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                    {request.reason}
+                  </p>
+                ) : null}
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '12px', color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 700 }}>
+                  <span>Requested {formatDate(request.lastRequestedAt || request.createdAt)}</span>
+                  <span>Count: {request.requestCount}</span>
+                  <span>Status: {request.status}</span>
+                  {request.emailDeliveryReason ? <span>Email note: {request.emailDeliveryReason}</span> : null}
+                </div>
+              </div>
+              <div style={{ display: 'grid', gap: '8px', minWidth: '132px' }}>
+                {request.email ? (
+                  <a href={`mailto:${request.email}?subject=Shrimply Android closed test access`} className="dashboard-action dashboard-action-primary" style={{ textDecoration: 'none', justifyContent: 'center' }}>
+                    <Mail size={14} />
+                    <span>Email</span>
+                  </a>
+                ) : null}
+                <button className="dashboard-action dashboard-action-secondary" type="button" onClick={() => copyText(request.email)}>
+                  <Copy size={14} />
+                  <span>Copy</span>
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TesterMini({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.66rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>{label}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>{value}</div>
+    </div>
+  );
+}
+
 function UsagePanel({ metrics }: { metrics: AdminMetrics }) {
   return (
     <div className="glass-card" style={{ padding: '24px' }}>
@@ -1152,6 +1298,7 @@ export default function HiddenAdminPage() {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [dataSource, setDataSource] = useState<DataSource>(null);
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
+  const [testerRequests, setTesterRequests] = useState<TesterRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedCompany, setSelectedCompany] = useState<CompanyMetric | null>(null);
@@ -1182,11 +1329,16 @@ export default function HiddenAdminPage() {
       const response = await getAdminMetrics({ days: period });
       setMetrics(response.data);
       setDataSource('Cloud Function');
+      setTesterRequests(await getTesterRequestsFromFirestore());
     } catch (err: unknown) {
       console.warn('Admin callable unavailable, using founder Firestore fallback:', err);
       try {
-        const fallbackMetrics = await getAdminMetricsFromFirestore(period);
+        const [fallbackMetrics, requests] = await Promise.all([
+          getAdminMetricsFromFirestore(period),
+          getTesterRequestsFromFirestore(),
+        ]);
         setMetrics(fallbackMetrics);
+        setTesterRequests(requests);
         setDataSource('Firestore fallback');
       } catch (fallbackError: unknown) {
         console.error('Failed to load admin metrics:', fallbackError);
@@ -1367,6 +1519,8 @@ export default function HiddenAdminPage() {
                   <AdminCompanyTable companies={metrics.companies} onSelectCompany={selectCompany} />
                 </div>
               )}
+
+              {activeTab === 'testers' && <TesterRequestsPanel requests={testerRequests} />}
             </div>
           ) : (
             <EmptyState message="No admin metrics loaded yet." />

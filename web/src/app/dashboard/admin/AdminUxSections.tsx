@@ -3,7 +3,7 @@
 import React from 'react';
 import { Activity, BarChart3, Building2, Database, Filter, Search, Sparkles, UserRoundCheck, Users, type LucideIcon } from 'lucide-react';
 
-type AdminTab = 'overview' | 'companies' | 'users' | 'usage' | 'followUp';
+type AdminTab = 'overview' | 'companies' | 'users' | 'usage' | 'followUp' | 'testers';
 
 type AdminMetricsSummary = {
   generatedAt: string;
@@ -45,6 +45,7 @@ export const ADMIN_TABS: Array<{ id: AdminTab; label: string; helper: string }> 
   { id: 'users', label: 'Users', helper: 'Recent signups' },
   { id: 'usage', label: 'Usage', helper: 'AI and API activity' },
   { id: 'followUp', label: 'Follow-up', helper: 'Action queue' },
+  { id: 'testers', label: 'Testers', helper: 'Android access requests' },
 ];
 
 export function AdminTabs({ activeTab, onChange }: { activeTab: AdminTab; onChange: (tab: AdminTab) => void }) {

@@ -7,6 +7,7 @@ Shrimply is shrimp farm management software for vannamei farms and aquaculture t
 - Homepage: https://www.shrimplytech.com/
 - About Shrimply: https://www.shrimplytech.com/about
 - How Shrimply works: https://www.shrimplytech.com/how-it-works
+- Download Shrimply Android app: https://www.shrimplytech.com/download
 - Shrimp farm management software: https://www.shrimplytech.com/shrimp-farm-management-software
 - Vannamei shrimp farming app: https://www.shrimplytech.com/vannamei-shrimp-farming-app
 - Feed inventory: https://www.shrimplytech.com/features/feed-inventory
