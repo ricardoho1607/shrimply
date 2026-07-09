@@ -56,12 +56,12 @@ export default function ShrimpHarvestTrackingPage() {
         },
       ]}
       related={[
-        { href: "/", label: "Homepage" },
-        { href: "/resources", label: "Education Hub" },
-        { href: "/shrimp-farm-management-software", label: "Farm Software" },
-        { href: "/features/shrimp-farm-finance", label: "Farm Finance" },
-        { href: "/resources/shrimp-harvest-tracking", label: "Harvest Guide" },
-        { href: "/how-it-works", label: "How It Works" },
+        { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "See how harvest outcomes complete the pond production record." },
+        { href: "/features/shrimp-farm-finance", label: "Shrimp farm finance tracking", description: "Connect harvested weight, revenue, production cost, and profitability review." },
+        { href: "/features/growth-sampling", label: "Growth sampling and biomass tracking", description: "Use MBW, biomass, population, and mortality context before harvest planning." },
+        { href: "/resources/shrimp-harvest-tracking", label: "Shrimp harvest tracking guide", description: "Read the resource for harvest weights, sizes, partial harvests, and cycle results." },
+        { href: "/resources/pond-performance", label: "Pond performance guide", description: "Understand how final output compares with stocking, feed, water, and mortality records." },
+        { href: "/how-it-works", label: "How Shrimply works", description: "Follow how field records become manager review, reports, and production history." },
       ]}
     />
   );

@@ -17,6 +17,7 @@ export type SeoLandingPageProps = {
   related: Array<{
     href: string;
     label: string;
+    description?: string;
   }>;
   checklist?: string[];
   faqs?: Array<{
@@ -48,6 +49,30 @@ export default function SeoLandingPage({
       url: canonicalUrl("/"),
     },
     about: [eyebrow, "Shrimp farming", "Aquaculture management", "Vannamei shrimp farming"],
+    significantLink: related.map(link => canonicalUrl(link.href)),
+    relatedLink: related.map(link => canonicalUrl(link.href)),
+  };
+  const softwareApplicationJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: `Shrimply ${eyebrow}`,
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "Web, iOS, Android",
+    description: intro,
+    url: pageUrl,
+    isPartOf: {
+      "@type": "SoftwareApplication",
+      name: SITE_CONFIG.name,
+      url: canonicalUrl("/shrimp-farm-management-software"),
+    },
+    featureList: [
+      ...sections.map(section => section.title),
+      ...checklist.slice(0, 5),
+    ],
+    offers: {
+      "@type": "Offer",
+      availability: "https://schema.org/InStock",
+    },
   };
   const breadcrumbJsonLd = {
     "@context": "https://schema.org",
@@ -81,11 +106,27 @@ export default function SeoLandingPage({
         })),
       }
     : null;
+  const relatedPagesJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: `Related Shrimply pages for ${eyebrow}`,
+    itemListElement: related.map((link, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: link.label,
+      description: link.description,
+      url: canonicalUrl(link.href),
+    })),
+  };
 
   return (
     <main>
       <Cursor />
       <Navbar />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareApplicationJsonLd) }}
+      />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webPageJsonLd) }}
@@ -100,6 +141,10 @@ export default function SeoLandingPage({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
         />
       ) : null}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(relatedPagesJsonLd) }}
+      />
 
       <section className="section" style={{ minHeight: "78vh", display: "flex", alignItems: "center" }}>
         <div className="container">
@@ -171,15 +216,36 @@ export default function SeoLandingPage({
           <h2 className="section-title" style={{ maxWidth: "760px", margin: "0 auto 36px", color: "var(--white)" }}>
             Explore more shrimp farm management workflows.
           </h2>
-          <div className="mobile-cta-row" style={{ display: "flex", flexWrap: "wrap", gap: "14px", justifyContent: "center" }}>
+          <div
+            className="resource-card-grid"
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "14px",
+              textAlign: "left",
+            }}
+          >
             {related.map(link => (
               <Link
                 href={link.href}
-                className="btn-outline"
                 key={link.href}
-                style={{ borderColor: "rgba(255,255,255,0.25)", color: "rgba(255,255,255,0.82)" }}
+                style={{
+                  minHeight: "118px",
+                  border: "1px solid rgba(255,255,255,0.18)",
+                  borderRadius: "14px",
+                  padding: "20px",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "rgba(255,255,255,0.86)",
+                }}
               >
-                {link.label}
+                <h3 className="feature-title" style={{ color: "var(--white)", fontSize: "1.08rem", marginBottom: "10px" }}>
+                  {link.label}
+                </h3>
+                {link.description ? (
+                  <p style={{ color: "rgba(255,255,255,0.72)", fontWeight: 500, fontSize: "0.94rem" }}>
+                    {link.description}
+                  </p>
+                ) : null}
               </Link>
             ))}
           </div>

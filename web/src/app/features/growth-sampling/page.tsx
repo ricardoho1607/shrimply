@@ -56,12 +56,12 @@ export default function GrowthSamplingPage() {
         },
       ]}
       related={[
-        { href: "/", label: "Homepage" },
-        { href: "/vannamei-shrimp-farming-app", label: "Vannamei App" },
-        { href: "/features/feed-inventory", label: "Feed Inventory" },
-        { href: "/features/water-quality-monitoring", label: "Water Quality" },
-        { href: "/resources", label: "Education Hub" },
-        { href: "/how-it-works", label: "How It Works" },
+        { href: "/vannamei-shrimp-farming-app", label: "Vannamei shrimp farming app", description: "See the mobile and web app context for DOC, MBW, ADG, FCR, and pond records." },
+        { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "Review how sampling supports pond performance, reports, finance, and harvest planning." },
+        { href: "/features/feed-inventory", label: "Feed inventory tracking", description: "Keep actual feed stock movement separate from sampling feed observations." },
+        { href: "/features/water-quality-monitoring", label: "Water quality monitoring", description: "Compare sampling outcomes with recent water quality trends and pond stress signals." },
+        { href: "/resources/pond-performance", label: "Pond performance guide", description: "Read how sampling, feed, mortality, and harvest records explain cycle performance." },
+        { href: "/resources/shrimp-cycle-planning", label: "Shrimp cycle planning guide", description: "Use growth records to plan stocking, feeding, projections, and harvest timing." },
       ]}
     />
   );

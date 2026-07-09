@@ -56,12 +56,12 @@ export default function FeedInventoryPage() {
         },
       ]}
       related={[
-        { href: "/", label: "Homepage" },
-        { href: "/shrimp-farm-management-software", label: "Farm Software" },
-        { href: "/features/growth-sampling", label: "Growth Sampling" },
-        { href: "/resources/feed-inventory-control", label: "Feed Inventory Guide" },
-        { href: "/resources", label: "Education Hub" },
-        { href: "/how-it-works", label: "How It Works" },
+        { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "See how feed stock connects with pond, finance, harvest, and reporting workflows." },
+        { href: "/vannamei-shrimp-farming-app", label: "Vannamei shrimp farming app", description: "Review the mobile and web app context for daily vannamei farm records." },
+        { href: "/features/growth-sampling", label: "Growth sampling and FCR tracking", description: "Connect feed-use accuracy with MBW, biomass, ADG, and FCR interpretation." },
+        { href: "/resources/feed-inventory-control", label: "Feed inventory control guide", description: "Read the practical resource for stock movement, reorder visibility, and feed accountability." },
+        { href: "/resources/fcr-shrimp-farming", label: "FCR in shrimp farming", description: "Understand why reliable feed records are essential for interpreting feed conversion ratio." },
+        { href: "/how-it-works", label: "How Shrimply works", description: "Follow the operating flow from field logging to manager review and reports." },
       ]}
     />
   );

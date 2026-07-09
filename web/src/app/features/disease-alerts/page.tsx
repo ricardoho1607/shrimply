@@ -56,12 +56,12 @@ export default function DiseaseAlertsPage() {
         },
       ]}
       related={[
-        { href: "/", label: "Homepage" },
-        { href: "/resources", label: "Education Hub" },
-        { href: "/shrimp-farm-management-software", label: "Farm Software" },
-        { href: "/features/water-quality-monitoring", label: "Water Quality" },
-        { href: "/resources/shrimp-disease-alerts", label: "Disease Alert Guide" },
-        { href: "/orson", label: "Orson AI" },
+        { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "See how disease-risk visibility fits into pond operations and reporting." },
+        { href: "/features/water-quality-monitoring", label: "Water quality monitoring", description: "Review pond conditions that can strengthen disease-risk and stress interpretation." },
+        { href: "/features/growth-sampling", label: "Growth sampling and mortality tracking", description: "Connect disease alerts with growth movement, appetite, and mortality records." },
+        { href: "/resources/shrimp-disease-alerts", label: "Shrimp disease alert guide", description: "Read how alert context supports faster farm response and biosecurity review." },
+        { href: "/resources/white-feces-disease-shrimp", label: "White feces disease guide", description: "Learn how symptoms, feed response, and pond records can support disease review." },
+        { href: "/orson", label: "Orson AI for risk analysis", description: "See how Orson uses recent pond records to interpret growth, feed, water, and disease signals." },
       ]}
     />
   );

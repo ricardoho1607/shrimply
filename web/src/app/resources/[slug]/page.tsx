@@ -17,6 +17,18 @@ type ResourcePageProps = {
 
 const stripSubtitle = (title: string) => title.split(":")[0];
 
+const relatedFeatureLabels: Record<string, string> = {
+  "/shrimp-farm-management-software": "Shrimp farm management software",
+  "/vannamei-shrimp-farming-app": "Vannamei shrimp farming app",
+  "/features/feed-inventory": "Shrimp feed inventory tracking",
+  "/features/water-quality-monitoring": "Shrimp pond water quality monitoring",
+  "/features/growth-sampling": "Shrimp growth sampling and MBW tracking",
+  "/features/shrimp-harvest-tracking": "Shrimp harvest tracking software",
+  "/features/shrimp-farm-finance": "Shrimp farm finance tracking",
+  "/features/disease-alerts": "Shrimp disease alerts and biosecurity",
+  "/resources": "Shrimp farming resources library",
+};
+
 const buildArticleFaqs = (article: NonNullable<ReturnType<typeof getResourceArticle>>) => {
   const topic = stripSubtitle(article.title).toLowerCase();
   const primaryTag = article.tags?.[0] ?? article.section.toLowerCase();
@@ -98,6 +110,28 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
   const relatedArticles = resourceArticles
     .filter(item => item.section === article.section && item.slug !== article.slug)
     .slice(0, 2);
+  const primaryRelatedLabel = relatedFeatureLabels[article.relatedFeature.href] ?? article.relatedFeature.label;
+  const relatedInternalLinks = [
+    {
+      href: article.relatedFeature.href,
+      label: primaryRelatedLabel,
+      description: article.relatedFeature.href === "/resources"
+        ? "Browse more Shrimply guides for feed, water quality, growth, disease, harvest, and finance workflows."
+        : `Explore how ${primaryRelatedLabel.toLowerCase()} connects with this farm guide in Shrimply.`,
+    },
+    ...relatedArticles.map(related => ({
+      href: `/resources/${related.slug}`,
+      label: related.title,
+      description: related.description,
+    })),
+  ];
+  if (!relatedInternalLinks.some(link => link.href === "/resources")) {
+    relatedInternalLinks.push({
+      href: "/resources",
+      label: "Shrimp farming resources library",
+      description: "Browse more practical Shrimply guides for vannamei farm operations and management.",
+    });
+  }
   const faqs = buildArticleFaqs(article);
 
   const jsonLd = {
@@ -123,6 +157,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     mainEntityOfPage: canonicalUrl(`/resources/${article.slug}`),
     about: [article.section, "Shrimp farming", "Vannamei shrimp farming", "Aquaculture management"],
     keywords: article.tags,
+    relatedLink: relatedInternalLinks.map(link => canonicalUrl(link.href)),
     datePublished: article.publishedAt,
     dateModified: article.publishedAt,
     image: article.image ? `${SITE_CONFIG.url}${article.image.src}` : undefined,
@@ -163,6 +198,18 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
       },
     ],
   };
+  const relatedPagesJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: `Related Shrimply pages for ${article.title}`,
+    itemListElement: relatedInternalLinks.map((link, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: link.label,
+      description: link.description,
+      url: canonicalUrl(link.href),
+    })),
+  };
 
   return (
     <main>
@@ -179,6 +226,10 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(relatedPagesJsonLd) }}
       />
 
       <article style={{ background: "var(--off-white)" }}>
@@ -302,15 +353,15 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                 </section>
 
                 <section style={{ marginTop: "64px", borderTop: "1px solid var(--slate)", paddingTop: "34px" }}>
-                  <div className="eyebrow" style={{ marginBottom: "20px" }}>Related Topics</div>
+                  <div className="eyebrow" style={{ marginBottom: "20px" }}>Related Shrimply Pages</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "16px" }}>
-                    {relatedArticles.map(related => (
+                    {relatedInternalLinks.map(related => (
                       <Link
-                        href={`/resources/${related.slug}`}
-                        key={related.slug}
+                        href={related.href}
+                        key={related.href}
                         style={{ background: "var(--off-white)", border: "1px solid var(--slate)", borderRadius: "14px", padding: "22px" }}
                       >
-                        <h3 className="feature-title" style={{ fontSize: "1.18rem", marginBottom: "10px" }}>{related.title}</h3>
+                        <h3 className="feature-title" style={{ fontSize: "1.18rem", marginBottom: "10px" }}>{related.label}</h3>
                         <p style={{ fontWeight: 500 }}>{related.description}</p>
                       </Link>
                     ))}

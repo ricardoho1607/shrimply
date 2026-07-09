@@ -56,13 +56,12 @@ export default function ShrimpFarmFinancePage() {
         },
       ]}
       related={[
-        { href: "/", label: "Homepage" },
-        { href: "/shrimp-farm-management-software", label: "Farm Software" },
-        { href: "/features/shrimp-harvest-tracking", label: "Harvest Tracking" },
-        { href: "/resources/shrimp-farm-cogs", label: "COGS Guide" },
-        { href: "/resources/shrimp-farm-cash-flow", label: "Cash Flow Guide" },
-        { href: "/resources", label: "Education Hub" },
-        { href: "/how-it-works", label: "How It Works" },
+        { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "See how finance connects with pond records, inventory, reports, and production outcomes." },
+        { href: "/features/feed-inventory", label: "Feed inventory and cost tracking", description: "Track feed stock and movement so inventory value can support farm cost review." },
+        { href: "/features/shrimp-harvest-tracking", label: "Shrimp harvest tracking", description: "Connect harvested weight and sale context with revenue and cycle profitability." },
+        { href: "/resources/shrimp-farm-cogs", label: "Shrimp farm COGS guide", description: "Read how production costs should be separated from cash timing and projections." },
+        { href: "/resources/shrimp-farm-cash-flow", label: "Shrimp farm cash flow guide", description: "Understand why cash movement and profit reporting answer different farm questions." },
+        { href: "/how-it-works", label: "How Shrimply works", description: "Follow the operating flow from farm logging to finance reports and owner review." },
       ]}
     />
   );
