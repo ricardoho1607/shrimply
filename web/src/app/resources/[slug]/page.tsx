@@ -30,6 +30,10 @@ const relatedFeatureLabels: Record<string, string> = {
 };
 
 const buildArticleFaqs = (article: NonNullable<ReturnType<typeof getResourceArticle>>) => {
+  if (article.faqs?.length) {
+    return article.faqs;
+  }
+
   const topic = stripSubtitle(article.title).toLowerCase();
   const primaryTag = article.tags?.[0] ?? article.section.toLowerCase();
   const firstSection = article.sections[0];

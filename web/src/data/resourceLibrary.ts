@@ -30,6 +30,10 @@ export type ResourceArticle = {
     body: string[];
   }[];
   checklist: string[];
+  faqs?: {
+    question: string;
+    answer: string;
+  }[];
   sources: ResourceSource[];
 };
 
@@ -255,6 +259,16 @@ export const resourceArticles: ResourceArticle[] = [
       "Sampling checkpoints help farms adjust feed and harvest timing before the final weeks.",
       "Disease and water-quality risk should be included in planning, not treated as separate work.",
     ],
+    faqs: [
+      {
+        question: "What stocking density should I use for vannamei shrimp?",
+        answer: "There is no single safe density for every farm. Set density from the pond system, aeration, water source, expected survival, management capacity, biosecurity plan, and target harvest size. Review the plan before stocking and reduce assumptions that the farm cannot monitor or support consistently.",
+      },
+      {
+        question: "How do I plan a shrimp crop from stocking to harvest?",
+        answer: "Define the target harvest size and window, initial stocking plan, expected survival, feed demand, sampling checkpoints, water-quality review points, disease-risk actions, and cash requirements. Then adjust the plan using actual sampling, feed, mortality, and harvest records.",
+      },
+    ],
     sections: [
       {
         heading: "What a useful cycle plan includes",
@@ -337,6 +351,109 @@ export const resourceArticles: ResourceArticle[] = [
     sources: [sources.faoRecords, sources.faoFeedRecords, sources.faoVannamei],
   },
   {
+    slug: "slow-shrimp-growth-adg-troubleshooting",
+    section: "Growth and Sampling",
+    label: "Growth and Sampling",
+    title: "Slow Shrimp Growth: An ADG Troubleshooting Guide for Vannamei Farms",
+    description: "Why is shrimp growth slow? Use MBW, ADG, feed-tray response, water-quality trends, survival, and health observations to find the reason before the harvest plan drifts.",
+    readTime: "8 min read",
+    tags: ["slow shrimp growth", "ADG", "average daily growth", "MBW", "biomass", "survival", "vannamei growth", "size variation", "growth sampling"],
+    publishedAt: "2026-07-10",
+    image: {
+      src: "/resources/images/slow-shrimp-growth-adg-troubleshooting-vannamei.png",
+      alt: "Shrimply infographic for troubleshooting slow vannamei shrimp growth using sampling, biomass and survival validation, feed-tray response, water-quality trends, and health checks",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Growth Sampling", href: "/features/growth-sampling" },
+    takeaways: [
+      "Slow growth is a pattern to investigate, not a diagnosis by itself.",
+      "Confirm sampling, biomass, and survival before changing feed, treatments, or the harvest plan.",
+      "The useful review connects MBW and ADG with feed response, water trends, survival, stocking pressure, and health observations.",
+    ],
+    faqs: [
+      {
+        question: "Why are my shrimp growing slowly?",
+        answer: "Slow growth can be associated with inconsistent sampling, inaccurate biomass or survival estimates, feed distribution, weak appetite, water-quality stress, crowding, weather changes, and health problems such as EHP. Review the full pond pattern before assuming a single cause.",
+      },
+      {
+        question: "How do I calculate ADG in shrimp farming?",
+        answer: "ADG is the change in average body weight divided by the days between two comparable samplings: ADG = (latest MBW − previous MBW) / days between samples. If only one valid sampling exists, compare it with the stocking weight and elapsed days, while noting that this estimate is less reliable.",
+      },
+      {
+        question: "What does a clean feed tray mean when shrimp MBW is flat?",
+        answer: "A clean tray shows feed was removed from that tray, not that the ration or biomass estimate is correct. Verify survival and biomass, feed distribution, tray placement, shrimp condition, water trends, size variation, and health signs before increasing feed.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Slow growth is a warning signal—act before feed becomes waste",
+        body: [
+          "Slow growth is not one problem with one cure. It is a warning that the pond is not converting feed, water conditions, and stock potential into expected weight gain. Treat it as a pattern when MBW or ADG repeatedly misses the farm's crop plan, size variation increases, or feed use rises without matching biomass gain.",
+          "Do not automatically increase feed. First confirm the data, then identify what is limiting growth. There is no universal ADG target that fits every vannamei farm: density, pond system, season, salinity, feed, aeration, disease pressure, and target harvest size all affect what is realistic.",
+        ],
+      },
+      {
+        heading: "Step 1: Confirm that growth is genuinely slow",
+        body: [
+          "Calculate average daily growth as: ADG = (latest MBW − previous MBW) / days between samplings. Compare two or more consistent samplings and record DOC, sample count, sampling area, MBW, size variation, feed issued, mortality, and recent water-quality readings.",
+          "One low sample does not always mean a growth problem. If MBW and ADG remain weak over comparable samplings, treat it as a real pond-performance issue. If one reliable sampling is missing or uncertain, label it as uncertain and schedule the next sampling before making a major feed or harvest decision.",
+        ],
+      },
+      {
+        heading: "Step 2: Read clean trays correctly",
+        body: [
+          "A clean tray means feed was removed from that tray. It does not prove that shrimp are growing well, that the ration is correct, or that the pond needs more feed. If trays are consistently clean but MBW is flat, first verify whether actual survival and biomass are higher than estimated. Underestimating shrimp numbers can leave the pond underfed per unit of biomass, so trays may clear quickly while individual growth slows.",
+          "Then review feed distribution across the full pond, tray placement, shrimp gut fullness and condition, size variation, water-quality trends, mortality, and health-risk signs. If trays have leftovers, appetite is weak, or shrimp are inactive, do not increase feed. Hold or adjust the ration gradually under the farm SOP while checking water quality and health.",
+        ],
+      },
+      {
+        heading: "Step 3: Correct water conditions before pushing feed",
+        body: [
+          "Water stress can reduce appetite and growth before a visible crisis occurs. Review the recent trend for dissolved oxygen, pH, temperature, salinity, ammonia, and nitrite—not a single reading. If oxygen is falling or appetite drops, inspect aerators, check for dead zones, organic load, algae changes, and recent feed increases. Do not increase feed until appetite and water stability recover.",
+          "If ammonia or nitrite is rising, stop ration increases, reduce avoidable feed waste, and review pond-bottom condition, aeration, and the farm's approved water-management procedure. Recheck readings after corrective action. Fixing the pond environment is often more important than changing the feed table.",
+        ],
+      },
+      {
+        heading: "Step 4: Recalculate survival and biomass",
+        body: [
+          "Feed decisions should be based on actual biomass, not only the original stocking plan. Review mortality, cast-net observations, sample counts, and shrimp condition. If survival has been underestimated, the pond may have more shrimp competing for the same ration than expected. If mortality has been missed, the farm may be overestimating biomass and issuing too much feed.",
+          "Update estimated population and biomass before setting the next feed plan. When biomass is lower or higher than expected, do not change feed automatically: first confirm how many shrimp remain, whether they are eating, and whether pond conditions can support growth.",
+        ],
+      },
+      {
+        heading: "Step 5: Rule out health problems without guessing",
+        body: [
+          "Persistent slow growth, uneven size, poor FCR, pale or empty gut, weak appetite, soft shell, white feces, or chronic mortality may point to a health issue as well as a feed or water problem. Slow growth alone cannot diagnose EHP, WFD, Vibrio-related disease, or another condition.",
+          "Record the pattern by pond and DOC, control movement of nets, boots, tools, water, sludge, and staff between suspect and unaffected ponds, and seek appropriate laboratory or veterinary support when the pattern persists. Do not use medication as a substitute for evidence, water stability, or a controlled response plan.",
+        ],
+      },
+      {
+        heading: "A practical 48-hour response plan",
+        body: [
+          "Today: validate MBW, ADG, sample method, and sample count; check feed trays, shrimp behaviour, mortality, and aeration; record water-quality readings and weather; and do not increase feed until the pond review is complete.",
+          "Tomorrow: compare the last three to five sampling, water-quality, appetite, feed, and mortality records; identify the clearest operational issue; and correct it gradually while documenting the action. At the next sampling, recalculate MBW, ADG, survival, biomass, and FCR. If growth remains weak or health signs increase, escalate diagnostics rather than repeating unproven actions.",
+        ],
+      },
+      {
+        heading: "Confirm recovery with records",
+        body: [
+          "A pond has not recovered just because trays are clean or water looks better for one day. Confirm recovery through improved appetite, stable water trends, realistic mortality records, and better MBW and ADG at the next comparable sampling.",
+          "Shrimply helps the team connect sampling, feed logs, water trends, mortality, disease notes, and harvest planning in one pond record—so the farm can see whether an action actually improved growth.",
+        ],
+      },
+    ],
+    checklist: [
+      "Confirm MBW, sample count, sample method, and days between samplings before acting on ADG.",
+      "Validate survival and biomass before increasing feed when trays are clean but MBW is flat.",
+      "Review feed distribution, tray placement, shrimp condition, water trends, mortality, and size variation together.",
+      "Do not increase feed into weak appetite or unstable water.",
+      "Correct the clearest operational issue gradually and document the action.",
+      "Escalate persistent slow growth or abnormal signs through the farm's biosecurity, diagnostic, and veterinary process.",
+    ],
+    sources: [sources.faoVannamei, sources.faoFeedManagement, sources.seafdecBmp, sources.woahEhpDiseaseCard],
+  },
+  {
     slug: "fcr-shrimp-farming",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
@@ -357,6 +474,16 @@ export const resourceArticles: ResourceArticle[] = [
       "FCR compares feed used against biomass gained, but bad records can make it misleading.",
       "Mortality, partial harvests, sampling quality, and feed stock errors all affect FCR.",
       "FCR should be reviewed with growth, water quality, survival, and feed behavior.",
+    ],
+    faqs: [
+      {
+        question: "How do I calculate FCR in shrimp farming?",
+        answer: "Calculate FCR as total feed used divided by biomass gained. For a useful pond result, include every partial harvest, final harvest, and remaining biomass, then subtract initial stocked biomass where reliable records exist.",
+      },
+      {
+        question: "Why is my shrimp FCR increasing?",
+        answer: "A rising FCR can be linked to excess feed, weak appetite, inaccurate biomass estimates, missed mortality, incomplete harvest records, water-quality stress, or feed stock errors. Review feed trays, DO, ammonia, nitrite, sampling, mortality, and harvest entries together before changing the ration.",
+      },
     ],
     sections: [
       {
@@ -470,6 +597,16 @@ export const resourceArticles: ResourceArticle[] = [
       "Tray results should be connected to water quality, weather, molting, and disease signals.",
       "Consistent tray records can reduce waste and improve feed decisions.",
     ],
+    faqs: [
+      {
+        question: "How much should I feed shrimp each day?",
+        answer: "Use the farm feeding plan as a starting point, then adjust gradually using estimated biomass, shrimp size, feed-tray observations, recent sampling, water quality, weather, and mortality. Do not increase feed from appetite alone without checking whether growth and pond conditions support it.",
+      },
+      {
+        question: "What does leftover feed in a shrimp feed tray mean?",
+        answer: "Leftover feed can indicate overfeeding or reduced appetite from low oxygen, water-quality stress, molting, disease risk, or weather. Confirm the pattern across trays and recent pond records before making a major feeding change.",
+      },
+    ],
     sections: [
       {
         heading: "What feed trays are trying to tell you",
@@ -505,9 +642,9 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Water, Health, and Risk",
     label: "Water Quality",
     title: "Shrimp Pond Water Quality Trends: Reading DO, pH, Salinity, Ammonia, and Nitrite Together",
-    description: "A practical guide to shrimp pond water-quality trends and why farmers should review dissolved oxygen, pH, temperature, salinity, ammonia, and nitrite together.",
+    description: "Which shrimp pond water parameters should you test? Learn how to review dissolved oxygen, pH, temperature, salinity, ammonia, and nitrite together before they become a pond-risk pattern.",
     readTime: "7 min read",
-    tags: ["water quality", "DO", "pH", "ammonia", "nitrite", "salinity"],
+    tags: ["shrimp water quality", "shrimp pond water parameters", "dissolved oxygen", "DO", "pH", "ammonia", "nitrite", "salinity"],
     publishedAt: "2026-06-08",
     image: {
       src: "/resources/images/shrimp-pond-water-quality-trends-monitoring.jpg",
@@ -520,6 +657,20 @@ export const resourceArticles: ResourceArticle[] = [
       "Water quality should be interpreted as a trend, not isolated readings.",
       "Ammonia, nitrite, DO, pH, temperature, and salinity interact with shrimp stress.",
       "Feed waste and organic load can worsen water-quality risk.",
+    ],
+    faqs: [
+      {
+        question: "What water parameters should I test in a shrimp pond?",
+        answer: "At minimum, consistently track the farm's operational parameters for dissolved oxygen, pH, temperature, salinity, ammonia, and nitrite, with the time of each reading. The right monitoring plan also depends on the farm system, season, stocking density, and local technical guidance.",
+      },
+      {
+        question: "What should I check when dissolved oxygen drops in a shrimp pond?",
+        answer: "Confirm the reading and timing, check aeration and shrimp behaviour, review recent feeding and organic load, compare pH and temperature movement, and inspect ammonia and nitrite where available. Escalate through the farm's oxygen-response procedure rather than assuming one measurement explains the cause.",
+      },
+      {
+        question: "Why should ammonia, pH, and temperature be reviewed together?",
+        answer: "These conditions interact: pH and temperature affect the proportion of ammonia present in the more toxic un-ionised form. A trend-based review is more useful than treating any one measurement as a complete diagnosis.",
+      },
     ],
     sections: [
       {
@@ -556,9 +707,9 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Water, Health, and Risk",
     label: "Disease Risk",
     title: "Shrimp Disease Alerts: Turning Farm Observations Into Faster Response",
-    description: "Learn how shrimp farms can use mortality, appetite, water quality, behavior, and nearby disease risk to create practical disease alert workflows.",
+    description: "What are the early signs of shrimp disease? Use mortality, appetite, water quality, behaviour, and biosecurity observations to create a faster, evidence-based farm response.",
     readTime: "7 min read",
-    tags: ["disease alerts", "Vibrio", "AHPND", "EHP", "WSSV", "mortality", "biosecurity"],
+    tags: ["shrimp disease signs", "shrimp disease prevention", "disease alerts", "Vibrio", "AHPND", "EHP", "WSSV", "mortality", "biosecurity"],
     publishedAt: "2026-06-08",
     image: {
       src: "/resources/images/shrimp-disease-alerts-vibrio-ahpnd-biosecurity.jpg",
@@ -571,6 +722,16 @@ export const resourceArticles: ResourceArticle[] = [
       "Disease response improves when farms track early warning signals consistently.",
       "Alerts should combine mortality, appetite, behavior, water quality, and regional risk.",
       "Biosecurity and better management practices reduce preventable losses.",
+    ],
+    faqs: [
+      {
+        question: "What are the early signs of disease in shrimp?",
+        answer: "Watch for appetite changes, unusual swimming, colour change, soft shell, rising mortality, water-quality instability, and unusual feed-tray observations. These signals do not confirm a disease by themselves, but they warrant a rapid pond review and appropriate diagnostic support.",
+      },
+      {
+        question: "How can shrimp farmers prevent disease outbreaks?",
+        answer: "Prevention combines biosecurity, quality post-larvae, controlled water and equipment movement, consistent water-quality and appetite records, early mortality review, and diagnostic escalation. A farm should follow local regulations and veterinary guidance for any treatment decisions.",
+      },
     ],
     sections: [
       {
@@ -607,9 +768,9 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Water, Health, and Risk",
     label: "Disease Risk",
     title: "Shrimp Mortality Tracking: How Loss Records Protect Biomass, FCR, and Harvest Planning",
-    description: "A farmer-focused guide to shrimp mortality tracking and why accurate loss records improve biomass estimates, FCR, disease response, and harvest planning.",
+    description: "Why are shrimp dying in my pond? Learn how mortality records help farmers investigate sudden loss, protect biomass estimates, improve FCR accuracy, and trigger a timely disease-risk response.",
     readTime: "6 min read",
-    tags: ["mortality", "survival", "disease risk", "biomass", "AHPND"],
+    tags: ["shrimp mortality", "shrimp dying", "sudden mortality", "survival", "disease risk", "biomass", "AHPND"],
     publishedAt: "2026-06-08",
     image: {
       src: "/resources/images/shrimp-mortality-tracking-survival-biomass.jpg",
@@ -622,6 +783,16 @@ export const resourceArticles: ResourceArticle[] = [
       "Mortality affects population, biomass, FCR, and harvest expectations.",
       "Daily mortality trends are more useful than occasional totals.",
       "Mortality records should trigger review of water, disease, and feed response.",
+    ],
+    faqs: [
+      {
+        question: "Why are shrimp dying in my pond?",
+        answer: "Mortality can be associated with water-quality stress, disease, feed response, handling, predators, and other operational conditions. Record the timing, pond area, shrimp condition, appetite, water readings, and recent changes, then follow the farm's biosecurity and diagnostic escalation process.",
+      },
+      {
+        question: "How does shrimp mortality affect FCR and harvest planning?",
+        answer: "Unrecorded losses overstate population and biomass, which can lead to overfeeding, misleading FCR, and unrealistic harvest expectations. Update population and biomass assumptions when a mortality pattern is confirmed.",
+      },
     ],
     sections: [
       {
@@ -976,9 +1147,9 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Harvest and Finance",
     label: "Harvest and Finance",
     title: "Shrimp Harvest Tracking: What to Record Before, During, and After Harvest",
-    description: "Learn which shrimp harvest records matter for partial harvests, final harvests, buyer readiness, pond history, revenue, and cycle performance.",
+    description: "When should shrimp farmers harvest or partially harvest? Learn which pond, size, biomass, buyer, price, and cycle records support a well-documented harvest decision.",
     readTime: "6 min read",
-    tags: ["harvest", "partial harvest", "buyer", "revenue", "cycle performance"],
+    tags: ["when to harvest shrimp", "shrimp harvest", "partial harvest", "buyer", "shrimp price", "revenue", "cycle performance"],
     publishedAt: "2026-06-08",
     image: {
       src: "/resources/images/shrimp-harvest-tracking-partial-final-harvest.jpg",
@@ -991,6 +1162,16 @@ export const resourceArticles: ResourceArticle[] = [
       "Harvest tracking should separate partial harvests from final harvests.",
       "Harvest records affect remaining biomass, revenue, and cycle analysis.",
       "Poor harvest records make FCR and profitability harder to trust.",
+    ],
+    faqs: [
+      {
+        question: "When should I harvest shrimp?",
+        answer: "Harvest timing should be based on the farm's target size, current growth and survival, estimated biomass, feed demand, pond risk, buyer specifications, price, and operational readiness. It is a farm decision, not a fixed DOC rule.",
+      },
+      {
+        question: "What should I record for a partial shrimp harvest?",
+        answer: "Record the pond, date, harvest type, weight, size, buyer, price, rejects or mortality where relevant, and harvest conditions. Then update remaining biomass and the feeding plan so the cycle records remain accurate.",
+      },
     ],
     sections: [
       {
@@ -1027,9 +1208,9 @@ export const resourceArticles: ResourceArticle[] = [
     section: "Harvest and Finance",
     label: "Harvest and Finance",
     title: "Shrimp Farm COGS: Understanding the True Cost of a Crop Cycle",
-    description: "A practical guide to shrimp farm cost of goods sold, including feed, seed, labor, energy, treatments, harvest cost, and cycle profitability.",
+    description: "Is your shrimp crop profitable? Learn how to calculate shrimp farm cost of goods sold using feed, seed, labor, energy, treatments, harvest costs, and kilograms sold.",
     readTime: "7 min read",
-    tags: ["COGS", "farm finance", "feed cost", "profitability", "cycle cost"],
+    tags: ["shrimp farming profitability", "shrimp farm cost", "COGS", "farm finance", "feed cost", "cost per kg", "profitability", "cycle cost"],
     publishedAt: "2026-06-08",
     image: {
       src: "/resources/images/shrimp-farm-cogs-cycle-cost-profitability.jpg",
@@ -1042,6 +1223,16 @@ export const resourceArticles: ResourceArticle[] = [
       "COGS connects production cost to harvested output.",
       "Feed, seed, labor, energy, and treatments should be tied to pond cycles.",
       "Profitability analysis improves when biological and finance records agree.",
+    ],
+    faqs: [
+      {
+        question: "How do I calculate shrimp farm profitability?",
+        answer: "Start with complete cycle revenue, then compare it with feed, seed, labour, energy, treatments, harvest, logistics where relevant, and allocated overhead where the farm tracks it. Review the result alongside survival, FCR, growth, harvest size, and sale price.",
+      },
+      {
+        question: "What costs should be included in shrimp farm COGS?",
+        answer: "A practical cycle view includes seed, feed, labour, energy, pond preparation, minerals or treatments, health management, harvest labour, packing or logistics where relevant, and consistently allocated overhead. Record costs as they occur rather than reconstructing them after harvest.",
+      },
     ],
     sections: [
       {

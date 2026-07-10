@@ -20,6 +20,7 @@ Shrimply is shrimp farm management software for vannamei farms and aquaculture t
 - Pond performance: https://www.shrimplytech.com/resources/pond-performance
 - Shrimp cycle planning: https://www.shrimplytech.com/resources/shrimp-cycle-planning
 - Shrimp farm record keeping: https://www.shrimplytech.com/resources/shrimp-farm-record-keeping
+- Slow shrimp growth and ADG troubleshooting: https://www.shrimplytech.com/resources/slow-shrimp-growth-adg-troubleshooting
 - Improving FCR in shrimp farming: https://www.shrimplytech.com/resources/fcr-shrimp-farming
 - Feed inventory control: https://www.shrimplytech.com/resources/feed-inventory-control
 - Feed tray observations: https://www.shrimplytech.com/resources/feed-tray-observations
