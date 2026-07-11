@@ -1544,57 +1544,59 @@ export default function PondManagementScreen() {
             <Text style={[styles.cycleFilterText, cycleFilter === 'ended' && styles.cycleFilterTextActive]}>{t.farmCycle.filterEnded}</Text>
           </TouchableOpacity>
         </View>
-        {cycleFilter === 'inactive' && idlePhysicalPonds.length > 0 && (
-          <View style={styles.scrollContent}>
-            {idlePhysicalPonds.map((pond) => (
-              <TouchableOpacity
-                key={pond.id}
-                style={styles.pondCard}
-                onPress={() => {
-                  setFormData((prev) => ({ ...prev, cyclePondId: pond.id }));
-                  openModal('cycle');
-                }}
-              >
-                <View style={[styles.pondHeader, styles.idlePondHeader]}>
-                  <View style={[styles.pondTitleGroup, styles.idlePondTitleGroup]}>
-                    <Text style={[styles.pondName, styles.idlePondName]}>{pond.pondName}</Text>
-                    <Text style={styles.midcycleBadgeText}>Idle pond</Text>
-                  </View>
-                  <View style={styles.headerRight}>
-                    <TouchableOpacity style={styles.editButton}>
-                      <Ionicons name="play-outline" size={18} color="#315f57" />
-                    </TouchableOpacity>
-                    {canEditPonds && (
-                      <TouchableOpacity
-                        style={styles.deletePondButton}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          handleDeletePhysicalPond(pond);
-                        }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${t.home.deletePond} ${pond.pondName}`}
-                      >
-                        <Ionicons name="trash-outline" size={18} color="#e74c3c" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-                <View style={styles.pondDetails}>
-                  <View style={styles.detailRow}>
-                    <DetailItem iconName="resize-outline" label={t.forms.pondSize} value={`${pond.pondArea} m²`} />
-                    <DetailItem iconName="time-outline" label="Status" value="No active cycle" />
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
         <FlatList 
           data={visiblePonds}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => <PondCard pond={item} />}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            cycleFilter === 'inactive' && idlePhysicalPonds.length > 0 ? (
+              <>
+                {idlePhysicalPonds.map((pond) => (
+                  <TouchableOpacity
+                    key={pond.id}
+                    style={styles.pondCard}
+                    onPress={() => {
+                      setFormData((prev) => ({ ...prev, cyclePondId: pond.id }));
+                      openModal('cycle');
+                    }}
+                  >
+                    <View style={[styles.pondHeader, styles.idlePondHeader]}>
+                      <View style={[styles.pondTitleGroup, styles.idlePondTitleGroup]}>
+                        <Text style={[styles.pondName, styles.idlePondName]}>{pond.pondName}</Text>
+                        <Text style={styles.midcycleBadgeText}>Idle pond</Text>
+                      </View>
+                      <View style={styles.headerRight}>
+                        <TouchableOpacity style={styles.editButton}>
+                          <Ionicons name="play-outline" size={18} color="#315f57" />
+                        </TouchableOpacity>
+                        {canEditPonds && (
+                          <TouchableOpacity
+                            style={styles.deletePondButton}
+                            onPress={(e) => {
+                              e.stopPropagation();
+                              handleDeletePhysicalPond(pond);
+                            }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`${t.home.deletePond} ${pond.pondName}`}
+                          >
+                            <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                    <View style={styles.pondDetails}>
+                      <View style={styles.detailRow}>
+                        <DetailItem iconName="resize-outline" label={t.forms.pondSize} value={`${pond.pondArea} m²`} />
+                        <DetailItem iconName="time-outline" label="Status" value="No active cycle" />
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : null
+          }
           ListEmptyComponent={
             cycleFilter === 'inactive' && idlePhysicalPonds.length > 0 ? null :
             <View style={styles.emptyState}>
