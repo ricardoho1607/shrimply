@@ -3,7 +3,7 @@ export type OrsonCapability =
   | 'water_quality_risk_detection'
   | 'growth_adg_analysis'
   | 'feed_fcr_analysis'
-  | 'appetite_stress_analysis'
+  | 'feed_allocation_trend_analysis'
   | 'harvest_projection_risk_analysis'
   | 'seventy_two_hour_outlook'
   | 'proactive_notifications';
@@ -32,15 +32,15 @@ export const ORSON_PRODUCT_PROMISE =
 
 export const ORSON_SUPPORTED_CAPABILITIES: Record<OrsonCapability, string> = {
   pond_health_analysis:
-    'Summarize current pond status using DOC, MBW, estimated biomass, mortality, water quality, feed, and appetite data where available.',
+    'Summarize current pond status using DOC, MBW, estimated biomass, mortality, water quality, and feed data where available.',
   water_quality_risk_detection:
     'Detect risk patterns from pH, DO, salinity, temperature if available, and recent trend direction.',
   growth_adg_analysis:
     'Calculate and interpret growth performance from valid MBW records while accounting for noisy manual sampling.',
   feed_fcr_analysis:
     'Analyze feed usage, estimated FCR, overfeeding risk, poor conversion risk, and mismatches between feed input and growth output.',
-  appetite_stress_analysis:
-    'Use feed tray or anco observations to detect appetite drops and possible hidden stress signals.',
+  feed_allocation_trend_analysis:
+    'Compare recent daily feed allocations with biomass, growth, mortality, and water-quality trends without treating feed changes as measured appetite.',
   harvest_projection_risk_analysis:
     'Assess harvest projections using DOC, MBW, estimated biomass, market price, feed cost, and expected profit.',
   seventy_two_hour_outlook:

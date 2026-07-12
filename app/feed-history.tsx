@@ -19,33 +19,6 @@ export default function FeedHistoryScreen() {
     .map((s: Sampling) => ({ ...s.feedData, date: s.date, id: s.id }))
     .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()) || [];
 
-  const getAncoValueColor = (percentage: string) => {
-    const num = parseFloat(percentage);
-    if (isNaN(num)) return "#0d2137";
-    return { 100: "#27ae60", 75: "#f39c12", 50: "#e74c3c", 0: "#e74c3c" }[num] || "#0d2137";
-  };
-
-  const renderParameterItem = (iconName: string, label: string, value: string, 
-    color: string = "#0d2137", isAncoDisplay: boolean = false, anco1?: string, anco2?: string) => (
-    <View style={styles.parameterItem}>
-      <Ionicons name={iconName as any} size={16} color="#dce8f2" />
-      <Text style={styles.parameterLabel}>{label}</Text>
-      {isAncoDisplay && anco1 && anco2 ? (
-        <View style={styles.ancoDisplayContainer}>
-          <Text style={[styles.ancoDisplayValue, { color: getAncoValueColor(anco1) }]}>
-            {anco1 || "N/A"}%
-          </Text>
-          <Text style={styles.ancoDisplaySeparator}> | </Text>
-          <Text style={[styles.ancoDisplayValue, { color: getAncoValueColor(anco2) }]}>
-            {anco2 || "N/A"}%
-          </Text>
-        </View>
-      ) : (
-        <Text style={[styles.parameterValue, { color }]}>{value || "N/A"}</Text>
-      )}
-    </View>
-  );
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-AU', {
       weekday: 'short', year: 'numeric', month: 'short', day: 'numeric'
@@ -84,25 +57,6 @@ export default function FeedHistoryScreen() {
                     <Text style={styles.totalFeedText}>{record.totalDailyFeed} kg</Text>
                   </View>
                 </View>
-
-                <View style={styles.parametersContainer}>
-                  <View style={styles.parameterRow}>
-                    {renderParameterItem("stats-chart-outline", t.feedHistory.anco, 
-                      `${record.ancoPercentage || "N/A"}%`, "#0d2137")}
-                  </View>
-                  <View style={styles.parameterRow}>
-                    {renderParameterItem("ellipse-outline", t.feedHistory.f1, "", "#0d2137", 
-                      true, record.anco1, record.anco2)}
-                    {renderParameterItem("ellipse-outline", t.feedHistory.f2, "", "#0d2137", 
-                      true, record.anco3, record.anco4)}
-                  </View>
-                  <View style={styles.parameterRow}>
-                    {renderParameterItem("ellipse-outline", t.feedHistory.f3, "", "#0d2137", 
-                      true, record.anco5, record.anco6)}
-                    {renderParameterItem("ellipse-outline", t.feedHistory.f4, "", "#0d2137", 
-                      true, record.anco7, record.anco8)}
-                  </View>
-                </View>
               </View>
           )}
         />
@@ -122,12 +76,4 @@ const styles = StyleSheet.create({
   dateText: { fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', color: '#0d2137' },
   totalFeedBadge: { backgroundColor: '#315f57', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   totalFeedText: { color: '#fff', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold' },
-  parametersContainer: { gap: Platform.OS === 'android' ? 10 : 12 },
-  parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  parameterItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
-  parameterLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: 50, flexShrink: 0 },
-  parameterValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'left', flex: 1, minWidth: 80, marginLeft: 8 },
-  ancoDisplayContainer: { flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 1 },
-  ancoDisplayValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'left' },
-  ancoDisplaySeparator: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#0d2137' },
 });

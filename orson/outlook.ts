@@ -37,7 +37,7 @@ const getDirection = (findings: OrsonRiskFinding[], level: OrsonRiskSeverity): O
   const hasDeterioratingSignals =
     ids.has('low_do')
     || ids.has('do_decline')
-    || ids.has('appetite_drop')
+    || ids.has('feed_allocation_drop')
     || ids.has('mortality_spike')
     || ids.has('salinity_shock');
 
@@ -103,4 +103,3 @@ export const build72HourOutlooks = (
 ): Orson72HourOutlook[] => {
   return reports.map((report) => build72HourOutlook(report, generatedAt));
 };
-

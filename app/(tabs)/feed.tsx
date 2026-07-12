@@ -18,9 +18,7 @@ import { db } from '@/config/firebase';
 import { useFeedAdditiveStore } from "../store/feedAdditiveStore";
 
 const initialValues = {
-  ancoPercentage: "", feed1: "", feed2: "", feed3: "", feed4: "", feed5: "",
-  anco1: "", anco2: "", anco3: "", anco4: "", anco5: "",
-  anco6: "", anco7: "", anco8: "", anco9: "", anco10: "",
+  totalDailyFeed: "",
 };
 
 const Input = React.memo(({ label, value, onChange, placeholder = "" }: any) => (
@@ -32,85 +30,14 @@ const Input = React.memo(({ label, value, onChange, placeholder = "" }: any) => 
 ));
 Input.displayName = 'Input';
 
-const AncoGrid = React.memo(({ value, onChange, getColor }: any) => (
-  <View style={styles.ancoGridContainer}>
-    {[["100", "75"], ["50", "0"]].map((row, idx) => (
-      <View key={idx} style={styles.ancoGridRow}>
-        {row.map((percent) => (
-          <TouchableOpacity key={percent}
-            style={[styles.ancoGridButton, value === percent && styles.ancoButtonSelected, 
-              { backgroundColor: getColor(percent) }]}
-            onPress={() => onChange(percent)}>
-            <Text style={styles.ancoButtonText}>{percent}%</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    ))}
-  </View>
-));
-AncoGrid.displayName = 'AncoGrid';
-
-const Parameter = React.memo(({ icon, label, value, isAnco = false, a1, a2, getColor }: any) => (
+const Parameter = React.memo(({ icon, label, value }: any) => (
   <View style={styles.parameterItem}>
     <Ionicons name={icon} size={16} color="#dce8f2" />
     <Text style={styles.parameterLabel}>{label}</Text>
-    {isAnco && a1 && a2 ? (
-      <View style={styles.ancoDisplayContainer}>
-        <Text style={[styles.ancoDisplayValue, { color: getColor(a1) }]}>{a1 || "N/A"}%</Text>
-        <Text style={styles.ancoDisplaySeparator}> | </Text>
-        <Text style={[styles.ancoDisplayValue, { color: getColor(a2) }]}>{a2 || "N/A"}%</Text>
-      </View>
-    ) : (
-      <Text style={styles.parameterValue}>{value || "N/A"}</Text>
-    )}
+    <Text style={styles.parameterValue}>{value || "N/A"}</Text>
   </View>
 ));
 Parameter.displayName = 'Parameter';
-
-const FeedSection = React.memo(({ num, values, setValues, calculateAncoGrams, getAncoValueColor, t }: any) => {
-  const feedKey = `feed${num}` as keyof typeof values;
-  const anco1Key = `anco${num * 2 - 1}` as keyof typeof values;
-  const anco2Key = `anco${num * 2}` as keyof typeof values;
-  
-  return (
-    <View>
-      <View style={styles.feedSectionHeader}>
-        <Text style={styles.feedSectionTitle}>{t.feed.feed} {num}</Text>
-      </View>
-      <View style={styles.feedRowContainer}>
-        <View style={styles.feedRow}>
-          <View style={styles.feedInputGroup}>
-            <Input label={`${t.feed.feed} ${num} (kg)`} value={values[feedKey]} 
-              onChange={(text: string) => setValues({ ...values, [feedKey]: text })} 
-              placeholder={t.feed.feedPlaceholder} />
-          </View>
-          <View style={styles.ancoGramsGroup}>
-            <Text style={styles.ancoGramsLabel}>{t.feed.ancoGrams}</Text>
-            <Text style={styles.ancoGramsValue}>
-              {calculateAncoGrams(values[feedKey], values.ancoPercentage)}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.ancoSelectorContainer}>
-          <View style={styles.ancoSelectorRow}>
-            {[
-              { value: values[anco1Key], key: anco1Key, label: `${t.feed.anco} 1` }, 
-              { value: values[anco2Key], key: anco2Key, label: `${t.feed.anco} 2` }
-            ].map((item, idx) => (
-              <View key={idx} style={styles.ancoSelectorGroup}>
-                <Text style={styles.ancoSelectorLabel}>{item.label}</Text>
-                <AncoGrid value={item.value} 
-                  onChange={(v: string) => setValues({ ...values, [item.key]: v })} 
-                  getColor={getAncoValueColor} />
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-});
-FeedSection.displayName = 'FeedSection';
 
 export default function FeedManagementScreen() {
   const router = useRouter();
@@ -146,19 +73,6 @@ export default function FeedManagementScreen() {
       return unsub;
     }
   }, [setCurrentCompanyId, user?.companyId]);
-
-  const calculateAncoGrams = (feedKg: string, ancoPercent: string) => 
-    (((parseFloat(feedKg) || 0) * 1000 * (parseFloat(ancoPercent) || 0)) / 100).toFixed(0);
-
-  const calculateTotalDailyFeed = () => 
-    [values.feed1, values.feed2, values.feed3, values.feed4, values.feed5]
-      .reduce((sum, feed) => sum + (parseFloat(feed) || 0), 0).toFixed(2);
-
-  const getAncoValueColor = (percentage: string) => {
-    const num = parseFloat(percentage);
-    if (isNaN(num)) return "#0d2137";
-    return { 100: "#27ae60", 75: "#f39c12", 50: "#e74c3c", 0: "#e74c3c" }[num] || "#0d2137";
-  };
 
   const getTodayFeedRecord = (pond: any) => {
     const today = new Date().toISOString().split('T')[0];
@@ -199,7 +113,13 @@ export default function FeedManagementScreen() {
       return;
     }
 
-    const totalDailyFeed = parseFloat(calculateTotalDailyFeed()) || 0;
+    const totalDailyFeed = parseFloat(values.totalDailyFeed);
+    if (!Number.isFinite(totalDailyFeed) || totalDailyFeed <= 0) {
+      Alert.alert(t.messages?.error || 'Error', t.feed.invalidAmount);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     const today = new Date().toISOString().split('T')[0];
     const todayRecord = getTodayFeedRecord(pond);
     const previousInventoryFeedId = todayRecord?.feedData?.inventoryFeedId || '';
@@ -210,18 +130,10 @@ export default function FeedManagementScreen() {
       .reduce((sum: number, usage: any) => sum + (Number(usage.quantity) || 0), 0);
     };
 
-    const feedData: any = {
-      ancoPercentage: values.ancoPercentage.trim(),
-      feed1: values.feed1.trim(), feed2: values.feed2.trim(), feed3: values.feed3.trim(),
-      feed4: values.feed4.trim(), feed5: values.feed5.trim(),
+    const feedData = {
       totalDailyFeed: totalDailyFeed.toFixed(2),
       inventoryFeedId: inventoryFeedId || null,
     };
-
-    for (let i = 1; i <= 10; i++) {
-      const key = `anco${i}` as keyof typeof values;
-      if (values[key]) feedData[key] = values[key];
-    }
 
     try {
       if (previousInventoryFeedId && previousInventoryFeedId !== inventoryFeedId) {
@@ -315,24 +227,6 @@ export default function FeedManagementScreen() {
                   <View style={styles.parameterRow}>
                     <Parameter icon="scale-outline" label={t.feed.dailyFeed} 
                       value={`${rec.totalDailyFeed || "N/A"} kg`} />
-                    <Parameter icon="stats-chart-outline" label={t.feed.anco} 
-                      value={`${rec.ancoPercentage || "N/A"}%`} />
-                  </View>
-                  <View style={styles.parameterRow}>
-                    <Parameter icon="ellipse-outline" label="F1" isAnco 
-                      a1={rec.anco1} a2={rec.anco2} getColor={getAncoValueColor} />
-                    <Parameter icon="ellipse-outline" label="F2" isAnco 
-                      a1={rec.anco3} a2={rec.anco4} getColor={getAncoValueColor} />
-                  </View>
-                  <View style={styles.parameterRow}>
-                    <Parameter icon="ellipse-outline" label="F3" isAnco 
-                      a1={rec.anco5} a2={rec.anco6} getColor={getAncoValueColor} />
-                    <Parameter icon="ellipse-outline" label="F4" isAnco 
-                      a1={rec.anco7} a2={rec.anco8} getColor={getAncoValueColor} />
-                  </View>
-                  <View style={styles.parameterRow}>
-                    <Parameter icon="ellipse-outline" label="F5" isAnco 
-                      a1={rec.anco9} a2={rec.anco10} getColor={getAncoValueColor} />
                     <View style={{ flex: 1 }} />
                   </View>
                 </View>
@@ -395,26 +289,9 @@ export default function FeedManagementScreen() {
                   </ScrollView>
                 </View>
 
-                <Input label={t.feed.ancoPercentage} value={values.ancoPercentage} 
-                  onChange={(text: string) => setValues({ ...values, ancoPercentage: text })} 
-                  placeholder={t.feed.ancoPlaceholder} />
-
-                {[1, 2, 3, 4, 5].map(num => (
-                  <FeedSection 
-                    key={num} 
-                    num={num} 
-                    values={values} 
-                    setValues={setValues}
-                    calculateAncoGrams={calculateAncoGrams}
-                    getAncoValueColor={getAncoValueColor}
-                    t={t}
-                  />
-                ))}
-
-                <View style={styles.totalFeedContainer}>
-                  <Text style={styles.totalFeedLabel}>{t.feed.totalDailyFeed}</Text>
-                  <Text style={styles.totalFeedValue}>{calculateTotalDailyFeed()}</Text>
-                </View>
+                <Input label={t.feed.totalDailyFeed} value={values.totalDailyFeed}
+                  onChange={(text: string) => setValues({ totalDailyFeed: text })}
+                  placeholder={t.feed.feedPlaceholder} />
 
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
@@ -450,9 +327,6 @@ const styles = StyleSheet.create({
   parameterItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
   parameterLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: 50, flexShrink: 0 },
   parameterValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'left', flex: 1, minWidth: 80, marginLeft: 8, color: '#0d2137' },
-  ancoDisplayContainer: { flexDirection: 'row', alignItems: 'center', flex: 1, marginLeft: 1 },
-  ancoDisplayValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'left' },
-  ancoDisplaySeparator: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#0d2137' },
   floatingButton: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#0d2137', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#e8f2f9', overflow: 'hidden' },
@@ -463,26 +337,6 @@ const styles = StyleSheet.create({
   inputContainer: { marginBottom: Platform.OS === 'android' ? 16 : 20 },
   inputLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
-  feedRow: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  feedInputGroup: { flex: 2 },
-  ancoGramsGroup: { flex: 1, alignItems: 'center', justifyContent: 'flex-start' },
-  ancoGramsLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8, marginTop: 0 },
-  ancoGramsValue: { color: '#315f57', fontSize: Platform.OS === 'android' ? 17 : 18, fontWeight: 'bold', backgroundColor: '#f4f8fc', paddingVertical: Platform.OS === 'android' ? 14 : 14, paddingHorizontal: 12, borderRadius: 12, textAlign: 'center', minWidth: 60, borderWidth: 1, borderColor: '#e8f2f9' },
-  feedSectionHeader: { marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#dce8f2', paddingBottom: 8 },
-  feedSectionTitle: { color: '#315f57', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },
-  ancoSelectorContainer: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
-  ancoSelectorRow: { flexDirection: 'row', gap: Platform.OS === 'android' ? 14 : 16 },
-  ancoSelectorGroup: { flex: 1 },
-  ancoSelectorLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', marginBottom: 8, textAlign: 'center' },
-  ancoGridContainer: { gap: 8 },
-  ancoGridRow: { flexDirection: 'row', gap: 8 },
-  ancoGridButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 8, borderRadius: 8, alignItems: 'center', minHeight: 40, justifyContent: 'center' },
-  feedRowContainer: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
-  ancoButtonSelected: { borderWidth: 2, borderColor: '#0d2137' },
-  ancoButtonText: { color: '#fff', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold' },
-  totalFeedContainer: { backgroundColor: '#f4f8fc', padding: Platform.OS === 'android' ? 18 : 20, borderRadius: 12, marginTop: Platform.OS === 'android' ? 18 : 20, borderWidth: 1, borderColor: '#e8f2f9', alignItems: 'center' },
-  totalFeedLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', marginBottom: 8 },
-  totalFeedValue: { color: '#315f57', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold' },
   pondSelector: { maxHeight: 50 },
   pondOption: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, marginRight: 8, backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#e8f2f9' },
   pondOptionSelected: { backgroundColor: '#0d2137', borderColor: '#0d2137' },

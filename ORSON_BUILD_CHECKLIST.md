@@ -55,7 +55,7 @@ Status legend:
   - DO morning/evening
   - Salinity
   - Temperature, if available
-  - Feed tray/appetite fields, if available
+  - Last 3 to 5 valid daily feed totals and feed-allocation trend
 - [x] Handle missing values consistently.
 - [x] Handle different mobile/web data shapes consistently.
 - [x] Add tests for normalization with realistic pond records.
@@ -83,7 +83,7 @@ These calculations should use zero AI tokens.
 - [x] Calculate pH morning/evening swing.
 - [x] Calculate DO minimum and DO trend.
 - [x] Calculate salinity trend.
-- [x] Calculate appetite/tray clearance trend.
+- [x] Calculate the recent daily feed-allocation trend.
 - [x] Calculate mortality trend.
 - [x] Calculate data completeness score.
 - [x] Add tests for each metric.
@@ -96,7 +96,7 @@ These rules should also use zero AI tokens.
 - [x] Add unsafe pH risk rule.
 - [x] Add large pH swing risk rule.
 - [x] Add downward DO trend warning.
-- [x] Add appetite drop warning.
+- [x] Add a material feed-allocation decrease warning without inferring appetite.
 - [x] Add slow growth warning.
 - [x] Add high FCR + slow growth warning.
 - [x] Add mortality spike warning.
@@ -182,7 +182,7 @@ Gemini should explain Orson's calculated report, not invent the report.
 - [x] Update Firebase Function to use the same Orson risk report shape.
 - [x] Trigger on new sampling records.
 - [x] Trigger on new water-quality records.
-- [x] Trigger on feed/appetite records where available.
+- [x] Trigger on daily feed records where available.
 - [x] Only send notifications when severity crosses a threshold.
 - [x] Avoid notification spam for repeated unchanged risks.
 - [x] Store notification evidence and confidence.
@@ -197,7 +197,7 @@ Gemini should explain Orson's calculated report, not invent the report.
 - [x] Keep strong but defensible positioning:
   - Biological risk detection
   - 72-hour outlook
-  - Feed and appetite intelligence
+  - Feed-allocation and feed-pressure intelligence
   - Water-quality trend monitoring
   - Harvest risk support
 - [x] Avoid disease certainty unless disease-specific inputs/model exist.

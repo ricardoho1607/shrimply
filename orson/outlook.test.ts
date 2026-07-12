@@ -29,7 +29,7 @@ export const runOutlookSelfTest = () => {
           doMorning: 4.8,
           doEvening: 4.4,
           salinity: 18,
-          feedData: { totalDailyFeed: 10, anco1: 90, anco2: 85 },
+          feedData: { totalDailyFeed: 10 },
         },
         {
           id: 's2',
@@ -42,7 +42,7 @@ export const runOutlookSelfTest = () => {
           doMorning: 4.1,
           doEvening: 3.6,
           salinity: 25,
-          feedData: { totalDailyFeed: 30, anco1: 65, anco2: 55 },
+          feedData: { totalDailyFeed: 30 },
         },
       ],
     },
@@ -86,7 +86,7 @@ export const runStableOutlookSelfTest = () => {
             doMorning: 5.5,
             doEvening: 5.0,
             salinity: 18,
-            feedData: { totalDailyFeed: 9, anco1: 90, anco2: 95 },
+            feedData: { totalDailyFeed: 9 },
           },
           {
             id: 's2',
@@ -99,7 +99,7 @@ export const runStableOutlookSelfTest = () => {
             doMorning: 5.5,
             doEvening: 5.1,
             salinity: 18,
-            feedData: { totalDailyFeed: 15, anco1: 90, anco2: 92 },
+            feedData: { totalDailyFeed: 15 },
           },
         ],
       },
@@ -114,4 +114,3 @@ export const runStableOutlookSelfTest = () => {
 
   return outlook;
 };
-

@@ -219,31 +219,10 @@ const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null =>
   const rawFeedData = record.feedData;
   if (!rawFeedData || typeof rawFeedData !== 'object') return null;
 
-  const trayValuesPercent: number[] = [];
-  const feedAmountsKg: number[] = [];
-
-  for (let index = 1; index <= 10; index += 1) {
-    const trayValue = toNumber(rawFeedData[`anco${index}`]);
-    if (trayValue !== null) trayValuesPercent.push(trayValue);
-  }
-
-  for (let index = 1; index <= 5; index += 1) {
-    const feedAmount = toNumber(rawFeedData[`feed${index}`]);
-    if (feedAmount !== null) feedAmountsKg.push(feedAmount);
-  }
-
   const totalDailyFeedKg = firstNumber(rawFeedData.totalDailyFeed, record.feed);
-  const ancoPercentage = toNumber(rawFeedData.ancoPercentage);
-  const trayClearancePercent = trayValuesPercent.length > 0
-    ? trayValuesPercent.reduce((sum, value) => sum + value, 0) / trayValuesPercent.length
-    : ancoPercentage;
 
   return {
     totalDailyFeedKg,
-    ancoPercentage,
-    trayClearancePercent,
-    trayValuesPercent,
-    feedAmountsKg,
     inventoryFeedId: firstString(rawFeedData.inventoryFeedId),
   };
 };

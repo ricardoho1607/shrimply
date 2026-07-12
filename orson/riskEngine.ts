@@ -129,19 +129,25 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }));
   }
 
-  if (metrics.appetiteTrend.direction === 'down' && hasNumber(metrics.appetiteTrend.delta) && metrics.appetiteTrend.delta <= -15) {
+  const feedTrendFirst = metrics.feedAllocationTrend.first;
+  const feedTrendDelta = metrics.feedAllocationTrend.delta;
+  const feedChangeRatio = hasNumber(feedTrendFirst) && feedTrendFirst > 0 && hasNumber(feedTrendDelta)
+    ? feedTrendDelta / feedTrendFirst
+    : null;
+
+  if (metrics.feedAllocationTrend.direction === 'down' && hasNumber(feedChangeRatio) && feedChangeRatio <= -0.1) {
     findings.push(createFinding({
-      id: 'appetite_drop',
-      severity: metrics.feedBiomassModel.feedPressureRatio && metrics.feedBiomassModel.feedPressureRatio > 1.1 ? 'warning' : 'watch',
+      id: 'feed_allocation_drop',
+      severity: hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 4 ? 'warning' : 'watch',
       confidence: confidenceFromCompleteness(0.84, dataScore),
-      title: 'Appetite is dropping',
-      summary: `Tray clearance dropped by ${Math.abs(metrics.appetiteTrend.delta)} percentage points.`,
+      title: 'Feed allocation decreased',
+      summary: `Logged daily feed decreased by ${round(Math.abs(feedChangeRatio) * 100, 1)}% across recent records.`,
       evidence: [
-        `Appetite first/last: ${metrics.appetiteTrend.first}% -> ${metrics.appetiteTrend.last}%`,
+        `Daily feed first/last: ${metrics.feedAllocationTrend.first} -> ${metrics.feedAllocationTrend.last} kg`,
         `Feed pressure: ${metrics.feedBiomassModel.feedPressureRatio ?? 'unknown'}x`,
       ],
-      recommendation: 'Do not increase feed. Hold or reduce feed until tray clearance recovers and water quality is stable.',
-      metricRefs: ['appetiteTrend', 'feedBiomassModel.feedPressureRatio'],
+      recommendation: 'Confirm whether this was a planned schedule change, then review MBW, mortality, and water quality before increasing feed again.',
+      metricRefs: ['feedAllocationTrend', 'feedBiomassModel.feedPressureRatio'],
     }));
   }
 
@@ -157,7 +163,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
         `Actual feed: ${metrics.feedBiomassModel.actualFeedKg} kg`,
         `Feed rate: ${metrics.feedBiomassModel.feedRatePercent}% of biomass`,
       ],
-      recommendation: 'Use tray response as the throttle. Step feed down or hold feed before increasing biomass assumptions.',
+      recommendation: 'Review the latest MBW, population assumptions, mortality, and water quality before increasing feed further.',
       metricRefs: ['feedBiomassModel.feedPressureRatio', 'feedBiomassModel.expectedFeedKg', 'feedBiomassModel.actualFeedKg'],
     }));
   }

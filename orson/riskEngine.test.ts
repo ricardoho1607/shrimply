@@ -22,13 +22,13 @@ export const runRiskEngineSelfTest = () => {
           date: '2026-01-10',
           mbw: 1.5,
           mortality: 50,
-          feed: 10,
+          feed: 40,
           phMorning: 7.8,
           phEvening: 8.1,
           doMorning: 4.8,
           doEvening: 4.4,
           salinity: 18,
-          feedData: { totalDailyFeed: 10, anco1: 90, anco2: 85 },
+          feedData: { totalDailyFeed: 40 },
         },
         {
           id: 's2',
@@ -41,7 +41,7 @@ export const runRiskEngineSelfTest = () => {
           doMorning: 4.1,
           doEvening: 3.6,
           salinity: 25,
-          feedData: { totalDailyFeed: 30, anco1: 65, anco2: 55 },
+          feedData: { totalDailyFeed: 30 },
         },
       ],
     },
@@ -57,7 +57,7 @@ export const runRiskEngineSelfTest = () => {
   assert(ids.includes('low_do'), 'flags low DO');
   assert(ids.includes('do_decline'), 'flags DO decline');
   assert(ids.includes('ph_instability'), 'flags pH swing');
-  assert(ids.includes('appetite_drop'), 'flags appetite drop');
+  assert(ids.includes('feed_allocation_drop'), 'flags a material feed allocation decrease');
   assert(ids.includes('feed_pressure_high'), 'flags high feed pressure');
   assert(ids.includes('biomass_model_disagreement'), 'flags biomass model disagreement');
   assert(ids.includes('salinity_shock'), 'flags salinity movement');
@@ -66,4 +66,3 @@ export const runRiskEngineSelfTest = () => {
 
   return report;
 };
-

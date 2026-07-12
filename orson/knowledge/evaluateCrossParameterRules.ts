@@ -58,13 +58,5 @@ export const evaluateCrossParameterRules = (metrics: OrsonPondMetrics): OrsonRis
     }
   }
 
-  if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5 && metrics.appetiteTrend.direction === 'down') {
-    const finding = createFinding(metrics, 'feed_leftover_low_do', [
-      `DO minimum: ${metrics.doMinimumLatest} mg/L`,
-      `Appetite trend: ${metrics.appetiteTrend.direction}`,
-    ]);
-    if (finding) findings.push(finding);
-  }
-
   return findings;
 };

@@ -17,15 +17,11 @@ export {
 } from "../../shared/pondCalculations";
 
 export interface FeedData { 
-  ancoPercentage: string; 
   totalDailyFeed: string; 
   inventoryFeedId?: string | null;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
-  feed1?: string; feed2?: string; feed3?: string; feed4?: string; feed5?: string; 
-  anco1?: string; anco2?: string; anco3?: string; anco4?: string; anco5?: string;
-  anco6?: string; anco7?: string; anco8?: string; anco9?: string; anco10?: string;
 }
 export interface HarvestData { biomass: string; size: string; pricePerKg: string; subBiomass: string; subSize: string; subPricePerKg: string; cycleId?: string; cycleName?: string; pondCycleId?: string; }
 export interface HarvestRecord { id: string; date: string; cycleId?: string; cycleName?: string; ponds: { pondId: string; pondName: string; cycleId?: string; cycleName?: string; pondCycleId?: string; biomass: string; size: string; price: string; subBiomass: string; subSize: string; subPrice: string; }[]; }

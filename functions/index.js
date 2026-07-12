@@ -10,7 +10,7 @@ admin.initializeApp();
 const DAY_MS = 1000 * 60 * 60 * 24;
 const SEVERITY_RANK = { info: 0, watch: 1, warning: 2, critical: 3 };
 const STAFF_ROLES = new Set(["manager", "technician", "admin"]);
-const BIOSECURITY_RISK_IDS = new Set(["low_do", "do_decline", "appetite_drop", "mortality_spike", "unsafe_ph"]);
+const BIOSECURITY_RISK_IDS = new Set(["low_do", "do_decline", "feed_allocation_drop", "mortality_spike", "unsafe_ph"]);
 const LAB_EXTRACTION_MODEL = "gemini-2.5-flash";
 const LAB_INSIGHT_MODEL = "gemini-2.5-flash-lite";
 const LAB_PDF_EXTRACTION_COOLDOWN_MS = 48 * 60 * 60 * 1000;
@@ -496,14 +496,6 @@ const getFeedRatePercent = (mbw) => {
 
 const normalizeRecord = (record) => {
   const feedData = record.feedData && typeof record.feedData === "object" ? record.feedData : null;
-  const trayValues = [];
-  for (let index = 1; index <= 10; index += 1) {
-    const value = toNumber(feedData?.[`anco${index}`]);
-    if (value !== null) trayValues.push(value);
-  }
-  const trayClearance = trayValues.length > 0
-    ? trayValues.reduce((sum, value) => sum + value, 0) / trayValues.length
-    : toNumber(feedData?.ancoPercentage);
 
   return {
     id: record.id || null,
@@ -516,7 +508,6 @@ const normalizeRecord = (record) => {
     doMorning: toNumber(record.doMorning),
     doEvening: toNumber(record.doEvening),
     salinityPpt: toNumber(record.salinity),
-    trayClearance,
   };
 };
 
@@ -524,7 +515,7 @@ const classifyRecord = (record) => {
   const kinds = [];
   if ((record.mbwG || 0) > 0 || (record.mortalityCount || 0) > 0) kinds.push("sampling");
   if (record.phMorning !== null || record.phEvening !== null || record.doMorning !== null || record.doEvening !== null || record.salinityPpt !== null) kinds.push("water_quality");
-  if (record.feedKg !== null || record.trayClearance !== null) kinds.push("feed");
+  if (record.feedKg !== null) kinds.push("feed");
   return kinds.length > 0 ? kinds : ["unknown"];
 };
 
@@ -602,16 +593,22 @@ const calculateRiskReport = (pond, pondId) => {
     });
   }
 
-  const appetite = recent.map((record) => record.trayClearance).filter((value) => value !== null);
-  if (appetite.length >= 2 && appetite[appetite.length - 1] < appetite[0] - 15) {
+  const feedAllocations = records
+    .map((record) => record.feedKg)
+    .filter((value) => value !== null && value > 0)
+    .slice(-5);
+  const feedChangeRatio = feedAllocations.length >= 2 && feedAllocations[0] > 0
+    ? (feedAllocations[feedAllocations.length - 1] - feedAllocations[0]) / feedAllocations[0]
+    : null;
+  if (feedChangeRatio !== null && feedChangeRatio <= -0.1) {
     pushFinding({
-      id: "appetite_drop",
-      severity: "warning",
-      title: "Appetite dropped",
-      summary: "Recent tray clearance is falling.",
-      evidence: [`Tray clearance moved from ${round(appetite[0], 1)}% to ${round(appetite[appetite.length - 1], 1)}%.`],
-      recommendation: "Reduce feed pressure and check DO, pH, and molts before returning to normal feeding.",
-      metricRefs: ["appetiteTrend"],
+      id: "feed_allocation_drop",
+      severity: latestDo !== null && latestDo < 4 ? "warning" : "watch",
+      title: "Feed allocation decreased",
+      summary: "Recent logged daily feed is lower.",
+      evidence: [`Daily feed moved from ${round(feedAllocations[0], 1)} kg to ${round(feedAllocations[feedAllocations.length - 1], 1)} kg.`],
+      recommendation: "Confirm whether this was planned, then review MBW, mortality, and water quality before increasing feed again.",
+      metricRefs: ["feedAllocationTrend"],
     });
   }
 
@@ -622,7 +619,7 @@ const calculateRiskReport = (pond, pondId) => {
       title: "Feed pressure is high",
       summary: "Logged feed is higher than expected for estimated biomass.",
       evidence: [`Feed pressure ratio is ${round(feedPressureRatio, 2)}.`],
-      recommendation: "Use tray response and the next MBW sample before increasing feed further.",
+      recommendation: "Review the next MBW sample, mortality, and water quality before increasing feed further.",
       metricRefs: ["feedPressureRatio"],
     });
   }

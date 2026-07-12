@@ -23,7 +23,7 @@ export const runPipelineSelfTest = () => {
           feed: 10,
           doMorning: 4.8,
           doEvening: 4.4,
-          feedData: { totalDailyFeed: 10, anco1: 90, anco2: 85 },
+          feedData: { totalDailyFeed: 10 },
         },
         {
           id: 's2',
@@ -33,7 +33,7 @@ export const runPipelineSelfTest = () => {
           feed: 30,
           doMorning: 4.1,
           doEvening: 3.6,
-          feedData: { totalDailyFeed: 30, anco1: 65, anco2: 55 },
+          feedData: { totalDailyFeed: 30 },
         },
       ],
     },

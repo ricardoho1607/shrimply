@@ -31,8 +31,6 @@ export const runMetricsSelfTest = () => {
           salinity: 18,
           feedData: {
             totalDailyFeed: 20,
-            anco1: 90,
-            anco2: 80,
           },
         },
         {
@@ -48,8 +46,6 @@ export const runMetricsSelfTest = () => {
           salinity: 20,
           feedData: {
             totalDailyFeed: 30,
-            anco1: 75,
-            anco2: 65,
           },
         },
       ],
@@ -82,7 +78,7 @@ export const runMetricsSelfTest = () => {
   assert(metrics.phSwingLatest === 0.6, 'calculates latest pH swing');
   assert(metrics.doMinimumLatest === 3.9, 'calculates latest DO minimum');
   assert(metrics.doMinimumTrend.direction === 'down', 'calculates DO trend direction');
-  assert(metrics.appetiteTrend.direction === 'down', 'calculates appetite trend direction');
+  assert(metrics.feedAllocationTrend.direction === 'up', 'calculates recent feed allocation trend');
   assert(metrics.dataCompleteness.score > 0.8, 'calculates data completeness');
 
   return metrics;
@@ -107,7 +103,7 @@ export const runDoc11To30SurvivalRefinementSelfTest = () => {
           feed: 10,
           doMorning: 4.8,
           doEvening: 4.3,
-          feedData: { totalDailyFeed: 10, anco1: 90, anco2: 85 },
+          feedData: { totalDailyFeed: 10 },
         },
         {
           id: 's2',
@@ -117,7 +113,7 @@ export const runDoc11To30SurvivalRefinementSelfTest = () => {
           feed: 12,
           doMorning: 4.3,
           doEvening: 3.8,
-          feedData: { totalDailyFeed: 12, anco1: 70, anco2: 60 },
+          feedData: { totalDailyFeed: 12 },
         },
       ],
     },
@@ -127,10 +123,10 @@ export const runDoc11To30SurvivalRefinementSelfTest = () => {
   const metrics = calculatePondMetrics(pond);
 
   assert(metrics.currentDoc === 15, 'sets up DOC 11-30 scenario');
-  assert(metrics.feedBiomassModel.survivalAssumption.confidence === 'medium', 'uses feed response for medium confidence in DOC 11-30');
-  assert(metrics.feedBiomassModel.survivalAssumption.expectedPercent === 78, 'reduces expected survival for appetite decline and low DO');
-  assert(metrics.feedBiomassModel.populationRange.expected === 77900, 'refines expected population from survival model');
-  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 155.8, 'refines expected biomass range');
+  assert(metrics.feedBiomassModel.survivalAssumption.confidence === 'low', 'keeps inferred early survival confidence low');
+  assert(metrics.feedBiomassModel.survivalAssumption.expectedPercent === 83, 'adjusts expected survival only for measured low DO');
+  assert(metrics.feedBiomassModel.populationRange.expected === 82900, 'refines expected population from measured records');
+  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 165.8, 'refines biomass range without inferred appetite');
 
   return metrics;
 };

@@ -141,7 +141,7 @@ const calculateDataCompleteness = (pond: OrsonNormalizedPond): OrsonDataComplete
   const latestMbw = latestWith(pond, (record) => positive(record.mbwG));
   const latestWq = latestWith(pond, (record) => minNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening));
   const latestFeed = latestWith(pond, (record) => positive(record.feedKg));
-  const latestAppetite = latestWith(pond, (record) => record.feedData?.trayClearancePercent ?? null);
+  const recentFeedRecords = recordsWith(pond, (record) => positive(record.feedKg)).slice(-5);
 
   const fields: Record<string, boolean> = {
     docStartDate: pond.docStartDate !== null,
@@ -150,7 +150,7 @@ const calculateDataCompleteness = (pond: OrsonNormalizedPond): OrsonDataComplete
     latestMbw: latestMbw !== null,
     latestWaterQuality: latestWq !== null,
     latestFeed: latestFeed !== null,
-    latestAppetite: latestAppetite !== null,
+    recentFeedHistory: recentFeedRecords.length >= 2,
   };
 
   const presentFields = Object.entries(fields).filter(([, present]) => present).map(([field]) => field);
@@ -167,7 +167,6 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 
 const calculateSurvivalAssumption = (
   pond: OrsonNormalizedPond,
-  appetiteTrend: OrsonTrendResult,
   doMinimumLatest: OrsonNumber,
 ): OrsonSurvivalAssumption => {
   const doc = pond.currentDoc;
@@ -194,12 +193,7 @@ const calculateSurvivalAssumption = (
 
   if (doc <= 30) {
     let expected = 88;
-    const reasons = ['DOC 11-30 survival is inferred from feed response and early sampling trend.'];
-
-    if (appetiteTrend.direction === 'down') {
-      expected -= 5;
-      reasons.push('Appetite is trending down.');
-    }
+    const reasons = ['DOC 11-30 survival is estimated from stocking, mortality, harvest, sampling, and water-quality records.'];
 
     if (hasNumber(doMinimumLatest) && doMinimumLatest < 4) {
       expected -= 5;
@@ -211,7 +205,7 @@ const calculateSurvivalAssumption = (
       lowPercent: clamp(expected - 10, 60, 90),
       expectedPercent: expected,
       highPercent: clamp(expected + 7, 80, 97),
-      confidence: appetiteTrend.points >= 2 ? 'medium' : 'low',
+      confidence: 'low',
       reason: reasons.join(' '),
     };
   }
@@ -220,8 +214,8 @@ const calculateSurvivalAssumption = (
     lowPercent: 80,
     expectedPercent: 90,
     highPercent: 97,
-    confidence: appetiteTrend.points >= 2 ? 'medium' : 'low',
-    reason: 'Later-cycle survival is still estimated unless mortality, harvest, and feed response are complete.',
+    confidence: 'low',
+    reason: 'Later-cycle survival is still estimated unless mortality, harvest, and sampling records are complete.',
   };
 };
 
@@ -297,7 +291,6 @@ const calculateFeedBiomassModel = (params: {
   estimatedBiomassKg: OrsonNumber;
   totalMortalityCount: number;
   harvestedPopulation: number;
-  appetiteTrend: OrsonTrendResult;
   doMinimumLatest: OrsonNumber;
   sharedPond: SharedPond;
 }): OrsonFeedBiomassModel => {
@@ -307,7 +300,6 @@ const calculateFeedBiomassModel = (params: {
     estimatedBiomassKg,
     totalMortalityCount,
     harvestedPopulation,
-    appetiteTrend,
     doMinimumLatest,
     sharedPond,
   } = params;
@@ -329,7 +321,7 @@ const calculateFeedBiomassModel = (params: {
     ? round((feedBasedPopulation * latestMbwG) / 1000, 2)
     : null;
 
-  const survivalAssumption = calculateSurvivalAssumption(pond, appetiteTrend, doMinimumLatest);
+  const survivalAssumption = calculateSurvivalAssumption(pond, doMinimumLatest);
   const populationRange = rangeFromPopulation(
     pond.initialPopulation,
     totalMortalityCount,
@@ -431,9 +423,12 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     timestampMs: record.timestampMs,
     value: record.salinityPpt,
   })));
-  const appetiteTrend = calculateTrend(pond.records.map((record) => ({
+  const feedAllocationTrend = calculateTrend(pond.records
+    .filter((record) => !record.isBaselineEstimate && hasNumber(positive(record.feedKg)))
+    .slice(-5)
+    .map((record) => ({
     timestampMs: record.timestampMs,
-    value: record.feedData?.trayClearancePercent ?? null,
+    value: positive(record.feedKg),
   })));
   const mortalityTrend = calculateTrend(pond.records.map((record) => ({
     timestampMs: record.timestampMs,
@@ -446,7 +441,6 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     estimatedBiomassKg,
     totalMortalityCount,
     harvestedPopulation,
-    appetiteTrend,
     doMinimumLatest: roundedDoMinimumLatest,
     sharedPond,
   });
@@ -478,7 +472,7 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     doMinimumLatest: roundedDoMinimumLatest,
     doMinimumTrend,
     salinityTrend,
-    appetiteTrend,
+    feedAllocationTrend,
     mortalityTrend,
     labContext: pond.labContext,
     dataCompleteness: calculateDataCompleteness(pond),

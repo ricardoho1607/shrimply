@@ -139,11 +139,8 @@ Orson AI should provide real aquaculture intelligence, not generic answers.
 Rules:
 - Do not send only a single data snapshot when trend analysis is needed.
 - Send the last 3 to 5 Water Quality and Sampling records where available.
-- For Feed Tray or Anco data, average the 4 daily trays into one appetite status:
-  - Excellent
-  - Good
-  - Fair
-  - Poor
+- Orson must use the last 3 to 5 valid daily feed totals to calculate feed-allocation trends.
+- Do not infer appetite, tray clearance, or feed consumption from a change in logged daily feed.
 - When a new Sampling is created, cross-reference Water Quality history since the previous sampling to explain growth variation.
 - Use stable production model IDs only.
 - Avoid experimental or guessed model IDs unless verified in documentation.

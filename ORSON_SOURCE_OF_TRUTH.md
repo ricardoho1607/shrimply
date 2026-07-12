@@ -24,7 +24,7 @@ Orson should not be positioned as:
 
 ### Pond Health Analysis
 
-Orson can summarize a pond's current biological status using DOC, MBW, estimated biomass, mortality, water quality, feed, and appetite data where available.
+Orson can summarize a pond's current biological status using DOC, MBW, estimated biomass, mortality, water quality, and daily feed data where available.
 
 ### Water-Quality Risk Detection
 
@@ -38,9 +38,9 @@ Orson can calculate and interpret growth performance from valid MBW records. It 
 
 Orson can analyze feed usage, estimated FCR, overfeeding risk, poor conversion risk, and mismatches between feed input and growth output.
 
-### Appetite And Stress Signal Analysis
+### Feed Allocation Trend Analysis
 
-Orson can use feed tray or anco observations to detect appetite drops and possible hidden stress signals. It should treat appetite decline as an early warning signal, not as proof of disease.
+Orson uses recent daily feed totals to detect feed-allocation changes and compares them with biomass, growth, mortality, harvest, and water quality. It must not treat a feed change as measured appetite or proof that feed was consumed.
 
 ### Harvest Projection Risk Analysis
 
@@ -52,7 +52,7 @@ Orson can produce a short outlook based on current risk level and trend directio
 
 ### Proactive Notifications
 
-Orson can generate notifications after new sampling, water-quality, feed, appetite, or mortality records when deterministic rules identify meaningful risk.
+Orson can generate notifications after new sampling, water-quality, feed, or mortality records when deterministic rules identify meaningful risk.
 
 ## Not Supported Yet
 
@@ -101,7 +101,7 @@ Example:
 
 ```text
 Risk level: Warning
-- Evidence: DO dropped from 4.8 to 3.7 across the last 3 records, while appetite also declined.
+- Evidence: DO dropped from 4.8 to 3.7 across the last 3 records, while logged daily feed decreased materially.
 - Action: Increase aeration tonight and recheck DO before sunrise.
 - 72-hour outlook: Watch closely; stress risk remains elevated unless DO stabilizes above 4.0.
 ```
@@ -112,4 +112,3 @@ Orson should be half calculator, half consultant:
 
 - The calculator/risk engine performs deterministic math and rule checks without AI token usage.
 - Gemini explains the calculated risk report in a human-friendly way when chat, report text, or notification copy is needed.
-

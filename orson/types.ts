@@ -2,10 +2,6 @@ export type OrsonNumber = number | null;
 
 export interface OrsonNormalizedFeedData {
   totalDailyFeedKg: OrsonNumber;
-  ancoPercentage: OrsonNumber;
-  trayClearancePercent: OrsonNumber;
-  trayValuesPercent: number[];
-  feedAmountsKg: number[];
   inventoryFeedId: string | null;
 }
 
@@ -153,7 +149,7 @@ export interface OrsonPondMetrics {
   doMinimumLatest: OrsonNumber;
   doMinimumTrend: OrsonTrendResult;
   salinityTrend: OrsonTrendResult;
-  appetiteTrend: OrsonTrendResult;
+  feedAllocationTrend: OrsonTrendResult;
   mortalityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
   dataCompleteness: OrsonDataCompleteness;
@@ -166,7 +162,7 @@ export type OrsonRiskId =
   | 'unsafe_ph'
   | 'ph_instability'
   | 'do_decline'
-  | 'appetite_drop'
+  | 'feed_allocation_drop'
   | 'slow_growth'
   | 'high_fcr'
   | 'feed_pressure_high'
@@ -224,6 +220,7 @@ export interface OrsonPromptPondPayload {
   feedPressureRatio: OrsonNumber;
   expectedFeedKg: OrsonNumber;
   actualFeedKg: OrsonNumber;
+  feedAllocationTrend: OrsonTrendResult;
   baselineFeedKg: number;
   operationalFeedKg: number;
   dataAssumptions: string[];

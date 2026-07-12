@@ -12,8 +12,6 @@ import {
   Calendar,
   Waves,
   ChevronRight,
-  TrendingUp,
-  CircleDot,
   ArrowRight,
   ClipboardList
 } from 'lucide-react';
@@ -34,14 +32,11 @@ import { auth, db } from '@/lib/firebase';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
-  ancoPercentage: string;
   totalDailyFeed: string;
   inventoryFeedId?: string | null;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
-  feed1?: string; feed2?: string; feed3?: string; feed4?: string;
-  anco1?: string; anco2?: string; anco3?: string; anco4?: string;
 }
 
 interface Sampling {
@@ -123,9 +118,6 @@ export default function FeedRecordsPage() {
     inventoryFeedId: '',
     date: new Date().toISOString().split('T')[0],
     totalDailyFeed: '',
-    ancoPercentage: '',
-    feed1: '', feed2: '', feed3: '', feed4: '',
-    anco1: '', anco2: '', anco3: '', anco4: '',
   });
   const canEditFeed = canEditOperations(user?.role);
 
@@ -224,9 +216,6 @@ export default function FeedRecordsPage() {
         date: prev.date,
         inventoryFeedId: '',
         totalDailyFeed: '',
-        ancoPercentage: '',
-        feed1: '', feed2: '', feed3: '', feed4: '',
-        anco1: '', anco2: '', anco3: '', anco4: '',
       }));
     }
   }, [formData.pondId, formData.date, isModalOpen, ponds]);
@@ -235,11 +224,15 @@ export default function FeedRecordsPage() {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
     if (!canEditFeed) return;
+    const feedAmount = parseFloat(formData.totalDailyFeed);
+    if (!Number.isFinite(feedAmount) || feedAmount <= 0) {
+      alert('Daily feed must be greater than 0.');
+      return;
+    }
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
       const requestedFeedId = formData.inventoryFeedId || '';
-      const feedAmount = parseFloat(formData.totalDailyFeed) || 0;
 
       await runTransaction(db, async (transaction) => {
         const pondDoc = await transaction.get(pondRef);
@@ -252,16 +245,11 @@ export default function FeedRecordsPage() {
         const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
 
         const feedData = {
-          ancoPercentage: formData.ancoPercentage,
           totalDailyFeed: formData.totalDailyFeed,
           inventoryFeedId: requestedFeedId || null,
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,
-          anco1: formData.anco1, anco2: formData.anco2,
-          anco3: formData.anco3, anco4: formData.anco4,
-          feed1: formData.feed1, feed2: formData.feed2,
-          feed3: formData.feed3, feed4: formData.feed4,
         };
 
         if (existingIndex >= 0) {
@@ -374,9 +362,6 @@ export default function FeedRecordsPage() {
           inventoryFeedId: '',
           date: new Date().toISOString().split('T')[0],
           totalDailyFeed: '',
-          ancoPercentage: '',
-          feed1: '', feed2: '', feed3: '', feed4: '',
-          anco1: '', anco2: '', anco3: '', anco4: ''
         });
     } catch (error) {
       console.error('Error adding feed record:', error);
@@ -420,9 +405,6 @@ export default function FeedRecordsPage() {
                 inventoryFeedId: '',
                 date: new Date().toISOString().split('T')[0],
                 totalDailyFeed: '',
-                ancoPercentage: '',
-                feed1: '', feed2: '', feed3: '', feed4: '',
-                anco1: '', anco2: '', anco3: '', anco4: '',
               });
               setModalOpen(true);
             }}
@@ -463,65 +445,17 @@ export default function FeedRecordsPage() {
                   </button>
                 </div>
 
-                <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+                <div style={{ padding: '22px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                     <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total</span>
                     <div style={{ fontSize: '21px', fontWeight: 900, color: 'var(--primary)', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
                       {latest ? latest.totalDailyFeed : '--'} <span style={{ fontSize: '13px', fontWeight: 700 }}>kg</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Efficiency</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <div style={{
-                        fontSize: '21px',
-                        fontWeight: 900,
-                        color: latest?.ancoPercentage === '100' ? '#22c55e' : '#f59e0b'
-                      }}>
-                        {latest ? `${latest.ancoPercentage}%` : '--'}
-                      </div>
-                      {latest?.ancoPercentage === '100' && (
-                        <div style={{ padding: '4px 10px', borderRadius: '8px', background: 'rgba(34, 197, 94, 0.1)', color: '#22c55e', fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                          Optimal
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Monitoring (4 trays)</span>
-                      <div style={{ display: 'flex', gap: '4px' }}>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#22c55e' }}></div>
-                        <div style={{ width: '8px', height: '8px', borderRadius: '2px', background: '#f59e0b' }}></div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
-                      {[1, 2, 3, 4].map(trayNum => {
-                        const ancoKey = `anco${trayNum}` as keyof FeedData;
-                        const val = latest?.[ancoKey];
-                        const isFinished = val === '100';
-                        const hasData = val !== undefined && val !== '';
-                        return (
-                        <div key={trayNum} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)', textAlign: 'center' }}>T{trayNum}</div>
-                          <div
-                            style={{
-                              height: '8px', borderRadius: '4px',
-                              background: isFinished ? '#22c55e' : (hasData ? '#f59e0b' : 'var(--bg-mid)'),
-                              border: '1px solid var(--border)',
-                              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                            }}
-                            title={`Tray ${trayNum}: ${val || '0'}%`}
-                          />
-                        </div>
-                        );
-                      })}
-                    </div>
-                  </div>
                 </div>
 
                 <div style={{ padding: '14px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>4 Tray Monitoring System</span>
+                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Daily feed record</span>
                   {canEditFeed && (
                     <button
                       onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
@@ -546,7 +480,7 @@ export default function FeedRecordsPage() {
             <div style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 800 }}>{selectedPondForHistory.pondName} Feed History</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Daily totals and tray observations</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Daily feed totals</p>
               </div>
               <button onClick={() => setSelectedPondForHistory(null)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                 <X size={20} />
@@ -569,26 +503,6 @@ export default function FeedRecordsPage() {
                           {log.feedData?.totalDailyFeed} kg
                         </div>
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
-                        {[1, 2, 3, 4].map(n => {
-                          const ancoKey = `anco${n}` as keyof FeedData;
-                          const ancoValue = log.feedData?.[ancoKey] || '-';
-                          return (
-                            <div key={n} style={{ textAlign: 'center', padding: '10px 8px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', flex: '1 1 72px', minWidth: '72px', maxWidth: '92px' }}>
-                              <div style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-faint)', marginBottom: '6px', letterSpacing: '0.02em' }}>TRAY {n}</div>
-                              <span style={{ fontSize: '11px', fontWeight: 900, color: ancoValue === '100' ? '#22c55e' : '#f59e0b' }}>
-                                {ancoValue}%
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div style={{ marginTop: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', padding: '10px', background: 'var(--primary-dim)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                        <TrendingUp size={16} color="var(--primary)" />
-                        <span style={{ fontSize: '13px', fontWeight: 800, color: log.feedData?.ancoPercentage === '100' ? '#22c55e' : 'var(--primary)' }}>
-                          Avg. Efficiency: {log.feedData?.ancoPercentage}%
-                        </span>
-                      </div>
                     </div>
                   ))
                 }
@@ -609,7 +523,7 @@ export default function FeedRecordsPage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '22px', fontWeight: 800 }}>Log Feeding</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>Record distribution and Orson AI tray observations.</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>Record the pond&apos;s total daily feed.</p>
                 </div>
               </div>
               <button onClick={() => setModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
@@ -637,7 +551,7 @@ export default function FeedRecordsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total (kg)</label>
-                  <input required type="number" step="0.1" value={formData.totalDailyFeed} onChange={e => setFormData({...formData, totalDailyFeed: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 800, color: 'var(--primary)' }} />
+                  <input required min="0.1" type="number" step="0.1" value={formData.totalDailyFeed} onChange={e => setFormData({...formData, totalDailyFeed: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 800, color: 'var(--primary)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
@@ -656,46 +570,6 @@ export default function FeedRecordsPage() {
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Overall Tray Efficiency (%)</label>
-                  <input required type="number" placeholder="e.g. 100" value={formData.ancoPercentage} onChange={e => setFormData({...formData, ancoPercentage: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 800, color: '#22c55e' }} />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feeding Amounts (kg)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                    {[1, 2, 3, 4].map(n => {
-                      const feedKey = `feed${n}` as keyof FeedData;
-                      return (
-                        <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>F{n}</span>
-                          <input type="number" placeholder="0" value={formData[feedKey] || ''} onChange={e => {
-                            const newF = { ...formData, [feedKey]: e.target.value };
-                            const total = [newF.feed1 || '', newF.feed2 || '', newF.feed3 || '', newF.feed4 || ''].reduce((s,v) => s + (parseFloat(v) || 0), 0);
-                            setFormData({ ...newF, totalDailyFeed: total.toFixed(2) });
-                          }} style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tray Observations (%)</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
-                    {[1, 2, 3, 4].map(n => {
-                      const ancoKey = `anco${n}` as keyof FeedData;
-                      return (
-                        <div key={n} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <span style={{ fontSize: '11px', fontWeight: 800, textAlign: 'center', color: 'var(--text-muted)' }}>Tray {n}</span>
-                            <input placeholder="100" value={formData[ancoKey] || ''} onChange={e => setFormData({...formData, [ancoKey]: e.target.value})} style={{ width: '100%', padding: '8px', borderRadius: '8px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '12px', fontWeight: 700, textAlign: 'center' }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
               </div>
 
               <div style={{ marginTop: '24px', display: 'flex', gap: '20px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>

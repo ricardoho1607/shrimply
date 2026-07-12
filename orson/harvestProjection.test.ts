@@ -23,7 +23,7 @@ export const runHarvestProjectionSelfTest = () => {
           feed: 25,
           doMorning: 4.8,
           doEvening: 4.2,
-          feedData: { totalDailyFeed: 25, anco1: 90, anco2: 85 },
+          feedData: { totalDailyFeed: 25 },
         },
         {
           id: 's2',
@@ -33,7 +33,7 @@ export const runHarvestProjectionSelfTest = () => {
           feed: 38,
           doMorning: 4.6,
           doEvening: 4,
-          feedData: { totalDailyFeed: 38, anco1: 82, anco2: 78 },
+          feedData: { totalDailyFeed: 38 },
         },
       ],
     },

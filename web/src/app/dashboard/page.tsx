@@ -46,9 +46,7 @@ import {
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
-  ancoPercentage: string;
   totalDailyFeed: string;
-  anco1?: string; anco2?: string; anco3?: string; anco4?: string;
 }
 
 interface Sampling {

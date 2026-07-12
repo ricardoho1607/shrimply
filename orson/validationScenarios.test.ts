@@ -27,8 +27,8 @@ export const runValidationScenarioSelfTest = () => {
       pondName: 'Healthy Pond',
       ...basePond,
       samplings: [
-        { id: 'h1', date: '2026-01-10', mbw: 2, mortality: 5, feed: 12, phMorning: 7.8, phEvening: 8, doMorning: 5.5, doEvening: 5.1, salinity: 18, feedData: { totalDailyFeed: 12, anco1: 90, anco2: 92 } },
-        { id: 'h2', date: '2026-01-17', mbw: 3.8, mortality: 5, feed: 18, phMorning: 7.8, phEvening: 8, doMorning: 5.4, doEvening: 5, salinity: 18, feedData: { totalDailyFeed: 18, anco1: 90, anco2: 92 } },
+        { id: 'h1', date: '2026-01-10', mbw: 2, mortality: 5, feed: 12, phMorning: 7.8, phEvening: 8, doMorning: 5.5, doEvening: 5.1, salinity: 18, feedData: { totalDailyFeed: 12 } },
+        { id: 'h2', date: '2026-01-17', mbw: 3.8, mortality: 5, feed: 18, phMorning: 7.8, phEvening: 8, doMorning: 5.4, doEvening: 5, salinity: 18, feedData: { totalDailyFeed: 18 } },
       ],
     },
   ], 'Analyze Healthy Pond', new Date('2026-01-20T00:00:00Z'));
@@ -40,7 +40,7 @@ export const runValidationScenarioSelfTest = () => {
       pondName: 'Low DO Pond',
       ...basePond,
       samplings: [
-        { id: 'd1', date: '2026-01-17', mbw: 3, mortality: 10, feed: 18, phMorning: 7.8, phEvening: 8.1, doMorning: 3.8, doEvening: 3.4, salinity: 18, feedData: { totalDailyFeed: 18, anco1: 85, anco2: 80 } },
+        { id: 'd1', date: '2026-01-17', mbw: 3, mortality: 10, feed: 18, phMorning: 7.8, phEvening: 8.1, doMorning: 3.8, doEvening: 3.4, salinity: 18, feedData: { totalDailyFeed: 18 } },
       ],
     },
   ], 'Analyze Low DO Pond', new Date('2026-01-20T00:00:00Z'));
@@ -52,8 +52,8 @@ export const runValidationScenarioSelfTest = () => {
       pondName: 'Slow Growth Pond',
       ...basePond,
       samplings: [
-        { id: 'g1', date: '2026-01-10', mbw: 5, mortality: 20, feed: 80, phMorning: 7.8, phEvening: 8, doMorning: 5, doEvening: 4.8, salinity: 18, feedData: { totalDailyFeed: 80, anco1: 82, anco2: 80 } },
-        { id: 'g2', date: '2026-01-17', mbw: 5.1, mortality: 20, feed: 90, phMorning: 7.8, phEvening: 8, doMorning: 5, doEvening: 4.8, salinity: 18, feedData: { totalDailyFeed: 90, anco1: 80, anco2: 78 } },
+        { id: 'g1', date: '2026-01-10', mbw: 5, mortality: 20, feed: 80, phMorning: 7.8, phEvening: 8, doMorning: 5, doEvening: 4.8, salinity: 18, feedData: { totalDailyFeed: 80 } },
+        { id: 'g2', date: '2026-01-17', mbw: 5.1, mortality: 20, feed: 90, phMorning: 7.8, phEvening: 8, doMorning: 5, doEvening: 4.8, salinity: 18, feedData: { totalDailyFeed: 90 } },
       ],
     },
   ], 'Analyze growth and FCR', new Date('2026-01-20T00:00:00Z'));
@@ -66,8 +66,8 @@ export const runValidationScenarioSelfTest = () => {
       pondName: 'Missing Water Pond',
       ...basePond,
       samplings: [
-        { id: 'm1', date: '2026-01-10', mbw: 2, mortality: 5, feed: 12, feedData: { totalDailyFeed: 12, anco1: 90, anco2: 92 } },
-        { id: 'm2', date: '2026-01-17', mbw: 3, mortality: 5, feed: 16, feedData: { totalDailyFeed: 16, anco1: 88, anco2: 90 } },
+        { id: 'm1', date: '2026-01-10', mbw: 2, mortality: 5, feed: 12, feedData: { totalDailyFeed: 12 } },
+        { id: 'm2', date: '2026-01-17', mbw: 3, mortality: 5, feed: 16, feedData: { totalDailyFeed: 16 } },
       ],
     },
   ], 'Analyze Missing Water Pond', new Date('2026-01-20T00:00:00Z'));

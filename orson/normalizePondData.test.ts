@@ -35,9 +35,6 @@ export const runNormalizePondDataSelfTest = () => {
           feed: 0,
           feedData: {
             totalDailyFeed: '52',
-            ancoPercentage: '85',
-            anco1: '90',
-            anco2: '80',
             inventoryFeedId: 'feed-a',
           },
         },
@@ -63,7 +60,6 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.records.length === 3, 'keeps existing records');
   assert(pond.records[0].kinds.includes('water_quality'), 'detects water-quality record');
   assert(!pond.records[0].kinds.includes('feed'), 'does not treat zero-feed water-quality entry as feed');
-  assert(pond.records[1].feedData?.trayClearancePercent === 85, 'averages tray clearance');
   assert(pond.records[1].feedKg === 52, 'uses feedData total daily feed');
   assert(pond.records[2].kinds.includes('sampling'), 'detects sampling record');
   assert(pond.records[2].mbwG === 1.2, 'normalizes MBW');

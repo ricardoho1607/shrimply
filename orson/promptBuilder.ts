@@ -54,7 +54,7 @@ const SUMMARY_PATTERNS = [
 
 const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
   { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
-  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\banco\b/i, /\btray\b/i, /\bappetite\b/i, /\bfcr\b/i] },
+  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i] },
   { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
   { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
   { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
@@ -239,6 +239,7 @@ export const buildOrsonPromptPayload = (
     feedPressureRatio: metrics.feedBiomassModel.feedPressureRatio,
     expectedFeedKg: metrics.feedBiomassModel.expectedFeedKg,
     actualFeedKg: metrics.feedBiomassModel.actualFeedKg,
+    feedAllocationTrend: metrics.feedAllocationTrend,
     baselineFeedKg: metrics.baselineFeedKg,
     operationalFeedKg: metrics.operationalFeedKg,
     dataAssumptions: metrics.dataAssumptions,
@@ -275,6 +276,7 @@ export const buildOrsonSystemInstruction = (): string => {
     '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
     '- Do not invent measurements, disease diagnoses, pathogen results, or lab data.',
+    '- Do not treat a change in logged daily feed as measured appetite or proof that feed was consumed.',
     '- If a measurement is missing or confidence is low, say so clearly.',
     '- Treat confirmed lab report findings as higher-confidence context than daily field logs, and call out contradictions instead of smoothing them over.',
     '- If data_assumptions mention mid-cycle onboarding, state that pre-onboarding values are estimates and avoid treating them as exact historical records.',
@@ -329,6 +331,12 @@ export const buildOrsonPromptContext = (
     feed_pressure_ratio: payload.feedPressureRatio,
     expected_feed_kg: payload.expectedFeedKg,
     actual_feed_kg: payload.actualFeedKg,
+    feed_allocation_trend: {
+      direction: payload.feedAllocationTrend.direction,
+      first_kg: payload.feedAllocationTrend.first,
+      last_kg: payload.feedAllocationTrend.last,
+      points: payload.feedAllocationTrend.points,
+    },
     baseline_feed_kg: payload.baselineFeedKg,
     operational_feed_kg: payload.operationalFeedKg,
     data_assumptions: payload.dataAssumptions,
