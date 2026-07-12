@@ -37,6 +37,19 @@ interface FormData {
   samplingDate: Date;
 }
 
+const pondNameCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: 'base',
+});
+
+const compareByPondName = (
+  first: { pondName: string },
+  second: { pondName: string }
+) => pondNameCollator.compare(
+  first.pondName.replace(/\s+/g, ''),
+  second.pondName.replace(/\s+/g, '')
+);
+
 const DetailItem = ({ 
   iconName, 
   label, 
@@ -281,8 +294,14 @@ export default function PondManagementScreen() {
     return Math.floor((baselineTime - startTime) / (24 * 60 * 60 * 1000));
   }, []);
 
-  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
-  const endedPonds = useMemo(() => ponds.filter((pond) => !isPondCycleActive(pond)), [ponds]);
+  const activePonds = useMemo(
+    () => ponds.filter(isPondCycleActive).sort(compareByPondName),
+    [ponds]
+  );
+  const endedPonds = useMemo(
+    () => ponds.filter((pond) => !isPondCycleActive(pond)).sort(compareByPondName),
+    [ponds]
+  );
   const activePhysicalPondNames = useMemo(
     () => new Set(activePonds.map((pond) => getPhysicalPondKey(pond.pondName))),
     [activePonds]
@@ -290,7 +309,7 @@ export default function PondManagementScreen() {
   const idlePhysicalPonds = useMemo(() => {
     return physicalPonds
       .filter((pond) => pond.status !== 'active' && !activePhysicalPondNames.has(getPhysicalPondKey(pond.pondName)))
-      .sort((a, b) => a.pondName.localeCompare(b.pondName));
+      .sort(compareByPondName);
   }, [activePhysicalPondNames, physicalPonds]);
   const startableEndedPonds = useMemo(() => {
     const latestByPondName = new Map<string, Pond>();
@@ -307,10 +326,10 @@ export default function PondManagementScreen() {
       }
     });
 
-    return Array.from(latestByPondName.values()).sort((a, b) => a.pondName.localeCompare(b.pondName));
+    return Array.from(latestByPondName.values()).sort(compareByPondName);
   }, [activePhysicalPondNames, endedPonds]);
   const startablePondOptions = useMemo<(PhysicalPond | Pond)[]>(
-    () => [...idlePhysicalPonds, ...startableEndedPonds],
+    () => [...idlePhysicalPonds, ...startableEndedPonds].sort(compareByPondName),
     [idlePhysicalPonds, startableEndedPonds]
   );
   const inferredFarmCycle = useMemo<FarmCycle | undefined>(() => {
@@ -347,17 +366,23 @@ export default function PondManagementScreen() {
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles) || inferredFarmCycle, [cycles, inferredFarmCycle]);
   const currentCyclePonds = useMemo(() => {
     if (!activeFarmCycle) return activePonds;
-    return ponds.filter((pond) =>
-      pond.cycleId === activeFarmCycle.id ||
-      (activeFarmCycle.id === 'legacy-active-cycle' && !pond.cycleId) ||
-      (!pond.cycleId && isPondCycleActive(pond))
-    );
+    return ponds
+      .filter((pond) =>
+        pond.cycleId === activeFarmCycle.id ||
+        (activeFarmCycle.id === 'legacy-active-cycle' && !pond.cycleId) ||
+        (!pond.cycleId && isPondCycleActive(pond))
+      )
+      .sort(compareByPondName);
   }, [activeFarmCycle, activePonds, ponds]);
   const activeCyclePonds = useMemo(() => currentCyclePonds.filter(isPondCycleActive), [currentCyclePonds]);
   const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? t.farmCycle.currentCycle : t.farmCycle.noActiveCycle);
   const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? t.farmCycle.status.active : t.farmCycle.status.waiting);
   const visiblePonds = useMemo(
-    () => cycleFilter === 'inactive' ? [] : ponds.filter((pond) => getPondCycleStatus(pond) === cycleFilter),
+    () => cycleFilter === 'inactive'
+      ? []
+      : ponds
+        .filter((pond) => getPondCycleStatus(pond) === cycleFilter)
+        .sort(compareByPondName),
     [ponds, cycleFilter]
   );
 
