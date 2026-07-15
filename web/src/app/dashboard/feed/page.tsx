@@ -10,6 +10,9 @@ import {
   X,
   Loader2,
   Calendar,
+  ArrowUpRight,
+  ArrowDownRight,
+  Minus,
   Waves,
   ChevronRight,
   ArrowRight,
@@ -29,6 +32,7 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { calculateFeedTrend } from '../../../../../shared/feedTrends';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -44,6 +48,8 @@ interface Sampling {
   isBaselineEstimate?: boolean;
   source?: string;
 }
+
+type FeedHistoryEntry = Sampling & { feedData: FeedData };
 
 interface Pond {
   id: string; pondName: string; samplings: Sampling[];
@@ -373,9 +379,17 @@ export default function FeedRecordsPage() {
     return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [ponds, searchTerm]);
 
+  const selectedFeedHistory = useMemo<FeedHistoryEntry[]>(() => (
+    selectedPondForHistory?.samplings || []
+  )
+    .filter((sampling): sampling is FeedHistoryEntry => Boolean(sampling.feedData))
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()), [selectedPondForHistory]);
+
   const getLatestFeed = (pond: Pond) => {
     const logs = (pond.samplings || [])
       .filter(s => s.feedData)
+      .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return logs[0]?.feedData;
   };
@@ -476,36 +490,90 @@ export default function FeedRecordsPage() {
       {/* -- HISTORY DRAWER ---------------------------------- */}
       {selectedPondForHistory && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'flex-end' }}>
-          <div style={{ width: '100%', maxWidth: '560px', background: '#FFFFFF', height: '100vh', boxShadow: '-10px 0 50px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column', animation: 'drawerSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-            <div style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-              <div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>{selectedPondForHistory.pondName} Feed History</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Daily feed totals</p>
+          <div role="dialog" aria-modal="true" aria-label={`${selectedPondForHistory.pondName} feed history`} style={{ width: '100%', maxWidth: '580px', background: '#F8FAFC', height: '100vh', boxShadow: '-14px 0 60px rgba(15, 76, 117, 0.16)', display: 'flex', flexDirection: 'column', animation: 'drawerSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
+            <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFFFFF' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(50, 130, 184, 0.12)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <History size={22} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: '20px', fontWeight: 850, color: 'var(--text-primary)', margin: 0 }}>{selectedPondForHistory.pondName}</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>Feed history · {selectedFeedHistory.length} records</p>
+                </div>
               </div>
-              <button onClick={() => setSelectedPondForHistory(null)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
+              <button aria-label="Close feed history" onClick={() => setSelectedPondForHistory(null)} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={20} />
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {selectedPondForHistory.samplings
-                  .filter(s => s.feedData)
-                  .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-                  .map((log, i) => (
-                    <div key={i} className="glass-card animate-fade-up" style={{ padding: '18px', background: 'white', animationDelay: `${i * 0.05}s` }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <Calendar size={18} color="var(--text-faint)" />
-                          <span style={{ fontWeight: 800, fontSize: '14px' }}>{new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px 32px' }}>
+              {selectedFeedHistory.length === 0 && (
+                <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <div style={{ width: '68px', height: '68px', borderRadius: '20px', background: '#EAF3F8', color: '#0F4C75', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                    <ClipboardList size={30} />
+                  </div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 850, marginBottom: '6px' }}>No feed history yet</div>
+                  <div style={{ maxWidth: '300px', fontSize: '13px', lineHeight: 1.6, fontWeight: 600 }}>Daily feed records will appear here after the first entry is saved.</div>
+                </div>
+              )}
+              {selectedFeedHistory.length > 0 && (
+                <div style={{ padding: '20px', marginBottom: '22px', borderRadius: '18px', background: 'linear-gradient(135deg, #0F4C75 0%, #176B9D 100%)', color: '#FFFFFF', boxShadow: '0 14px 30px rgba(15, 76, 117, 0.2)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <div>
+                    <div style={{ fontSize: '12px', fontWeight: 750, color: 'rgba(255,255,255,0.72)', marginBottom: '6px' }}>LATEST DAILY FEED</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                      <span style={{ fontSize: '32px', lineHeight: 1, fontWeight: 900 }}>{selectedFeedHistory[0].feedData.totalDailyFeed}</span>
+                      <span style={{ fontSize: '14px', fontWeight: 750, color: 'rgba(255,255,255,0.78)' }}>kg</span>
+                    </div>
+                  </div>
+                  <div style={{ padding: '7px 11px', borderRadius: '999px', background: 'rgba(255,255,255,0.13)', border: '1px solid rgba(255,255,255,0.18)', fontSize: '12px', fontWeight: 750 }}>
+                    {new Date(selectedFeedHistory[0].date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                {selectedFeedHistory.map((log, i) => {
+                  const trend = calculateFeedTrend(log.feedData.totalDailyFeed, selectedFeedHistory[i + 1]?.feedData.totalDailyFeed);
+                  const trendConfig = {
+                    increased: { label: 'Increased', Icon: ArrowUpRight, color: '#16805C', background: '#E8F7F1' },
+                    decreased: { label: 'Decreased', Icon: ArrowDownRight, color: '#C0392B', background: '#FDEDEC' },
+                    maintained: { label: 'Maintained', Icon: Minus, color: '#0F4C75', background: '#EAF3F8' },
+                    first: { label: 'First record', Icon: Calendar, color: '#60758A', background: '#EEF3F6' },
+                  }[trend.direction];
+                  const TrendIcon = trendConfig.Icon;
+                  const signedDelta = trend.deltaKg === null ? null : `${trend.deltaKg > 0 ? '+' : ''}${trend.deltaKg.toFixed(2)} kg`;
+                  return (
+                    <div key={log.id || log.date} style={{ display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', alignItems: 'stretch' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#3282B8', border: '2px solid #BBE1FA', marginTop: '22px', zIndex: 1 }} />
+                        {i < selectedFeedHistory.length - 1 && <div style={{ width: '2px', flex: 1, background: '#DCE8F2' }} />}
+                      </div>
+                      <div className="animate-fade-up" style={{ padding: '18px', marginBottom: '14px', borderRadius: '18px', background: '#FFFFFF', border: '1px solid #DCE8F2', boxShadow: '0 6px 18px rgba(15, 76, 117, 0.06)', animationDelay: `${i * 0.04}s` }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                            <Calendar size={16} color="#60758A" />
+                            <span style={{ fontWeight: 750, fontSize: '13px', color: '#334E68' }}>{new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0, padding: '6px 9px', borderRadius: '999px', color: trendConfig.color, background: trendConfig.background, fontSize: '11px', fontWeight: 850 }}>
+                            <TrendIcon size={14} />
+                            {trendConfig.label}
+                          </div>
                         </div>
-                        <div style={{ padding: '6px 12px', borderRadius: '12px', background: 'var(--primary)', color: '#FFF', fontSize: '12px', fontWeight: 800, boxShadow: '0 4px 12px rgba(15, 76, 117, 0.2)' }}>
-                          {log.feedData?.totalDailyFeed} kg
+                        <div style={{ color: '#60758A', fontSize: '12px', fontWeight: 650, marginBottom: '3px' }}>Daily total</div>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: '5px' }}>
+                          <span style={{ color: '#0F4C75', fontSize: '28px', lineHeight: 1.1, fontWeight: 900 }}>{log.feedData.totalDailyFeed}</span>
+                          <span style={{ color: '#60758A', fontSize: '14px', fontWeight: 750 }}>kg</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginTop: '15px', paddingTop: '12px', borderTop: '1px solid #EEF3F6', color: '#60758A', fontSize: '12px', fontWeight: 650 }}>
+                          <TrendIcon size={15} />
+                          {signedDelta && trend.percent !== null
+                            ? `${signedDelta} · ${Math.abs(trend.percent).toFixed(1)}% from previous record`
+                            : 'First recorded feed total'}
                         </div>
                       </div>
                     </div>
-                  ))
-                }
+                  );
+                })}
               </div>
             </div>
           </div>
