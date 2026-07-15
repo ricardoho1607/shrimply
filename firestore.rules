@@ -765,6 +765,26 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      match /orsonPredictions/{predictionId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
+      }
+
+      match /orsonCycleOutcomes/{outcomeId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
+      }
+
+      match /orsonCalibration/{calibrationId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
+      }
+
+      match /orsonCalibrationEvaluations/{evaluationId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
+      }
+
       match /userActivitySessions/{sessionId} {
         allow read: if isFounderAdmin()
           || isCompanyManager(companyId)

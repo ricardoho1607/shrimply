@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { doc, getDoc } from 'firebase/firestore';
 import app, { db } from '@/config/firebase';
 import NotificationService from '../services/notificationService';
 import { buildOrsonAnalysis } from '../../orson/pipeline';
@@ -14,6 +15,9 @@ import {
   ORSON_MODEL_TIMEOUT_MS,
   withOrsonTimeout,
 } from '../../orson/promptBuilder';
+import { normalizeOrsonCalibration } from '../../orson/learning';
+import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnapshot';
+import type { OrsonCalibrationProfile, OrsonHarvestProjection } from '../../orson/types';
 
 // Types for the chat history
 interface Message {
@@ -22,6 +26,16 @@ interface Message {
 }
 
 type OrsonAnalysis = ReturnType<typeof buildOrsonAnalysis>;
+
+type SendMessageOptions = {
+  companyId?: string;
+  aiFunction?: OrsonAiFunction;
+  calibration?: OrsonCalibrationProfile | null;
+  projectionSnapshot?: {
+    pond: Record<string, unknown>;
+    projection: OrsonHarvestProjection;
+  };
+};
 
 const formatMetric = (value: number | null | undefined, unit: string, decimals = 1) => {
   if (typeof value !== 'number' || !Number.isFinite(value)) return null;
@@ -102,7 +116,7 @@ export const useGemini = () => {
   const sendMessage = async (
     userMessage: string,
     allPonds: any[],
-    options: { companyId?: string; aiFunction?: OrsonAiFunction } = {},
+    options: SendMessageOptions = {},
   ) => {
     setLoading(true);
     setError(null);
@@ -114,12 +128,36 @@ export const useGemini = () => {
         return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
 
-      analysis = buildOrsonAnalysis(allPonds, userMessage);
+      let calibration = options.calibration;
+      if (calibration === undefined && options.companyId) {
+        try {
+          const calibrationSnap = await getDoc(doc(db, 'companies', options.companyId, 'orsonCalibration', 'current'));
+          calibration = normalizeOrsonCalibration(calibrationSnap.exists() ? calibrationSnap.data() : null);
+        } catch (calibrationError) {
+          console.warn('Orson calibration could not be loaded; using safe defaults.', calibrationError);
+          calibration = null;
+        }
+      }
+
+      analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration);
       void createRiskNotifications(options.companyId, analysis);
 
+      const functions = getFunctions(app);
+      if (options.companyId && options.projectionSnapshot) {
+        try {
+          const snapshotRequest = buildOrsonPredictionSnapshotRequest(
+            options.companyId,
+            options.projectionSnapshot.pond,
+            options.projectionSnapshot.projection,
+          );
+          const recordPrediction = httpsCallable(functions, 'recordOrsonPrediction');
+          await recordPrediction(snapshotRequest);
+        } catch (predictionError) {
+          console.warn('Orson prediction snapshot could not be recorded.', predictionError);
+        }
+      }
       await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat');
 
-      const functions = getFunctions(app);
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string },
         { text?: string }

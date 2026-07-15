@@ -182,7 +182,11 @@ const orderPayloadsForQuestion = (
   payloads: OrsonPromptPondPayload[],
   focus: OrsonQuestionFocus,
 ): OrsonPromptPondPayload[] => {
-  if (!focus.isPondSpecific) return payloads;
+  if (!focus.isPondSpecific) {
+    return [...payloads]
+      .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
+      .slice(0, 10);
+  }
 
   const focused = payloads.find((payload) => {
     return payload.pondName === focus.focusedPondName || payload.pondId === focus.focusedPondId;
@@ -244,6 +248,7 @@ export const buildOrsonPromptPayload = (
     operationalFeedKg: metrics.operationalFeedKg,
     dataAssumptions: metrics.dataAssumptions,
     dataCompletenessScore: metrics.dataCompleteness.score,
+    calibration: metrics.calibration,
     phSwingLatest: metrics.phSwingLatest,
     doMinimumLatest: metrics.doMinimumLatest,
     salinityTrend: metrics.salinityTrend,
@@ -280,6 +285,7 @@ export const buildOrsonSystemInstruction = (): string => {
     '- If a measurement is missing or confidence is low, say so clearly.',
     '- Treat confirmed lab report findings as higher-confidence context than daily field logs, and call out contradictions instead of smoothing them over.',
     '- If data_assumptions mention mid-cycle onboarding, state that pre-onboarding values are estimates and avoid treating them as exact historical records.',
+    '- Treat calibration as a bounded company prediction adjustment, not as a change to biological safety thresholds or proof of causation.',
     '',
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
@@ -319,6 +325,7 @@ export const buildOrsonPromptContext = (
   payloads: OrsonPromptPondPayload[],
   questionFocus: OrsonQuestionFocus,
   selectedKnowledge: SelectedKnowledge,
+  totalPondCount = payloads.length,
 ): string => {
   const compactPayloads = payloads.map((payload) => ({
     pond: payload.pondName,
@@ -341,6 +348,7 @@ export const buildOrsonPromptContext = (
     operational_feed_kg: payload.operationalFeedKg,
     data_assumptions: payload.dataAssumptions,
     data_completeness_pct: round(payload.dataCompletenessScore * 100, 0),
+    calibration: payload.calibration,
     water_metrics: {
       ph_swing_latest: payload.phSwingLatest,
       do_minimum_latest_mg_l: payload.doMinimumLatest,
@@ -358,6 +366,15 @@ export const buildOrsonPromptContext = (
   }));
 
   return [
+    'ORSON FARM SCOPE:',
+    JSON.stringify({
+      active_pond_count: totalPondCount,
+      included_pond_count: payloads.length,
+      selection: totalPondCount > payloads.length
+        ? 'Highest-risk ponds were selected to keep large-farm analysis bounded.'
+        : 'All active ponds are included.',
+    }, null, 2),
+    '',
     'ORSON QUESTION FOCUS:',
     JSON.stringify({
       intent: questionFocus.intent,
@@ -419,7 +436,7 @@ export const buildOrsonPromptPackage = (params: {
 
   return {
     systemInstruction: buildOrsonSystemInstruction(),
-    context: buildOrsonPromptContext(orderedPayloads, questionFocus, selectedKnowledge),
+    context: buildOrsonPromptContext(orderedPayloads, questionFocus, selectedKnowledge, params.metrics.length),
     userMessage: params.userMessage,
     cacheKey: buildOrsonCacheKey(params.userMessage, orderedPayloads),
     isFarmSpecific: isFarmSpecificQuestion(params.userMessage),

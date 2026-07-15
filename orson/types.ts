@@ -109,6 +109,33 @@ export interface OrsonSurvivalAssumption {
   reason: string;
 }
 
+export interface OrsonCalibrationAdjustment {
+  adgMultiplier: number;
+  survivalOffsetPercentagePoints: number;
+  biomassMultiplier: number;
+  sampleSize: number;
+}
+
+export interface OrsonPondCalibrationAdjustment extends OrsonCalibrationAdjustment {
+  pondName: string;
+  pondNameKey: string;
+}
+
+export interface OrsonCalibrationProfile {
+  schemaVersion: 1;
+  versionNumber: number;
+  versionId: string;
+  status: 'default' | 'active';
+  companyAdjustment: OrsonCalibrationAdjustment;
+  pondAdjustments: OrsonPondCalibrationAdjustment[];
+  eligibleOutcomeCount: number;
+  trainingOutcomeCount: number;
+  validationOutcomeCount: number;
+  previousScore: number | null;
+  validationScore: number | null;
+  updatedAt?: unknown;
+}
+
 export interface OrsonFeedBiomassModel {
   feedRatePercent: OrsonNumber;
   expectedFeedKg: OrsonNumber;
@@ -153,6 +180,11 @@ export interface OrsonPondMetrics {
   mortalityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
   dataCompleteness: OrsonDataCompleteness;
+  calibration: {
+    versionId: string;
+    scope: 'default' | 'company' | 'pond';
+    sampleSize: number;
+  };
 }
 
 export type OrsonRiskSeverity = 'info' | 'watch' | 'warning' | 'critical';
@@ -225,6 +257,7 @@ export interface OrsonPromptPondPayload {
   operationalFeedKg: number;
   dataAssumptions: string[];
   dataCompletenessScore: number;
+  calibration: OrsonPondMetrics['calibration'];
   phSwingLatest: OrsonNumber;
   doMinimumLatest: OrsonNumber;
   salinityTrend: OrsonTrendResult;
@@ -273,7 +306,21 @@ export interface OrsonHarvestProjectionInput {
   targetAdgGPerDay?: number | null;
   assumedSurvivalPercent?: number | null;
   targetMarketSizeG?: number | null;
+  calibration?: OrsonCalibrationProfile | null;
   now?: Date;
+}
+
+export interface OrsonProjectionLearningContext {
+  currentMbwG: OrsonNumber;
+  baseAssumedAdgGPerDay: OrsonNumber;
+  baseProjectedMbwG: OrsonNumber;
+  baseAssumedSurvivalPercent: OrsonNumber;
+  baseProjectedBiomassKg: OrsonNumber;
+  initialPopulation: OrsonNumber;
+  mortalityCountAtPrediction: number;
+  harvestedPopulationAtPrediction: number;
+  manualAdgOverride: boolean;
+  manualSurvivalOverride: boolean;
 }
 
 export interface OrsonHarvestProjectionRisk {
@@ -290,6 +337,9 @@ export interface OrsonHarvestProjection {
   pondName: string;
   currentDoc: number | null;
   futureDoc: number | null;
+  generatedAt: string;
+  targetDate: string;
+  daysToHarvest: number;
   currentMbwG: OrsonNumber;
   historicalAdgGPerDay: OrsonNumber;
   assumedAdgGPerDay: OrsonNumber;
@@ -308,4 +358,8 @@ export interface OrsonHarvestProjection {
   confidenceScore: number;
   confidenceReasons: string[];
   risks: OrsonHarvestProjectionRisk[];
+  calibrationVersionId: string;
+  calibrationScope: 'default' | 'company' | 'pond';
+  calibrationSampleSize: number;
+  learningContext: OrsonProjectionLearningContext;
 }

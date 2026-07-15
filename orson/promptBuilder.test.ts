@@ -77,6 +77,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
+  assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
   assert(farmPackage.context.length < 8000, 'keeps prompt context compact');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
 

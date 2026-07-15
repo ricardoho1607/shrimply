@@ -19,7 +19,10 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useAuth } from '../context/AuthContext';
 import { calculateOrsonHarvestProjection } from '../orson/harvestProjection';
-import type { OrsonHarvestProjection } from '../orson/types';
+import { createDefaultOrsonCalibration, normalizeOrsonCalibration } from '../orson/learning';
+import type { OrsonCalibrationProfile, OrsonHarvestProjection } from '../orson/types';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/config/firebase';
 
 export default function HarvestProjectionScreen() {
   const router = useRouter();
@@ -39,6 +42,7 @@ export default function HarvestProjectionScreen() {
   const [targetMarketSize, setTargetMarketSize] = useState('20');
   
   const [insight, setInsight] = useState<string | null>(null);
+  const [calibration, setCalibration] = useState<OrsonCalibrationProfile>(() => createDefaultOrsonCalibration());
 
   // Projections state
   const [projection, setProjection] = useState<OrsonHarvestProjection | null>(null);
@@ -52,6 +56,21 @@ export default function HarvestProjectionScreen() {
   }, [activePonds, selectedPondId]);
 
   useEffect(() => {
+    if (!company?.id) {
+      setCalibration(createDefaultOrsonCalibration());
+      return;
+    }
+    return onSnapshot(
+      doc(db, 'companies', company.id, 'orsonCalibration', 'current'),
+      (snapshot) => setCalibration(normalizeOrsonCalibration(snapshot.exists() ? snapshot.data() : null)),
+      (error) => {
+        console.warn('Orson calibration listener failed; using safe defaults.', error);
+        setCalibration(createDefaultOrsonCalibration());
+      },
+    );
+  }, [company?.id]);
+
+  useEffect(() => {
     if (!selectedPond) return;
 
     const nextProjection = calculateOrsonHarvestProjection({
@@ -62,19 +81,14 @@ export default function HarvestProjectionScreen() {
       targetAdgGPerDay: targetADG ? parseFloat(targetADG) : null,
       assumedSurvivalPercent: assumedSurvival ? parseFloat(assumedSurvival) : null,
       targetMarketSizeG: targetMarketSize ? parseFloat(targetMarketSize) : null,
+      calibration,
     });
 
     setProjection(nextProjection);
-    if (!assumedSurvival && nextProjection.assumedSurvivalPercent !== null) {
-      setAssumedSurvival(String(nextProjection.assumedSurvivalPercent));
-    }
-    if (!targetADG && nextProjection.assumedAdgGPerDay !== null) {
-      setTargetADG(String(nextProjection.assumedAdgGPerDay));
-    }
     
     // Reset insight when data changes
     setInsight(null);
-  }, [selectedPondId, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, selectedPond]);
+  }, [selectedPondId, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, selectedPond, calibration]);
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
@@ -98,6 +112,11 @@ Give a concise recommendation based on Orson's structured projection risk.`;
       const response = await sendMessage(prompt, activePonds, {
         companyId: company?.id,
         aiFunction: 'projection',
+        calibration,
+        projectionSnapshot: {
+          pond: selectedPond as unknown as Record<string, unknown>,
+          projection,
+        },
       });
       setInsight(response);
     } catch {

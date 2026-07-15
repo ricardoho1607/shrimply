@@ -1915,3 +1915,7 @@ exports.orsonDailySupervisor = onSchedule({
 });
 
 Object.assign(exports, require("./adminMetrics"));
+Object.assign(exports, require("./orsonLearning")({
+  admin,
+  assertCompanyMemberForCallable,
+}));

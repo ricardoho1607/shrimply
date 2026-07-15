@@ -7,6 +7,7 @@ import type {
   OrsonNumber,
   OrsonRiskSeverity,
 } from './types';
+import { getOrsonCalibrationAdjustment } from './learning';
 
 const round = (value: number, decimals = 2): number => {
   const factor = 10 ** decimals;
@@ -60,29 +61,55 @@ export const calculateOrsonHarvestProjection = (
   const now = input.now ?? new Date();
   const normalized = normalizePondData(input.pond, { now });
   const metrics = calculatePondMetrics(normalized);
+  const calibration = getOrsonCalibrationAdjustment(input.calibration, normalized.pondName);
   const daysToHarvest = Math.max(0, Math.floor(input.daysToHarvest || 0));
   const currentMbwG = metrics.latestMbwG ?? normalized.initialWeightG;
   const defaultAdg = chooseDefaultAdg(metrics.smoothedAdgGPerDay ?? metrics.adgGPerDay, currentMbwG);
-  const assumedAdgGPerDay = input.targetAdgGPerDay && input.targetAdgGPerDay > 0
-    ? input.targetAdgGPerDay
-    : defaultAdg;
+  const manualAdgOverride = Boolean(input.targetAdgGPerDay && input.targetAdgGPerDay > 0);
+  const baseAssumedAdgGPerDay = manualAdgOverride ? input.targetAdgGPerDay! : defaultAdg;
+  const assumedAdgGPerDay = manualAdgOverride
+    ? baseAssumedAdgGPerDay
+    : round(baseAssumedAdgGPerDay * calibration.adjustment.adgMultiplier, 3);
 
   const modelSurvival = metrics.feedBiomassModel.survivalAssumption;
-  const assumedSurvivalPercent = input.assumedSurvivalPercent && input.assumedSurvivalPercent > 0
-    ? clamp(input.assumedSurvivalPercent, 1, 100)
+  const manualSurvivalOverride = Boolean(input.assumedSurvivalPercent && input.assumedSurvivalPercent > 0);
+  const baseAssumedSurvivalPercent = manualSurvivalOverride
+    ? clamp(input.assumedSurvivalPercent!, 1, 100)
     : modelSurvival.expectedPercent;
+  const assumedSurvivalPercent = isNumber(baseAssumedSurvivalPercent)
+    ? manualSurvivalOverride
+      ? baseAssumedSurvivalPercent
+      : round(clamp(
+          baseAssumedSurvivalPercent + calibration.adjustment.survivalOffsetPercentagePoints,
+          1,
+          100,
+        ), 1)
+    : null;
 
   const initialPopulation = normalized.initialPopulation;
+  const baseCurrentPopulation = isNumber(initialPopulation) && isNumber(baseAssumedSurvivalPercent)
+    ? round((initialPopulation * baseAssumedSurvivalPercent) / 100, 0) - metrics.totalMortalityCount - (normalized.totalHarvestedPopulation ?? 0)
+    : metrics.estimatedCurrentPopulation;
+  const boundedBasePopulation = isNumber(baseCurrentPopulation) ? Math.max(0, baseCurrentPopulation) : null;
   const currentPopulation = isNumber(initialPopulation) && isNumber(assumedSurvivalPercent)
     ? round((initialPopulation * assumedSurvivalPercent) / 100, 0) - metrics.totalMortalityCount - (normalized.totalHarvestedPopulation ?? 0)
     : metrics.estimatedCurrentPopulation;
   const boundedPopulation = isNumber(currentPopulation) ? Math.max(0, currentPopulation) : null;
 
+  const baseProjectedMbwG = isNumber(currentMbwG)
+    ? round(currentMbwG + baseAssumedAdgGPerDay * daysToHarvest, 2)
+    : null;
   const projectedMbwG = isNumber(currentMbwG)
     ? round(currentMbwG + assumedAdgGPerDay * daysToHarvest, 2)
     : null;
-  const projectedBiomassKg = isNumber(boundedPopulation) && isNumber(projectedMbwG)
-    ? round((boundedPopulation * projectedMbwG) / 1000, 2)
+  const baseProjectedBiomassKg = isNumber(boundedBasePopulation) && isNumber(baseProjectedMbwG)
+    ? round((boundedBasePopulation * baseProjectedMbwG) / 1000, 2)
+    : null;
+  const calibratedBiomassKg = isNumber(boundedPopulation) && isNumber(projectedMbwG)
+    ? (boundedPopulation * projectedMbwG) / 1000
+    : null;
+  const projectedBiomassKg = isNumber(calibratedBiomassKg)
+    ? round(calibratedBiomassKg * calibration.adjustment.biomassMultiplier, 2)
     : null;
   const projectedRevenue = isNumber(projectedBiomassKg)
     ? round(projectedBiomassKg * input.expectedPricePerKg, 2)
@@ -113,6 +140,11 @@ export const calculateOrsonHarvestProjection = (
   if (!isNumber(projectedBiomassKg)) {
     confidenceScore -= 0.2;
     confidenceReasons.push('Projected biomass is missing because current MBW or population is unavailable.');
+  }
+  if (calibration.scope !== 'default') {
+    confidenceReasons.push(
+      `Orson calibration ${calibration.versionId} uses ${calibration.adjustment.sampleSize} completed ${calibration.scope === 'pond' ? 'cycles for this pond' : 'company pond-cycle outcomes'}.`,
+    );
   }
   confidenceScore = round(clamp(confidenceScore, 0, 1), 2);
 
@@ -173,6 +205,9 @@ export const calculateOrsonHarvestProjection = (
     pondName: normalized.pondName,
     currentDoc: metrics.currentDoc,
     futureDoc: metrics.currentDoc !== null ? metrics.currentDoc + daysToHarvest : null,
+    generatedAt: now.toISOString(),
+    targetDate: new Date(now.getTime() + daysToHarvest * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    daysToHarvest,
     currentMbwG,
     historicalAdgGPerDay: metrics.smoothedAdgGPerDay ?? metrics.adgGPerDay,
     assumedAdgGPerDay: round(assumedAdgGPerDay, 3),
@@ -191,5 +226,20 @@ export const calculateOrsonHarvestProjection = (
     confidenceScore,
     confidenceReasons,
     risks,
+    calibrationVersionId: calibration.versionId,
+    calibrationScope: calibration.scope,
+    calibrationSampleSize: calibration.adjustment.sampleSize,
+    learningContext: {
+      currentMbwG,
+      baseAssumedAdgGPerDay: round(baseAssumedAdgGPerDay, 3),
+      baseProjectedMbwG,
+      baseAssumedSurvivalPercent: isNumber(baseAssumedSurvivalPercent) ? round(baseAssumedSurvivalPercent, 1) : null,
+      baseProjectedBiomassKg,
+      initialPopulation,
+      mortalityCountAtPrediction: metrics.totalMortalityCount,
+      harvestedPopulationAtPrediction: normalized.totalHarvestedPopulation ?? 0,
+      manualAdgOverride,
+      manualSurvivalOverride,
+    },
   };
 };

@@ -54,6 +54,24 @@ Orson can produce a short outlook based on current risk level and trend directio
 
 Orson can generate notifications after new sampling, water-quality, feed, or mortality records when deterministic rules identify meaningful risk.
 
+### Company Cycle Learning
+
+Orson can store immutable harvest-projection snapshots inside the company that created them, compare those snapshots with completed-cycle harvest outcomes, and apply a bounded company or pond calibration to later ADG, survival, and biomass projections.
+
+Cycle learning must:
+- Keep raw predictions, outcomes, calibration evaluations, and active calibration versions company-scoped.
+- Preserve missing actual values as missing rather than converting them to zero.
+- Exclude incomplete, mid-cycle-onboarded, non-harvest, and manually overridden projections from automatic calibration.
+- Train a candidate on older eligible outcomes and test it on held-out outcomes.
+- Keep calibration in data-collection mode until at least 6 eligible pond-cycle outcomes exist; pond-specific calibration also requires at least 6 outcomes for that pond.
+- Reject a candidate unless aggregate validation error improves without materially worsening an individual calibrated metric.
+- Limit every promoted adjustment and preserve prior versions for audit and rollback.
+- Keep biological safety thresholds and deterministic risk rules fixed.
+
+Cycle learning does not allow Gemini to rewrite Orson code, prompts, safety rules, or calibration limits.
+
+For large companies, calculations may run across every active pond, but broad Gemini prompts must include at most the 10 highest-risk pond payloads plus the total active-pond count. A pond-specific question may include the focused pond and at most two supporting ponds.
+
 ## Not Supported Yet
 
 Orson must not claim these capabilities until the product has the required data and logic:
@@ -66,6 +84,8 @@ Orson must not claim these capabilities until the product has the required data 
 - Market price prediction unless market data is integrated.
 - Benchmarking against thousands of farms unless Shrimply has a real benchmark dataset.
 - Automatic treatment prescriptions involving medication or chemicals without expert review.
+- Cross-company learning from raw farm records without a separately approved consent, anonymization, and aggregation design.
+- Claims that a recommendation caused an outcome unless the farm records whether and when the recommendation was followed.
 
 ## Response Style
 

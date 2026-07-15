@@ -22,6 +22,8 @@ import { useGemini } from '@/hooks/useGemini';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { calculateOrsonHarvestProjection } from '../../../../../orson/harvestProjection';
+import { createDefaultOrsonCalibration, normalizeOrsonCalibration } from '../../../../../orson/learning';
+import type { OrsonCalibrationProfile } from '../../../../../orson/types';
 import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 
 /* --- Types --------------------------------------------------- */
@@ -90,9 +92,19 @@ export default function HarvestProjectionsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [selectedPondId, setSelectedPondId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<DashboardUser | null>(null);
+  const [, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const [calibrationState, setCalibrationState] = useState<{
+    companyId: string;
+    profile: OrsonCalibrationProfile;
+  } | null>(null);
+  const calibration = useMemo(
+    () => calibrationState && calibrationState.companyId === company?.id
+      ? calibrationState.profile
+      : createDefaultOrsonCalibration(),
+    [calibrationState, company?.id],
+  );
   
   // Assumptions
   const [daysToHarvest, setDaysToHarvest] = useState('14');
@@ -146,6 +158,22 @@ export default function HarvestProjectionsPage() {
 
   useEffect(() => {
     if (!company?.id) return;
+    const companyId = company.id;
+    return onSnapshot(
+      doc(db, 'companies', companyId, 'orsonCalibration', 'current'),
+      (snapshot) => setCalibrationState({
+        companyId,
+        profile: normalizeOrsonCalibration(snapshot.exists() ? snapshot.data() : null),
+      }),
+      (error) => {
+        console.warn('Orson calibration listener failed; using safe defaults.', error);
+        setCalibrationState({ companyId, profile: createDefaultOrsonCalibration() });
+      },
+    );
+  }, [company?.id]);
+
+  useEffect(() => {
+    if (!company?.id) return;
     const q = query(collection(db, 'companies', company.id, 'cycles'), orderBy('createdAt', 'asc'));
     const unsub = onSnapshot(q, (snapshot) => {
       setCycles(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as FarmCycle)));
@@ -171,16 +199,9 @@ export default function HarvestProjectionsPage() {
       targetAdgGPerDay: targetADG ? Number(targetADG) : null,
       assumedSurvivalPercent: assumedSurvival ? Number(assumedSurvival) : null,
       targetMarketSizeG: targetMarketSize ? Number(targetMarketSize) : null,
+      calibration,
     });
-  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize]);
-
-  useEffect(() => {
-    if (!projection) return;
-    queueMicrotask(() => {
-      if (!targetADG && projection.assumedAdgGPerDay !== null) setTargetADG(String(projection.assumedAdgGPerDay));
-      if (!assumedSurvival && projection.assumedSurvivalPercent !== null) setAssumedSurvival(String(projection.assumedSurvivalPercent));
-    });
-  }, [projection, targetADG, assumedSurvival]);
+  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, calibration]);
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
@@ -203,9 +224,14 @@ Give a concise recommendation based on Orson's structured projection risk.`;
       const response = await sendMessage(prompt, activePonds, {
         companyId: company?.id,
         aiFunction: 'projection',
+        calibration,
+        projectionSnapshot: {
+          pond: selectedPond as unknown as Record<string, unknown>,
+          projection,
+        },
       });
       setInsight(response);
-    } catch (err) {
+    } catch {
       setInsight("Orson is currently unavailable to provide an analysis.");
     }
   };

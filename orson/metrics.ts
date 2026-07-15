@@ -1,4 +1,6 @@
 import type {
+  OrsonCalibrationAdjustment,
+  OrsonCalibrationProfile,
   OrsonDataCompleteness,
   OrsonFeedBiomassModel,
   OrsonNormalizedPond,
@@ -9,6 +11,7 @@ import type {
   OrsonSurvivalAssumption,
   OrsonTrendResult,
 } from './types';
+import { getOrsonCalibrationAdjustment } from './learning';
 import {
   calculateAdg as calculateSharedAdg,
   calculatePondMetricsWithHarvest,
@@ -168,27 +171,40 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 const calculateSurvivalAssumption = (
   pond: OrsonNormalizedPond,
   doMinimumLatest: OrsonNumber,
+  calibration: OrsonCalibrationAdjustment,
 ): OrsonSurvivalAssumption => {
   const doc = pond.currentDoc;
 
-  if (doc === null) {
+  const applyCalibration = (assumption: OrsonSurvivalAssumption): OrsonSurvivalAssumption => {
+    if (calibration.sampleSize <= 0 || calibration.survivalOffsetPercentagePoints === 0) return assumption;
+    const offset = calibration.survivalOffsetPercentagePoints;
     return {
+      ...assumption,
+      lowPercent: hasNumber(assumption.lowPercent) ? round(clamp(assumption.lowPercent + offset, 50, 99), 1) : null,
+      expectedPercent: hasNumber(assumption.expectedPercent) ? round(clamp(assumption.expectedPercent + offset, 50, 99), 1) : null,
+      highPercent: hasNumber(assumption.highPercent) ? round(clamp(assumption.highPercent + offset, 50, 99), 1) : null,
+      reason: `${assumption.reason} A bounded ${offset > 0 ? '+' : ''}${round(offset, 1)} percentage-point company calibration is applied.`,
+    };
+  };
+
+  if (doc === null) {
+    return applyCalibration({
       lowPercent: 70,
       expectedPercent: 85,
       highPercent: 95,
       confidence: 'low',
       reason: 'DOC is missing, so early survival cannot be staged reliably.',
-    };
+    });
   }
 
   if (doc <= 10) {
-    return {
+    return applyCalibration({
       lowPercent: 70,
       expectedPercent: 85,
       highPercent: 95,
       confidence: 'low',
       reason: 'Early PL survival is not directly observable during the first 10 DOC.',
-    };
+    });
   }
 
   if (doc <= 30) {
@@ -201,22 +217,22 @@ const calculateSurvivalAssumption = (
     }
 
     expected = clamp(expected, 75, 92);
-    return {
+    return applyCalibration({
       lowPercent: clamp(expected - 10, 60, 90),
       expectedPercent: expected,
       highPercent: clamp(expected + 7, 80, 97),
       confidence: 'low',
       reason: reasons.join(' '),
-    };
+    });
   }
 
-  return {
+  return applyCalibration({
     lowPercent: 80,
     expectedPercent: 90,
     highPercent: 97,
     confidence: 'low',
     reason: 'Later-cycle survival is still estimated unless mortality, harvest, and sampling records are complete.',
-  };
+  });
 };
 
 const rangeFromPopulation = (
@@ -293,6 +309,7 @@ const calculateFeedBiomassModel = (params: {
   harvestedPopulation: number;
   doMinimumLatest: OrsonNumber;
   sharedPond: SharedPond;
+  calibration: OrsonCalibrationAdjustment;
 }): OrsonFeedBiomassModel => {
   const {
     pond,
@@ -302,6 +319,7 @@ const calculateFeedBiomassModel = (params: {
     harvestedPopulation,
     doMinimumLatest,
     sharedPond,
+    calibration,
   } = params;
 
   const latestFeedRecord = latestWith(pond, (record) => record.isBaselineEstimate ? null : positive(record.feedKg));
@@ -321,14 +339,23 @@ const calculateFeedBiomassModel = (params: {
     ? round((feedBasedPopulation * latestMbwG) / 1000, 2)
     : null;
 
-  const survivalAssumption = calculateSurvivalAssumption(pond, doMinimumLatest);
+  const survivalAssumption = calculateSurvivalAssumption(pond, doMinimumLatest, calibration);
   const populationRange = rangeFromPopulation(
     pond.initialPopulation,
     totalMortalityCount,
     harvestedPopulation,
     survivalAssumption,
   );
-  const biomassRangeKg = biomassRangeFromPopulationRange(populationRange, latestMbwG);
+  const rawBiomassRangeKg = biomassRangeFromPopulationRange(populationRange, latestMbwG);
+  const applyBiomassMultiplier = (value: OrsonNumber): OrsonNumber =>
+    hasNumber(value) ? round(value * calibration.biomassMultiplier, 2) : null;
+  const biomassRangeKg = calibration.sampleSize > 0
+    ? {
+        low: applyBiomassMultiplier(rawBiomassRangeKg.low),
+        expected: applyBiomassMultiplier(rawBiomassRangeKg.expected),
+        high: applyBiomassMultiplier(rawBiomassRangeKg.high),
+      }
+    : rawBiomassRangeKg;
 
   const warnings: string[] = [];
   if (hasNumber(feedPressureRatio) && feedPressureRatio > 1.25) {
@@ -359,7 +386,11 @@ const calculateFeedBiomassModel = (params: {
   };
 };
 
-export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetrics => {
+export const calculatePondMetrics = (
+  pond: OrsonNormalizedPond,
+  calibrationProfile?: OrsonCalibrationProfile | null,
+): OrsonPondMetrics => {
+  const calibration = getOrsonCalibrationAdjustment(calibrationProfile, pond.pondName);
   const sharedPond = toSharedPond(pond);
   const sharedMetrics = calculatePondMetricsWithHarvest(sharedPond);
   const mbwPoints = recordsWith(pond, (record) => positive(record.mbwG));
@@ -383,6 +414,11 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
         'Post-baseline records are Shrimply tracked observations; pre-baseline values should not be treated as exact historical logs.',
       ]
     : [];
+  if (calibration.scope !== 'default') {
+    dataAssumptions.push(
+      `Orson calibration ${calibration.versionId} uses ${calibration.adjustment.sampleSize} completed ${calibration.scope === 'pond' ? 'cycles for this pond' : 'pond-cycle outcomes for this company'} to adjust projection ranges.`,
+    );
+  }
 
   const estimatedSurvivalPercent = round(sharedMetrics.adjustedSR, 2);
   const estimatedBiomassKg = round(sharedMetrics.currentBiomass, 2);
@@ -443,6 +479,7 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     harvestedPopulation,
     doMinimumLatest: roundedDoMinimumLatest,
     sharedPond,
+    calibration: calibration.adjustment,
   });
 
   return {
@@ -476,9 +513,17 @@ export const calculatePondMetrics = (pond: OrsonNormalizedPond): OrsonPondMetric
     mortalityTrend,
     labContext: pond.labContext,
     dataCompleteness: calculateDataCompleteness(pond),
+    calibration: {
+      versionId: calibration.versionId,
+      scope: calibration.scope,
+      sampleSize: calibration.adjustment.sampleSize,
+    },
   };
 };
 
-export const calculatePondsMetrics = (ponds: OrsonNormalizedPond[]): OrsonPondMetrics[] => {
-  return ponds.map(calculatePondMetrics);
+export const calculatePondsMetrics = (
+  ponds: OrsonNormalizedPond[],
+  calibrationProfile?: OrsonCalibrationProfile | null,
+): OrsonPondMetrics[] => {
+  return ponds.map((pond) => calculatePondMetrics(pond, calibrationProfile));
 };

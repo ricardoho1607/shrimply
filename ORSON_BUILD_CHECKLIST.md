@@ -222,6 +222,24 @@ Gemini should explain Orson's calculated report, not invent the report.
 - [ ] Manually test harvest projection analysis.
 - [ ] Manually test Firebase notification behavior.
 
+## Phase 13: Company Cycle Learning
+
+- [x] Store immutable, server-validated harvest prediction snapshots inside each company.
+- [x] Create idempotent pond-cycle outcome records when a pond ends or a farm cycle closes.
+- [x] Preserve missing harvest actuals as null and exclude incomplete outcomes from calibration.
+- [x] Compare predicted MBW, biomass, survival, FCR, and target timing with actual cycle outcomes.
+- [x] Train bounded ADG, survival, and biomass calibration candidates on older outcomes.
+- [x] Test candidates on held-out outcomes and reject candidates that do not improve validation accuracy.
+- [x] Cap the change allowed in each promoted calibration version.
+- [x] Store current, historical, and rejected/insufficient-data calibration evaluations for audit.
+- [x] Support company calibration with pond-specific calibration after enough pond history exists.
+- [x] Bound broad 50-100 pond Gemini prompts to the 10 highest-risk ponds while preserving the total farm pond count.
+- [x] Apply active calibration to shared mobile/web projections and Orson biomass/survival ranges.
+- [x] Keep calibration collections company-scoped and server-write-only in Firestore rules.
+- [ ] Manually test callable prediction recording against deployed Firebase Functions.
+- [ ] Manually close a partial pond cycle and confirm the outcome remains ineligible when harvest actuals are incomplete.
+- [ ] Manually close a full farm cycle with multiple ponds and confirm one calibration evaluation is produced.
+
 ## Implementation Notes
 
 - The calculator and rule engine should not consume Gemini tokens.
