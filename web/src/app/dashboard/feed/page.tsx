@@ -33,15 +33,30 @@ import {
   buildDailyFeedRecordId,
   getDailyFeedUsageTotal,
   isDailyFeedUsage,
+  normalizeFeedAllocations,
+  sumFeedAllocations,
+  type FeedAllocation,
 } from '../../../../../shared/feedInventoryUsage';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
   totalDailyFeed: string;
   inventoryFeedId?: string | null;
+  feedAllocations?: FeedAllocation[];
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
+}
+
+interface FeedAllocationInput {
+  inventoryFeedId: string;
+  quantityKg: string;
+}
+
+interface FeedFormData extends Omit<FeedData, 'feedAllocations'> {
+  pondId: string;
+  date: string;
+  feedAllocations: FeedAllocationInput[];
 }
 
 interface Sampling {
@@ -122,11 +137,11 @@ export default function FeedRecordsPage() {
   const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
 
   // Form State
-  const [formData, setFormData] = useState<FeedData & { pondId: string; date: string }>({
+  const [formData, setFormData] = useState<FeedFormData>({
     pondId: '',
-    inventoryFeedId: '',
     date: new Date().toISOString().split('T')[0],
     totalDailyFeed: '',
+    feedAllocations: [],
   });
   const canEditFeed = canEditOperations(user?.role);
 
@@ -214,7 +229,11 @@ export default function FeedRecordsPage() {
       setFormData(prev => ({
         ...prev,
         ...data,
-        inventoryFeedId: data.inventoryFeedId || '',
+        inventoryFeedId: undefined,
+        feedAllocations: normalizeFeedAllocations(data).map((allocation) => ({
+          inventoryFeedId: allocation.inventoryFeedId,
+          quantityKg: String(allocation.quantityKg),
+        })),
         pondId: prev.pondId, // Ensure these aren't lost
         date: prev.date
       }));
@@ -223,8 +242,8 @@ export default function FeedRecordsPage() {
       setFormData(prev => ({
         pondId: prev.pondId,
         date: prev.date,
-        inventoryFeedId: '',
         totalDailyFeed: '',
+        feedAllocations: [],
       }));
     }
   }, [formData.pondId, formData.date, isModalOpen, ponds]);
@@ -233,7 +252,20 @@ export default function FeedRecordsPage() {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
     if (!canEditFeed) return;
-    const feedAmount = parseFloat(formData.totalDailyFeed);
+    const allocationInputs = formData.feedAllocations.map((allocation) => ({
+      inventoryFeedId: allocation.inventoryFeedId,
+      quantityKg: Number(allocation.quantityKg),
+    }));
+    if (allocationInputs.some((allocation) => (
+      !allocation.inventoryFeedId || !Number.isFinite(allocation.quantityKg) || allocation.quantityKg <= 0
+    ))) {
+      alert('Enter an amount greater than 0 for every selected feed.');
+      return;
+    }
+    const requestedAllocations = normalizeFeedAllocations({ feedAllocations: allocationInputs });
+    const feedAmount = requestedAllocations.length > 0
+      ? sumFeedAllocations(requestedAllocations)
+      : parseFloat(formData.totalDailyFeed);
     if (!Number.isFinite(feedAmount) || feedAmount <= 0) {
       alert('Daily feed must be greater than 0.');
       return;
@@ -241,8 +273,6 @@ export default function FeedRecordsPage() {
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
-      const requestedFeedId = formData.inventoryFeedId || '';
-
       await runTransaction(db, async (transaction) => {
         const pondDoc = await transaction.get(pondRef);
         if (!pondDoc.exists()) throw new Error('Pond record not found');
@@ -251,12 +281,16 @@ export default function FeedRecordsPage() {
         const samplings = [...(pondData.samplings || [])];
         const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
-        const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
+        const previousAllocations = normalizeFeedAllocations(existingFeedData);
+        const desiredByFeedId = new Map(requestedAllocations.map((allocation) => (
+          [allocation.inventoryFeedId, allocation.quantityKg]
+        )));
         const feedRecordId = buildDailyFeedRecordId(formData.pondId, formData.date);
 
         const feedData = {
-          totalDailyFeed: formData.totalDailyFeed,
-          inventoryFeedId: requestedFeedId || null,
+          totalDailyFeed: feedAmount.toFixed(2),
+          inventoryFeedId: requestedAllocations.length === 1 ? requestedAllocations[0].inventoryFeedId : null,
+          feedAllocations: requestedAllocations,
           cycleId: pondData.cycleId,
           cycleName: pondData.cycleName,
           pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -282,7 +316,10 @@ export default function FeedRecordsPage() {
           });
         }
 
-        const feedIds = Array.from(new Set([previousInventoryFeedId, requestedFeedId].filter(Boolean)));
+        const feedIds = Array.from(new Set([
+          ...previousAllocations.map((allocation) => allocation.inventoryFeedId),
+          ...requestedAllocations.map((allocation) => allocation.inventoryFeedId),
+        ]));
         const feedSnapshots = new Map<string, DocumentSnapshot<DocumentData>>();
         for (const feedId of feedIds) {
           const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
@@ -297,7 +334,7 @@ export default function FeedRecordsPage() {
         };
 
         const adjustFeedUsage = (feedId: string, quantityDelta: number) => {
-          if (!feedId || !Number.isFinite(quantityDelta) || quantityDelta === 0) return;
+          if (!feedId || !Number.isFinite(quantityDelta) || Math.abs(quantityDelta) < 0.000001) return;
 
           const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
           const feedDoc = feedSnapshots.get(feedId);
@@ -331,7 +368,7 @@ export default function FeedRecordsPage() {
               ? Math.max(0, currentCost - (quantityDelta * unitPrice))
               : currentCost + (Math.abs(quantityDelta) * unitPrice),
             usageHistory: arrayUnion({
-              id: `usage-${formData.pondId}-${formData.date}-${Date.now()}`,
+              id: `usage-${formData.pondId}-${formData.date}-${feedId}-${Date.now()}`,
               date: formData.date,
               quantity: quantityDelta,
               unitPrice,
@@ -349,14 +386,15 @@ export default function FeedRecordsPage() {
           });
         };
 
-        if (previousInventoryFeedId && previousInventoryFeedId !== requestedFeedId) {
-          const previousDeducted = getFeedScreenUsageTotal(previousInventoryFeedId);
-          adjustFeedUsage(previousInventoryFeedId, -previousDeducted);
-        }
-
-        if (requestedFeedId) {
-          const alreadyDeducted = getFeedScreenUsageTotal(requestedFeedId);
-          adjustFeedUsage(requestedFeedId, feedAmount - alreadyDeducted);
+        for (const feedId of feedIds) {
+          const feedDoc = feedSnapshots.get(feedId);
+          if (!feedDoc?.exists()) {
+            if (desiredByFeedId.has(feedId)) throw new Error('Selected feed inventory item was not found.');
+            continue;
+          }
+          const alreadyDeducted = getFeedScreenUsageTotal(feedId);
+          const desiredAmount = desiredByFeedId.get(feedId) || 0;
+          adjustFeedUsage(feedId, desiredAmount - alreadyDeducted);
         }
 
         transaction.update(pondRef, {
@@ -369,9 +407,9 @@ export default function FeedRecordsPage() {
         setModalOpen(false);
         setFormData({
           pondId: '',
-          inventoryFeedId: '',
           date: new Date().toISOString().split('T')[0],
           totalDailyFeed: '',
+          feedAllocations: [],
         });
     } catch (error) {
       console.error('Error adding feed record:', error);
@@ -398,6 +436,14 @@ export default function FeedRecordsPage() {
     return logs[0]?.feedData;
   };
 
+  const formAllocationTotal = sumFeedAllocations(formData.feedAllocations.map((allocation) => ({
+    inventoryFeedId: allocation.inventoryFeedId,
+    quantityKg: Number(allocation.quantityKg) || 0,
+  })));
+  const hasUnusedInventoryFeed = inventoryFeeds.some((feed) => (
+    !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id)
+  ));
+
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
@@ -420,9 +466,9 @@ export default function FeedRecordsPage() {
             onClick={() => {
               setFormData({
                 pondId: '',
-                inventoryFeedId: '',
                 date: new Date().toISOString().split('T')[0],
                 totalDailyFeed: '',
+                feedAllocations: [],
               });
               setModalOpen(true);
             }}
@@ -580,24 +626,87 @@ export default function FeedRecordsPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total (kg)</label>
-                  <input required min="0.1" type="number" step="0.1" value={formData.totalDailyFeed} onChange={e => setFormData({...formData, totalDailyFeed: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 800, color: 'var(--primary)' }} />
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{formData.feedAllocations.length > 0 ? 'Calculated Daily Total (kg)' : 'Daily Total (kg)'}</label>
+                  <input
+                    required={formData.feedAllocations.length === 0}
+                    readOnly={formData.feedAllocations.length > 0}
+                    min="0.1"
+                    type="number"
+                    step="0.1"
+                    value={formData.feedAllocations.length > 0 ? formAllocationTotal.toFixed(2) : formData.totalDailyFeed}
+                    onChange={e => setFormData({...formData, totalDailyFeed: e.target.value})}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: formData.feedAllocations.length > 0 ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 800, color: 'var(--primary)' }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Feed (Optional)</label>
-                  <select
-                    value={formData.inventoryFeedId || ''}
-                    onChange={e => setFormData({...formData, inventoryFeedId: e.target.value})}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Feed Mix (Optional)</label>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Add one or more feeds. The daily total is calculated automatically.</p>
+                  {formData.feedAllocations.map((allocation, index) => (
+                    <div key={allocation.inventoryFeedId} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 140px 40px', gap: '10px', alignItems: 'center' }}>
+                      <select
+                        value={allocation.inventoryFeedId}
+                        onChange={e => setFormData((current) => ({
+                          ...current,
+                          feedAllocations: current.feedAllocations.map((item, itemIndex) => (
+                            itemIndex === index ? { ...item, inventoryFeedId: e.target.value } : item
+                          )),
+                        }))}
+                        style={{ minWidth: 0, padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
+                      >
+                        {!inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId) && (
+                          <option value={allocation.inventoryFeedId}>Unavailable inventory feed</option>
+                        )}
+                        {inventoryFeeds
+                          .filter((feed) => feed.id === allocation.inventoryFeedId || !formData.feedAllocations.some((item) => item.inventoryFeedId === feed.id))
+                          .map((feed) => (
+                            <option key={feed.id} value={feed.id}>{feed.feedName || feed.brand || 'Feed'} — {feed.totalStock || 0} {feed.unit || 'kg'}</option>
+                          ))}
+                      </select>
+                      <input
+                        required
+                        min="0.1"
+                        type="number"
+                        step="0.1"
+                        aria-label="Feed amount in kilograms"
+                        placeholder="Amount (kg)"
+                        value={allocation.quantityKg}
+                        onChange={e => setFormData((current) => ({
+                          ...current,
+                          feedAllocations: current.feedAllocations.map((item, itemIndex) => (
+                            itemIndex === index ? { ...item, quantityKg: e.target.value } : item
+                          )),
+                        }))}
+                        style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, color: 'var(--primary)' }}
+                      />
+                      <button
+                        type="button"
+                        aria-label="Remove feed"
+                        onClick={() => setFormData((current) => ({
+                          ...current,
+                          feedAllocations: current.feedAllocations.filter((_, itemIndex) => itemIndex !== index),
+                        }))}
+                        style={{ width: '40px', height: '40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: '#e74c3c', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                      >
+                        <X size={18} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={!hasUnusedInventoryFeed}
+                    onClick={() => {
+                      const nextFeed = inventoryFeeds.find((feed) => !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id));
+                      if (!nextFeed) return;
+                      setFormData((current) => ({
+                        ...current,
+                        feedAllocations: [...current.feedAllocations, { inventoryFeedId: nextFeed.id, quantityKg: '' }],
+                      }));
+                    }}
+                    style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 800, cursor: hasUnusedInventoryFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedInventoryFeed ? 1 : 0.5 }}
                   >
-                    <option value="">No deduction from inventory</option>
-                    {inventoryFeeds.map(f => (
-                      <option key={f.id} value={f.id}>
-                        {f.feedName} {f.brand ? `(${f.brand})` : ''} - Stock: {f.totalStock} {f.unit}
-                      </option>
-                    ))}
-                  </select>
+                    + Add Feed Type
+                  </button>
                 </div>
 
               </div>

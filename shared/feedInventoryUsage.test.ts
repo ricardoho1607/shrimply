@@ -3,6 +3,8 @@ import {
   buildDailyFeedRecordId,
   getDailyFeedUsageTotal,
   isDailyFeedUsage,
+  normalizeFeedAllocations,
+  sumFeedAllocations,
 } from './feedInventoryUsage';
 
 const assert = (condition: unknown, message: string) => {
@@ -31,6 +33,31 @@ export const runFeedInventoryUsageSelfTest = () => {
   assert(isDailyFeedUsage(usages[2], pondId, date), 'recognizes stable daily-feed identity');
   assert(!isDailyFeedUsage(usages[3], pondId, date), 'excludes manual inventory usage');
   assert(getDailyFeedUsageTotal(usages, pondId, date) === 20, 'nets cross-platform adjustments once');
+
+  const legacyAllocations = normalizeFeedAllocations({
+    inventoryFeedId: 'feed-a',
+    totalDailyFeed: '70',
+  });
+  assert(legacyAllocations.length === 1 && legacyAllocations[0].quantityKg === 70, 'normalizes a legacy single-feed record');
+
+  const mixedAllocations = normalizeFeedAllocations({
+    feedAllocations: [
+      { inventoryFeedId: 'feed-a', quantityKg: 70 },
+      { inventoryFeedId: 'feed-b', quantityKg: 40 },
+      { inventoryFeedId: 'feed-a', quantityKg: 5 },
+      { inventoryFeedId: '', quantityKg: 20 },
+      { inventoryFeedId: 'feed-c', quantityKg: 0 },
+    ],
+  });
+  assert(mixedAllocations.length === 2, 'ignores invalid allocations and aggregates duplicate feeds');
+  assert(sumFeedAllocations(mixedAllocations) === 115, 'sums a multi-feed mix');
+  assert(sumFeedAllocations(normalizeFeedAllocations({
+    feedAllocations: [
+      { inventoryFeedId: 'feed-a', quantityKg: 70 },
+      { inventoryFeedId: 'feed-b', quantityKg: 40 },
+    ],
+  })) === 110, 'calculates a 70 kg plus 40 kg mix as 110 kg');
+  assert(normalizeFeedAllocations({ totalDailyFeed: '110' }).length === 0, 'keeps manual totals separate from inventory');
 
   return true;
 };

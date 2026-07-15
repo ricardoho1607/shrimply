@@ -16,9 +16,15 @@ export {
   isBaselineSampling,
 } from "../../shared/pondCalculations";
 
+export interface FeedAllocation {
+  inventoryFeedId: string;
+  quantityKg: number;
+}
+
 export interface FeedData { 
   totalDailyFeed: string; 
   inventoryFeedId?: string | null;
+  feedAllocations?: FeedAllocation[];
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;

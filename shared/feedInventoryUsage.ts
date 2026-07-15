@@ -3,10 +3,55 @@ export const DAILY_FEED_USAGE_SOURCE = 'daily_feed_record' as const;
 export const DAILY_FEED_ERROR_CODES = {
   companyUnavailable: 'DAILY_FEED_COMPANY_UNAVAILABLE',
   invalidAmount: 'DAILY_FEED_INVALID_AMOUNT',
+  invalidAllocation: 'DAILY_FEED_INVALID_ALLOCATION',
   inventoryNotFound: 'DAILY_FEED_INVENTORY_NOT_FOUND',
   insufficientStock: 'DAILY_FEED_INSUFFICIENT_STOCK',
   missingCost: 'DAILY_FEED_MISSING_COST',
 } as const;
+
+export interface FeedAllocation {
+  inventoryFeedId: string;
+  quantityKg: number;
+}
+
+export interface FeedAllocationDataLike {
+  totalDailyFeed?: unknown;
+  inventoryFeedId?: unknown;
+  feedAllocations?: unknown;
+}
+
+export const normalizeFeedAllocations = (
+  feedData: FeedAllocationDataLike | null | undefined,
+): FeedAllocation[] => {
+  const totals = new Map<string, number>();
+  const rawAllocations = Array.isArray(feedData?.feedAllocations)
+    ? feedData.feedAllocations
+    : [];
+
+  rawAllocations.forEach((allocation) => {
+    if (!allocation || typeof allocation !== 'object') return;
+    const inventoryFeedId = 'inventoryFeedId' in allocation
+      ? allocation.inventoryFeedId
+      : undefined;
+    const quantityKg = 'quantityKg' in allocation
+      ? Number(allocation.quantityKg)
+      : Number.NaN;
+    if (typeof inventoryFeedId !== 'string' || !inventoryFeedId || !Number.isFinite(quantityKg) || quantityKg <= 0) return;
+    totals.set(inventoryFeedId, (totals.get(inventoryFeedId) || 0) + quantityKg);
+  });
+
+  if (totals.size === 0 && typeof feedData?.inventoryFeedId === 'string' && feedData.inventoryFeedId) {
+    const quantityKg = Number(feedData.totalDailyFeed);
+    if (Number.isFinite(quantityKg) && quantityKg > 0) {
+      totals.set(feedData.inventoryFeedId, quantityKg);
+    }
+  }
+
+  return Array.from(totals, ([inventoryFeedId, quantityKg]) => ({ inventoryFeedId, quantityKg }));
+};
+
+export const sumFeedAllocations = (allocations: FeedAllocation[]): number =>
+  allocations.reduce((total, allocation) => total + allocation.quantityKg, 0);
 
 export interface DailyFeedUsageLike {
   date?: unknown;
