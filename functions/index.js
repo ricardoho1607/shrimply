@@ -532,7 +532,8 @@ const calculateRiskReport = (pond, pondId) => {
   const biomassKg = currentPopulation !== null && latestMbw !== null ? (currentPopulation * latestMbw) / 1000 : null;
   const feedRate = latestMbw !== null ? getFeedRatePercent(latestMbw) : null;
   const expectedFeedKg = biomassKg !== null && feedRate !== null ? (biomassKg * feedRate) / 100 : null;
-  const feedPressureRatio = latest.feedKg !== null && expectedFeedKg ? latest.feedKg / expectedFeedKg : null;
+  const latestFeed = [...records].reverse().find((record) => record.feedKg !== null && record.feedKg > 0) || null;
+  const feedPressureRatio = latestFeed && expectedFeedKg ? latestFeed.feedKg / expectedFeedKg : null;
   const recent = records.slice(-3);
   const recentDo = recent.map((record) => minKnown(record.doMorning, record.doEvening)).filter((value) => value !== null);
   const latestDo = minKnown(latest.doMorning, latest.doEvening);
@@ -1734,7 +1735,7 @@ const summarizePondRisks = (pondsSnapshot) => {
 
 /**
  * Orson AI Proactive Consultant
- * Triggers when a pond document receives new sampling, water-quality, or feed/appetite records.
+ * Triggers when a pond document receives new sampling, water-quality, or feed records.
  */
 exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/ponds/{pondId}", async (event) => {
   const beforeData = event.data.before.data() || {};

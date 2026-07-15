@@ -28,6 +28,12 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import {
+  DAILY_FEED_USAGE_SOURCE,
+  buildDailyFeedRecordId,
+  getDailyFeedUsageTotal,
+  isDailyFeedUsage,
+} from '../../../../../shared/feedInventoryUsage';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -64,6 +70,8 @@ interface FeedUsage {
   totalCost?: number | string;
   pondId?: string;
   notes?: string;
+  source?: string;
+  feedRecordId?: string;
 }
 
 interface InventoryFeed {
@@ -244,6 +252,7 @@ export default function FeedRecordsPage() {
         const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
         const previousInventoryFeedId = existingFeedData?.inventoryFeedId || '';
+        const feedRecordId = buildDailyFeedRecordId(formData.pondId, formData.date);
 
         const feedData = {
           totalDailyFeed: formData.totalDailyFeed,
@@ -284,9 +293,7 @@ export default function FeedRecordsPage() {
           const feedDoc = feedSnapshots.get(feedId);
           if (!feedDoc?.exists()) return 0;
           const data = feedDoc.data() as InventoryFeed;
-          return (data.usageHistory || [])
-            .filter((usage) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
-            .reduce((sum: number, usage) => sum + (Number(usage.quantity) || 0), 0);
+          return getDailyFeedUsageTotal(data.usageHistory, formData.pondId, formData.date);
         };
 
         const adjustFeedUsage = (feedId: string, quantityDelta: number) => {
@@ -306,7 +313,7 @@ export default function FeedRecordsPage() {
           }
 
           const matchingUsage = (currentFeedData.usageHistory || [])
-            .filter((usage) => usage.date === formData.date && usage.pondId === formData.pondId && usage.notes === `Daily feed for pond: ${pondData.pondName}`)
+            .filter((usage) => isDailyFeedUsage(usage, formData.pondId, formData.date))
             .slice()
             .reverse()
             .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
@@ -334,6 +341,8 @@ export default function FeedRecordsPage() {
               cycleName: pondData.cycleName,
               pondCycleId: pondData.pondCycleId || formData.pondId,
               notes: `Daily feed for pond: ${pondData.pondName}`,
+              source: DAILY_FEED_USAGE_SOURCE,
+              feedRecordId,
               createdAt: Timestamp.now()
             }),
             lastUpdated: serverTimestamp()

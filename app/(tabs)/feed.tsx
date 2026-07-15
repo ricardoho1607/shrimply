@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useFeedAdditiveStore } from "../store/feedAdditiveStore";
+import { DAILY_FEED_ERROR_CODES } from '../../shared/feedInventoryUsage';
 
 const initialValues = {
   totalDailyFeed: "",
@@ -44,7 +45,7 @@ export default function FeedManagementScreen() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const { ponds, addFeedData } = usePondStore();
-  const { setCurrentCompanyId, adjustFeedUsage } = useFeedAdditiveStore();
+  const { setCurrentCompanyId, reconcileDailyFeedUsage } = useFeedAdditiveStore();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
 
@@ -123,12 +124,6 @@ export default function FeedManagementScreen() {
     const today = new Date().toISOString().split('T')[0];
     const todayRecord = getTodayFeedRecord(pond);
     const previousInventoryFeedId = todayRecord?.feedData?.inventoryFeedId || '';
-    const getFeedScreenUsageTotal = (feedId: string) => {
-      const inventoryFeed = inventoryFeeds.find((feed) => feed.id === feedId);
-      return (inventoryFeed?.usageHistory || [])
-      .filter((usage: any) => usage.date === today && usage.pondId === pond.id && usage.notes === 'Feed screen record')
-      .reduce((sum: number, usage: any) => sum + (Number(usage.quantity) || 0), 0);
-    };
 
     const feedData = {
       totalDailyFeed: totalDailyFeed.toFixed(2),
@@ -136,20 +131,13 @@ export default function FeedManagementScreen() {
     };
 
     try {
-      if (previousInventoryFeedId && previousInventoryFeedId !== inventoryFeedId) {
-        const previousDeducted = getFeedScreenUsageTotal(previousInventoryFeedId);
-        if (previousDeducted !== 0) {
-          await adjustFeedUsage(previousInventoryFeedId, -previousDeducted, pond.id, 'Feed screen record');
-        }
-      }
-
-      if (inventoryFeedId) {
-        const alreadyDeductedToday = getFeedScreenUsageTotal(inventoryFeedId);
-        const usageDelta = totalDailyFeed - alreadyDeductedToday;
-        if (usageDelta !== 0) {
-          await adjustFeedUsage(inventoryFeedId, usageDelta, pond.id, 'Feed screen record');
-        }
-      }
+      await reconcileDailyFeedUsage(
+        previousInventoryFeedId,
+        inventoryFeedId,
+        totalDailyFeed,
+        pond.id,
+        today,
+      );
 
       addFeedData(pond.id, feedData);
       setValues(initialValues);
@@ -158,7 +146,14 @@ export default function FeedManagementScreen() {
       setIsModalVisible(false);
     } catch (error: any) {
       console.error('Failed to save feed data:', error);
-      Alert.alert(t.messages?.error || 'Error', error?.message || 'Failed to save feed data');
+      const errorMessages: Record<string, string> = {
+        [DAILY_FEED_ERROR_CODES.companyUnavailable]: t.feed.companyUnavailable,
+        [DAILY_FEED_ERROR_CODES.invalidAmount]: t.feed.invalidAmount,
+        [DAILY_FEED_ERROR_CODES.inventoryNotFound]: t.feed.inventoryNotFound,
+        [DAILY_FEED_ERROR_CODES.insufficientStock]: t.feed.insufficientStock,
+        [DAILY_FEED_ERROR_CODES.missingCost]: t.feed.missingFeedCost,
+      };
+      Alert.alert(t.messages?.error || 'Error', errorMessages[error?.message] || t.feed.saveFailed);
       submitLockRef.current = false;
       setIsSubmitting(false);
     }

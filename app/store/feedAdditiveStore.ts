@@ -6,6 +6,13 @@ import {
 import { db } from '../../config/firebase';
 import NotificationService from '../services/notificationService';
 import { usePondStore } from './pondStore';
+import {
+  DAILY_FEED_ERROR_CODES,
+  DAILY_FEED_USAGE_SOURCE,
+  buildDailyFeedRecordId,
+  getDailyFeedUsageTotal,
+  isDailyFeedUsage,
+} from '../../shared/feedInventoryUsage';
 
 export interface StockHistory {
   id: string;
@@ -30,6 +37,8 @@ export interface UsageHistory {
   cycleName?: string;
   pondCycleId?: string;
   notes?: string;
+  source?: string;
+  feedRecordId?: string;
   createdAt: Timestamp | any;
 }
 
@@ -87,6 +96,7 @@ interface FeedAdditiveStore {
   stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { batch?: string; expiry?: string; unit?: string }) => Promise<void>;
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
+  reconcileDailyFeedUsage: (previousFeedId: string, nextFeedId: string, targetQuantity: number, pondId: string, date: string) => Promise<void>;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
@@ -442,6 +452,111 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       console.error('adjustFeedUsage transaction failed', e);
       throw e;
     }
+  },
+
+  reconcileDailyFeedUsage: async (previousFeedId, nextFeedId, targetQuantity, pondId, date) => {
+    const { currentCompanyId } = get();
+    if (!currentCompanyId) throw new Error(DAILY_FEED_ERROR_CODES.companyUnavailable);
+    if (!Number.isFinite(targetQuantity) || targetQuantity <= 0) throw new Error(DAILY_FEED_ERROR_CODES.invalidAmount);
+
+    const feedIds = Array.from(new Set([previousFeedId, nextFeedId].filter(Boolean)));
+    if (feedIds.length === 0) return;
+
+    const pond = usePondStore.getState().ponds.find((item) => item.id === pondId);
+    const feedRecordId = buildDailyFeedRecordId(pondId, date);
+
+    const lowStockItems = await runTransaction(db, async (tx) => {
+      const feedEntries = [];
+      for (const feedId of feedIds) {
+        const feedRef = doc(db, 'companies', currentCompanyId, 'feeds', feedId);
+        feedEntries.push({ feedId, feedRef, snapshot: await tx.get(feedRef) });
+      }
+
+      const lowStockResults: { feedId: string; feedName: string; totalStock: number; reorderLevel: number; unit: string }[] = [];
+
+      for (const { feedId, feedRef, snapshot } of feedEntries) {
+        if (!snapshot.exists()) {
+          if (feedId === nextFeedId) throw new Error(DAILY_FEED_ERROR_CODES.inventoryNotFound);
+          continue;
+        }
+
+        const feed = snapshot.data() as Feed;
+        const currentStock = Number(feed.totalStock) || 0;
+        const currentCost = Number(feed.totalCost) || 0;
+        const currentDailyTotal = getDailyFeedUsageTotal(feed.usageHistory, pondId, date);
+        const desiredDailyTotal = feedId === nextFeedId ? targetQuantity : 0;
+        const quantityDelta = desiredDailyTotal - currentDailyTotal;
+        if (Math.abs(quantityDelta) < 0.000001) continue;
+
+        if (quantityDelta > 0 && quantityDelta > currentStock) throw new Error(DAILY_FEED_ERROR_CODES.insufficientStock);
+
+        const matchingUsage = (feed.usageHistory || [])
+          .filter((usage) => isDailyFeedUsage(usage, pondId, date) && Number(usage.quantity) > 0)
+          .slice()
+          .reverse()
+          .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
+        const historicalUnitPrice = matchingUsage
+          ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
+          : 0;
+        const unitPrice = currentStock > 0 ? currentCost / currentStock : historicalUnitPrice;
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          throw new Error(DAILY_FEED_ERROR_CODES.missingCost);
+        }
+
+        const isDeduction = quantityDelta > 0;
+        const quantity = Math.abs(quantityDelta);
+        const newStock = isDeduction ? currentStock - quantity : currentStock + quantity;
+        const newCost = isDeduction
+          ? Math.max(0, currentCost - (quantity * unitPrice))
+          : currentCost + (quantity * unitPrice);
+
+        tx.update(feedRef, {
+          usageHistory: arrayUnion({
+            id: `${feedRecordId}:${feedId}:${Date.now()}`,
+            date,
+            quantity: quantityDelta,
+            unitPrice,
+            totalCost: quantityDelta * unitPrice,
+            pondId,
+            cycleId: pond?.cycleId || null,
+            cycleName: pond?.cycleName || null,
+            pondCycleId: pond?.pondCycleId || pondId,
+            notes: 'Feed screen record',
+            source: DAILY_FEED_USAGE_SOURCE,
+            feedRecordId,
+            createdAt: Timestamp.now(),
+          }),
+          totalStock: newStock,
+          totalCost: newCost,
+          lastUpdated: serverTimestamp(),
+        });
+
+        const reorderLevel = Number(feed.reorderLevel) || 0;
+        if (isDeduction && reorderLevel > 0 && newStock <= reorderLevel) {
+          lowStockResults.push({
+            feedId,
+            feedName: feed.feedName,
+            totalStock: newStock,
+            reorderLevel,
+            unit: feed.unit || 'kg',
+          });
+        }
+      }
+
+      return lowStockResults;
+    });
+
+    await Promise.all(lowStockItems.map((item) => NotificationService.createLowStockNotification(
+      currentCompanyId,
+      item.feedName,
+      'feed',
+      item.totalStock,
+      item.reorderLevel,
+      item.unit,
+      item.feedId,
+    ).catch((error) => {
+      console.error('Error creating low-stock notification after daily feed reconciliation:', error);
+    })));
   },
 
   deleteFeed: async (feedId) => {
