@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   User, 
   Building2, 
@@ -28,6 +28,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
+import { getSupportedTimeZones, getSystemTimeZone, resolveFarmTimeZone } from '../../../../../shared/farmDate';
 
 const settingsShellStyle: React.CSSProperties = {
   display: 'flex',
@@ -100,6 +101,7 @@ export default function SettingsPage() {
 
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
+  const timeZoneOptions = useMemo(() => getSupportedTimeZones(), []);
 
   const AVAILABLE_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -119,6 +121,7 @@ export default function SettingsPage() {
     description: '',
     contactPhone: '',
     isPublicProfile: true,
+    timeZone: getSystemTimeZone(),
   });
 
   useEffect(() => {
@@ -138,6 +141,7 @@ export default function SettingsPage() {
         description: company.description || '',
         contactPhone: company.contactPhone || '',
         isPublicProfile: company.isPublicProfile ?? true,
+        timeZone: resolveFarmTimeZone(company.timeZone),
       });
     });
   }, [company]);
@@ -204,6 +208,7 @@ export default function SettingsPage() {
           contactPhone: companyForm.contactPhone,
           isPublicProfile: companyForm.isPublicProfile,
           isSearchable: companyForm.isPublicProfile,
+          timeZone: resolveFarmTimeZone(companyForm.timeZone),
           ownerId: company?.ownerId || user.uid,
           updatedAt: new Date().toISOString()
         };
@@ -405,6 +410,24 @@ export default function SettingsPage() {
                     <option value="medium">{t.companyDetails.medium || 'Medium'} operation</option>
                     <option value="large">{t.companyDetails.large || 'Large'} operation</option>
                   </select>
+                </div>
+                <div style={fieldStyle}>
+                  <label style={labelStyle}>Farm timezone</label>
+                  <select
+                    value={companyForm.timeZone}
+                    onChange={e => setCompanyForm({...companyForm, timeZone: e.target.value})}
+                    style={controlStyle}
+                  >
+                    {!timeZoneOptions.includes(companyForm.timeZone) && (
+                      <option value={companyForm.timeZone}>{companyForm.timeZone}</option>
+                    )}
+                    {timeZoneOptions.map(timeZone => (
+                      <option key={timeZone} value={timeZone}>{timeZone}</option>
+                    ))}
+                  </select>
+                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+                    Daily farm records roll over at midnight in this timezone.
+                  </span>
                 </div>
                 <div style={fieldStyle}>
                   <label style={labelStyle}>Contact Phone</label>

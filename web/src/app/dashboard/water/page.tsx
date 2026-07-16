@@ -26,6 +26,9 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app, auth, db, storage } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
+import { getFarmDateKey } from '../../../../../shared/farmDate';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -178,6 +181,8 @@ const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'sou
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function WaterQualityPage() {
+  const { company } = useAuth();
+  const today = useFarmDateKey(company?.timeZone);
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [labReports, setLabReports] = useState<LabReport[]>([]);
@@ -202,7 +207,7 @@ export default function WaterQualityPage() {
   // Form State
   const [formData, setFormData] = useState({
     pondId: '',
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     phMorning: '',
     phEvening: '',
     doMorning: '',
@@ -212,7 +217,7 @@ export default function WaterQualityPage() {
   });
   const [labForm, setLabForm] = useState({
     reportType: 'water_quality' as LabReportType,
-    sampleDate: new Date().toISOString().split('T')[0],
+    sampleDate: today,
     labName: '',
     farmName: '',
   });
@@ -395,7 +400,7 @@ export default function WaterQualityPage() {
         setModalOpen(false);
         setFormData({
           pondId: '',
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           phMorning: '',
           phEvening: '',
           doMorning: '',
@@ -666,7 +671,7 @@ export default function WaterQualityPage() {
     setLabRows([]);
     setLabForm({
       reportType: 'water_quality',
-      sampleDate: new Date().toISOString().split('T')[0],
+      sampleDate: today,
       labName: '',
       farmName: '',
     });
@@ -700,7 +705,7 @@ export default function WaterQualityPage() {
     setLabPdfFile(null);
     setLabForm({
       reportType: report.reportType || 'water_quality',
-      sampleDate: report.sampleDate || new Date().toISOString().split('T')[0],
+      sampleDate: report.sampleDate || today,
       labName: report.labName || '',
       farmName: report.farmName || '',
     });
@@ -861,7 +866,7 @@ export default function WaterQualityPage() {
     filteredLabReports.forEach((report) => {
       const parsedDate = report.sampleDate ? new Date(report.sampleDate) : null;
       const hasValidDate = parsedDate && !Number.isNaN(parsedDate.getTime());
-      const key = hasValidDate ? parsedDate.toISOString().split('T')[0] : 'no-date';
+      const key = hasValidDate ? getFarmDateKey(parsedDate, company?.timeZone) : 'no-date';
       const existing = groups.get(key);
       const group = existing || {
         key,
@@ -876,7 +881,7 @@ export default function WaterQualityPage() {
     });
 
     return Array.from(groups.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [filteredLabReports]);
+  }, [company?.timeZone, filteredLabReports]);
 
   const toggleLabDateGroup = (dateKey: string) => {
     setExpandedLabDateKeys((current) =>
@@ -1015,7 +1020,7 @@ export default function WaterQualityPage() {
         {canEditWater && activeView === 'daily' && (
           <button
             onClick={() => {
-              setFormData({ ...formData, pondId: '' });
+              setFormData({ ...formData, pondId: '', date: today });
               setModalOpen(true);
             }}
             className="dashboard-action dashboard-action-primary"
@@ -1114,7 +1119,7 @@ export default function WaterQualityPage() {
                 <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-mid)' }}>
                   {canEditWater && (
                     <button
-                      onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
+                      onClick={() => { setFormData({ ...formData, pondId: pond.id, date: today }); setModalOpen(true); }}
                       className="btn-secondary"
                       style={{ padding: '9px 16px', fontSize: '0.82rem' }}
                     >

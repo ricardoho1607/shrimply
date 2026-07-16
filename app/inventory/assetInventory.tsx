@@ -6,6 +6,7 @@ import { CameraView, Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { getFarmDateKey } from '../../shared/farmDate';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { useAssetStore, type Asset, type MaintenanceType } from '../store/assetStore';
@@ -118,7 +119,7 @@ export default function AssetInventoryScreen() {
     setDatePickerField(null);
   };
 
-  const formatDateValue = (date: Date) => date.toISOString().split('T')[0];
+  const formatDateValue = (date: Date) => getFarmDateKey(date, company?.timeZone);
 
   const getDatePickerValue = (field: 'purchaseDate' | 'expectedReturn' | 'nextMaintenance') => {
     const value = formData[field];

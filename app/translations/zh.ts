@@ -311,6 +311,7 @@ companySetup: {
   
   companyNamePlaceholder: '例如：蓝海虾场',
   locationPlaceholder: '例如：雅加达，印度尼西亚',
+  locationSearchPlaceholder: '输入城市或国家',
   farmTypePlaceholder: '例如：南美白对虾，集约化养殖',
   descriptionPlaceholder: '简要描述您的运营（可选）',
   phonePlaceholder: '您的业务联系号码',
@@ -331,6 +332,9 @@ companySetup: {
   disclaimer: '您可以随时从个人资料中修改这些设置',
   companyNameRequired: '公司名称为必填项',
   locationRequired: '主要地点为必填项',
+  locationSelectionRequired: '请从建议中选择位置或使用您的当前位置。',
+  locationSearchFailed: '无法搜索位置，请重试。',
+  noLocationsFound: '未找到匹配的城市。',
   businessSizeRequired: '请选择您的业务规模',
   updateSuccess: '公司信息更新成功！',
   setupSuccess: '您的公司已成功设置。您现在可以开始管理您的池塘了！',

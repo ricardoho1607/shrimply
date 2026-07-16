@@ -46,6 +46,7 @@ interface DashboardUser {
 interface Company {
   id: string;
   companyName?: string;
+  timeZone?: string;
 }
 
 interface FarmCycle {
@@ -200,8 +201,9 @@ export default function HarvestProjectionsPage() {
       assumedSurvivalPercent: assumedSurvival ? Number(assumedSurvival) : null,
       targetMarketSizeG: targetMarketSize ? Number(targetMarketSize) : null,
       calibration,
+      timeZone: company?.timeZone,
     });
-  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, calibration]);
+  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, calibration, company?.timeZone]);
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
@@ -223,6 +225,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
     try {
       const response = await sendMessage(prompt, activePonds, {
         companyId: company?.id,
+        timeZone: company?.timeZone,
         aiFunction: 'projection',
         calibration,
         projectionSnapshot: {

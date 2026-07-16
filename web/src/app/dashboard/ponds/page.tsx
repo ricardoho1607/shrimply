@@ -25,6 +25,8 @@ import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyCycles, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -124,9 +126,11 @@ const removeUndefinedFields = (value: unknown): unknown => {
 
 export default function PondsPage() {
   const { t } = useLanguage();
+  const { company } = useAuth();
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   const { data: physicalPonds, loading: physicalPondsLoading } = useCompanyPhysicalPonds<PhysicalPond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
+  const today = useFarmDateKey(company?.timeZone);
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
@@ -139,11 +143,11 @@ export default function PondsPage() {
     pondName: '',
     pondArea: '',
     density: '',
-    docStart: new Date().toISOString().split('T')[0],
+    docStart: today,
     supplier: '',
     plValue: '0.5',
     cycleStartMode: 'new' as 'new' | 'midcycle',
-    baselineDate: new Date().toISOString().split('T')[0],
+    baselineDate: today,
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
@@ -157,14 +161,14 @@ export default function PondsPage() {
   });
   const [endCyclePond, setEndCyclePond] = useState<Pond | null>(null);
   const [endCycleForm, setEndCycleForm] = useState({
-    cycleEndedAt: new Date().toISOString().split('T')[0],
+    cycleEndedAt: today,
     cycleEndReason: 'harvested' as 'harvested' | 'disease' | 'reset' | 'other',
   });
   const [startCyclePond, setStartCyclePond] = useState<(Pond | PhysicalPond) | null>(null);
   const [pendingPhysicalPonds, setPendingPhysicalPonds] = useState<PhysicalPond[]>([]);
   const [startCycleForm, setStartCycleForm] = useState({
     density: '',
-    docStart: new Date().toISOString().split('T')[0],
+    docStart: today,
     plValue: '0.5',
     plSupplier: '',
     cycleStartMode: 'new' as 'new' | 'midcycle',
@@ -176,7 +180,7 @@ export default function PondsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [baselineEditPond, setBaselineEditPond] = useState<Pond | null>(null);
   const [baselineForm, setBaselineForm] = useState({
-    baselineDate: new Date().toISOString().split('T')[0],
+    baselineDate: today,
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
@@ -282,7 +286,6 @@ export default function PondsPage() {
   const handleCloseFarmCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
     if (!canEditPonds) return;
-    const today = new Date().toISOString().split('T')[0];
     if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
 
     try {
@@ -372,11 +375,11 @@ export default function PondsPage() {
         pondName: '',
         pondArea: '',
         density: '',
-        docStart: new Date().toISOString().split('T')[0],
+        docStart: today,
         supplier: '',
         plValue: '0.5',
         cycleStartMode: 'new',
-        baselineDate: new Date().toISOString().split('T')[0],
+        baselineDate: today,
         baselineMbw: '',
         baselineEstimatedPopulation: '',
         baselineSurvivalRate: '',
@@ -422,7 +425,7 @@ export default function PondsPage() {
       await batch.commit();
       setEndCyclePond(null);
       setEndCycleForm({
-        cycleEndedAt: new Date().toISOString().split('T')[0],
+        cycleEndedAt: today,
         cycleEndReason: 'harvested',
       });
       setCycleFilter('ended');
@@ -437,7 +440,7 @@ export default function PondsPage() {
     setStartCyclePond(pond);
     setStartCycleForm({
       density: '',
-      docStart: new Date().toISOString().split('T')[0],
+      docStart: today,
       plValue: '0.5',
       plSupplier: '',
       cycleStartMode: 'new',
@@ -456,7 +459,7 @@ export default function PondsPage() {
 
     setBaselineEditPond(pond);
     setBaselineForm({
-      baselineDate: pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0],
+      baselineDate: pond.baselineDate || baselineSampling?.date || today,
       baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
       baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
       baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
@@ -553,7 +556,7 @@ export default function PondsPage() {
       const initialWeight = parseFloat(startCycleForm.plValue) / 10;
       const activeCycle = await ensureActiveCycle(startCycleForm.docStart);
       const isMidcycle = startCycleForm.cycleStartMode === 'midcycle';
-      const baselineDate = new Date().toISOString().split('T')[0];
+      const baselineDate = today;
       const baselineDocValue = isMidcycle ? calculateDocFromDates(startCycleForm.docStart, baselineDate) : 0;
       const baselineMbwValue = parseFloat(startCycleForm.baselineMbw);
       const baselinePopulationValue = parseFloat(startCycleForm.baselineEstimatedPopulation);
@@ -888,7 +891,10 @@ export default function PondsPage() {
           </button>
         </div>
         {canEditPonds && (
-          <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
+          <button className="dashboard-action dashboard-action-primary" onClick={() => {
+            setFormData(prev => ({ ...prev, docStart: today, baselineDate: today }));
+            setModalOpen(true);
+          }}>
             <Plus size={20} strokeWidth={3} />
             <span>{t.ponds.addNew || 'Add New Pond'}</span>
           </button>
@@ -914,7 +920,10 @@ export default function PondsPage() {
             {t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}
           </p>
           {canEditPonds && (
-            <button className="btn-primary" onClick={() => setModalOpen(true)}>
+            <button className="btn-primary" onClick={() => {
+              setFormData(prev => ({ ...prev, docStart: today, baselineDate: today }));
+              setModalOpen(true);
+            }}>
               <Plus size={20} strokeWidth={3} />
               {t.ponds.addNew || 'Add New Pond'}
             </button>

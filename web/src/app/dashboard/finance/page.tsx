@@ -29,6 +29,7 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useDebouncedValue, useFinanceRecords } from '@/hooks/useDashboardData';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface Transaction {
@@ -49,6 +50,7 @@ export default function FinancePage() {
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
+  const today = useFarmDateKey(company?.timeZone);
 
   const EXPENSE_CATEGORIES = [t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, 'Feed', 'Chemicals', 'Probiotics'];
   const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome];
@@ -64,7 +66,7 @@ export default function FinancePage() {
   // Form State
   const [formType, setFormType] = useState<'expense' | 'income'>('expense');
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     category: EXPENSE_CATEGORIES[0],
     item: '',
     amount: '',
@@ -120,7 +122,7 @@ export default function FinancePage() {
 
   const resetForm = () => {
     setFormData({
-      date: new Date().toISOString().split('T')[0],
+      date: today,
       category: formType === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0],
       item: '', amount: '', paymentType: PAYMENT_TYPES[0], reference: '', notes: ''
     });
@@ -154,14 +156,14 @@ export default function FinancePage() {
     <div className="dashboard-page">
       <div className="dashboard-action-row">
           <button 
-            onClick={() => { setFormType('income'); setFormData({...formData, category: INCOME_CATEGORIES[0]}); setIsModalOpen(true); }}
+            onClick={() => { setFormType('income'); setFormData({...formData, date: today, category: INCOME_CATEGORIES[0]}); setIsModalOpen(true); }}
             className="btn-secondary" 
             style={{ border: '1px solid #27AE60', color: '#27AE60', background: 'rgba(39, 174, 96, 0.05)' }}
           >
             <ArrowUpRight size={18} /> {t.finance.addRevenue}
           </button>
           <button 
-            onClick={() => { setFormType('expense'); setFormData({...formData, category: EXPENSE_CATEGORIES[0]}); setIsModalOpen(true); }}
+            onClick={() => { setFormType('expense'); setFormData({...formData, date: today, category: EXPENSE_CATEGORIES[0]}); setIsModalOpen(true); }}
             className="btn-primary" 
             style={{ background: '#ef4444', border: 'none' }}
           >

@@ -5,6 +5,7 @@ import {
   toFiniteNumber,
   type PondMetricsWithHarvest,
 } from "../../shared/pondCalculations";
+import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 
 export {
   getPondBaselineFeed,
@@ -118,14 +119,15 @@ const normalizeSamplingNumbers = <T extends Partial<Sampling>>(sampling: T): T =
   ...(sampling.mortality !== undefined ? { mortality: toFiniteNumber(sampling.mortality) } : {}),
   ...(sampling.feed !== undefined ? { feed: toFiniteNumber(sampling.feed) } : {}),
 });
-export const buildDefaultFarmCycle = (existingCycles: FarmCycle[] = []): FarmCycle => {
+export const buildDefaultFarmCycle = (existingCycles: FarmCycle[] = [], timeZone?: string): FarmCycle => {
   const now = Date.now();
+  const today = getFarmDateKey(new Date(now), timeZone);
   return {
     id: `cycle-${now}`,
     cycleName: `Cycle ${existingCycles.length + 1}`,
     status: 'stocking',
-    plannedStartDate: new Date(now).toISOString().split('T')[0],
-    stockingStartDate: new Date(now).toISOString().split('T')[0],
+    plannedStartDate: today,
+    stockingStartDate: today,
   };
 };
 export const normalizePondLifecycle = (pond: Pond): Pond => ({
@@ -139,7 +141,7 @@ export const normalizePondLifecycle = (pond: Pond): Pond => ({
 });
 
 interface PondStore {
-  ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
+  ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
   firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
@@ -159,25 +161,28 @@ interface PondStore {
   
   calculatePondMetricsWithHarvest: (pond: Pond) => PondMetricsWithHarvest;
   
-  switchAccount: (companyId: string) => void; clearData: () => void; setFirebaseSync: (sync: PondStore['firebaseSync']) => void;
+  switchAccount: (companyId: string, timeZone?: string) => void; clearData: () => void; setFirebaseSync: (sync: PondStore['firebaseSync']) => void;
   backupToFirebase: (userId: string) => Promise<void>; restoreFromFirebase: (userId: string) => Promise<void>;
 }
 
 export const usePondStore = create<PondStore>()(
     (set, get) => ({
-      ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
+      ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
       
       setFirebaseSync: (sync) => set({ firebaseSync: sync }),
       
-      switchAccount: (companyId: string) => {
+      switchAccount: (companyId: string, timeZone?: string) => {
         const state = get();
+        const resolvedTimeZone = resolveFarmTimeZone(timeZone);
         if (state.currentCompanyId !== companyId) {
           console.log(`Switching account from ${state.currentCompanyId} to ${companyId}`);
-          set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId });
+          set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId, currentTimeZone: resolvedTimeZone });
+        } else if (state.currentTimeZone !== resolvedTimeZone) {
+          set({ currentTimeZone: resolvedTimeZone });
         }
       },
       
-      clearData: () => set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined }),
+      clearData: () => set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined }),
       
       backupToFirebase: async (userId: string) => { console.log('Legacy backupToFirebase called - real-time sync handles this now'); return Promise.resolve(); },
       restoreFromFirebase: async (userId: string) => { console.log('Legacy restoreFromFirebase called - real-time sync handles this now'); return Promise.resolve(); },
@@ -185,7 +190,7 @@ export const usePondStore = create<PondStore>()(
       addFarmCycle: (cycle) => {
         const state = get();
         const newCycle: FarmCycle = {
-          ...buildDefaultFarmCycle(state.cycles),
+          ...buildDefaultFarmCycle(state.cycles, state.currentTimeZone),
           ...cycle,
         };
         set((state) => ({ cycles: [...state.cycles, newCycle] }));
@@ -345,7 +350,7 @@ export const usePondStore = create<PondStore>()(
         let cycle = pond.cycleId ? state.cycles.find((item) => item.id === pond.cycleId) : getActiveFarmCycle(state.cycles);
         if (!cycle) {
           cycle = {
-            ...buildDefaultFarmCycle(state.cycles),
+            ...buildDefaultFarmCycle(state.cycles, state.currentTimeZone),
             stockingStartDate: pond.docStart,
             plannedStartDate: pond.docStart,
           };
@@ -549,7 +554,7 @@ export const usePondStore = create<PondStore>()(
         updatedPonds.forEach((pond) => get().firebaseSync?.syncPond('update', pond));
       },
 
-      calculatePondMetricsWithHarvest: (pond) => calculateSharedPondMetricsWithHarvest(pond),
+      calculatePondMetricsWithHarvest: (pond) => calculateSharedPondMetricsWithHarvest(pond, get().currentTimeZone),
       addSampling: (pondId, sampling) => {
         const pond = get().ponds.find((item) => item.id === pondId);
         if (!pond) return;
@@ -595,7 +600,7 @@ export const usePondStore = create<PondStore>()(
       },
 
       addWaterQuality: (pondId, record) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getFarmDateKey(new Date(), get().currentTimeZone);
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -629,7 +634,7 @@ export const usePondStore = create<PondStore>()(
       },
 
       addFeedData: (pondId, record) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getFarmDateKey(new Date(), get().currentTimeZone);
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -660,7 +665,7 @@ export const usePondStore = create<PondStore>()(
       },
 
       addHarvestData: (pondId, record) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = getFarmDateKey(new Date(), get().currentTimeZone);
         
         set((state) => ({
           ponds: state.ponds.map((p) => {

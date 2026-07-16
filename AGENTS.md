@@ -254,6 +254,15 @@ Final response should include:
 4. Verification run
 5. Remaining risk or manual testing required
 
+### Response Style
+
+- Use minimal wording and lead with the outcome.
+- Include only the important result, files changed, verification, blockers, and remaining risks.
+- Keep progress updates to one short sentence.
+- Prefer 3 to 6 concise bullets where appropriate.
+- Skip introductions, repeated context, detailed reasoning, and optional suggestions unless requested.
+- Ask questions only when genuinely blocked.
+
 ## 12. SHIPALL Release Shortcut
 
 When the user says `SHIPALL` (case-insensitive), treat it as explicit authorization to complete this production release workflow without asking for separate confirmation:

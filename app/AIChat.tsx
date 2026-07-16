@@ -135,7 +135,7 @@ export default function AIChat() {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     try {
-      const aiResponse = await sendMessage(userText, activePonds, { companyId: company?.id });
+      const aiResponse = await sendMessage(userText, activePonds, { companyId: company?.id, timeZone: company?.timeZone });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',

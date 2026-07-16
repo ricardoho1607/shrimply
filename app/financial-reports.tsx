@@ -13,6 +13,12 @@ import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExpor
 import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
 import { normalizeCategory } from './utils/categoryNormalizer';
 import { getActiveFarmCycle, usePondStore } from './store/pondStore';
+import {
+  getFarmDateKey,
+  getFarmPeriodDateKeys,
+  isDateKeyInRange,
+  normalizeFarmDateKey,
+} from '../shared/farmDate';
 
 type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
@@ -93,37 +99,49 @@ export default function FinancialReportsPage() {
 
   const getDateRange = () => {
     const now = new Date();
-    let startDate: Date, endDate: Date = now;
+    const today = getFarmDateKey(now, company?.timeZone);
+    let startDateKey: string | null;
+    let endDateKey = today;
 
-    if (selectedPeriod === 'Today') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (selectedPeriod === 'This Week') {
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 7);
-    } else if (selectedPeriod === 'This Month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (selectedPeriod === 'This Year') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    } else if (selectedPeriod === 'Custom') {
-      startDate = customStartDate ? new Date(customStartDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-      endDate = customEndDate ? new Date(customEndDate) : now;
+    if (selectedPeriod === 'Custom') {
+      startDateKey = normalizeFarmDateKey(customStartDate, company?.timeZone) || `${today.slice(0, 7)}-01`;
+      endDateKey = normalizeFarmDateKey(customEndDate, company?.timeZone) || today;
+    } else if (selectedPeriod === 'All Time') {
+      const allDateKeys = [...expenses, ...revenues]
+        .map(item => normalizeFarmDateKey(item.date, company?.timeZone))
+        .filter((dateKey): dateKey is string => Boolean(dateKey))
+        .sort();
+      startDateKey = allDateKeys[0] || today;
     } else {
-      const allDates = [...expenses.map(e => new Date(e.date)), ...revenues.map(r => new Date(r.date))];
-      startDate = allDates.length > 0 ? new Date(Math.min(...allDates.map(d => d.getTime()))) : now;
+      const period = selectedPeriod === 'Today'
+        ? 'today'
+        : selectedPeriod === 'This Week'
+          ? 'week'
+          : selectedPeriod === 'This Month'
+            ? 'month'
+            : 'year';
+      ({ startDateKey, endDateKey } = getFarmPeriodDateKeys(period, now, company?.timeZone));
     }
-    return { startDate, endDate };
+
+    const effectiveStartKey = startDateKey || today;
+    return {
+      startDateKey,
+      endDateKey,
+      startDate: new Date(`${effectiveStartKey}T00:00:00.000Z`),
+      endDate: new Date(`${endDateKey}T23:59:59.999Z`),
+    };
   };
 
   const getFilteredData = () => {
-    const { startDate, endDate } = getDateRange();
+    const { startDateKey, endDateKey } = getDateRange();
     const scopeFinance = <T extends { cycleId?: string }>(items: T[]) =>
       cycleScope === 'current' && activeFarmCycle
         ? items.filter((item) => item.cycleId === activeFarmCycle.id)
         : items;
 
     return {
-      filteredExpenses: scopeFinance(expenses).filter(e => { const date = new Date(e.date); return date >= startDate && date <= endDate; }),
-      filteredRevenues: scopeFinance(revenues).filter(r => { const date = new Date(r.date); return date >= startDate && date <= endDate; })
+      filteredExpenses: scopeFinance(expenses).filter(e => isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)),
+      filteredRevenues: scopeFinance(revenues).filter(r => isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone))
     };
   };
 
@@ -183,9 +201,15 @@ export default function FinancialReportsPage() {
   const netProfitPL = operatingIncome - totalOtherExpenses;
 
   const getOpeningBalance = () => {
-    const { startDate } = getDateRange();
-    const previousRevenues = revenues.filter(r => new Date(r.date) < startDate);
-    const previousExpenses = expenses.filter(e => new Date(e.date) < startDate);
+    const { startDateKey } = getDateRange();
+    const previousRevenues = revenues.filter(r => {
+      const dateKey = normalizeFarmDateKey(r.date, company?.timeZone);
+      return Boolean(startDateKey && dateKey && dateKey < startDateKey);
+    });
+    const previousExpenses = expenses.filter(e => {
+      const dateKey = normalizeFarmDateKey(e.date, company?.timeZone);
+      return Boolean(startDateKey && dateKey && dateKey < startDateKey);
+    });
     return revenueService.calculateTotal(previousRevenues) - financeService.calculateTotal(previousExpenses);
   };
 

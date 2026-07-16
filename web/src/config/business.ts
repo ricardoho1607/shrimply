@@ -10,6 +10,7 @@ export const DEFAULT_COMPANY_SETUP = {
   description: "",
   contactPhone: "",
   isPublicProfile: true,
+  timeZone: "",
 };
 
 export const BUYER_INTEREST_OPTIONS = [

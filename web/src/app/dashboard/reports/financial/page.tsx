@@ -16,6 +16,7 @@ import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { useRouter } from 'next/navigation';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { getFarmPeriodDateKeys, isDateKeyInRange } from '../../../../../../shared/farmDate';
 import { useFinanceRecords } from '@/hooks/useDashboardData';
 
 /* --- Types ----------------------------------------------- */
@@ -392,27 +393,27 @@ export default function FinancialReportsPage() {
 
   const getDateRange = () => {
     const now = new Date();
-    let startDate: Date;
-    const endDate: Date = now;
-
-    if (selectedPeriod === 'Today') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    } else if (selectedPeriod === 'This Week') {
-      startDate = new Date(now);
-      startDate.setDate(startDate.getDate() - 7);
-    } else if (selectedPeriod === 'This Month') {
-      startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-    } else if (selectedPeriod === 'This Year') {
-      startDate = new Date(now.getFullYear(), 0, 1);
-    } else {
-      startDate = new Date(0); // All time
-    }
-    return { startDate, endDate };
+    const period = selectedPeriod === 'Today'
+      ? 'today'
+      : selectedPeriod === 'This Week'
+        ? 'week'
+        : selectedPeriod === 'This Month'
+          ? 'month'
+          : selectedPeriod === 'This Year'
+            ? 'year'
+            : 'all';
+    const { startDateKey, endDateKey } = getFarmPeriodDateKeys(period, now, company?.timeZone);
+    return {
+      startDateKey,
+      endDateKey,
+      startDate: new Date(`${startDateKey || '1970-01-01'}T00:00:00.000Z`),
+      endDate: new Date(`${endDateKey}T23:59:59.999Z`),
+    };
   };
 
-  const { startDate, endDate } = getDateRange();
-  const filteredExpenses = expenses.filter(e => new Date(e.date) >= startDate && new Date(e.date) <= endDate);
-  const filteredRevenues = revenues.filter(r => new Date(r.date) >= startDate && new Date(r.date) <= endDate);
+  const { startDate, endDate, startDateKey, endDateKey } = getDateRange();
+  const filteredExpenses = expenses.filter(e => isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone));
+  const filteredRevenues = revenues.filter(r => isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone));
 
   // Financial Calculations for Preview
   const totalRev = filteredRevenues.reduce((s, r) => s + r.amount, 0);

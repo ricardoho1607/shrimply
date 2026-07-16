@@ -15,6 +15,7 @@ import {
   normalizeFeedAllocations,
   type FeedAllocation,
 } from '../../shared/feedInventoryUsage';
+import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 
 export interface StockHistory {
   id: string;
@@ -92,8 +93,9 @@ interface FeedAdditiveStore {
   additives: Additive[];
   loading: boolean;
   currentCompanyId: string | null;
-  initializeForCompany: (companyId: string) => () => void;
-  setCurrentCompanyId: (companyId: string | null) => void;
+  currentTimeZone: string;
+  initializeForCompany: (companyId: string, timeZone?: string) => () => void;
+  setCurrentCompanyId: (companyId: string | null, timeZone?: string) => void;
   addFeed: (feed: Partial<Feed>) => Promise<void>;
   stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { batch?: string; expiry?: string; unit?: string }) => Promise<void>;
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
@@ -115,7 +117,7 @@ interface FeedAdditiveStore {
   checkAllLowStock: () => Promise<void>;
 }
 
-const isoDate = (d = new Date()) => d.toISOString().split('T')[0];
+const isoDate = (d = new Date(), timeZone?: string) => getFarmDateKey(d, timeZone);
 
 // Helper to check low stock and create notification
 const checkLowStock = async (
@@ -170,11 +172,12 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
   additives: [],
   loading: false,
   currentCompanyId: null,
+  currentTimeZone: resolveFarmTimeZone(),
 
-  setCurrentCompanyId: (companyId) => set({ currentCompanyId: companyId }),
+  setCurrentCompanyId: (companyId, timeZone) => set({ currentCompanyId: companyId, currentTimeZone: resolveFarmTimeZone(timeZone) }),
 
-  initializeForCompany: (companyId: string) => {
-    set({ currentCompanyId: companyId, loading: true });
+  initializeForCompany: (companyId: string, timeZone?: string) => {
+    set({ currentCompanyId: companyId, currentTimeZone: resolveFarmTimeZone(timeZone), loading: true });
     let feedsLoaded = false;
     let additivesLoaded = false;
 
@@ -256,7 +259,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const stock: StockHistory = {
           id: Date.now().toString(),
-          date: isoDate(),
+          date: isoDate(new Date(), get().currentTimeZone),
           quantity,
           price,
           notes,
@@ -305,7 +308,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const usage: Partial<UsageHistory> = {
           id: Date.now().toString(),
-          date: isoDate(),
+          date: isoDate(new Date(), get().currentTimeZone),
           quantity,
           unitPrice,
           totalCost: quantity * unitPrice,
@@ -405,7 +408,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         const pond = pondId ? usePondStore.getState().ponds.find((item) => item.id === pondId) : undefined;
         const usage: Partial<UsageHistory> = {
           id: Date.now().toString(),
-          date: isoDate(),
+          date: isoDate(new Date(), get().currentTimeZone),
           quantity: quantityDelta,
           unitPrice,
           totalCost: quantityDelta * unitPrice,
@@ -650,7 +653,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const stock: StockHistory = {
           id: Date.now().toString(),
-          date: isoDate(),
+          date: isoDate(new Date(), get().currentTimeZone),
           quantity,
           price,
           notes,
@@ -699,7 +702,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const usage: Partial<UsageHistory> = {
           id: Date.now().toString(),
-          date: isoDate(),
+          date: isoDate(new Date(), get().currentTimeZone),
           quantity,
           unitPrice,
           totalCost: quantity * unitPrice,

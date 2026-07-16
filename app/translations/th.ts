@@ -311,6 +311,7 @@ companySetup: {
   
   companyNamePlaceholder: 'เช่น ฟาร์มกุ้งมหาสมุทรสีน้ำเงิน',
   locationPlaceholder: 'เช่น จาการ์ตา อินโดนีเซีย',
+  locationSearchPlaceholder: 'พิมพ์เมืองหรือประเทศ',
   farmTypePlaceholder: 'เช่น กุ้งวานามี การเลี้ยงแบบเข้มข้น',
   descriptionPlaceholder: 'คำอธิบายสั้นๆ เกี่ยวกับการดำเนินงานของคุณ (ตัวเลือก)',
   phonePlaceholder: 'หมายเลขติดต่อธุรกิจของคุณ',
@@ -331,6 +332,9 @@ companySetup: {
   disclaimer: 'คุณสามารถแก้ไขการตั้งค่าเหล่านี้ได้ทุกเมื่อจากโปรไฟล์ของคุณ',
   companyNameRequired: 'ต้องระบุชื่อบริษัท',
   locationRequired: 'ต้องระบุสถานที่หลัก',
+  locationSelectionRequired: 'เลือกสถานที่จากคำแนะนำหรือใช้ตำแหน่งปัจจุบันของคุณ',
+  locationSearchFailed: 'ไม่สามารถค้นหาสถานที่ได้ โปรดลองอีกครั้ง',
+  noLocationsFound: 'ไม่พบเมืองที่ตรงกัน',
   businessSizeRequired: 'กรุณาเลือกขนาดธุรกิจของคุณ',
   updateSuccess: 'อัปเดตข้อมูลบริษัทเรียบร้อยแล้ว!',
   setupSuccess: 'บริษัทของคุณถูกตั้งค่าเรียบร้อยแล้ว ตอนนี้คุณสามารถเริ่มจัดการบ่อของคุณได้แล้ว!',

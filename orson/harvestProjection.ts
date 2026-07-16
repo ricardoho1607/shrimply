@@ -8,6 +8,7 @@ import type {
   OrsonRiskSeverity,
 } from './types';
 import { getOrsonCalibrationAdjustment } from './learning';
+import { getFarmDateKey, shiftDateKey } from '../shared/farmDate';
 
 const round = (value: number, decimals = 2): number => {
   const factor = 10 ** decimals;
@@ -206,7 +207,7 @@ export const calculateOrsonHarvestProjection = (
     currentDoc: metrics.currentDoc,
     futureDoc: metrics.currentDoc !== null ? metrics.currentDoc + daysToHarvest : null,
     generatedAt: now.toISOString(),
-    targetDate: new Date(now.getTime() + daysToHarvest * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    targetDate: shiftDateKey(getFarmDateKey(now, input.timeZone), daysToHarvest),
     daysToHarvest,
     currentMbwG,
     historicalAdgGPerDay: metrics.smoothedAdgGPerDay ?? metrics.adgGPerDay,

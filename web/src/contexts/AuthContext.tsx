@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   signInWithEmailAndPassword,
@@ -20,6 +20,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
 import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
+import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../../../shared/farmDate';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -46,7 +47,16 @@ interface User {
 interface Company {
   id: string;
   companyName: string;
-  primaryLocation?: { address?: string } | string;
+  primaryLocation?: {
+    address?: string;
+    latitude?: number;
+    longitude?: number;
+    city?: string;
+    state?: string;
+    country?: string;
+    postalCode?: string;
+    placeId?: string;
+  } | string;
   farmType: string;
   businessSize: 'small' | 'medium' | 'large';
   description: string;
@@ -56,6 +66,7 @@ interface Company {
   ownerId: string;
   teamMembers: string[];
   pendingInvites: PendingInvite[];
+  timeZone?: string;
 }
 
 interface PendingInvite {
@@ -101,6 +112,7 @@ interface CompanySetupData {
   contactPhone: string;
   isPublicProfile: boolean;
   isSearchable?: boolean;
+  timeZone?: string;
   [key: string]: unknown;
 }
 
@@ -141,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [company, setCompany] = useState<Company | null>(null);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const timeZoneMigrationRef = useRef<Set<string>>(new Set());
   const router = useRouter();
 
   const setupCompanyListener = useCallback((companyId: string) => {
@@ -148,6 +161,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
         setCompany({ ...companyData, id: companyData.id || companyDoc.id });
+        if (!isValidTimeZone(companyData.timeZone)
+          && companyData.ownerId === auth.currentUser?.uid
+          && !timeZoneMigrationRef.current.has(companyId)) {
+          timeZoneMigrationRef.current.add(companyId);
+          void updateDoc(doc(db, 'companies', companyId), {
+            timeZone: getSystemTimeZone(),
+            updatedAt: serverTimestamp(),
+          }).catch((error) => {
+            timeZoneMigrationRef.current.delete(companyId);
+            console.warn('Company timezone migration failed:', error);
+          });
+        }
       } else {
         setCompany(null);
       }
@@ -318,6 +343,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const companyRef = doc(collection(db, 'companies'));
       const newCompany = {
         ...companyData,
+        timeZone: resolveFarmTimeZone(companyData.timeZone, getSystemTimeZone()),
         id: companyRef.id,
         ownerId: user.uid,
         teamMembers: [user.uid],

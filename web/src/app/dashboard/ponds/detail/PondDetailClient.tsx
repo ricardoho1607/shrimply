@@ -57,6 +57,8 @@ import {
   getSamplingMbw,
   isBaselineSampling,
 } from '../../../../../../shared/pondCalculations';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -264,6 +266,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
 };
 
 export default function PondDetailClient() {
+  const { company } = useAuth();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const router = useRouter();
@@ -271,32 +274,33 @@ export default function PondDetailClient() {
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | undefined>();
+  const today = useFarmDateKey(company?.timeZone);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingPond, setIsDeletingPond] = useState(false);
   const [isEndCycleOpen, setEndCycleOpen] = useState(false);
   const [endCycleForm, setEndCycleForm] = useState({
-    cycleEndedAt: new Date().toISOString().split('T')[0],
+    cycleEndedAt: today,
     cycleEndReason: 'harvested' as 'harvested' | 'disease' | 'reset' | 'other',
   });
   const [isStartCycleOpen, setStartCycleOpen] = useState(false);
   const [startCycleForm, setStartCycleForm] = useState({
     density: '',
-    docStart: new Date().toISOString().split('T')[0],
+    docStart: today,
     plValue: '0.5',
     plSupplier: '',
   });
   const [isBaselineModalOpen, setBaselineModalOpen] = useState(false);
   const [baselineForm, setBaselineForm] = useState({
-    baselineDate: new Date().toISOString().split('T')[0],
+    baselineDate: today,
     baselineMbw: '',
     baselineEstimatedPopulation: '',
     baselineSurvivalRate: '',
     baselineCumulativeFeed: '',
   });
   const [samplingForm, setSamplingForm] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     mbw: '',
     feed: '',
     mortality: '0'
@@ -399,7 +403,7 @@ export default function PondDetailClient() {
 
       setSamplingModalOpen(false);
       setSamplingForm({
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         mbw: '',
         mortality: '0',
         feed: ''
@@ -581,7 +585,7 @@ export default function PondDetailClient() {
       .filter(isBaselineSampling)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
     setBaselineForm({
-      baselineDate: pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0],
+      baselineDate: pond.baselineDate || baselineSampling?.date || today,
       baselineMbw: String(pond.baselineMbw ?? baselineSampling?.mbw ?? ''),
       baselineEstimatedPopulation: String(pond.baselineEstimatedPopulation ?? baselineSampling?.estimatedPopulation ?? ''),
       baselineSurvivalRate: String(pond.baselineSurvivalRate ?? baselineSampling?.estimatedSurvivalRate ?? ''),
@@ -661,7 +665,7 @@ export default function PondDetailClient() {
     const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const latest = sorted[sorted.length - 1] || { mbw: 0, mortality: 0, feed: 0 };
     const docStart = new Date(pond.docStart);
-    const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
+    const biologicalMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone);
     const feedBiomassInsight = detectFeedBiomassMismatchInsight(pond);
 
     const chartData = sorted
@@ -687,7 +691,7 @@ export default function PondDetailClient() {
       fcr: biologicalMetrics.biomassGainFCR,
       feedBiomassInsight
     };
-  }, [pond]);
+  }, [company?.timeZone, pond]);
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   if (!pond) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
@@ -752,12 +756,18 @@ export default function PondDetailClient() {
         {canEditPond && (
           <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
             {isActiveCycle(pond) ? (
-              <button onClick={() => setEndCycleOpen(true)} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
+              <button onClick={() => {
+                setEndCycleForm(prev => ({ ...prev, cycleEndedAt: today }));
+                setEndCycleOpen(true);
+              }} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
                 <Archive size={18} strokeWidth={2.5} />
                 <span>End Cycle</span>
               </button>
             ) : (
-              <button onClick={() => setStartCycleOpen(true)} className="dashboard-action dashboard-action-primary">
+              <button onClick={() => {
+                setStartCycleForm(prev => ({ ...prev, docStart: today }));
+                setStartCycleOpen(true);
+              }} className="dashboard-action dashboard-action-primary">
                 <RotateCcw size={18} strokeWidth={2.5} />
                 <span>Start New Cycle</span>
               </button>
@@ -772,7 +782,10 @@ export default function PondDetailClient() {
               <Settings size={18} strokeWidth={2.5} />
             </button>
             <button
-              onClick={() => setSamplingModalOpen(true)}
+              onClick={() => {
+                setSamplingForm(prev => ({ ...prev, date: today }));
+                setSamplingModalOpen(true);
+              }}
               className="dashboard-action dashboard-action-primary"
               disabled={!isActiveCycle(pond)}
               style={{ opacity: isActiveCycle(pond) ? 1 : 0.45, cursor: isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}

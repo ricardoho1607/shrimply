@@ -16,6 +16,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface ChatMessage {
   id: string;
@@ -66,6 +67,7 @@ const parseStoredMessages = (value: string | null): ChatMessage[] | null => {
 };
 
 export default function OrsonAIPage() {
+  const { company } = useAuth();
   const [ponds, setPonds] = useState<PondContext[]>([]);
   const [companyId, setCompanyId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -136,7 +138,7 @@ export default function OrsonAIPage() {
     setInputText('');
 
     try {
-      const aiResponse = await sendMessage(text.trim(), ponds, { companyId });
+      const aiResponse = await sendMessage(text.trim(), ponds, { companyId, timeZone: company?.timeZone });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',

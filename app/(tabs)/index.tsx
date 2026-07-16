@@ -15,6 +15,7 @@ import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 interface FormData {
   pondName: string; 
@@ -216,7 +217,7 @@ export default function PondManagementScreen() {
 
   useEffect(() => {
     if (company?.id) {
-      switchAccount(company.id);
+      switchAccount(company.id, company.timeZone);
       setFirebaseSync({
         syncPond: firebaseSync.syncPond,
         syncPhysicalPond: firebaseSync.syncPhysicalPond,
@@ -226,7 +227,8 @@ export default function PondManagementScreen() {
       });
     }
   }, [
-    company?.id, 
+    company?.id,
+    company?.timeZone,
     firebaseSync.syncPond, 
     firebaseSync.syncPhysicalPond,
     firebaseSync.syncSampling, 
@@ -452,7 +454,7 @@ export default function PondManagementScreen() {
       : '0';
       
     return {
-      doc: getPondCurrentDoc(pond),
+      doc: getPondCurrentDoc(pond, company?.timeZone),
       totalBiomass: metrics.currentBiomass,
       sr: metrics.adjustedSR.toFixed(1), 
       size,
@@ -460,7 +462,7 @@ export default function PondManagementScreen() {
       latestSampling,
       fcr: metrics.adjustedFCR.toFixed(2),
     };
-  }, [calculatePondMetricsWithHarvest, getLatestSampling]);
+  }, [calculatePondMetricsWithHarvest, company?.timeZone, getLatestSampling]);
 
   const getDOCColor = useCallback((doc: number): string => {
     if (doc < 30) return '#0d2137';
@@ -694,7 +696,7 @@ export default function PondManagementScreen() {
     }
 
     const endCycle = (reason: PondCycleEndReason) => {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getFarmDateKey(new Date(), company?.timeZone);
       endPondCycle(pond.id, today, reason, user?.uid);
       Alert.alert(t.messages.success, t.farmCycle.pondEndedSuccess.replace('{{pondName}}', pond.pondName));
     };
@@ -708,7 +710,7 @@ export default function PondManagementScreen() {
         { text: t.farmCycle.reasons.resetOther, onPress: () => endCycle('other') },
       ]
     );
-  }, [canEditPonds, endPondCycle, t, user?.uid]);
+  }, [canEditPonds, company?.timeZone, endPondCycle, t, user?.uid]);
 
   const handleDeletePond = useCallback((pond: Pond) => {
     if (!canEditPonds) {
@@ -863,7 +865,7 @@ export default function PondManagementScreen() {
   const handleCloseFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     const reportCycleId = activeFarmCycle.id;
     const canViewCycleReport = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
     Alert.alert(
@@ -903,7 +905,7 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [activeFarmCycle, closeFarmCycle, currentCyclePonds, persistFarmCycleClose, router, t, user?.role]);
+  }, [activeFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, persistFarmCycleClose, router, t, user?.role]);
 
   const handleDateChange = useCallback((
     confirmed: boolean, 
@@ -937,7 +939,7 @@ export default function PondManagementScreen() {
     const baselineSampling = (pond.samplings || [])
       .filter(isBaselineSampling)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-    const baselineDate = pond.baselineDate || baselineSampling?.date || new Date().toISOString().split('T')[0];
+    const baselineDate = pond.baselineDate || baselineSampling?.date || getFarmDateKey(new Date(), company?.timeZone);
 
     setEditingBaselinePondId(pond.id);
     setFormData((prev) => ({
@@ -950,7 +952,7 @@ export default function PondManagementScreen() {
     }));
     setModalType('baseline');
     setModalVisible(true);
-  }, [normalizeDateValue]);
+  }, [company?.timeZone, normalizeDateValue]);
 
   const handleUpdateBaseline = useCallback(() => {
     if (submitLockRef.current) return;
@@ -993,8 +995,8 @@ export default function PondManagementScreen() {
       return;
     }
 
-    const baselineDateString = formData.baselineDate.toISOString().split('T')[0];
-    const docStartString = cycleStartDate.toISOString().split('T')[0];
+    const baselineDateString = formatLocalDateKey(formData.baselineDate);
+    const docStartString = formatLocalDateKey(cycleStartDate);
     const baselineSamplingIndex = (pond.samplings || []).findIndex(isBaselineSampling);
     const existingBaseline = baselineSamplingIndex >= 0 ? pond.samplings[baselineSamplingIndex] : undefined;
     const baselineSampling: Sampling = {
@@ -1033,7 +1035,7 @@ export default function PondManagementScreen() {
     setEditingBaselinePondId(null);
     closeModal();
     Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
-  }, [calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, normalizeDateValue, ponds, t, updatePond]);
+  }, [calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, ponds, t, updatePond]);
 
   const PondCard = useMemo(() => React.memo(function PondCardItem({ pond }: { pond: Pond }) {
     const metrics = calculateMetrics(pond);

@@ -1,24 +1,93 @@
 "use client";
 
-import React, { useState } from 'react';
-import { Building2, Rocket, Phone, MapPin, ArrowLeft, LogOut } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Building2, Rocket, Phone, MapPin, ArrowLeft, LogOut, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { BUSINESS_SIZES, DEFAULT_COMPANY_SETUP, type BusinessSize } from '@/config/business';
 import { ROUTES } from '@/config/routes';
+import { getSupportedTimeZones, getSystemTimeZone } from '../../../../../shared/farmDate';
+import {
+  getLocationDetails,
+  searchCityLocations,
+  type PlaceSuggestion,
+  type SelectedLocation,
+} from '@/lib/googlePlacesClient';
 
 export default function CompanySetupPage() {
   const isReady = useOnboardingGuard('setup');
   const { completeCompanySetup, loading, signOut } = useAuth();
   const router = useRouter();
-  const [formData, setFormData] = useState(DEFAULT_COMPANY_SETUP);
+  const [formData, setFormData] = useState(() => ({
+    ...DEFAULT_COMPANY_SETUP,
+    timeZone: getSystemTimeZone(),
+  }));
   const [signingOut, setSigningOut] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [locationSuggestions, setLocationSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [searchingLocations, setSearchingLocations] = useState(false);
+  const [locationError, setLocationError] = useState('');
+  const timeZoneOptions = useMemo(() => getSupportedTimeZones(), []);
+
+  useEffect(() => {
+    const query = formData.primaryLocation.trim();
+    if (query.length < 2 || selectedLocation) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setSearchingLocations(true);
+      setLocationError('');
+      try {
+        const suggestions = await searchCityLocations(query);
+        if (!controller.signal.aborted) setLocationSuggestions(suggestions);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+        setLocationSuggestions([]);
+        setLocationError('Could not search locations. Please try again.');
+      } finally {
+        if (!controller.signal.aborted) setSearchingLocations(false);
+      }
+    }, 300);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [formData.primaryLocation, selectedLocation]);
+
+  const selectLocation = async (suggestion: PlaceSuggestion) => {
+    setSearchingLocations(true);
+    setLocationError('');
+    try {
+      const location = await getLocationDetails(suggestion.placeId);
+      setSelectedLocation(location);
+      setLocationSuggestions([]);
+      setFormData(current => ({
+        ...current,
+        primaryLocation: location.address,
+      }));
+    } catch {
+      setLocationError('Could not load that location. Please try another result.');
+    } finally {
+      setSearchingLocations(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!selectedLocation) {
+      setLocationError('Select a city from the suggestions before continuing.');
+      return;
+    }
     try {
-      await completeCompanySetup(formData);
+      await completeCompanySetup({
+        ...formData,
+        primaryLocation: selectedLocation,
+        country: selectedLocation.country,
+      });
       router.push(ROUTES.dashboard);
     } catch (error: unknown) {
       alert(error instanceof Error ? error.message : 'Failed to set up company');
@@ -160,16 +229,75 @@ export default function CompanySetupPage() {
           <div>
             <label htmlFor="company-location" style={labelStyle}>Location *</label>
             <div style={{ position: 'relative' }}>
-              <MapPin size={18} style={{ position: 'absolute', left: '14px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
+              <MapPin size={18} style={{ position: 'absolute', left: '14px', top: '17px', color: 'var(--text-faint)', zIndex: 1 }} />
               <input 
                 id="company-location"
                 style={{ ...inputStyle, paddingLeft: '44px' }}
-                placeholder="e.g. Jakarta, ID"
+                placeholder="Type a city or country"
                 value={formData.primaryLocation}
-                onChange={e => setFormData({...formData, primaryLocation: e.target.value})}
+                onChange={e => {
+                  setSelectedLocation(null);
+                  setLocationSuggestions([]);
+                  setLocationError('');
+                  setFormData({...formData, primaryLocation: e.target.value});
+                }}
+                autoComplete="off"
+                aria-autocomplete="list"
+                aria-controls="company-location-suggestions"
                 required
               />
+              {searchingLocations && (
+                <LoaderCircle size={18} style={{ position: 'absolute', right: '14px', top: '17px', color: 'var(--primary)' }} />
+              )}
+              {locationSuggestions.length > 0 && (
+                <div
+                  id="company-location-suggestions"
+                  role="listbox"
+                  style={{
+                    position: 'absolute', left: 0, right: 0, top: 'calc(100% + 6px)', zIndex: 20,
+                    background: '#FFFFFF', border: '1px solid var(--border)', borderRadius: '14px',
+                    overflow: 'hidden', boxShadow: '0 16px 36px rgba(15, 76, 117, 0.16)'
+                  }}
+                >
+                  {locationSuggestions.map((suggestion, index) => (
+                    <button
+                      key={suggestion.placeId}
+                      type="button"
+                      role="option"
+                      aria-selected="false"
+                      onClick={() => selectLocation(suggestion)}
+                      style={{
+                        width: '100%', display: 'flex', alignItems: 'center', gap: '10px', textAlign: 'left',
+                        padding: '12px 14px', background: '#FFFFFF', border: 'none', cursor: 'pointer',
+                        borderBottom: index < locationSuggestions.length - 1 ? '1px solid var(--border)' : 'none',
+                        color: 'var(--text-primary)', fontFamily: 'inherit'
+                      }}
+                    >
+                      <MapPin size={17} color="var(--secondary)" />
+                      <span>
+                        <strong style={{ display: 'block', fontSize: '13px' }}>{suggestion.mainText}</strong>
+                        {suggestion.secondaryText && (
+                          <span style={{ display: 'block', marginTop: '2px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                            {suggestion.secondaryText}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  ))}
+                  <div style={{ padding: '7px 12px', background: '#F8FAFC', color: 'var(--text-faint)', fontSize: '10px', textAlign: 'right' }}>
+                    Powered by Google
+                  </div>
+                </div>
+              )}
             </div>
+            {selectedLocation && (
+              <p style={{ margin: '7px 4px 0', color: '#15803d', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <CheckCircle2 size={13} /> Standardized location selected
+              </p>
+            )}
+            {locationError && (
+              <p role="alert" style={{ margin: '7px 4px 0', color: '#B42318', fontSize: '11px' }}>{locationError}</p>
+            )}
           </div>
           <div>
             <label htmlFor="company-farm-type" style={labelStyle}>Farm Type</label>
@@ -208,6 +336,27 @@ export default function CompanySetupPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        <div>
+          <label htmlFor="company-timezone" style={labelStyle}>Farm timezone *</label>
+          <select
+            id="company-timezone"
+            style={inputStyle}
+            value={formData.timeZone}
+            onChange={e => setFormData({...formData, timeZone: e.target.value})}
+            required
+          >
+            {!timeZoneOptions.includes(formData.timeZone) && (
+              <option value={formData.timeZone}>{formData.timeZone}</option>
+            )}
+            {timeZoneOptions.map(timeZone => (
+              <option key={timeZone} value={timeZone}>{timeZone}</option>
+            ))}
+          </select>
+          <p style={{ margin: '8px 4px 0', color: 'var(--text-muted)', fontSize: '12px' }}>
+            Confirm this matches the selected city. Daily farm records roll over at midnight here.
+          </p>
         </div>
 
         <div>

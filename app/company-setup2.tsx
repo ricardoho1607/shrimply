@@ -21,6 +21,9 @@ import { db } from '../config/firebase';
 import * as Location from 'expo-location';
 import { useLanguage } from '../context/LanguageContext';
 import { syncPublicCompanyProfile } from './utils/publicCompanyProfile';
+import { googlePlacesService } from './services/googlePlacesService';
+import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
+import { getSystemTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 
 interface CompanyData {
   companyName: string;
@@ -169,102 +172,31 @@ export default function CompanySetupScreen() {
       Alert.alert(t.messages.error, t.companySetup.locationRequired);
       return false;
     }
+    if (!locationCoordinates) {
+      Alert.alert(t.messages.error, t.companySetup.locationSelectionRequired);
+      return false;
+    }
     if (!formData.businessSize) {
       Alert.alert(t.messages.error, t.companySetup.businessSizeRequired);
       return false;
     }
     return true;
-  }, [formData, t]);
+  }, [formData, locationCoordinates, t]);
 
   const handleSetupComplete = useCallback(async () => {
     if (!validateForm()) return;
 
     try {
-      // Prepare location data
-      let locationData: LocationCoordinates | string;
-      
-      if (locationCoordinates) {
-        // Use existing coordinates
-        locationData = {
-          address: formData.primaryLocation,
-          latitude: locationCoordinates.latitude,
-          longitude: locationCoordinates.longitude,
-          city: locationCoordinates.city,
-          state: locationCoordinates.state,
-          country: locationCoordinates.country,
-          placeId: locationCoordinates.placeId,
-        };
-      } else {
-        // If no coordinates, try to get current location or use a default
-        Alert.alert(
-          t.companySetup.addCoordinates,
-          t.companySetup.coordinatesPrompt,
-          [
-            {
-              text: t.companySetup.useCurrentLocation,
-              onPress: async () => {
-                try {
-                  setGettingLocation(true);
-                  const { status } = await Location.requestForegroundPermissionsAsync();
-                  
-                  if (status === 'granted') {
-                    const location = await Location.getCurrentPositionAsync({});
-                    
-                    // Try to get address details
-                    try {
-                      const addresses = await Location.reverseGeocodeAsync({
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                      });
-                      
-                      const address = addresses && addresses.length > 0 ? addresses[0] : null;
-                      
-                      locationData = {
-                        address: formData.primaryLocation,
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                        city: address?.city || '',
-                        state: address?.region || '',
-                        country: address?.country || '',
-                      };
-                    } catch {
-                      // If geocoding fails, just use coordinates
-                      locationData = {
-                        address: formData.primaryLocation,
-                        latitude: location.coords.latitude,
-                        longitude: location.coords.longitude,
-                        city: '',
-                        state: '',
-                        country: '',
-                      };
-                    }
-                  } else {
-                    // If permission denied, save without coordinates (string)
-                    locationData = formData.primaryLocation;
-                  }
-                  
-                  await saveCompanyData(locationData);
-                } catch (error) {
-                  console.error('Error getting location:', error);
-                  // If error, save without coordinates
-                  await saveCompanyData(formData.primaryLocation);
-                } finally {
-                  setGettingLocation(false);
-                }
-              },
-            },
-            {
-              text: t.companySetup.skipForNow,
-              onPress: async () => {
-                await saveCompanyData(formData.primaryLocation);
-              },
-            },
-          ]
-        );
-        return; // Exit early, will continue in alert handlers
-      }
-
-      await saveCompanyData(locationData);
+      if (!locationCoordinates) return;
+      await saveCompanyData({
+        address: formData.primaryLocation,
+        latitude: locationCoordinates.latitude,
+        longitude: locationCoordinates.longitude,
+        city: locationCoordinates.city,
+        state: locationCoordinates.state,
+        country: locationCoordinates.country,
+        placeId: locationCoordinates.placeId,
+      });
     } catch (error: any) {
       console.error('Company setup failed:', error);
       Alert.alert(t.messages.error, t.companySetup.saveFailed);
@@ -273,6 +205,10 @@ export default function CompanySetupScreen() {
 
   const saveCompanyData = async (locationData: LocationCoordinates | string) => {
     try {
+      const timeZone = typeof locationData === 'object'
+        ? await googlePlacesService.getTimeZone(locationData.latitude, locationData.longitude)
+          .catch(() => resolveFarmTimeZone(company?.timeZone, getSystemTimeZone()))
+        : resolveFarmTimeZone(company?.timeZone, getSystemTimeZone());
       // Clean location data to remove undefined fields
       let cleanedLocationData: LocationCoordinates | string;
       let country = '';  // ADD THIS LINE
@@ -309,6 +245,7 @@ export default function CompanySetupScreen() {
           description: formData.description,
           contactPhone: formData.contactPhone,
           isPublicProfile: formData.isPublicProfile,
+          timeZone,
         };
         await updateDoc(doc(db, 'companies', company.id), companyUpdate);
         await syncPublicCompanyProfile(company.id, companyUpdate);
@@ -328,6 +265,7 @@ export default function CompanySetupScreen() {
         description: formData.description,
         contactPhone: formData.contactPhone,
         isPublicProfile: formData.isPublicProfile,
+        timeZone,
       };
 
       console.log('Calling completeCompanySetup with:', setupData);
@@ -483,11 +421,31 @@ export default function CompanySetupScreen() {
               'companyName',
               t.companySetup.companyNamePlaceholder
             )}
-            {renderInput(
-              `${t.companySetup.primaryLocation} ${t.companySetup.required}`,
-              'primaryLocation',
-              t.companySetup.locationPlaceholder
-            )}
+            <LocationAutocompleteInput
+              label={`${t.companySetup.primaryLocation} ${t.companySetup.required}`}
+              placeholder={t.companySetup.locationSearchPlaceholder}
+              value={formData.primaryLocation}
+              selectedLocation={locationCoordinates}
+              onChangeText={value => {
+                updateForm('primaryLocation', value);
+                setLocationCoordinates(null);
+              }}
+              onSelectLocation={location => {
+                updateForm('primaryLocation', location.address);
+                setLocationCoordinates({
+                  ...location,
+                  city: location.city || '',
+                  state: location.state || '',
+                  country: location.country || '',
+                });
+              }}
+              onUseCurrentLocation={getCurrentLocation}
+              gettingCurrentLocation={gettingLocation}
+              useCurrentLabel={t.companySetup.useCurrent}
+              coordinatesLabel={t.companySetup.coordinates}
+              searchFailedMessage={t.companySetup.locationSearchFailed}
+              noResultsMessage={t.companySetup.noLocationsFound}
+            />
             {renderInput(
               t.companySetup.farmSpecialization,
               'farmType',

@@ -39,6 +39,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
+import { getFarmDateKey } from '../../../../../../shared/farmDate';
 
 /* --- Types --------------------------------------------------- */
 
@@ -90,7 +91,7 @@ const canEditOperations = (role?: string) => role === 'owner' || role === 'co-ow
 export default function InventoryFeedsPage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { user } = useAuth();
+  const { user, company } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
   const { feeds, additives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
@@ -283,7 +284,7 @@ export default function InventoryFeedsPage() {
           totalCost: qty * price,
           stockInHistory: [{
             id: Date.now().toString(),
-            date: new Date().toISOString().split('T')[0],
+            date: getFarmDateKey(new Date(), company?.timeZone),
             quantity: qty,
             price: price,
             notes: formData.notes,
@@ -314,7 +315,7 @@ export default function InventoryFeedsPage() {
             totalCost: newCost,
             stockInHistory: arrayUnion({
               id: Date.now().toString(),
-              date: new Date().toISOString().split('T')[0],
+              date: getFarmDateKey(new Date(), company?.timeZone),
               quantity: qty,
               price: price,
               notes: formData.notes,
@@ -353,7 +354,7 @@ export default function InventoryFeedsPage() {
             totalCost: Math.max(0, currentCost - (qty * unitPrice)),
             usageHistory: arrayUnion({
               id: Date.now().toString(),
-              date: new Date().toISOString().split('T')[0],
+              date: getFarmDateKey(new Date(), company?.timeZone),
               quantity: qty,
               unitPrice,
               totalCost: qty * unitPrice,

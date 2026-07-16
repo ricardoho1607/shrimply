@@ -1,3 +1,9 @@
+import {
+  differenceInFarmCalendarDays,
+  getFarmDateKey,
+  normalizeFarmDateKey,
+} from './farmDate';
+
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface SharedFeedData {
@@ -164,14 +170,19 @@ export const calculatePopulationFromSampling = (sampling: SharedSampling): numbe
   return Math.round(((feedAmount / frPercentage) / mbw) * 100000);
 };
 
-export const getPondCurrentDoc = (pond: Pick<SharedPond, 'docStart' | 'baselineDate' | 'baselineDoc'>): number => {
-  const docStartTime = getValidTime(pond.docStart);
-  const docFromStart = docStartTime === null ? 0 : Math.floor((Date.now() - docStartTime) / DAY_MS);
+export const getPondCurrentDoc = (
+  pond: Pick<SharedPond, 'docStart' | 'baselineDate' | 'baselineDoc'>,
+  timeZone?: string,
+  now: Date = new Date(),
+): number => {
+  const today = getFarmDateKey(now, timeZone);
+  const docStartDate = normalizeFarmDateKey(pond.docStart, timeZone);
+  const docFromStart = docStartDate === null ? 0 : differenceInFarmCalendarDays(today, docStartDate);
   const baselineDoc = toFiniteNumber(pond.baselineDoc);
-  const baselineDateTime = getValidTime(pond.baselineDate);
+  const baselineDate = normalizeFarmDateKey(pond.baselineDate, timeZone);
 
-  if (baselineDoc > 0 && baselineDateTime !== null) {
-    const daysSinceBaseline = Math.floor((Date.now() - baselineDateTime) / DAY_MS);
+  if (baselineDoc > 0 && baselineDate !== null) {
+    const daysSinceBaseline = differenceInFarmCalendarDays(today, baselineDate);
     return Math.max(0, Math.floor(baselineDoc + Math.max(0, daysSinceBaseline)));
   }
 
@@ -264,7 +275,7 @@ export const calculateAdg = (
   return (getSamplingMbw(currentSampling) - previousWeight) / daysDiff;
 };
 
-export const calculatePondMetricsWithHarvest = (pond: SharedPond): PondMetricsWithHarvest => {
+export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: string): PondMetricsWithHarvest => {
   const samplings = pond.samplings || [];
   const validSamplings = sortByDateAsc(
     samplings.filter(
@@ -325,7 +336,7 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond): PondMetricsWi
     latestMbw,
     size: latestMbw > 0 ? Math.round(1000 / latestMbw) : 0,
     adg: calculateAdg(pond),
-    doc: getPondCurrentDoc(pond),
+    doc: getPondCurrentDoc(pond, timeZone),
     totalMortality,
     totalMortalityWeight,
     latestSampling,

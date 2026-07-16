@@ -66,10 +66,10 @@ export default function FeedAdditivesScreen() {
 
   useEffect(() => {
     if (company?.id) {
-      store.setCurrentCompanyId(company.id);
-      store.initializeForCompany(company.id);
+      store.setCurrentCompanyId(company.id, company.timeZone);
+      store.initializeForCompany(company.id, company.timeZone);
     }
-  }, [company?.id]);
+  }, [company?.id, company?.timeZone]);
 
   function getEmptyFormData(type: ItemType): FormData {
     return { itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', batch: '', expiry: '', reorderLevel: '' };

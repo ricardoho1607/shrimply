@@ -90,6 +90,7 @@ interface DashboardUser {
 interface Company {
   id: string;
   companyName?: string;
+  timeZone?: string;
 }
 
 /* --- Robust Calculation Utilities (Mobile + Web Parity) ---- */
@@ -169,12 +170,12 @@ const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
     .filter((series) => series.data.length > 0);
 };
 
-const calculatePondStats = (pond: Pond) => {
+const calculatePondStats = (pond: Pond, timeZone?: string) => {
   const samplings = pond.samplings || [];
   // Sort by date ascending to correctly identify latest/previous
   const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const growthSorted = sorted.filter((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
-  const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
+  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone);
   
   const previousRaw = growthSorted[growthSorted.length - 2] || null;
   const previous = previousRaw ? {
@@ -202,12 +203,12 @@ const calculatePondStats = (pond: Pond) => {
   };
 };
 
-const getGlobalAverages = (ponds: Pond[]) => {
+const getGlobalAverages = (ponds: Pond[], timeZone?: string) => {
   if (ponds.length === 0) {
     return { avgABW: 0, avgADG: 0, avgSize: 0, avgSR: 0, avgFCR: 0, totalBiomass: 0, totalFeed: 0, avgDensity: 0, stats: [] };
   }
   
-  const stats = ponds.map(p => calculatePondStats(p));
+  const stats = ponds.map(p => calculatePondStats(p, timeZone));
   const totalPonds = ponds.length;
 
   return {
@@ -455,7 +456,7 @@ export default function ShrimpReportsPage() {
   }, [company?.id]);
 
   const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
-  const global = useMemo(() => getGlobalAverages(activePonds), [activePonds]);
+  const global = useMemo(() => getGlobalAverages(activePonds, company?.timeZone), [activePonds, company?.timeZone]);
   const growthSeries = useMemo(() => buildGrowthSeries(activePonds), [activePonds]);
 
   const chartUrl = useMemo(() => {

@@ -7,6 +7,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
   return (
@@ -33,7 +34,7 @@ export default function HarvestScreen() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { user } = useAuth();
+  const { user, company } = useAuth();
   const { ponds, cycles, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact, calculatePondMetricsWithHarvest } = usePondStore();
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const activeFarmCycle = React.useMemo(() => getActiveFarmCycle(cycles), [cycles]);
@@ -127,7 +128,7 @@ export default function HarvestScreen() {
 
     const newHarvest: HarvestRecord = {
       id: Date.now().toString(),
-      date: new Date().toISOString().split('T')[0],
+      date: getFarmDateKey(new Date(), company?.timeZone),
       ponds: pondsWithData,
     };
 

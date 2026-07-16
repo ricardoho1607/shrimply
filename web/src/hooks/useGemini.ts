@@ -27,6 +27,7 @@ interface Message {
 
 type SendMessageOptions = {
   companyId?: string;
+  timeZone?: string;
   aiFunction?: OrsonAiFunction;
   calibration?: OrsonCalibrationProfile | null;
   projectionSnapshot?: {
@@ -143,7 +144,7 @@ export const useGemini = () => {
           console.warn('Orson prediction snapshot could not be recorded.', predictionError);
         }
       }
-      await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat');
+      await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat', options.timeZone);
 
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string },

@@ -311,6 +311,7 @@ companySetup: {
   
   companyNamePlaceholder: 'mis., Blue Ocean Shrimp Farm',
   locationPlaceholder: 'mis., Jakarta, Indonesia',
+  locationSearchPlaceholder: 'Ketik kota atau negara',
   farmTypePlaceholder: 'mis., Udang Vannamei, Budidaya Intensif',
   descriptionPlaceholder: 'Deskripsi singkat operasi Anda (opsional)',
   phonePlaceholder: 'Nomor kontak bisnis Anda',
@@ -331,6 +332,9 @@ companySetup: {
   disclaimer: 'Anda dapat mengubah pengaturan ini kapan saja dari profil Anda',
   companyNameRequired: 'Nama perusahaan diperlukan',
   locationRequired: 'Lokasi utama diperlukan',
+  locationSelectionRequired: 'Pilih lokasi dari saran atau gunakan lokasi Anda saat ini.',
+  locationSearchFailed: 'Tidak dapat mencari lokasi. Silakan coba lagi.',
+  noLocationsFound: 'Tidak ada kota yang cocok.',
   businessSizeRequired: 'Silakan pilih ukuran bisnis Anda',
   updateSuccess: 'Informasi perusahaan berhasil diperbarui!',
   setupSuccess: 'Perusahaan Anda telah berhasil diatur. Anda sekarang dapat mulai mengelola kolam Anda!',

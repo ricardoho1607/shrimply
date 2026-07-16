@@ -21,8 +21,8 @@ export default function ShrimpReportsScreen() {
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
 
   const activePonds = useMemo(
-    () => ponds.filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond) >= 0),
-    [ponds]
+    () => ponds.filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone) >= 0),
+    [company?.timeZone, ponds]
   );
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function ShrimpReportsScreen() {
   };
 
   const getPondStats = (pond: Pond) => {
-    const doc = getPondCurrentDoc(pond);
+    const doc = getPondCurrentDoc(pond, company?.timeZone);
     const metrics = calculatePondMetricsWithHarvest(pond);
     return {
       doc, currentPopulation: metrics.currentPopulation, biomass: metrics.currentBiomass, sr: metrics.adjustedSR,

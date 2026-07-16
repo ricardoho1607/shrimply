@@ -308,6 +308,7 @@ companySetup: {
   // Placeholders
   companyNamePlaceholder: 'e.g., Blue Ocean Shrimp Farm',
   locationPlaceholder: 'e.g., Jakarta, Indonesia',
+  locationSearchPlaceholder: 'Type a city or country',
   farmTypePlaceholder: 'e.g., Vannamei Shrimp, Intensive Culture',
   descriptionPlaceholder: 'Brief description of your operation (optional)',
   phonePlaceholder: 'Your business contact number',
@@ -332,6 +333,9 @@ companySetup: {
   disclaimer: 'You can modify these settings anytime from your profile',
   companyNameRequired: 'Company name is required',
   locationRequired: 'Primary location is required',
+  locationSelectionRequired: 'Select a location from the suggestions or use your current location.',
+  locationSearchFailed: 'Could not search locations. Please try again.',
+  noLocationsFound: 'No matching cities found.',
   businessSizeRequired: 'Please select your business size',
   updateSuccess: 'Company information updated successfully!',
   setupSuccess: 'Your company has been set up successfully. You can now start managing your ponds!',

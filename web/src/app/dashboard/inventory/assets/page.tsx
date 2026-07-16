@@ -37,6 +37,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 
@@ -111,7 +112,7 @@ const MAINTENANCE_TYPES = ['Preventive', 'Corrective', 'Inspection', 'Repair', '
 export default function AssetInventoryPage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { user: authUser } = useAuth();
+  const { user: authUser, company } = useAuth();
   const isMechanic = authUser?.role === 'mechanic';
   const canManageAssets = canEditOperations(authUser?.role);
   const canLogMaintenance = canManageAssets || isMechanic;
@@ -130,11 +131,11 @@ export default function AssetInventoryPage() {
     if (!date) return '';
     if (typeof date === 'string') return date;
     if (date && typeof date === 'object' && 'seconds' in date) {
-      return new Date(date.seconds * 1000).toISOString().split('T')[0];
+      return getFarmDateKey(new Date(date.seconds * 1000), company?.timeZone);
     }
     try {
       const d = new Date(date);
-      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+      if (!isNaN(d.getTime())) return getFarmDateKey(d, company?.timeZone);
     } catch (e) {}
     return '';
   };
@@ -150,7 +151,7 @@ export default function AssetInventoryPage() {
     name: '',
     description: '',
     category: 'Equipment',
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: getFarmDateKey(new Date(), company?.timeZone),
     purchaseCost: '',
     serialNumber: '',
     manufacturer: '',
@@ -277,7 +278,7 @@ export default function AssetInventoryPage() {
         name: '',
         description: '',
         category: 'Equipment',
-        purchaseDate: new Date().toISOString().split('T')[0],
+        purchaseDate: getFarmDateKey(new Date(), company?.timeZone),
         purchaseCost: '',
         serialNumber: '',
         manufacturer: '',

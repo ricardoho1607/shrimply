@@ -30,6 +30,7 @@ import {
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   DAILY_FEED_USAGE_SOURCE,
   buildDailyFeedRecordId,
@@ -39,6 +40,7 @@ import {
   sumFeedAllocations,
   type FeedAllocation,
 } from '../../../../../shared/feedInventoryUsage';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -129,6 +131,8 @@ const canEditOperations = (role?: string) => role === 'owner' || role === 'co-ow
 
 export default function FeedRecordsPage() {
   const { t } = useLanguage();
+  const { company } = useAuth();
+  const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ uid: string; role?: string } | null>(null);
@@ -142,7 +146,7 @@ export default function FeedRecordsPage() {
   // Form State
   const [formData, setFormData] = useState<FeedFormData>({
     pondId: '',
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     totalDailyFeed: '',
     feedAllocations: [],
   });
@@ -416,7 +420,7 @@ export default function FeedRecordsPage() {
         setModalOpen(false);
         setFormData({
           pondId: '',
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           totalDailyFeed: '',
           feedAllocations: [],
         });
@@ -480,7 +484,7 @@ export default function FeedRecordsPage() {
             onClick={() => {
               setFormData({
                 pondId: '',
-                date: new Date().toISOString().split('T')[0],
+                date: today,
                 totalDailyFeed: '',
                 feedAllocations: [],
               });

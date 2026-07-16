@@ -4,6 +4,7 @@ import {
   serverTimestamp,
   type Firestore,
 } from 'firebase/firestore';
+import { getFarmDateKey } from '../../../shared/farmDate';
 
 export type OrsonAiFunction = 'chat' | 'projection';
 
@@ -28,30 +29,19 @@ export class OrsonDailyLimitError extends Error {
   }
 }
 
-const getPacificDateKey = (date = new Date()) => {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(date);
-
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  return `${values.year}-${values.month}-${values.day}`;
-};
-
 const getLimit = (aiFunction: OrsonAiFunction) => ORSON_DAILY_LIMITS[aiFunction];
 
 export const reserveOrsonRequest = async (
   db: Firestore,
   companyId: string | undefined,
   aiFunction: OrsonAiFunction,
+  timeZone?: string,
 ) => {
   if (!companyId) {
     throw new Error('Orson needs an approved company before AI requests can be used.');
   }
 
-  const dateKey = getPacificDateKey();
+  const dateKey = getFarmDateKey(new Date(), timeZone);
   const limit = getLimit(aiFunction);
   const usageRef = doc(db, 'companies', companyId, 'aiUsage', dateKey);
 

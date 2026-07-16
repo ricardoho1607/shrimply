@@ -82,13 +82,14 @@ export default function HarvestProjectionScreen() {
       assumedSurvivalPercent: assumedSurvival ? parseFloat(assumedSurvival) : null,
       targetMarketSizeG: targetMarketSize ? parseFloat(targetMarketSize) : null,
       calibration,
+      timeZone: company?.timeZone,
     });
 
     setProjection(nextProjection);
     
     // Reset insight when data changes
     setInsight(null);
-  }, [selectedPondId, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, selectedPond, calibration]);
+  }, [selectedPondId, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, selectedPond, calibration, company?.timeZone]);
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
@@ -111,6 +112,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
     try {
       const response = await sendMessage(prompt, activePonds, {
         companyId: company?.id,
+        timeZone: company?.timeZone,
         aiFunction: 'projection',
         calibration,
         projectionSnapshot: {

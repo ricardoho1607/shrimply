@@ -311,6 +311,7 @@ companySetup: {
   
   companyNamePlaceholder: 'vd: Trang Trại Tôm Đại Dương Xanh',
   locationPlaceholder: 'vd: Jakarta, Indonesia',
+  locationSearchPlaceholder: 'Nhập thành phố hoặc quốc gia',
   farmTypePlaceholder: 'vd: Tôm Vannamei, Nuôi Thâm Canh',
   descriptionPlaceholder: 'Mô tả ngắn gọn về hoạt động của bạn (tùy chọn)',
   phonePlaceholder: 'Số liên hệ kinh doanh của bạn',
@@ -331,6 +332,9 @@ companySetup: {
   disclaimer: 'Bạn có thể sửa đổi các cài đặt này bất cứ lúc nào từ hồ sơ của mình',
   companyNameRequired: 'Tên công ty là bắt buộc',
   locationRequired: 'Địa điểm chính là bắt buộc',
+  locationSelectionRequired: 'Chọn một địa điểm từ gợi ý hoặc dùng vị trí hiện tại của bạn.',
+  locationSearchFailed: 'Không thể tìm kiếm địa điểm. Vui lòng thử lại.',
+  noLocationsFound: 'Không tìm thấy thành phố phù hợp.',
   businessSizeRequired: 'Vui lòng chọn quy mô kinh doanh của bạn',
   updateSuccess: 'Thông tin công ty đã được cập nhật thành công!',
   setupSuccess: 'Công ty của bạn đã được thiết lập thành công. Bây giờ bạn có thể bắt đầu quản lý ao của mình!',

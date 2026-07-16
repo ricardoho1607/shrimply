@@ -22,12 +22,13 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 import firebaseApp, { auth, db } from '../config/firebase';
-import { LocationData } from '../app/services/googlePlacesService'
+import { googlePlacesService, LocationData } from '../app/services/googlePlacesService'
 import { useBuyerStore } from '../app/store/buyerStore';
 import { usePondStore } from '../app/store/pondStore';
 import { syncPublicCompanyProfile } from '../app/utils/publicCompanyProfile';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -66,6 +67,7 @@ interface Company {
   isSearchable?: boolean;
   logo?: string;
   logoUrl?: string;
+  timeZone?: string;
 }
 
 const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
@@ -137,6 +139,7 @@ interface CompanySetupData {
   isPublicProfile: boolean;
   serviceRadius?: number;
   locationData?: LocationData;
+  timeZone?: string;
 }
 
 interface AuthContextType {
@@ -197,6 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const previousCompanyRef = useRef<Company | null>(null);
+  const timeZoneMigrationRef = useRef<Set<string>>(new Set());
   const clearPondData = usePondStore((state) => state.clearData);
   const clearBuyerData = useBuyerStore((state) => state.clearData);
 
@@ -211,10 +215,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
+        usePondStore.getState().switchAccount(companyId, companyData.timeZone);
         
         if (JSON.stringify(previousCompanyRef.current) !== JSON.stringify(companyData)) {
           previousCompanyRef.current = companyData;
           setCompany(companyData);
+        }
+
+        if (!isValidTimeZone(companyData.timeZone)
+          && companyData.ownerId === auth.currentUser?.uid
+          && !timeZoneMigrationRef.current.has(companyId)) {
+          timeZoneMigrationRef.current.add(companyId);
+          const location = typeof companyData.primaryLocation === 'object'
+            ? companyData.primaryLocation
+            : companyData.locationData;
+
+          void (async () => {
+            const detectedTimeZone = location
+              && Number.isFinite(location.latitude)
+              && Number.isFinite(location.longitude)
+              && (location.latitude !== 0 || location.longitude !== 0)
+              ? await googlePlacesService.getTimeZone(location.latitude, location.longitude)
+                .catch(() => getSystemTimeZone())
+              : getSystemTimeZone();
+
+            try {
+              await updateDoc(doc(db, 'companies', companyId), {
+                timeZone: resolveFarmTimeZone(detectedTimeZone),
+                updatedAt: serverTimestamp(),
+              });
+            } catch (error) {
+              timeZoneMigrationRef.current.delete(companyId);
+              console.log('Company timezone migration failed (non-critical):', error);
+            }
+          })();
         }
         
         if (companyData.primaryLocation && typeof companyData.primaryLocation === 'string' && !companyData.locationData) {
@@ -522,6 +556,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       pendingInvites: [],
       serviceRadius: companyData.serviceRadius || 50,
       isSearchable: true,
+      timeZone: resolveFarmTimeZone(companyData.timeZone, getSystemTimeZone()),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };

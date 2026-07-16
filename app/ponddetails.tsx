@@ -18,6 +18,7 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
+import { getFarmDateKey } from '../shared/farmDate';
 
 const InputField = React.memo(({ 
   label, 
@@ -278,7 +279,7 @@ export default function PondDetails() {
   const [startCycleVisible, setStartCycleVisible] = useState(false);
   const [newCycleForm, setNewCycleForm] = useState({
     density: '',
-    docStart: new Date().toISOString().split('T')[0],
+    docStart: getFarmDateKey(new Date(), company?.timeZone),
     plValue: '',
     plSupplier: '',
   });
@@ -401,7 +402,7 @@ export default function PondDetails() {
     const getTotalFeedData = () => getPondTotalFeedConsumed(pond);
 
     const latestSampling = getLatestSamplingData();
-    const doc = getPondCurrentDoc(pond);
+    const doc = getPondCurrentDoc(pond, company?.timeZone);
     const totalMortality = harvestAdjustedMetrics.totalMortality;
     
     const currentPopulation = harvestAdjustedMetrics.currentPopulation;
@@ -453,7 +454,7 @@ export default function PondDetails() {
       pondSamplingData,
       feedBiomassInsight
     };
-  }, [pond, calculatePondMetricsWithHarvest]);
+  }, [company?.timeZone, pond, calculatePondMetricsWithHarvest]);
 
   const openEditModal = useCallback((sample: Sampling) => {
     if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
@@ -513,13 +514,13 @@ export default function PondDetails() {
     setStartCycleVisible(false);
     setNewCycleForm({
       density: '',
-      docStart: new Date().toISOString().split('T')[0],
+      docStart: getFarmDateKey(new Date(), company?.timeZone),
       plValue: '',
       plSupplier: '',
     });
     router.push('/(tabs)' as any);
     Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [addPond, canEditPonds, newCycleForm, pond, ponds, router, t]);
+  }, [addPond, canEditPonds, company?.timeZone, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);

@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
 import { format } from 'date-fns';
+import { useFarmDateKey } from './hooks/useFarmDateKey';
 import { useDataBackup } from './hooks/useDataBackup';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -29,13 +30,6 @@ interface ActivitySummary {
 }
 
 const ACTIVITY_ACTIVE_WINDOW_MS = 5 * 60 * 1000;
-
-const formatLocalDateKey = (date: Date): string => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const toActivityDate = (value: unknown): Date | null => {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
@@ -74,6 +68,7 @@ export default function Settings() {
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
   const [activitySummaries, setActivitySummaries] = useState<ActivitySummary[]>([]);
+  const farmToday = useFarmDateKey(company?.timeZone);
 
   useEffect(() => {
     if (!canViewActivity || !company?.id) {
@@ -83,7 +78,7 @@ export default function Settings() {
 
     const activityQuery = query(
       collection(db, 'companies', company.id, 'userActivityDaily'),
-      where('dateKey', '==', formatLocalDateKey(new Date()))
+      where('dateKey', '==', farmToday)
     );
 
     const unsubscribe = onSnapshot(activityQuery, (snapshot) => {
@@ -100,7 +95,7 @@ export default function Settings() {
     });
 
     return unsubscribe;
-  }, [canViewActivity, company?.id]);
+  }, [canViewActivity, company?.id, farmToday]);
 
   const activityStatusLine = useMemo(() => {
     const nowMs = Date.now();

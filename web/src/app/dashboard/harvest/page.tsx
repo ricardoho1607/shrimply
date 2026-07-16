@@ -16,6 +16,8 @@ import {
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, query, orderBy, onSnapshot, doc, addDoc, serverTimestamp, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -96,6 +98,8 @@ const getEstimatedCurrentBiomass = (pond: Pond) => {
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function HarvestPage() {
+  const { company } = useAuth();
+  const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -108,7 +112,7 @@ export default function HarvestPage() {
 
   // Form State
   const [formData, setFormData] = useState({
-    date: new Date().toISOString().split('T')[0],
+    date: today,
     pondId: '',
     biomass: '',
     size: '',
@@ -218,7 +222,7 @@ export default function HarvestPage() {
 
       setModalOpen(false);
       setFormData({
-        date: new Date().toISOString().split('T')[0],
+        date: today,
         pondId: '',
         biomass: '',
         size: '',
@@ -310,7 +314,10 @@ export default function HarvestPage() {
           />
         </div>
         {canEditHarvest && (
-          <button className="dashboard-action dashboard-action-primary" onClick={() => setModalOpen(true)}>
+          <button className="dashboard-action dashboard-action-primary" onClick={() => {
+            setFormData(prev => ({ ...prev, date: today }));
+            setModalOpen(true);
+          }}>
             <Plus size={20} />
             <span>Log Harvest</span>
           </button>

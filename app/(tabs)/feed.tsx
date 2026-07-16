@@ -21,6 +21,7 @@ import {
   normalizeFeedAllocations,
   sumFeedAllocations,
 } from '../../shared/feedInventoryUsage';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 interface FeedAllocationInput {
   inventoryFeedId: string;
@@ -48,7 +49,7 @@ Parameter.displayName = 'Parameter';
 export default function FeedManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, company } = useAuth();
   const { ponds, addFeedData } = usePondStore();
   const { setCurrentCompanyId, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
@@ -70,29 +71,29 @@ export default function FeedManagementScreen() {
 
   React.useEffect(() => {
     if (user?.companyId) {
-      setCurrentCompanyId(user.companyId);
+      setCurrentCompanyId(user.companyId, company?.timeZone);
       const q = query(collection(db, 'companies', user.companyId, 'feeds'), orderBy('feedName', 'asc'));
       const unsub = onSnapshot(q, (snapshot) => {
         setInventoryFeeds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
       });
       return unsub;
     }
-  }, [setCurrentCompanyId, user?.companyId]);
+  }, [company?.timeZone, setCurrentCompanyId, user?.companyId]);
 
-  const getTodayFeedRecord = (pond: any) => {
-    const today = new Date().toISOString().split('T')[0];
+  const getTodayFeedRecord = React.useCallback((pond: any) => {
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     return pond.samplings.find((s: any) => s.feedData && s.date === today);
-  };
+  }, [company?.timeZone]);
 
   const allFeedRecords = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     return activePonds.map(pond => {
       const todayRecord = getTodayFeedRecord(pond);
       return todayRecord?.feedData 
         ? { ...todayRecord.feedData, pondId: pond.id, pondName: pond.pondName, date: today }
         : { pondId: pond.id, pondName: pond.pondName, date: today };
     });
-  }, [activePonds]);
+  }, [activePonds, company?.timeZone, getTodayFeedRecord]);
 
   const handleSave = async () => {
     if (submitLockRef.current) return;
@@ -149,7 +150,7 @@ export default function FeedManagementScreen() {
       setIsSubmitting(false);
       return;
     }
-    const today = new Date().toISOString().split('T')[0];
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     const todayRecord = getTodayFeedRecord(pond);
     const previousAllocations = normalizeFeedAllocations(todayRecord?.feedData);
 

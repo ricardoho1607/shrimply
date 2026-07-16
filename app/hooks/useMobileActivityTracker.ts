@@ -10,15 +10,9 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 const HEARTBEAT_MS = 2 * 60 * 1000;
-
-const getLocalDateKey = (date: Date) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
 
 const getElapsedSeconds = (fromMs: number | null, toMs: number) => {
   if (!fromMs || toMs <= fromMs) return 0;
@@ -51,8 +45,8 @@ export const useMobileActivityTracker = () => {
 
   const getDailySummaryRef = useCallback((date = new Date()) => {
     if (!company?.id || !user?.uid) return null;
-    return doc(db, 'companies', company.id, 'userActivityDaily', `${getLocalDateKey(date)}_${user.uid}`);
-  }, [company?.id, user?.uid]);
+    return doc(db, 'companies', company.id, 'userActivityDaily', `${getFarmDateKey(date, company.timeZone)}_${user.uid}`);
+  }, [company?.id, company?.timeZone, user?.uid]);
 
   const flushSession = useCallback(async (endSession = false) => {
     if (!sessionRef.current || !company?.id || !user?.uid) return;
@@ -85,7 +79,7 @@ export const useMobileActivityTracker = () => {
         userEmail: user.email || '',
         role: user.role ?? null,
         platform: 'mobile',
-        dateKey: getLocalDateKey(new Date(nowMs)),
+        dateKey: getFarmDateKey(new Date(nowMs), company.timeZone),
         totalSeconds: increment(elapsedSeconds),
         lastSeenAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -97,7 +91,7 @@ export const useMobileActivityTracker = () => {
     } catch (error) {
       console.log('Activity tracking update failed:', error);
     }
-  }, [company?.id, getDailySummaryRef, user?.email, user?.name, user?.role, user?.uid]);
+  }, [company?.id, company?.timeZone, getDailySummaryRef, user?.email, user?.name, user?.role, user?.uid]);
 
   const endCurrentSession = useCallback(async () => {
     clearHeartbeat();
@@ -144,7 +138,7 @@ export const useMobileActivityTracker = () => {
         }),
         setDoc(dailySummaryRef, {
           ...baseActivityData,
-          dateKey: getLocalDateKey(now),
+          dateKey: getFarmDateKey(now, company.timeZone),
           totalSeconds: increment(0),
           sessionCount: increment(1),
           lastSeenAt: serverTimestamp(),
@@ -172,6 +166,7 @@ export const useMobileActivityTracker = () => {
     canTrack,
     clearHeartbeat,
     company?.id,
+    company?.timeZone,
     endCurrentSession,
     flushSession,
     getDailySummaryRef,

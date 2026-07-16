@@ -34,6 +34,22 @@ export interface LocationData {
   postalCode?: string;
 }
 
+export interface PlaceSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+}
+
+interface GooglePlacePrediction {
+  place_id: string;
+  description: string;
+  structured_formatting?: {
+    main_text?: string;
+    secondary_text?: string;
+  };
+}
+
 class GooglePlacesService {
   private apiKey: string;
   private baseUrl = 'https://maps.googleapis.com/maps/api/place';
@@ -64,11 +80,42 @@ class GooglePlacesService {
     }
   }
 
+  // Search standardized cities and administrative regions worldwide.
+  async searchLocations(query: string): Promise<PlaceSuggestion[]> {
+    const input = query.trim();
+    if (input.length < 2) return [];
+
+    try {
+      const params = new URLSearchParams({
+        input,
+        types: '(cities)',
+        key: this.apiKey,
+      });
+      const response = await fetch(`${this.baseUrl}/autocomplete/json?${params.toString()}`);
+      const data = await response.json();
+
+      if (data.status === 'ZERO_RESULTS') return [];
+      if (data.status !== 'OK') {
+        throw new Error(data.error_message || 'Location search failed');
+      }
+
+      return ((data.predictions || []) as GooglePlacePrediction[]).slice(0, 6).map(prediction => ({
+        placeId: prediction.place_id,
+        description: prediction.description,
+        mainText: prediction.structured_formatting?.main_text || prediction.description,
+        secondaryText: prediction.structured_formatting?.secondary_text || '',
+      }));
+    } catch (error) {
+      console.error('Google location search error:', error);
+      throw error;
+    }
+  }
+
   // Get detailed information about a place
   async getPlaceDetails(placeId: string): Promise<LocationData> {
     try {
       const response = await fetch(
-        `${this.baseUrl}/details/json?place_id=${placeId}&fields=formatted_address,geometry,address_component,name&key=${this.apiKey}`
+        `${this.baseUrl}/details/json?place_id=${placeId}&fields=place_id,formatted_address,geometry,address_component,name&key=${this.apiKey}`
       );
       
       const data = await response.json();
@@ -100,6 +147,29 @@ class GooglePlacesService {
       throw new Error('Reverse geocoding failed');
     } catch (error) {
       console.error('Reverse geocoding error:', error);
+      throw error;
+    }
+  }
+
+  async getTimeZone(latitude: number, longitude: number, date: Date = new Date()): Promise<string> {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new Error('Valid coordinates are required to detect the farm timezone');
+    }
+
+    try {
+      const timestamp = Math.floor(date.getTime() / 1000);
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/timezone/json?location=${latitude},${longitude}&timestamp=${timestamp}&key=${this.apiKey}`
+      );
+      const data = await response.json();
+
+      if (data.status === 'OK' && typeof data.timeZoneId === 'string') {
+        return data.timeZoneId;
+      }
+
+      throw new Error(data.errorMessage || 'Timezone detection failed');
+    } catch (error) {
+      console.error('Google timezone detection error:', error);
       throw error;
     }
   }

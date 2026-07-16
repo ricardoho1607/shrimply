@@ -10,6 +10,7 @@ import { usePondStore, isPondCycleActive, type Pond } from "../store/pondStore";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import app, { db, storage } from '../../config/firebase';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 interface MobileLabReport {
   id: string;
@@ -220,7 +221,7 @@ export default function WaterQualityScreen() {
     selectedPondLabHistory.forEach((entry) => {
       const parsedDate = entry.report.sampleDate ? new Date(entry.report.sampleDate) : null;
       const hasValidDate = parsedDate && !Number.isNaN(parsedDate.getTime());
-      const dateKey = hasValidDate ? parsedDate.toISOString().split('T')[0] : 'unknown-date';
+      const dateKey = hasValidDate ? getFarmDateKey(parsedDate, company?.timeZone) : 'unknown-date';
       const dateLabel = hasValidDate ? parsedDate.toLocaleDateString() : t.waterQuality.lastLab;
       const timestamp = hasValidDate ? parsedDate.getTime() : 0;
       const existing = groups.get(dateKey);
@@ -233,7 +234,7 @@ export default function WaterQualityScreen() {
     });
 
     return Array.from(groups.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [selectedPondLabHistory, t.waterQuality.lastLab]);
+  }, [company?.timeZone, selectedPondLabHistory, t.waterQuality.lastLab]);
 
   const openLabPdf = useCallback(async (report: MobileLabReport) => {
     if (!report.sourcePdfUrl) {
@@ -249,7 +250,7 @@ export default function WaterQualityScreen() {
   }, [t.waterQuality.labUploadFailedTitle, t.waterQuality.noLabReports, t.waterQuality.openPdfFailedMessage, t.waterQuality.originalPdfUnavailableMessage]);
 
   const allWaterRecords = useMemo(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     return activePonds.map((p) => {
       const todayWQRecord = p.samplings.find(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
       return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
@@ -258,7 +259,7 @@ export default function WaterQualityScreen() {
         doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName
       };
     });
-  }, [activePonds]);
+  }, [activePonds, company?.timeZone]);
 
   const handleSave = useCallback(() => {
     if (submitLockRef.current) return;
@@ -295,7 +296,7 @@ export default function WaterQualityScreen() {
 
   const handlePondSelection = useCallback((pondName: string) => {
     setSelectedPond(pondName);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getFarmDateKey(new Date(), company?.timeZone);
     const pond = ponds.find(p => p.pondName === pondName);
     const todayWQRecord = pond?.samplings.find(s => 
       s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today
@@ -305,7 +306,7 @@ export default function WaterQualityScreen() {
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
       transparency: todayWQRecord.transparency || "", salinity: todayWQRecord.salinity || "",
     } : { phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
-  }, [ponds]);
+  }, [company?.timeZone, ponds]);
 
   const closeModal = useCallback(() => {
     setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
@@ -437,7 +438,7 @@ export default function WaterQualityScreen() {
         reportType,
         entryMode: 'pdf_upload',
         status: 'draft',
-        sampleDate: new Date().toISOString().split('T')[0],
+        sampleDate: getFarmDateKey(new Date(), company?.timeZone),
         labName: reportType === 'plankton' ? t.waterQuality.uploadedPlanktonReport : t.waterQuality.uploadedMineralReport,
         farmName: company.companyName || '',
         originalFileName: asset.name || 'lab-report.pdf',
@@ -477,7 +478,7 @@ export default function WaterQualityScreen() {
           reportType,
           entryMode: 'pdf_upload',
           status: 'extracted',
-          sampleDate: new Date().toISOString().split('T')[0],
+          sampleDate: getFarmDateKey(new Date(), company?.timeZone),
           labName: reportType === 'plankton' ? t.waterQuality.uploadedPlanktonReport : t.waterQuality.uploadedMineralReport,
           originalFileName: asset.name || 'lab-report.pdf',
           sourcePdfPath,

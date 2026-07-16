@@ -308,6 +308,7 @@ export interface OrsonHarvestProjectionInput {
   targetMarketSizeG?: number | null;
   calibration?: OrsonCalibrationProfile | null;
   now?: Date;
+  timeZone?: string;
 }
 
 export interface OrsonProjectionLearningContext {

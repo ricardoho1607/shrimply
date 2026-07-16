@@ -43,6 +43,7 @@ import {
   calculatePondMetricsWithHarvest,
   getLatestValidMbwSampling,
 } from '../../../../shared/pondCalculations';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -92,13 +93,13 @@ interface FarmCycle {
 
 /* --- Calculation Utilities ----------------------------------- */
 
-const calculateMetrics = (pond: Pond) => {
+const calculateMetrics = (pond: Pond, timeZone?: string) => {
   const samplings = pond.samplings || [];
   const validSamplings = samplings.filter(s => s.mbw > 0 || s.mortality > 0 || s.feed > 0 || s.feedData);
   const sorted = [...validSamplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const latest = sorted[sorted.length - 1] || {};
   const latestValid = getLatestValidMbwSampling(pond);
-  const biologicalMetrics = calculatePondMetricsWithHarvest(pond);
+  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone);
 
     const phM = parseFloat(latest.phMorning || '');
     const phE = parseFloat(latest.phEvening || '');
@@ -184,10 +185,10 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
   );
 }
 
-function PondCard({ pond, calculateMetrics, t }: any) {
-  const m = calculateMetrics(pond);
+function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
+  const m = calculateMetrics(pond, timeZone);
+  const today = useFarmDateKey(timeZone);
   const isHarvested = (pond.totalHarvestedPopulation || 0) >= (pond.initialPopulation * 0.9);
-    const today = new Date().toISOString().split('T')[0];
     const todaySampling = pond.samplings?.find((s: any) => s.date === today);
     const wqPosted = !!(todaySampling?.phMorning || todaySampling?.phEvening || todaySampling?.doMorning || todaySampling?.doEvening);
     const feedPosted = !!(todaySampling?.feed || todaySampling?.feedData?.totalDailyFeed);
@@ -516,7 +517,7 @@ function BuyerDashboard({ t, user }: any) {
 
 export default function DashboardPage() {
   const { t } = useLanguage();
-  const { user, loading: authLoading } = useAuth();
+  const { user, company, loading: authLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
@@ -531,12 +532,12 @@ export default function DashboardPage() {
     activePonds.forEach(pond => {
       const samplings = pond.samplings || [];
       const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      const m = calculateMetrics(pond);
+      const m = calculateMetrics(pond, company?.timeZone);
       currentBiomass += m.biomass; currentSR += m.sr; currentPop += m.population;
 
       if (sorted.length >= 2) {
         const previousSamplings = sorted.slice(0, -1);
-        const previousMetrics = calculatePondMetricsWithHarvest({ ...pond, samplings: previousSamplings });
+        const previousMetrics = calculatePondMetricsWithHarvest({ ...pond, samplings: previousSamplings }, company?.timeZone);
         prevBiomass += previousMetrics.currentBiomass;
         prevSR += previousMetrics.adjustedSR;
         prevPop += previousMetrics.currentPopulation;
@@ -554,7 +555,7 @@ export default function DashboardPage() {
     const popTrend = prevPop > 0 ? ((currentPop - prevPop) / prevPop) * 100 : 0;
 
     return { biomass: currentBiomass, population: currentPop, sr: avgSR, activeCount, biomassTrend, srTrend, popTrend };
-  }, [activePonds]);
+  }, [activePonds, company?.timeZone]);
 
   const averageActivePondMetric = (selector: (pond: Pond) => number | null | undefined) => {
     const values = activePonds
@@ -649,9 +650,9 @@ export default function DashboardPage() {
               gap: viewMode === 'grid' ? '32px' : '0' 
             }}>
               {activePonds.map((pond, idx) => {
-                const m = calculateMetrics(pond);
+                const m = calculateMetrics(pond, company?.timeZone);
                 return viewMode === 'grid' ? (
-                  <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} t={t} />
+                  <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} t={t} timeZone={company?.timeZone} />
                 ) : (
                   <Link key={pond.id} href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
                     <div style={{ 
@@ -735,7 +736,7 @@ export default function DashboardPage() {
                   label: 'pH Level', 
                   value: (() => {
                     const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p);
+                    const m = calculateMetrics(p, company?.timeZone);
                     return m?.ph;
                     });
                     return average === null ? '--' : average.toFixed(1);
@@ -746,7 +747,7 @@ export default function DashboardPage() {
                   label: 'Transparency', 
                   value: (() => {
                     const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p);
+                    const m = calculateMetrics(p, company?.timeZone);
                     return m?.transparency;
                     });
                     return average === null ? '--' : `${average.toFixed(0)}cm`;
@@ -757,7 +758,7 @@ export default function DashboardPage() {
                   label: 'Temperature', 
                   value: (() => {
                     const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p);
+                    const m = calculateMetrics(p, company?.timeZone);
                     return m?.temperature;
                     });
                     return average === null ? '--' : `${average.toFixed(1)}°C`;
@@ -768,7 +769,7 @@ export default function DashboardPage() {
                   label: 'Daily Feed Usage', 
                   value: (() => {
                     const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p);
+                    const m = calculateMetrics(p, company?.timeZone);
                     return m?.dailyFeed;
                     });
                     return average === null ? '--' : `${average.toFixed(0)}kg`;

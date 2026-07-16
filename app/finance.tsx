@@ -15,6 +15,7 @@ import financeService, { Expense, ExpenseInput } from './services/financeService
 import revenueService, { Revenue, RevenueInput } from './services/revenueService';
 import { getActiveFarmCycle, usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
+import { getFarmDateKey, getFarmPeriodDateKeys, isDateKeyInRange } from '../shared/farmDate';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
@@ -82,7 +83,7 @@ export default function FinancePage() {
   const [syncedInventoryIds, setSyncedInventoryIds] = useState<Set<string>>(new Set());
 
   const [formData, setFormData] = useState<FormData>({
-    date: new Date().toISOString().split('T')[0], 
+    date: getFarmDateKey(new Date(), company?.timeZone),
     category: CATEGORIES[0], 
     item: '', 
     amount: '',
@@ -116,9 +117,9 @@ export default function FinancePage() {
       return;
     }
     loadData();
-    feedAdditiveStore.setCurrentCompanyId(company.id);
-    feedAdditiveStore.initializeForCompany(company.id);
-  }, [company?.id]);
+    feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
+    feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+  }, [company?.id, company?.timeZone]);
 
   useEffect(() => {
     if (!company?.id || !user?.uid || loading) return;
@@ -196,9 +197,9 @@ export default function FinancePage() {
       
       if (totalCost > 0) {
         const expenseData: ExpenseInput = {
-          date: stock.date instanceof Date ? stock.date.toISOString().split('T')[0] : 
+          date: stock.date instanceof Date ? getFarmDateKey(stock.date, company?.timeZone) :
                 typeof stock.date === 'string' ? stock.date.split('T')[0] : 
-                new Date().toISOString().split('T')[0],
+                getFarmDateKey(new Date(), company?.timeZone),
           category: stock.category,
           item: `${stock.itemName} - ${stock.quantity} ${stock.unit || 'kg'}${stock.batch ? ` (${t.finance?.batch || 'Batch'}: ${stock.batch})` : ''}`,
           amount: totalCost,
@@ -419,7 +420,7 @@ export default function FinancePage() {
 
   const resetForm = () => {
     setFormData({
-      date: new Date().toISOString().split('T')[0], 
+      date: getFarmDateKey(new Date(), company?.timeZone),
       category: formType === 'expense' ? CATEGORIES[0] : REVENUE_CATEGORIES[0],
       item: '', amount: '', paymentType: TRANSLATED_PAYMENT_TYPES[0], reference: '', linkedInventory: '', notes: '',
     });
@@ -433,20 +434,18 @@ export default function FinancePage() {
   };
 
   const getFilteredData = <T extends { date: string; category?: string; cycleId?: string }>(data: T[], useCategory = true) => {
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const period = selectedPeriod === 'Today'
+      ? 'today'
+      : selectedPeriod === 'This Week'
+        ? 'week'
+        : selectedPeriod === 'This Month'
+          ? 'month'
+          : 'all';
+    const { startDateKey, endDateKey } = getFarmPeriodDateKeys(period, new Date(), company?.timeZone);
     
     let filtered = getCycleScopedData(data).filter(item => {
-      const itemDate = new Date(item.date);
       if (selectedPeriod === 'All Time') return true;
-      if (selectedPeriod === 'Today') return itemDate >= today;
-      if (selectedPeriod === 'This Week') {
-        const weekAgo = new Date(today);
-        weekAgo.setDate(weekAgo.getDate() - 7);
-        return itemDate >= weekAgo;
-      }
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      return itemDate >= monthStart;
+      return isDateKeyInRange(item.date, startDateKey, endDateKey, company?.timeZone);
     });
 
     if (useCategory && filterCategory !== (t.finance?.all || 'All')) {
