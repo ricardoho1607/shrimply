@@ -460,6 +460,10 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error(DAILY_FEED_ERROR_CODES.companyUnavailable);
 
+    if (nextAllocations.length === 0) {
+      throw new Error(DAILY_FEED_ERROR_CODES.feedSelectionRequired);
+    }
+
     if (nextAllocations.some((allocation) => (
       !allocation.inventoryFeedId ||
       !Number.isFinite(allocation.quantityKg) ||

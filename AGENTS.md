@@ -253,3 +253,18 @@ Final response should include:
 3. What changed
 4. Verification run
 5. Remaining risk or manual testing required
+
+## 12. SHIPALL Release Shortcut
+
+When the user says `SHIPALL` (case-insensitive), treat it as explicit authorization to complete this production release workflow without asking for separate confirmation:
+
+1. Run the Shrimply release gate and the checks relevant to the current scoped changes.
+2. Commit only the current task-related changes with an appropriate message and push the current branch to GitHub.
+3. Deploy the web app to Vercel production and verify the production deployment.
+4. Publish an Android Expo/EAS OTA update to the production channel and verify that the channel points to the new update.
+5. Report the Git commit, branch, Vercel production URL, and Expo update URL.
+
+Safety rules:
+- Stop before production deployment if a required release check fails, and report the failure.
+- Preserve unrelated user changes and do not include them in the release commit.
+- `SHIPALL` does not authorize Firebase deployment, Firestore rule changes, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.

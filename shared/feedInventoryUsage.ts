@@ -2,6 +2,7 @@ export const DAILY_FEED_USAGE_SOURCE = 'daily_feed_record' as const;
 
 export const DAILY_FEED_ERROR_CODES = {
   companyUnavailable: 'DAILY_FEED_COMPANY_UNAVAILABLE',
+  feedSelectionRequired: 'DAILY_FEED_SELECTION_REQUIRED',
   invalidAmount: 'DAILY_FEED_INVALID_AMOUNT',
   invalidAllocation: 'DAILY_FEED_INVALID_ALLOCATION',
   inventoryNotFound: 'DAILY_FEED_INVENTORY_NOT_FOUND',

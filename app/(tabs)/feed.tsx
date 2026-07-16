@@ -22,10 +22,6 @@ import {
   sumFeedAllocations,
 } from '../../shared/feedInventoryUsage';
 
-const initialValues = {
-  totalDailyFeed: "",
-};
-
 interface FeedAllocationInput {
   inventoryFeedId: string;
   quantityKg: string;
@@ -62,7 +58,6 @@ export default function FeedManagementScreen() {
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
-  const [values, setValues] = useState(initialValues);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -127,6 +122,18 @@ export default function FeedManagementScreen() {
       inventoryFeedId: allocation.inventoryFeedId,
       quantityKg: Number(allocation.quantityKg),
     }));
+    if (allocationInputs.length === 0) {
+      Alert.alert(t.feed.inventoryRequired, inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    if (allocationInputs.some((allocation) => !inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId))) {
+      Alert.alert(t.messages?.error || 'Error', t.feed.inventoryNotFound);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     if (allocationInputs.some((allocation) => !Number.isFinite(allocation.quantityKg) || allocation.quantityKg <= 0)) {
       Alert.alert(t.messages?.error || 'Error', t.feed.invalidAllocation);
       submitLockRef.current = false;
@@ -135,9 +142,7 @@ export default function FeedManagementScreen() {
     }
     const parsedAllocations = normalizeFeedAllocations({ feedAllocations: allocationInputs });
 
-    const totalDailyFeed = parsedAllocations.length > 0
-      ? sumFeedAllocations(parsedAllocations)
-      : parseFloat(values.totalDailyFeed);
+    const totalDailyFeed = sumFeedAllocations(parsedAllocations);
     if (!Number.isFinite(totalDailyFeed) || totalDailyFeed <= 0) {
       Alert.alert(t.messages?.error || 'Error', t.feed.invalidAmount);
       submitLockRef.current = false;
@@ -163,7 +168,6 @@ export default function FeedManagementScreen() {
       );
 
       addFeedData(pond.id, feedData);
-      setValues(initialValues);
       setSelectedPond(null);
       setFeedAllocations([]);
       setIsModalVisible(false);
@@ -171,6 +175,7 @@ export default function FeedManagementScreen() {
       console.error('Failed to save feed data:', error);
       const errorMessages: Record<string, string> = {
         [DAILY_FEED_ERROR_CODES.companyUnavailable]: t.feed.companyUnavailable,
+        [DAILY_FEED_ERROR_CODES.feedSelectionRequired]: t.feed.selectFeedFirst,
         [DAILY_FEED_ERROR_CODES.invalidAmount]: t.feed.invalidAmount,
         [DAILY_FEED_ERROR_CODES.invalidAllocation]: t.feed.invalidAllocation,
         [DAILY_FEED_ERROR_CODES.inventoryNotFound]: t.feed.inventoryNotFound,
@@ -189,19 +194,16 @@ export default function FeedManagementScreen() {
     const todayRecord = pond ? getTodayFeedRecord(pond) : null;
     
     if (todayRecord?.feedData) {
-      setValues({ ...initialValues, ...todayRecord.feedData });
       setFeedAllocations(normalizeFeedAllocations(todayRecord.feedData).map((allocation) => ({
         inventoryFeedId: allocation.inventoryFeedId,
         quantityKg: String(allocation.quantityKg),
       })));
     } else {
-      setValues(initialValues);
       setFeedAllocations([]);
     }
   };
 
   const closeModal = () => {
-    setValues(initialValues);
     setSelectedPond(null);
     setFeedAllocations([]);
     submitLockRef.current = false;
@@ -297,12 +299,23 @@ export default function FeedManagementScreen() {
                 <View style={styles.inputContainer}>
                   <Text style={styles.inputLabel}>{t.feed.feedMix}</Text>
                   <Text style={styles.inputHint}>{t.feed.feedMixHint}</Text>
+                  {feedAllocations.length === 0 && (
+                    <View style={styles.feedWarning}>
+                      <Ionicons name="warning-outline" size={20} color="#b45309" />
+                      <View style={styles.feedWarningTextContainer}>
+                        <Text style={styles.feedWarningTitle}>{t.feed.inventoryRequired}</Text>
+                        <Text style={styles.feedWarningText}>
+                          {inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
                   {feedAllocations.map((allocation) => {
                     const feed = inventoryFeeds.find((item) => item.id === allocation.inventoryFeedId);
                     return (
                       <View key={allocation.inventoryFeedId} style={styles.allocationRow}>
                         <View style={styles.allocationNameContainer}>
-                          <Text style={styles.allocationName} numberOfLines={1}>{feed?.feedName || allocation.inventoryFeedId}</Text>
+                          <Text style={styles.allocationName} numberOfLines={1}>{feed?.feedName || t.feed.feedUnavailable}</Text>
                           <Text style={styles.allocationStock}>{feed?.totalStock ?? 0} {feed?.unit || 'kg'}</Text>
                         </View>
                         <TextInput
@@ -344,19 +357,16 @@ export default function FeedManagementScreen() {
                       </ScrollView>
                     </>
                   )}
-                  {inventoryFeeds.length === 0 && <Text style={styles.inputHint}>{t.feed.noFeedsAvailable}</Text>}
                 </View>
 
-                <Input label={feedAllocations.length > 0 ? t.feed.calculatedTotal : t.feed.totalDailyFeed}
-                  value={feedAllocations.length > 0
-                    ? sumFeedAllocations(feedAllocations.map((allocation) => ({
-                        inventoryFeedId: allocation.inventoryFeedId,
-                        quantityKg: Number(allocation.quantityKg) || 0,
-                      }))).toFixed(2)
-                    : values.totalDailyFeed}
-                  onChange={(text: string) => setValues({ totalDailyFeed: text })}
+                <Input label={t.feed.calculatedTotal}
+                  value={sumFeedAllocations(feedAllocations.map((allocation) => ({
+                    inventoryFeedId: allocation.inventoryFeedId,
+                    quantityKg: Number(allocation.quantityKg) || 0,
+                  }))).toFixed(2)}
+                  onChange={() => undefined}
                   placeholder={t.feed.feedPlaceholder}
-                  disabled={feedAllocations.length > 0} />
+                  disabled />
 
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
@@ -404,6 +414,10 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   inputDisabled: { backgroundColor: '#edf3f8', color: '#315f57' },
   inputHint: { color: '#6b8aa0', fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  feedWarning: { flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f6c453', backgroundColor: '#fff8e6' },
+  feedWarningTextContainer: { flex: 1 },
+  feedWarningTitle: { color: '#92400e', fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  feedWarningText: { color: '#92400e', fontSize: 12, lineHeight: 17 },
   allocationRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#e8f2f9' },
   allocationNameContainer: { flex: 1, minWidth: 0 },
   allocationName: { color: '#0d2137', fontSize: 14, fontWeight: '600' },

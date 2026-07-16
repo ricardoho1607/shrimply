@@ -12,7 +12,8 @@ import {
   Waves,
   ChevronRight,
   ArrowRight,
-  ClipboardList
+  ClipboardList,
+  TriangleAlert
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -28,6 +29,7 @@ import {
 } from 'firebase/firestore';
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   DAILY_FEED_USAGE_SOURCE,
   buildDailyFeedRecordId,
@@ -126,6 +128,7 @@ const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'sou
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function FeedRecordsPage() {
+  const { t } = useLanguage();
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<{ uid: string; role?: string } | null>(null);
@@ -256,18 +259,24 @@ export default function FeedRecordsPage() {
       inventoryFeedId: allocation.inventoryFeedId,
       quantityKg: Number(allocation.quantityKg),
     }));
+    if (allocationInputs.length === 0) {
+      alert(inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst);
+      return;
+    }
+    if (allocationInputs.some((allocation) => !inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId))) {
+      alert(t.feed.inventoryNotFound);
+      return;
+    }
     if (allocationInputs.some((allocation) => (
       !allocation.inventoryFeedId || !Number.isFinite(allocation.quantityKg) || allocation.quantityKg <= 0
     ))) {
-      alert('Enter an amount greater than 0 for every selected feed.');
+      alert(t.feed.invalidAllocation);
       return;
     }
     const requestedAllocations = normalizeFeedAllocations({ feedAllocations: allocationInputs });
-    const feedAmount = requestedAllocations.length > 0
-      ? sumFeedAllocations(requestedAllocations)
-      : parseFloat(formData.totalDailyFeed);
+    const feedAmount = sumFeedAllocations(requestedAllocations);
     if (!Number.isFinite(feedAmount) || feedAmount <= 0) {
-      alert('Daily feed must be greater than 0.');
+      alert(t.feed.invalidAmount);
       return;
     }
 
@@ -630,23 +639,18 @@ export default function FeedRecordsPage() {
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }} />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{formData.feedAllocations.length > 0 ? 'Calculated Daily Total (kg)' : 'Daily Total (kg)'}</label>
-                  <input
-                    required={formData.feedAllocations.length === 0}
-                    readOnly={formData.feedAllocations.length > 0}
-                    min="0.1"
-                    type="number"
-                    step="0.1"
-                    value={formData.feedAllocations.length > 0 ? formAllocationTotal.toFixed(2) : formData.totalDailyFeed}
-                    onChange={e => setFormData({...formData, totalDailyFeed: e.target.value})}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: formData.feedAllocations.length > 0 ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 800, color: 'var(--primary)' }}
-                  />
-                </div>
-
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Inventory Feed Mix (Optional)</label>
-                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>Add one or more feeds. The daily total is calculated automatically.</p>
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.feed.feedMix}</label>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{t.feed.feedMixHint}</p>
+                  {formData.feedAllocations.length === 0 && (
+                    <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #f6c453', background: '#fff8e6', color: '#92400e' }}>
+                      <TriangleAlert size={20} style={{ flexShrink: 0 }} />
+                      <div>
+                        <strong style={{ display: 'block', fontSize: '13px', marginBottom: '2px' }}>{t.feed.inventoryRequired}</strong>
+                        <span style={{ fontSize: '13px', fontWeight: 600 }}>{inventoryFeeds.length === 0 ? t.feed.noFeedsAvailable : t.feed.selectFeedFirst}</span>
+                      </div>
+                    </div>
+                  )}
                   {formData.feedAllocations.map((allocation, index) => (
                     <div key={allocation.inventoryFeedId} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 140px 40px', gap: '10px', alignItems: 'center' }}>
                       <select
@@ -660,7 +664,7 @@ export default function FeedRecordsPage() {
                         style={{ minWidth: 0, padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
                       >
                         {!inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId) && (
-                          <option value={allocation.inventoryFeedId}>Unavailable inventory feed</option>
+                          <option value={allocation.inventoryFeedId}>{t.feed.feedUnavailable}</option>
                         )}
                         {inventoryFeeds
                           .filter((feed) => feed.id === allocation.inventoryFeedId || !formData.feedAllocations.some((item) => item.inventoryFeedId === feed.id))
@@ -673,8 +677,8 @@ export default function FeedRecordsPage() {
                         min="0.1"
                         type="number"
                         step="0.1"
-                        aria-label="Feed amount in kilograms"
-                        placeholder="Amount (kg)"
+                        aria-label={t.feed.feedAmountKg}
+                        placeholder={t.feed.feedAmountKg}
                         value={allocation.quantityKg}
                         onChange={e => setFormData((current) => ({
                           ...current,
@@ -686,7 +690,7 @@ export default function FeedRecordsPage() {
                       />
                       <button
                         type="button"
-                        aria-label="Remove feed"
+                        aria-label={t.feed.removeFeed}
                         onClick={() => setFormData((current) => ({
                           ...current,
                           feedAllocations: current.feedAllocations.filter((_, itemIndex) => itemIndex !== index),
@@ -710,8 +714,19 @@ export default function FeedRecordsPage() {
                     }}
                     style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 800, cursor: hasUnusedInventoryFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedInventoryFeed ? 1 : 0.5 }}
                   >
-                    + Add Feed Type
+                    + {t.feed.addFeedType}
                   </button>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.feed.calculatedTotal}</label>
+                  <input
+                    readOnly
+                    type="number"
+                    step="0.1"
+                    value={formAllocationTotal.toFixed(2)}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: '#edf3f8', fontWeight: 800, color: 'var(--primary)' }}
+                  />
                 </div>
 
               </div>
