@@ -94,8 +94,8 @@ export default function FeedManagementScreen() {
     return activePonds.map(pond => {
       const todayRecord = getTodayFeedRecord(pond);
       return todayRecord?.feedData 
-        ? { ...todayRecord.feedData, pondName: pond.pondName, date: today }
-        : { pondName: pond.pondName, date: today };
+        ? { ...todayRecord.feedData, pondId: pond.id, pondName: pond.pondName, date: today }
+        : { pondId: pond.id, pondName: pond.pondName, date: today };
     });
   }, [activePonds]);
 
@@ -235,9 +235,8 @@ export default function FeedManagementScreen() {
           renderItem={({ item: rec }) => (
               <TouchableOpacity style={styles.recordCard}
                 onPress={() => {
-                  const pond = ponds.find(p => p.pondName === rec.pondName);
-                  if (pond) router.push({ pathname: '/feed-history', 
-                    params: { pondId: pond.id, pondName: rec.pondName }});
+                  router.push({ pathname: '/feed-history',
+                    params: { pondId: rec.pondId, pondName: rec.pondName }});
                 }}>
                 <View style={styles.cardHeader}>
                   <Text style={styles.pondName}>{rec.pondName}</Text>

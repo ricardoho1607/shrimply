@@ -12,7 +12,8 @@ export default function FeedHistoryScreen() {
   const { ponds } = usePondStore();
   const { t } = useLanguage();
 
-  const pond: Pond | undefined = ponds.find((p: Pond) => p.id === pondId);
+  const resolvedPondId = Array.isArray(pondId) ? pondId[0] : pondId;
+  const pond: Pond | undefined = ponds.find((p: Pond) => p.id === resolvedPondId);
   const displayPondName = Array.isArray(pondName) ? pondName[0] : pondName;
 
   const feedHistory = useMemo<FeedHistoryRecord[]>(() => (pond?.samplings || [])

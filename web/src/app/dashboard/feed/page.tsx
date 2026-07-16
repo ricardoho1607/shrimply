@@ -132,7 +132,7 @@ export default function FeedRecordsPage() {
   const [companyId, setCompanyId] = useState<string | null>(null);
 
   const [isModalOpen, setModalOpen] = useState(false);
-  const [selectedPondForHistory, setSelectedPondForHistory] = useState<Pond | null>(null);
+  const [selectedPondIdForHistory, setSelectedPondIdForHistory] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
 
@@ -421,6 +421,11 @@ export default function FeedRecordsPage() {
     return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [ponds, searchTerm]);
 
+  const selectedPondForHistory = useMemo(
+    () => ponds.find((pond) => pond.id === selectedPondIdForHistory) || null,
+    [ponds, selectedPondIdForHistory],
+  );
+
   const selectedFeedHistory = useMemo<FeedHistoryEntry[]>(() => (
     selectedPondForHistory?.samplings || []
   )
@@ -500,7 +505,7 @@ export default function FeedRecordsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setSelectedPondForHistory(pond)}
+                    onClick={() => setSelectedPondIdForHistory(pond.id)}
                     style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', color: 'var(--primary)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                     onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
                     onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
@@ -551,7 +556,7 @@ export default function FeedRecordsPage() {
                   <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>Feed history</p>
                 </div>
               </div>
-              <button aria-label="Close feed history" onClick={() => setSelectedPondForHistory(null)} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button aria-label="Close feed history" onClick={() => setSelectedPondIdForHistory(null)} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={20} />
               </button>
             </div>
