@@ -263,9 +263,9 @@ Final response should include:
 - Skip introductions, repeated context, detailed reasoning, and optional suggestions unless requested.
 - Ask questions only when genuinely blocked.
 
-## 12. SHIPALL Release Shortcut
+## 12. SHIPALL / PUSHALL Release Shortcut
 
-When the user says `SHIPALL` (case-insensitive), treat it as explicit authorization to complete this production release workflow without asking for separate confirmation:
+When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to complete this production release workflow without asking for separate confirmation:
 
 1. Run the Shrimply release gate and the checks relevant to the current scoped changes.
 2. Commit only the current task-related changes with an appropriate message and push the current branch to GitHub.
