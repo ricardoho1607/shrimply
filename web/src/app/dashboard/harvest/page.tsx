@@ -14,10 +14,21 @@ import {
   History
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, addDoc, serverTimestamp, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, serverTimestamp, runTransaction } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import {
+  applyHarvestImpactToPond,
+  calculateHarvestRemoval,
+  getNextPartialHarvestNumber,
+  reverseHarvestImpactOnPond,
+  withHarvestReference,
+  type HarvestType,
+} from '../../../../../shared/harvestCalculations';
+import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -26,6 +37,11 @@ interface HarvestPond {
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
+  harvestType?: HarvestType;
+  partialHarvestNumber?: number;
+  harvestReferenceSamplingId?: string | null;
+  harvestReferenceSamplingDate?: string | null;
+  harvestReferenceMbw?: number | string | null;
   biomass: string;
   size: string;
   price: string;
@@ -51,6 +67,13 @@ interface Pond {
   samplings?: { date?: string; mbw?: number; abw?: number; mortality?: number }[];
   totalHarvestedBiomass?: number;
   totalHarvestedPopulation?: number;
+  partialHarvestCount?: number;
+  postHarvestBaselineDate?: string | null;
+  postHarvestRemainingBiomass?: number | null;
+  postHarvestRemainingPopulation?: number | null;
+  postHarvestReferenceSamplingId?: string | null;
+  postHarvestReferenceSamplingDate?: string | null;
+  postHarvestReferenceMbw?: number | null;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
@@ -63,42 +86,12 @@ interface DashboardUser {
   companyId?: string;
 }
 
-const getHarvestRemoval = (harvestPond: Pick<HarvestPond, 'biomass' | 'size' | 'subBiomass' | 'subSize'>) => {
-  const mainBiomass = parseFloat(harvestPond.biomass) || 0;
-  const subBiomass = parseFloat(harvestPond.subBiomass) || 0;
-  const mainSize = parseFloat(harvestPond.size) || 0;
-  const subSize = parseFloat(harvestPond.subSize) || 0;
-
-  return {
-    biomass: mainBiomass + subBiomass,
-    population: (mainSize > 0 ? mainBiomass * mainSize : 0) + (subSize > 0 ? subBiomass * subSize : 0),
-  };
-};
-
-const getEstimatedCurrentBiomass = (pond: Pond) => {
-  const sortedSamplings = [...(pond.samplings || [])].sort((a, b) => {
-    const aTime = a.date ? new Date(a.date).getTime() : 0;
-    const bTime = b.date ? new Date(b.date).getTime() : 0;
-    return bTime - aTime;
-  });
-  const latestWeight = sortedSamplings
-    .map((sampling) => Number(sampling.mbw || sampling.abw || 0))
-    .find((weight) => Number.isFinite(weight) && weight > 0);
-  const totalMortality = sortedSamplings.reduce((sum, sampling) => {
-    const mortality = Number(sampling.mortality || 0);
-    return sum + (Number.isFinite(mortality) && mortality > 0 ? mortality : 0);
-  }, 0);
-  const initialPopulation = pond.initialPopulation || 0;
-  const remainingPopulation = Math.max(0, initialPopulation - totalMortality - (pond.totalHarvestedPopulation || 0));
-  const weight = latestWeight || pond.initialWeight || 0.5;
-
-  return Math.max(0, (remainingPopulation * weight) / 1000);
-};
-
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 
 export default function HarvestPage() {
   const { company } = useAuth();
+  const { t } = useLanguage();
+  const { formatCurrency, currencyConfig } = useCurrency();
   const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
@@ -114,6 +107,7 @@ export default function HarvestPage() {
   const [formData, setFormData] = useState({
     date: today,
     pondId: '',
+    harvestType: 'partial' as HarvestType,
     biomass: '',
     size: '',
     price: '',
@@ -143,6 +137,13 @@ export default function HarvestPage() {
                   samplings: Array.isArray(doc.data().samplings) ? doc.data().samplings : [],
                   totalHarvestedBiomass: doc.data().totalHarvestedBiomass || 0,
                   totalHarvestedPopulation: doc.data().totalHarvestedPopulation || 0,
+                  partialHarvestCount: doc.data().partialHarvestCount || 0,
+                  postHarvestBaselineDate: doc.data().postHarvestBaselineDate ?? null,
+                  postHarvestRemainingBiomass: doc.data().postHarvestRemainingBiomass ?? null,
+                  postHarvestRemainingPopulation: doc.data().postHarvestRemainingPopulation ?? null,
+                  postHarvestReferenceSamplingId: doc.data().postHarvestReferenceSamplingId ?? null,
+                  postHarvestReferenceSamplingDate: doc.data().postHarvestReferenceSamplingDate ?? null,
+                  postHarvestReferenceMbw: doc.data().postHarvestReferenceMbw ?? null,
                   cycleId: doc.data().cycleId,
                   cycleName: doc.data().cycleName,
                   pondCycleId: doc.data().pondCycleId || doc.id,
@@ -168,14 +169,14 @@ export default function HarvestPage() {
 
   const handleAddHarvest = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId || !formData.pondId) return;
+    if (!companyId || !formData.pondId || !user) return;
     if (!canEditHarvest) return;
 
     try {
       const selectedPond = ponds.find(p => p.id === formData.pondId);
       if (!selectedPond) return;
-      const removal = getHarvestRemoval(formData);
-      const estimatedBiomass = getEstimatedCurrentBiomass(selectedPond);
+      const removal = calculateHarvestRemoval(formData);
+      const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass;
 
       if (
         estimatedBiomass > 0 &&
@@ -187,7 +188,9 @@ export default function HarvestPage() {
         return;
       }
 
-      const newRecord = {
+      const harvestRef = doc(collection(db, 'companies', companyId, 'harvestRecords'));
+      const newRecord: HarvestRecord = {
+        id: harvestRef.id,
         date: formData.date,
         cycleId: selectedPond.cycleId,
         cycleName: selectedPond.cycleName,
@@ -197,6 +200,7 @@ export default function HarvestPage() {
           cycleId: selectedPond.cycleId,
           cycleName: selectedPond.cycleName,
           pondCycleId: selectedPond.pondCycleId || selectedPond.id,
+          harvestType: formData.harvestType,
           biomass: formData.biomass,
           size: formData.size,
           price: formData.price,
@@ -204,26 +208,51 @@ export default function HarvestPage() {
           subSize: formData.subSize,
           subPrice: formData.subPrice
         }],
-        createdAt: serverTimestamp(),
-        createdBy: user.uid
       };
 
-      await addDoc(collection(db, 'companies', companyId, 'harvestRecords'), newRecord);
+      await runTransaction(db, async (transaction) => {
+        const pondRef = doc(db, 'companies', companyId, 'ponds', selectedPond.id);
+        const pondSnapshot = await transaction.get(pondRef);
+        if (!pondSnapshot.exists()) throw new Error('Pond was not found');
 
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', selectedPond.id), {
-        totalHarvestedBiomass: (selectedPond.totalHarvestedBiomass || 0) + removal.biomass,
-        totalHarvestedPopulation: Math.min(
-          selectedPond.initialPopulation || Number.MAX_SAFE_INTEGER,
-          (selectedPond.totalHarvestedPopulation || 0) + removal.population
-        ),
-        updatedAt: serverTimestamp(),
-        updatedBy: user.uid
+        const serverPond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+        const partialHarvestNumber = formData.harvestType === 'partial'
+          ? getNextPartialHarvestNumber(serverPond)
+          : undefined;
+        const canonicalHarvestPond = withHarvestReference(serverPond, { ...newRecord.ponds[0], partialHarvestNumber });
+        const updatedPond = applyHarvestImpactToPond(
+          serverPond,
+          canonicalHarvestPond,
+          newRecord.date,
+          partialHarvestNumber,
+        );
+
+        transaction.update(pondRef, {
+          totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+          totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+          partialHarvestCount: updatedPond.partialHarvestCount || 0,
+          postHarvestBaselineDate: updatedPond.postHarvestBaselineDate || null,
+          postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass ?? null,
+          postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation ?? null,
+          postHarvestReferenceSamplingId: updatedPond.postHarvestReferenceSamplingId || null,
+          postHarvestReferenceSamplingDate: updatedPond.postHarvestReferenceSamplingDate || null,
+          postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw || 0,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        });
+        transaction.set(harvestRef, {
+          ...newRecord,
+          ponds: [canonicalHarvestPond],
+          createdAt: serverTimestamp(),
+          createdBy: user.uid,
+        });
       });
 
       setModalOpen(false);
       setFormData({
         date: today,
         pondId: '',
+        harvestType: 'partial',
         biomass: '',
         size: '',
         price: '',
@@ -238,27 +267,35 @@ export default function HarvestPage() {
   };
 
   const handleDeleteRecord = async (recordId: string) => {
-    if (!companyId || !window.confirm('Delete this harvest record?')) return;
+    if (!companyId || !user || !window.confirm('Delete this harvest record?')) return;
     if (!canEditHarvest) return;
     try {
-      const record = harvestRecords.find((item) => item.id === recordId);
-      if (record) {
-        await Promise.all(record.ponds.map(async (harvestPond) => {
-          const pondRef = doc(db, 'companies', companyId, 'ponds', harvestPond.pondId);
-          const pondSnap = await getDoc(pondRef);
-          if (!pondSnap.exists()) return;
-          const pondData = pondSnap.data();
-          const removal = getHarvestRemoval(harvestPond);
+      const harvestRef = doc(db, 'companies', companyId, 'harvestRecords', recordId);
+      await runTransaction(db, async (transaction) => {
+        const harvestSnapshot = await transaction.get(harvestRef);
+        if (!harvestSnapshot.exists()) return;
+        const record = { id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord;
+        const uniquePondIds = Array.from(new Set(record.ponds.map((pond) => pond.pondId)));
+        const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', companyId, 'ponds', pondId));
+        const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
+        const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
 
-          await updateDoc(pondRef, {
-            totalHarvestedBiomass: Math.max(0, (pondData.totalHarvestedBiomass || 0) - removal.biomass),
-            totalHarvestedPopulation: Math.max(0, (pondData.totalHarvestedPopulation || 0) - removal.population),
+        record.ponds.forEach((harvestPond) => {
+          const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
+          if (!pondSnapshot?.exists()) return;
+          const pond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+          const updatedPond = reverseHarvestImpactOnPond(pond, harvestPond);
+          transaction.update(pondSnapshot.ref, {
+            totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+            totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+            postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass ?? null,
+            postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation ?? null,
             updatedAt: serverTimestamp(),
-            updatedBy: user?.uid || ''
+            updatedBy: user.uid,
           });
-        }));
-      }
-      await deleteDoc(doc(db, 'companies', companyId, 'harvestRecords', recordId));
+        });
+        transaction.delete(harvestRef);
+      });
     } catch (error) {
       console.error('Error deleting record:', error);
     }
@@ -299,6 +336,14 @@ export default function HarvestPage() {
     , 0);
   }, [visibleHarvestRecords]);
 
+  const getHarvestTypeLabel = (pond: HarvestPond) => {
+    if (pond.harvestType === 'partial') {
+      return t.harvest.partialHarvestNumber.replace('{{number}}', String(pond.partialHarvestNumber || 1));
+    }
+    if (pond.harvestType === 'final') return t.harvest.finalHarvest;
+    return t.harvest.harvest;
+  };
+
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
@@ -329,14 +374,12 @@ export default function HarvestPage() {
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#27ae60', marginBottom: '10px' }}><DollarSign size={22} /></div>
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Estimated Revenue</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>IDR {totalRevenue.toLocaleString()}</div>
+          <div style={{ fontSize: '21px', fontWeight: 800 }}>{formatCurrency(totalRevenue)}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#0d2137', marginBottom: '10px' }}><Scale size={22} /></div>
           <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Harvested Biomass</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>
-            {totalBiomass.toLocaleString()} <span style={{ fontSize: '13px' }}>kg</span>
-          </div>
+          <div style={{ fontSize: '21px', fontWeight: 800 }}>{totalBiomass.toLocaleString()}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#3282B8', marginBottom: '10px' }}><History size={22} /></div>
@@ -406,10 +449,13 @@ export default function HarvestPage() {
                   {record.ponds.map((p, idx) => (
                     <div key={idx} style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)' }}>
                       <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>{p.pondName}</div>
+                      <div style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 800, marginBottom: '10px' }}>
+                        {getHarvestTypeLabel(p)}
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Biomass</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700 }}>{parseFloat(p.biomass) + (parseFloat(p.subBiomass) || 0)} kg</span>
+                          <span style={{ fontSize: '13px', fontWeight: 700 }}>{parseFloat(p.biomass) + (parseFloat(p.subBiomass) || 0)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Avg. Size</span>
@@ -418,7 +464,7 @@ export default function HarvestPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Revenue</span>
                           <span style={{ fontSize: '13px', fontWeight: 700, color: '#27ae60' }}>
-                            IDR {((parseFloat(p.biomass) * parseFloat(p.price)) + (parseFloat(p.subBiomass) * parseFloat(p.subPrice))).toLocaleString()}
+                            {formatCurrency((parseFloat(p.biomass) * parseFloat(p.price)) + (parseFloat(p.subBiomass) * parseFloat(p.subPrice)))}
                           </span>
                         </div>
                       </div>
@@ -438,7 +484,7 @@ export default function HarvestPage() {
             <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontSize: '24px', fontWeight: 800 }}>Log Harvest</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>Record final production data and pricing.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
               <button onClick={() => setModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '50%', padding: '8px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -466,32 +512,62 @@ export default function HarvestPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvest.harvestType}</label>
+                  <div style={{ display: 'flex', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
+                    {(['partial', 'final'] as HarvestType[]).map((harvestType) => (
+                      <button
+                        key={harvestType}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, harvestType })}
+                        style={{
+                          flex: 1,
+                          padding: '9px 10px',
+                          border: 'none',
+                          borderRadius: '7px',
+                          background: formData.harvestType === harvestType ? '#0F4C75' : 'transparent',
+                          color: formData.harvestType === harvestType ? '#FFFFFF' : 'var(--text-muted)',
+                          fontSize: '12px',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {harvestType === 'partial' ? t.harvest.partialHarvest : t.harvest.finalHarvest}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>Avg. Size (pcs/kg)</label>
-                  <input required type="number" value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+                  <input required min="0.01" step="0.01" type="number" value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: 'span 2', padding: '24px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>Main Biomass (kg)</label>
-                      <input required type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required min="0.01" type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>Main Price (per kg)</label>
-                      <input required type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>Main Price ({currencyConfig.symbol}/kg)</label>
+                      <input required min="0.01" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
 
                   <div style={{ height: '1px', background: 'var(--border)' }} />
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Biomass (Optional)</label>
-                      <input type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Price (Optional)</label>
-                      <input type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Size (pcs/kg)</label>
+                      <input required={Boolean(formData.subBiomass || formData.subPrice)} min="0.01" step="0.01" type="number" value={formData.subSize} onChange={e => setFormData({...formData, subSize: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Price ({currencyConfig.symbol}/kg, Optional)</label>
+                      <input required={Boolean(formData.subBiomass || formData.subSize)} min="0.01" type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
                 </div>

@@ -128,7 +128,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.topSafeArea}>
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.push('/financial-reports')} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={24} color="#0d2137" />

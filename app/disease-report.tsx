@@ -642,7 +642,7 @@ export default function DiseaseReportScreen() {
 // --- Sub-components ---
 
 const Header = React.memo(({ title, onBack, onReport }: any) => (
-  <SafeAreaView style={styles.topSafeArea}>
+  <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
     <View style={styles.header}>
       <TouchableOpacity
         style={styles.backButton}

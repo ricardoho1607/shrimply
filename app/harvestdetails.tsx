@@ -76,10 +76,16 @@ export default function HarvestDetailsScreen() {
     const mainPrice = biomass * pricePerKg;
     const subPrice = subBiomass * subPricePerKg;
     const totalPondPrice = mainPrice + subPrice;
+    const harvestTypeLabel = pond.harvestType === 'partial'
+      ? t.harvest.partialHarvestNumber.replace('{{number}}', String(pond.partialHarvestNumber || 1))
+      : pond.harvestType === 'final'
+        ? t.harvest.finalHarvest
+        : t.harvest.harvest;
 
     return (
       <View key={index} style={styles.pondCard}>
         <Text style={styles.pondTitle}>{pond.pondName}</Text>
+        <Text style={styles.harvestTypeLabel}>{harvestTypeLabel}</Text>
 
         <View style={styles.detailsRow}>
           {renderDetailItem(t.harvest.size, size.toString())}
@@ -186,6 +192,7 @@ const styles = StyleSheet.create({
   emptySubtitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, lineHeight: Platform.OS === 'android' ? 20 : 22 },
   pondCard: { backgroundColor: '#FFFFFF', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   pondTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#315f57', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  harvestTypeLabel: { alignSelf: 'flex-start', color: '#315f57', backgroundColor: '#dce8f2', fontSize: 12, fontWeight: '700', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, marginTop: -4, marginBottom: 12 },
   detailsRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   detailItem: { flex: 1, backgroundColor: '#f4f8fc', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#e8f2f9' },
   detailLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '600', marginBottom: 2 },

@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -17,17 +18,17 @@ import { useLanguage } from '../context/LanguageContext';
 import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { financeService, type Expense } from './services/financeService';
 import { buildCycleReport, type CycleReport } from './services/cycleReportService';
+import { exportCycleReportPDF } from './services/cycleReportExportService';
 import { useAssetStore } from './store/assetStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { usePondStore } from './store/pondStore';
 
-type TabKey = 'overview' | 'ponds' | 'costs' | 'notes';
+type TabKey = 'overview' | 'ponds' | 'costs';
 
 const tabs: { key: TabKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: 'overview', label: 'Overview', icon: 'analytics-outline' },
   { key: 'ponds', label: 'Ponds', icon: 'water-outline' },
   { key: 'costs', label: 'Costs', icon: 'receipt-outline' },
-  { key: 'notes', label: 'Notes', icon: 'document-text-outline' },
 ];
 
 const toNumber = (value: number) => Number.isFinite(value) ? value : 0;
@@ -53,6 +54,7 @@ export default function CycleReportScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingFinance, setLoadingFinance] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const {
     cycles,
@@ -132,12 +134,6 @@ export default function CycleReportScreen() {
     overview: t.cycleReport.tabs.overview,
     ponds: t.cycleReport.tabs.ponds,
     costs: t.cycleReport.tabs.costs,
-    notes: t.cycleReport.tabs.notes,
-  };
-
-  const noteText = (note: CycleReport['notes'][number]) => {
-    const template = t.cycleReport.notes[note.key] || note.message;
-    return fillTemplate(template, { pondName: note.pondName || '' });
   };
 
   const statusText = (status: string) => {
@@ -145,6 +141,23 @@ export default function CycleReportScreen() {
     if (status === 'ended') return t.cycleReport.status.ended;
     if (status === 'active') return t.cycleReport.status.active;
     return status.toUpperCase();
+  };
+
+  const handleExportPdf = async () => {
+    if (!report || exportingPdf) return;
+    try {
+      setExportingPdf(true);
+      await exportCycleReportPDF({
+        report,
+        companyName: company?.companyName || 'Shrimply Farm',
+        formatCurrency,
+      });
+    } catch (error) {
+      console.error('Failed to export Cycle Report PDF:', error);
+      Alert.alert(t.cycleReport.pdfExportFailedTitle, t.cycleReport.pdfExportFailedBody);
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   const MetricCard = ({
@@ -192,8 +205,7 @@ export default function CycleReportScreen() {
           </View>
           <View style={styles.summaryStats}>
             <Text style={styles.summaryStat}>{fillTemplate(t.cycleReport.summary.pondsIncluded, { count: report.totals.pondCount })}</Text>
-            <Text style={styles.summaryStat}>{fillTemplate(t.cycleReport.summary.endedCount, { count: report.totals.endedPondCount })}</Text>
-            <Text style={styles.summaryStat}>{formatCompact(report.totals.totalArea, 0)} m2</Text>
+            <Text style={styles.summaryStat}>{t.cycleReport.metrics.totalArea}: {formatCompact(report.totals.totalArea, 0)} m²</Text>
           </View>
         </View>
 
@@ -204,50 +216,67 @@ export default function CycleReportScreen() {
           <MetricCard label={t.cycleReport.metrics.profit} value={formatCurrency(report.totals.grossProfit)} subtext={t.cycleReport.metrics.grossEstimate} tone={profitTone} />
         </View>
 
-        <Section title={t.cycleReport.sections.pondPerformance}>
-          {report.ponds.slice(0, 4).map((pond) => (
-            <View key={pond.id} style={styles.pondRow}>
-              <View style={styles.pondRowMain}>
-                <Text style={styles.pondName}>{pond.pondName}</Text>
-                <Text style={styles.pondMeta}>{pond.supplier} • DOC {pond.doc} • {statusText(pond.status)}</Text>
-              </View>
-              <View style={styles.pondRowNumbers}>
-                <Text style={styles.pondNumber}>{formatCompact(pond.harvestedBiomass)} kg</Text>
-                <Text style={styles.pondSmall}>MBW {formatCompact(pond.latestMbw, 2)}g</Text>
-              </View>
-            </View>
-          ))}
-        </Section>
       </>
     );
   };
 
   const renderPonds = () => {
     if (!report) return null;
+    const harvestedPonds = report.ponds.filter((pond) => !pond.isNonHarvestClosure);
+    const nonHarvestPonds = report.ponds.filter((pond) => pond.isNonHarvestClosure);
+    const closureReasonText = (reason?: string) => {
+      if (reason === 'disease') return t.cycleReport.closureReasons.disease;
+      if (reason === 'reset') return t.cycleReport.closureReasons.reset;
+      return t.cycleReport.closureReasons.other;
+    };
+
     return (
-      <Section title={t.cycleReport.sections.pondDetails}>
-        {report.ponds.map((pond) => (
-          <View key={pond.id} style={styles.detailCard}>
-            <View style={styles.detailHeader}>
-              <View>
-                <Text style={styles.detailTitle}>{pond.pondName}</Text>
-                <Text style={styles.detailSub}>{pond.supplier}</Text>
+      <>
+        <Section title={t.cycleReport.sections.harvestedPonds}>
+          {harvestedPonds.map((pond) => (
+            <View key={pond.id} style={styles.detailCard}>
+              <View style={styles.detailHeader}>
+                <View>
+                  <Text style={styles.detailTitle}>{pond.pondName}</Text>
+                  <Text style={styles.detailSub}>{pond.supplier}</Text>
+                </View>
               </View>
-              <View style={[styles.smallBadge, pond.status === 'ended' && styles.endedBadge]}>
-                <Text style={styles.smallBadgeText}>{statusText(pond.status)}</Text>
+              <View style={styles.detailGrid}>
+                <Detail label="DOC" value={pond.doc.toString()} />
+                <Detail label={t.cycleReport.metrics.finalHarvestMbw} value={pond.hasFinalHarvest ? `${formatCompact(pond.finalHarvestMbw, 2)} g` : '—'} />
+                <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
+                <Detail label={t.cycleReport.metrics.harvestedPopulation} value={formatCompact(pond.harvestedPopulation, 0)} />
+                <Detail label={t.cycleReport.metrics.actualSr} value={pond.hasFinalHarvest ? `${formatCompact(pond.actualSurvivalRate)}%` : '—'} />
+                <Detail label={t.cycleReport.metrics.actualFcr} value={pond.hasFinalHarvest && pond.actualFcr > 0 ? formatCompact(pond.actualFcr, 2) : '—'} />
               </View>
             </View>
-            <View style={styles.detailGrid}>
-              <Detail label="DOC" value={pond.doc.toString()} />
-              <Detail label="MBW" value={`${formatCompact(pond.latestMbw, 2)} g`} />
-              <Detail label="SR" value={`${formatCompact(pond.survivalRate)}%`} />
-              <Detail label="FCR" value={formatCompact(pond.fcr, 2)} />
-              <Detail label={t.cycleReport.metrics.biomass} value={`${formatCompact(pond.estimatedBiomass)} kg`} />
-              <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
-            </View>
-          </View>
-        ))}
-      </Section>
+          ))}
+        </Section>
+
+        {nonHarvestPonds.length > 0 && (
+          <Section title={t.cycleReport.sections.nonHarvestClosures}>
+            {nonHarvestPonds.map((pond) => (
+              <View key={pond.id} style={styles.detailCard}>
+                <View style={styles.detailHeader}>
+                  <View>
+                    <Text style={styles.detailTitle}>{pond.pondName}</Text>
+                    <Text style={styles.detailSub}>{pond.supplier}</Text>
+                  </View>
+                  <View style={styles.smallBadge}>
+                    <Text style={styles.smallBadgeText}>{closureReasonText(pond.closureReason)}</Text>
+                  </View>
+                </View>
+                <View style={styles.detailGrid}>
+                  <Detail label="DOC" value={pond.doc.toString()} />
+                  <Detail label={t.cycleReport.metrics.lastSamplingMbw} value={pond.latestMbw > 0 ? `${formatCompact(pond.latestMbw, 2)} g` : '—'} />
+                  <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
+                  <Detail label={t.cycleReport.metrics.feedUsed} value={`${formatCompact(pond.totalFeedUsed)} kg`} />
+                </View>
+              </View>
+            ))}
+          </Section>
+        )}
+      </>
     );
   };
 
@@ -284,40 +313,20 @@ export default function CycleReportScreen() {
             <CostRow label={t.cycleReport.costs.additives} value={report.totals.costs.additives} total={total} />
             <CostRow label={t.cycleReport.costs.maintenance} value={report.totals.costs.maintenance} total={total} />
             <CostRow label={t.cycleReport.costs.manualExpenses} value={report.totals.costs.manualExpenses} total={total} />
+            <View style={styles.costTotalRow}>
+              <Text style={styles.costTotalLabel}>{t.cycleReport.metrics.totalCost}</Text>
+              <Text style={styles.costTotalValue}>{formatCurrency(total)}</Text>
+            </View>
           </View>
         </Section>
         <Section title={t.cycleReport.sections.unitEconomics}>
           <View style={styles.unitCard}>
             <Detail label={t.cycleReport.metrics.costPerKg} value={formatCurrency(report.totals.costPerKg)} />
             <Detail label={t.cycleReport.metrics.revenuePerKg} value={formatCurrency(report.totals.revenuePerKg)} />
-            <Detail label={t.cycleReport.metrics.feedUsed} value={`${formatCompact(report.totals.feedUsageQty)} kg`} />
-            <Detail label={t.cycleReport.metrics.additivesUsed} value={formatCompact(report.totals.additiveUsageQty)} />
+            <Detail label={t.cycleReport.metrics.profitPerKg} value={formatCurrency(report.totals.profitPerKg)} />
           </View>
         </Section>
       </>
-    );
-  };
-
-  const renderNotes = () => {
-    if (!report) return null;
-    return (
-      <Section title={t.cycleReport.sections.dataNotes}>
-        {report.notes.length === 0 ? (
-          <View style={styles.emptyNote}>
-            <Ionicons name="checkmark-circle-outline" size={24} color="#315f57" />
-            <Text style={styles.emptyNoteText}>{t.cycleReport.notes.noDataIssues}</Text>
-          </View>
-        ) : report.notes.map((note, index) => (
-          <View key={`${note.message}-${index}`} style={styles.noteRow}>
-            <Ionicons
-              name={note.severity === 'warning' ? 'warning-outline' : 'information-circle-outline'}
-              size={20}
-              color={note.severity === 'warning' ? '#e67e22' : '#315f57'}
-            />
-            <Text style={styles.noteText}>{noteText(note)}</Text>
-          </View>
-        ))}
-      </Section>
     );
   };
 
@@ -392,7 +401,6 @@ export default function CycleReportScreen() {
 
     if (activeTab === 'ponds') return renderPonds();
     if (activeTab === 'costs') return renderCosts();
-    if (activeTab === 'notes') return renderNotes();
     return renderOverview();
   };
 
@@ -401,7 +409,7 @@ export default function CycleReportScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       <View style={styles.container}>
-        <SafeAreaView style={styles.topSafeArea}>
+        <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#0d2137" />
@@ -410,7 +418,22 @@ export default function CycleReportScreen() {
               <Text style={styles.headerTitle}>{resolvedCycleId ? t.cycleReport.title : t.cycleReport.archiveTitle}</Text>
               <Text style={styles.headerSub}>{report?.cycle.cycleName || t.cycleReport.archiveSubtitle}</Text>
             </View>
-            <View style={styles.backButton} />
+            {hasFinanceAccess && resolvedCycleId ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={t.cycleReport.exportPdf}
+                disabled={!report || exportingPdf}
+                onPress={handleExportPdf}
+                style={[styles.exportPdfButton, (!report || exportingPdf) && styles.exportPdfButtonDisabled]}
+              >
+                {exportingPdf
+                  ? <ActivityIndicator size="small" color="#0F4C75" />
+                  : <Ionicons name="document-outline" size={16} color="#0F4C75" />}
+                <Text style={styles.exportPdfText} numberOfLines={1}>{exportingPdf ? t.cycleReport.exportingPdf : t.cycleReport.exportPdf}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.backButton} />
+            )}
           </View>
         </SafeAreaView>
 
@@ -458,9 +481,24 @@ const styles = StyleSheet.create({
     borderBottomColor: '#dce8f2',
   },
   backButton: { width: 42, padding: 8 },
-  headerCenter: { flex: 1, alignItems: 'center' },
+  headerCenter: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
   headerTitle: { color: '#0d2137', fontSize: 19, fontWeight: '900' },
   headerSub: { color: '#315f57', fontSize: 12, fontWeight: '700', marginTop: 2 },
+  exportPdfButton: {
+    minWidth: 96,
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#3282B8',
+    backgroundColor: '#F8FBFE',
+  },
+  exportPdfButtonDisabled: { opacity: 0.45 },
+  exportPdfText: { color: '#0F4C75', fontSize: 11, fontWeight: '900' },
   tabBar: {
     flexDirection: 'row',
     gap: 6,
@@ -537,6 +575,9 @@ const styles = StyleSheet.create({
   costValue: { color: '#315f57', fontSize: 13, fontWeight: '900' },
   progressTrack: { height: 8, backgroundColor: '#e8f2f9', borderRadius: 999, overflow: 'hidden' },
   progressFill: { height: 8, backgroundColor: '#315f57', borderRadius: 999 },
+  costTotalRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#e8f2f9', paddingTop: 12 },
+  costTotalLabel: { color: '#0d2137', fontSize: 14, fontWeight: '900' },
+  costTotalValue: { color: '#0d2137', fontSize: 15, fontWeight: '900' },
   unitCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e8f2f9', flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   reportListCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e8f2f9', marginBottom: 10, flexDirection: 'row', alignItems: 'center', gap: 12 },
   reportListIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: '#dce8f2', alignItems: 'center', justifyContent: 'center' },

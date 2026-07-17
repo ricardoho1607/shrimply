@@ -565,7 +565,7 @@ export default function AssetInventoryScreen() {
     return (
       <View style={styles.outerContainer}>
         <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-        <SafeAreaView style={styles.topSafeArea}>
+        <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
           <View style={styles.loadingContainer}>
             <Text style={styles.loadingText}>{t.asset?.loadingAssets || 'Loading assets...'}</Text>
           </View>
@@ -577,7 +577,7 @@ export default function AssetInventoryScreen() {
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <SafeAreaView style={styles.topSafeArea}>
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}

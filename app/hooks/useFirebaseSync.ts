@@ -10,11 +10,18 @@ import {
   query,
   orderBy,
   getDoc,
+  runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, normalizePondLifecycle } from './../store/pondStore';
 import { Platform } from 'react-native';
+import {
+  applyHarvestImpactToPond,
+  getNextPartialHarvestNumber,
+  reverseHarvestImpactOnPond,
+  withHarvestReference,
+} from '../../shared/harvestCalculations';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -350,6 +357,13 @@ export const useFirebaseSync = () => {
                 totalHarvestedBiomass: data.totalHarvestedBiomass || 0,
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,
+                partialHarvestCount: data.partialHarvestCount || 0,
+                postHarvestBaselineDate: data.postHarvestBaselineDate ?? null,
+                postHarvestRemainingBiomass: data.postHarvestRemainingBiomass ?? null,
+                postHarvestRemainingPopulation: data.postHarvestRemainingPopulation ?? null,
+                postHarvestReferenceSamplingId: data.postHarvestReferenceSamplingId ?? null,
+                postHarvestReferenceSamplingDate: data.postHarvestReferenceSamplingDate ?? null,
+                postHarvestReferenceMbw: data.postHarvestReferenceMbw ?? null,
                 latestLabStatus: data.latestLabStatus,
                 cycleId: data.cycleId,
                 cycleName: data.cycleName,
@@ -411,6 +425,8 @@ export const useFirebaseSync = () => {
               serverHarvestRecords.push({
                 id: doc.id,
                 date: data.date || '',
+                cycleId: data.cycleId,
+                cycleName: data.cycleName,
                 ponds: data.ponds || []
               });
             });
@@ -442,6 +458,7 @@ export const useFirebaseSync = () => {
     try {
       const batch = writeBatch(db);
       const processedChanges: string[] = [];
+      let hasBatchWrites = false;
 
       for (const change of changes) {
         try {
@@ -461,9 +478,11 @@ export const useFirebaseSync = () => {
                 })
               };
               batch.set(pondRef, pondData, { merge: change.action === 'update' });
+              hasBatchWrites = true;
               didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(pondRef);
+              hasBatchWrites = true;
               didProcess = true;
             }
           } 
@@ -480,9 +499,11 @@ export const useFirebaseSync = () => {
                 }),
               };
               batch.set(physicalPondRef, physicalPondData, { merge: change.action === 'update' });
+              hasBatchWrites = true;
               didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(physicalPondRef);
+              hasBatchWrites = true;
               didProcess = true;
             }
           }
@@ -499,9 +520,11 @@ export const useFirebaseSync = () => {
                 }),
               };
               batch.set(cycleRef, cycleData, { merge: change.action === 'update' });
+              hasBatchWrites = true;
               didProcess = true;
             } else if (change.action === 'delete') {
               batch.delete(cycleRef);
+              hasBatchWrites = true;
               didProcess = true;
             }
           }
@@ -509,20 +532,85 @@ export const useFirebaseSync = () => {
             const harvestRef = change.data.id ? 
               doc(db, 'companies', company.id, 'harvestRecords', change.data.id) :
               doc(collection(db, 'companies', company.id, 'harvestRecords'));
-            
-            if (change.action === 'create') {
-              const harvestData = {
-                ...change.data,
-                id: harvestRef.id,
-                createdAt: serverTimestamp(),
-                createdBy: user.uid
-              };
-              batch.set(harvestRef, harvestData);
-              didProcess = true;
-            } else if (change.action === 'delete') {
-              batch.delete(harvestRef);
-              didProcess = true;
-            }
+
+            await runTransaction(db, async (transaction) => {
+              const harvestSnapshot = await transaction.get(harvestRef);
+
+              if (change.action === 'create' && harvestSnapshot.exists()) return;
+              if (change.action === 'delete' && !harvestSnapshot.exists()) return;
+
+              const sourceRecord = change.action === 'delete'
+                ? ({ id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord)
+                : (change.data as HarvestRecord);
+              const uniquePondIds = Array.from(new Set(sourceRecord.ponds.map((pond) => pond.pondId)));
+              const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', company.id, 'ponds', pondId));
+              const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
+              const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+
+              if (change.action === 'create') {
+                const canonicalPonds = sourceRecord.ponds.map((harvestPond) => {
+                  const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
+                  if (!pondSnapshot?.exists()) throw new Error(`Pond ${harvestPond.pondId} was not found`);
+                  const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+                  const partialHarvestNumber = harvestPond.harvestType === 'partial'
+                    ? getNextPartialHarvestNumber(pondData)
+                    : undefined;
+                  const canonicalHarvestPond = withHarvestReference(pondData, { ...harvestPond, partialHarvestNumber });
+                  const updatedPond = applyHarvestImpactToPond(
+                    pondData,
+                    canonicalHarvestPond,
+                    sourceRecord.date,
+                    partialHarvestNumber,
+                  );
+
+                  transaction.update(pondSnapshot.ref, {
+                    ...removeUndefinedFields({
+                      totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+                      totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+                      partialHarvestCount: updatedPond.partialHarvestCount,
+                      postHarvestBaselineDate: updatedPond.postHarvestBaselineDate,
+                      postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
+                      postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
+                      postHarvestReferenceSamplingId: updatedPond.postHarvestReferenceSamplingId,
+                      postHarvestReferenceSamplingDate: updatedPond.postHarvestReferenceSamplingDate,
+                      postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw,
+                    }),
+                    updatedAt: serverTimestamp(),
+                    updatedBy: user.uid,
+                  });
+
+                  return canonicalHarvestPond;
+                });
+
+                transaction.set(harvestRef, {
+                  ...removeUndefinedFields(sourceRecord),
+                  id: harvestRef.id,
+                  ponds: canonicalPonds.map(removeUndefinedFields),
+                  createdAt: serverTimestamp(),
+                  createdBy: user.uid,
+                });
+                return;
+              }
+
+              sourceRecord.ponds.forEach((harvestPond) => {
+                const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
+                if (!pondSnapshot?.exists()) return;
+                const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+                const updatedPond = reverseHarvestImpactOnPond(pondData, harvestPond);
+                transaction.update(pondSnapshot.ref, {
+                  ...removeUndefinedFields({
+                    totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+                    totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+                    postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
+                    postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
+                  }),
+                  updatedAt: serverTimestamp(),
+                  updatedBy: user.uid,
+                });
+              });
+              transaction.delete(harvestRef);
+            });
+            didProcess = true;
           }
           else if (change.type === 'sampling' && change.pondId) {
             const pondRef = doc(db, 'companies', company.id, 'ponds', change.pondId);
@@ -548,6 +636,7 @@ export const useFirebaseSync = () => {
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid
               });
+              hasBatchWrites = true;
               didProcess = true;
             }
           }
@@ -558,7 +647,7 @@ export const useFirebaseSync = () => {
         }
       }
 
-      if (processedChanges.length > 0) await batch.commit();
+      if (hasBatchWrites) await batch.commit();
       return processedChanges;
     } catch (error) {
       console.error('Error syncing changes:', error);
@@ -607,7 +696,11 @@ export const useFirebaseSync = () => {
     setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
 
     try {
-      const processedChanges = await commitChanges(pendingChanges);
+      const processedChanges: string[] = [];
+      for (const pendingChange of [...pendingChanges].sort((a, b) => a.timestamp - b.timestamp)) {
+        const processed = await commitChanges([pendingChange]);
+        processedChanges.push(...processed);
+      }
       if (processedChanges.length > 0) {
         console.log(`Synced ${processedChanges.length} changes to server`);
       }

@@ -35,9 +35,16 @@ export type CycleReportPond = {
   density: number;
   initialPopulation: number;
   latestMbw: number;
+  finalHarvestMbw: number;
   estimatedBiomass: number;
   survivalRate: number;
   fcr: number;
+  actualSurvivalRate: number;
+  actualFcr: number;
+  totalFeedUsed: number;
+  hasFinalHarvest: boolean;
+  closureReason?: Pond['cycleEndReason'];
+  isNonHarvestClosure: boolean;
   harvestedBiomass: number;
   harvestedPopulation: number;
   mortality: number;
@@ -72,6 +79,7 @@ export type CycleReport = {
     grossProfit: number;
     costPerKg: number;
     revenuePerKg: number;
+    profitPerKg: number;
   };
 };
 
@@ -174,6 +182,62 @@ const calculateHarvestTotals = (records: HarvestRecord[]) => {
   };
 };
 
+export const calculatePondHarvestTotals = (records: HarvestRecord[], pondId: string) => {
+  let biomass = 0;
+  let population = 0;
+  const finalHarvests: { date: string; biomass: number; population: number }[] = [];
+
+  records.forEach((record) => {
+    record.ponds
+      .filter((harvestPond) => harvestPond.pondId === pondId)
+      .forEach((harvestPond) => {
+        const mainBiomass = toNumber(harvestPond.biomass);
+        const subBiomass = toNumber(harvestPond.subBiomass);
+        const mainPopulation = mainBiomass * toNumber(harvestPond.size);
+        const subPopulation = subBiomass * toNumber(harvestPond.subSize);
+        const pondBiomass = mainBiomass + subBiomass;
+        const pondPopulation = mainPopulation + subPopulation;
+
+        biomass += pondBiomass;
+        population += pondPopulation;
+        if (harvestPond.harvestType === 'final') {
+          finalHarvests.push({ date: record.date, biomass: pondBiomass, population: pondPopulation });
+        }
+      });
+  });
+
+  const finalHarvest = finalHarvests.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+  return {
+    biomass,
+    population,
+    hasFinalHarvest: Boolean(finalHarvest),
+    finalHarvestMbw: finalHarvest && finalHarvest.population > 0
+      ? (finalHarvest.biomass * 1000) / finalHarvest.population
+      : 0,
+  };
+};
+
+export const calculateActualPondPerformance = ({
+  initialPopulation,
+  initialWeight,
+  harvestedBiomass,
+  harvestedPopulation,
+  totalFeedUsed,
+}: {
+  initialPopulation: number;
+  initialWeight: number;
+  harvestedBiomass: number;
+  harvestedPopulation: number;
+  totalFeedUsed: number;
+}) => {
+  const initialBiomass = (initialPopulation * initialWeight) / 1000;
+  const biomassGain = harvestedBiomass - initialBiomass;
+  return {
+    actualSurvivalRate: initialPopulation > 0 ? (harvestedPopulation / initialPopulation) * 100 : 0,
+    actualFcr: biomassGain > 0 ? totalFeedUsed / biomassGain : 0,
+  };
+};
+
 const inferCycle = (cycleId: string, cycles: FarmCycle[], ponds: Pond[]): FarmCycle | undefined => {
   const cycle = cycles.find((item) => item.id === cycleId);
   if (cycle) return cycle;
@@ -258,6 +322,18 @@ export const buildCycleReport = ({
 
   const reportPonds: CycleReportPond[] = cyclePonds.map((pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);
+    const pondHarvest = calculatePondHarvestTotals(matchedHarvestRecords, pond.id);
+    const harvestedBiomass = pondHarvest.biomass || toNumber(pond.totalHarvestedBiomass);
+    const harvestedPopulation = pondHarvest.population || toNumber(pond.totalHarvestedPopulation);
+    const initialPopulation = toNumber(pond.initialPopulation);
+    const actualPerformance = calculateActualPondPerformance({
+      initialPopulation,
+      initialWeight: toNumber(pond.initialWeight || 0.5),
+      harvestedBiomass,
+      harvestedPopulation,
+      totalFeedUsed: metrics.totalFeedConsumed,
+    });
+    const nonHarvestReasons: Pond['cycleEndReason'][] = ['disease', 'reset', 'other'];
     return {
       id: pond.id,
       pondName: pond.pondName,
@@ -270,11 +346,18 @@ export const buildCycleReport = ({
       density: toNumber(pond.density),
       initialPopulation: toNumber(pond.initialPopulation),
       latestMbw: getLatestMbw(pond),
+      finalHarvestMbw: pondHarvest.finalHarvestMbw,
       estimatedBiomass: metrics.currentBiomass,
       survivalRate: metrics.adjustedSR,
       fcr: metrics.adjustedFCR,
-      harvestedBiomass: toNumber(pond.totalHarvestedBiomass),
-      harvestedPopulation: toNumber(pond.totalHarvestedPopulation),
+      actualSurvivalRate: actualPerformance.actualSurvivalRate,
+      actualFcr: actualPerformance.actualFcr,
+      totalFeedUsed: metrics.totalFeedConsumed,
+      hasFinalHarvest: pondHarvest.hasFinalHarvest,
+      closureReason: pond.cycleEndReason,
+      isNonHarvestClosure: nonHarvestReasons.includes(pond.cycleEndReason),
+      harvestedBiomass,
+      harvestedPopulation,
       mortality: getPondMortality(pond),
       samplingCount: (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling) && toNumber(sampling.mbw) > 0).length,
     };
@@ -319,6 +402,7 @@ export const buildCycleReport = ({
       grossProfit,
       costPerKg: harvestTotals.biomass > 0 ? costs.total / harvestTotals.biomass : 0,
       revenuePerKg: harvestTotals.biomass > 0 ? harvestTotals.revenue / harvestTotals.biomass : 0,
+      profitPerKg: harvestTotals.biomass > 0 ? grossProfit / harvestTotals.biomass : 0,
     },
   };
 };

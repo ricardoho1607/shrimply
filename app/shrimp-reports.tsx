@@ -101,7 +101,7 @@ export default function ShrimpReportsScreen() {
         company?.companyName || t.shrimpReports?.myCompany || 'My Company', pondDataForPDF);
       await exportSamplingReportPDF(reportData);
       Alert.alert(t.shrimpReports?.success || 'Success', 
-        t.shrimpReports?.reportGenerated || 'Shrimp report has been generated successfully!');
+        t.shrimpReports?.reportGenerated || 'Sampling report has been generated successfully!');
     } catch (error) {
       console.error('Error generating report:', error);
       Alert.alert(t.shrimpReports?.error || 'Error', 
@@ -170,7 +170,7 @@ export default function ShrimpReportsScreen() {
   return (
     <View style={s.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <SafeAreaView style={s.topSafeArea}>
+      <SafeAreaView style={s.topSafeArea} edges={['top', 'left', 'right']}>
         <View style={s.header}>
           <TouchableOpacity
             onPress={() => router.back()}
@@ -181,7 +181,7 @@ export default function ShrimpReportsScreen() {
           >
             <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
-          <Text style={s.headerTitle}>{t.shrimpReports?.title || 'Shrimp Reports'}</Text>
+          <Text style={s.headerTitle}>{t.shrimpReports?.title || 'Sampling Reports'}</Text>
           <View style={s.placeholder} />
         </View>
       </SafeAreaView>

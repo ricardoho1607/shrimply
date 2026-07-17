@@ -138,7 +138,7 @@ export default function UserProfileScreen() {
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      <SafeAreaView style={styles.topSafeArea}>
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}

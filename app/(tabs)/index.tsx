@@ -16,6 +16,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
 import { getFarmDateKey } from '../../shared/farmDate';
+import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 
 interface FormData {
   pondName: string; 
@@ -157,6 +158,7 @@ export default function PondManagementScreen() {
     ponds, 
     physicalPonds,
     cycles,
+    harvestRecords,
     addPhysicalPond,
     deletePhysicalPond,
     addPond, 
@@ -695,10 +697,33 @@ export default function PondManagementScreen() {
       return;
     }
 
+    const goToHarvest = () => router.push('/harvest');
     const endCycle = (reason: PondCycleEndReason) => {
+      if (reason === 'harvested' && !hasFinalHarvestForPondCycle(harvestRecords, pond)) {
+        Alert.alert(
+          t.farmCycle.finalHarvestRequiredTitle,
+          t.farmCycle.finalHarvestRequiredMessage.replace('{{pondNames}}', pond.pondName),
+          [
+            { text: t.actions.cancel, style: 'cancel' },
+            { text: t.farmCycle.goToHarvest, onPress: goToHarvest },
+          ]
+        );
+        return;
+      }
       const today = getFarmDateKey(new Date(), company?.timeZone);
       endPondCycle(pond.id, today, reason, user?.uid);
       Alert.alert(t.messages.success, t.farmCycle.pondEndedSuccess.replace('{{pondName}}', pond.pondName));
+    };
+    const chooseNonHarvestReason = () => {
+      Alert.alert(
+        t.farmCycle.endCycleTitle,
+        t.farmCycle.endPondCycleMessage.replace('{{pondName}}', pond.pondName),
+        [
+          { text: t.actions.cancel, style: 'cancel' },
+          { text: t.farmCycle.reasons.disease, onPress: () => endCycle('disease') },
+          { text: t.farmCycle.reasons.resetOther, onPress: () => endCycle('other') },
+        ]
+      );
     };
 
     Alert.alert(
@@ -707,10 +732,10 @@ export default function PondManagementScreen() {
       [
         { text: t.actions.cancel, style: 'cancel' },
         { text: t.farmCycle.reasons.harvested, onPress: () => endCycle('harvested') },
-        { text: t.farmCycle.reasons.resetOther, onPress: () => endCycle('other') },
+        { text: t.farmCycle.reasons.nonHarvest, onPress: chooseNonHarvestReason },
       ]
     );
-  }, [canEditPonds, company?.timeZone, endPondCycle, t, user?.uid]);
+  }, [canEditPonds, company?.timeZone, endPondCycle, harvestRecords, router, t, user?.uid]);
 
   const handleDeletePond = useCallback((pond: Pond) => {
     if (!canEditPonds) {
@@ -865,6 +890,24 @@ export default function PondManagementScreen() {
   const handleCloseFarmCycle = useCallback(() => {
     if (!activeFarmCycle) return;
 
+    const missingFinalHarvestPonds = activeCyclePonds.filter((pond) =>
+      !hasFinalHarvestForPondCycle(harvestRecords, pond)
+    );
+    if (missingFinalHarvestPonds.length > 0) {
+      Alert.alert(
+        t.farmCycle.finalHarvestRequiredTitle,
+        t.farmCycle.finalHarvestRequiredMessage.replace(
+          '{{pondNames}}',
+          missingFinalHarvestPonds.map((pond) => pond.pondName).join(', ')
+        ),
+        [
+          { text: t.actions.cancel, style: 'cancel' },
+          { text: t.farmCycle.goToHarvest, onPress: () => router.push('/harvest') },
+        ]
+      );
+      return;
+    }
+
     const today = getFarmDateKey(new Date(), company?.timeZone);
     const reportCycleId = activeFarmCycle.id;
     const canViewCycleReport = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
@@ -881,7 +924,7 @@ export default function PondManagementScreen() {
           onPress: async () => {
             try {
               await persistFarmCycleClose(activeFarmCycle, currentCyclePonds, today);
-              closeFarmCycle(activeFarmCycle.id, today);
+              closeFarmCycle(activeFarmCycle.id, today, { sync: false, endedBy: user?.uid });
               setCycleFilter('ended');
               setCycleManagerExpanded(false);
               Alert.alert(
@@ -905,7 +948,7 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [activeFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, persistFarmCycleClose, router, t, user?.role]);
+  }, [activeCyclePonds, activeFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, persistFarmCycleClose, router, t, user?.role, user?.uid]);
 
   const handleDateChange = useCallback((
     confirmed: boolean, 

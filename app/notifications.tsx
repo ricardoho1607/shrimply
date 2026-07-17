@@ -175,7 +175,7 @@ export default function NotificationsScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
       
-      <SafeAreaView style={styles.topSafeArea}>
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -187,7 +187,11 @@ export default function NotificationsScreen() {
             <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
 
-          <Text style={styles.headerTitle}>{t.notifications?.title || 'Notifications'}</Text>
+          <View style={styles.headerTitleContainer} pointerEvents="none">
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {t.notifications?.title || 'Notifications'}
+            </Text>
+          </View>
 
           <View style={styles.headerRightActions}>
             {notifications.length > 0 && (
@@ -270,22 +274,34 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingBottom: 8,
     backgroundColor: '#dce8f2',
   },
-  backButton: { padding: 4 },
+  backButton: { padding: 8, marginLeft: -4, zIndex: 1 },
+  headerTitleContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 96,
+  },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 20,
+    fontWeight: 'bold',
     color: '#0d2137',
-    marginLeft: 12,
-    flex: 1,
+    textAlign: 'center',
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginLeft: 'auto',
+    zIndex: 1,
   },
   clearButton: {
     padding: 6,

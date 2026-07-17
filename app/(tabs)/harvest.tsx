@@ -8,6 +8,7 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFarmDateKey } from '../../shared/farmDate';
+import type { HarvestType } from '../../shared/harvestCalculations';
 
 const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
   return (
@@ -24,7 +25,7 @@ const SummaryItem = React.memo(function SummaryItem({ iconName, label, value, un
   <View style={styles.summaryItem}>
     <Ionicons name={iconName as any} size={16} color="#dce8f2" />
     <Text style={styles.summaryLabel}>{label}</Text>
-    <Text style={styles.summaryValue}>{value} {unit}</Text>
+    <Text style={styles.summaryValue}>{value}{unit ? ` ${unit}` : ''}</Text>
   </View>
   );
 });
@@ -33,9 +34,9 @@ export default function HarvestScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
-  const { ponds, cycles, addHarvestData, harvestRecords, addHarvestRecord, removeHarvestRecord, processHarvestImpact, calculatePondMetricsWithHarvest } = usePondStore();
+  const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
   const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const activeFarmCycle = React.useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   const activePondIds = React.useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
@@ -49,10 +50,13 @@ export default function HarvestScreen() {
 
   const initializePondData = useCallback(() => activePonds.map(pond => ({
     pondId: pond.id, pondName: pond.pondName,
+    harvestType: 'partial' as HarvestType,
     biomass: "", size: "", price: "", subBiomass: "", subSize: "", subPrice: "",
   })), [activePonds]);
 
   const [pondData, setPondData] = useState(initializePondData());
+  const [expandedPondId, setExpandedPondId] = useState<string | null>(activePonds[0]?.id ?? null);
+  const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -79,18 +83,59 @@ export default function HarvestScreen() {
     if (isModalVisible) {
       submitLockRef.current = false;
       setIsSubmitting(false);
+      setExpandedPondId((currentPondId) =>
+        activePonds.some((pond) => pond.id === currentPondId)
+          ? currentPondId
+          : activePonds[0]?.id ?? null
+      );
     }
-  }, [isModalVisible]);
+  }, [activePonds, isModalVisible]);
 
   React.useEffect(() => { setPondData(initializePondData()); }, [initializePondData]);
 
-  const updatePondField = (pondId: string, field: string, value: string) => {
+  const updatePondField = (pondId: string, field: string, value: string | HarvestType) => {
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
   };
 
   const parsePositiveNumber = (value: string) => {
     const parsed = Number(value);
     return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  };
+
+  const hasAnyHarvestData = (pond: typeof pondData[number]) =>
+    !!(pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
+
+  const isPondEntryComplete = (pond: typeof pondData[number]) => {
+    const hasMainHarvest = !!(pond.biomass || pond.size || pond.price);
+    const hasSubHarvest = !!(pond.subBiomass || pond.subSize || pond.subPrice);
+    const isMainComplete = !hasMainHarvest || !!(
+      parsePositiveNumber(pond.biomass) &&
+      parsePositiveNumber(pond.size) &&
+      parsePositiveNumber(pond.price)
+    );
+    const isSubComplete = !hasSubHarvest || !!(
+      parsePositiveNumber(pond.subBiomass) &&
+      parsePositiveNumber(pond.subSize) &&
+      parsePositiveNumber(pond.subPrice)
+    );
+
+    return (hasMainHarvest || hasSubHarvest) && isMainComplete && isSubComplete;
+  };
+
+  const completedPondCount = pondData.filter(isPondEntryComplete).length;
+  const enteredPondCount = pondData.filter(hasAnyHarvestData).length;
+
+  const toggleSecondaryHarvest = (pondId: string) => {
+    setSecondaryPondIds((current) =>
+      current.includes(pondId)
+        ? current.filter((id) => id !== pondId)
+        : [...current, pondId]
+    );
+  };
+
+  const openNextPond = (pondId: string) => {
+    const currentIndex = activePonds.findIndex((pond) => pond.id === pondId);
+    setExpandedPondId(activePonds[currentIndex + 1]?.id ?? null);
   };
 
   const getHarvestBiomass = (pond: { biomass: string; subBiomass: string }) =>
@@ -118,22 +163,21 @@ export default function HarvestScreen() {
   };
 
   const saveHarvestRecords = (pondsWithData: typeof pondData) => {
-    pondsWithData.forEach(pondData => {
-      const recordToSave = {
-        biomass: pondData.biomass.trim(), size: pondData.size.trim(), pricePerKg: pondData.price.trim(),
-        subBiomass: pondData.subBiomass.trim(), subSize: pondData.subSize.trim(), subPricePerKg: pondData.subPrice.trim(),
-      };
-      addHarvestData(pondData.pondId, recordToSave);
-    });
-
     const newHarvest: HarvestRecord = {
       id: Date.now().toString(),
       date: getFarmDateKey(new Date(), company?.timeZone),
-      ponds: pondsWithData,
+      ponds: pondsWithData.map((pond) => ({
+        ...pond,
+        biomass: pond.biomass.trim(),
+        size: pond.size.trim(),
+        price: pond.price.trim(),
+        subBiomass: pond.subBiomass.trim(),
+        subSize: pond.subSize.trim(),
+        subPrice: pond.subPrice.trim(),
+      })),
     };
 
     addHarvestRecord(newHarvest);
-    processHarvestImpact(newHarvest);
     resetForm();
     setIsModalVisible(false);
   };
@@ -154,7 +198,7 @@ export default function HarvestScreen() {
       pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
 
     if (activePonds.length === 0) {
-      Alert.alert(t.messages.error, 'There are no active ponds in the current cycle.');
+      Alert.alert(t.messages.error, t.harvest.noActivePonds);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -190,7 +234,7 @@ export default function HarvestScreen() {
     if (invalidPond) {
       Alert.alert(
         t.messages.error,
-        `${invalidPond.pondName}: biomass, size, and price per kg are required and must be greater than 0 for every harvest line.`
+        t.harvest.invalidHarvestLine.replace('{{pondName}}', invalidPond.pondName)
       );
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -223,7 +267,11 @@ export default function HarvestScreen() {
     saveHarvestRecords(pondsWithData);
   };
 
-  const resetForm = () => { setPondData(initializePondData()); };
+  const resetForm = () => {
+    setPondData(initializePondData());
+    setExpandedPondId(activePonds[0]?.id ?? null);
+    setSecondaryPondIds([]);
+  };
 
   const handleModalClose = () => {
     resetForm();
@@ -286,6 +334,14 @@ export default function HarvestScreen() {
       averageSize: averageSize,
       totalPrice: totalPrice,
     };
+  };
+
+  const getHarvestTypeLabel = (pond: HarvestRecord['ponds'][number]) => {
+    if (pond.harvestType === 'partial') {
+      return t.harvest.partialHarvestNumber.replace('{{number}}', String(pond.partialHarvestNumber || 1));
+    }
+    if (pond.harvestType === 'final') return t.harvest.finalHarvest;
+    return t.harvest.harvest;
   };
 
   return (
@@ -354,6 +410,9 @@ export default function HarvestScreen() {
                       <Text style={styles.dateText}>
                         {harvest.ponds.length} {t.harvest.pond}{harvest.ponds.length !== 1 ? 's' : ''}
                       </Text>
+                      <Text style={styles.harvestTypeSummary}>
+                        {harvest.ponds.map((pond) => `${pond.pondName}: ${getHarvestTypeLabel(pond)}`).join(' • ')}
+                      </Text>
                     </TouchableOpacity>
                     {canEditHarvest && (
                       <TouchableOpacity style={styles.deleteButton}
@@ -365,8 +424,8 @@ export default function HarvestScreen() {
                   <TouchableOpacity onPress={() => handleHarvestCardClick(harvest.id, harvest.date)}>
                     <View style={styles.parametersContainer}>
                       <View style={styles.parameterRow}>
-                        <SummaryItem iconName="scale-outline" label={t.harvest.totalBiomass} 
-                          value={totals.totalBiomass.toLocaleString('id-ID')} unit="kg" />
+                        <SummaryItem iconName="scale-outline" label={t.harvest.totalBiomass}
+                          value={totals.totalBiomass.toLocaleString('id-ID')} />
                         <SummaryItem iconName="resize-outline" label={t.harvest.averageSize} 
                           value={totals.averageSize.toFixed(1)} />
                       </View>
@@ -386,7 +445,7 @@ export default function HarvestScreen() {
             style={[styles.floatingButton, { bottom: Math.max(insets.bottom, 30) }, activePonds.length === 0 && styles.floatingButtonDisabled]}
             onPress={() => {
               if (activePonds.length === 0) {
-                Alert.alert(t.messages.error, 'Start a pond cycle before adding harvest records.');
+                Alert.alert(t.messages.error, t.harvest.startPondCycleFirst);
                 return;
               }
               setIsModalVisible(true);
@@ -408,27 +467,112 @@ export default function HarvestScreen() {
                   onPress={handleModalClose}
                   style={styles.closeButton}
                   accessibilityRole="button"
-                  accessibilityLabel="Close"
+                  accessibilityLabel={t.harvest.close}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Ionicons name="close" size={24} color="#dce8f2" />
+                  <Ionicons name="close" size={24} color="#315f57" />
                 </TouchableOpacity>
               </View>
 
               <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 style={styles.modalScrollView}
-                contentContainerStyle={{ paddingBottom: 40 }}
+                contentContainerStyle={styles.modalScrollContent}
                 keyboardShouldPersistTaps="handled"
                 nestedScrollEnabled={true}
               >
+                <View style={styles.progressCard}>
+                  <View style={styles.progressTextRow}>
+                    <Text style={styles.progressLabel}>{t.harvest.harvestProgress}</Text>
+                    <Text style={styles.progressCount}>
+                      {t.harvest.pondsCompleted
+                        .replace('{{completed}}', String(completedPondCount))
+                        .replace('{{total}}', String(activePonds.length))}
+                    </Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <View
+                      style={[
+                        styles.progressFill,
+                        { width: `${activePonds.length > 0 ? (completedPondCount / activePonds.length) * 100 : 0}%` },
+                      ]}
+                    />
+                  </View>
+                </View>
+
                 {activePonds.map((pond) => {
                   const currentPondData = pondData.find(p => p.pondId === pond.id);
                   if (!currentPondData) return null;
+                  const isExpanded = expandedPondId === pond.id;
+                  const hasData = hasAnyHarvestData(currentPondData);
+                  const isComplete = isPondEntryComplete(currentPondData);
+                  const showSecondaryHarvest = secondaryPondIds.includes(pond.id);
+                  const hasSecondaryData = !!(
+                    currentPondData.subBiomass || currentPondData.subSize || currentPondData.subPrice
+                  );
+                  const harvestTypeLabel = currentPondData.harvestType === 'partial'
+                    ? t.harvest.partialHarvest
+                    : t.harvest.finalHarvest;
+                  const biomassTotal = getHarvestBiomass(currentPondData);
 
                   return (
-                    <View key={pond.id} style={styles.pondSection}>
-                      <Text style={styles.pondSectionTitle}>{pond.pondName}</Text>
+                    <View key={pond.id} style={[styles.pondSection, isExpanded && styles.pondSectionExpanded]}>
+                      <TouchableOpacity
+                        style={styles.pondAccordionHeader}
+                        onPress={() => setExpandedPondId(isExpanded ? null : pond.id)}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: isExpanded }}
+                      >
+                        <View style={styles.pondAccordionTitleGroup}>
+                          <View style={styles.pondTitleRow}>
+                            <Text style={styles.pondSectionTitle}>{pond.pondName}</Text>
+                            {isComplete && (
+                              <Ionicons name="checkmark-circle" size={18} color="#2e7d63" />
+                            )}
+                          </View>
+                          <Text style={[
+                            styles.pondEntryStatus,
+                            isComplete && styles.pondEntryStatusComplete,
+                            hasData && !isComplete && styles.pondEntryStatusInProgress,
+                          ]}>
+                            {isComplete
+                              ? `${harvestTypeLabel} · ${biomassTotal.toLocaleString()} · ${currentPondData.size || currentPondData.subSize} ${t.harvest.pcsPerKg}`
+                              : hasData
+                                ? t.harvest.inProgress
+                                : t.harvest.notEntered}
+                          </Text>
+                        </View>
+                        <Ionicons
+                          name={isExpanded ? "chevron-up" : "chevron-down"}
+                          size={20}
+                          color="#315f57"
+                        />
+                      </TouchableOpacity>
+
+                      {isExpanded && (
+                        <View style={styles.pondFormContent}>
+
+                      <Text style={styles.inputLabel}>{t.harvest.harvestType}</Text>
+                      <View style={styles.harvestTypeSelector}>
+                        {(['partial', 'final'] as HarvestType[]).map((harvestType) => (
+                          <TouchableOpacity
+                            key={harvestType}
+                            accessibilityRole="button"
+                            style={[
+                              styles.harvestTypeOption,
+                              currentPondData.harvestType === harvestType && styles.harvestTypeOptionActive,
+                            ]}
+                            onPress={() => updatePondField(pond.id, 'harvestType', harvestType)}
+                          >
+                            <Text style={[
+                              styles.harvestTypeOptionText,
+                              currentPondData.harvestType === harvestType && styles.harvestTypeOptionTextActive,
+                            ]}>
+                              {harvestType === 'partial' ? t.harvest.partialHarvest : t.harvest.finalHarvest}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
 
                       <View style={styles.harvestRow}>
                         <View style={styles.inputGroup}>
@@ -444,42 +588,94 @@ export default function HarvestScreen() {
                       </View>
 
                       <View style={styles.singleRow}>
-                        <Input label={t.harvest.pricePerKg} value={currentPondData.price}
+                        <Input label={`${t.harvest.pricePerKg} (${currencyConfig.symbol})`} value={currentPondData.price}
                           onChangeText={(text: string) => updatePondField(pond.id, "price", text)}
                           placeholder={t.harvest.pricePlaceholder} />
                       </View>
 
-                      <View style={styles.harvestRow}>
-                        <View style={styles.inputGroup}>
-                          <Input label={t.harvest.subSize} value={currentPondData.subSize}
-                            onChangeText={(text: string) => updatePondField(pond.id, "subSize", text)}
-                            placeholder={t.harvest.subSizePlaceholder} />
-                        </View>
-                        <View style={styles.inputGroup}>
-                          <Input label={t.harvest.subBiomassKg} value={currentPondData.subBiomass}
-                            onChangeText={(text: string) => updatePondField(pond.id, "subBiomass", text)}
-                            placeholder={t.harvest.subBiomassPlaceholder} />
-                        </View>
-                      </View>
+                      <TouchableOpacity
+                        style={styles.secondaryToggle}
+                        onPress={() => toggleSecondaryHarvest(pond.id)}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name={showSecondaryHarvest ? "remove-circle-outline" : "add-circle-outline"}
+                          size={19}
+                          color="#315f57"
+                        />
+                        <Text style={styles.secondaryToggleText}>
+                          {showSecondaryHarvest
+                            ? t.harvest.hideSecondarySize
+                            : hasSecondaryData
+                              ? t.harvest.showSecondarySize
+                              : t.harvest.addSecondarySize}
+                        </Text>
+                      </TouchableOpacity>
 
-                      <View style={styles.singleRow}>
-                        <Input label={t.harvest.pricePerKg} value={currentPondData.subPrice}
-                          onChangeText={(text: string) => updatePondField(pond.id, "subPrice", text)}
-                          placeholder={t.harvest.subPricePlaceholder} />
-                      </View>
+                      {showSecondaryHarvest && (
+                        <View style={styles.secondaryFields}>
+                          <View style={styles.harvestRow}>
+                            <View style={styles.inputGroup}>
+                              <Input label={t.harvest.subSize} value={currentPondData.subSize}
+                                onChangeText={(text: string) => updatePondField(pond.id, "subSize", text)}
+                                placeholder={t.harvest.subSizePlaceholder} />
+                            </View>
+                            <View style={styles.inputGroup}>
+                              <Input label={t.harvest.subBiomassKg} value={currentPondData.subBiomass}
+                                onChangeText={(text: string) => updatePondField(pond.id, "subBiomass", text)}
+                                placeholder={t.harvest.subBiomassPlaceholder} />
+                            </View>
+                          </View>
+
+                          <View style={styles.singleRow}>
+                            <Input label={`${t.harvest.pricePerKg} (${currencyConfig.symbol})`} value={currentPondData.subPrice}
+                              onChangeText={(text: string) => updatePondField(pond.id, "subPrice", text)}
+                              placeholder={t.harvest.subPricePlaceholder} />
+                          </View>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
+                        style={[styles.nextPondButton, !isComplete && styles.nextPondButtonDisabled]}
+                        onPress={() => openNextPond(pond.id)}
+                        disabled={!isComplete}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[styles.nextPondButtonText, !isComplete && styles.nextPondButtonTextDisabled]}>
+                          {activePonds[activePonds.length - 1]?.id === pond.id
+                            ? t.harvest.finishPondEntry
+                            : t.harvest.nextPond}
+                        </Text>
+                        <Ionicons
+                          name={activePonds[activePonds.length - 1]?.id === pond.id ? "checkmark" : "arrow-forward"}
+                          size={18}
+                          color={isComplete ? "#FFFFFF" : "#8ba2b3"}
+                        />
+                      </TouchableOpacity>
+                        </View>
+                      )}
                     </View>
                   );
                 })}
-
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity style={styles.cancelButton} onPress={handleModalClose}>
-                    <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.addButton, isSubmitting && { opacity: 0.6 }]} onPress={handleSave} disabled={isSubmitting}>
-                    <Text style={styles.addButtonText}>{t.harvest.saveRecord}</Text>
-                  </TouchableOpacity>
-                </View>
               </ScrollView>
+
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity style={styles.cancelButton} onPress={handleModalClose}>
+                  <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.addButton,
+                    (isSubmitting || completedPondCount === 0 || completedPondCount !== enteredPondCount) && styles.addButtonDisabled,
+                  ]}
+                  onPress={handleSave}
+                  disabled={isSubmitting || completedPondCount === 0 || completedPondCount !== enteredPondCount}
+                >
+                  <Text style={styles.addButtonText}>
+                    {t.harvest.saveHarvests.replace('{{count}}', String(completedPondCount))}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </KeyboardAvoidingView>
         </Modal>
@@ -541,6 +737,7 @@ const styles = StyleSheet.create({
   cardContent: { flex: 1 },
   harvestTitle: { fontSize: 20, fontWeight: 'bold', color: '#0d2137' },
   dateText: { color: '#0d2137', fontSize: 12, marginTop: 4 },
+  harvestTypeSummary: { color: '#315f57', fontSize: 12, fontWeight: '700', marginTop: 6 },
   deleteButton: { padding: 8, marginLeft: 8, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(231, 76, 60, 0.3)' },
   parametersContainer: { gap: 12 },
   parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -552,19 +749,47 @@ const styles = StyleSheet.create({
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#e8f2f9', overflow: 'hidden' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 24, paddingBottom: 0 },
-  modalTitle: { fontSize: 24, fontWeight: 'bold', color: '#0d2137' },
+  modalTitle: { flex: 1, marginRight: 12, fontSize: 24, fontWeight: 'bold', color: '#0d2137' },
   closeButton: { padding: 4 },
-  modalScrollView: { padding: 24, paddingTop: 0 },
-  pondSection: { marginBottom: 24 },
-  pondSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#315f57', marginBottom: 16, textAlign: 'center' },
+  modalScrollView: { paddingHorizontal: 20 },
+  modalScrollContent: { paddingTop: 20, paddingBottom: 12 },
+  progressCard: { backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9', borderRadius: 14, padding: 14, marginBottom: 14 },
+  progressTextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10 },
+  progressLabel: { color: '#0d2137', fontSize: 14, fontWeight: '800' },
+  progressCount: { color: '#315f57', fontSize: 12, fontWeight: '700', textAlign: 'right', flexShrink: 1 },
+  progressTrack: { height: 6, borderRadius: 3, backgroundColor: '#dce8f2', overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 3, backgroundColor: '#2e7d63' },
+  pondSection: { marginBottom: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#e8f2f9', borderRadius: 14, overflow: 'hidden' },
+  pondSectionExpanded: { borderColor: '#8fb7d1' },
+  pondAccordionHeader: { minHeight: 66, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  pondAccordionTitleGroup: { flex: 1, minWidth: 0 },
+  pondTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  pondSectionTitle: { color: '#0d2137', fontSize: 15, fontWeight: '800', flexShrink: 1 },
+  pondEntryStatus: { color: '#6b8aa0', fontSize: 12, fontWeight: '600', marginTop: 4 },
+  pondEntryStatusComplete: { color: '#2e7d63' },
+  pondEntryStatusInProgress: { color: '#b7791f' },
+  pondFormContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#fbfdff' },
+  harvestTypeSelector: { flexDirection: 'row', padding: 4, marginBottom: 16, borderRadius: 12, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9' },
+  harvestTypeOption: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: 9 },
+  harvestTypeOptionActive: { backgroundColor: '#0d2137' },
+  harvestTypeOptionText: { color: '#315f57', fontSize: 13, fontWeight: '700' },
+  harvestTypeOptionTextActive: { color: '#FFFFFF' },
   harvestRow: { flexDirection: 'row', gap: 12, marginBottom: 0 },
   singleRow: { marginBottom: 0 },
+  secondaryToggle: { minHeight: 42, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1, borderColor: '#b9d4e6', borderRadius: 10, backgroundColor: '#f4f8fc', marginBottom: 14 },
+  secondaryToggleText: { color: '#315f57', fontSize: 13, fontWeight: '700' },
+  secondaryFields: { paddingTop: 2 },
+  nextPondButton: { minHeight: 44, borderRadius: 10, backgroundColor: '#315f57', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 2 },
+  nextPondButtonDisabled: { backgroundColor: '#e8f2f9' },
+  nextPondButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  nextPondButtonTextDisabled: { color: '#8ba2b3' },
   inputContainer: { marginBottom: 16 },
   inputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: 16, includeFontPadding: false, textAlignVertical: 'center' },
   inputGroup: { flex: 1 },
-  buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: Platform.OS === 'android' ? 20 : 24 },
+  buttonContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingTop: 14, paddingBottom: Platform.OS === 'android' ? 20 : 24, borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#FFFFFF' },
   addButton: { backgroundColor: '#315f57', paddingVertical: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, borderRadius: 12, alignItems: 'center', flex: 1, marginLeft: 6, shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 },
+  addButtonDisabled: { opacity: 0.45, shadowOpacity: 0, elevation: 0 },
   addButtonText: { color: '#fff', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },
   cancelButton: { backgroundColor: 'transparent', paddingVertical: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#e74c3c', flex: 1, marginRight: 6 },
   cancelButtonText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold' },

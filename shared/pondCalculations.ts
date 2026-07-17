@@ -38,6 +38,12 @@ export interface SharedPond {
   baselineCumulativeFeed?: number | string | null;
   totalHarvestedPopulation?: number | string | null;
   totalHarvestedBiomass?: number | string | null;
+  postHarvestBaselineDate?: string | null;
+  postHarvestRemainingBiomass?: number | string | null;
+  postHarvestRemainingPopulation?: number | string | null;
+  postHarvestReferenceSamplingId?: string | null;
+  postHarvestReferenceSamplingDate?: string | null;
+  postHarvestReferenceMbw?: number | string | null;
   samplings?: SharedSampling[] | null;
 }
 
@@ -313,7 +319,23 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
     getSamplingMbw(latestValidMbwSampling) ||
     toFiniteNumber(pond.baselineMbw) ||
     initialWeight;
-  const currentBiomass = Math.max(0, (currentPopulation * latestMbw) / 1000);
+  const postHarvestBiomass = pond.postHarvestRemainingBiomass;
+  const postHarvestPopulation = toFiniteNumber(pond.postHarvestRemainingPopulation);
+  const referenceSamplingId = pond.postHarvestReferenceSamplingId || '';
+  const referenceSamplingDate = pond.postHarvestReferenceSamplingDate || '';
+  const referenceMbw = toFiniteNumber(pond.postHarvestReferenceMbw);
+  const latestSamplingId = latestValidMbwSampling?.id || '';
+  const latestSamplingDate = latestValidMbwSampling?.date || '';
+  const hasPostHarvestBiomass = postHarvestBiomass !== undefined && postHarvestBiomass !== null;
+  const sameReferenceSampling = referenceSamplingId
+    ? latestSamplingId === referenceSamplingId
+    : latestSamplingDate === referenceSamplingDate;
+  const referenceMbwUnchanged = referenceMbw <= 0 || Math.abs(latestMbw - referenceMbw) < 0.0001;
+  const canUsePostHarvestBiomass = hasPostHarvestBiomass && sameReferenceSampling && referenceMbwUnchanged;
+  const populationRemovedAfterBaseline = Math.max(0, postHarvestPopulation - currentPopulation);
+  const currentBiomass = canUsePostHarvestBiomass
+    ? Math.max(0, toFiniteNumber(postHarvestBiomass) - ((populationRemovedAfterBaseline * latestMbw) / 1000))
+    : Math.max(0, (currentPopulation * latestMbw) / 1000);
   const totalFeedConsumed = Math.max(0, getPondTotalFeedConsumed(pond));
   const adjustedSR = initialPopulation > 0 ? (currentPopulation / initialPopulation) * 100 : 0;
   const totalHarvestedBiomass = toFiniteNumber(pond.totalHarvestedBiomass);

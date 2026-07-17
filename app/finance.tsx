@@ -567,7 +567,7 @@ export default function FinancePage() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <SafeAreaView style={styles.safeArea}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}

@@ -75,7 +75,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
       id: 'reports',
       children: [
         { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
-        { label: getString(t.nav.shrimpReports, 'Shrimp Reports'), href: '/dashboard/reports/shrimp' },
+        { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp' },
         { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), href: '/dashboard/projections' },
       ]
     },

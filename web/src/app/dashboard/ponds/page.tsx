@@ -20,13 +20,15 @@ import {
   Trash2
 } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { collection, doc, addDoc, serverTimestamp, deleteDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import { useCompanyCycles, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
+import { useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../shared/harvestCalculations';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -69,6 +71,17 @@ interface FarmCycle {
   stockingStartDate?: string;
   stockingEndDate?: string;
   closedAt?: string;
+}
+
+interface HarvestRecord {
+  id: string;
+  cycleId?: string;
+  ponds: {
+    pondId: string;
+    pondCycleId?: string;
+    cycleId?: string;
+    harvestType?: HarvestType;
+  }[];
 }
 
 interface PhysicalPond {
@@ -125,11 +138,13 @@ const removeUndefinedFields = (value: unknown): unknown => {
 };
 
 export default function PondsPage() {
+  const router = useRouter();
   const { t } = useLanguage();
   const { company } = useAuth();
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   const { data: physicalPonds, loading: physicalPondsLoading } = useCompanyPhysicalPonds<PhysicalPond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
+  const { data: harvestRecords } = useCompanyHarvestRecords<HarvestRecord>();
   const today = useFarmDateKey(company?.timeZone);
 
   const [isModalOpen, setModalOpen] = useState(false);
@@ -178,6 +193,7 @@ export default function PondsPage() {
     baselineCumulativeFeed: '',
   });
   const [isDeleting, setIsDeleting] = useState(false);
+  const [finalHarvestPromptPonds, setFinalHarvestPromptPonds] = useState<Pond[]>([]);
   const [baselineEditPond, setBaselineEditPond] = useState<Pond | null>(null);
   const [baselineForm, setBaselineForm] = useState({
     baselineDate: today,
@@ -286,6 +302,13 @@ export default function PondsPage() {
   const handleCloseFarmCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
     if (!canEditPonds) return;
+    const missingFinalHarvestPonds = activeCyclePonds.filter((pond) =>
+      !hasFinalHarvestForPondCycle(harvestRecords, pond)
+    );
+    if (missingFinalHarvestPonds.length > 0) {
+      setFinalHarvestPromptPonds(missingFinalHarvestPonds);
+      return;
+    }
     if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
 
     try {
@@ -399,6 +422,14 @@ export default function PondsPage() {
   const handleEndCycle = async () => {
     if (!companyId || !user || !endCyclePond) return;
     if (!canEditPonds) return;
+    if (
+      endCycleForm.cycleEndReason === 'harvested' &&
+      !hasFinalHarvestForPondCycle(harvestRecords, endCyclePond)
+    ) {
+      setFinalHarvestPromptPonds([endCyclePond]);
+      setEndCyclePond(null);
+      return;
+    }
     try {
       const batch = writeBatch(db);
       batch.update(doc(db, 'companies', companyId, 'ponds', endCyclePond.id), {
@@ -1379,6 +1410,23 @@ export default function PondsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmationModal
+        isOpen={finalHarvestPromptPonds.length > 0}
+        title={t.farmCycle.finalHarvestRequiredTitle}
+        message={t.farmCycle.finalHarvestRequiredMessage.replace(
+          '{{pondNames}}',
+          finalHarvestPromptPonds.map((pond) => pond.pondName).join(', ')
+        )}
+        confirmText={t.farmCycle.goToHarvest}
+        cancelText={t.common.cancel}
+        onConfirm={() => {
+          setFinalHarvestPromptPonds([]);
+          router.push('/dashboard/harvest');
+        }}
+        onCancel={() => setFinalHarvestPromptPonds([])}
+        isDanger={false}
+      />
 
       <ConfirmationModal
         isOpen={deleteConfirm.isOpen}

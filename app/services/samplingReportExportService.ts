@@ -686,7 +686,7 @@ export const exportSamplingReportPDF = async (data: SamplingReportData) => {
     const cleanDate = new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }).replace(' ', '');
     const pondNames = data.ponds.map(p => p.pondNumber).join('_').substring(0, 20);
     const safeFarmName = data.farmName.replace(/[^a-zA-Z0-9]/g, '');
-    const filename = `ShrimpReport_${safeFarmName}_${pondNames}_${cleanDate}.pdf`;
+    const filename = `SamplingReport_${safeFarmName}_${pondNames}_${cleanDate}.pdf`;
     
     const newUri = `${FileSystem.documentDirectory}${filename}`;
     await FileSystem.copyAsync({
@@ -705,7 +705,7 @@ export const exportSamplingReportPDF = async (data: SamplingReportData) => {
     } else {
       Alert.alert(
         'PDF Generated',
-        `Your shrimp report has been saved to: ${newUri}`,
+        `Your sampling report has been saved to: ${newUri}`,
         [{ text: 'OK' }]
       );
     }
@@ -713,7 +713,7 @@ export const exportSamplingReportPDF = async (data: SamplingReportData) => {
     return newUri;
   } catch (error) {
     console.error('Error generating shrimp PDF:', error);
-    Alert.alert('Error', 'Failed to generate shrimp report PDF');
+    Alert.alert('Error', 'Failed to generate sampling report PDF');
     throw error;
   }
 };

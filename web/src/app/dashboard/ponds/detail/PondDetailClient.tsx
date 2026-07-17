@@ -58,7 +58,9 @@ import {
   isBaselineSampling,
 } from '../../../../../../shared/pondCalculations';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../../shared/harvestCalculations';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -91,6 +93,17 @@ interface Sampling {
   estimatedPopulation?: number;
   estimatedSurvivalRate?: number;
   cumulativeFeedToDate?: number;
+}
+
+interface HarvestRecord {
+  id: string;
+  cycleId?: string;
+  ponds: {
+    pondId: string;
+    pondCycleId?: string;
+    cycleId?: string;
+    harvestType?: HarvestType;
+  }[];
 }
 
 type LabReportStatus = {
@@ -267,6 +280,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
 
 export default function PondDetailClient() {
   const { company } = useAuth();
+  const { t } = useLanguage();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const router = useRouter();
@@ -420,6 +434,20 @@ export default function PondDetailClient() {
     if (!companyId || !pond) return;
     if (!canEditPond) return;
     try {
+      if (endCycleForm.cycleEndReason === 'harvested') {
+        const harvestSnapshot = await getDocs(collection(db, 'companies', companyId, 'harvestRecords'));
+        const harvestRecords = harvestSnapshot.docs.map((harvestDoc) => ({
+          id: harvestDoc.id,
+          ...harvestDoc.data(),
+        } as HarvestRecord));
+        if (!hasFinalHarvestForPondCycle(harvestRecords, pond)) {
+          const shouldGoToHarvest = window.confirm(
+            `${t.farmCycle.finalHarvestRequiredMessage.replace('{{pondNames}}', pond.pondName)}\n\n${t.farmCycle.goToHarvest}?`
+          );
+          if (shouldGoToHarvest) router.push('/dashboard/harvest');
+          return;
+        }
+      }
       const physicalPondsByActiveId = await getDocs(query(
         collection(db, 'companies', companyId, 'physicalPonds'),
         where('activePondId', '==', pond.id)

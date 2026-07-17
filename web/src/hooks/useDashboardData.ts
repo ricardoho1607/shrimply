@@ -130,6 +130,11 @@ export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
   return useCompanySubcollection<T>('cycles', constraints);
 }
 
+export function useCompanyHarvestRecords<T>(sort: 'asc' | 'desc' = 'desc') {
+  const constraints = useMemo(() => [orderBy('date', sort)], [sort]);
+  return useCompanySubcollection<T>('harvestRecords', constraints);
+}
+
 export function useCompanyMembers<T>() {
   const { companyId } = useCompanyId();
   const [state, setState] = useState<SnapshotState<T>>({

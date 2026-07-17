@@ -491,7 +491,7 @@ export default function ShrimpReportsPage() {
       const element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);
-      await html2pdf().from(element).set({ margin: 10, filename: 'Shrimp_Audit.pdf', jsPDF: { orientation: 'landscape' } }).save();
+      await html2pdf().from(element).set({ margin: 10, filename: 'Sampling_Report.pdf', jsPDF: { orientation: 'landscape' } }).save();
       document.body.removeChild(element);
     } catch (err) { console.error(err); } finally { setExportLoading(false); }
   };

@@ -17,7 +17,7 @@ export const en = {
     inventoryAssets: 'Assets',
     marketplace: 'Marketplace',
     diseaseReport: 'Disease Report',
-    shrimpReports: 'Shrimp Reports',
+    shrimpReports: 'Sampling Reports',
     management: 'Management',
     notifications: 'Notifications',
     marketOverview: 'Market Overview',
@@ -37,9 +37,14 @@ export const en = {
   averageSize: 'Average Size',
   totalPrice: 'Total Price',
   addRecord: 'Add Harvest Record',
+  harvestType: 'Harvest Type',
+  partialHarvest: 'Partial Harvest',
+  finalHarvest: 'Final Harvest',
+  partialHarvestNumber: 'Partial {{number}}',
+  recordHarvestDescription: 'Record harvest production data and pricing.',
   size: 'Size',
   biomassKg: 'Biomass (kg)',
-  pricePerKg: 'Price per kg (Rp)',
+  pricePerKg: 'Price per kg',
   subSize: 'Sub-Size',
   subBiomassKg: 'Sub-Biomass (kg)',
   saveRecord: 'Save Record',
@@ -956,7 +961,7 @@ FinancialReportsPage: {
   
 },
 shrimpReports: {
-  title: 'Shrimp Reports',
+  title: 'Sampling Reports',
   selectPonds: 'Select Ponds',
   selectPondsSubtitle: 'Choose which ponds to include in the report',
   reportSummary: 'Report Summary',
@@ -992,7 +997,7 @@ shrimpReports: {
   // Success & Error
   success: 'Success', // NEW
   error: 'Error', // NEW
-  reportGenerated: 'Shrimp report has been generated successfully!',
+  reportGenerated: 'Sampling report has been generated successfully!',
   generateError: 'Failed to generate report. Please try again.',
   generateFailed: 'Failed to generate report. Please try again.', // NEW
   // Fallback values
@@ -1454,6 +1459,11 @@ common: {
     helpTechDesc: 'Search and join an existing company',
     helpBuyerDesc: 'Connect with shrimp suppliers',
     helpFooter: 'You can always contact support to change your role later.'
+  },
+  farmCycle: {
+    finalHarvestRequiredTitle: 'Final Harvest required',
+    finalHarvestRequiredMessage: 'Record a Final Harvest for: {{pondNames}} before ending the cycle.',
+    goToHarvest: 'Go to Harvest',
   },
   harvestProjectionScreen: {
     title: 'Harvest Projections',
