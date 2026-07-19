@@ -7,7 +7,10 @@ import {
   Waves, 
   Sparkles, 
   Loader2, 
-  Download
+  Download,
+  Pencil,
+  Save,
+  X,
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -16,6 +19,8 @@ import {
   orderBy, 
   onSnapshot, 
   doc, 
+  serverTimestamp,
+  updateDoc,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
@@ -25,6 +30,25 @@ import { calculateOrsonHarvestProjection } from '../../../../../orson/harvestPro
 import { createDefaultOrsonCalibration, normalizeOrsonCalibration } from '../../../../../orson/learning';
 import type { OrsonCalibrationProfile } from '../../../../../orson/types';
 import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
+import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
+import { getFarmDateKey } from '../../../../../shared/farmDate';
+import {
+  buildDailyFeedTotalsForPond,
+  buildPondProfitabilityCostSnapshot,
+  calculateHarvestProfitability,
+  calculateRecordedDailyMortalityRate,
+  type ExpenseCostLike,
+  type InventoryItemWithUsage,
+  type PriceTier,
+} from '../../../../../shared/harvestProfitability';
+import {
+  HARVEST_MARKET_SIZE_TIERS,
+  buildPersistedHarvestMarketPrices,
+  createEmptyHarvestMarketPriceInputs,
+  harvestMarketPriceInputsEqual,
+  normalizeHarvestMarketPriceInputs,
+  type HarvestMarketPriceInputs,
+} from '../../../../../shared/harvestProjectionSettings';
 
 /* --- Types --------------------------------------------------- */
 interface Pond {
@@ -32,21 +56,29 @@ interface Pond {
   pondName: string;
   docStart: string;
   initialPopulation: number;
+  initialStock?: number;
   initialWeight?: number;
   samplings: Array<Record<string, unknown>>;
+  mortalityRecords?: Array<Record<string, unknown>>;
   cycleId?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
+  cycleStartedAt?: string;
+  cycleEndedAt?: string;
 }
 
 interface DashboardUser {
   uid: string;
   companyId?: string;
+  role?: string;
 }
 
 interface Company {
   id: string;
   companyName?: string;
   timeZone?: string;
+  ownerId?: string;
+  harvestProjectionMarketPrices?: Record<string, number>;
 }
 
 interface FarmCycle {
@@ -74,6 +106,35 @@ interface ProjectionExportData {
   projectedFcr?: number | null;
   marketSizeRisk?: string;
   risks?: ProjectionRisk[];
+  operatingComparison: {
+    decision: 'harvest_now' | 'keep_growing' | 'review_data';
+    decisionReason: string;
+    currentSizeCountPerKg: number;
+    feedDailyIncreaseRatePercent: number;
+    dailyMortalityRatePercent: number;
+    mortalityRecordedDays: number;
+    todayRevenue: number;
+    todayOperatingProfit: number;
+    bestTargetSizeCountPerKg: number;
+    bestDaysFromNow: number;
+    bestRevenue: number;
+    bestOperatingProfit: number;
+    incrementalProfit: number;
+    costsToDate: {
+      feed: number;
+      additives: number;
+      generalExpenses: number;
+      other: number;
+    };
+    futureCosts: {
+      feed: number;
+      additives: number;
+      generalExpenses: number;
+      other: number;
+    };
+    inventoryPurchasesExcluded: boolean;
+    dataQualityWarning: boolean;
+  };
 }
 
 type Html2PdfWorker = {
@@ -86,6 +147,9 @@ type Html2PdfWorker = {
 
 type Html2PdfFactory = () => Html2PdfWorker;
 
+const totalScenarioCosts = (costs: { feed: number; additives: number; generalExpenses: number; other: number }) =>
+  costs.feed + costs.additives + costs.generalExpenses + costs.other;
+
 export default function HarvestProjectionsPage() {
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
@@ -93,9 +157,13 @@ export default function HarvestProjectionsPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [selectedPondId, setSelectedPondId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [, setUser] = useState<DashboardUser | null>(null);
+  const [user, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const [feeds, setFeeds] = useState<InventoryItemWithUsage[]>([]);
+  const [additives, setAdditives] = useState<InventoryItemWithUsage[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseCostLike[]>([]);
+  const [financeDataWarning, setFinanceDataWarning] = useState<string | null>(null);
   const [calibrationState, setCalibrationState] = useState<{
     companyId: string;
     profile: OrsonCalibrationProfile;
@@ -107,27 +175,29 @@ export default function HarvestProjectionsPage() {
     [calibrationState, company?.id],
   );
   
-  // Assumptions
-  const [daysToHarvest, setDaysToHarvest] = useState('14');
-  const [expectedPrice, setExpectedPrice] = useState('5.50');
-  const [dailyFeedCost, setDailyFeedCost] = useState('50');
-  const [targetADG, setTargetADG] = useState('');
-  const [assumedSurvival, setAssumedSurvival] = useState('');
-  const [targetMarketSize, setTargetMarketSize] = useState('20');
+  const [marketPrices, setMarketPrices] = useState<HarvestMarketPriceInputs>(createEmptyHarvestMarketPriceInputs);
+  const [savedMarketPrices, setSavedMarketPrices] = useState<HarvestMarketPriceInputs>(createEmptyHarvestMarketPriceInputs);
+  const [isEditingPrices, setIsEditingPrices] = useState(true);
+  const [priceSaveStatus, setPriceSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [priceSaveError, setPriceSaveError] = useState<string | null>(null);
   
   // AI State
   const { sendMessage, loading: aiLoading } = useGemini();
   const [insight, setInsight] = useState<string | null>(null);
 
   useEffect(() => {
+    let unsubscribeUser: (() => void) | undefined;
+    let unsubscribeCompany: (() => void) | undefined;
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       if (firebaseUser) {
-        onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
+        unsubscribeUser?.();
+        unsubscribeUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           if (uDoc.exists()) {
             const userData = uDoc.data();
             setUser({ ...userData, uid: firebaseUser.uid });
             if (userData.companyId) {
-              onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
+              unsubscribeCompany?.();
+              unsubscribeCompany = onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
                 if (cDoc.exists()) setCompany({ id: cDoc.id, ...cDoc.data() });
               }, (error) => {
                 console.error("Error fetching company in projections:", error);
@@ -139,8 +209,30 @@ export default function HarvestProjectionsPage() {
         });
       }
     });
-    return () => unsubAuth();
+    return () => {
+      unsubAuth();
+      unsubscribeUser?.();
+      unsubscribeCompany?.();
+    };
   }, []);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    const normalized = normalizeHarvestMarketPriceInputs(company.harvestProjectionMarketPrices);
+    const hasSavedPrices = Object.values(normalized).some((value) => value !== '');
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+      setMarketPrices(normalized);
+      setSavedMarketPrices(normalized);
+      setIsEditingPrices(!hasSavedPrices);
+      setPriceSaveStatus('idle');
+      setPriceSaveError(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [company?.id, company?.harvestProjectionMarketPrices]);
 
   useEffect(() => {
     if (!company?.id) return;
@@ -155,6 +247,29 @@ export default function HarvestProjectionsPage() {
       setLoading(false);
     });
     return () => unsub();
+  }, [company?.id]);
+
+  useEffect(() => {
+    if (!company?.id) return;
+    const companyId = company.id;
+    const unsubFeeds = onSnapshot(collection(db, 'companies', companyId, 'feeds'), (snapshot) => {
+      setFeeds(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as InventoryItemWithUsage)));
+    }, (error) => console.error('Error fetching feed costs in projections:', error));
+    const unsubAdditives = onSnapshot(collection(db, 'companies', companyId, 'additives'), (snapshot) => {
+      setAdditives(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as InventoryItemWithUsage)));
+    }, (error) => console.error('Error fetching additive costs in projections:', error));
+    const unsubExpenses = onSnapshot(collection(db, 'companies', companyId, 'expenses'), (snapshot) => {
+      setExpenses(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as ExpenseCostLike)));
+      setFinanceDataWarning(null);
+    }, (error) => {
+      console.error('Error fetching expenses in projections:', error);
+      setFinanceDataWarning('General expenses could not be loaded. Review the result before using it.');
+    });
+    return () => {
+      unsubFeeds();
+      unsubAdditives();
+      unsubExpenses();
+    };
   }, [company?.id]);
 
   useEffect(() => {
@@ -189,21 +304,118 @@ export default function HarvestProjectionsPage() {
     return activePonds.find(p => p.id === selectedPondId) || activePonds[0] || null;
   }, [activePonds, selectedPondId]);
 
+  const canManagePriceLadder = Boolean(user && company && (
+    company.ownerId === user.uid || ['owner', 'co-owner', 'manager', 'admin'].includes(user.role || '')
+  ));
+  const hasSavedPriceLadder = Object.values(savedMarketPrices).some((value) => value !== '');
+  const hasUnsavedPriceChanges = !harvestMarketPriceInputsEqual(marketPrices, savedMarketPrices);
+
+  const priceLadder = useMemo<PriceTier[]>(() => HARVEST_MARKET_SIZE_TIERS
+    .map((sizeCountPerKg) => ({ sizeCountPerKg, pricePerKg: Number(savedMarketPrices[sizeCountPerKg]) }))
+    .filter((tier) => Number.isFinite(tier.pricePerKg) && tier.pricePerKg > 0), [savedMarketPrices]);
+
+  const financialComparison = useMemo(() => {
+    if (!selectedPond || priceLadder.length === 0) return null;
+    const today = getFarmDateKey(new Date(), company?.timeZone);
+    const cycleStart = selectedPond.cycleStartedAt || selectedPond.docStart || today;
+    const metrics = calculatePondMetricsWithHarvest(selectedPond, company?.timeZone);
+    const costSnapshot = buildPondProfitabilityCostSnapshot({
+      pond: selectedPond,
+      ponds,
+      feeds,
+      additives,
+      expenses,
+      startDate: cycleStart,
+      endDate: today,
+      timeZone: company?.timeZone,
+    });
+    const mortality = calculateRecordedDailyMortalityRate({
+      records: selectedPond.mortalityRecords || [],
+      currentPopulation: metrics.currentPopulation,
+      timeZone: company?.timeZone,
+    });
+    const result = calculateHarvestProfitability({
+      currentPopulation: metrics.currentPopulation,
+      initialPopulation: Number(selectedPond.initialPopulation || selectedPond.initialStock || 0),
+      currentMbwG: metrics.latestMbw,
+      currentSurvivalRatePercent: metrics.adjustedSR,
+      adgGPerDay: metrics.adg,
+      historicalFcr: metrics.biomassGainFCR > 0 ? metrics.biomassGainFCR : metrics.adjustedFCR,
+      dailyMortalityRatePercent: mortality.dailyRatePercent,
+      recentDailyFeedTotals: buildDailyFeedTotalsForPond(feeds, selectedPond.id, company?.timeZone),
+      feedUnitCostPerKg: costSnapshot.feedUnitCostPerKg,
+      priceLadder,
+      costsToDate: costSnapshot.costsToDate,
+      projectedDailyAdditiveCost: costSnapshot.projectedDailyAdditiveCost,
+      projectedDailyGeneralExpense: costSnapshot.projectedDailyGeneralExpense,
+      timeZone: company?.timeZone,
+    });
+    return { result, costSnapshot, mortality };
+  }, [selectedPond, priceLadder, company?.timeZone, ponds, feeds, additives, expenses]);
+
+  const financialDecisionReason = useMemo(() => {
+    if (!financialComparison) return '';
+    const { result } = financialComparison;
+    if (result.decision === 'keep_growing') {
+      return (t.harvestProjectionScreen?.keepGrowingReason || 'Target size {{size}} is projected to improve operating profit by {{amount}}.')
+        .replace('{{size}}', String(result.bestScenario.targetSizeCountPerKg))
+        .replace('{{amount}}', formatCurrency(result.bestScenario.incrementalProfitVsToday));
+    }
+    if (result.decision === 'harvest_now') {
+      return t.harvestProjectionScreen?.harvestNowReason || 'Harvesting now has equal or higher projected operating profit than the reachable larger sizes.';
+    }
+    return t.harvestProjectionScreen?.reviewDataReason || 'Critical population, MBW, or market-price data is missing.';
+  }, [financialComparison, formatCurrency, t.harvestProjectionScreen]);
+
   const projection = useMemo(() => {
-    if (!selectedPond) return null;
+    if (!selectedPond || !financialComparison) return null;
+    const bestScenario = financialComparison.result.bestScenario;
 
     return calculateOrsonHarvestProjection({
       pond: selectedPond,
-      daysToHarvest: Number(daysToHarvest) || 0,
-      expectedPricePerKg: Number(expectedPrice) || 0,
-      dailyFeedCost: Number(dailyFeedCost) || 0,
-      targetAdgGPerDay: targetADG ? Number(targetADG) : null,
-      assumedSurvivalPercent: assumedSurvival ? Number(assumedSurvival) : null,
-      targetMarketSizeG: targetMarketSize ? Number(targetMarketSize) : null,
+      daysToHarvest: bestScenario.daysFromNow,
+      expectedPricePerKg: bestScenario.pricePerKg,
+      dailyFeedCost: bestScenario.daysFromNow > 0
+        ? bestScenario.futureCosts.feed / bestScenario.daysFromNow
+        : 0,
+      targetAdgGPerDay: null,
+      assumedSurvivalPercent: bestScenario.projectedSurvivalRatePercent,
+      targetMarketSizeG: bestScenario.targetMbwG,
       calibration,
       timeZone: company?.timeZone,
     });
-  }, [selectedPond, daysToHarvest, expectedPrice, dailyFeedCost, targetADG, assumedSurvival, targetMarketSize, calibration, company?.timeZone]);
+  }, [selectedPond, financialComparison, calibration, company?.timeZone]);
+
+  const handleSavePrices = async () => {
+    if (!company?.id || !user?.uid || !canManagePriceLadder) return;
+    setPriceSaveStatus('saving');
+    setPriceSaveError(null);
+    try {
+      const persisted = buildPersistedHarvestMarketPrices(marketPrices);
+      await updateDoc(doc(db, 'companies', company.id), {
+        harvestProjectionMarketPrices: persisted,
+        harvestProjectionMarketPricesUpdatedAt: serverTimestamp(),
+        harvestProjectionMarketPricesUpdatedBy: user.uid,
+      });
+      const normalized = normalizeHarvestMarketPriceInputs(persisted);
+      setSavedMarketPrices(normalized);
+      setMarketPrices(normalized);
+      setIsEditingPrices(false);
+      setPriceSaveStatus('saved');
+      setInsight(null);
+    } catch (error) {
+      console.error('Failed to save harvest market prices:', error);
+      setPriceSaveStatus('error');
+      setPriceSaveError(error instanceof Error ? error.message : 'Unable to save market prices.');
+    }
+  };
+
+  const handleCancelPriceEdit = () => {
+    setMarketPrices(savedMarketPrices);
+    setIsEditingPrices(false);
+    setPriceSaveStatus('idle');
+    setPriceSaveError(null);
+  };
 
   const handleAskOrson = async () => {
     if (!selectedPond || !projection) return;
@@ -214,13 +426,14 @@ Current MBW: ${projection.currentMbwG ?? 'unknown'}g | Projected MBW: ${projecti
 Historical ADG: ${projection.historicalAdgGPerDay ?? 'unknown'}g/day | Assumed ADG: ${projection.assumedAdgGPerDay ?? 'unknown'}g/day
 Assumed survival: ${projection.assumedSurvivalPercent ?? 'unknown'}% (${projection.survivalConfidence} confidence)
 Projected FCR: ${projection.projectedFcr ?? 'unknown'} | Market size status: ${projection.marketSizeRisk}
-Expected Price: ${currencyConfig.symbol}${expectedPrice}/kg | Daily Feed Cost: ${currencyConfig.symbol}${dailyFeedCost}
-Projected Revenue: ${currencyConfig.symbol}${projection.projectedRevenue.toFixed(2)}
-Projected Profit (Gross - Future Feed): ${currencyConfig.symbol}${projection.projectedProfit.toFixed(2)}
+${financialComparison ? `Harvest-today operating profit: ${formatCurrency(financialComparison.result.today.operatingProfit)}
+Best scenario: ${financialComparison.result.bestScenario.kind === 'today' ? 'Harvest now' : `Size ${financialComparison.result.bestScenario.targetSizeCountPerKg}`} — ${formatCurrency(financialComparison.result.bestScenario.operatingProfit)}
+Decision: ${financialComparison.result.decision} — ${financialComparison.result.decisionReason}
+Market price ladder: ${priceLadder.map((tier) => `${tier.sizeCountPerKg}=${formatCurrency(tier.pricePerKg)}/kg`).join(', ')}` : 'Comprehensive operating-profit comparison is waiting for market price inputs.'}
 Projection confidence: ${(projection.confidenceScore * 100).toFixed(0)}%
 Structured risks: ${projection.risks.map((risk) => `${risk.severity}: ${risk.summary}`).join('; ') || 'none'}
 
-Give a concise recommendation based on Orson's structured projection risk.`;
+Give a concise recommendation based on the operating-profit comparison and Orson's structured projection risk. Do not use the legacy feed-only profit calculation.`;
 
     try {
       const response = await sendMessage(prompt, activePonds, {
@@ -241,7 +454,12 @@ Give a concise recommendation based on Orson's structured projection risk.`;
 
 
   const generateProjectionHTML = (data: ProjectionExportData): string => {
-    const { pondName, futureDoc, projectedMbwG, projectedBiomassKg, projectedRevenue, projectedProfit, insight, companyName, confidenceScore, assumedSurvivalPercent, survivalConfidence, projectedFcr, marketSizeRisk, risks = [] } = data;
+    const { pondName, futureDoc, projectedMbwG, projectedBiomassKg, insight, companyName, confidenceScore, assumedSurvivalPercent, survivalConfidence, projectedFcr, marketSizeRisk, risks = [], operatingComparison } = data;
+    const decisionTitle = operatingComparison.decision === 'keep_growing'
+      ? 'Keep Growing'
+      : operatingComparison.decision === 'harvest_now'
+        ? 'Harvest Now'
+        : 'Review Data';
     return `
       <!DOCTYPE html>
       <html>
@@ -260,13 +478,22 @@ Give a concise recommendation based on Orson's structured projection risk.`;
           .value { font-size: 20px; font-weight: 700; color: #2C3E50; }
           .financial-card { background: #F0F9FF; padding: 25px; border-radius: 12px; border-left: 5px solid #3282B8; margin-bottom: 25px; }
           .profit { color: #10B981; font-size: 36px; font-weight: 900; }
+          .section { margin-top: 24px; page-break-inside: avoid; }
+          .section-title { font-size: 18px; font-weight: 800; color: #0F4C75; margin-bottom: 10px; }
+          .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+          .scenario { background: #FFFFFF; border: 1px solid #BAE6FD; border-radius: 10px; padding: 16px; }
+          .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          .table td { border-bottom: 1px solid #E2E8F0; padding: 8px 4px; }
+          .table td:last-child { text-align: right; font-weight: 700; }
+          .note { font-size: 12px; color: #64748B; margin-top: 10px; }
+          .warning { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 12px; border-radius: 8px; margin-top: 10px; }
           .orson-box { background: #FFFBEA; border: 1px solid #FDE68A; padding: 20px; border-radius: 12px; margin-top: 30px; }
           .footer { margin-top: 40px; text-align: center; font-size: 12px; color: #64748B; }
         </style>
       </head>
       <body>
         <div class="header">
-          <div class="title">Harvest Projection Audit</div>
+          <div class="title">Financial Harvest Projection</div>
           <div class="company-name">${companyName}</div>
           <div style="font-size: 14px; color: #4A5568;">Pond: ${pondName} | Generated on ${new Date().toLocaleDateString()}</div>
         </div>
@@ -280,10 +507,46 @@ Give a concise recommendation based on Orson's structured projection risk.`;
           <div class="card"><div class="label">Confidence</div><div class="value">${confidenceScore ? `${Math.round(confidenceScore * 100)}%` : '-'}</div></div>
         </div>
         <div class="financial-card">
-          <div class="label">Projected Gross Revenue</div>
-          <div class="value" style="font-size: 28px; margin-bottom: 15px;">${formatCurrency(projectedRevenue)}</div>
-          <div class="label">Projected Net Profit (After Future Feed)</div>
-          <div class="profit">${formatCurrency(projectedProfit)}</div>
+          <div class="label">Recommended action</div>
+          <div class="profit">${decisionTitle}</div>
+          <div style="margin-top: 8px; color: #334155;">${operatingComparison.decisionReason}</div>
+          <div class="comparison">
+            <div class="scenario">
+              <div class="label">Harvest today</div>
+              <div class="value">${formatCurrency(operatingComparison.todayOperatingProfit)}</div>
+              <div class="note">Revenue: ${formatCurrency(operatingComparison.todayRevenue)}</div>
+            </div>
+            <div class="scenario">
+              <div class="label">Best projected scenario</div>
+              <div class="value">${formatCurrency(operatingComparison.bestOperatingProfit)}</div>
+              <div class="note">Size ${operatingComparison.bestTargetSizeCountPerKg} in ${operatingComparison.bestDaysFromNow} days; revenue ${formatCurrency(operatingComparison.bestRevenue)}</div>
+            </div>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-title">Cost Basis</div>
+          <table class="table">
+            <tr><td>Consumed feed to date</td><td>${formatCurrency(operatingComparison.costsToDate.feed)}</td></tr>
+            <tr><td>Consumed additives to date</td><td>${formatCurrency(operatingComparison.costsToDate.additives)}</td></tr>
+            <tr><td>Allocated general expenses to date</td><td>${formatCurrency(operatingComparison.costsToDate.generalExpenses)}</td></tr>
+            <tr><td>Projected future feed at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.feed)}</td></tr>
+            <tr><td>Projected future additives at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.additives)}</td></tr>
+            <tr><td>Projected future general expenses at best scenario</td><td>${formatCurrency(operatingComparison.futureCosts.generalExpenses)}</td></tr>
+          </table>
+          ${operatingComparison.inventoryPurchasesExcluded ? '<div class="note">Unused feed and additive inventory is excluded. Only recorded consumption is treated as production cost.</div>' : ''}
+        </div>
+        <div class="section">
+          <div class="section-title">Key Assumptions and Sensitivities</div>
+          <table class="table">
+            <tr><td>Current market size</td><td>${operatingComparison.currentSizeCountPerKg} count/kg</td></tr>
+            <tr><td>Feed change benchmark</td><td>${operatingComparison.feedDailyIncreaseRatePercent.toFixed(2)}% per day</td></tr>
+            <tr><td>Mortality benchmark</td><td>${operatingComparison.dailyMortalityRatePercent.toFixed(4)}% per day</td></tr>
+            <tr><td>Mortality data coverage</td><td>${operatingComparison.mortalityRecordedDays} recorded days</td></tr>
+            <tr><td>Projected FCR</td><td>${projectedFcr ?? 'Not available'}</td></tr>
+            <tr><td>Survival assumption</td><td>${assumedSurvivalPercent ?? 'Not available'}%</td></tr>
+          </table>
+          <div class="note">The recommendation changes if selling prices, feed cost, ADG, mortality, or allocated operating expenses differ from the recorded trend.</div>
+          ${operatingComparison.dataQualityWarning ? '<div class="warning">Some projection inputs are incomplete. Review source records and recalculate after the next sampling, feed, mortality, or expense update.</div>' : ''}
         </div>
         <div class="orson-box">
           <div style="font-weight: 800; color: #92400E; margin-bottom: 8px;">Orson AI Risk Analysis:</div>
@@ -294,14 +557,14 @@ Give a concise recommendation based on Orson's structured projection risk.`;
             ${risks.length > 0 ? risks.map((risk: ProjectionRisk) => `<li><strong>${risk.severity}:</strong> ${risk.summary}</li>`).join('') : '<li>No projection-specific risks were detected from the available data.</li>'}
           </ul>
         </div>
-        <div class="footer">This is a biological projection based on current Orson metrics, survival assumptions, feed cost, and market-size inputs. Actual results may vary. Generated by Shrimply.</div>
+        <div class="footer">This projection is based on available app data and user-entered market prices. Actual results may vary due to market price, survival, feed cost, disease events, harvest timing, and operating conditions. Generated by Shrimply.</div>
       </body>
       </html>
     `;
   };
 
   const handleExport = async () => {
-    if (!selectedPond || !projection) return;
+    if (!selectedPond || !projection || !financialComparison) return;
     setExportLoading(true);
     try {
       const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
@@ -309,7 +572,26 @@ Give a concise recommendation based on Orson's structured projection risk.`;
         ...projection,
         pondName: selectedPond.pondName,
         companyName: company?.companyName || 'My Farm',
-        insight: insight
+        insight: insight,
+        operatingComparison: {
+          decision: financialComparison.result.decision,
+          decisionReason: financialDecisionReason,
+          currentSizeCountPerKg: financialComparison.result.currentSizeCountPerKg,
+          feedDailyIncreaseRatePercent: financialComparison.result.feedDailyIncreaseRatePercent,
+          dailyMortalityRatePercent: financialComparison.result.dailyMortalityRatePercent,
+          mortalityRecordedDays: financialComparison.mortality.recordedDays,
+          todayRevenue: financialComparison.result.today.revenue,
+          todayOperatingProfit: financialComparison.result.today.operatingProfit,
+          bestTargetSizeCountPerKg: financialComparison.result.bestScenario.targetSizeCountPerKg,
+          bestDaysFromNow: financialComparison.result.bestScenario.daysFromNow,
+          bestRevenue: financialComparison.result.bestScenario.revenue,
+          bestOperatingProfit: financialComparison.result.bestScenario.operatingProfit,
+          incrementalProfit: financialComparison.result.bestScenario.incrementalProfitVsToday,
+          costsToDate: financialComparison.result.today.totalCosts,
+          futureCosts: financialComparison.result.bestScenario.futureCosts,
+          inventoryPurchasesExcluded: financialComparison.costSnapshot.excludedInventoryPurchaseIds.length > 0,
+          dataQualityWarning: financialComparison.costSnapshot.warnings.length > 0 || financialComparison.result.warnings.length > 0 || financialComparison.mortality.recordedDays === 0 || Boolean(financeDataWarning),
+        },
       });
 
       const element = document.createElement('div');
@@ -343,7 +625,7 @@ Give a concise recommendation based on Orson's structured projection risk.`;
         <button 
           className="btn-primary" 
           onClick={handleExport}
-          disabled={exportLoading || !projection}
+          disabled={exportLoading || !projection || !financialComparison}
         >
           {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
           {exportLoading ? 'Generating...' : t.actions.export + ' Audit PDF'}
@@ -381,44 +663,63 @@ Give a concise recommendation based on Orson's structured projection risk.`;
           </div>
 
           <div className="glass-card" style={{ background: '#FFF', padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Target size={20} color="var(--primary)" /> 2. Manual Assumptions
+            <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Target size={20} color="var(--primary)" /> {t.harvestProjectionScreen?.marketPriceLadder || '2. Market Price by Size'}
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>DAYS UNTIL HARVEST</label>
-                <input type="number" value={daysToHarvest} onChange={e => { setDaysToHarvest(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>EXPECTED MARKET PRICE ({currencyConfig.symbol}/KG)</label>
-                <input type="number" step="0.1" value={expectedPrice} onChange={e => { setExpectedPrice(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>EST. DAILY FEED COST ({currencyConfig.symbol})</label>
-                <input type="number" value={dailyFeedCost} onChange={e => { setDailyFeedCost(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>GROWTH RATE (ADG g/DAY)</label>
-                  {projection?.historicalAdgGPerDay && projection.historicalAdgGPerDay > 0 && (
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)' }}>HISTORICAL: {projection.historicalAdgGPerDay.toFixed(2)}g</span>
+            <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: '16px' }}>
+              {t.harvestProjectionScreen?.marketPriceHelp || 'Save the farm-gate price per kg for each size. Saved prices are reused for every pond until edited.'}
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
+              {HARVEST_MARKET_SIZE_TIERS.map((size) => (
+                <label key={size} style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                  {size} {t.harvestProjectionScreen?.countPerKg || 'count/kg'}
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={marketPrices[size]}
+                    disabled={!isEditingPrices || !canManagePriceLadder}
+                    placeholder={`${currencyConfig.symbol}/kg`}
+                    onChange={(event) => {
+                      setMarketPrices((current) => ({ ...current, [size]: event.target.value }));
+                      setPriceSaveStatus('idle');
+                      setPriceSaveError(null);
+                      setInsight(null);
+                    }}
+                    style={{ width: '100%', padding: '10px', borderRadius: '9px', border: '1px solid var(--border)', background: isEditingPrices ? 'var(--bg-mid)' : '#FFF', outline: 'none', opacity: canManagePriceLadder ? 1 : 0.75 }}
+                  />
+                </label>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginTop: '18px', flexWrap: 'wrap' }}>
+              {canManagePriceLadder && isEditingPrices && (
+                <>
+                  <button
+                    className="btn-primary"
+                    onClick={handleSavePrices}
+                    disabled={priceSaveStatus === 'saving' || !hasUnsavedPriceChanges}
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}
+                  >
+                    {priceSaveStatus === 'saving' ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                    {priceSaveStatus === 'saving'
+                      ? (t.harvestProjectionScreen?.savingPrices || 'Saving...')
+                      : (t.harvestProjectionScreen?.savePrices || 'Save prices')}
+                  </button>
+                  {hasSavedPriceLadder && (
+                    <button className="btn-secondary" onClick={handleCancelPriceEdit} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                      <X size={16} /> {t.actions.cancel || 'Cancel'}
+                    </button>
                   )}
-                </div>
-                <input type="number" step="0.01" value={targetADG} onChange={e => { setTargetADG(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>ASSUMED SURVIVAL (%)</label>
-                  {projection && (
-                    <span style={{ fontSize: '10px', fontWeight: 800, color: 'var(--primary)' }}>CONFIDENCE: {projection.survivalConfidence.toUpperCase()}</span>
-                  )}
-                </div>
-                <input type="number" step="0.1" value={assumedSurvival} onChange={e => { setAssumedSurvival(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <label style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>TARGET MARKET SIZE (G)</label>
-                <input type="number" step="0.1" value={targetMarketSize} onChange={e => { setTargetMarketSize(e.target.value); setInsight(null); }} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
-              </div>
+                </>
+              )}
+              {canManagePriceLadder && !isEditingPrices && (
+                <button className="btn-secondary" onClick={() => { setIsEditingPrices(true); setPriceSaveStatus('idle'); }} style={{ display: 'inline-flex', alignItems: 'center', gap: '7px' }}>
+                  <Pencil size={16} /> {t.harvestProjectionScreen?.editPrices || 'Edit prices'}
+                </button>
+              )}
+              {priceSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 700, color: '#059669' }}>{t.harvestProjectionScreen?.pricesSaved || 'Prices saved.'}</span>}
+              {priceSaveError && <span style={{ fontSize: '12px', fontWeight: 700, color: '#B91C1C' }}>{t.harvestProjectionScreen?.priceSaveError || priceSaveError}</span>}
+              {!canManagePriceLadder && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.priceEditRestricted || 'Only owners and finance managers can edit saved prices.'}</span>}
             </div>
           </div>
         </div>
@@ -428,53 +729,102 @@ Give a concise recommendation based on Orson's structured projection risk.`;
           
           <div className="glass-card" style={{ background: '#FFF', padding: '32px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <TrendingUp size={22} color="var(--primary)" /> Projected Outcomes
+              <TrendingUp size={22} color="var(--primary)" /> {t.harvestProjectionScreen?.step3 || '3. Financial Projected Outcomes'}
             </h3>
-            
-            {projection ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>HARVEST DOC</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.futureDoc ?? '-'}</div>
+
+            {!selectedPond ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>{t.forms.selectPond || 'Please select a pond to begin.'}</div>
+            ) : !hasSavedPriceLadder ? (
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
+                {t.harvestProjectionScreen?.priceRequired || 'Save at least one market price to calculate harvest-today versus target-size operating profit.'}
+              </div>
+            ) : financialComparison && projection ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
+                <div style={{ padding: '28px', borderRadius: '22px', background: 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)', border: '1px solid #BAE6FD' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#0369A1', textTransform: 'uppercase' }}>
+                    {financialComparison.result.decision === 'keep_growing'
+                      ? (t.harvestProjectionScreen?.keepGrowing || 'Keep Growing')
+                      : financialComparison.result.decision === 'harvest_now'
+                        ? (t.harvestProjectionScreen?.harvestNow || 'Harvest Now')
+                        : (t.harvestProjectionScreen?.reviewData || 'Review Data')}
                   </div>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>PROJ. MBW</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedMbwG?.toFixed(1) ?? '-'}g</div>
+                  <div style={{ fontSize: '14px', color: '#334155', marginTop: '6px' }}>{financialDecisionReason}</div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '14px' }}>
+                  <div style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
+                    <div style={{ fontSize: '25px', fontWeight: 900, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
                   </div>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>PROJ. BIOMASS</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.projectedBiomassKg?.toFixed(0) ?? '-'} kg</div>
+                  <div style={{ padding: '18px', borderRadius: '16px', background: '#ECFDF5' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#047857' }}>
+                      {financialComparison.result.bestScenario.kind === 'today'
+                        ? (t.harvestProjectionScreen?.bestOption || 'BEST OPTION')
+                        : `${t.harvestProjectionScreen?.targetSize || 'TARGET SIZE'} ${financialComparison.result.bestScenario.targetSizeCountPerKg}`}
+                    </div>
+                    <div style={{ fontSize: '25px', fontWeight: 900, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
+                    <div style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(financialComparison.result.bestScenario.revenue)}</div>
+                    <div style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
                   </div>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>ASSUMED ADG</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.assumedAdgGPerDay?.toFixed(2) ?? '-'}g</div>
-                  </div>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>ASSUMED SURVIVAL</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{projection.assumedSurvivalPercent ?? '-'}%</div>
-                  </div>
-                  <div style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-mid)', textAlign: 'center' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)', marginBottom: '8px' }}>CONFIDENCE</div>
-                    <div style={{ fontSize: '24px', fontWeight: 900, color: 'var(--primary)' }}>{Math.round(projection.confidenceScore * 100)}%</div>
+                  <div style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
+                    <div style={{ fontSize: '25px', fontWeight: 900, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
+                      {formatCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}
+                    </div>
+                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</div>
                   </div>
                 </div>
 
-                <div style={{ padding: '32px', borderRadius: '24px', background: 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)', border: '1px solid #BAE6FD' }}>
-                  <div style={{ marginBottom: '24px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '4px' }}>ESTIMATED GROSS REVENUE</div>
-                    <div style={{ fontSize: '36px', fontWeight: 900, color: 'var(--text-primary)' }}>{formatCurrency(projection.projectedRevenue)}</div>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '10px' }}>{t.harvestProjectionScreen?.sizeComparison || 'Profit by harvest size'}</div>
+                  <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '650px', fontSize: '12px' }}>
+                      <thead style={{ background: 'var(--bg-mid)', color: 'var(--text-muted)' }}>
+                        <tr>
+                          <th style={{ padding: '11px', textAlign: 'left' }}>{t.harvestProjectionScreen?.harvestSize || 'Harvest size'}</th>
+                          <th style={{ padding: '11px', textAlign: 'right' }}>{t.harvestProjectionScreen?.days || 'Days'}</th>
+                          <th style={{ padding: '11px', textAlign: 'right' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}</th>
+                          <th style={{ padding: '11px', textAlign: 'right' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}</th>
+                          <th style={{ padding: '11px', textAlign: 'right' }}>{t.harvestProjectionScreen?.operatingProfit || 'Operating profit'}</th>
+                          <th style={{ padding: '11px', textAlign: 'right' }}>{t.harvestProjectionScreen?.changeVsToday || 'Change vs today'}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[financialComparison.result.today, ...financialComparison.result.targets].map((scenario) => (
+                          <tr key={`${scenario.kind}-${scenario.targetSizeCountPerKg}`} style={{ borderTop: '1px solid var(--border)', background: scenario === financialComparison.result.bestScenario ? '#ECFDF5' : '#FFF' }}>
+                            <td style={{ padding: '11px', fontWeight: 800 }}>{scenario.kind === 'today' ? `${t.harvestProjectionScreen?.today || 'Today'} (${scenario.targetSizeCountPerKg})` : scenario.targetSizeCountPerKg}</td>
+                            <td style={{ padding: '11px', textAlign: 'right' }}>{scenario.daysFromNow}</td>
+                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(scenario.revenue)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(totalScenarioCosts(scenario.totalCosts))}</td>
+                            <td style={{ padding: '11px', textAlign: 'right', fontWeight: 900, color: scenario.operatingProfit >= 0 ? '#059669' : '#DC2626' }}>{formatCurrency(scenario.operatingProfit)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right', color: scenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626' }}>{formatCurrency(scenario.incrementalProfitVsToday)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div style={{ borderTop: '1px solid #BAE6FD', paddingTop: '24px' }}>
-                    <div style={{ fontSize: '13px', fontWeight: 700, color: '#059669', marginBottom: '4px' }}>PROJECTED PROFIT (MINUS FUTURE FEED)</div>
-                    <div style={{ fontSize: '36px', fontWeight: 900, color: '#059669' }}>{formatCurrency(projection.projectedProfit)}</div>
-                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestDOC || 'HARVEST DOC'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{projection.futureDoc ?? '-'}</div></div>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projBiomass || 'PROJ. BIOMASS'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedBiomassKg.toFixed(0)} kg</div></div>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projectedSurvival || 'PROJECTED SURVIVAL'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedSurvivalRatePercent.toFixed(1)}%</div></div>
+                </div>
+
+                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', fontSize: '12px', lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>{t.harvestProjectionScreen?.costsIncluded || 'Costs included to date'}</strong><br />
+                  {t.inventory?.feeds || 'Feed'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.feed)} · {t.inventory?.additives || 'Additives'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.additives)}<br />
+                  {t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}<br />
+                  {t.harvestProjectionScreen?.feedTrend || 'Daily feed trend'}: {financialComparison.result.feedDailyIncreaseRatePercent.toFixed(2)}% · {t.harvestProjectionScreen?.mortalityTrend || 'Daily mortality benchmark'}: {financialComparison.result.dailyMortalityRatePercent.toFixed(4)}%
+                  {financialComparison.costSnapshot.excludedInventoryPurchaseIds.length > 0 && <div style={{ color: '#92400E' }}>• {t.harvestProjectionScreen?.inventorySafeguard || 'Unused inventory is excluded; only consumed feed and additives are counted.'}</div>}
+                  {(financialComparison.costSnapshot.warnings.length > 0 || financialComparison.result.warnings.length > 0 || financialComparison.mortality.recordedDays === 0) && <div style={{ color: '#92400E' }}>• {t.harvestProjectionScreen?.dataQualityWarning || 'Some projection inputs are incomplete. Review the recorded data before deciding.'}</div>}
+                  {financeDataWarning && <div style={{ color: '#92400E' }}>• {t.harvestProjectionScreen?.financeLoadWarning || 'General expenses could not be loaded. Review the result before using it.'}</div>}
                 </div>
               </div>
             ) : (
-              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>
-                {t.forms.selectPond || 'Please select a pond to begin.'}
-              </div>
+              <div style={{ textAlign: 'center', padding: '48px', color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.dataQualityWarning || 'Projection data is still loading or incomplete.'}</div>
             )}
           </div>
 

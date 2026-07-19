@@ -672,18 +672,13 @@ export default function FinancePage() {
                 <>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthlyCardsScroll}>
                     <View style={styles.monthlyCardsContainer}>
-                      {profitLossData.map((data, index) => {
-                        const profitMargin = data.revenue > 0 ? ((data.profit / data.revenue) * 100).toFixed(1) : '0.0';
+                      {profitLossData.map((data) => {
                         const isProfit = data.profit >= 0;
                         
                         return (
-                          <View key={index} style={styles.monthCard}>
+                          <View key={data.month} style={styles.monthCard}>
                             <View style={styles.monthCardHeader}>
                               <Text style={styles.monthCardMonth}>{data.month}</Text>
-                              <View style={[styles.profitBadge, isProfit ? styles.profitBadgePositive : styles.profitBadgeNegative]}>
-                                <Ionicons name={isProfit ? "trending-up" : "trending-down"} size={12} color="#FFFFFF" />
-                                <Text style={styles.profitBadgeText}>{profitMargin}%</Text>
-                              </View>
                             </View>
                             
                             <View style={styles.monthCardBody}>
@@ -1023,9 +1018,9 @@ const styles = StyleSheet.create({
   syncToggleSubtext: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#7F8C8D' },
   content: { flex: 1 },
   periodContainer: { flexDirection: 'row', margin: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  periodTab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: Platform.OS === 'android' ? 7 : 8 },
+  periodTab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', justifyContent: 'center', borderRadius: Platform.OS === 'android' ? 7 : 8 },
   periodTabActive: { backgroundColor: '#3498DB' },
-  periodTabText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#7F8C8D' },
+  periodTabText: { fontSize: Platform.OS === 'android' ? 13 : 14, lineHeight: Platform.OS === 'android' ? 17 : 19, fontWeight: '600', color: '#7F8C8D', textAlign: 'center' },
   periodTabTextActive: { color: '#FFFFFF' },
   summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12 },
@@ -1044,10 +1039,6 @@ const styles = StyleSheet.create({
   monthCard: { width: Platform.OS === 'android' ? 260 : 280, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#ECF0F1' },
   monthCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   monthCardMonth: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: '700', color: '#2C3E50' },
-  profitBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: Platform.OS === 'android' ? 5 : 6, borderRadius: Platform.OS === 'android' ? 18 : 20 },
-  profitBadgePositive: { backgroundColor: '#27AE60' },
-  profitBadgeNegative: { backgroundColor: '#E74C3C' },
-  profitBadgeText: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '700', color: '#FFFFFF' },
   monthCardBody: { gap: Platform.OS === 'android' ? 10 : 12 },
   amountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   amountLabel: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8 },

@@ -354,6 +354,7 @@ export const useFirebaseSync = () => {
                 plSupplier: data.plSupplier || data.supplier || '',
                 initialWeight: data.initialWeight || 0,
                 samplings: data.samplings || [],
+                mortalityRecords: data.mortalityRecords || [],
                 totalHarvestedBiomass: data.totalHarvestedBiomass || 0,
                 totalHarvestedPopulation: data.totalHarvestedPopulation || 0,
                 totalHarvestedFeed: data.totalHarvestedFeed || 0,

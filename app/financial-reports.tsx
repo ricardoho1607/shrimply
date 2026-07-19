@@ -136,7 +136,7 @@ export default function FinancialReportsPage() {
     const { startDateKey, endDateKey } = getDateRange();
     const scopeFinance = <T extends { cycleId?: string }>(items: T[]) =>
       cycleScope === 'current' && activeFarmCycle
-        ? items.filter((item) => item.cycleId === activeFarmCycle.id)
+        ? items.filter((item) => !item.cycleId || item.cycleId === activeFarmCycle.id)
         : items;
 
     return {
@@ -360,17 +360,17 @@ export default function FinancialReportsPage() {
             ))}
           </View>
 
-          <View style={styles.periodContainer}>
+          <View style={[styles.periodContainer, styles.cyclePeriodContainer]}>
             {[
               { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
               { key: 'all', label: 'All History' },
             ].map((scope) => (
               <TouchableOpacity
                 key={scope.key}
-                style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
+                style={[styles.periodTab, styles.cyclePeriodTab, cycleScope === scope.key && styles.periodTabActive]}
                 onPress={() => setCycleScope(scope.key as 'current' | 'all')}
               >
-                <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
+                <Text style={[styles.periodTabText, styles.cyclePeriodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
                   {scope.label}
                 </Text>
               </TouchableOpacity>
@@ -654,10 +654,13 @@ const styles = StyleSheet.create({
   comingSoonText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase' },
   selectedCheck: { position: 'absolute', top: 8, right: 8 },
   periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  cyclePeriodContainer: { marginTop: Platform.OS === 'android' ? 10 : 12 },
   periodTab: { flex: 1, minWidth: '30%', paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#F8FAFB' },
   periodTabActive: { backgroundColor: '#3498DB' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
   periodTabTextActive: { color: '#FFFFFF' },
+  cyclePeriodTab: { paddingHorizontal: 8, justifyContent: 'center' },
+  cyclePeriodTabText: { lineHeight: Platform.OS === 'android' ? 16 : 18, textAlign: 'center' },
   customDateContainer: { marginTop: Platform.OS === 'android' ? 14 : 16, gap: Platform.OS === 'android' ? 10 : 12 },
   dateInputGroup: { gap: 8 },
   dateLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#34495E' },

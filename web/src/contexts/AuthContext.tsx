@@ -67,6 +67,7 @@ interface Company {
   teamMembers: string[];
   pendingInvites: PendingInvite[];
   timeZone?: string;
+  harvestProjectionMarketPrices?: Record<string, number>;
 }
 
 interface PendingInvite {

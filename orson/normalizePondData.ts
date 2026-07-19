@@ -234,6 +234,7 @@ const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null
   const feed = firstNumber(record.feed);
 
   if ((mbw !== null && mbw > 0) || (mortality !== null && mortality > 0)) kinds.push('sampling');
+  if (record.mortalityObservationType) kinds.push('mortality');
   if (
     firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency) !== null
   ) {
@@ -251,7 +252,11 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
   const feedData = normalizeFeedData(record);
   const feedKg = feedData?.totalDailyFeedKg ?? firstNumber(record.feed);
   const mbwG = firstNumber(record.mbw, record.abw);
-  const mortalityCount = firstNumber(record.mortality, record.dead, record.deaths);
+  const mortalityCount = record.mortalityObservationType
+    ? record.mortalityObservationType === 'estimated_total'
+      ? firstNumber(record.mortality, record.count) ?? 0
+      : 0
+    : firstNumber(record.mortality, record.dead, record.deaths);
 
   const normalized: OrsonNormalizedRecord = {
     id: firstString(record.id),
@@ -296,11 +301,19 @@ export const normalizePondData = (
     : null;
   const initialPopulation = explicitInitialPopulation ?? calculatedInitialPopulation;
 
-  const rawRecords = Array.isArray(pond.samplings)
+  const rawSamplingRecords = Array.isArray(pond.samplings)
     ? pond.samplings
     : Array.isArray(pond.records)
       ? pond.records
       : [];
+  const rawMortalityRecords = Array.isArray(pond.mortalityRecords)
+    ? pond.mortalityRecords.map((record: RawRecord) => ({
+        ...record,
+        mortalityObservationType: record.observationType,
+        mortality: record.count,
+      }))
+    : [];
+  const rawRecords = [...rawSamplingRecords, ...rawMortalityRecords];
 
   const records = rawRecords
     .filter((record) => record && typeof record === 'object')

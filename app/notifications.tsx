@@ -187,27 +187,31 @@ export default function NotificationsScreen() {
             <Ionicons name="arrow-back" size={24} color="#0d2137" />
           </TouchableOpacity>
 
-          <View style={styles.headerTitleContainer} pointerEvents="none">
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {t.notifications?.title || 'Notifications'}
-            </Text>
-          </View>
+          <Text style={styles.headerTitle} numberOfLines={1}>
+            {t.notifications?.title || 'Notifications'}
+          </Text>
 
           <View style={styles.headerRightActions}>
+            {unreadCount > 0 && (
+              <TouchableOpacity
+                style={styles.headerActionButton}
+                onPress={markAllAsRead}
+                accessibilityRole="button"
+                accessibilityLabel={t.notifications?.markAllRead || 'Mark all as read'}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="checkmark-done-outline" size={22} color="#0F4C75" />
+              </TouchableOpacity>
+            )}
             {notifications.length > 0 && (
               <TouchableOpacity
-                style={styles.clearButton}
+                style={styles.headerActionButton}
                 onPress={confirmClearAll}
                 accessibilityRole="button"
                 accessibilityLabel="Clear all notifications"
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Ionicons name="trash-outline" size={22} color="#e74c3c" />
-              </TouchableOpacity>
-            )}
-            {unreadCount > 0 && (
-              <TouchableOpacity style={styles.markAllButton} onPress={markAllAsRead}>
-                <Text style={styles.markAllText}>{t.notifications?.markAllRead || 'Read'}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -279,44 +283,20 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     backgroundColor: '#dce8f2',
   },
-  backButton: { padding: 8, marginLeft: -4, zIndex: 1 },
-  headerTitleContainer: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 96,
-  },
+  backButton: { padding: 8, marginLeft: -4 },
   headerTitle: {
+    flex: 1,
     fontSize: 20,
     fontWeight: 'bold',
     color: '#0d2137',
-    textAlign: 'center',
+    marginLeft: 8,
   },
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginLeft: 'auto',
-    zIndex: 1,
+    gap: 4,
   },
-  clearButton: {
-    padding: 6,
-  },
-  markAllButton: {
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  markAllText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0d2137',
-  },
+  headerActionButton: { padding: 8 },
   filterContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,

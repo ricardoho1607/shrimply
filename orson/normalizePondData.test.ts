@@ -46,6 +46,20 @@ export const runNormalizePondDataSelfTest = () => {
           feed: '50',
         },
       ],
+      mortalityRecords: [
+        {
+          id: 'mortality-1',
+          date: '2026-01-05',
+          observationType: 'estimated_total',
+          count: 25,
+        },
+        {
+          id: 'mortality-2',
+          date: '2026-01-06',
+          observationType: 'observed_recovered',
+          count: 10,
+        },
+      ],
     },
     { now: new Date('2026-01-06T00:00:00Z') },
   );
@@ -57,12 +71,15 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.initialPopulation === 250000, 'derives initial population from area and density');
   assert(pond.initialWeightG === 0.8, 'normalizes initial weight');
   assert(pond.currentDoc === 5, 'calculates current DOC');
-  assert(pond.records.length === 3, 'keeps existing records');
+  assert(pond.records.length === 5, 'keeps sampling and mortality records');
   assert(pond.records[0].kinds.includes('water_quality'), 'detects water-quality record');
   assert(!pond.records[0].kinds.includes('feed'), 'does not treat zero-feed water-quality entry as feed');
   assert(pond.records[1].feedKg === 52, 'uses feedData total daily feed');
   assert(pond.records[2].kinds.includes('sampling'), 'detects sampling record');
   assert(pond.records[2].mbwG === 1.2, 'normalizes MBW');
+  assert(pond.records[3].kinds.includes('mortality'), 'detects daily mortality record');
+  assert(pond.records[3].mortalityCount === 25, 'deducts estimated total mortality');
+  assert(pond.records[4].mortalityCount === 0, 'does not deduct observed recovered mortality');
 
   return pond;
 };

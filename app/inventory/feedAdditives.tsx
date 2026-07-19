@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, FlatList, Modal, Platform, ScrollView, Share, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
@@ -261,28 +261,6 @@ export default function FeedAdditivesScreen() {
     setModalVisible(true);
   }, []);
 
-  const exportCSV = useCallback(async () => {
-    try {
-      const rows = [[t.inventory.itemName, 'Action', 'Date', t.inventory.quantity, t.inventory.unitPrice, t.inventory.total, t.inventory.pondId, t.inventory.batch, t.inventory.expiry, t.inventory.notes].join(',')];
-      [...store.feeds, ...store.additives].forEach((item: any) => {
-        const type = 'feedName' in item ? 'Feed' : 'Additive';
-        const name = type === 'Feed' ? item.feedName : item.additiveName;
-        (item.stockInHistory || []).forEach((s: any) => {
-          const row = [type, name, t.inventory.stockIn, s.date || '', s.quantity, s.price, (s.quantity * s.price).toFixed(2), '', s.batch || '', s.expiry || '', s.notes || ''];
-          rows.push(row.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','));
-        });
-        (item.usageHistory || []).forEach((u: any) => {
-          const row = [type, name, t.inventory.use, u.date || '', -u.quantity, '', '', u.pondId || '', '', '', u.notes || ''];
-          rows.push(row.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(','));
-        });
-      });
-      await Share.share({ message: rows.join('\n'), title: `inventory_${company?.id || 'export'}` });
-    } catch (e) {
-      console.error('Inventory export failed:', e);
-      Alert.alert(t.inventory.exportFailed, t.inventory.unknownError);
-    }
-  }, [store.feeds, store.additives, company?.id, t]);
-
   const ItemCard = ({ item, type }: { item: Feed | Additive; type: ItemType }) => {
     const name = type === 'feed' ? (item as Feed).feedName : (item as Additive).additiveName;
     const totalStockInQty = item.stockInHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
@@ -508,12 +486,15 @@ export default function FeedAdditivesScreen() {
         {activeTab !== 'dashboard' && (
           <View style={styles.searchContainer}>
             <View style={styles.searchRow}>
-              <TextInput placeholder={t.inventory.searchPlaceholder} value={searchQuery} onChangeText={setSearchQuery} style={[styles.textInput, { flex: 1 }]} />
+              <TextInput
+                placeholder={t.inventory.searchPlaceholder}
+                placeholderTextColor="#6B7F91"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                style={[styles.textInput, styles.searchInput, { flex: 1 }]}
+              />
               <TouchableOpacity onPress={() => { setCategoryFilter(null); setSearchQuery(''); }} style={{ padding: 12 }}>
-                <Ionicons name="close-circle" size={20} color="#dce8f2" />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={exportCSV} style={{ padding: 12 }}>
-                <Ionicons name="download-outline" size={20} color="#0d2137" />
+                <Ionicons name="close-circle" size={20} color="#6B7F91" />
               </TouchableOpacity>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
@@ -809,6 +790,7 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#315f57' },
   searchContainer: { padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFF', borderBottomColor: '#E8F4F8', borderBottomWidth: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  searchInput: { backgroundColor: '#F4F8FC', borderColor: '#B8CBD9' },
   scroll: { padding: Platform.OS === 'android' ? 14 : 16, paddingBottom: 140 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
   metricCard: { 

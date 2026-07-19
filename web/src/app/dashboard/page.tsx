@@ -42,6 +42,7 @@ import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 import {
   calculatePondMetricsWithHarvest,
   getLatestValidMbwSampling,
+  type SharedMortalityRecord,
 } from '../../../../shared/pondCalculations';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 
@@ -74,6 +75,7 @@ interface Sampling {
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
+  mortalityRecords?: SharedMortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
   cycleId?: string;
   cycleStatus?: 'active' | 'ended';
@@ -537,7 +539,14 @@ export default function DashboardPage() {
 
       if (sorted.length >= 2) {
         const previousSamplings = sorted.slice(0, -1);
-        const previousMetrics = calculatePondMetricsWithHarvest({ ...pond, samplings: previousSamplings }, company?.timeZone);
+        const previousSamplingTime = new Date(previousSamplings[previousSamplings.length - 1].date).getTime();
+        const previousMortalityRecords = (pond.mortalityRecords || [])
+          .filter((record) => new Date(record.date || '').getTime() <= previousSamplingTime);
+        const previousMetrics = calculatePondMetricsWithHarvest({
+          ...pond,
+          samplings: previousSamplings,
+          mortalityRecords: previousMortalityRecords,
+        }, company?.timeZone);
         prevBiomass += previousMetrics.currentBiomass;
         prevSR += previousMetrics.adjustedSR;
         prevPop += previousMetrics.currentPopulation;

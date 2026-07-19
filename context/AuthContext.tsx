@@ -68,6 +68,7 @@ interface Company {
   logo?: string;
   logoUrl?: string;
   timeZone?: string;
+  harvestProjectionMarketPrices?: Record<string, number>;
 }
 
 const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {

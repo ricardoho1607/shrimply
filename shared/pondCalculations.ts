@@ -25,6 +25,22 @@ export interface SharedSampling {
   cumulativeFeedToDate?: number | string | null;
 }
 
+export type MortalityObservationType = 'estimated_total' | 'observed_recovered' | 'none_observed';
+
+export interface SharedMortalityRecord {
+  id?: string;
+  date?: string;
+  observationType?: MortalityObservationType;
+  count?: number | string | null;
+  mbwAtRecord?: number | string | null;
+  notes?: string | null;
+  recordedAt?: string | null;
+  recordedBy?: string | null;
+  cycleId?: string | null;
+  cycleName?: string | null;
+  pondCycleId?: string | null;
+}
+
 export interface SharedPond {
   docStart?: string | null;
   baselineDate?: string | null;
@@ -45,6 +61,7 @@ export interface SharedPond {
   postHarvestReferenceSamplingDate?: string | null;
   postHarvestReferenceMbw?: number | string | null;
   samplings?: SharedSampling[] | null;
+  mortalityRecords?: SharedMortalityRecord[] | null;
 }
 
 export interface PondMetricsWithHarvest {
@@ -123,6 +140,12 @@ export const getSamplingMbw = (sampling?: Pick<SharedSampling, 'mbw' | 'abw'> | 
 
 export const isBaselineSampling = (sampling: Pick<SharedSampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+
+export const getMortalityPopulationDeduction = (
+  record: Pick<SharedMortalityRecord, 'observationType' | 'count'>,
+): number => record.observationType === 'estimated_total'
+  ? Math.max(0, toFiniteNumber(record.count))
+  : 0;
 
 export const getSamplingFeedAmount = (sampling: Pick<SharedSampling, 'feed' | 'feedData'>): number => {
   const samplingFeed = toFiniteNumber(sampling.feed);
@@ -283,6 +306,7 @@ export const calculateAdg = (
 
 export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: string): PondMetricsWithHarvest => {
   const samplings = pond.samplings || [];
+  const mortalityRecords = pond.mortalityRecords || [];
   const validSamplings = sortByDateAsc(
     samplings.filter(
       (sampling) =>
@@ -299,12 +323,19 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
   const latestSampling = validSamplings[validSamplings.length - 1];
   const latestValidMbwSampling = [...validSamplings].reverse().find((sampling) => getSamplingMbw(sampling) > 0);
   const baselineTime = getValidTime(pond.baselineDate) ?? 0;
-  const postBaselineMortality = validSamplings
-    .filter((sampling) => !isBaselineSampling(sampling) && (!baselineTime || (getValidTime(sampling.date) ?? 0) >= baselineTime))
-    .reduce((sum, sampling) => sum + toFiniteNumber(sampling.mortality), 0);
-  const totalMortality = validSamplings
+  const samplingMortality = validSamplings
     .filter((sampling) => !isBaselineSampling(sampling))
     .reduce((sum, sampling) => sum + toFiniteNumber(sampling.mortality), 0);
+  const dailyMortality = mortalityRecords
+    .reduce((sum, record) => sum + getMortalityPopulationDeduction(record), 0);
+  const postBaselineSamplingMortality = validSamplings
+    .filter((sampling) => !isBaselineSampling(sampling) && (!baselineTime || (getValidTime(sampling.date) ?? 0) >= baselineTime))
+    .reduce((sum, sampling) => sum + toFiniteNumber(sampling.mortality), 0);
+  const postBaselineDailyMortality = mortalityRecords
+    .filter((record) => !baselineTime || (getValidTime(record.date) ?? 0) >= baselineTime)
+    .reduce((sum, record) => sum + getMortalityPopulationDeduction(record), 0);
+  const postBaselineMortality = postBaselineSamplingMortality + postBaselineDailyMortality;
+  const totalMortality = samplingMortality + dailyMortality;
 
   let currentPopulation = initialPopulation;
   if (baselinePopulation !== null) {
@@ -344,9 +375,15 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
   const initialBiomass = (initialPopulation * initialWeight) / 1000;
   const biomassGain = producedBiomass - initialBiomass;
   const biomassGainFCR = biomassGain > 0 ? totalFeedConsumed / biomassGain : 0;
-  const totalMortalityWeight = validSamplings
+  const samplingMortalityWeight = validSamplings
     .filter((sampling) => !isBaselineSampling(sampling))
     .reduce((sum, sampling) => sum + (toFiniteNumber(sampling.mortality) * getSamplingMbw(sampling)) / 1000, 0);
+  const dailyMortalityWeight = mortalityRecords.reduce((sum, record) => {
+    const mortalityCount = getMortalityPopulationDeduction(record);
+    const mbwAtRecord = Math.max(0, toFiniteNumber(record.mbwAtRecord));
+    return sum + (mortalityCount * mbwAtRecord) / 1000;
+  }, 0);
+  const totalMortalityWeight = samplingMortalityWeight + dailyMortalityWeight;
 
   return {
     currentBiomass,
@@ -388,6 +425,12 @@ export const detectFeedBiomassMismatchInsight = (
           const samplingTime = getValidTime(sampling.date);
           if (itemTime === null || samplingTime === null) return item === sampling;
           return itemTime <= samplingTime;
+        }),
+        mortalityRecords: (pond.mortalityRecords || []).filter((record) => {
+          const recordTime = getValidTime(record.date);
+          const samplingTime = getValidTime(sampling.date);
+          if (recordTime === null || samplingTime === null) return false;
+          return recordTime <= samplingTime;
         }),
       });
       const recordBiomassKg = metricsToDate.currentBiomass;

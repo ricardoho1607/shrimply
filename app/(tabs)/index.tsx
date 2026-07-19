@@ -9,7 +9,7 @@ import {
   Text, TextInput, TouchableOpacity, View, Alert, KeyboardAvoidingView,
   Keyboard, TouchableWithoutFeedback
 } from 'react-native';
-import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, type PhysicalPond, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from '.././store/pondStore';
+import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, type PhysicalPond, type MortalityObservationType, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from '.././store/pondStore';
 import { useFirebaseSync } from '.././hooks/useFirebaseSync';
 import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
@@ -34,9 +34,12 @@ interface FormData {
   cyclePondId: string;
   selectedPond: string; 
   mbw: string; 
-  mortality: string; 
   feed: string; 
   samplingDate: Date;
+  mortalityObservationType: MortalityObservationType;
+  mortalityCount: string;
+  mortalityDate: Date;
+  mortalityNotes: string;
 }
 
 const pondNameCollator = new Intl.Collator(undefined, {
@@ -101,7 +104,8 @@ const InputField = React.memo(({
   onChangeText, 
   placeholder, 
   keyboardType = 'default', 
-  hint 
+  hint,
+  maxLength,
 }: {
   label: string; 
   value: string; 
@@ -109,6 +113,7 @@ const InputField = React.memo(({
   placeholder: string;
   keyboardType?: 'default' | 'numeric' | 'email-address' | 'phone-pad'; 
   hint?: string;
+  maxLength?: number;
 }) => (
   <View style={styles.inputContainer}>
     <Text style={styles.inputLabel}>{label}</Text>
@@ -117,6 +122,7 @@ const InputField = React.memo(({
       value={value} 
       onChangeText={onChangeText} 
       keyboardType={keyboardType}
+      maxLength={maxLength}
       style={styles.input} 
       placeholderTextColor="#6b8aa0" 
     />
@@ -165,6 +171,7 @@ export default function PondManagementScreen() {
     updatePond,
     deletePond,
     addSampling, 
+    addMortalityRecord,
     endPondCycle, 
     updateFarmCycle,
     closeFarmCycle,
@@ -181,8 +188,8 @@ export default function PondManagementScreen() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
-  const [modalType, setModalType] = useState<'pond' | 'sampling' | 'cycle' | 'baseline'>('pond');
-  const [datePickerField, setDatePickerField] = useState<'docStart' | 'samplingDate' | 'baselineDate'>('docStart');
+  const [modalType, setModalType] = useState<'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline'>('pond');
+  const [datePickerField, setDatePickerField] = useState<'docStart' | 'samplingDate' | 'mortalityDate' | 'baselineDate'>('docStart');
   const [tempDate, setTempDate] = useState(new Date());
   const tempDateRef = useRef(new Date());
   const originalDateRef = useRef(new Date());
@@ -205,9 +212,12 @@ export default function PondManagementScreen() {
     cyclePondId: '',
     selectedPond: '', 
     mbw: '', 
-    mortality: '', 
     feed: '', 
-    samplingDate: new Date()
+    samplingDate: new Date(),
+    mortalityObservationType: 'estimated_total',
+    mortalityCount: '',
+    mortalityDate: new Date(),
+    mortalityNotes: '',
   });
 
   useEffect(() => {
@@ -260,9 +270,12 @@ export default function PondManagementScreen() {
     cyclePondId: '',
     selectedPond: '', 
     mbw: '', 
-    mortality: '', 
     feed: '', 
-    samplingDate: new Date()
+    samplingDate: new Date(),
+    mortalityObservationType: 'estimated_total',
+    mortalityCount: '',
+    mortalityDate: new Date(),
+    mortalityNotes: '',
   }), []);
 
   const convertPlToGrams = useCallback((plValue: string): number => {
@@ -616,6 +629,7 @@ export default function PondManagementScreen() {
       docStart: docStartString,
       initialWeight: convertPlToGrams(plValue),
       samplings: baselineSampling,
+      mortalityRecords: [],
       totalHarvestedBiomass: 0,
       totalHarvestedPopulation: 0,
       totalHarvestedFeed: 0,
@@ -653,8 +667,8 @@ export default function PondManagementScreen() {
       return;
     }
     
-    const { selectedPond, mbw, mortality, feed, samplingDate } = formData;
-    if (!selectedPond || !mbw || mortality === '') {
+    const { selectedPond, mbw, feed, samplingDate } = formData;
+    if (!selectedPond || !mbw) {
       Alert.alert(t.messages.error, t.home.fillAllFields);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -672,7 +686,7 @@ export default function PondManagementScreen() {
     addSampling(selectedPondData.id, {
       id: Date.now().toString(), 
       mbw: parseNumericInput(mbw),
-      mortality: parseNumericInput(mortality),
+      mortality: 0,
       feed: parseNumericInput(feed),
       date: formatLocalDateKey(samplingDate),
       // No feedData here - sampling doesn't deduct from inventory
@@ -681,6 +695,80 @@ export default function PondManagementScreen() {
     closeModal();
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
   }, [canEditPonds, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
+
+  const handleAddMortalityRecord = useCallback(() => {
+    if (submitLockRef.current) return;
+    submitLockRef.current = true;
+    setIsSubmitting(true);
+
+    if (!canEditPonds || !user?.uid) {
+      Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAddMortality, [{ text: t.actions.confirm }]);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const {
+      selectedPond,
+      mortalityObservationType,
+      mortalityCount,
+      mortalityDate,
+      mortalityNotes,
+    } = formData;
+    const selectedPondData = activePonds.find((pond) => pond.pondName === selectedPond);
+    if (!selectedPondData) {
+      Alert.alert(t.messages.error, t.home.pondNotFound);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const count = mortalityObservationType === 'none_observed'
+      ? 0
+      : Number(String(mortalityCount).trim().replace(',', '.'));
+    if (mortalityObservationType !== 'none_observed' && (!Number.isInteger(count) || count <= 0)) {
+      Alert.alert(t.messages.error, t.home.mortalityPositiveCountRequired);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const dateKey = formatLocalDateKey(mortalityDate);
+    const todayKey = getFarmDateKey(new Date(), company?.timeZone);
+    const cycleStartKey = String(selectedPondData.cycleStartedAt || selectedPondData.docStart || '').slice(0, 10);
+    if (dateKey > todayKey) {
+      Alert.alert(t.messages.error, t.home.mortalityFutureDateError);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    if (cycleStartKey && dateKey < cycleStartKey) {
+      Alert.alert(t.messages.error, t.home.mortalityBeforeCycleError);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
+    const mbwAtRecord = [...(selectedPondData.samplings || [])]
+      .filter((sampling) => sampling.date <= dateKey && Number(sampling.mbw) > 0)
+      .sort((first, second) => second.date.localeCompare(first.date))[0]?.mbw;
+    addMortalityRecord(selectedPondData.id, {
+      id: `mortality-${Date.now()}`,
+      date: dateKey,
+      observationType: mortalityObservationType,
+      count,
+      mbwAtRecord: Number(mbwAtRecord) > 0 ? Number(mbwAtRecord) : undefined,
+      notes: mortalityNotes.trim() || undefined,
+      recordedAt: new Date().toISOString(),
+      recordedBy: user.uid,
+      cycleId: selectedPondData.cycleId,
+      cycleName: selectedPondData.cycleName,
+      pondCycleId: selectedPondData.pondCycleId || selectedPondData.id,
+    });
+
+    closeModal();
+    Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
+  }, [activePonds, addMortalityRecord, canEditPonds, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user?.uid]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canEditPonds) {
@@ -962,8 +1050,12 @@ export default function PondManagementScreen() {
     setShowDatePicker(false);
   }, [datePickerField, normalizeDateValue, updateForm]);
 
-  const openDatePicker = useCallback((field?: 'docStart' | 'samplingDate' | 'baselineDate') => {
-    const nextField = field || (modalType === 'sampling' ? 'samplingDate' : 'docStart');
+  const openDatePicker = useCallback((field?: 'docStart' | 'samplingDate' | 'mortalityDate' | 'baselineDate') => {
+    const nextField = field || (modalType === 'sampling'
+      ? 'samplingDate'
+      : modalType === 'mortality'
+        ? 'mortalityDate'
+        : 'docStart');
     const nextDate = normalizeDateValue(formData[nextField]);
     setDatePickerField(nextField);
     originalDateRef.current = nextDate;
@@ -972,7 +1064,7 @@ export default function PondManagementScreen() {
     setShowDatePicker(true);
   }, [modalType, formData, normalizeDateValue]);
 
-  const openModal = useCallback((type: 'pond' | 'sampling' | 'cycle' | 'baseline') => {
+  const openModal = useCallback((type: 'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline') => {
     setModalType(type); 
     setMenuModalVisible(false); 
     setModalVisible(true);
@@ -1323,13 +1415,6 @@ export default function PondManagementScreen() {
         keyboardType="numeric" 
       />
       <InputField 
-        label={t.shrimp.mortality} 
-        value={formData.mortality} 
-        onChangeText={(value) => updateForm('mortality', value)} 
-        placeholder={t.home.mortalityHint} 
-        keyboardType="numeric" 
-      />
-      <InputField 
         label={t.shrimp.feedAmount} 
         value={formData.feed} 
         onChangeText={(value) => updateForm('feed', value)} 
@@ -1343,6 +1428,98 @@ export default function PondManagementScreen() {
       />
     </>
   ), [formData, activePonds, updateForm, openDatePicker, t]);
+
+  const renderMortalityForm = useMemo(() => {
+    const observationOptions: { value: MortalityObservationType; label: string }[] = [
+      { value: 'estimated_total', label: t.home.mortalityEstimatedTotal },
+      { value: 'observed_recovered', label: t.home.mortalityObservedRecovered },
+      { value: 'none_observed', label: t.home.mortalityNoneObserved },
+    ];
+    const observationHint = formData.mortalityObservationType === 'estimated_total'
+      ? t.home.mortalityEstimatedHint
+      : formData.mortalityObservationType === 'observed_recovered'
+        ? t.home.mortalityObservedHint
+        : t.home.mortalityNoneHint;
+
+    return (
+      <>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t.forms.selectPond}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
+            {activePonds.map((pond) => (
+              <TouchableOpacity
+                key={pond.id}
+                style={[
+                  styles.pondOption,
+                  formData.selectedPond === pond.pondName && styles.pondOptionSelected,
+                ]}
+                onPress={() => updateForm('selectedPond', pond.pondName)}
+              >
+                <Text style={[
+                  styles.pondOptionText,
+                  formData.selectedPond === pond.pondName && styles.pondOptionTextSelected,
+                ]}>
+                  {pond.pondName}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t.home.mortalityObservationType}</Text>
+          <View style={styles.mortalityOptionList}>
+            {observationOptions.map((option) => {
+              const selected = formData.mortalityObservationType === option.value;
+              return (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[styles.mortalityOption, selected && styles.mortalityOptionSelected]}
+                  onPress={() => updateForm('mortalityObservationType', option.value)}
+                >
+                  <Ionicons
+                    name={selected ? 'radio-button-on' : 'radio-button-off'}
+                    size={18}
+                    color={selected ? '#FFFFFF' : '#315f57'}
+                  />
+                  <Text style={[styles.mortalityOptionText, selected && styles.mortalityOptionTextSelected]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.inputHint}>{observationHint}</Text>
+        </View>
+
+        {formData.mortalityObservationType !== 'none_observed' && (
+          <InputField
+            label={t.home.mortalityCount}
+            value={formData.mortalityCount}
+            onChangeText={(value) => updateForm('mortalityCount', value)}
+            placeholder={t.home.mortalityHint}
+            keyboardType="numeric"
+            hint={t.home.mortalityCountHint}
+            maxLength={12}
+          />
+        )}
+
+        <DateInput
+          label={t.home.mortalityDate}
+          date={formData.mortalityDate}
+          onPress={() => openDatePicker('mortalityDate')}
+        />
+
+        <InputField
+          label={t.home.mortalityNotes}
+          value={formData.mortalityNotes}
+          onChangeText={(value) => updateForm('mortalityNotes', value)}
+          placeholder={t.home.mortalityNotesHint}
+          maxLength={500}
+        />
+      </>
+    );
+  }, [activePonds, formData.mortalityCount, formData.mortalityDate, formData.mortalityNotes, formData.mortalityObservationType, formData.selectedPond, openDatePicker, t, updateForm]);
 
   const renderCycleForm = useMemo(() => (
     <>
@@ -1721,6 +1898,13 @@ export default function PondManagementScreen() {
                     {t.home.samplingData}
                   </Text>
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.menuOption}
+                  onPress={() => openModal('mortality')}
+                >
+                  <Ionicons name="pulse-outline" size={24} color="#315f57" />
+                  <Text style={styles.menuOptionText}>{t.home.dailyMortality}</Text>
+                </TouchableOpacity>
                 <TouchableOpacity 
                   style={styles.cancelMenuButton} 
                   onPress={() => setMenuModalVisible(false)}
@@ -1749,7 +1933,9 @@ export default function PondManagementScreen() {
                       ? t.farmCycle.addCycle
                       : modalType === 'baseline'
                         ? 'Edit Baseline'
-                        : t.home.addSamplingData}
+                        : modalType === 'mortality'
+                          ? t.home.addDailyMortality
+                          : t.home.addSamplingData}
                 </Text>
                 <TouchableOpacity 
                   onPress={() => setModalVisible(false)} 
@@ -1773,7 +1959,9 @@ export default function PondManagementScreen() {
                     ? renderCycleForm
                     : modalType === 'baseline'
                       ? renderBaselineForm
-                    : renderSamplingForm}
+                      : modalType === 'mortality'
+                        ? renderMortalityForm
+                        : renderSamplingForm}
 
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity 
@@ -1788,11 +1976,13 @@ export default function PondManagementScreen() {
 	                    style={[styles.addButton, isSubmitting && { opacity: 0.6 }]} 
 	                    onPress={modalType === 'pond'
 	                      ? handleAddPond
-	                      : modalType === 'cycle'
+                      : modalType === 'cycle'
                           ? handleAddCycle
                           : modalType === 'baseline'
                             ? handleUpdateBaseline
-	                        : handleAddSamplingData}
+	                          : modalType === 'mortality'
+	                            ? handleAddMortalityRecord
+	                            : handleAddSamplingData}
 	                    disabled={isSubmitting}
 	                  >
                     <Text style={styles.addButtonText}>
@@ -1800,9 +1990,11 @@ export default function PondManagementScreen() {
                         ? t.home.addPondButton
                         : modalType === 'cycle'
                           ? 'Start Cycle'
-                          : modalType === 'baseline'
+                        : modalType === 'baseline'
                             ? 'Save Baseline'
-                          : t.home.addDataButton}
+                            : modalType === 'mortality'
+                              ? t.home.saveMortality
+                              : t.home.addDataButton}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -2511,6 +2703,38 @@ const styles = StyleSheet.create({
   },
 
   segmentOptionTextSelected: {
+    color: '#FFFFFF',
+  },
+
+  mortalityOptionList: {
+    gap: 8,
+  },
+
+  mortalityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: Platform.OS === 'android' ? 11 : 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    backgroundColor: '#FFFFFF',
+  },
+
+  mortalityOptionSelected: {
+    backgroundColor: '#0F4C75',
+    borderColor: '#0F4C75',
+  },
+
+  mortalityOptionText: {
+    flex: 1,
+    color: '#0d2137',
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    fontWeight: '700',
+  },
+
+  mortalityOptionTextSelected: {
     color: '#FFFFFF',
   },
   

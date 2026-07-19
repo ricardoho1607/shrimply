@@ -25,7 +25,7 @@ export interface OrsonLabContext {
   worstStatus: OrsonLabStatusLevel | null;
 }
 
-export type OrsonRecordKind = 'sampling' | 'water_quality' | 'feed' | 'harvest' | 'unknown';
+export type OrsonRecordKind = 'sampling' | 'mortality' | 'water_quality' | 'feed' | 'harvest' | 'unknown';
 
 export interface OrsonNormalizedRecord {
   id: string | null;

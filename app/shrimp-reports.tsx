@@ -52,7 +52,13 @@ export default function ShrimpReportsScreen() {
       .map((sampling, index, allSamplings) => {
         const samplingTime = new Date(sampling.date).getTime();
         const samplingsToDate = sortedSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime);
-        const metricsToDate = calculatePondMetricsWithHarvest({ ...pond, samplings: samplingsToDate });
+        const mortalityRecordsToDate = (pond.mortalityRecords || [])
+          .filter((record) => new Date(record.date).getTime() <= samplingTime);
+        const metricsToDate = calculatePondMetricsWithHarvest({
+          ...pond,
+          samplings: samplingsToDate,
+          mortalityRecords: mortalityRecordsToDate,
+        });
         const samplingDoc = Math.floor((samplingTime - new Date(pond.docStart).getTime()) / DAY_MS);
         const currentMbw = getSamplingMbw(sampling);
         const fcr = index === allSamplings.length - 1 ? pondMetrics.adjustedFCR : metricsToDate.adjustedFCR;

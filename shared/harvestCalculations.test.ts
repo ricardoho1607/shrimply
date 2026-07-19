@@ -41,6 +41,21 @@ export const runHarvestCalculationsSelfTest = () => {
   assertClose(calculatePondMetricsWithHarvest(restored).currentBiomass, 1_000, 'reversed biomass');
   assertClose(calculatePondMetricsWithHarvest(restored).currentPopulation, 100_000, 'reversed population');
 
+  const withDailyMortality = {
+    ...pond,
+    mortalityRecords: [
+      { id: 'mortality-1', date: '2026-07-11', observationType: 'estimated_total' as const, count: 500, mbwAtRecord: 10 },
+      { id: 'mortality-2', date: '2026-07-12', observationType: 'observed_recovered' as const, count: 250, mbwAtRecord: 10 },
+      { id: 'mortality-3', date: '2026-07-13', observationType: 'none_observed' as const, count: 0, mbwAtRecord: 10 },
+    ],
+  };
+  const mortalityMetrics = calculatePondMetricsWithHarvest(withDailyMortality);
+  assertClose(mortalityMetrics.totalMortality, 500, 'only estimated total mortality is deducted');
+  assertClose(mortalityMetrics.currentPopulation, 99_500, 'daily mortality updates standing population');
+  assertClose(mortalityMetrics.adjustedSR, 99.5, 'daily mortality updates SR');
+  assertClose(mortalityMetrics.currentBiomass, 995, 'daily mortality updates biomass');
+  assertClose(mortalityMetrics.totalMortalityWeight, 5, 'daily mortality uses MBW snapshot for mortality weight');
+
   const laterHarvest = withHarvestReference(afterNewSampling, { biomass: 50, size: 100, harvestType: 'partial' as const });
   const afterLaterHarvest = applyHarvestImpactToPond(afterNewSampling, laterHarvest, '2026-07-15', 2);
   const oldHarvestRemoved = reverseHarvestImpactOnPond(afterLaterHarvest, harvest);

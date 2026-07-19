@@ -3,6 +3,7 @@ import {
   calculatePondMetricsWithHarvest as calculateSharedPondMetricsWithHarvest,
   isBaselineSampling,
   toFiniteNumber,
+  type MortalityObservationType,
   type PondMetricsWithHarvest,
 } from "../../shared/pondCalculations";
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
@@ -23,6 +24,7 @@ export {
   getSamplingFeedAmount,
   isBaselineSampling,
 } from "../../shared/pondCalculations";
+export type { MortalityObservationType } from "../../shared/pondCalculations";
 
 export interface FeedAllocation {
   inventoryFeedId: string;
@@ -79,6 +81,20 @@ export interface Sampling {
   feedData?: FeedData; harvestData?: HarvestData;
 }
 
+export interface MortalityRecord {
+  id: string;
+  date: string;
+  observationType: MortalityObservationType;
+  count: number;
+  mbwAtRecord?: number;
+  notes?: string;
+  recordedAt: string;
+  recordedBy: string;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId: string;
+}
+
 export type CycleStartMode = 'new' | 'midcycle';
 
 export type LabReportStatus = {
@@ -93,7 +109,8 @@ export type LabReportStatus = {
 };
 
 export interface Pond {
-  id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; initialStock?: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  mortalityRecords?: MortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
   partialHarvestCount?: number;
   postHarvestBaselineDate?: string | null;
@@ -146,6 +163,8 @@ export const buildDefaultFarmCycle = (existingCycles: FarmCycle[] = [], timeZone
 };
 export const normalizePondLifecycle = (pond: Pond): Pond => ({
   ...pond,
+  samplings: Array.isArray(pond.samplings) ? pond.samplings : [],
+  mortalityRecords: Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [],
   supplier: pond.supplier || pond.plSupplier || '',
   plSupplier: pond.plSupplier || pond.supplier || '',
   pondCycleId: pond.pondCycleId || pond.id,
@@ -164,7 +183,7 @@ interface PondStore {
   addPhysicalPond: (pond: PhysicalPond) => void;
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   deletePhysicalPond: (pondId: string) => void;
-  addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void;
+  addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; }) => void;
@@ -608,6 +627,38 @@ export const usePondStore = create<PondStore>()(
           samplings: (pond.samplings || []).filter((s) => s.id !== samplingId),
         };
         set((state) => ({ ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond) }));
+        state.firebaseSync?.syncPond('update', updatedPond);
+      },
+
+      addMortalityRecord: (pondId, record) => {
+        const state = get();
+        const pond = state.ponds.find((item) => item.id === pondId);
+        if (!pond) return;
+
+        const normalizedRecord: MortalityRecord = {
+          ...record,
+          count: record.observationType === 'none_observed'
+            ? 0
+            : Math.max(0, Math.round(toFiniteNumber(record.count))),
+          mbwAtRecord: record.mbwAtRecord === undefined
+            ? undefined
+            : Math.max(0, toFiniteNumber(record.mbwAtRecord)),
+          cycleId: record.cycleId || pond.cycleId,
+          cycleName: record.cycleName || pond.cycleName,
+          pondCycleId: record.pondCycleId || pond.pondCycleId || pondId,
+        };
+        const existingRecords = pond.mortalityRecords || [];
+        const existingIndex = existingRecords.findIndex((item) => item.date === normalizedRecord.date);
+        const mortalityRecords = existingIndex >= 0
+          ? existingRecords.map((item, index) => index === existingIndex
+            ? { ...normalizedRecord, id: item.id }
+            : item)
+          : [...existingRecords, normalizedRecord];
+        const updatedPond = { ...pond, mortalityRecords };
+
+        set((current) => ({
+          ponds: current.ponds.map((item) => item.id === pondId ? updatedPond : item),
+        }));
         state.firebaseSync?.syncPond('update', updatedPond);
       },
 
