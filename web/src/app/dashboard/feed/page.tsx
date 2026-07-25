@@ -149,6 +149,7 @@ export default function FeedRecordsPage() {
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondIdForHistory, setSelectedPondIdForHistory] = useState<string | null>(null);
+  const [editingFeedRecord, setEditingFeedRecord] = useState<{ pondId: string; date: string; id: string } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
 
@@ -244,7 +245,11 @@ export default function FeedRecordsPage() {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
 
     const pond = accessiblePonds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
+    const existing = pond?.samplings?.find(s => (
+      !isBaselineSampling(s) &&
+      s.feedData &&
+      (editingFeedRecord ? s.id === editingFeedRecord.id : s.date === formData.date)
+    ));
 
     if (existing?.feedData) {
       // Data exists for this day, pre-fill the form
@@ -270,7 +275,7 @@ export default function FeedRecordsPage() {
         feedAllocations: [],
       }));
     }
-  }, [accessiblePonds, formData.pondId, formData.date, isModalOpen]);
+  }, [accessiblePonds, editingFeedRecord, formData.pondId, formData.date, isModalOpen]);
 
   const handleAddFeed = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -310,7 +315,11 @@ export default function FeedRecordsPage() {
 
         const pondData = pondDoc.data();
         const samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
+        const existingIndex = samplings.findIndex(s => (
+          !isBaselineSampling(s) &&
+          s.feedData &&
+          (editingFeedRecord ? s.id === editingFeedRecord.id : s.date === formData.date)
+        ));
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
         const previousAllocations = normalizeFeedAllocations(existingFeedData);
         const desiredByFeedId = new Map(requestedAllocations.map((allocation) => (
@@ -436,6 +445,7 @@ export default function FeedRecordsPage() {
       });
 
         setModalOpen(false);
+        setEditingFeedRecord(null);
         setFormData({
           pondId: '',
           date: today,
@@ -480,6 +490,31 @@ export default function FeedRecordsPage() {
     !formData.feedAllocations.some((allocation) => allocation.inventoryFeedId === feed.id)
   ));
 
+  const openHistoryEditor = (log: FeedHistoryEntry) => {
+    if (!selectedPondForHistory || !canEditFeed) return;
+    setEditingFeedRecord({
+      pondId: selectedPondForHistory.id,
+      date: log.date,
+      id: log.id,
+    });
+    setFormData({
+      pondId: selectedPondForHistory.id,
+      date: log.date,
+      totalDailyFeed: log.feedData.totalDailyFeed,
+      feedAllocations: normalizeFeedAllocations(log.feedData).map((allocation) => ({
+        inventoryFeedId: allocation.inventoryFeedId,
+        quantityKg: String(allocation.quantityKg),
+      })),
+    });
+    setSelectedPondIdForHistory(null);
+    setModalOpen(true);
+  };
+
+  const closeFeedModal = () => {
+    setModalOpen(false);
+    setEditingFeedRecord(null);
+  };
+
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
@@ -500,6 +535,7 @@ export default function FeedRecordsPage() {
         {canEditFeed && (
           <button
             onClick={() => {
+              setEditingFeedRecord(null);
               setFormData({
                 pondId: '',
                 date: today,
@@ -569,7 +605,16 @@ export default function FeedRecordsPage() {
                   <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Daily feed record</span>
                   {canEditFeed && (
                     <button
-                      onClick={() => { setFormData({ ...formData, pondId: pond.id }); setModalOpen(true); }}
+                      onClick={() => {
+                        setEditingFeedRecord(null);
+                        setFormData({
+                          pondId: pond.id,
+                          date: today,
+                          totalDailyFeed: '',
+                          feedAllocations: [],
+                        });
+                        setModalOpen(true);
+                      }}
                       style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
                       onMouseOver={(e) => (e.currentTarget.style.gap = '10px')}
                       onMouseOut={(e) => (e.currentTarget.style.gap = '6px')}
@@ -595,7 +640,7 @@ export default function FeedRecordsPage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '20px', fontWeight: 850, color: 'var(--text-primary)', margin: 0 }}>{selectedPondForHistory.pondName}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>Feed history</p>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>{t.feedHistory.title}</p>
                 </div>
               </div>
               <button aria-label="Close feed history" onClick={() => setSelectedPondIdForHistory(null)} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -604,29 +649,39 @@ export default function FeedRecordsPage() {
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 32px' }}>
+              {canEditFeed && selectedFeedHistory.length > 0 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #BBE1FA', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', fontWeight: 700 }}>
+                  <History size={17} />
+                  <span>{t.feedHistory.editHint}</span>
+                </div>
+              )}
               {selectedFeedHistory.length === 0 && (
                 <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--text-muted)' }}>
                   <div style={{ width: '68px', height: '68px', borderRadius: '20px', background: '#EAF3F8', color: '#0F4C75', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
                     <ClipboardList size={30} />
                   </div>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 850, marginBottom: '6px' }}>No feed history yet</div>
-                  <div style={{ maxWidth: '300px', fontSize: '13px', lineHeight: 1.6, fontWeight: 600 }}>Daily feed records will appear here after the first entry is saved.</div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 850, marginBottom: '6px' }}>{t.feedHistory.noHistory}</div>
+                  <div style={{ maxWidth: '300px', fontSize: '13px', lineHeight: 1.6, fontWeight: 600 }}>{t.feedHistory.noHistorySubtitle}</div>
                 </div>
               )}
               {selectedFeedHistory.length > 0 && (
                 <div style={{ overflow: 'hidden', borderRadius: '14px', background: '#FFFFFF', border: '1px solid #DCE8F2' }}>
                   {selectedFeedHistory.map((log, i) => (
-                    <div
+                    <button
+                      type="button"
                       key={log.id || log.date}
-                      style={{ minHeight: '58px', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', borderBottom: i < selectedFeedHistory.length - 1 ? '1px solid #EEF3F6' : 'none' }}
+                      onClick={() => openHistoryEditor(log)}
+                      disabled={!canEditFeed}
+                      aria-label={canEditFeed ? `${t.feedHistory.editTitle}: ${log.date}, ${log.feedData.totalDailyFeed} kg` : undefined}
+                      style={{ width: '100%', minHeight: '58px', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', border: 'none', borderBottom: i < selectedFeedHistory.length - 1 ? '1px solid #EEF3F6' : 'none', background: '#FFFFFF', cursor: canEditFeed ? 'pointer' : 'default', textAlign: 'left' }}
                     >
                       <span style={{ color: '#334E68', fontSize: '14px', fontWeight: 650 }}>
                         {new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                       </span>
-                      <span style={{ color: '#0F4C75', fontSize: '16px', fontWeight: 850, whiteSpace: 'nowrap' }}>
-                        {log.feedData.totalDailyFeed} kg
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F4C75', fontSize: '16px', fontWeight: 850, whiteSpace: 'nowrap' }}>
+                        {log.feedData.totalDailyFeed} kg {canEditFeed && <ChevronRight size={18} color="#6B8AA0" />}
                       </span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               )}
@@ -645,11 +700,13 @@ export default function FeedRecordsPage() {
                   <Plus size={28} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800 }}>Log Feeding</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>Record the pond&apos;s total daily feed.</p>
+                  <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{editingFeedRecord ? t.feedHistory.editTitle : t.feed.addFeedData}</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>
+                    {editingFeedRecord ? t.feedHistory.editSubtitle : t.feed.feedMixHint}
+                  </p>
                 </div>
               </div>
-              <button onClick={() => setModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+              <button onClick={closeFeedModal} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
             </div>
 
             <form onSubmit={handleAddFeed} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', maxHeight: '70vh', overflowY: 'auto' }}>
@@ -658,9 +715,10 @@ export default function FeedRecordsPage() {
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Pond</label>
                   <select
                     required
+                    disabled={Boolean(editingFeedRecord)}
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
                   >
                     <option value="">Choose a pond...</option>
                     {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
@@ -668,8 +726,8 @@ export default function FeedRecordsPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Date</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }} />
+                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</label>
+                  <input type="date" disabled={Boolean(editingFeedRecord)} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
@@ -765,8 +823,8 @@ export default function FeedRecordsPage() {
               </div>
 
               <div style={{ marginTop: '24px', display: 'flex', gap: '20px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'white', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', fontWeight: 900, fontSize: '16px' }}>Save Record</button>
+                <button type="button" onClick={closeFeedModal} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'white', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>{t.actions.cancel}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', fontWeight: 900, fontSize: '16px' }}>{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
               </div>
             </form>
           </div>

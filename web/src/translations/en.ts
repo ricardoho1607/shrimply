@@ -133,6 +133,11 @@ feedHistory: {
   noHistory: 'No Feed History',
   noHistorySubtitle: 'Feed records will appear here once added',
   totalFeed: 'Total Feed',
+  editHint: 'Click a feed entry to edit it and reconcile inventory.',
+  editTitle: 'Edit Feed Entry',
+  editSubtitle: 'Update this past feed record. Inventory will be adjusted automatically.',
+  updateFeed: 'Update Feed',
+  updateSuccess: 'Feed entry and inventory updated.',
 },
 companyDetails: {
   title: 'Company Details',

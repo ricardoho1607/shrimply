@@ -133,6 +133,11 @@ feedHistory: {
   noHistory: '无投料历史',
   noHistorySubtitle: '添加后饲料记录将显示在此处',
   totalFeed: '总饲料',
+  editHint: '点击投喂记录即可编辑并核对库存。',
+  editTitle: '编辑投喂记录',
+  editSubtitle: '更新这条历史投喂记录，库存将自动调整。',
+  updateFeed: '更新投喂',
+  updateSuccess: '投喂记录和库存已更新。',
 },
 companyDetails: {
   title: '公司详情',

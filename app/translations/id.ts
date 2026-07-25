@@ -226,6 +226,11 @@ feedHistory: {
   noHistory: 'Tidak Ada Riwayat Pakan',
   noHistorySubtitle: 'Catatan pakan akan muncul di sini setelah ditambahkan',
   totalFeed: 'Total Pakan',
+  editHint: 'Ketuk catatan pakan untuk mengedit dan menyesuaikan inventaris.',
+  editTitle: 'Edit Catatan Pakan',
+  editSubtitle: 'Perbarui catatan pakan sebelumnya. Inventaris akan disesuaikan secara otomatis.',
+  updateFeed: 'Perbarui Pakan',
+  updateSuccess: 'Catatan pakan dan inventaris berhasil diperbarui.',
 },
 companyDetails: {
   title: 'Detail Perusahaan',

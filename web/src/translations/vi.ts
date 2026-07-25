@@ -133,6 +133,11 @@ feedHistory: {
   noHistory: 'Không Có Lịch Sử Cho Ăn',
   noHistorySubtitle: 'Các bản ghi thức ăn sẽ xuất hiện ở đây sau khi được thêm',
   totalFeed: 'Tổng Thức Ăn',
+  editHint: 'Nhấn vào bản ghi thức ăn để chỉnh sửa và đối soát tồn kho.',
+  editTitle: 'Chỉnh sửa bản ghi thức ăn',
+  editSubtitle: 'Cập nhật bản ghi thức ăn trước đây. Tồn kho sẽ được điều chỉnh tự động.',
+  updateFeed: 'Cập nhật thức ăn',
+  updateSuccess: 'Đã cập nhật bản ghi thức ăn và tồn kho.',
 },
 companyDetails: {
   title: 'Chi Tiết Công Ty',
