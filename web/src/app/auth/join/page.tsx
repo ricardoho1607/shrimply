@@ -5,7 +5,7 @@ import { ArrowLeft, ArrowRight, Lock, Mail, ShieldCheck, User } from 'lucide-rea
 import { useAuth } from '@/contexts/AuthContext';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ROUTES } from '@/config/routes';
+import { getRequiredSetupRoute, ROUTES } from '@/config/routes';
 
 export default function JoinPage() {
   const [name, setName] = useState('');
@@ -14,7 +14,7 @@ export default function JoinPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signUp, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
+  const { signUp, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || undefined;
@@ -28,12 +28,12 @@ export default function JoinPage() {
     }
 
     if (needsSetup) {
-      router.replace(ROUTES.setupChoice);
+      router.replace(getRequiredSetupRoute(user?.role));
       return;
     }
 
     router.replace(ROUTES.dashboard);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, router]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, router, user?.role]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();

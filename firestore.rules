@@ -160,6 +160,64 @@ service cloud.firestore {
         && validOptionalBoolean(data, 'isVerified');
     }
 
+    function validRequiredCompanySetup(data) {
+      return validNonEmptyString(data.companyName)
+        && validNonEmptyString(data.farmType)
+        && validNonEmptyString(data.businessSize)
+        && 'primaryLocation' in data
+        && (
+          validNonEmptyString(data.primaryLocation)
+          || (
+            data.primaryLocation is map
+            && 'address' in data.primaryLocation
+            && validNonEmptyString(data.primaryLocation.address)
+          )
+        );
+    }
+
+    function validFarmBlockPayload(data, companyId) {
+      return data.keys().hasOnly([
+          'companyId',
+          'name',
+          'assignedTechnicianId',
+          'assignedTechnicianName',
+          'assignedTechnicianEmail',
+          'createdAt',
+          'createdBy',
+          'updatedAt',
+          'updatedBy'
+        ])
+        && data.companyId == companyId
+        && validNonEmptyString(data.name)
+        && validOptionalNullableString(data, 'assignedTechnicianId', 160)
+        && validOptionalNullableString(data, 'assignedTechnicianName', 120)
+        && validOptionalNullableString(data, 'assignedTechnicianEmail', 200)
+        && validOptionalTimestamp(data, 'createdAt')
+        && validOptionalString(data, 'createdBy', 160)
+        && validOptionalTimestamp(data, 'updatedAt')
+        && validOptionalString(data, 'updatedBy', 160)
+        && (
+          !('assignedTechnicianId' in data)
+          || data.assignedTechnicianId == null
+          || (
+            exists(/databases/$(database)/documents/users/$(data.assignedTechnicianId))
+            && get(/databases/$(database)/documents/users/$(data.assignedTechnicianId)).data.companyId == companyId
+            && get(/databases/$(database)/documents/users/$(data.assignedTechnicianId)).data.role == 'technician'
+          )
+        );
+    }
+
+    function validEnterprisePondBlock(companyId, data) {
+      return !('businessSize' in companyDoc(companyId).data)
+        || companyDoc(companyId).data.businessSize != 'enterprise'
+        || isCompanyOwnerRole(companyId)
+        || (
+          data.blockId is string
+          && exists(/databases/$(database)/documents/companies/$(companyId)/blocks/$(data.blockId))
+          && get(/databases/$(database)/documents/companies/$(companyId)/blocks/$(data.blockId)).data.assignedTechnicianId == request.auth.uid
+        );
+    }
+
     function validJoinRequestCreate(data) {
       return validNonEmptyString(data.companyId)
         && data.userId == request.auth.uid
@@ -423,6 +481,7 @@ service cloud.firestore {
           'description',
           'contactPhone',
           'isPublicProfile',
+          'publicMemberCount',
           'publicPondCount',
           'publicAverageDOC',
           'publicAverageSize',
@@ -439,10 +498,22 @@ service cloud.firestore {
         && validOptionalString(data, 'contactPhone', 40)
         && data.isPublicProfile is bool
         && data.updatedAt is timestamp
+        && (!('publicMemberCount' in data) || (data.publicMemberCount is int && data.publicMemberCount >= 0))
         && (!('publicPondCount' in data) || (data.publicPondCount is number && data.publicPondCount >= 0))
         && (!('publicAverageDOC' in data) || (data.publicAverageDOC is number && data.publicAverageDOC >= 0))
         && (!('publicAverageSize' in data) || (data.publicAverageSize is number && data.publicAverageSize >= 0))
         && (!('publicAverageBiomass' in data) || (data.publicAverageBiomass is number && data.publicAverageBiomass >= 0));
+    }
+
+    function validPublicMemberCountUpdate(companyId) {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          'publicMemberCount',
+          'updatedAt'
+        ])
+        && request.resource.data.companyId == companyId
+        && request.resource.data.publicMemberCount is int
+        && request.resource.data.publicMemberCount >= 0
+        && request.resource.data.updatedAt is timestamp;
     }
 
     function marketplaceListingDoc(listingId) {
@@ -639,6 +710,7 @@ service cloud.firestore {
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
           && isCompanyOwner(request.resource.data.companyId)
+          && validRequiredCompanySetup(companyDoc(request.resource.data.companyId).data)
         )
         || (
           request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
@@ -665,6 +737,7 @@ service cloud.firestore {
     match /companies/{companyId} {
       allow create: if signedIn()
         && validCompanyPayload(request.resource.data)
+        && validRequiredCompanySetup(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.teamMembers.hasAny([request.auth.uid]);
       allow read: if signedIn() && (
@@ -694,9 +767,24 @@ service cloud.firestore {
         );
       allow delete: if isCompanyOwner(companyId);
 
+      match /blocks/{blockId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow create: if isCompanyOwnerRole(companyId)
+          && validFarmBlockPayload(request.resource.data, companyId)
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isCompanyOwnerRole(companyId)
+          && validFarmBlockPayload(request.resource.data, companyId)
+          && request.resource.data.companyId == resource.data.companyId
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if isCompanyOwnerRole(companyId);
+      }
+
       match /ponds/{pondId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow create, update: if isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, request.resource.data);
+        allow delete: if isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, resource.data);
 
         match /labSummaries/{labReportId} {
           allow read: if isFounderAdmin() || isCompanyMember(companyId);
@@ -725,12 +813,20 @@ service cloud.firestore {
 
       match /physicalPonds/{physicalPondId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow create, update: if isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, request.resource.data);
+        allow delete: if isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, resource.data);
       }
 
       match /cycles/{cycleId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow write: if isCompanyOperator(companyId)
+          && (
+            !('businessSize' in companyDoc(companyId).data)
+            || companyDoc(companyId).data.businessSize != 'enterprise'
+            || isCompanyOwnerRole(companyId)
+          );
       }
 
       match /harvestRecords/{harvestId} {
@@ -814,9 +910,15 @@ service cloud.firestore {
         || resource.data.isPublicProfile == true
         || isCompanyMember(companyId)
       );
-      allow create, update: if signedIn()
+      allow create: if signedIn()
         && isCompanyManager(companyId)
         && validPublicCompanyProfile(request.resource.data, companyId);
+      allow update: if signedIn()
+        && isCompanyManager(companyId)
+        && (
+          validPublicCompanyProfile(request.resource.data, companyId)
+          || validPublicMemberCountUpdate(companyId)
+        );
       allow delete: if signedIn() && isCompanyManager(companyId);
     }
 

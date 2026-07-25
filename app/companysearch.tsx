@@ -24,6 +24,8 @@ import { db } from '@/config/firebase';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
+import OnboardingProgress from './components/onboarding/OnboardingProgress';
 
 interface Company {
   id: string;
@@ -50,6 +52,7 @@ const ROLES = [
 export default function CompanySearchScreen() {
   const router = useRouter();
   const { searchCompanies, requestToJoinCompany, user, signOut } = useAuth();
+  const { t } = useLanguage();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [companies, setCompanies] = useState<Company[]>([]);
@@ -157,8 +160,13 @@ export default function CompanySearchScreen() {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         <View style={styles.content}>
+          <OnboardingProgress
+            percent={pendingRequest ? 75 : 50}
+            title={pendingRequest ? t.onboardingProgress.pendingApproval : t.onboardingProgress.join}
+            detail={pendingRequest ? t.onboardingProgress.pendingDetail : t.onboardingProgress.joinDetail}
+          />
           <View style={styles.searchRow}>
             <View style={styles.searchInput}>
               <Ionicons name="search" size={20} color="#315f57" />

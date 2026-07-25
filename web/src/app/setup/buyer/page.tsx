@@ -9,10 +9,14 @@ import { db } from '@/lib/firebase';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { BUYER_INTEREST_OPTIONS } from '@/config/business';
 import { ROUTES } from '@/config/routes';
+import { useLanguage } from '@/contexts/LanguageContext';
+import OnboardingProgress from '@/components/OnboardingProgress';
+import { getBuyerSetupProgress } from '../../../../../shared/onboarding';
 
 export default function BuyerSetupPage() {
   const isReady = useOnboardingGuard('setup');
   const { user, signOut } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [formData, setFormData] = useState({
     businessName: '',
@@ -22,6 +26,12 @@ export default function BuyerSetupPage() {
   });
   const [loading, setLoading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const setupProgress = getBuyerSetupProgress([
+    Boolean(formData.businessName.trim()),
+    Boolean(formData.phone.trim()),
+    Boolean(formData.region.trim()),
+    formData.interests.length > 0,
+  ]);
 
   const toggleInterest = (interest: string) => {
     setFormData(prev => ({
@@ -44,7 +54,10 @@ export default function BuyerSetupPage() {
         companyName: formData.businessName,
         businessType: 'Shrimp Buyer',
         farmType: 'buyer',
-        location: formData.region,
+        primaryLocation: formData.region,
+        country: formData.region,
+        businessSize: 'medium',
+        description: '',
         contactPhone: formData.phone,
         ownerId: user.uid,
         teamMembers: [user.uid],
@@ -121,6 +134,11 @@ export default function BuyerSetupPage() {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
+      <OnboardingProgress
+        percent={setupProgress}
+        title={t.onboardingProgress.buyer}
+        detail={t.onboardingProgress.buyerDetail}
+      />
       <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px' }}>
           <button

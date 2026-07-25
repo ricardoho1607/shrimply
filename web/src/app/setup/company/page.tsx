@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Building2, Rocket, Phone, MapPin, ArrowLeft, LogOut, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { BUSINESS_SIZES, DEFAULT_COMPANY_SETUP, type BusinessSize } from '@/config/business';
@@ -14,10 +15,13 @@ import {
   type PlaceSuggestion,
   type SelectedLocation,
 } from '@/lib/googlePlacesClient';
+import OnboardingProgress from '@/components/OnboardingProgress';
+import { getCompanySetupProgress } from '../../../../../shared/onboarding';
 
 export default function CompanySetupPage() {
   const isReady = useOnboardingGuard('setup');
-  const { completeCompanySetup, loading, signOut } = useAuth();
+  const { completeCompanySetup, loading, signOut, company, user } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const [formData, setFormData] = useState(() => ({
     ...DEFAULT_COMPANY_SETUP,
@@ -29,6 +33,43 @@ export default function CompanySetupPage() {
   const [searchingLocations, setSearchingLocations] = useState(false);
   const [locationError, setLocationError] = useState('');
   const timeZoneOptions = useMemo(() => getSupportedTimeZones(), []);
+  const setupProgress = getCompanySetupProgress(formData, Boolean(selectedLocation));
+
+  useEffect(() => {
+    if (!company || user?.hasCompletedSetup) return;
+    const existingLocation = company.primaryLocation;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setFormData(current => ({
+        ...current,
+        companyName: company.companyName || '',
+        primaryLocation: typeof existingLocation === 'string' ? existingLocation : existingLocation?.address || '',
+        farmType: company.farmType || '',
+        businessSize: company.businessSize || current.businessSize,
+        description: company.description || '',
+        contactPhone: company.contactPhone || '',
+        isPublicProfile: company.isPublicProfile ?? true,
+        timeZone: company.timeZone || current.timeZone,
+      }));
+      if (existingLocation && typeof existingLocation === 'object'
+        && Number.isFinite(existingLocation.latitude) && Number.isFinite(existingLocation.longitude)) {
+        setSelectedLocation({
+          address: existingLocation.address || '',
+          latitude: existingLocation.latitude || 0,
+          longitude: existingLocation.longitude || 0,
+          city: existingLocation.city || '',
+          state: existingLocation.state || '',
+          country: existingLocation.country || '',
+          postalCode: existingLocation.postalCode,
+          placeId: existingLocation.placeId || 'existing-location',
+        });
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [company, user?.hasCompletedSetup]);
 
   useEffect(() => {
     const query = formData.primaryLocation.trim();
@@ -80,6 +121,10 @@ export default function CompanySetupPage() {
     e.preventDefault();
     if (!selectedLocation) {
       setLocationError('Select a city from the suggestions before continuing.');
+      return;
+    }
+    if (!formData.farmType.trim()) {
+      alert(t.onboardingProgress.farmTypeRequired);
       return;
     }
     try {
@@ -139,6 +184,11 @@ export default function CompanySetupPage() {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
+      <OnboardingProgress
+        percent={setupProgress}
+        title={t.onboardingProgress.company}
+        detail={t.onboardingProgress.companyDetail}
+      />
       <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px' }}>
           <button
@@ -313,7 +363,7 @@ export default function CompanySetupPage() {
 
         <div>
           <label style={labelStyle}>Business Size</label>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '12px' }}>
             {BUSINESS_SIZES.map(size => (
               <button
                 key={size}
@@ -332,10 +382,20 @@ export default function CompanySetupPage() {
                   cursor: 'pointer'
                 }}
               >
-                {size}
+                <span style={{ display: 'block' }}>{size === 'enterprise' ? 'Enterprise' : size}</span>
+                {size === 'enterprise' && (
+                  <span style={{ display: 'block', marginTop: '4px', fontSize: '10px', fontWeight: 600, textTransform: 'none' }}>
+                    100+ ponds • managed by blocks
+                  </span>
+                )}
               </button>
             ))}
           </div>
+          {formData.businessSize === 'enterprise' && (
+            <p style={{ margin: '12px 2px 0', color: 'var(--primary)', fontSize: '12px', lineHeight: 1.6, fontWeight: 650 }}>
+              {t.onboardingProgress.enterpriseNext}
+            </p>
+          )}
         </div>
 
         <div>

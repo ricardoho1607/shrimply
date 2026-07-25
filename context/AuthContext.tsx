@@ -29,6 +29,7 @@ import { syncPublicCompanyProfile } from '../app/utils/publicCompanyProfile';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
+import { isCompanyProfileComplete, isUserOnboardingComplete } from '../shared/onboarding';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -54,7 +55,7 @@ interface Company {
   companyName: string;
   primaryLocation: string | LocationData;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -134,7 +135,7 @@ interface CompanySetupData {
   primaryLocation: string | LocationData;
   country?: string;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -198,10 +199,12 @@ const convertStringToLocationData = (locationString: string): LocationData => ({
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [companyResolved, setCompanyResolved] = useState(true);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const previousCompanyRef = useRef<Company | null>(null);
   const timeZoneMigrationRef = useRef<Set<string>>(new Set());
+  const publicMemberCountSyncRef = useRef<Map<string, number>>(new Map());
   const clearPondData = usePondStore((state) => state.clearData);
   const clearBuyerData = useBuyerStore((state) => state.clearData);
 
@@ -212,7 +215,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const setupCompanyListener = useCallback((companyId: string) => {
+  const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean) => {
+    setCompanyResolved(false);
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
@@ -221,6 +225,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (JSON.stringify(previousCompanyRef.current) !== JSON.stringify(companyData)) {
           previousCompanyRef.current = companyData;
           setCompany(companyData);
+        }
+
+        const publicMemberCount = new Set([
+          ...(Array.isArray(companyData.teamMembers) ? companyData.teamMembers : []),
+          companyData.ownerId,
+        ].filter((memberId): memberId is string => typeof memberId === 'string' && Boolean(memberId.trim()))).size;
+        if ((canSyncPublicProfile || companyData.ownerId === auth.currentUser?.uid)
+          && (companyData.isPublicProfile === true || companyData.isSearchable === true)
+          && publicMemberCountSyncRef.current.get(companyId) !== publicMemberCount) {
+          publicMemberCountSyncRef.current.set(companyId, publicMemberCount);
+          void syncPublicCompanyProfile(companyId, companyData).catch((error) => {
+            publicMemberCountSyncRef.current.delete(companyId);
+            console.log('Public company member count sync failed (non-critical):', error);
+          });
         }
 
         if (!isValidTimeZone(companyData.timeZone)
@@ -268,12 +286,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCompany(null);
         }
       }
+      setCompanyResolved(true);
     }, (error) => {
       console.error('Error listening to company data:', error);
       if (previousCompanyRef.current !== null) {
         previousCompanyRef.current = null;
         setCompany(null);
       }
+      setCompanyResolved(true);
     });
   }, []);
 
@@ -307,10 +327,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 companyUnsubscribe = null;
               }
               if (userData.companyId) {
-                companyUnsubscribe = setupCompanyListener(userData.companyId);
+                companyUnsubscribe = setupCompanyListener(userData.companyId, isOwnerRole(userData.role));
               } else {
                 previousCompanyRef.current = null;
                 setCompany(null);
+                setCompanyResolved(true);
               }
             } else {
               const newUser: User = {
@@ -321,6 +342,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setUser(newUser);
               previousCompanyRef.current = null;
               setCompany(null);
+              setCompanyResolved(true);
             }
             setInitializing(false);
           },
@@ -333,6 +355,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(null);
         previousCompanyRef.current = null;
         setCompany(null);
+        setCompanyResolved(true);
         setInitializing(false);
       }
     });
@@ -356,11 +379,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           previousCompanyRef.current = newCompanyData;
           setCompany(newCompanyData);
         }
+        setCompanyResolved(true);
       } else {
         if (previousCompanyRef.current !== null) {
           previousCompanyRef.current = null;
           setCompany(null);
         }
+        setCompanyResolved(true);
       }
     } catch (error) {
       console.error('Error refreshing company data:', error);
@@ -505,6 +530,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     previousCompanyRef.current = null;
     setCompany(null);
+    setCompanyResolved(true);
     // Redirection is handled automatically by RootLayoutNav based on auth state
   };
 
@@ -517,12 +543,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const completeCompanySetup = async (companyData: CompanySetupData) => {
-  if (!user || user.role !== 'owner') {
+  if (!user || (user.role !== 'owner' && company?.ownerId !== user.uid)) {
     throw new Error('Only owners can set up a company');
+  }
+  if (!isCompanyProfileComplete(companyData)) {
+    throw new Error('Complete all required farm details before continuing');
   }
 
   try {
-    const companyRef = doc(collection(db, 'companies'));
+    const resumableCompany = user.companyId && company?.ownerId === user.uid ? company : null;
+    const companyRef = resumableCompany
+      ? doc(db, 'companies', resumableCompany.id)
+      : doc(collection(db, 'companies'));
     
     let primaryLocation: string | LocationData;
     let locationData: LocationData | undefined;
@@ -543,6 +575,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Build the company document
     const newCompany: any = {
+      ...(resumableCompany || {}),
       id: companyRef.id,
       companyName: companyData.companyName,
       primaryLocation: primaryLocation,
@@ -553,13 +586,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       contactPhone: companyData.contactPhone,
       isPublicProfile: companyData.isPublicProfile,
       ownerId: user.uid,
-      teamMembers: [user.uid],
-      pendingInvites: [],
+      teamMembers: resumableCompany?.teamMembers?.includes(user.uid)
+        ? resumableCompany.teamMembers
+        : [user.uid],
+      pendingInvites: resumableCompany?.pendingInvites || [],
       serviceRadius: companyData.serviceRadius || 50,
       isSearchable: true,
       timeZone: resolveFarmTimeZone(companyData.timeZone, getSystemTimeZone()),
-      createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
+      ...(!resumableCompany ? { createdAt: serverTimestamp() } : {}),
     };
 
     // Add locationData if available
@@ -570,7 +605,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     console.log('Creating company with data:', newCompany);
 
     // Save to Firestore
-    await setDoc(companyRef, newCompany);
+    await setDoc(companyRef, newCompany, { merge: Boolean(resumableCompany) });
     await syncPublicCompanyProfile(companyRef.id, newCompany);
 
     // Update user document
@@ -584,6 +619,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Update local state
     setUser({ ...user, hasCompletedSetup: true, companyId: newCompany.id });
+    setCompanyResolved(true);
     
     // Trigger company data refresh
     await refreshCompanyData(newCompany.id);
@@ -659,7 +695,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           results.push({
             id: companyData.companyId || profileDoc.id, companyName, region, country,
             farmType: companyData.farmType || '', businessSize: companyData.businessSize || '',
-            memberCount: companyData.publicMemberCount || 0,
+            memberCount: typeof companyData.publicMemberCount === 'number' && Number.isFinite(companyData.publicMemberCount)
+              ? Math.max(0, Math.floor(companyData.publicMemberCount))
+              : 0,
             logo: companyData.logo, logoUrl: companyData.logoUrl,
           });
         }
@@ -696,6 +734,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
       if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
 
+      const nextTeamMembers = Array.from(new Set([
+        ...(Array.isArray(company.teamMembers) ? company.teamMembers : []),
+        user.uid,
+        requestData.userId,
+      ]));
       const batch = writeBatch(db);
       batch.update(doc(db, 'joinRequests', requestId), {
         status: 'approved', processedBy: user.uid, processedAt: new Date().toISOString(),
@@ -708,6 +751,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         companyId: company.id, role: requestData.requestedRole, hasCompletedSetup: true, lastActive: serverTimestamp()
       });
       await batch.commit();
+      await syncPublicCompanyProfile(company.id, { ...company, teamMembers: nextTeamMembers }).catch((syncError) => {
+        console.log('Public company member count sync failed after approval (non-critical):', syncError);
+      });
       await refreshCompanyData();
     } catch (error) {
       console.error('Error approving join request:', error);
@@ -733,6 +779,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can remove members');
     if (memberId === user.uid) throw new Error('Cannot remove yourself');
     try {
+      const nextTeamMembers = (Array.isArray(company.teamMembers) ? company.teamMembers : [])
+        .filter((teamMemberId) => teamMemberId !== memberId);
       const memberDoc = await getDoc(doc(db, 'users', memberId));
       const memberRole = memberDoc.exists() ? (memberDoc.data() as User).role : undefined;
       if (isProtectedOwnerRole(memberRole) || memberId === company.ownerId) {
@@ -742,6 +790,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       batch.update(doc(db, 'companies', company.id), { teamMembers: arrayRemove(memberId), updatedAt: serverTimestamp() });
       batch.update(doc(db, 'users', memberId), { companyId: null, role: null, hasCompletedSetup: false, lastActive: serverTimestamp() });
       await batch.commit();
+      await syncPublicCompanyProfile(company.id, { ...company, teamMembers: nextTeamMembers }).catch((syncError) => {
+        console.log('Public company member count sync failed after removal (non-critical):', syncError);
+      });
       await refreshCompanyData();
     } catch (error) {
       console.error('Error removing member:', error);
@@ -883,7 +934,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       user: effectiveUser,
       company,
-      loading: loading || initializing,
+      loading: loading || initializing || (!!user?.companyId && !companyResolved),
       signIn,
       signUp,
       signInWithGoogle,
@@ -905,12 +956,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       refreshCompanyData,
       isAuthenticated: !!user,
       needsRoleSelection: !!user && !effectiveRole,
-      needsSetup: !!user && !!effectiveRole && !user.hasCompletedSetup,
+      needsSetup: !!effectiveUser && !!effectiveRole
+        && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
       isBuyer: effectiveRole === 'buyer',
       getCompanyLocationData,
       getCompanyLocationString,
     };
-  }, [user, company, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies, 
+  }, [user, company, companyResolved, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
        getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, getTeamMembers, acceptInvite,
        checkInviteToken, refreshUserData, refreshCompanyData, getCompanyLocationData, getCompanyLocationString]);
 

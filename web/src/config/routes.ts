@@ -1,4 +1,5 @@
 import { resourceArticles } from "@/data/resourceLibrary";
+import { getSetupDestination, type OnboardingRole } from "../../../shared/onboarding";
 
 export const ROUTES = {
   home: "/",
@@ -38,3 +39,11 @@ export const ROUTES = {
 } as const;
 
 export type AppRoute = typeof ROUTES[keyof typeof ROUTES];
+
+export const getRequiredSetupRoute = (role?: string | null): string => {
+  const destination = getSetupDestination(role as OnboardingRole | undefined);
+  if (destination === 'company') return ROUTES.setupCompany;
+  if (destination === 'buyer') return ROUTES.setupBuyer;
+  if (destination === 'join') return ROUTES.setupSearch;
+  return ROUTES.roleSelection;
+};

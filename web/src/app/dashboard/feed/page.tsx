@@ -41,6 +41,13 @@ import {
   type FeedAllocation,
 } from '../../../../../shared/feedInventoryUsage';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { EnterpriseGroupedPondGrid } from '@/components/EnterpriseDashboard';
+import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import {
+  filterEnterpriseRecordsForUser,
+  isEnterpriseOwner,
+  type FarmBlock,
+} from '../../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -73,6 +80,8 @@ type FeedHistoryEntry = Sampling & { feedData: FeedData };
 
 interface Pond {
   id: string; pondName: string; samplings: Sampling[];
+  blockId?: string;
+  blockName?: string;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
@@ -151,6 +160,14 @@ export default function FeedRecordsPage() {
     feedAllocations: [],
   });
   const canEditFeed = canEditOperations(user?.role);
+  const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
+  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: farmBlocks,
+  }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
@@ -226,7 +243,7 @@ export default function FeedRecordsPage() {
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
 
-    const pond = ponds.find(p => p.id === formData.pondId);
+    const pond = accessiblePonds.find(p => p.id === formData.pondId);
     const existing = pond?.samplings?.find(s => !isBaselineSampling(s) && s.feedData && s.date === formData.date);
 
     if (existing?.feedData) {
@@ -253,12 +270,13 @@ export default function FeedRecordsPage() {
         feedAllocations: [],
       }));
     }
-  }, [formData.pondId, formData.date, isModalOpen, ponds]);
+  }, [accessiblePonds, formData.pondId, formData.date, isModalOpen]);
 
   const handleAddFeed = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId) return;
     if (!canEditFeed) return;
+    if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
     const allocationInputs = formData.feedAllocations.map((allocation) => ({
       inventoryFeedId: allocation.inventoryFeedId,
       quantityKg: Number(allocation.quantityKg),
@@ -431,12 +449,12 @@ export default function FeedRecordsPage() {
   };
 
   const filteredPonds = useMemo(() => {
-    return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [ponds, searchTerm]);
+    return accessiblePonds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [accessiblePonds, searchTerm]);
 
   const selectedPondForHistory = useMemo(
-    () => ponds.find((pond) => pond.id === selectedPondIdForHistory) || null,
-    [ponds, selectedPondIdForHistory],
+    () => accessiblePonds.find((pond) => pond.id === selectedPondIdForHistory) || null,
+    [accessiblePonds, selectedPondIdForHistory],
   );
 
   const selectedFeedHistory = useMemo<FeedHistoryEntry[]>(() => (
@@ -501,6 +519,17 @@ export default function FeedRecordsPage() {
       {/* Pond Grid */}
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>
+      ) : enterpriseOwnerView ? (
+        <EnterpriseGroupedPondGrid
+          ponds={filteredPonds}
+          emptyMessage={t.feed.noData}
+          getTone={(pond) => getLatestFeed(pond as Pond) ? 'stable' : 'neutral'}
+          getSubtitle={(pond) => {
+            const latest = getLatestFeed(pond as Pond);
+            return latest ? `${latest.totalDailyFeed} kg` : undefined;
+          }}
+          onSelect={(pond) => setSelectedPondIdForHistory(pond.id)}
+        />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
           {filteredPonds.map((pond, idx) => {
@@ -634,7 +663,7 @@ export default function FeedRecordsPage() {
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
                   >
                     <option value="">Choose a pond...</option>
-                    {ponds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
+                    {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>
 

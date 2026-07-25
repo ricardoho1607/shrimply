@@ -61,6 +61,11 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../../shared/harvestCalculations';
+import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import {
+  getAssignedEnterpriseBlockIds,
+  type FarmBlock,
+} from '../../../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -118,6 +123,8 @@ type LabReportStatus = {
 
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
+  blockId?: string;
+  blockName?: string;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   latestLabStatus?: LabReportStatus & {
     byType?: {
@@ -319,6 +326,11 @@ export default function PondDetailClient() {
     feed: '',
     mortality: '0'
   });
+  const { data: farmBlocks, loading: blocksLoading } = useCompanyBlocks<FarmBlock>('asc');
+  const assignedBlockIds = useMemo(
+    () => getAssignedEnterpriseBlockIds(farmBlocks, auth.currentUser?.uid),
+    [farmBlocks],
+  );
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
@@ -384,7 +396,10 @@ export default function PondDetailClient() {
       cleanCompanyListeners();
     };
   }, [id]);
-  const canEditPond = canEditOperations(userRole);
+  const isEnterpriseTechnician = company?.businessSize === 'enterprise' && userRole === 'technician';
+  const hasPondAccess = !isEnterpriseTechnician
+    || (typeof pond?.blockId === 'string' && assignedBlockIds.has(pond.blockId));
+  const canEditPond = canEditOperations(userRole) && hasPondAccess;
 
   const handleAddSampling = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -511,6 +526,10 @@ export default function PondDetailClient() {
     e.preventDefault();
     if (!companyId || !pond) return;
     if (!canEditPond) return;
+    if (isEnterpriseTechnician && !cycles.some(isOpenFarmCycle)) {
+      alert(t.enterprise.ownerMustStartCycle);
+      return;
+    }
     try {
       const sameNamePonds = await getDocs(query(
         collection(db, 'companies', companyId, 'ponds'),
@@ -570,6 +589,8 @@ export default function PondDetailClient() {
         id: newCyclePondRef.id,
         pondName: pond.pondName,
         pondArea: Number(pond.pondArea),
+        blockId: pond.blockId,
+        blockName: pond.blockName,
         density: Number(startCycleForm.density),
         initialPopulation,
         docStart: startCycleForm.docStart,
@@ -721,8 +742,8 @@ export default function PondDetailClient() {
     };
   }, [company?.timeZone, pond]);
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
-  if (!pond) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
+  if (loading || (isEnterpriseTechnician && blocksLoading)) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
+  if (!pond || !hasPondAccess) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
   const latestLabStatus = pond.latestLabStatus;
   const waterQualityLabStatus = latestLabStatus?.byType?.water_quality
     ?? (latestLabStatus?.reportType === 'water_quality' || (!latestLabStatus?.reportType && !latestLabStatus?.byType) ? latestLabStatus : undefined);

@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { useLanguage } from '../context/LanguageContext';
+import OnboardingProgress from './components/onboarding/OnboardingProgress';
 
 interface RoleOption {
   id: 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
@@ -247,6 +248,11 @@ export default function RoleSelectionScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <OnboardingProgress
+          percent={25}
+          title={t.onboardingProgress.role}
+          detail={t.onboardingProgress.roleDetail}
+        />
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.logoContainer}>

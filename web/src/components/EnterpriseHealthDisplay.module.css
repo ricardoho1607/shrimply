@@ -1,0 +1,348 @@
+.display {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  min-height: 100dvh;
+  overflow: hidden;
+  background: #eef4f7;
+  color: #1b262c;
+}
+
+.header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  min-height: 86px;
+  padding: 14px 24px;
+  border-bottom: 1px solid #91b9cf;
+  background: #bbe1fa;
+  color: #0f4c75;
+  box-shadow: 0 8px 28px rgba(15, 76, 117, .12);
+}
+
+.titleGroup,
+.headerActions,
+.legend,
+.legend span,
+.exitButton {
+  display: flex;
+  align-items: center;
+}
+
+.titleGroup {
+  min-width: 0;
+  gap: 16px;
+}
+
+.brand {
+  border-right: 1px solid rgba(15, 76, 117, .2);
+  padding-right: 16px;
+  font-size: 1.15rem;
+  font-weight: 900;
+  letter-spacing: -.03em;
+}
+
+.titleGroup h1,
+.titleGroup p,
+.blockHeader h2,
+.blockHeader p,
+.noPonds {
+  margin: 0;
+}
+
+.titleGroup h1 {
+  overflow: hidden;
+  font-size: 1.1rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titleGroup p {
+  margin-top: 3px;
+  color: #3282b8;
+  font-size: .76rem;
+  font-weight: 700;
+}
+
+.headerActions {
+  gap: 20px;
+}
+
+.legend {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 14px;
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.legend span {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legend b {
+  color: #0f4c75;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(15, 76, 117, .18);
+  border-radius: 999px;
+}
+
+.exitButton {
+  position: relative;
+  z-index: 2;
+  flex: 0 0 auto;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 1px solid #91b9cf;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .56);
+  color: #0f4c75;
+  padding: 0 15px;
+  font: inherit;
+  font-size: .8rem;
+  font-weight: 800;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.exitButton:hover {
+  background: #fff;
+}
+
+.content {
+  flex: 1;
+  overflow: auto;
+  padding: 20px;
+}
+
+.blockGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+
+.block {
+  overflow: hidden;
+  border: 1px solid #cbdce6;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 76, 117, .08);
+}
+
+.blockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  border-bottom: 1px solid #d6e2e9;
+  background: #fff;
+  color: #1b262c;
+  padding: 11px 20px;
+}
+
+.blockHeader h2 {
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.blockHeader p {
+  margin-top: 3px;
+  color: #647786;
+  font-size: .7rem;
+  font-weight: 700;
+}
+
+.pondGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 9px;
+  padding: 14px;
+}
+
+.pondTile {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 5px;
+  min-height: 70px;
+  overflow: hidden;
+  border: 1px solid;
+  border-radius: 12px;
+  padding: 7px;
+  text-align: center;
+}
+
+.pondTile strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  font-size: .76rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.pondTile small {
+  font-size: .62rem;
+  font-weight: 800;
+  opacity: .82;
+}
+
+.stable {
+  border-color: #c1e1c1;
+}
+
+.warning {
+  border-color: #fac898;
+}
+
+.highRisk {
+  border-color: #faa0a0;
+}
+
+.pondTile.stable,
+.legendDot.stable {
+  background: #c1e1c1;
+  color: #1f5132;
+}
+
+.pondTile.warning,
+.legendDot.warning {
+  background: #fac898;
+  color: #5a3700;
+}
+
+.pondTile.highRisk,
+.legendDot.highRisk {
+  background: #faa0a0;
+  color: #721c24;
+}
+
+.noPonds {
+  padding: 22px;
+  color: #647786;
+  font-size: .8rem;
+  font-weight: 700;
+  text-align: center;
+}
+
+.empty {
+  width: min(520px, 100%);
+  margin: 10vh auto 0;
+  border: 1px solid #cbdce6;
+  border-radius: 22px;
+  background: #fff;
+  padding: 48px 28px;
+  text-align: center;
+  box-shadow: 0 12px 30px rgba(15, 76, 117, .08);
+}
+
+.empty svg {
+  color: #3282b8;
+}
+
+.empty h2 {
+  margin: 14px 0 7px;
+}
+
+.empty p {
+  margin: 0;
+  color: #647786;
+}
+
+@media (min-width: 1600px) {
+  .blockGrid {
+    grid-template-columns: repeat(auto-fit, minmax(460px, 1fr));
+  }
+
+  .pondGrid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 14px;
+  }
+
+  .headerActions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .legend {
+    justify-content: flex-start;
+  }
+
+  .exitButton {
+    padding-inline: 12px;
+  }
+
+  .content {
+    padding: 10px;
+  }
+
+  .blockGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .pondGrid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .pondTile {
+    min-height: 0;
+    border-radius: 8px;
+    padding: 4px;
+  }
+
+  .pondTile strong {
+    font-size: .62rem;
+  }
+
+  .pondTile small {
+    font-size: .54rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand {
+    display: none;
+  }
+
+  .legend {
+    gap: 8px;
+    font-size: .65rem;
+  }
+
+  .exitButton {
+    min-width: 44px;
+    padding: 0 11px;
+    font-size: 0;
+  }
+
+  .exitButton svg {
+    width: 20px;
+    height: 20px;
+  }
+}

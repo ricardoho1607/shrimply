@@ -2,36 +2,59 @@ import React, { useEffect } from "react";
 import { FlatList, StyleSheet, Text, View, StatusBar, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useNavigation } from 'expo-router';
-import { usePondStore, Sampling } from "./store/pondStore";
+import { hasWaterQualityData, usePondStore, type Sampling } from "./store/pondStore";
 import { useLanguage } from '.././context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
+import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
+import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 
-type IconName = "sunny-outline" | "moon-outline" | "eye-outline" | "water-outline";
-
-const ParameterItem = React.memo(({ iconName, label, value, color }: any) => (
-  <View style={styles.parameterItem}>
-    <Ionicons name={iconName} size={16} color="#dce8f2" />
-    <Text style={styles.parameterLabel}>{label}</Text>
-    <Text style={[styles.parameterValue, { color }]}>{value || "N/A"}</Text>
-  </View>
-));
+const ParameterItem = React.memo(function ParameterItem({ iconName, label, value, color }: any) {
+  return (
+    <View style={styles.parameterItem}>
+      <Ionicons name={iconName} size={16} color="#dce8f2" />
+      <Text style={styles.parameterLabel}>{label}</Text>
+      <Text style={[styles.parameterValue, { color }]}>{value || "N/A"}</Text>
+    </View>
+  );
+});
 
 export default function WaterQualityHistoryScreen() {
   const navigation = useNavigation();
   const { pondId, pondName } = useLocalSearchParams();
   const { getPondById } = usePondStore();
   const { t } = useLanguage();
+  const { user, company } = useAuth();
+  const enterpriseBlocks = useEnterpriseBlocks(
+    company?.businessSize === 'enterprise' ? company?.id : undefined,
+    user?.uid,
+  );
+  const assignedBlockIds = React.useMemo(
+    () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
+    [enterpriseBlocks.blocks, user?.uid],
+  );
+  const sourcePond = getPondById(pondId as string);
+  const isEnterpriseTechnician = company?.businessSize === 'enterprise' && user?.role === 'technician';
+  const canAccessPond = !isEnterpriseTechnician
+    || (typeof sourcePond?.blockId === 'string' && assignedBlockIds.has(sourcePond.blockId));
+  const pond = canAccessPond ? sourcePond : undefined;
 
   useEffect(() => {
     navigation.setOptions({
-      title: `${pondName} ${t.waterQuality.historyTitle}`,
+      title: canAccessPond ? `${pondName} ${t.waterQuality.historyTitle}` : t.waterQuality.historyTitle,
       headerStyle: { backgroundColor: '#dce8f2' },
       headerTintColor: '#0d2137',
       headerTitleStyle: { fontWeight: 'bold', fontSize: Platform.OS === 'android' ? 17 : 18 },
       headerBackTitle: " WQ ",
     });
-  }, [navigation, pondName, t]);
+  }, [canAccessPond, navigation, pondName, t]);
 
-  const pond = getPondById(pondId as string);
+  if (isEnterpriseTechnician && enterpriseBlocks.loading) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.errorText}>{t.actions.loading}</Text>
+      </View>
+    );
+  }
   
   if (!pond) {
     return (
@@ -42,8 +65,7 @@ export default function WaterQualityHistoryScreen() {
   }
 
   const waterQualityHistory = pond.samplings
-    .filter((s: Sampling) => s.mbw === 0 && s.feed === 0 && s.mortality === 0)
-    .filter((s: Sampling) => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity)
+    .filter(hasWaterQualityData)
     .sort((a: Sampling, b: Sampling) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .filter((current: Sampling, index: number, array: Sampling[]) => 
       index === 0 || current.date !== array[index - 1].date);

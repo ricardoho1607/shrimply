@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { ROUTES } from '@/config/routes';
+import { getRequiredSetupRoute, ROUTES } from '@/config/routes';
 
 export default function AuthPage() {
   const { t } = useLanguage();
@@ -20,7 +20,7 @@ export default function AuthPage() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || undefined;
 
-  const { signIn, resetPassword, isAuthenticated, needsRoleSelection, needsSetup } = useAuth();
+  const { signIn, resetPassword, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -31,12 +31,12 @@ export default function AuthPage() {
     }
 
     if (needsSetup) {
-      router.replace(ROUTES.setupChoice);
+      router.replace(getRequiredSetupRoute(user?.role));
       return;
     }
 
     router.replace(ROUTES.dashboard);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, router]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, router, user?.role]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

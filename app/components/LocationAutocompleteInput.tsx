@@ -49,6 +49,11 @@ export function LocationAutocompleteInput({
   const [searchError, setSearchError] = useState('');
   const [showNoResults, setShowNoResults] = useState(false);
   const skipNextSearch = useRef(false);
+  const latitude = Number(selectedLocation?.latitude);
+  const longitude = Number(selectedLocation?.longitude);
+  const hasValidCoordinates = selectedLocation !== null
+    && Number.isFinite(latitude)
+    && Number.isFinite(longitude);
 
   useEffect(() => {
     if (skipNextSearch.current) {
@@ -57,7 +62,7 @@ export function LocationAutocompleteInput({
     }
 
     const query = value.trim();
-    if (query.length < 2 || selectedLocation) {
+    if (query.length < 2 || hasValidCoordinates) {
       setSuggestions([]);
       setShowNoResults(false);
       setSearchError('');
@@ -87,7 +92,7 @@ export function LocationAutocompleteInput({
       active = false;
       clearTimeout(timeout);
     };
-  }, [searchFailedMessage, selectedLocation, value]);
+  }, [hasValidCoordinates, searchFailedMessage, value]);
 
   const selectSuggestion = async (suggestion: PlaceSuggestion) => {
     setSearching(true);
@@ -127,7 +132,7 @@ export function LocationAutocompleteInput({
 
       <View>
         <TextInput
-          style={[styles.input, selectedLocation && styles.inputSelected]}
+          style={[styles.input, hasValidCoordinates && styles.inputSelected]}
           placeholder={placeholder}
           value={value}
           onChangeText={onChangeText}
@@ -162,11 +167,11 @@ export function LocationAutocompleteInput({
         </View>
       )}
 
-      {selectedLocation && (
+      {hasValidCoordinates && (
         <View style={styles.coordinatesInfo}>
           <Ionicons name="checkmark-circle" size={14} color="#15803d" />
           <Text style={styles.coordinatesText}>
-            {coordinatesLabel}: {selectedLocation.latitude.toFixed(6)}, {selectedLocation.longitude.toFixed(6)}
+            {coordinatesLabel}: {latitude.toFixed(6)}, {longitude.toFixed(6)}
           </Text>
         </View>
       )}

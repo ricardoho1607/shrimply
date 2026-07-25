@@ -1,0 +1,99 @@
+.page { display: flex; flex-direction: column; gap: 16px; }
+.cycleCard { border: 1px solid var(--border); border-radius: 20px; background: #fff; padding: 18px; box-shadow: 0 8px 24px rgba(15, 76, 117, .04); }
+.cycleCardCollapsed { border-radius: 14px; padding: 8px 12px; box-shadow: 0 4px 12px rgba(15, 76, 117, .03); }
+.cycleCardHeader { width: 100%; min-height: 32px; border: 0; background: transparent; color: inherit; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; text-align: left; font: inherit; cursor: pointer; }
+.cycleHeaderLeft { min-width: 0; flex: 1; display: flex; flex-direction: column; align-items: flex-start; }
+.cycleTitle { margin-top: 4px; color: var(--text-primary); font-size: 1.2rem; font-weight: 900; }
+.cycleMeta { margin-top: 3px; color: #315f57; font-size: .78rem; font-weight: 700; }
+.cycleCollapsedContent { width: 100%; min-width: 0; display: flex; align-items: center; }
+.cycleStatusDot { width: 8px; height: 8px; flex: 0 0 8px; border-radius: 999px; background: #315f57; margin-right: 8px; }
+.cycleStatusDotMuted { background: var(--text-muted); }
+.cycleCollapsedTitle { max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-size: .88rem; font-weight: 900; margin-right: 8px; }
+.cycleCollapsedMeta { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .75rem; font-weight: 800; }
+.cycleHeaderRight { flex: 0 0 auto; display: flex; align-items: center; gap: 9px; color: #315f57; }
+.cycleStatus { border-radius: 10px; background: #315f57; color: #fff; padding: 6px 10px; font-size: .66rem; font-weight: 900; text-transform: uppercase; }
+.cycleStatusMuted { background: var(--text-muted); }
+.cycleStats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }
+.cycleStats span { display: flex; flex-direction: column; align-items: center; gap: 3px; border-radius: 12px; background: var(--bg-mid); padding: 11px 8px; min-width: 0; }
+.cycleStats b { color: var(--primary); font-size: 1rem; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.cycleStats small { color: var(--text-muted); font-weight: 700; font-size: .68rem; }
+.cycleActions { display: flex; gap: 9px; margin-top: 13px; }
+.cycleActions input { min-width: 0; flex: 1; border: 1px solid var(--border); border-radius: 11px; background: var(--bg-mid); color: var(--text-primary); padding: 10px 12px; font: inherit; }
+.cycleActions button { border: 0; border-radius: 11px; background: var(--primary-dim); color: var(--primary); display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 13px; font-weight: 800; cursor: pointer; }
+.cyclePondList { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.cyclePondList span { border-radius: 999px; background: var(--primary-dim); color: #315f57; padding: 6px 10px; font-size: .7rem; font-weight: 800; }
+.cyclePondList .cyclePondChipEnded { opacity: .55; }
+.endCycleButton { width: 100%; margin-top: 14px; border: 0; border-radius: 11px; background: #c53030; color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 11px 13px; font-weight: 800; cursor: pointer; }
+.cycleActions button:disabled, .endCycleButton:disabled, .addButton:disabled { opacity: .55; cursor: default; }
+.cycleCard > .addButton { margin-top: 14px; }
+.cycleFilters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cycleFilters button { border: 0; border-radius: 11px; background: var(--bg-mid); color: var(--text-muted); padding: 10px; font-weight: 800; cursor: pointer; }
+.cycleFilters .cycleFilterActive { background: var(--primary); color: #fff; }
+.blockSectionHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.blockSectionHeader h1 { margin: 0 0 3px; font-size: 1.25rem; color: var(--text-primary); }
+.blockSectionHeader p, .modalHeader p { margin: 0; color: var(--text-muted); font-size: .82rem; }
+.blockHeaderActions { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; }
+.blockHeaderActions .addButton, .blockHeaderActions .displayButton { box-sizing: border-box; height: 46px; padding: 0 18px; font-family: inherit; font-size: .833rem; line-height: 1; }
+.eyebrow { color: var(--secondary); font-size: .72rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.addButton, .saveButton { border: 0; border-radius: 14px; background: var(--primary); color: #fff; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 13px 18px; font-weight: 800; cursor: pointer; text-decoration: none; }
+.displayButton { border: 1px solid #91b9cf; border-radius: 14px; background: #fff; color: var(--primary); display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-weight: 800; cursor: pointer; }
+.displayButton:hover { background: var(--primary-dim); }
+.legend { display: flex; flex-wrap: wrap; gap: 18px; color: var(--text-muted); font-size: .78rem; font-weight: 700; }
+.legend span { display: flex; align-items: center; gap: 7px; }
+.legendDot { width: 9px; height: 9px; border-radius: 999px; display: block; }
+.blockList { display: flex; flex-direction: column; gap: 12px; }
+.block { border: 1px solid var(--border); border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 8px 24px rgba(15, 76, 117, .04); }
+.blockHeader { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 12px; background: #fff; color: var(--text-primary); padding: 0 14px 0 20px; }
+.blockCopyButton { min-width: 0; flex: 1; align-self: stretch; display: flex; align-items: center; border: 0; background: transparent; color: inherit; padding: 0; text-align: left; cursor: pointer; }
+.blockChevron { width: 36px; height: 36px; flex: 0 0 36px; display: grid; place-items: center; border: 0; border-radius: 10px; background: transparent; color: var(--text-muted); cursor: pointer; }
+.blockRisk { width: 6px; align-self: stretch; }
+.blockCopy { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.blockTitleRow { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.blockCopy strong { font-size: 1rem; }
+.technicianBadge { max-width: min(50%, 260px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-radius: 999px; background: #e8f3fa; color: #0f4c75; padding: 5px 9px; font-size: .68rem; font-weight: 800; }
+.technicianBadgeButton { border: 1px solid #9ec5dc; cursor: pointer; }
+.technicianBadgeButton:hover { background: #d9edf8; }
+.blockCopy small, .noPonds { color: var(--text-muted); }
+.pondGrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(82px, 1fr)); gap: 10px; padding: 4px 18px 18px; }
+.pondTile { aspect-ratio: 1; border-radius: 13px; border: 1.5px solid; padding: 8px; display: grid; place-items: center; align-content: center; gap: 4px; font-size: .78rem; font-weight: 850; cursor: pointer; overflow-wrap: anywhere; }
+.pondTile:disabled { opacity: 1; cursor: default; }
+.stable { background: #c1e1c1; border-color: #c1e1c1; color: #1f5132; }
+.warning { background: #fac898; border-color: #fac898; color: #5a3700; }
+.highRisk { background: #faa0a0; border-color: #faa0a0; color: #721c24; }
+.neutral { background: #3282b8; border-color: #3282b8; color: #fff; }
+.ended { background: #64748b; border-color: #64748b; color: #fff; }
+.legendDot.stable, .blockRisk.stable { background: #c1e1c1; }
+.legendDot.warning, .blockRisk.warning { background: #fac898; }
+.legendDot.highRisk, .blockRisk.highRisk { background: #faa0a0; }
+.blockRisk.neutral { background: #76a9c8; }
+.pondTile span { display: block; }
+.pondTile small { display: block; margin-top: 4px; font-size: .65rem; opacity: .8; }
+.noPonds { padding: 2px 20px 20px; margin: 0; }
+.empty, .loading { border: 1px solid var(--border); border-radius: 22px; padding: 42px; text-align: center; background: #fff; }
+.empty p { color: var(--text-muted); margin: 8px auto 22px; max-width: 520px; }
+.error { color: #b42318; }
+.overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 42, 60, .45); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; padding: 24px; }
+.modal { width: min(560px, 100%); border-radius: 24px; background: #fff; padding: 28px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 30px 80px rgba(15, 42, 60, .22); }
+.modalHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
+.modalHeader h2 { margin: 0 0 5px; color: var(--text-primary); }
+.iconButton { border: 1px solid var(--border); background: var(--bg-mid); width: 38px; height: 38px; border-radius: 11px; cursor: pointer; display: grid; place-items: center; }
+.modal label { display: flex; flex-direction: column; gap: 8px; color: var(--text-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
+.modal input, .modal select { width: 100%; padding: 14px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-mid); color: var(--text-primary); font: inherit; text-transform: none; letter-spacing: normal; }
+.stablePanel { display: flex; align-items: center; gap: 10px; padding: 15px; border-radius: 13px; background: #eaf7ee; color: #1f6a39; font-weight: 700; }
+.warningList { display: flex; flex-direction: column; gap: 9px; }
+.warningList > div { display: flex; align-items: flex-start; gap: 9px; padding: 13px; border-radius: 12px; background: #fff8e8; color: #754900; font-weight: 700; }
+.mortalityPanel { border-radius: 14px; background: var(--bg-mid); padding: 16px; }
+.mortalityPanel > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
+.mortalityPanel span { display: flex; flex-direction: column; gap: 3px; }
+.mortalityPanel small { color: var(--text-muted); }
+@media (max-width: 640px) {
+  .cycleStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cycleActions { flex-wrap: wrap; }
+  .cycleActions input { flex-basis: 100%; }
+  .blockSectionHeader { align-items: center; }
+  .blockHeaderActions { gap: 7px; }
+  .blockHeaderActions .addButton, .blockHeaderActions .displayButton { height: 44px; padding: 0 12px; }
+  .pondGrid { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; padding-inline: 10px; }
+  .pondTile { border-radius: 8px; padding: 3px; font-size: .58rem; }
+  .mortalityPanel > div { grid-template-columns: 1fr; }
+}

@@ -11,6 +11,8 @@ import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import * as Location from 'expo-location';
 import { useLanguage } from '../context/LanguageContext';
+import OnboardingProgress from './components/onboarding/OnboardingProgress';
+import { getBuyerSetupProgress } from '../shared/onboarding';
 
 interface FormData {
   companyName: string;
@@ -43,6 +45,12 @@ export default function BuyerSetupScreen() {
   const [gettingLocation, setGettingLocation] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const setupProgress = getBuyerSetupProgress([
+    Boolean(formData.companyName.trim()),
+    Boolean(formData.location.trim()),
+    Boolean(formData.contactPhone.trim()),
+    Boolean(formData.businessType.trim()),
+  ]);
 
   const updateField = (key: keyof FormData, value: string) => 
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -361,6 +369,12 @@ export default function BuyerSetupScreen() {
             <Text style={styles.logoutButtonText}>{t.sidebar.signOut}</Text>
           </TouchableOpacity>
         </View>
+
+        <OnboardingProgress
+          percent={setupProgress}
+          title={t.onboardingProgress.buyer}
+          detail={t.onboardingProgress.buyerDetail}
+        />
 
         <View style={styles.header}>
           <View style={styles.headerIcon}>

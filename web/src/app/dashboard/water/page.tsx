@@ -29,19 +29,29 @@ import { app, auth, db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../shared/farmDate';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { EnterpriseGroupedPondGrid } from '@/components/EnterpriseDashboard';
+import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import {
+  filterEnterpriseRecordsForUser,
+  getEnterprisePondStatus,
+  isEnterpriseOwner,
+  type FarmBlock,
+} from '../../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;
-  feedData?: unknown; harvestData?: unknown;
+  feedData?: { totalDailyFeed?: number | string | null } | null; harvestData?: unknown;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
 }
 
 interface Pond {
   id: string; pondName: string; supplier: string; samplings: Sampling[];
+  blockId?: string;
+  blockName?: string;
   latestLabStatus?: LabStatus;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
@@ -203,6 +213,14 @@ export default function WaterQualityPage() {
   const [expandedLabReportId, setExpandedLabReportId] = useState<string | null>(null);
   const [expandedLabDateKeys, setExpandedLabDateKeys] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
+  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: farmBlocks,
+  }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -280,7 +298,7 @@ export default function WaterQualityPage() {
   useEffect(() => {
     if (!isModalOpen || !formData.pondId || !formData.date) return;
 
-    const pond = ponds.find(p => p.id === formData.pondId);
+    const pond = accessiblePonds.find(p => p.id === formData.pondId);
     const existing = pond?.samplings?.find(s =>
       !isBaselineSampling(s) &&
       !s.feedData &&
@@ -333,12 +351,13 @@ export default function WaterQualityPage() {
         };
       });
     }
-  }, [formData.pondId, formData.date, isModalOpen, ponds]);
+  }, [accessiblePonds, formData.pondId, formData.date, isModalOpen]);
 
   const handleAddWQ = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId || !user) return;
     if (!canEditWater) return;
+    if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
@@ -570,7 +589,7 @@ export default function WaterQualityPage() {
 
   const denormalizeLabRow = (row: LabPondResult): LabPondResult => ({
     pondId: row.pondId,
-    pondCode: row.pondCode || ponds.find(pond => pond.id === row.pondId)?.pondName || '',
+    pondCode: row.pondCode || accessiblePonds.find(pond => pond.id === row.pondId)?.pondName || '',
     doc: toInputString(row.doc),
     transparencyCm: toInputString(row.transparencyCm),
     waterQuality: {
@@ -802,6 +821,9 @@ export default function WaterQualityPage() {
   const handleCreateManualLabReport = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !canEditWater || selectedLabPondIds.length === 0 || !user) return;
+    const accessiblePondIds = new Set(accessiblePonds.map((pond) => pond.id));
+    const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
+    if (permittedLabRows.length === 0) return;
     setLabSubmitting(true);
 
     try {
@@ -813,7 +835,7 @@ export default function WaterQualityPage() {
         sampleDate: labForm.sampleDate,
         labName: labForm.labName.trim() || (labEntryMode === 'pdf_upload' ? 'Uploaded lab report' : 'Farm test kit'),
         farmName: labForm.farmName.trim() || '',
-        pondResults: labRows.map(normalizeLabRow),
+        pondResults: permittedLabRows.map(normalizeLabRow),
         insights: { status: 'pending' },
         processing: { status: 'pending' },
         updatedAt: serverTimestamp(),
@@ -844,8 +866,8 @@ export default function WaterQualityPage() {
   };
 
   const filteredPonds = useMemo(() => {
-    return ponds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
-  }, [ponds, searchTerm]);
+    return accessiblePonds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
+  }, [accessiblePonds, searchTerm]);
 
   const filteredLabReports = useMemo(() => {
     const term = searchTerm.toLowerCase();
@@ -1045,6 +1067,14 @@ export default function WaterQualityPage() {
       {loading ? (
         <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>
       ) : activeView === 'daily' ? (
+        enterpriseOwnerView ? (
+          <EnterpriseGroupedPondGrid
+            ponds={filteredPonds}
+            emptyMessage="No water quality data"
+            getTone={(pond) => getEnterprisePondStatus(pond, company?.timeZone).risk}
+            onSelect={(pond) => setSelectedPondForHistory(pond as Pond)}
+          />
+        ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {filteredPonds.map((pond, idx) => {
             const latest = getLatestWQ(pond);
@@ -1131,6 +1161,7 @@ export default function WaterQualityPage() {
             );
           })}
         </div>
+        )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           {groupedLabReports.map((group, groupIndex) => (
@@ -1192,7 +1223,7 @@ export default function WaterQualityPage() {
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {(report.pondResults || []).slice(0, 8).map((row, rowIndex) => {
-                        const relatedPond = ponds.find((pond) =>
+                        const relatedPond = accessiblePonds.find((pond) =>
                           pond.id === row.pondId ||
                           pond.pondName.toLowerCase() === (row.pondCode || '').toLowerCase()
                         );
@@ -1598,7 +1629,7 @@ export default function WaterQualityPage() {
                   <span style={{ color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.82rem' }}>{selectedLabPondIds.length} selected</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
-                  {ponds.map(pond => {
+                  {accessiblePonds.map(pond => {
                     const selected = selectedLabPondIds.includes(pond.id);
                     return (
                       <button
@@ -1709,7 +1740,7 @@ export default function WaterQualityPage() {
                     className="form-input"
                   >
                     <option value="">Select a pond asset...</option>
-                    {ponds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
+                    {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>
 

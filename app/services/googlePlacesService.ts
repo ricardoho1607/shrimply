@@ -156,22 +156,17 @@ class GooglePlacesService {
       throw new Error('Valid coordinates are required to detect the farm timezone');
     }
 
-    try {
-      const timestamp = Math.floor(date.getTime() / 1000);
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/timezone/json?location=${latitude},${longitude}&timestamp=${timestamp}&key=${this.apiKey}`
-      );
-      const data = await response.json();
+    const timestamp = Math.floor(date.getTime() / 1000);
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/timezone/json?location=${latitude},${longitude}&timestamp=${timestamp}&key=${this.apiKey}`
+    );
+    const data = await response.json();
 
-      if (data.status === 'OK' && typeof data.timeZoneId === 'string') {
-        return data.timeZoneId;
-      }
-
-      throw new Error(data.errorMessage || 'Timezone detection failed');
-    } catch (error) {
-      console.error('Google timezone detection error:', error);
-      throw error;
+    if (data.status === 'OK' && typeof data.timeZoneId === 'string') {
+      return data.timeZoneId;
     }
+
+    throw new Error(data.errorMessage || 'Timezone detection failed');
   }
 
   // Format place details to our LocationData interface

@@ -154,7 +154,7 @@ export default function UserProfileScreen() {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
           {/* Profile Picture Section */}
           <View style={styles.profileImageSection}>

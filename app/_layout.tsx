@@ -1,5 +1,5 @@
 // app/_layout.tsx
-import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
+import { Stack, useGlobalSearchParams, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import * as Sentry from '@sentry/react-native';
 import * as Updates from 'expo-updates';
 import { StatusBar } from 'expo-status-bar';
@@ -56,6 +56,7 @@ function RootLayoutNav() {
   const { user, loading, isAuthenticated, needsRoleSelection, needsSetup, isBuyer } = useAuth();
   const { t } = useLanguage();
   const segments = useSegments() as string[];
+  const params = useGlobalSearchParams<{ edit?: string }>();
   const router = useRouter();
   const rootNavigationState = useRootNavigationState();
   const homePath = isBuyer ? '/indexbuyer' : '/';
@@ -90,7 +91,7 @@ function RootLayoutNav() {
     }
 
     if (needsSetup) {
-      let setupPath = '/company-setup'; // Default for owners
+      let setupPath = '/company-setup2'; // Owners use the validated, resumable farm setup flow
 
       if (user?.role === 'buyer') {
         setupPath = '/buyersetup';
@@ -106,18 +107,19 @@ function RootLayoutNav() {
       return;
     }
 
-    const isInSetup = segments?.includes('company-setup') || segments?.includes('buyersetup') || segments?.includes('companysearch');
+    const isInSetup = segments?.includes('company-setup') || segments?.includes('company-setup2') || segments?.includes('buyersetup') || segments?.includes('companysearch');
+    const isEditingCompanySetup = segments?.includes('company-setup2') && params.edit === 'true';
 
     if (!firstSegment) {
       handleRedirect(homePath);
       return;
     }
 
-    if (isInAuth || isInRoleSelection || isInSetup) {
+    if (isInAuth || isInRoleSelection || (isInSetup && !isEditingCompanySetup)) {
       handleRedirect(homePath);
       return;
     }
-  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, homePath]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, homePath, params.edit]);
 
   const { width } = useWindowDimensions();
   const isLargeScreen = Platform.OS === 'web' && width > 1024;
@@ -140,6 +142,7 @@ function RootLayoutNav() {
       <Stack.Screen name="auth" />
       <Stack.Screen name="roleselection" />
       <Stack.Screen name="company-setup" />
+      <Stack.Screen name="company-setup2" />
       <Stack.Screen name="settings" options={{ presentation: 'card', headerShown: false }} />
       <Stack.Screen
         name="AIChat"

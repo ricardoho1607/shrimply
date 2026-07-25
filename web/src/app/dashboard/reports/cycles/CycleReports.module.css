@@ -1,0 +1,355 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: var(--text-primary);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--secondary);
+  font-size: .72rem;
+  font-weight: 850;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.pageHeader h1 {
+  margin: 0;
+  font-size: 1.65rem;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.headerActions {
+  display: flex;
+  gap: 10px;
+}
+
+.actionButton,
+.backButton {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 14px;
+  font: inherit;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.archiveList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.archiveCard {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: #fff;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 18px;
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(15, 76, 117, .04);
+}
+
+.archiveIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+
+.archiveCopy {
+  min-width: 0;
+}
+
+.archiveCopy strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 1rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archiveCopy span {
+  display: block;
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: .8rem;
+}
+
+.summaryCard,
+.section,
+.empty,
+.restricted {
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(15, 76, 117, .04);
+}
+
+.summaryCard {
+  padding: 22px;
+}
+
+.summaryTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.summaryTop h2 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.summaryTop p {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+}
+
+.status {
+  border-radius: 999px;
+  background: #e8f3fa;
+  color: var(--primary);
+  padding: 7px 11px;
+  font-size: .7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.summaryMeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 18px;
+  color: var(--text-muted);
+  font-size: .82rem;
+  font-weight: 700;
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tabs button {
+  border: 0;
+  border-radius: 11px;
+  background: var(--bg-mid);
+  color: var(--text-muted);
+  padding: 11px;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.tabs .tabActive {
+  background: var(--primary);
+  color: #fff;
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.metric {
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  background: #fff;
+  padding: 17px;
+}
+
+.metric small {
+  display: block;
+  color: var(--text-muted);
+  font-size: .72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.metric strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--primary);
+  font-size: 1.18rem;
+  overflow-wrap: anywhere;
+}
+
+.metricPositive strong {
+  color: #2f855a;
+}
+
+.metricNegative strong {
+  color: #c53030;
+}
+
+.section {
+  padding: 20px;
+}
+
+.section h2 {
+  margin: 0 0 15px;
+  font-size: 1rem;
+}
+
+.pondList,
+.costList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pondCard {
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  padding: 15px;
+  background: var(--bg-mid);
+}
+
+.pondHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pondHeader strong {
+  color: var(--text-primary);
+}
+
+.pondHeader span {
+  color: var(--text-muted);
+  font-size: .76rem;
+}
+
+.pondStats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 13px;
+}
+
+.pondStats span {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--text-muted);
+  font-size: .7rem;
+}
+
+.pondStats b {
+  color: var(--text-primary);
+  font-size: .82rem;
+}
+
+.costRow,
+.costTotal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.costTotal {
+  border-bottom: 0;
+  color: var(--primary);
+  font-weight: 900;
+}
+
+.empty,
+.restricted {
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.empty h2,
+.restricted h2 {
+  margin: 13px 0 7px;
+}
+
+.empty p,
+.restricted p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+@media (max-width: 900px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .pageHeader {
+    flex-direction: column;
+  }
+
+  .headerActions {
+    width: 100%;
+  }
+
+  .headerActions > * {
+    flex: 1;
+  }
+
+  .metricGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pondStats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media print {
+  .headerActions,
+  .tabs,
+  :global(aside),
+  :global(header) {
+    display: none !important;
+  }
+
+  .page {
+    color: #1b262c;
+  }
+
+  .summaryCard,
+  .section,
+  .metric {
+    box-shadow: none;
+    break-inside: avoid;
+  }
+}

@@ -125,6 +125,11 @@ export function useCompanyPhysicalPonds<T>(sort: 'asc' | 'desc' = 'asc') {
   return useCompanySubcollection<T>('physicalPonds', constraints);
 }
 
+export function useCompanyBlocks<T>(sort: 'asc' | 'desc' = 'asc') {
+  const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
+  return useCompanySubcollection<T>('blocks', constraints);
+}
+
 export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
   const constraints = useMemo(() => [orderBy('createdAt', sort)], [sort]);
   return useCompanySubcollection<T>('cycles', constraints);

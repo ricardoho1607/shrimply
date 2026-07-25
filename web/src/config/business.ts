@@ -1,6 +1,6 @@
-export type BusinessSize = "small" | "medium" | "large";
+export type BusinessSize = "small" | "medium" | "large" | "enterprise";
 
-export const BUSINESS_SIZES: BusinessSize[] = ["small", "medium", "large"];
+export const BUSINESS_SIZES: BusinessSize[] = ["small", "medium", "large", "enterprise"];
 
 export const DEFAULT_COMPANY_SETUP = {
   companyName: "",

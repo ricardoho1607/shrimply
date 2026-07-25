@@ -22,6 +22,9 @@ import {
   sumFeedAllocations,
 } from '../../shared/feedInventoryUsage';
 import { getFarmDateKey } from '../../shared/farmDate';
+import { filterEnterpriseRecordsForUser, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
+import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
+import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 
 interface FeedAllocationInput {
   inventoryFeedId: string;
@@ -52,8 +55,19 @@ export default function FeedManagementScreen() {
   const { user, company } = useAuth();
   const { ponds, addFeedData } = usePondStore();
   const { setCurrentCompanyId, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
-  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
+  const enterpriseBlocks = useEnterpriseBlocks(
+    company?.businessSize === 'enterprise' ? company?.id : undefined,
+    user?.uid,
+  );
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: enterpriseBlocks.blocks,
+  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+  const activePonds = useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
@@ -221,6 +235,20 @@ export default function FeedManagementScreen() {
           <Text style={styles.headerTitle}>{t.feed.title}</Text>
         </View>
 
+        {enterpriseOwnerView ? (
+          <EnterprisePondGrid
+            blocks={enterpriseBlocks.blocks}
+            technicians={enterpriseBlocks.technicians}
+            ponds={activePonds}
+            emptyMessage={t.feed.noData}
+            getTone={(pond) => getTodayFeedRecord(pond)?.feedData ? 'stable' : 'neutral'}
+            getSubtitle={(pond) => {
+              const amount = getTodayFeedRecord(pond)?.feedData?.totalDailyFeed;
+              return amount ? `${amount} kg` : undefined;
+            }}
+            onPress={(pond) => router.push({ pathname: '/feed-history', params: { pondId: pond.id, pondName: pond.pondName } })}
+          />
+        ) : (
         <FlatList
           data={allFeedRecords}
           keyExtractor={(item, index) => `${item.pondName}-${item.date || index}`}
@@ -257,6 +285,7 @@ export default function FeedManagementScreen() {
               </TouchableOpacity>
           )}
         />
+        )}
 
         {canEditPonds && (
           <TouchableOpacity style={styles.floatingButton} onPress={() => setIsModalVisible(true)}>

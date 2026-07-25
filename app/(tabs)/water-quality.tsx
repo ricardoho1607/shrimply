@@ -6,11 +6,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
-import { usePondStore, isPondCycleActive, type Pond } from "../store/pondStore";
+import { hasWaterQualityData, usePondStore, isPondCycleActive, type Pond } from "../store/pondStore";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import app, { db, storage } from '../../config/firebase';
 import { getFarmDateKey } from '../../shared/farmDate';
+import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
+import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
+import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 
 interface MobileLabReport {
   id: string;
@@ -97,8 +100,19 @@ export default function WaterQualityScreen() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
-  const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
+  const enterpriseBlocks = useEnterpriseBlocks(
+    company?.businessSize === 'enterprise' ? company?.id : undefined,
+    user?.uid,
+  );
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: enterpriseBlocks.blocks,
+  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+  const activePonds = useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
   const [activeView, setActiveView] = useState<'daily' | 'lab'>('daily');
   
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -252,7 +266,7 @@ export default function WaterQualityScreen() {
   const allWaterRecords = useMemo(() => {
     const today = getFarmDateKey(new Date(), company?.timeZone);
     return activePonds.map((p) => {
-      const todayWQRecord = p.samplings.find(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today);
+      const todayWQRecord = p.samplings.find(s => s.date === today && hasWaterQualityData(s));
       return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
         id: `temp-${p.id}`, date: today, mbw: 0, mortality: 0, feed: 0,
         phMorning: undefined, phEvening: undefined, doMorning: undefined, 
@@ -298,9 +312,7 @@ export default function WaterQualityScreen() {
     setSelectedPond(pondName);
     const today = getFarmDateKey(new Date(), company?.timeZone);
     const pond = ponds.find(p => p.pondName === pondName);
-    const todayWQRecord = pond?.samplings.find(s => 
-      s.mbw === 0 && s.feed === 0 && s.mortality === 0 && s.date === today
-    );
+    const todayWQRecord = pond?.samplings.find(s => s.date === today && hasWaterQualityData(s));
     setValues(todayWQRecord ? {
       phMorning: todayWQRecord.phMorning || "", phEvening: todayWQRecord.phEvening || "",
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
@@ -710,6 +722,16 @@ export default function WaterQualityScreen() {
         </View>
 
         {activeView === 'daily' ? (
+        enterpriseOwnerView ? (
+          <EnterprisePondGrid
+            blocks={enterpriseBlocks.blocks}
+            technicians={enterpriseBlocks.technicians}
+            ponds={activePonds}
+            emptyMessage={t.waterQuality.noData}
+            getTone={(pond) => getEnterprisePondStatus(pond, company?.timeZone).risk}
+            onPress={(pond) => router.push({ pathname: '/water-quality-history', params: { pondId: pond.id, pondName: pond.pondName } })}
+          />
+        ) : (
         <FlatList
           data={allWaterRecords}
           keyExtractor={(item, index) => `${item.pondName}-${item.date || index}`}
@@ -754,6 +776,7 @@ export default function WaterQualityScreen() {
               </TouchableOpacity>
           )}
         />
+        )
         ) : (
           <FlatList
             data={activePonds}

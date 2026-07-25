@@ -4,12 +4,12 @@ import { useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { ROUTES } from "@/config/routes";
+import { getRequiredSetupRoute, ROUTES } from "@/config/routes";
 
 type OnboardingStage = "role" | "setup";
 
 export function useOnboardingGuard(stage: OnboardingStage) {
-  const { isAuthenticated, needsRoleSelection, needsSetup, loading } = useAuth();
+  const { isAuthenticated, needsRoleSelection, needsSetup, loading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export function useOnboardingGuard(stage: OnboardingStage) {
 
     if (stage === "role") {
       if (!needsRoleSelection) {
-        router.replace(needsSetup ? ROUTES.setupChoice : ROUTES.dashboard);
+        router.replace(needsSetup ? getRequiredSetupRoute(user?.role) : ROUTES.dashboard);
         return;
       }
 
@@ -37,7 +37,7 @@ export function useOnboardingGuard(stage: OnboardingStage) {
     if (!needsSetup) {
       router.replace(ROUTES.dashboard);
     }
-  }, [isAuthenticated, loading, needsRoleSelection, needsSetup, router, stage]);
+  }, [isAuthenticated, loading, needsRoleSelection, needsSetup, router, stage, user?.role]);
 
   if (loading || !isAuthenticated) return false;
   if (stage === "role") return needsRoleSelection;

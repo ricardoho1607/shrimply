@@ -19,14 +19,21 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
-import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
+import { syncPublicCompanyMemberCount, syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../../../shared/farmDate';
+import { isCompanyProfileComplete, isUserOnboardingComplete } from '../../../shared/onboarding';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
 
 const OWNER_ROLES: UserRole[] = ['owner', 'co-owner'];
 const isOwnerRole = (role?: UserRole | null) => !!role && OWNER_ROLES.includes(role);
+
+const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
+  if (!user) return undefined;
+  const ownsFarmCompany = company?.ownerId === user.uid && company?.farmType !== 'buyer';
+  return ownsFarmCompany ? 'owner' : user.role;
+};
 
 interface User {
   id: string;
@@ -58,7 +65,7 @@ interface Company {
     placeId?: string;
   } | string;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -108,7 +115,7 @@ interface CompanySetupData {
   companyName: string;
   primaryLocation: Company['primaryLocation'];
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -152,16 +159,32 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const [companyResolved, setCompanyResolved] = useState(true);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const timeZoneMigrationRef = useRef<Set<string>>(new Set());
+  const publicMemberCountSyncRef = useRef<Map<string, number>>(new Map());
   const router = useRouter();
 
-  const setupCompanyListener = useCallback((companyId: string) => {
+  const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean) => {
+    setCompanyResolved(false);
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
         setCompany({ ...companyData, id: companyData.id || companyDoc.id });
+        const publicMemberCount = new Set([
+          ...(Array.isArray(companyData.teamMembers) ? companyData.teamMembers : []),
+          companyData.ownerId,
+        ].filter((memberId): memberId is string => typeof memberId === 'string' && Boolean(memberId.trim()))).size;
+        if ((canSyncPublicProfile || companyData.ownerId === auth.currentUser?.uid)
+          && (companyData.isPublicProfile === true || companyData.isSearchable === true)
+          && publicMemberCountSyncRef.current.get(companyId) !== publicMemberCount) {
+          publicMemberCountSyncRef.current.set(companyId, publicMemberCount);
+          void syncPublicCompanyMemberCount(companyId, companyData).catch((error) => {
+            publicMemberCountSyncRef.current.delete(companyId);
+            console.warn('Public company member count sync failed:', error);
+          });
+        }
         if (!isValidTimeZone(companyData.timeZone)
           && companyData.ownerId === auth.currentUser?.uid
           && !timeZoneMigrationRef.current.has(companyId)) {
@@ -177,6 +200,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setCompany(null);
       }
+      setCompanyResolved(true);
+    }, (error) => {
+      console.error('Company listener error:', error);
+      setCompany(null);
+      setCompanyResolved(true);
     });
   }, []);
 
@@ -184,6 +212,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let userUnsubscribe: (() => void) | null = null;
     let companyUnsubscribe: (() => void) | null = null;
     let currentCompanyId: string | null = null;
+    let currentCompanyCanSync = false;
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       // Clean up previous listeners
@@ -192,6 +221,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       userUnsubscribe = null;
       companyUnsubscribe = null;
       currentCompanyId = null;
+      currentCompanyCanSync = false;
 
       if (firebaseUser) {
         // Real-time listener for User Doc
@@ -201,18 +231,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(userData);
             
             // Manage Company Listener
-            if (userData.companyId && userData.companyId !== currentCompanyId) {
+            const canSyncPublicProfile = isOwnerRole(userData.role);
+            if (userData.companyId
+              && (userData.companyId !== currentCompanyId || canSyncPublicProfile !== currentCompanyCanSync)) {
               if (companyUnsubscribe) companyUnsubscribe();
               currentCompanyId = userData.companyId;
-              companyUnsubscribe = setupCompanyListener(userData.companyId);
+              currentCompanyCanSync = canSyncPublicProfile;
+              companyUnsubscribe = setupCompanyListener(userData.companyId, canSyncPublicProfile);
             } else if (!userData.companyId) {
               if (companyUnsubscribe) companyUnsubscribe();
               currentCompanyId = null;
+              currentCompanyCanSync = false;
               setCompany(null);
+              setCompanyResolved(true);
             }
           } else {
             setUser(null);
             setCompany(null);
+            setCompanyResolved(true);
           }
           setInitializing(false);
         }, (error) => {
@@ -222,6 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(null);
         setCompany(null);
+        setCompanyResolved(true);
         setInitializing(false);
       }
     });
@@ -251,8 +288,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCompany(companyDoc.exists()
           ? { ...(companyDoc.data() as Company), id: companyDoc.id }
           : null);
+        setCompanyResolved(true);
       } else {
         setCompany(null);
+        setCompanyResolved(true);
       }
       return;
     }
@@ -268,6 +307,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
     setUser(newUser);
     setCompany(null);
+    setCompanyResolved(true);
   };
 
   const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true, inviteToken?: string) => {
@@ -318,6 +358,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await firebaseSignOut(auth);
     setUser(null);
     setCompany(null);
+    setCompanyResolved(true);
     router.push('/auth');
   };
 
@@ -339,25 +380,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const completeCompanySetup = async (companyData: CompanySetupData) => {
     if (!user) return;
-    if (user.role !== 'owner') throw new Error('Only owners can set up a company');
+    if (user.role !== 'owner' && company?.ownerId !== user.uid) throw new Error('Only owners can set up a company');
+    if (!isCompanyProfileComplete(companyData)) {
+      throw new Error('Complete all required farm details before continuing');
+    }
     try {
-      const companyRef = doc(collection(db, 'companies'));
+      const resumableCompany = user.companyId && company?.ownerId === user.uid ? company : null;
+      const companyRef = resumableCompany
+        ? doc(db, 'companies', resumableCompany.id)
+        : doc(collection(db, 'companies'));
       const newCompany = {
+        ...(resumableCompany || {}),
         ...companyData,
         timeZone: resolveFarmTimeZone(companyData.timeZone, getSystemTimeZone()),
         id: companyRef.id,
         ownerId: user.uid,
-        teamMembers: [user.uid],
+        teamMembers: resumableCompany?.teamMembers?.includes(user.uid)
+          ? resumableCompany.teamMembers
+          : [user.uid],
         isSearchable: companyData.isSearchable ?? companyData.isPublicProfile ?? true,
-        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...(!resumableCompany ? { createdAt: serverTimestamp() } : {}),
       };
-      await setDoc(companyRef, newCompany);
+      await setDoc(companyRef, newCompany, { merge: Boolean(resumableCompany) });
       await syncPublicCompanyProfile(companyRef.id, newCompany);
       await updateDoc(doc(db, 'users', user.uid), {
         companyId: companyRef.id,
         hasCompletedSetup: true,
       });
       setUser({ ...user, companyId: companyRef.id, hasCompletedSetup: true });
+      setCompany({ ...(newCompany as Company), id: companyRef.id });
+      setCompanyResolved(true);
     } catch (error) {
       console.error('Error in completeCompanySetup:', error);
       throw error;
@@ -368,7 +421,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const companyId = user?.companyId || company?.id;
     if (!companyId) return;
     const companyDoc = await getDoc(doc(db, 'companies', companyId));
-    setCompany(companyDoc.exists() ? companyDoc.data() as Company : null);
+    setCompany(companyDoc.exists() ? { ...(companyDoc.data() as Company), id: companyDoc.id } : null);
+    setCompanyResolved(true);
   }, [company?.id, user?.companyId]);
 
   const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
@@ -408,7 +462,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     publicSnapshot.docs.forEach((companyDoc) => {
       if (seenCompanyIds.has(companyDoc.id)) return;
       seenCompanyIds.add(companyDoc.id);
-      const data = companyDoc.data() as Partial<Company> & { companyId?: string; location?: string };
+      const data = companyDoc.data() as Partial<Company> & {
+        companyId?: string;
+        location?: string;
+        publicMemberCount?: number;
+      };
       if (!data.companyName?.toLowerCase().includes(normalizedSearch)) return;
       farms.push({
         id: data.companyId || companyDoc.id,
@@ -416,7 +474,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         primaryLocation: data.primaryLocation || data.location || undefined,
         farmType: data.farmType,
         businessSize: data.businessSize,
-        memberCount: 0,
+        memberCount: typeof data.publicMemberCount === 'number' && Number.isFinite(data.publicMemberCount)
+          ? Math.max(0, Math.floor(data.publicMemberCount))
+          : 0,
       });
     });
     return farms;
@@ -448,6 +508,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
     if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
 
+    const nextTeamMembers = Array.from(new Set([
+      ...(Array.isArray(company.teamMembers) ? company.teamMembers : []),
+      user.uid,
+      requestData.userId,
+    ]));
     const batch = writeBatch(db);
     batch.update(requestRef, {
       status: 'approved',
@@ -465,6 +530,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       lastActive: serverTimestamp(),
     });
     await batch.commit();
+    await syncPublicCompanyMemberCount(company.id, { ...company, teamMembers: nextTeamMembers }).catch((syncError) => {
+      console.warn('Public company member count sync failed after approval:', syncError);
+    });
     await refreshCompanyData();
   }, [company, refreshCompanyData, user]);
 
@@ -486,10 +554,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, [company, user]);
 
-  const value = useMemo(() => ({
-    user,
+  const value = useMemo(() => {
+    const effectiveRole = getEffectiveUserRole(user, company);
+    const effectiveUser = user ? { ...user, role: effectiveRole } : null;
+    return {
+    user: effectiveUser,
     company,
-    loading,
+    loading: loading || initializing || (!!user?.companyId && !companyResolved),
     signIn,
     signUp,
     resetPassword,
@@ -504,10 +575,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     rejectJoinRequest,
     refreshCompanyData,
     isAuthenticated: !!user,
-    needsRoleSelection: !!user && !user.role,
-    needsSetup: !!user && !!user.role && !user.hasCompletedSetup,
-    isBuyer: !!user && user.role === 'buyer',
-  }), [user, company, loading, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);
+    needsRoleSelection: !!user && !effectiveRole,
+    needsSetup: !!effectiveUser && !!effectiveRole && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
+    isBuyer: effectiveRole === 'buyer',
+  };
+  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);
 
   if (initializing) return null;
 

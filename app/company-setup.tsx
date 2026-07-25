@@ -28,7 +28,7 @@ interface CompanyData {
   companyName: string;
   primaryLocation: string;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large' | '';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise' | '';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -94,7 +94,8 @@ export default function CompanySetupScreen() {
   const businessSizes = [
     { id: 'small', label: 'Small Operation', description: '1-5 ponds' },
     { id: 'medium', label: 'Medium Farm', description: '6-20 ponds' },
-    { id: 'large', label: 'Large Enterprise', description: '20+ ponds' },
+    { id: 'large', label: 'Large Farm', description: '20-99 ponds' },
+    { id: 'enterprise', label: 'Enterprise Farm', description: '100+ ponds managed by blocks' },
   ];
 
   const updateForm = useCallback(
@@ -239,7 +240,7 @@ export default function CompanySetupScreen() {
         primaryLocation: cleanedLocationData,
         country: country, 
         farmType: formData.farmType,
-        businessSize: formData.businessSize as 'small' | 'medium' | 'large',
+        businessSize: formData.businessSize as 'small' | 'medium' | 'large' | 'enterprise',
         description: formData.description,
         contactPhone: formData.contactPhone,
         isPublicProfile: formData.isPublicProfile,

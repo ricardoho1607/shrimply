@@ -8,6 +8,7 @@ import { signOut } from 'firebase/auth';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { getRequiredSetupRoute } from '@/config/routes';
 import {
   LayoutDashboard,
   Waves,
@@ -38,6 +39,7 @@ type DashboardTranslations = {
   auth: TranslationSection;
   finance: TranslationSection;
   financialReports: TranslationSection;
+  cycleReport: { archiveTitle?: string };
   nav: TranslationSection;
   sidebar: TranslationSection;
 };
@@ -76,6 +78,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
       children: [
         { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
         { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp' },
+        { label: getString(t.cycleReport.archiveTitle, 'Cycle Reports'), href: '/dashboard/reports/cycles' },
         { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), href: '/dashboard/projections' },
       ]
     },
@@ -178,10 +181,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       return;
     }
     if (needsSetup) {
-      router.push('/setup/choice');
+      router.push(getRequiredSetupRoute(user?.role));
       return;
     }
-  }, [isAuthenticated, needsRoleSelection, needsSetup, loading, router]);
+  }, [isAuthenticated, needsRoleSelection, needsSetup, loading, router, user?.role]);
 
   useEffect(() => {
     queueMicrotask(() => setSidebarOpen(false));

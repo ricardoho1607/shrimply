@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
+import OnboardingProgress from '@/components/OnboardingProgress';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { ROUTES } from '@/config/routes';
 
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -15,6 +17,7 @@ export default function CompanySearchPage() {
   const isReady = useOnboardingGuard('setup');
   const { user, searchCompanies, requestToJoinCompany } = useAuth();
   const router = useRouter();
+  const { t } = useLanguage();
   const { pendingRequest, loading: pendingRequestLoading } = usePendingJoinRequest(user?.uid);
   const [searchTerm, setSearchTerm] = useState('');
   const [results, setResults] = useState<Array<{ id: string; companyName: string; primaryLocation?: { address?: string } | string; memberCount?: number }>>([]);
@@ -85,6 +88,11 @@ export default function CompanySearchPage() {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
+      <OnboardingProgress
+        percent={50}
+        title={t.onboardingProgress.join}
+        detail={t.onboardingProgress.joinDetail}
+      />
       <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
         <button
           type="button"

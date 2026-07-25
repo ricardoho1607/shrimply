@@ -9,6 +9,8 @@ import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFarmDateKey } from '../../shared/farmDate';
 import type { HarvestType } from '../../shared/harvestCalculations';
+import { filterEnterpriseRecordsForUser } from '../../shared/enterpriseBlocks';
+import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 
 const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
   return (
@@ -37,12 +39,35 @@ export default function HarvestScreen() {
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
   const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
-  const activePonds = React.useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
+  const enterpriseBlocks = useEnterpriseBlocks(
+    company?.businessSize === 'enterprise' ? company?.id : undefined,
+    user?.uid,
+  );
+  const accessiblePonds = React.useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: enterpriseBlocks.blocks,
+  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+  const activePonds = React.useMemo(() => accessiblePonds.filter(isPondCycleActive), [accessiblePonds]);
   const activeFarmCycle = React.useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   const activePondIds = React.useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
+  const accessiblePondIds = React.useMemo(() => new Set(accessiblePonds.map((pond) => pond.id)), [accessiblePonds]);
+  const accessibleHarvestRecords = React.useMemo(() => harvestRecords
+    .map((record) => ({
+      ...record,
+      ponds: record.ponds.filter((pond) => accessiblePondIds.has(pond.pondId)),
+    }))
+    .filter((record) => record.ponds.length > 0), [accessiblePondIds, harvestRecords]);
   const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
   
   const canEditHarvest = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canModifyHarvestRecord = useCallback((harvestId: string) => {
+    const record = harvestRecords.find((harvest) => harvest.id === harvestId);
+    if (!record) return false;
+    if (company?.businessSize !== 'enterprise' || user?.role !== 'technician') return true;
+    return record.ponds.every((pond) => accessiblePondIds.has(pond.pondId));
+  }, [accessiblePondIds, company?.businessSize, harvestRecords, user?.role]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
@@ -73,10 +98,10 @@ export default function HarvestScreen() {
   }, [activeFarmCycle, activePondIds]);
 
   const visibleHarvestRecords = React.useMemo(
-    () => harvestRecords.filter((harvest) =>
+    () => accessibleHarvestRecords.filter((harvest) =>
       harvestFilter === 'current' ? isCurrentCycleHarvest(harvest) : !isCurrentCycleHarvest(harvest)
     ),
-    [harvestFilter, harvestRecords, isCurrentCycleHarvest]
+    [accessibleHarvestRecords, harvestFilter, isCurrentCycleHarvest]
   );
 
   React.useEffect(() => {
@@ -281,7 +306,7 @@ export default function HarvestScreen() {
   };
 
   const handleDeleteHarvest = (harvestId: string) => {
-    if (!canEditHarvest) {
+    if (!canEditHarvest || !canModifyHarvestRecord(harvestId)) {
       Alert.alert(t.harvest.permissionDenied, t.harvest.permissionMessage);
       return;
     }
@@ -414,7 +439,7 @@ export default function HarvestScreen() {
                         {harvest.ponds.map((pond) => `${pond.pondName}: ${getHarvestTypeLabel(pond)}`).join(' • ')}
                       </Text>
                     </TouchableOpacity>
-                    {canEditHarvest && (
+                    {canEditHarvest && canModifyHarvestRecord(harvest.id) && (
                       <TouchableOpacity style={styles.deleteButton}
                         onPress={() => handleDeleteHarvest(harvest.id)}>
                         <Ionicons name="trash-outline" size={20} color="#e74c3c" />

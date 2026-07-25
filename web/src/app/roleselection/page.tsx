@@ -17,7 +17,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
-import { ROUTES } from '@/config/routes';
+import { getRequiredSetupRoute } from '@/config/routes';
+import OnboardingProgress from '@/components/OnboardingProgress';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 
@@ -134,7 +135,7 @@ export default function RoleSelectionPage() {
 
     try {
       await completeRoleSelection(role.id);
-      router.push(ROUTES.setupChoice);
+      router.push(getRequiredSetupRoute(role.id));
     } catch (error: unknown) {
       console.error('Role selection failed:', error);
       alert(error instanceof Error ? error.message : 'Failed to set up role');
@@ -164,6 +165,11 @@ export default function RoleSelectionPage() {
       flexDirection: 'column',
       alignItems: 'center'
     }}>
+      <OnboardingProgress
+        percent={25}
+        title={t.onboardingProgress.role}
+        detail={t.onboardingProgress.roleDetail}
+      />
       <div style={{ maxWidth: '1000px', width: '100%', textAlign: 'center', marginBottom: '60px' }}>
         <button
           type="button"

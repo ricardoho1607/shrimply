@@ -33,6 +33,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
+  useCompanyBlocks,
   useCompanyCycles,
   useCompanyPonds,
   useMarketplaceListings,
@@ -45,6 +46,13 @@ import {
   type SharedMortalityRecord,
 } from '../../../../shared/pondCalculations';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import EnterpriseDashboard from '@/components/EnterpriseDashboard';
+import ProfileCompletionCard from '@/components/ProfileCompletionCard';
+import {
+  filterEnterpriseRecordsForUser,
+  isEnterpriseOwner,
+  type FarmBlock,
+} from '../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -74,6 +82,8 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
+  blockId?: string;
+  blockName?: string;
   docStart: string; supplier: string; initialWeight: number; samplings: Sampling[];
   mortalityRecords?: SharedMortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
@@ -523,9 +533,19 @@ export default function DashboardPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
+  const { data: blocks } = useCompanyBlocks<FarmBlock>('asc');
   const userData = user;
   const loading = authLoading || !userData || (userData.role !== 'buyer' && pondsLoading);
-  const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: userData?.role,
+    userId: userData?.uid,
+    blocks,
+  }), [blocks, company?.businessSize, ponds, userData?.role, userData?.uid]);
+  const activePonds = useMemo(
+    () => filterActiveCyclePonds(accessiblePonds, cycles),
+    [accessiblePonds, cycles],
+  );
 
   const totalMetrics = useMemo(() => {
     let currentBiomass = 0; let currentSR = 0; let currentPop = 0;
@@ -581,9 +601,16 @@ export default function DashboardPage() {
   );
 
   if (userData?.role === 'buyer') return <BuyerDashboard t={t} user={userData} />;
+  if (isEnterpriseOwner(company?.businessSize, userData?.role)) {
+    return <EnterpriseDashboard ponds={ponds} timeZone={company?.timeZone} />;
+  }
 
   return (
     <div className="dashboard-page">
+
+      {(userData?.role === 'owner' || userData?.role === 'co-owner') ? (
+        <ProfileCompletionCard company={company} />
+      ) : null}
 
       {/* Summary Row */}
       <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>

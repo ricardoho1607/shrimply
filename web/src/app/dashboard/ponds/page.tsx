@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   Plus,
   Waves,
@@ -25,10 +25,20 @@ import { collection, doc, addDoc, serverTimestamp, deleteDoc, setDoc, updateDoc,
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import { useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
+import { useCompanyBlocks, useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../shared/harvestCalculations';
+import StartPondCycleModal from '@/components/StartPondCycleModal';
+import {
+  StartPondCycleError,
+  startPondCycle,
+  type StartPondCycleFormValue,
+} from '@/lib/startPondCycle';
+import {
+  canManageEnterpriseFarmCycle,
+  filterEnterpriseRecordsForUser,
+} from '../../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -40,6 +50,8 @@ interface Sampling {
 
 interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
+  blockId?: string;
+  blockName?: string;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
   cycleId?: string;
@@ -88,13 +100,22 @@ interface PhysicalPond {
   id: string;
   pondName: string;
   pondArea: number;
+  blockId?: string;
+  blockName?: string;
   status?: 'idle' | 'active';
   activePondId?: string | null;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
 
-type InactivePondOption = PhysicalPond | Pond;
+interface FarmBlock {
+  id: string;
+  companyId: string;
+  name: string;
+  assignedTechnicianId?: string | null;
+}
+
+type InactivePondOption = PhysicalPond;
 type DeleteTarget = {
   isOpen: boolean;
   id: string | null;
@@ -143,12 +164,14 @@ export default function PondsPage() {
   const { company } = useAuth();
   const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
   const { data: physicalPonds, loading: physicalPondsLoading } = useCompanyPhysicalPonds<PhysicalPond>('asc');
+  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
   const { data: harvestRecords } = useCompanyHarvestRecords<HarvestRecord>();
   const today = useFarmDateKey(company?.timeZone);
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
+  const startRequestHandledRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [cycleNameDraft, setCycleNameDraft] = useState('');
@@ -157,10 +180,11 @@ export default function PondsPage() {
   const [formData, setFormData] = useState({
     pondName: '',
     pondArea: '',
+    blockId: '',
     density: '',
     docStart: today,
     supplier: '',
-    plValue: '0.5',
+    plValue: '',
     cycleStartMode: 'new' as 'new' | 'midcycle',
     baselineDate: today,
     baselineMbw: '',
@@ -181,17 +205,7 @@ export default function PondsPage() {
   });
   const [startCyclePond, setStartCyclePond] = useState<(Pond | PhysicalPond) | null>(null);
   const [pendingPhysicalPonds, setPendingPhysicalPonds] = useState<PhysicalPond[]>([]);
-  const [startCycleForm, setStartCycleForm] = useState({
-    density: '',
-    docStart: today,
-    plValue: '0.5',
-    plSupplier: '',
-    cycleStartMode: 'new' as 'new' | 'midcycle',
-    baselineMbw: '',
-    baselineEstimatedPopulation: '',
-    baselineSurvivalRate: '',
-    baselineCumulativeFeed: '',
-  });
+  const [startingPondCycle, setStartingPondCycle] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [finalHarvestPromptPonds, setFinalHarvestPromptPonds] = useState<Pond[]>([]);
   const [baselineEditPond, setBaselineEditPond] = useState<Pond | null>(null);
@@ -238,14 +252,37 @@ export default function PondsPage() {
 
   const activeFarmCycle = useMemo(() => cycles.find(isOpenFarmCycle), [cycles]);
   const canEditPonds = canEditOperations(user?.role);
+  const isEnterpriseFarm = company?.businessSize === 'enterprise';
+  const canManageFarmCycle = canEditPonds && canManageEnterpriseFarmCycle(company?.businessSize, user?.role);
+  const availableFarmBlocks = useMemo(() => {
+    if (!isEnterpriseFarm) return [];
+    if (user?.role === 'owner' || user?.role === 'co-owner') return farmBlocks;
+    if (user?.role === 'technician') return farmBlocks.filter((block) => block.assignedTechnicianId === user.uid);
+    return [];
+  }, [farmBlocks, isEnterpriseFarm, user]);
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: farmBlocks,
+  }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
+  const accessiblePhysicalPonds = useMemo(() => filterEnterpriseRecordsForUser(allPhysicalPonds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: farmBlocks,
+  }), [allPhysicalPonds, company?.businessSize, farmBlocks, user?.role, user?.uid]);
   const activeCyclePonds = useMemo(
     () => activeFarmCycle
-      ? ponds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || !pond.cycleId))
+      ? accessiblePonds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || !pond.cycleId))
       : [],
-    [activeFarmCycle, ponds]
+    [accessiblePonds, activeFarmCycle]
   );
   const activePondCount = activeCyclePonds.length;
-  const endedPondCount = useMemo(() => ponds.filter((pond) => getCycleStatus(pond) === 'ended').length, [ponds]);
+  const endedPondCount = useMemo(
+    () => accessiblePonds.filter((pond) => getCycleStatus(pond) === 'ended').length,
+    [accessiblePonds],
+  );
 
   useEffect(() => {
     queueMicrotask(() => setCycleNameDraft(activeFarmCycle?.cycleName || ''));
@@ -255,6 +292,10 @@ export default function PondsPage() {
     if (!companyId || !user || !canEditPonds) return null;
     const activeCycle = cycles.find(isOpenFarmCycle);
     if (activeCycle) return activeCycle;
+    if (isEnterpriseFarm) {
+      alert(t.enterprise.ownerMustStartCycle);
+      return null;
+    }
 
     const cycleName = `Cycle ${cycles.length + 1}`;
     const docRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
@@ -272,7 +313,7 @@ export default function PondsPage() {
 
   const handleRenameCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
-    if (!canEditPonds) return;
+    if (!canManageFarmCycle) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
       alert('Cycle name cannot be empty.');
@@ -280,19 +321,22 @@ export default function PondsPage() {
     }
 
     try {
+      for (let index = 0; index < activeCyclePonds.length; index += 400) {
+        const batch = writeBatch(db);
+        activeCyclePonds.slice(index, index + 400).forEach((pond) => {
+          batch.update(doc(db, 'companies', companyId, 'ponds', pond.id), {
+            cycleName: nextName,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+          });
+        });
+        await batch.commit();
+      }
       await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
         cycleName: nextName,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
       });
-
-      await Promise.all(activeCyclePonds.map((pond) =>
-        updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-          cycleName: nextName,
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid,
-        })
-      ));
     } catch (error) {
       console.error('Error renaming cycle:', error);
       alert(t.messages.error || 'Failed to rename cycle.');
@@ -301,7 +345,7 @@ export default function PondsPage() {
 
   const handleCloseFarmCycle = async () => {
     if (!companyId || !user || !activeFarmCycle) return;
-    if (!canEditPonds) return;
+    if (!canManageFarmCycle) return;
     const missingFinalHarvestPonds = activeCyclePonds.filter((pond) =>
       !hasFinalHarvestForPondCycle(harvestRecords, pond)
     );
@@ -312,8 +356,45 @@ export default function PondsPage() {
     if (!window.confirm(`End ${activeFarmCycle.cycleName} and move ${activeCyclePonds.length} pond${activeCyclePonds.length === 1 ? '' : 's'} to history?`)) return;
 
     try {
-      const batch = writeBatch(db);
-      batch.update(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
+      const activePondsToEnd = activeCyclePonds.filter(isActiveCycle);
+      const activePondIds = new Set(activePondsToEnd.map((pond) => pond.id));
+      const activePondNames = new Set(activePondsToEnd.map((pond) => getPhysicalPondKey(pond.pondName)));
+      const lifecycleUpdates: Array<{
+        ref: ReturnType<typeof doc>;
+        data: Record<string, unknown>;
+      }> = [];
+      activePondsToEnd.forEach((pond) => {
+        lifecycleUpdates.push({ ref: doc(db, 'companies', companyId, 'ponds', pond.id), data: {
+          cycleStatus: 'ended',
+          cycleEndedAt: today,
+          cycleEndReason: 'harvested',
+          cycleEndedBy: user.uid,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        } });
+      });
+      accessiblePhysicalPonds
+        .filter((physicalPond) =>
+          (physicalPond.activePondId && activePondIds.has(physicalPond.activePondId)) ||
+          (isPhysicalPondActive(physicalPond) && activePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
+        )
+        .forEach((physicalPond) => {
+          lifecycleUpdates.push({ ref: doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), data: {
+            status: 'idle',
+            activePondId: null,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+          } });
+        });
+
+      for (let index = 0; index < lifecycleUpdates.length; index += 400) {
+        const batch = writeBatch(db);
+        lifecycleUpdates.slice(index, index + 400).forEach((update) => {
+          batch.update(update.ref, update.data);
+        });
+        await batch.commit();
+      }
+      await updateDoc(doc(db, 'companies', companyId, 'cycles', activeFarmCycle.id), {
         status: 'closed',
         closedAt: today,
         stockingEndDate: activeFarmCycle.stockingEndDate || today,
@@ -321,36 +402,11 @@ export default function PondsPage() {
         updatedBy: user.uid,
       });
 
-      const activePondsToEnd = activeCyclePonds.filter(isActiveCycle);
-      const activePondIds = new Set(activePondsToEnd.map((pond) => pond.id));
-      const activePondNames = new Set(activePondsToEnd.map((pond) => getPhysicalPondKey(pond.pondName)));
-      activePondsToEnd.forEach((pond) => {
-        batch.update(doc(db, 'companies', companyId, 'ponds', pond.id), {
-          cycleStatus: 'ended',
-          cycleEndedAt: today,
-          cycleEndReason: 'harvested',
-          cycleEndedBy: user.uid,
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid,
-        });
-      });
-      allPhysicalPonds
-        .filter((physicalPond) =>
-          (physicalPond.activePondId && activePondIds.has(physicalPond.activePondId)) ||
-          (isPhysicalPondActive(physicalPond) && activePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
-        )
-        .forEach((physicalPond) => {
-          batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
-            status: 'idle',
-            activePondId: null,
-            updatedAt: serverTimestamp(),
-            updatedBy: user.uid,
-          });
-        });
-
-      await batch.commit();
-
       setCycleFilter('ended');
+      const openReport = window.confirm(
+        `${t.farmCycle.endFarmCycleSuccess.replace('{{cycleName}}', activeFarmCycle.cycleName)}\n\n${t.farmCycle.viewCycleReport}`,
+      );
+      if (openReport) router.push(`/dashboard/reports/cycles?cycleId=${encodeURIComponent(activeFarmCycle.id)}`);
     } catch (error) {
       console.error('Error ending cycle:', error);
       alert(t.messages.error || 'Failed to end cycle.');
@@ -365,6 +421,11 @@ export default function PondsPage() {
     try {
       const pondName = formData.pondName.trim();
       const pondArea = Number(formData.pondArea);
+      const selectedBlock = availableFarmBlocks.find((block) => block.id === formData.blockId);
+      if (isEnterpriseFarm && !selectedBlock) {
+        alert(availableFarmBlocks.length === 0 ? t.enterprise.noAssignedBlocks : t.enterprise.blockRequired);
+        return;
+      }
       const pondKey = getPhysicalPondKey(pondName);
       const alreadyExists = allPhysicalPonds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey) ||
         ponds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey);
@@ -379,11 +440,15 @@ export default function PondsPage() {
         id: physicalPondRef.id,
         pondName,
         pondArea,
+        blockId: selectedBlock?.id,
+        blockName: selectedBlock?.name,
         status: 'idle',
       };
       const pondData = {
         pondName,
         pondArea,
+        blockId: selectedBlock?.id,
+        blockName: selectedBlock?.name,
         status: 'idle',
         createdAt: serverTimestamp(),
         createdBy: user.uid,
@@ -397,10 +462,11 @@ export default function PondsPage() {
       setFormData({
         pondName: '',
         pondArea: '',
+        blockId: '',
         density: '',
         docStart: today,
         supplier: '',
-        plValue: '0.5',
+        plValue: '',
         cycleStartMode: 'new',
         baselineDate: today,
         baselineMbw: '',
@@ -440,7 +506,7 @@ export default function PondsPage() {
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
       });
-      allPhysicalPonds
+      accessiblePhysicalPonds
         .filter((physicalPond) =>
           physicalPond.activePondId === endCyclePond.id ||
           (isPhysicalPondActive(physicalPond) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(endCyclePond.pondName))
@@ -466,21 +532,50 @@ export default function PondsPage() {
     }
   };
 
-  const openStartCycle = (pond: Pond | PhysicalPond) => {
+  const openStartCycle = useCallback((pond: Pond | PhysicalPond) => {
     if (!canEditPonds) return;
     setStartCyclePond(pond);
-    setStartCycleForm({
-      density: '',
-      docStart: today,
-      plValue: '0.5',
-      plSupplier: '',
-      cycleStartMode: 'new',
-      baselineMbw: '',
-      baselineEstimatedPopulation: '',
-      baselineSurvivalRate: '',
-      baselineCumulativeFeed: '',
+  }, [canEditPonds]);
+
+  useEffect(() => {
+    if (
+      startRequestHandledRef.current
+      || loading
+      || physicalPondsLoading
+      || !canEditPonds
+      || typeof window === 'undefined'
+    ) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const requestedPondId = params.get('startPondId');
+    const requestedPondType = params.get('startPondType');
+    if (!requestedPondId || !['physical', 'cycle'].includes(requestedPondType || '')) return;
+
+    const requestedPond = requestedPondType === 'cycle'
+      ? accessiblePonds.find((pond) => pond.id === requestedPondId && getCycleStatus(pond) === 'ended')
+      : accessiblePhysicalPonds.find((pond) => pond.id === requestedPondId && !isPhysicalPondActive(pond));
+    if (!requestedPond) {
+      startRequestHandledRef.current = true;
+      window.history.replaceState(window.history.state, '', '/dashboard/ponds');
+      alert(t.startPondCycle.invalidRequest);
+      return;
+    }
+
+    startRequestHandledRef.current = true;
+    queueMicrotask(() => {
+      setCycleFilter('inactive');
+      openStartCycle(requestedPond);
+      window.history.replaceState(window.history.state, '', '/dashboard/ponds');
     });
-  };
+  }, [
+    accessiblePhysicalPonds,
+    accessiblePonds,
+    canEditPonds,
+    loading,
+    openStartCycle,
+    physicalPondsLoading,
+    t.startPondCycle.invalidRequest,
+  ]);
 
   const openBaselineEdit = (pond: Pond) => {
     if (!canEditPonds) return;
@@ -566,103 +661,32 @@ export default function PondsPage() {
     }
   };
 
-  const handleStartCycle = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleStartCycle = async (form: StartPondCycleFormValue) => {
     if (!companyId || !user || !startCyclePond) return;
     if (!canEditPonds) return;
 
+    setStartingPondCycle(true);
     try {
-      const hasActiveCycleForPond = ponds.some((pond) =>
-        pond.id !== startCyclePond.id &&
-        isActiveCycle(pond) &&
-        getPhysicalPondKey(pond.pondName) === getPhysicalPondKey(startCyclePond.pondName)
-      );
-
-      if (hasActiveCycleForPond) {
-        alert(`${startCyclePond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
-        return;
-      }
-
-      const initialPopulation = Number(startCyclePond.pondArea) * Number(startCycleForm.density);
-      const initialWeight = parseFloat(startCycleForm.plValue) / 10;
-      const activeCycle = await ensureActiveCycle(startCycleForm.docStart);
-      const isMidcycle = startCycleForm.cycleStartMode === 'midcycle';
-      const baselineDate = today;
-      const baselineDocValue = isMidcycle ? calculateDocFromDates(startCycleForm.docStart, baselineDate) : 0;
-      const baselineMbwValue = parseFloat(startCycleForm.baselineMbw);
-      const baselinePopulationValue = parseFloat(startCycleForm.baselineEstimatedPopulation);
-      const baselineSurvivalValue = parseFloat(startCycleForm.baselineSurvivalRate);
-      const baselineFeedValue = parseFloat(startCycleForm.baselineCumulativeFeed);
-
-      if (isMidcycle && (!startCycleForm.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0)) {
-        alert(t.midcycleOnboarding?.baselineMbwRequired || 'Current MBW is required for an existing cycle.');
-        return;
-      }
-
-      if (isMidcycle && (!Number.isFinite(baselineDocValue) || baselineDocValue < 0)) {
-        alert('Start date must be today or earlier for an existing cycle.');
-        return;
-      }
-
-      const baselineSampling = isMidcycle ? [{
-        id: `baseline-${Date.now()}`,
-        date: baselineDate,
-        mbw: baselineMbwValue,
-        mortality: 0,
-        feed: Number.isNaN(baselineFeedValue) ? 0 : baselineFeedValue,
-        isBaselineEstimate: true,
-        source: 'midcycle_onboarding',
-        ...(Number.isNaN(baselinePopulationValue) ? {} : { estimatedPopulation: baselinePopulationValue }),
-        ...(Number.isNaN(baselineSurvivalValue) ? {} : { estimatedSurvivalRate: baselineSurvivalValue }),
-        ...(Number.isNaN(baselineFeedValue) ? {} : { cumulativeFeedToDate: baselineFeedValue }),
-        ...(activeCycle?.id ? { cycleId: activeCycle.id } : {}),
-        ...(activeCycle?.cycleName ? { cycleName: activeCycle.cycleName } : {}),
-      }] : [];
-
-      const newCyclePondRef = await addDoc(collection(db, 'companies', companyId, 'ponds'), removeUndefinedFields({
-        pondName: startCyclePond.pondName,
-        pondArea: Number(startCyclePond.pondArea),
-        density: Number(startCycleForm.density),
-        initialPopulation,
-        docStart: startCycleForm.docStart,
-        supplier: startCycleForm.plSupplier,
-        plSupplier: startCycleForm.plSupplier,
-        initialWeight,
-        samplings: baselineSampling,
-        totalHarvestedBiomass: 0,
-        totalHarvestedPopulation: 0,
-        totalHarvestedFeed: 0,
-        cycleId: activeCycle?.id,
-        cycleName: activeCycle?.cycleName,
-        cycleStatus: 'active',
-        cycleStartedAt: startCycleForm.docStart,
-        cycleStartMode: startCycleForm.cycleStartMode,
-        previousCyclePondId: startCyclePond.id,
-        ...(isMidcycle && {
-          baselineDate,
-          baselineDoc: baselineDocValue,
-          baselineMbw: baselineMbwValue,
-          baselineEstimatedPopulation: Number.isNaN(baselinePopulationValue) ? undefined : baselinePopulationValue,
-          baselineSurvivalRate: Number.isNaN(baselineSurvivalValue) ? undefined : baselineSurvivalValue,
-          baselineCumulativeFeed: Number.isNaN(baselineFeedValue) ? undefined : baselineFeedValue,
-          baselineSource: 'user_midcycle_estimate',
-        }),
-        createdAt: serverTimestamp(),
-        createdBy: user.uid,
-      }) as Record<string, unknown>);
-      if (!('cycleStatus' in startCyclePond)) {
-        await updateDoc(doc(db, 'companies', companyId, 'physicalPonds', startCyclePond.id), {
-          status: 'active',
-          activePondId: newCyclePondRef.id,
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid,
-        });
-      }
+      const activeCycle = await ensureActiveCycle(form.docStart);
+      if (!activeCycle) return;
+      await startPondCycle({
+        companyId,
+        userId: user.uid,
+        pond: startCyclePond,
+        pondType: 'cycleStatus' in startCyclePond ? 'cycle' : 'physical',
+        activeCycle,
+        form,
+        today,
+        activePonds: ponds,
+      });
       setStartCyclePond(null);
       setCycleFilter('active');
     } catch (error) {
       console.error('Error starting new cycle:', error);
-      alert(t.messages.error || 'Failed to start new cycle.');
+      const errorCode = error instanceof StartPondCycleError ? error.code : 'failed';
+      alert(t.startPondCycle.errors[errorCode]);
+    } finally {
+      setStartingPondCycle(false);
     }
   };
 
@@ -710,7 +734,7 @@ export default function PondsPage() {
     setIsDeleting(true);
     try {
       if (deleteConfirm.type === 'physical') {
-        const physicalPond = allPhysicalPonds.find((pond) => pond.id === deleteConfirm.id);
+        const physicalPond = accessiblePhysicalPonds.find((pond) => pond.id === deleteConfirm.id);
 
         if (!physicalPond) {
           alert(t.messages?.dataNotFound || 'Pond data not found.');
@@ -724,7 +748,7 @@ export default function PondsPage() {
 
         await deleteDoc(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id));
       } else {
-        const pond = ponds.find((item) => item.id === deleteConfirm.id);
+        const pond = accessiblePonds.find((item) => item.id === deleteConfirm.id);
 
         if (!pond) {
           alert(t.messages?.dataNotFound || 'Pond data not found.');
@@ -736,7 +760,7 @@ export default function PondsPage() {
           return;
         }
 
-        const linkedPhysicalPond = allPhysicalPonds.find((physicalPond) =>
+        const linkedPhysicalPond = accessiblePhysicalPonds.find((physicalPond) =>
           physicalPond.activePondId === pond.id ||
           (!isPhysicalPondActive(physicalPond) && getPhysicalPondKey(physicalPond.pondName) === getPhysicalPondKey(pond.pondName))
         );
@@ -767,28 +791,16 @@ export default function PondsPage() {
   const filteredPonds = useMemo(() => {
     if (cycleFilter === 'inactive') return [];
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
-    const statusFiltered = ponds.filter(p => getCycleStatus(p) === cycleFilter);
+    const statusFiltered = accessiblePonds.filter(p => getCycleStatus(p) === cycleFilter);
     if (!normalizedSearch) return statusFiltered;
     return statusFiltered.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
-  }, [ponds, debouncedSearchTerm, cycleFilter]);
+  }, [accessiblePonds, debouncedSearchTerm, cycleFilter]);
   const inactivePondOptions = useMemo<InactivePondOption[]>(() => {
-    const activeNames = new Set(ponds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
-    const physicalOptions = allPhysicalPonds.filter((pond) =>
+    const activeNames = new Set(accessiblePonds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
+    return accessiblePhysicalPonds.filter((pond) =>
       !isPhysicalPondActive(pond) && !activeNames.has(getPhysicalPondKey(pond.pondName))
     );
-    const physicalNames = new Set(physicalOptions.map((pond) => getPhysicalPondKey(pond.pondName)));
-    const legacyEndedOptions = ponds
-      .filter((pond) => getCycleStatus(pond) === 'ended')
-      .filter((pond) => !activeNames.has(getPhysicalPondKey(pond.pondName)))
-      .filter((pond) => !physicalNames.has(getPhysicalPondKey(pond.pondName)))
-      .reduce<Pond[]>((unique, pond) => {
-        const key = getPhysicalPondKey(pond.pondName);
-        if (!unique.some((item) => getPhysicalPondKey(item.pondName) === key)) unique.push(pond);
-        return unique;
-      }, []);
-
-    return [...physicalOptions, ...legacyEndedOptions];
-  }, [allPhysicalPonds, ponds]);
+  }, [accessiblePhysicalPonds, accessiblePonds]);
   const filteredPhysicalPonds = useMemo<InactivePondOption[]>(() => {
     if (cycleFilter !== 'inactive') return [];
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
@@ -843,7 +855,7 @@ export default function PondsPage() {
             <Calendar size={15} color="var(--primary)" />
             {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}
           </div>
-          {canEditPonds && activeFarmCycle && (
+          {canManageFarmCycle && activeFarmCycle && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <input
                 value={cycleNameDraft}
@@ -962,10 +974,8 @@ export default function PondsPage() {
         </div>
       ) : (
         <div className="animate-fade-up animate-delay-2" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
-          {filteredPhysicalPonds.map(pond => {
-            const isLegacyEnded = 'cycleStatus' in pond;
-            return (
-            <div key={`${isLegacyEnded ? 'legacy' : 'physical'}-${pond.id}`} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          {filteredPhysicalPonds.map(pond => (
+            <div key={`physical-${pond.id}`} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
               <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{
@@ -977,7 +987,7 @@ export default function PondsPage() {
                   <div>
                     <h3 style={{ fontSize: '1.02rem', fontWeight: 850, letterSpacing: '0' }}>{pond.pondName}</h3>
                     <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>
-                      {isLegacyEnded ? 'Previous cycle ended' : 'Ready for next cycle'}
+                      {t.startPondCycle.readyForNextCycle}
                     </p>
                   </div>
                 </div>
@@ -985,7 +995,7 @@ export default function PondsPage() {
                   <div style={{ display: 'flex', gap: '8px' }}>
                     <button
                       onClick={() => openStartCycle(pond)}
-                      title="Start cycle"
+                      title={t.startPondCycle.submit}
                       style={{
                         background: 'var(--bg-mid)', border: 'none', color: '#3282B8',
                         cursor: 'pointer', padding: '8px', borderRadius: '10px',
@@ -994,7 +1004,7 @@ export default function PondsPage() {
                       <RotateCcw size={18} />
                     </button>
                     <button
-                      onClick={() => isLegacyEnded ? openDeleteCyclePond(pond as Pond) : openDeletePhysicalPond(pond as PhysicalPond)}
+                      onClick={() => openDeletePhysicalPond(pond)}
                       title={t.ponds?.deletePond || 'Delete pond'}
                       style={{
                         background: 'rgba(231, 76, 60, 0.1)', border: 'none', color: '#e74c3c',
@@ -1020,8 +1030,7 @@ export default function PondsPage() {
                 </div>
               </div>
             </div>
-            );
-          })}
+          ))}
           {filteredPonds.map(pond => (
             <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '330px' }}>
               <div style={{ padding: '22px', minHeight: '106px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '14px' }}>
@@ -1224,6 +1233,23 @@ export default function PondsPage() {
                   />
                 </div>
 
+                {isEnterpriseFarm && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.enterprise.selectBlock}</label>
+                    {availableFarmBlocks.length > 0 ? (
+                      <select
+                        required
+                        value={formData.blockId}
+                        onChange={e => setFormData({ ...formData, blockId: e.target.value })}
+                        style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}
+                      >
+                        <option value="">{t.enterprise.selectBlock}</option>
+                        {availableFarmBlocks.map((block) => <option key={block.id} value={block.id}>{block.name}</option>)}
+                      </select>
+                    ) : <p style={{ margin: 0, color: '#B42318', fontSize: '0.82rem' }}>{t.enterprise.noAssignedBlocks}</p>}
+                  </div>
+                )}
+
               </div>
 
               <div style={{ marginTop: '12px', display: 'flex', gap: '20px' }}>
@@ -1330,85 +1356,14 @@ export default function PondsPage() {
       )}
 
       {startCyclePond && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
-        }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '640px', maxHeight: '90vh', background: '#FFFFFF', padding: '0', overflow: 'auto' }}>
-            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Start New Cycle</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{startCyclePond.pondName} and {startCyclePond.pondArea} m² will be reused. Supplier must be entered for this cycle.</p>
-              </div>
-              <button onClick={() => setStartCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <div style={{ gridColumn: 'span 2', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                {(['new', 'midcycle'] as const).map((mode) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setStartCycleForm(prev => ({ ...prev, cycleStartMode: mode }))}
-                    style={{
-                      padding: '12px',
-                      borderRadius: '10px',
-                      border: `1px solid ${startCycleForm.cycleStartMode === mode ? 'var(--primary)' : 'var(--border)'}`,
-                      background: startCycleForm.cycleStartMode === mode ? 'var(--primary)' : 'var(--bg-mid)',
-                      color: startCycleForm.cycleStartMode === mode ? '#fff' : 'var(--text-primary)',
-                      fontWeight: 800,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {mode === 'new' ? (t.midcycleOnboarding?.newCycle || 'New cycle') : (t.midcycleOnboarding?.existingCycle || 'Existing cycle')}
-                  </button>
-                ))}
-              </div>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Density (PL/m²)
-                <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Stocking Date
-                <input required type="date" value={startCycleForm.docStart} onChange={e => setStartCycleForm(prev => ({ ...prev, docStart: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                PL Value (g)
-                <input required type="number" step="0.1" value={startCycleForm.plValue} onChange={e => setStartCycleForm(prev => ({ ...prev, plValue: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-              </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                PL Supplier
-                <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-              </label>
-              {startCycleForm.cycleStartMode === 'midcycle' && (
-                <>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Current MBW (g)
-                    <input required type="number" step="0.01" value={startCycleForm.baselineMbw} onChange={e => setStartCycleForm(prev => ({ ...prev, baselineMbw: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Current Population
-                    <input type="number" value={startCycleForm.baselineEstimatedPopulation} onChange={e => setStartCycleForm(prev => ({ ...prev, baselineEstimatedPopulation: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Current SR %
-                    <input type="number" step="0.1" value={startCycleForm.baselineSurvivalRate} onChange={e => setStartCycleForm(prev => ({ ...prev, baselineSurvivalRate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-                  </label>
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    Feed Used So Far (kg)
-                    <input type="number" step="0.01" value={startCycleForm.baselineCumulativeFeed} onChange={e => setStartCycleForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-                  </label>
-                </>
-              )}
-              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setStartCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>Start Cycle</button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <StartPondCycleModal
+          key={startCyclePond.id}
+          pond={startCyclePond}
+          today={today}
+          saving={startingPondCycle}
+          onClose={() => setStartCyclePond(null)}
+          onSubmit={handleStartCycle}
+        />
       )}
 
       <ConfirmationModal

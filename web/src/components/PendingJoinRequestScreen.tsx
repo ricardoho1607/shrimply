@@ -5,6 +5,8 @@ import { Clock, Loader2, LogOut } from 'lucide-react';
 import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import OnboardingProgress from '@/components/OnboardingProgress';
 
 type PendingJoinRequest = {
   id: string;
@@ -99,6 +101,7 @@ export function usePendingJoinRequest(userId?: string) {
 
 export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequest }) {
   const { signOut } = useAuth();
+  const { t } = useLanguage();
   const [signingOut, setSigningOut] = useState(false);
 
   const handleSignOut = async () => {
@@ -119,9 +122,14 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
       alignItems: 'center',
       justifyContent: 'center',
     }}>
-      <section style={{
+      <div style={{ width: '100%', maxWidth: '560px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+        <OnboardingProgress
+          percent={75}
+          title={t.onboardingProgress.pendingApproval}
+          detail={t.onboardingProgress.pendingDetail}
+        />
+        <section style={{
         width: '100%',
-        maxWidth: '560px',
         background: '#FFFFFF',
         border: '1px solid var(--border)',
         borderRadius: '24px',
@@ -184,7 +192,8 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
           {signingOut ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
           Sign Out
         </button>
-      </section>
+        </section>
+      </div>
     </main>
   );
 }

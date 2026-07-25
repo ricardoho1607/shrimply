@@ -29,6 +29,11 @@ import {
   type HarvestType,
 } from '../../../../../shared/harvestCalculations';
 import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
+import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import {
+  filterEnterpriseRecordsForUser,
+  type FarmBlock,
+} from '../../../../../shared/enterpriseBlocks';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -62,6 +67,8 @@ interface HarvestRecord {
 interface Pond {
   id: string;
   pondName: string;
+  blockId?: string;
+  blockName?: string;
   initialPopulation?: number;
   initialWeight?: number;
   samplings?: { date?: string; mbw?: number; abw?: number; mortality?: number }[];
@@ -116,6 +123,17 @@ export default function HarvestPage() {
     subPrice: ''
   });
   const canEditHarvest = canEditOperations(user?.role);
+  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: farmBlocks,
+  }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
+  const accessiblePondIds = useMemo(
+    () => new Set(accessiblePonds.map((pond) => pond.id)),
+    [accessiblePonds],
+  );
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -132,6 +150,8 @@ export default function HarvestPage() {
                 .map(doc => ({
                   id: doc.id,
                   pondName: doc.data().pondName,
+                  blockId: doc.data().blockId,
+                  blockName: doc.data().blockName,
                   initialPopulation: doc.data().initialPopulation || 0,
                   initialWeight: doc.data().initialWeight || 0.5,
                   samplings: Array.isArray(doc.data().samplings) ? doc.data().samplings : [],
@@ -173,7 +193,7 @@ export default function HarvestPage() {
     if (!canEditHarvest) return;
 
     try {
-      const selectedPond = ponds.find(p => p.id === formData.pondId);
+      const selectedPond = accessiblePonds.find(p => p.id === formData.pondId);
       if (!selectedPond) return;
       const removal = calculateHarvestRemoval(formData);
       const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass;
@@ -269,6 +289,12 @@ export default function HarvestPage() {
   const handleDeleteRecord = async (recordId: string) => {
     if (!companyId || !user || !window.confirm('Delete this harvest record?')) return;
     if (!canEditHarvest) return;
+    const localRecord = harvestRecords.find((record) => record.id === recordId);
+    if (
+      company?.businessSize === 'enterprise'
+      && user.role === 'technician'
+      && (!localRecord || !localRecord.ponds.every((pond) => accessiblePondIds.has(pond.pondId)))
+    ) return;
     try {
       const harvestRef = doc(db, 'companies', companyId, 'harvestRecords', recordId);
       await runTransaction(db, async (transaction) => {
@@ -301,18 +327,29 @@ export default function HarvestPage() {
     }
   };
 
-  const activePondIds = useMemo(() => new Set(ponds.map((pond) => pond.id)), [ponds]);
+  const activePondIds = useMemo(() => new Set(accessiblePonds.map((pond) => pond.id)), [accessiblePonds]);
+  const accessibleHarvestRecords = useMemo(() => harvestRecords
+    .map((record) => ({
+      ...record,
+      ponds: record.ponds.filter((pond) => accessiblePondIds.has(pond.pondId)),
+    }))
+    .filter((record) => record.ponds.length > 0), [accessiblePondIds, harvestRecords]);
+  const canModifyHarvestRecord = useCallback((recordId: string) => {
+    if (company?.businessSize !== 'enterprise' || user?.role !== 'technician') return true;
+    const record = harvestRecords.find((item) => item.id === recordId);
+    return Boolean(record?.ponds.every((pond) => accessiblePondIds.has(pond.pondId)));
+  }, [accessiblePondIds, company?.businessSize, harvestRecords, user?.role]);
 
   const isCurrentCycleHarvest = useCallback((harvest: HarvestRecord) => {
     if (harvest.ponds.some((pond) => activePondIds.has(pond.pondId))) return true;
-    return Boolean(harvest.cycleId && ponds.some((pond) => pond.cycleId === harvest.cycleId));
-  }, [activePondIds, ponds]);
+    return Boolean(harvest.cycleId && accessiblePonds.some((pond) => pond.cycleId === harvest.cycleId));
+  }, [accessiblePonds, activePondIds]);
 
   const visibleHarvestRecords = useMemo(() => {
-    return harvestRecords.filter((harvest) =>
+    return accessibleHarvestRecords.filter((harvest) =>
       harvestFilter === 'current' ? isCurrentCycleHarvest(harvest) : !isCurrentCycleHarvest(harvest)
     );
-  }, [harvestFilter, harvestRecords, isCurrentCycleHarvest]);
+  }, [accessibleHarvestRecords, harvestFilter, isCurrentCycleHarvest]);
 
   const filteredRecords = useMemo(() => {
     return visibleHarvestRecords.filter(r =>
@@ -440,9 +477,9 @@ export default function HarvestPage() {
                     <Calendar size={18} color="var(--primary)" />
                     <span style={{ fontSize: '15px', fontWeight: 700 }}>{new Date(record.date).toLocaleDateString()}</span>
                   </div>
-                  {canEditHarvest && (
+                  {canEditHarvest && canModifyHarvestRecord(record.id) ? (
                     <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
-                  )}
+                  ) : null}
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
@@ -502,7 +539,7 @@ export default function HarvestPage() {
                     style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}
                   >
                     <option value="">Choose a pond...</option>
-                    {ponds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
+                    {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>
 

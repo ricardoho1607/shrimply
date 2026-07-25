@@ -64,6 +64,8 @@ export interface PhysicalPond {
   id: string;
   pondName: string;
   pondArea: number;
+  blockId?: string;
+  blockName?: string;
   status?: 'idle' | 'active';
   activePondId?: string | null;
   createdAt?: any;
@@ -80,6 +82,17 @@ export interface Sampling {
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
   feedData?: FeedData; harvestData?: HarvestData;
 }
+
+export const hasWaterQualityData = (
+  sampling: Pick<Sampling, 'phMorning' | 'phEvening' | 'doMorning' | 'doEvening' | 'transparency' | 'salinity'>,
+): boolean => [
+  sampling.phMorning,
+  sampling.phEvening,
+  sampling.doMorning,
+  sampling.doEvening,
+  sampling.transparency,
+  sampling.salinity,
+].some((value) => value !== null && value !== undefined && String(value).trim() !== '');
 
 export interface MortalityRecord {
   id: string;
@@ -110,6 +123,8 @@ export type LabReportStatus = {
 
 export interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; initialStock?: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  blockId?: string;
+  blockName?: string;
   mortalityRecords?: MortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number; totalHarvestedFeed?: number;
   partialHarvestCount?: number;
@@ -672,12 +687,8 @@ export const usePondStore = create<PondStore>()(
             
             const todayWQIndex = p.samplings.findIndex(s =>
               !isBaselineSampling(s) &&
-              !s.feedData &&
-              !s.harvestData &&
-              s.mbw === 0 &&
-              s.feed === 0 &&
-              s.mortality === 0 &&
-              s.date === today
+              s.date === today &&
+              hasWaterQualityData(s)
             );
             
             let updatedSamplings;

@@ -17,10 +17,19 @@ import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
 import { getFarmDateKey } from '../../shared/farmDate';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
+import {
+  canManageEnterpriseFarmCycle,
+  filterEnterpriseRecordsForUser,
+  isEnterpriseOwner,
+} from '../../shared/enterpriseBlocks';
+import EnterpriseDashboard from '../components/enterprise/EnterpriseDashboard';
+import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
+import ProfileCompletionCard from '../components/onboarding/ProfileCompletionCard';
 
 interface FormData {
   pondName: string; 
   pondArea: string; 
+  blockId: string;
   density: string; 
   supplier: string; 
   plValue: string; 
@@ -159,12 +168,16 @@ export default function PondManagementScreen() {
   const { t } = useLanguage();
   const { user, company } = useAuth();
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const isEnterpriseFarm = company?.businessSize === 'enterprise';
+  const canManageFarmCycle = canEditPonds && canManageEnterpriseFarmCycle(company?.businessSize, user?.role);
+  const enterpriseBlocks = useEnterpriseBlocks(isEnterpriseFarm ? company?.id : undefined, user?.uid);
   
   const { 
     ponds, 
     physicalPonds,
     cycles,
     harvestRecords,
+    addFarmCycle,
     addPhysicalPond,
     deletePhysicalPond,
     addPond, 
@@ -199,6 +212,7 @@ export default function PondManagementScreen() {
   const [formData, setFormData] = useState<FormData>({
     pondName: '', 
     pondArea: '', 
+    blockId: '',
     density: '', 
     supplier: '', 
     plValue: '', 
@@ -257,6 +271,7 @@ export default function PondManagementScreen() {
   const resetForm = useCallback(() => setFormData({
     pondName: '', 
     pondArea: '', 
+    blockId: '',
     density: '', 
     supplier: '', 
     plValue: '', 
@@ -311,23 +326,41 @@ export default function PondManagementScreen() {
     return Math.floor((baselineTime - startTime) / (24 * 60 * 60 * 1000));
   }, []);
 
+  const availableEnterpriseBlocks = useMemo(() => {
+    if (!isEnterpriseFarm) return [];
+    if (user?.role === 'owner' || user?.role === 'co-owner') return enterpriseBlocks.blocks;
+    if (user?.role === 'technician') return enterpriseBlocks.blocksAssignedToUser;
+    return [];
+  }, [enterpriseBlocks.blocks, enterpriseBlocks.blocksAssignedToUser, isEnterpriseFarm, user?.role]);
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: enterpriseBlocks.blocks,
+  }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
+  const accessiblePhysicalPonds = useMemo(() => filterEnterpriseRecordsForUser(physicalPonds, {
+    businessSize: company?.businessSize,
+    role: user?.role,
+    userId: user?.uid,
+    blocks: enterpriseBlocks.blocks,
+  }), [company?.businessSize, enterpriseBlocks.blocks, physicalPonds, user?.role, user?.uid]);
   const activePonds = useMemo(
-    () => ponds.filter(isPondCycleActive).sort(compareByPondName),
-    [ponds]
+    () => accessiblePonds.filter(isPondCycleActive).sort(compareByPondName),
+    [accessiblePonds]
   );
   const endedPonds = useMemo(
-    () => ponds.filter((pond) => !isPondCycleActive(pond)).sort(compareByPondName),
-    [ponds]
+    () => accessiblePonds.filter((pond) => !isPondCycleActive(pond)).sort(compareByPondName),
+    [accessiblePonds]
   );
   const activePhysicalPondNames = useMemo(
     () => new Set(activePonds.map((pond) => getPhysicalPondKey(pond.pondName))),
     [activePonds]
   );
   const idlePhysicalPonds = useMemo(() => {
-    return physicalPonds
+    return accessiblePhysicalPonds
       .filter((pond) => pond.status !== 'active' && !activePhysicalPondNames.has(getPhysicalPondKey(pond.pondName)))
       .sort(compareByPondName);
-  }, [activePhysicalPondNames, physicalPonds]);
+  }, [accessiblePhysicalPonds, activePhysicalPondNames]);
   const startableEndedPonds = useMemo(() => {
     const latestByPondName = new Map<string, Pond>();
 
@@ -350,9 +383,9 @@ export default function PondManagementScreen() {
     [idlePhysicalPonds, startableEndedPonds]
   );
   const inferredFarmCycle = useMemo<FarmCycle | undefined>(() => {
-    if (cycles.length > 0 || ponds.length === 0) return undefined;
+    if (cycles.length > 0 || accessiblePonds.length === 0) return undefined;
 
-    const groupedPonds = ponds.reduce((groups, pond) => {
+    const groupedPonds = accessiblePonds.reduce((groups, pond) => {
       const cycleId = pond.cycleId || 'legacy-active-cycle';
       const existing = groups.get(cycleId) || [];
       groups.set(cycleId, [...existing, pond]);
@@ -379,28 +412,28 @@ export default function PondManagementScreen() {
         .filter(Boolean)
         .sort()[0],
     };
-  }, [cycles.length, ponds, t.farmCycle.currentCycle]);
+  }, [accessiblePonds, cycles.length, t.farmCycle.currentCycle]);
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles) || inferredFarmCycle, [cycles, inferredFarmCycle]);
   const currentCyclePonds = useMemo(() => {
     if (!activeFarmCycle) return activePonds;
-    return ponds
+    return accessiblePonds
       .filter((pond) =>
         pond.cycleId === activeFarmCycle.id ||
         (activeFarmCycle.id === 'legacy-active-cycle' && !pond.cycleId) ||
         (!pond.cycleId && isPondCycleActive(pond))
       )
       .sort(compareByPondName);
-  }, [activeFarmCycle, activePonds, ponds]);
+  }, [accessiblePonds, activeFarmCycle, activePonds]);
   const activeCyclePonds = useMemo(() => currentCyclePonds.filter(isPondCycleActive), [currentCyclePonds]);
   const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? t.farmCycle.currentCycle : t.farmCycle.noActiveCycle);
   const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? t.farmCycle.status.active : t.farmCycle.status.waiting);
   const visiblePonds = useMemo(
     () => cycleFilter === 'inactive'
       ? []
-      : ponds
+      : accessiblePonds
         .filter((pond) => getPondCycleStatus(pond) === cycleFilter)
         .sort(compareByPondName),
-    [ponds, cycleFilter]
+    [accessiblePonds, cycleFilter]
   );
 
   useEffect(() => {
@@ -408,17 +441,17 @@ export default function PondManagementScreen() {
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
 
   const getLatestSampling = useCallback((pondId: string): Sampling | null => {
-    const pond = ponds.find(p => p.id === pondId);
+    const pond = accessiblePonds.find(p => p.id === pondId);
     const samples = (pond?.samplings || []).filter((sample) =>
       !isBaselineSampling(sample) && Number(sample.mbw) > 0
     );
     return samples.sort((a, b) => 
       new Date(b.date).getTime() - new Date(a.date).getTime()
     )[0] || null;
-  }, [ponds]);
+  }, [accessiblePonds]);
 
   const getLastADG = useCallback((pondId: string): number => {
-    const pond = ponds.find(p => p.id === pondId);
+    const pond = accessiblePonds.find(p => p.id === pondId);
     if (!pond) return 0;
     
     const samples = (pond.samplings || [])
@@ -458,7 +491,7 @@ export default function PondManagementScreen() {
     if (isNaN(currentWeight) || isNaN(previousWeight) || daysDiff <= 0) return 0;
     const adg = (currentWeight - previousWeight) / daysDiff;
     return isNaN(adg) ? 0 : adg;
-  }, [ponds]);
+  }, [accessiblePonds]);
 
   const calculateMetrics = useCallback((pond: Pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);
@@ -507,11 +540,19 @@ export default function PondManagementScreen() {
       setIsSubmitting(false);
       return;
     }
-    
-    const { pondName, pondArea } = formData;
+    const { pondName, pondArea, blockId } = formData;
 
     if (!pondName || !pondArea) {
       Alert.alert(t.messages.error, t.home.fillAllFields);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    const selectedBlock = availableEnterpriseBlocks.find((block) => block.id === blockId);
+    if (isEnterpriseFarm && !selectedBlock) {
+      Alert.alert(t.messages.error, availableEnterpriseBlocks.length === 0
+        ? t.enterprise.noAssignedBlocks
+        : t.enterprise.blockRequired);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -531,13 +572,15 @@ export default function PondManagementScreen() {
       id: Date.now().toString(),
       pondName,
       pondArea: Number(pondArea),
+      blockId: selectedBlock?.id,
+      blockName: selectedBlock?.name,
       status: 'idle',
     });
 
     closeModal();
     setCycleFilter('inactive');
     Alert.alert(t.messages.success, t.home.pondAddedSuccess);
-  }, [addPhysicalPond, canEditPonds, closeModal, formData, physicalPonds, ponds, t]);
+  }, [addPhysicalPond, availableEnterpriseBlocks, canEditPonds, closeModal, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
 
   const handleAddCycle = useCallback(() => {
     if (submitLockRef.current) return;
@@ -546,6 +589,12 @@ export default function PondManagementScreen() {
 
     if (!canEditPonds) {
       Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    if (isEnterpriseFarm && !activeFarmCycle) {
+      Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -621,6 +670,8 @@ export default function PondManagementScreen() {
     addPond({
       id: Date.now().toString(),
       pondName: sourcePond.pondName,
+      blockId: sourcePond.blockId,
+      blockName: sourcePond.blockName,
       supplier,
       plSupplier: supplier,
       pondArea: sourcePond.pondArea,
@@ -653,7 +704,7 @@ export default function PondManagementScreen() {
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
-  }, [activeFarmCycle, activePhysicalPondNames, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, formData, formatLocalDateKey, startablePondOptions, t]);
+  }, [activeFarmCycle, activePhysicalPondNames, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, formData, formatLocalDateKey, isEnterpriseFarm, startablePondOptions, t]);
 
   const handleAddSamplingData = useCallback(() => {
     if (submitLockRef.current) return;
@@ -913,7 +964,7 @@ export default function PondManagementScreen() {
   }, [canEditPonds, company?.id, deletePhysicalPond, t]);
 
   const handleRenameFarmCycle = useCallback(() => {
-    if (!activeFarmCycle) return;
+    if (!activeFarmCycle || !canManageFarmCycle) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
       Alert.alert(t.messages.error, t.farmCycle.cycleNameRequired);
@@ -922,31 +973,23 @@ export default function PondManagementScreen() {
 
     updateFarmCycle(activeFarmCycle.id, { cycleName: nextName });
     Alert.alert(t.messages.success, t.farmCycle.cycleNameUpdated);
-  }, [activeFarmCycle, cycleNameDraft, t, updateFarmCycle]);
+  }, [activeFarmCycle, canManageFarmCycle, cycleNameDraft, t, updateFarmCycle]);
 
   const persistFarmCycleClose = useCallback(async (cycle: FarmCycle, cyclePonds: Pond[], closedAt: string) => {
     if (!company?.id || !user?.uid) {
       throw new Error('Missing company or user context.');
     }
 
-    const batch = writeBatch(db);
     const cycleRef = doc(db, 'companies', company.id, 'cycles', cycle.id);
-    batch.set(cycleRef, {
-      ...cycle,
-      status: 'closed',
-      closedAt,
-      stockingEndDate: cycle.stockingEndDate || closedAt,
-      updatedAt: serverTimestamp(),
-      updatedBy: user.uid,
-      createdAt: cycle.createdAt || serverTimestamp(),
-      createdBy: cycle.createdBy || user.uid,
-    }, { merge: true });
-
     const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
     const cyclePondNames = new Set(cyclePonds.map((pond) => getPhysicalPondKey(pond.pondName)));
+    const lifecycleUpdates: {
+      ref: ReturnType<typeof doc>;
+      data: Record<string, unknown>;
+    }[] = [];
     cyclePonds.forEach((pond) => {
       const pondRef = doc(db, 'companies', company.id, 'ponds', pond.id);
-      batch.set(pondRef, {
+      lifecycleUpdates.push({ ref: pondRef, data: {
         cycleId: pond.cycleId || cycle.id,
         cycleName: pond.cycleName || cycle.cycleName,
         pondCycleId: pond.pondCycleId || pond.id,
@@ -956,7 +999,7 @@ export default function PondManagementScreen() {
         cycleEndReason: pond.cycleEndReason || 'harvested',
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
-      }, { merge: true });
+      } });
     });
     physicalPonds
       .filter((physicalPond) =>
@@ -964,19 +1007,38 @@ export default function PondManagementScreen() {
         (physicalPond.status === 'active' && cyclePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
       )
       .forEach((physicalPond) => {
-        batch.set(doc(db, 'companies', company.id, 'physicalPonds', physicalPond.id), {
+        lifecycleUpdates.push({ ref: doc(db, 'companies', company.id, 'physicalPonds', physicalPond.id), data: {
           status: 'idle',
           activePondId: null,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
-        }, { merge: true });
+        } });
       });
 
-    await batch.commit();
+    for (let index = 0; index < lifecycleUpdates.length; index += 400) {
+      const batch = writeBatch(db);
+      lifecycleUpdates.slice(index, index + 400).forEach((update) => {
+        batch.set(update.ref, update.data, { merge: true });
+      });
+      await batch.commit();
+    }
+
+    const cycleBatch = writeBatch(db);
+    cycleBatch.set(cycleRef, {
+      ...cycle,
+      status: 'closed',
+      closedAt,
+      stockingEndDate: cycle.stockingEndDate || closedAt,
+      updatedAt: serverTimestamp(),
+      updatedBy: user.uid,
+      createdAt: cycle.createdAt || serverTimestamp(),
+      createdBy: cycle.createdBy || user.uid,
+    }, { merge: true });
+    await cycleBatch.commit();
   }, [company?.id, physicalPonds, user?.uid]);
 
   const handleCloseFarmCycle = useCallback(() => {
-    if (!activeFarmCycle) return;
+    if (!activeFarmCycle || !canManageFarmCycle) return;
 
     const missingFinalHarvestPonds = activeCyclePonds.filter((pond) =>
       !hasFinalHarvestForPondCycle(harvestRecords, pond)
@@ -1036,7 +1098,12 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [activeCyclePonds, activeFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, persistFarmCycleClose, router, t, user?.role, user?.uid]);
+  }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, persistFarmCycleClose, router, t, user?.role, user?.uid]);
+
+  const handleStartEnterpriseFarmCycle = useCallback(() => {
+    if (!isEnterpriseOwner(company?.businessSize, user?.role) || activeFarmCycle) return;
+    addFarmCycle();
+  }, [activeFarmCycle, addFarmCycle, company?.businessSize, user?.role]);
 
   const handleDateChange = useCallback((
     confirmed: boolean, 
@@ -1065,10 +1132,18 @@ export default function PondManagementScreen() {
   }, [modalType, formData, normalizeDateValue]);
 
   const openModal = useCallback((type: 'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline') => {
+    if (type === 'pond' && isEnterpriseFarm && availableEnterpriseBlocks.length === 1) {
+      setFormData((current) => ({ ...current, blockId: availableEnterpriseBlocks[0].id }));
+    }
     setModalType(type); 
     setMenuModalVisible(false); 
     setModalVisible(true);
-  }, []);
+  }, [availableEnterpriseBlocks, isEnterpriseFarm]);
+
+  const openEnterprisePondCycle = useCallback((pond: Pond | PhysicalPond) => {
+    setFormData((current) => ({ ...current, cyclePondId: pond.id }));
+    openModal('cycle');
+  }, [openModal]);
 
   const openBaselineEditModal = useCallback((pond: Pond) => {
     const baselineSampling = (pond.samplings || [])
@@ -1101,7 +1176,7 @@ export default function PondManagementScreen() {
       return;
     }
 
-    const pond = ponds.find((item) => item.id === editingBaselinePondId);
+    const pond = accessiblePonds.find((item) => item.id === editingBaselinePondId);
     if (!pond) {
       Alert.alert(t.messages.error, t.messages.error);
       submitLockRef.current = false;
@@ -1170,7 +1245,7 @@ export default function PondManagementScreen() {
     setEditingBaselinePondId(null);
     closeModal();
     Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
-  }, [calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, ponds, t, updatePond]);
+  }, [accessiblePonds, calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, t, updatePond]);
 
   const PondCard = useMemo(() => React.memo(function PondCardItem({ pond }: { pond: Pond }) {
     const metrics = calculateMetrics(pond);
@@ -1319,6 +1394,28 @@ export default function PondManagementScreen() {
       <Text style={styles.inputHint}>
         Add the physical pond first. Density, supplier, stocking date, and PL details are added when you start a cycle.
       </Text>
+      {isEnterpriseFarm && (
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t.enterprise.selectBlock}</Text>
+          {availableEnterpriseBlocks.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pondSelector}>
+              {availableEnterpriseBlocks.map((block) => (
+                <TouchableOpacity
+                  key={block.id}
+                  style={[styles.pondOption, formData.blockId === block.id && styles.pondOptionSelected]}
+                  onPress={() => updateForm('blockId', block.id)}
+                >
+                  <Text style={[styles.pondOptionText, formData.blockId === block.id && styles.pondOptionTextSelected]}>
+                    {block.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.inputHint}>{t.enterprise.noAssignedBlocks}</Text>
+          )}
+        </View>
+      )}
       <InputField 
         label={t.forms.pondName} 
         value={formData.pondName} 
@@ -1333,7 +1430,7 @@ export default function PondManagementScreen() {
         keyboardType="numeric" 
       />
     </>
-  ), [formData.pondArea, formData.pondName, updateForm, t]);
+  ), [availableEnterpriseBlocks, formData.blockId, formData.pondArea, formData.pondName, isEnterpriseFarm, updateForm, t]);
 
   const renderBaselineForm = useMemo(() => (
     <>
@@ -1638,13 +1735,42 @@ export default function PondManagementScreen() {
       )}
     </>
   ), [formData, openDatePicker, startablePondOptions, t, updateForm]);
-
-
+  if (isEnterpriseOwner(company?.businessSize, user?.role)) {
+    return (
+      <EnterpriseDashboard
+        ponds={ponds}
+        physicalPonds={physicalPonds}
+        blocks={enterpriseBlocks.blocks}
+        technicians={enterpriseBlocks.technicians}
+        activeFarmCycle={activeFarmCycle}
+        cyclesCount={cycles.length}
+        currentCyclePonds={currentCyclePonds}
+        activeCyclePonds={activeCyclePonds}
+        cycleNameDraft={cycleNameDraft}
+        timeZone={company?.timeZone}
+        loading={enterpriseBlocks.loading}
+        error={enterpriseBlocks.error}
+        onCycleNameChange={setCycleNameDraft}
+        onRenameCycle={handleRenameFarmCycle}
+        onCloseCycle={handleCloseFarmCycle}
+        onStartCycle={handleStartEnterpriseFarmCycle}
+        onStartPondCycle={openEnterprisePondCycle}
+        createBlock={enterpriseBlocks.createBlock}
+        assignBlockTechnician={enterpriseBlocks.assignBlockTechnician}
+      />
+    );
+  }
 
   return (
     <>
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
+        {(user?.role === 'owner' || user?.role === 'co-owner') ? (
+          <ProfileCompletionCard
+            company={company}
+            onPress={() => router.push('/company-setup2?edit=true' as any)}
+          />
+        ) : null}
         <View style={[
           styles.cycleManagerCard,
           !cycleManagerExpanded && styles.cycleManagerCardCollapsed
@@ -1723,7 +1849,7 @@ export default function PondManagementScreen() {
                 </View>
               </View>
 
-              {canEditPonds && activeFarmCycle && (
+              {canManageFarmCycle && activeFarmCycle && (
                 <View style={styles.cycleRenameRow}>
                   <TextInput
                     value={cycleNameDraft}
@@ -1757,7 +1883,7 @@ export default function PondManagementScreen() {
                 )}
               </View>
 
-              {canEditPonds && activeFarmCycle && (
+              {canManageFarmCycle && activeFarmCycle && (
                 <TouchableOpacity style={styles.closeFarmCycleButton} onPress={handleCloseFarmCycle}>
                   <Ionicons name="lock-closed-outline" size={18} color="#fff" />
                   <Text style={styles.closeFarmCycleText}>{t.farmCycle.endCycleAction}</Text>

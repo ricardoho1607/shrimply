@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCurrency, CURRENCIES, Currency } from '../context/CurrencyContext';
 import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
-import { usePondStore } from './store/pondStore';
+import { hasWaterQualityData, usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
 import { format } from 'date-fns';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
@@ -227,8 +227,7 @@ export default function Settings() {
         
         // Get latest water quality record
         const latestWQ = pond.samplings
-          .filter(s => s.mbw === 0 && s.feed === 0 && s.mortality === 0)
-          .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity)
+          .filter(hasWaterQualityData)
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
 
         return {
@@ -379,7 +378,7 @@ export default function Settings() {
         </View>
       </SafeAreaView>
 
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['left', 'right', 'bottom']}>
         <ScrollView style={styles.scrollContainer}>
           <View style={styles.section}>
             <Text style={styles.sectionHeader}>{t.settings?.language || 'LANGUAGE & REGION'}</Text>

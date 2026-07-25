@@ -7,7 +7,7 @@ import {
   TextInput, TouchableOpacity, View, Alert, Platform,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, type Sampling, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
 import { detectFeedBiomassMismatchInsight, getSamplingMbw } from '../shared/pondCalculations';
@@ -19,6 +19,8 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { getFarmDateKey } from '../shared/farmDate';
+import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
+import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 
 const InputField = React.memo(({ 
   label, 
@@ -262,14 +264,25 @@ export default function PondDetails() {
   const insets = useSafeAreaInsets();
   
   const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const isEnterpriseTechnician = company?.businessSize === 'enterprise' && user?.role === 'technician';
+  const enterpriseBlocks = useEnterpriseBlocks(
+    company?.businessSize === 'enterprise' ? company?.id : undefined,
+    user?.uid,
+  );
+  const assignedBlockIds = useMemo(
+    () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
+    [enterpriseBlocks.blocks, user?.uid],
+  );
   
   const { 
     getPondById, 
     addPond,
     updateSampling, 
     calculatePondMetricsWithHarvest,
-    ponds
+    ponds,
+    cycles,
   } = usePondStore();
+  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   
   const [pond, setPond] = useState<Pond | null>(null);
   const [showMore, setShowMore] = useState(false);
@@ -287,11 +300,16 @@ export default function PondDetails() {
   useEffect(() => {
     if (pondId) {
       const pondData = getPondById(pondId as string);
-      if (pondData) {
+      if (isEnterpriseTechnician && enterpriseBlocks.loading) return;
+      const canAccessPond = !isEnterpriseTechnician
+        || (typeof pondData?.blockId === 'string' && assignedBlockIds.has(pondData.blockId));
+      if (pondData && canAccessPond) {
         setPond(pondData);
+      } else {
+        setPond(null);
       }
     }
-  }, [pondId, ponds, getPondById]);
+  }, [assignedBlockIds, enterpriseBlocks.loading, getPondById, isEnterpriseTechnician, pondId, ponds]);
 
   useEffect(() => {
     if (company?.id) {
@@ -472,6 +490,10 @@ export default function PondDetails() {
 
   const handleStartNewCycle = useCallback(() => {
     if (!pond || !canEditPonds) return;
+    if (isEnterpriseTechnician && !activeFarmCycle) {
+      Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
+      return;
+    }
     const { density, docStart, plValue, plSupplier } = newCycleForm;
 
     if (!density || !docStart || !plValue || !plSupplier) {
@@ -496,6 +518,8 @@ export default function PondDetails() {
       id: Date.now().toString(),
       pondName: pond.pondName,
       pondArea: pond.pondArea,
+      blockId: pond.blockId,
+      blockName: pond.blockName,
       density: Number(density),
       initialPopulation,
       docStart,
@@ -520,7 +544,7 @@ export default function PondDetails() {
     });
     router.push('/(tabs)' as any);
     Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [addPond, canEditPonds, company?.timeZone, newCycleForm, pond, ponds, router, t]);
+  }, [activeFarmCycle, addPond, canEditPonds, company?.timeZone, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);

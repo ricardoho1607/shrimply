@@ -24,12 +24,14 @@ import { syncPublicCompanyProfile } from './utils/publicCompanyProfile';
 import { googlePlacesService } from './services/googlePlacesService';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import { getSystemTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
+import { getCompanySetupProgress } from '../shared/onboarding';
+import OnboardingProgress from './components/onboarding/OnboardingProgress';
 
 interface CompanyData {
   companyName: string;
   primaryLocation: string;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large' | '';
+  businessSize: 'small' | 'medium' | 'large' | 'enterprise' | '';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -46,7 +48,7 @@ interface LocationCoordinates {
 }
 
 export default function CompanySetupScreen() {
-  const { company, completeCompanySetup, loading, refreshUserData, signOut } = useAuth();
+  const { company, completeCompanySetup, loading, refreshUserData, signOut, user } = useAuth();
   const params = useLocalSearchParams();
   const router = useRouter();
   const { t } = useLanguage();
@@ -64,17 +66,22 @@ export default function CompanySetupScreen() {
 
   const [locationCoordinates, setLocationCoordinates] = useState<LocationCoordinates | null>(null);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const setupProgress = getCompanySetupProgress(
+    { ...formData, timeZone: getSystemTimeZone() },
+    Boolean(locationCoordinates),
+  );
 
   // Business sizes with translations
   const businessSizes = useMemo(() => [
     { id: 'small', label: t.companySetup.smallOperation, description: t.companySetup.smallDescription },
     { id: 'medium', label: t.companySetup.mediumFarm, description: t.companySetup.mediumDescription },
     { id: 'large', label: t.companySetup.largeEnterprise, description: t.companySetup.largeDescription },
+    { id: 'enterprise', label: t.companySetup.enterpriseOperation, description: t.companySetup.enterpriseDescription },
   ], [t]);
 
   // Prefill form in edit mode
   useEffect(() => {
-    if (isEditMode && company) {
+    if (company && (isEditMode || !user?.hasCompletedSetup)) {
       setFormData({
         companyName: company.companyName,
         primaryLocation: typeof company.primaryLocation === 'string' ? company.primaryLocation : company.primaryLocation?.address || '',
@@ -87,18 +94,24 @@ export default function CompanySetupScreen() {
 
       // If editing and location is already an object, preserve coordinates
       if (company.primaryLocation && typeof company.primaryLocation !== 'string') {
-        setLocationCoordinates({
-          address: company.primaryLocation.address,
-          latitude: company.primaryLocation.latitude,
-          longitude: company.primaryLocation.longitude,
-          city: company.primaryLocation.city || '',
-          state: company.primaryLocation.state || '',
-          country: company.primaryLocation.country || '',
-          placeId: company.primaryLocation.placeId,
-        });
+        const latitude = Number(company.primaryLocation.latitude);
+        const longitude = Number(company.primaryLocation.longitude);
+        setLocationCoordinates(Number.isFinite(latitude) && Number.isFinite(longitude)
+          ? {
+              address: company.primaryLocation.address,
+              latitude,
+              longitude,
+              city: company.primaryLocation.city || '',
+              state: company.primaryLocation.state || '',
+              country: company.primaryLocation.country || '',
+              placeId: company.primaryLocation.placeId,
+            }
+          : null);
+      } else {
+        setLocationCoordinates(null);
       }
     }
-  }, [isEditMode, company]);
+  }, [isEditMode, company, user?.hasCompletedSetup]);
 
   const updateForm = useCallback(
     (key: keyof CompanyData, value: any) => setFormData(prev => ({ ...prev, [key]: value })),
@@ -174,6 +187,10 @@ export default function CompanySetupScreen() {
     }
     if (!locationCoordinates) {
       Alert.alert(t.messages.error, t.companySetup.locationSelectionRequired);
+      return false;
+    }
+    if (!formData.farmType.trim()) {
+      Alert.alert(t.messages.error, t.onboardingProgress.farmTypeRequired);
       return false;
     }
     if (!formData.businessSize) {
@@ -261,7 +278,7 @@ export default function CompanySetupScreen() {
         primaryLocation: cleanedLocationData,
         country: country,
         farmType: formData.farmType,
-        businessSize: formData.businessSize as 'small' | 'medium' | 'large',
+        businessSize: formData.businessSize as 'small' | 'medium' | 'large' | 'enterprise',
         description: formData.description,
         contactPhone: formData.contactPhone,
         isPublicProfile: formData.isPublicProfile,
@@ -395,6 +412,13 @@ export default function CompanySetupScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {!isEditMode ? (
+          <OnboardingProgress
+            percent={setupProgress}
+            title={t.onboardingProgress.company}
+            detail={t.onboardingProgress.companyDetail}
+          />
+        ) : null}
         <View style={styles.header}>
           <View style={styles.headerIcon}>
             <Ionicons name="business-outline" size={32} color="#0d2137" />
@@ -469,6 +493,9 @@ export default function CompanySetupScreen() {
             {businessSizes.map(option => (
               <BusinessSizeOption key={option.id} option={option} />
             ))}
+            {formData.businessSize === 'enterprise' ? (
+              <Text style={styles.enterpriseHint}>{t.onboardingProgress.enterpriseNext}</Text>
+            ) : null}
           </View>
 
           <View style={styles.section}>
@@ -679,6 +706,13 @@ const styles = StyleSheet.create({
   },
   sizeOptionDescriptionSelected: {
     color: '#315f57',
+  },
+  enterpriseHint: {
+    color: '#0F4C75',
+    fontSize: Platform.OS === 'android' ? 12 : 13,
+    lineHeight: Platform.OS === 'android' ? 17 : 18,
+    fontWeight: '600',
+    marginTop: 2,
   },
   radioButton: {
     width: Platform.OS === 'android' ? 22 : 24,

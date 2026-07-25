@@ -44,7 +44,7 @@ export default function SetupChoicePage() {
   ].filter((choice) => {
     if (isBuyer) return choice.id === 'new';
     if (isStaffRole) return choice.id === 'join';
-    return true;
+    return choice.id === 'new';
   });
 
   const handleChangeRole = async () => {

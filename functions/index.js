@@ -193,6 +193,8 @@ exports.acceptCompanyInvite = onCall(async (request) => {
     }
 
     const companyData = companySnap.data();
+    const publicProfileRef = db.collection("publicCompanyProfiles").doc(targetCompanyRef.id);
+    const publicProfileSnap = await transaction.get(publicProfileRef);
     const pendingInvites = Array.isArray(companyData.pendingInvites) ? companyData.pendingInvites : [];
     const inviteIndex = pendingInvites.findIndex((item) => item.inviteToken === inviteToken && item.status === "pending");
     if (inviteIndex < 0) {
@@ -207,6 +209,11 @@ exports.acceptCompanyInvite = onCall(async (request) => {
     const updatedInvites = pendingInvites.map((item, index) => (
       index === inviteIndex ? { ...item, status: "accepted", acceptedAt: admin.firestore.Timestamp.now() } : item
     ));
+    const publicMemberCount = new Set([
+      ...(Array.isArray(companyData.teamMembers) ? companyData.teamMembers : []),
+      companyData.ownerId,
+      uid,
+    ].filter((memberId) => typeof memberId === "string" && memberId.trim())).size;
 
     transaction.update(targetCompanyRef, {
       teamMembers: admin.firestore.FieldValue.arrayUnion(uid),
@@ -220,6 +227,12 @@ exports.acceptCompanyInvite = onCall(async (request) => {
       hasCompletedSetup: true,
       lastActive: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
+    if (publicProfileSnap.exists && publicProfileSnap.data()?.isPublicProfile === true) {
+      transaction.set(publicProfileRef, {
+        publicMemberCount,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
   });
 
   return {
