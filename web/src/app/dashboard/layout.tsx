@@ -37,6 +37,7 @@ import {
 type TranslationSection = Record<string, string | undefined>;
 type DashboardTranslations = {
   auth: TranslationSection;
+  companyDetails?: TranslationSection;
   finance: TranslationSection;
   financialReports: TranslationSection;
   cycleReport: { archiveTitle?: string };
@@ -141,6 +142,13 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   };
 
   const currentNavMeta = (() => {
+    if (pathname === '/dashboard/company') {
+      return {
+        section: 'Management',
+        title: getString(t.companyDetails?.title, 'Company Details'),
+      };
+    }
+
     for (const [groupKey, items] of Object.entries(visibleNavigation)) {
       for (const item of items) {
         if (

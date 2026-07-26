@@ -57,6 +57,8 @@ const pageStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   gap: '24px',
+  width: '100%',
+  minWidth: 0,
   maxWidth: '1180px',
   margin: '0 auto',
 };
@@ -210,28 +212,28 @@ export default function CompanyPage() {
   }
 
   return (
-    <div style={pageStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
-        <div>
+    <div className="company-page" style={pageStyle}>
+      <div className="company-page-header" style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+        <div className="company-page-heading">
           <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', marginBottom: '18px' }}>
             <ArrowLeft size={16} />
             Dashboard
           </Link>
-          <h1 style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>
+          <h1 className="company-page-title" style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>
             {companyProfile.companyName || t.companyDetails?.title || 'Company Details'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '15px', maxWidth: '680px', lineHeight: 1.6 }}>
             {companyProfile.description || 'Company information, organization structure, and public profile details for your aquaculture operation.'}
           </p>
         </div>
-        <Link href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
+        <Link className="company-edit-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
           <Edit3 size={16} />
           Edit details
         </Link>
       </div>
 
       <section style={{ ...panelStyle, overflow: 'hidden' }}>
-        <div style={{ padding: '28px 32px', borderBottom: '1px solid var(--shell-border)', display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="company-info-header" style={{ padding: '28px 32px', borderBottom: '1px solid var(--shell-border)', display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <div style={{ width: '58px', height: '58px', borderRadius: '16px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Building2 size={28} />
@@ -283,8 +285,8 @@ export default function CompanyPage() {
       </section>
 
       {(user?.role === 'owner' || user?.role === 'co-owner') && (
-        <section style={{ ...panelStyle, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+        <section className="company-requests-panel" style={{ ...panelStyle, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
+          <div className="company-request-copy" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Clock size={22} />
             </div>
@@ -299,13 +301,13 @@ export default function CompanyPage() {
               </div>
             </div>
           </div>
-          <Link href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
+          <Link className="company-settings-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
             Open Settings &gt; Organization
           </Link>
         </section>
       )}
 
-      <section style={{ ...panelStyle, padding: '30px 32px' }}>
+      <section className="company-organization-panel" style={{ ...panelStyle, padding: '30px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--sans)', color: 'var(--text-primary)', marginBottom: '4px' }}>
@@ -322,26 +324,26 @@ export default function CompanyPage() {
             const RoleIcon = role.icon;
             const roleMembers = membersByRole[roleKey] || [];
             return (
-              <div key={roleKey} style={{ border: '1px solid var(--border)', borderRadius: '16px', overflow: 'hidden', background: 'var(--bg-mid)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '18px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
+              <div className="company-role-card" key={roleKey} style={{ border: '1px solid var(--border)', borderRadius: '16px', overflow: 'hidden', background: 'var(--bg-mid)' }}>
+                <div className="company-role-header" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '18px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
                   <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <RoleIcon size={20} />
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="company-role-copy" style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 900 }}>{role.title}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{role.description}</div>
+                    <div className="company-role-description" style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{role.description}</div>
                   </div>
                   <div style={{ color: roleMembers.length > 0 ? '#16a34a' : '#94a3b8', fontWeight: 900, fontSize: '13px' }}>
                     {roleMembers.length}/{role.maxCount}
                   </div>
                 </div>
 
-                <div style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: roleMembers.length ? '1.35fr 1fr' : '1fr', gap: '16px' }}>
+                <div className="company-role-body" style={{ padding: '14px 18px', display: 'grid', gridTemplateColumns: roleMembers.length ? '1.35fr 1fr' : '1fr', gap: '16px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                     {roleMembers.length ? roleMembers.map((member: TeamMember) => (
-                      <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
+                      <div className="company-member-row" key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                         <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: statusColor(member.status) }} />
-                        <div style={{ minWidth: 0 }}>
+                        <div className="company-member-copy" style={{ minWidth: 0 }}>
                           <div style={{ color: 'var(--text-primary)', fontWeight: 850, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name || member.email || 'Team member'}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.email}</div>
                         </div>
@@ -352,9 +354,9 @@ export default function CompanyPage() {
                   </div>
 
                   {roleMembers.length > 0 && (
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start' }}>
+                    <div className="company-permissions" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start' }}>
                       {role.permissions.map((permission: string) => (
-                        <span key={permission} style={{ padding: '6px 9px', borderRadius: '999px', background: '#fff', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 800 }}>
+                        <span className="company-permission" key={permission} style={{ padding: '6px 9px', borderRadius: '999px', background: '#fff', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 800 }}>
                           {permission}
                         </span>
                       ))}
@@ -375,8 +377,99 @@ export default function CompanyPage() {
         }
 
         @media (max-width: 640px) {
+          .company-page {
+            gap: 18px !important;
+          }
+
+          .company-page-heading {
+            min-width: 0;
+            width: 100%;
+          }
+
+          .company-page-title {
+            font-size: 28px !important;
+            overflow-wrap: anywhere;
+          }
+
+          .company-edit-link,
+          .company-settings-link {
+            justify-content: center !important;
+            width: 100%;
+          }
+
+          .company-info-header {
+            align-items: flex-start !important;
+            padding: 22px 20px !important;
+          }
+
           .company-info-grid {
             grid-template-columns: 1fr !important;
+          }
+
+          .company-requests-panel {
+            align-items: stretch !important;
+            padding: 20px !important;
+          }
+
+          .company-request-copy {
+            align-items: flex-start !important;
+          }
+
+          .company-organization-panel {
+            padding: 22px 18px !important;
+          }
+
+          .company-role-header {
+            align-items: flex-start !important;
+            display: grid !important;
+            grid-template-columns: 42px minmax(0, 1fr) auto;
+            padding: 16px !important;
+          }
+
+          .company-role-description {
+            line-height: 1.5;
+          }
+
+          .company-role-body {
+            gap: 14px !important;
+            grid-template-columns: minmax(0, 1fr) !important;
+            padding: 16px !important;
+          }
+
+          .company-member-copy {
+            min-width: 0;
+          }
+
+          .company-member-copy > div {
+            overflow-wrap: anywhere;
+            white-space: normal !important;
+          }
+
+          .company-permissions {
+            border-top: 1px solid var(--border);
+            display: grid !important;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            padding-top: 14px;
+            width: 100%;
+          }
+
+          .company-permission {
+            align-items: center;
+            border-radius: 10px !important;
+            display: flex;
+            justify-content: center;
+            line-height: 1.35;
+            min-width: 0;
+            overflow-wrap: anywhere;
+            text-align: center;
+            white-space: normal;
+            width: 100%;
+          }
+        }
+
+        @media (max-width: 360px) {
+          .company-permissions {
+            grid-template-columns: 1fr;
           }
         }
       `}</style>
