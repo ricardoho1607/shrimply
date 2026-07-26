@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AppProviders from '@/components/AppProviders';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/firebase';
@@ -103,7 +103,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [isDesktopNavigation, setDesktopNavigation] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
+  const sidebarRef = useRef<HTMLElement>(null);
+  const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const navigation = NAV_STRUCTURE(t);
   const todayLabel = new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
@@ -140,14 +143,22 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const currentNavMeta = (() => {
     for (const [groupKey, items] of Object.entries(visibleNavigation)) {
       for (const item of items) {
-        if (isNavLink(item) && pathname === item.href) {
+        if (
+          isNavLink(item)
+          && (
+            pathname === item.href
+            || (item.href !== '/dashboard' && pathname.startsWith(`${item.href}/`))
+          )
+        ) {
           return {
             section: sectionLabels[groupKey] || groupKey,
             title: item.label,
           };
         }
         if (isNavGroup(item)) {
-          const matchingChild = item.children.find((child) => pathname === child.href);
+          const matchingChild = item.children.find((child) =>
+            pathname === child.href || pathname.startsWith(`${child.href}/`)
+          );
           if (matchingChild) {
             return {
               section: sectionLabels[groupKey] || groupKey,
@@ -190,6 +201,58 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     queueMicrotask(() => setSidebarOpen(false));
   }, [pathname]);
 
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+    const syncNavigationMode = () => setDesktopNavigation(mediaQuery.matches);
+    syncNavigationMode();
+    mediaQuery.addEventListener('change', syncNavigationMode);
+    return () => mediaQuery.removeEventListener('change', syncNavigationMode);
+  }, []);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    const sidebarTrigger = sidebarTriggerRef.current;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setSidebarOpen(false);
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+      const focusable = Array.from(
+        sidebarRef.current?.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        ) || [],
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    sidebarRef.current
+      ?.querySelector<HTMLElement>('[aria-label="Close dashboard navigation"]')
+      ?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+      sidebarTrigger?.focus();
+    };
+  }, [isSidebarOpen]);
+
   const handleSignOut = async () => {
     try {
       await signOut(auth);
@@ -210,7 +273,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="dashboard-saas" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
+    <div className="dashboard-saas" style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
       <style jsx global>{`
         .dashboard-saas,
         .dashboard-saas :where(h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label, div) {
@@ -251,16 +314,29 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       `}</style>
 
       {isSidebarOpen && (
-        <div
+        <button
+          type="button"
+          aria-label="Close navigation"
+          aria-hidden="true"
+          tabIndex={-1}
           onClick={() => setSidebarOpen(false)}
           style={{
             position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, 0.4)',
-            backdropFilter: 'blur(4px)', zIndex: 40, cursor: 'pointer'
+            backdropFilter: 'blur(4px)', zIndex: 40, cursor: 'pointer', width: '100%', height: '100%'
           }}
         />
       )}
 
-      <aside className={`sidebar ${isSidebarOpen ? 'mobile-open' : ''}`} style={{
+      <aside
+        ref={sidebarRef}
+        id="dashboard-navigation"
+        role={isSidebarOpen ? 'dialog' : 'navigation'}
+        aria-modal={isSidebarOpen ? true : undefined}
+        aria-label="Dashboard navigation"
+        aria-hidden={!(isDesktopNavigation || isSidebarOpen)}
+        inert={!(isDesktopNavigation || isSidebarOpen) ? true : undefined}
+        className={`sidebar ${isSidebarOpen ? 'mobile-open' : ''}`}
+        style={{
         width: '280px',
         padding: '0 16px 24px',
         display: 'flex',
@@ -290,7 +366,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           <button
             onClick={() => setSidebarOpen(false)}
             className="mobile-trigger"
-            style={{ background: 'var(--bg-mid)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '6px', borderRadius: '8px' }}
+            aria-label="Close dashboard navigation"
+            style={{ background: 'var(--bg-mid)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '10px', borderRadius: '10px' }}
           >
             <X size={18} />
           </button>
@@ -443,8 +520,13 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100vh', overflow: 'hidden' }}>
-        <header style={{
+      <div
+        className="dashboard-content-shell"
+        aria-hidden={isSidebarOpen || undefined}
+        inert={isSidebarOpen ? true : undefined}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100dvh', overflow: 'hidden' }}
+      >
+        <header className="dashboard-app-header" style={{
           height: '80px',
           background: 'rgba(255,255,255,0.82)',
           borderBottom: '1px solid var(--shell-border)',
@@ -458,10 +540,14 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           zIndex: 30,
           gap: '24px',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px', minWidth: 0 }}>
+          <div className="dashboard-header-left" style={{ display: 'flex', alignItems: 'center', gap: '20px', minWidth: 0 }}>
             <button
+              ref={sidebarTriggerRef}
               onClick={() => setSidebarOpen(true)}
               className="mobile-trigger"
+              aria-label="Open dashboard navigation"
+              aria-expanded={isSidebarOpen}
+              aria-controls="dashboard-navigation"
               style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '10px', padding: '10px', cursor: 'pointer', color: 'var(--primary)' }}
             >
               <Menu size={24} />
@@ -473,27 +559,27 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                 </span>
               </div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div className="dashboard-header-title" style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {currentNavMeta.title}
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div className="dashboard-header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
             <div className="dashboard-header-date mobile-trigger-hide" title={todayLabel}>
               <CalendarDays size={17} />
               <span>{todayLabel}</span>
             </div>
 
-            <div style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 8px' }} />
+            <div className="dashboard-header-divider" style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 8px' }} />
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
+            <div className="dashboard-profile-button" style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
                 <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
                 <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
               </div>
-              <div style={{
+              <div className="dashboard-profile-avatar" style={{
                 width: '44px', height: '44px', borderRadius: '12px', background: 'var(--gradient)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
                 fontWeight: 700, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
@@ -504,7 +590,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main style={{
+        <main className="dashboard-main-scroll" style={{
           flex: 1,
           padding: '16px 40px 40px',
           maxWidth: '1600px',

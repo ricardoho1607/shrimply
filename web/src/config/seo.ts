@@ -105,8 +105,8 @@ export const coreSeoPages: SeoPage[] = [
   },
   {
     path: "/download",
-    title: "Download Shrimply Android App | Closed Testing Access",
-    description: "Request access to the Shrimply Android app closed testing track. Shrimply is currently available only for approved Android testers.",
+    title: "Shrimply iPhone Web App & Android Testing | Install on Your Phone",
+    description: "Add Shrimply to your iPhone Home Screen from Safari, or request access to the Shrimply Android closed-testing app.",
     priority: 0.86,
     changeFrequency: "weekly",
     lastModified: PUBLIC_SITE_LAST_MODIFIED,

@@ -405,14 +405,14 @@ function BuyerDashboard({ t, user }: any) {
         </div>
       </div>
 
-      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+      <div className="animate-fade-up animate-delay-1 responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
         <SummaryCard label={t.buyer.monitoredSuppliers} value={monitoredCompanies.length.toString()} icon={Users} loading={loading} />
         <SummaryCard label={t.buyer.totalAvailableBiomass} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.totalBiomass || 0), 0)).toLocaleString()} ${t.common.kg}`} icon={TrendingUp} loading={loading} />
         <SummaryCard label={t.buyer.avgSupplierDOC} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.avgDOC || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.days}`} icon={Clock} loading={loading} />
         <SummaryCard label={t.buyer.avgMarketSize} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.avgSize || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.pcsKg}`} icon={Scale} loading={loading} />
       </div>
 
-      <div className="animate-fade-up animate-delay-2" style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '40px' }}>
+      <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '40px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <h3 style={{ fontSize: '1.8rem', fontWeight: 700, letterSpacing: '0' }}>{t.buyer.monitoredSuppliers}</h3>
@@ -433,7 +433,7 @@ function BuyerDashboard({ t, user }: any) {
               </Link>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '32px' }}>
+            <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '32px' }}>
               {monitoredCompanies.map(company => (
                 <div key={company.id} className="glass-card" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -613,7 +613,7 @@ export default function DashboardPage() {
       ) : null}
 
       {/* Summary Row */}
-      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+      <div className="animate-fade-up animate-delay-1 responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
         <SummaryCard label={t.shrimp.biomass} value={`${totalMetrics.biomass.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg`} trend={`${totalMetrics.biomassTrend >= 0 ? '+' : ''}${totalMetrics.biomassTrend.toFixed(1)}%`} trendType={totalMetrics.biomassTrend >= 0 ? 'up' : 'down'} icon={Scale} loading={loading} />
         <SummaryCard label={t.shrimp.survivalRate} value={`${totalMetrics.sr.toFixed(1)}%`} trend={`${totalMetrics.srTrend >= 0 ? '+' : ''}${totalMetrics.srTrend.toFixed(1)}%`} trendType={totalMetrics.srTrend >= 0 ? 'up' : 'down'} icon={TrendingUp} loading={loading} />
         <SummaryCard label={t.shrimp.population} value={totalMetrics.population.toLocaleString()} trend={`${totalMetrics.popTrend >= 0 ? '+' : ''}${totalMetrics.popTrend.toFixed(1)}%`} trendType={totalMetrics.popTrend >= 0 ? 'up' : 'down'} icon={Users} loading={loading} />
@@ -621,11 +621,11 @@ export default function DashboardPage() {
       </div>
 
       {/* Ponds Section with Insights Sidebar */}
-      <div className="animate-fade-up animate-delay-2" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px', alignItems: 'start' }}>
+      <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px', alignItems: 'start' }}>
         
         {/* Left Column: Ponds List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="dashboard-section-heading responsive-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h3 style={{ fontSize: '1.8rem', fontWeight: 700, letterSpacing: '0' }}>Ponds</h3>
               <div style={{ 
@@ -636,7 +636,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <div style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
+              <div className="dashboard-view-toggle" style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
                 <button 
                   onClick={() => setViewMode('grid')}
                   style={{ 
@@ -665,9 +665,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div className="glass-card" style={{ padding: '0', overflow: 'hidden', border: viewMode === 'list' ? '1px solid var(--border)' : 'none', background: viewMode === 'list' ? 'white' : 'transparent', boxShadow: viewMode === 'list' ? 'var(--shadow-card)' : 'none' }}>
+          <div className="glass-card responsive-horizontal-scroll" style={{ padding: '0', overflow: 'hidden', border: viewMode === 'list' ? '1px solid var(--border)' : 'none', background: viewMode === 'list' ? 'white' : 'transparent', boxShadow: viewMode === 'list' ? 'var(--shadow-card)' : 'none' }}>
             {viewMode === 'list' && (
-              <div style={{ 
+              <div className="dashboard-list-row" style={{
                 display: 'grid', 
                 gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1fr 0.5fr', 
                 padding: '24px 32px',
@@ -680,7 +680,7 @@ export default function DashboardPage() {
               </div>
             )}
             
-            <div style={{ 
+            <div className="dashboard-pond-grid" style={{
               display: 'grid', 
               gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr', 
               gap: viewMode === 'grid' ? '32px' : '0' 
@@ -691,7 +691,7 @@ export default function DashboardPage() {
                   <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} t={t} timeZone={company?.timeZone} />
                 ) : (
                   <Link key={pond.id} href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
-                    <div style={{ 
+                    <div className="dashboard-list-row" style={{
                       display: 'grid', 
                       gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1fr 0.5fr', 
                       padding: '16px 32px',

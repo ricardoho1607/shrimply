@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { ArrowLeft, ArrowRight, Lock, Mail, ShieldCheck, User } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getRequiredSetupRoute, ROUTES } from '@/config/routes';
 
@@ -15,6 +17,7 @@ export default function JoinPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const { signUp, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
+  const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || undefined;
@@ -62,14 +65,14 @@ export default function JoinPage() {
         <section className="auth-brand-panel" aria-label="Shrimply signup">
           <Link href={ROUTES.auth} className="auth-back">
             <ArrowLeft size={16} />
-            Back to Login
+            {t.auth.backToLogin || 'Back to Login'}
           </Link>
 
           <div className="brand-lockup">
-            <img
+            <Image
               src="/assets/shrimplylogoweb.webp"
-              width="500"
-              height="160"
+              width={500}
+              height={160}
               alt="Shrimply"
               className="auth-logo"
             />
@@ -96,6 +99,20 @@ export default function JoinPage() {
         </section>
 
         <section className="auth-form-panel" aria-label="Create account form">
+          <div className="mobile-auth-header">
+            <Link href={ROUTES.auth} className="mobile-auth-back">
+              <ArrowLeft size={17} />
+              {t.auth.backToLogin || 'Back to Login'}
+            </Link>
+            <Image
+              src="/assets/shrimplylogoweb.webp"
+              width={500}
+              height={160}
+              alt="Shrimply"
+              className="mobile-auth-logo"
+            />
+          </div>
+
           <div className="form-heading">
             <div className="secure-badge">
               <ShieldCheck size={16} />
@@ -197,7 +214,7 @@ export default function JoinPage() {
 
       <style jsx>{`
         .auth-shell {
-          min-height: 100vh;
+          min-height: 100dvh;
           background: linear-gradient(180deg, #f8fafc 0%, #eef5fa 100%);
           color: var(--text-primary);
           display: flex;
@@ -267,7 +284,7 @@ export default function JoinPage() {
           gap: 42px;
         }
 
-        .auth-logo {
+        :global(.auth-logo) {
           width: 214px;
           height: auto;
           filter: drop-shadow(0 10px 20px rgba(15, 76, 117, 0.1));
@@ -323,10 +340,15 @@ export default function JoinPage() {
         }
 
         .auth-form-panel {
+          min-width: 0;
           padding: 52px 58px;
           display: flex;
           flex-direction: column;
           justify-content: center;
+        }
+
+        .mobile-auth-header {
+          display: none;
         }
 
         .form-heading {
@@ -479,7 +501,12 @@ export default function JoinPage() {
 
         @media (max-width: 880px) {
           .auth-shell {
-            padding: 18px;
+            min-height: 100dvh;
+            padding:
+              calc(12px + var(--safe-area-top))
+              calc(12px + var(--safe-area-right))
+              calc(12px + var(--safe-area-bottom))
+              calc(12px + var(--safe-area-left));
             align-items: flex-start;
           }
 
@@ -490,33 +517,51 @@ export default function JoinPage() {
           }
 
           .auth-brand-panel {
-            padding: 28px;
-            gap: 42px;
+            display: none;
           }
 
-          .brand-lockup {
-            gap: 28px;
+          .mobile-auth-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            margin-bottom: 30px;
+            min-width: 0;
           }
 
-          .auth-logo {
-            width: 176px;
+          .mobile-auth-back {
+            min-height: 44px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 800;
           }
 
-          .auth-title {
-            font-size: 2.35rem;
+          :global(.mobile-auth-logo) {
+            display: block;
+            flex: 0 0 auto;
+            width: 126px;
+            max-width: 42%;
+            height: auto;
+            object-fit: contain;
           }
 
-          .auth-proof-row {
-            grid-template-columns: 1fr;
-            gap: 14px;
+          .form-heading {
+            margin-bottom: 26px;
           }
 
           .auth-form-panel {
-            padding: 32px 24px;
+            padding: 24px;
           }
 
           .form-heading h2 {
             font-size: 28px;
+          }
+
+          .input-wrap input {
+            font-size: 16px;
           }
         }
       `}</style>

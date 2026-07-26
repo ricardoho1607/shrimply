@@ -763,7 +763,7 @@ export default function InventoryFeedsPage() {
                 )}
               </div>
             ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
+            <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
                 {filteredItems.map((item, idx) => {
                   const isLow = (item.reorderLevel || 0) > 0 && item.totalStock <= (item.reorderLevel || 0);
                   const lastPrice = item.stockInHistory?.[item.stockInHistory.length - 1]?.price || 0;
@@ -914,18 +914,18 @@ export default function InventoryFeedsPage() {
 
       {/* -- MODERNIZED MODALS --------------------------------------------- */}
       {isModalOpen && (
-        <div style={{
+        <div className="responsive-modal-overlay" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
         }}>
-          <div className="glass-card animate-fade-up" style={{
+          <div className="glass-card responsive-modal animate-fade-up" style={{
             width: '100%', maxWidth: modalType === 'history' ? '1000px' : '680px', background: '#FFFFFF', padding: '0',
             overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.2)',
             maxHeight: '90vh', display: 'flex', flexDirection: 'column',
             border: '1px solid var(--border)', borderRadius: '32px'
           }}>
-            <div style={{ padding: '32px 40px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, var(--bg-mid), white)' }}>
+            <div className="responsive-modal-header" style={{ padding: '32px 40px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, var(--bg-mid), white)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{
                   width: '64px', height: '64px', borderRadius: '20px', background: 'white',
@@ -964,9 +964,9 @@ export default function InventoryFeedsPage() {
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
+            <div className="responsive-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
               {modalType === 'history' && selectedItem ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
+                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
                   {/* Stock In Ledger */}
                   <div>
                     <h3 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
@@ -1061,7 +1061,7 @@ export default function InventoryFeedsPage() {
               ) : (
                 <form id="inventoryForm" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
                   {modalType === 'add' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                    <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                       <div style={{ gridColumn: 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Item Identification</label>
                         <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder="Full Item Name (e.g., Premium Growth Feed 02)" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
@@ -1090,7 +1090,7 @@ export default function InventoryFeedsPage() {
                   )}
 
                   {modalType !== 'editReorder' && (
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+                    <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                       <div style={{ gridColumn: modalType === 'add' ? 'span 1' : 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.quantity} ({formData.unit || 'units'})</label>
                         <input required type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} placeholder="0.00" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 900, fontSize: '20px', outline: 'none', color: 'var(--primary)' }} />

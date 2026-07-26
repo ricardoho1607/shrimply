@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { CheckCircle2, Loader2, Send } from "lucide-react";
 import { app } from "@/lib/firebase";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type RequestState = "idle" | "submitting" | "success" | "error";
 
@@ -28,6 +29,8 @@ const initialForm: TesterRequestPayload = {
 };
 
 export default function DownloadRequestForm() {
+  const { t } = useLanguage();
+  const copy = t.download.form;
   const [form, setForm] = useState<TesterRequestPayload>(initialForm);
   const [state, setState] = useState<RequestState>("idle");
   const [error, setError] = useState("");
@@ -42,7 +45,7 @@ export default function DownloadRequestForm() {
 
     if (!form.name.trim() || !form.email.trim()) {
       setState("error");
-      setError("Please enter your name and email so we can add you to the Android closed test.");
+      setError(copy.validationError);
       return;
     }
 
@@ -67,7 +70,7 @@ export default function DownloadRequestForm() {
     } catch (requestError) {
       console.error("Tester request failed:", requestError);
       setState("error");
-      setError(requestError instanceof Error ? requestError.message : "The request could not be sent. Please try again.");
+      setError(requestError instanceof Error ? requestError.message : copy.submitError);
     }
   };
 
@@ -75,55 +78,55 @@ export default function DownloadRequestForm() {
     <form onSubmit={submitRequest} style={{ display: "grid", gap: "16px" }}>
       <div className="download-form-grid">
         <Field
-          label="Name"
+          label={copy.name}
           value={form.name}
           onChange={value => updateField("name", value)}
-          placeholder="Your name"
+          placeholder={copy.namePlaceholder}
           required
         />
         <Field
-          label="Email"
+          label={copy.email}
           type="email"
           value={form.email}
           onChange={value => updateField("email", value)}
-          placeholder="name@company.com"
+          placeholder={copy.emailPlaceholder}
           required
         />
       </div>
       <div className="download-form-grid">
         <Field
-          label="Farm or company"
+          label={copy.company}
           value={form.company}
           onChange={value => updateField("company", value)}
-          placeholder="Farm/company name"
+          placeholder={copy.companyPlaceholder}
         />
         <Field
-          label="Role"
+          label={copy.role}
           value={form.role}
           onChange={value => updateField("role", value)}
-          placeholder="Owner, manager, technician..."
+          placeholder={copy.rolePlaceholder}
         />
       </div>
       <div className="download-form-grid">
         <Field
-          label="Country"
+          label={copy.country}
           value={form.country}
           onChange={value => updateField("country", value)}
-          placeholder="Indonesia, Thailand, Vietnam..."
+          placeholder={copy.countryPlaceholder}
         />
         <Field
-          label="Android device"
+          label={copy.androidDevice}
           value={form.androidDevice}
           onChange={value => updateField("androidDevice", value)}
-          placeholder="Samsung A54, Pixel 8..."
+          placeholder={copy.devicePlaceholder}
         />
       </div>
       <label style={{ display: "grid", gap: "8px" }}>
-        <span style={{ color: "var(--ink)", fontWeight: 800, fontSize: "0.82rem" }}>What do you want to test?</span>
+        <span style={{ color: "var(--ink)", fontWeight: 800, fontSize: "0.82rem" }}>{copy.reason}</span>
         <textarea
           value={form.reason}
           onChange={event => updateField("reason", event.target.value)}
-          placeholder="Tell us about your farm workflow or what you want to test first."
+          placeholder={copy.reasonPlaceholder}
           rows={5}
           style={{
             width: "100%",
@@ -140,7 +143,7 @@ export default function DownloadRequestForm() {
         />
       </label>
       <p style={{ color: "var(--ocean)", fontSize: "0.92rem", fontWeight: 600 }}>
-        Shrimply is currently available only on Android through a closed testing track. We will use this request to review tester access and contact you by email.
+        {copy.helper}
       </p>
       {state === "error" && error ? (
         <div style={{ border: "1px solid #fecaca", background: "#fff7f7", color: "#991b1b", borderRadius: "12px", padding: "14px 16px", fontWeight: 700 }}>
@@ -150,7 +153,7 @@ export default function DownloadRequestForm() {
       {state === "success" ? (
         <div style={{ display: "flex", gap: "10px", alignItems: "center", border: "1px solid #bbf7d0", background: "#f0fdf4", color: "#166534", borderRadius: "12px", padding: "14px 16px", fontWeight: 800 }}>
           <CheckCircle2 size={20} />
-          Request received. We will review it and follow up by email.
+          {copy.success}
         </div>
       ) : null}
       <button
@@ -160,7 +163,7 @@ export default function DownloadRequestForm() {
         style={{ border: 0, minHeight: "54px", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "10px", cursor: state === "submitting" ? "wait" : "pointer" }}
       >
         {state === "submitting" ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
-        Request Android Tester Access
+        {state === "submitting" ? copy.submitting : copy.submit}
       </button>
     </form>
   );

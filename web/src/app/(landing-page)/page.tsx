@@ -38,7 +38,7 @@ export default function LandingPage() {
           <p className="animate-hero" style={{ animationDelay: '0.76s', maxWidth: '420px', marginBottom: '40px', fontWeight: 500 }}>
             Track ponds, feed inventory, water quality, growth sampling, harvests, finance, and Orson AI risk signals in one shrimp farm platform.
           </p>
-          <div className="animate-hero" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
+          <div className="animate-hero hero-actions" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
             <Link href="/how-it-works" className="btn-primary">See the Platform</Link>
             <Link href="/auth/join" className="btn-outline">Start Free Trial</Link>
           </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
@@ -17,6 +17,9 @@ export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = usePathname();
+  const navRef = useRef<HTMLElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -34,16 +37,61 @@ export default function Navbar() {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setMenuOpen(false);
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        const focusable = Array.from(
+          drawerRef.current?.querySelectorAll<HTMLElement>(
+            'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+          ) || [],
+        ).filter(element => !element.hasAttribute('disabled'));
+
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
       }
     };
 
     const previousOverflow = document.body.style.overflow;
+    const menuButton = menuButtonRef.current;
+    const shell = navRef.current?.parentElement;
+    const backgroundElements = shell
+      ? Array.from(shell.children).filter(element => element !== navRef.current)
+      : [];
+    const previousStates = backgroundElements.map(element => ({
+      element,
+      ariaHidden: element.getAttribute('aria-hidden'),
+      hadInert: element.hasAttribute('inert'),
+    }));
+
+    backgroundElements.forEach(element => {
+      element.setAttribute('inert', '');
+      element.setAttribute('aria-hidden', 'true');
+    });
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
+    drawerRef.current
+      ?.querySelector<HTMLElement>('button:not([disabled]), a[href]')
+      ?.focus();
 
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
+      previousStates.forEach(({ element, ariaHidden, hadInert }) => {
+        if (!hadInert) element.removeAttribute('inert');
+        if (ariaHidden === null) element.removeAttribute('aria-hidden');
+        else element.setAttribute('aria-hidden', ariaHidden);
+      });
+      menuButton?.focus();
     };
   }, [menuOpen]);
 
@@ -56,6 +104,7 @@ export default function Navbar() {
 
   return (
     <nav
+      ref={navRef}
       id="navbar"
       className={scrolled ? 'scrolled' : ''}
       style={{
@@ -104,6 +153,7 @@ export default function Navbar() {
       </div>
 
       <button
+        ref={menuButtonRef}
         className="mobile-menu-button"
         type="button"
         aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
@@ -118,12 +168,18 @@ export default function Navbar() {
         className={`mobile-backdrop ${menuOpen ? 'open' : ''}`}
         type="button"
         aria-label="Close navigation menu"
+        aria-hidden="true"
+        tabIndex={-1}
         onClick={closeMenu}
       />
 
       <aside
+        ref={drawerRef}
         id="mobile-navigation"
         className={`mobile-drawer ${menuOpen ? 'open' : ''}`}
+        role="dialog"
+        aria-modal={menuOpen ? true : undefined}
+        aria-label="Site navigation"
         aria-hidden={!menuOpen}
       >
         <div className="drawer-header">
@@ -270,8 +326,12 @@ export default function Navbar() {
 
         @media (max-width: 920px) {
           nav {
-            padding: 14px 20px !important;
-            min-height: 74px;
+            padding:
+              calc(14px + var(--safe-area-top))
+              calc(20px + var(--safe-area-right))
+              14px
+              calc(20px + var(--safe-area-left)) !important;
+            min-height: calc(74px + var(--safe-area-top));
             background: rgba(255, 255, 255, 0.94) !important;
             backdrop-filter: blur(18px) !important;
             box-shadow: 0 1px 0 var(--slate) !important;
@@ -322,8 +382,12 @@ export default function Navbar() {
             right: 0;
             z-index: 9002;
             width: min(360px, 86vw);
-            height: 100vh;
-            padding: 24px;
+            height: 100dvh;
+            padding:
+              calc(24px + var(--safe-area-top))
+              calc(24px + var(--safe-area-right))
+              calc(24px + var(--safe-area-bottom))
+              24px;
             display: flex;
             flex-direction: column;
             background: rgba(244, 248, 252, 0.98);
@@ -356,8 +420,8 @@ export default function Navbar() {
           }
 
           .drawer-close {
-            width: 42px;
-            height: 42px;
+            width: 44px;
+            height: 44px;
             border-radius: 999px;
             border: 1px solid var(--slate);
             color: var(--ink);

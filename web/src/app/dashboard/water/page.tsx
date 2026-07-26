@@ -1075,7 +1075,7 @@ export default function WaterQualityPage() {
             onSelect={(pond) => setSelectedPondForHistory(pond as Pond)}
           />
         ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+        <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
           {filteredPonds.map((pond, idx) => {
             const latest = getLatestWQ(pond);
             const labStyle = getSeverityStyle(pond.latestLabStatus?.status);
@@ -1206,7 +1206,7 @@ export default function WaterQualityPage() {
                 const isExpanded = expandedLabReportId === report.id;
                 return (
                   <div key={report.id} className="glass-card" style={{ padding: '18px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) auto', gap: '16px', alignItems: 'center' }}>
+                <div className="responsive-four-column" style={{ display: 'grid', gridTemplateColumns: 'minmax(260px, 1.4fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) auto', gap: '16px', alignItems: 'center' }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'center', marginBottom: '8px' }}>
                       <div style={{ width: 38, height: 38, borderRadius: 12, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1389,8 +1389,8 @@ export default function WaterQualityPage() {
       {/* -- HISTORY DRAWER ------------------------------ */}
       {selectedPondForHistory && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'flex-end' }}>
-          <div className="drawer-content animate-slide-left">
-            <div style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+          <div className="drawer-content responsive-side-drawer animate-slide-left">
+            <div className="responsive-modal-header" style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 800, fontFamily: "var(--sans)", color: 'var(--text-primary)' }}>
                   {selectedPondForHistory.pondName} Water Quality History
@@ -1450,9 +1450,9 @@ export default function WaterQualityPage() {
 
       {/* -- LAB REPORT ACTION MODAL --------------------- */}
       {isLabActionModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2900, background: 'rgba(15, 23, 42, 0.38)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <div style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'var(--bg-mid)' }}>
+        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2900, background: 'rgba(15, 23, 42, 0.38)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
+            <div className="responsive-modal-header" style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '1.25rem', fontWeight: 850 }}>Add Lab Report</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginTop: '4px', fontWeight: 650 }}>Upload a PDF or enter results manually.</p>
@@ -1461,10 +1461,10 @@ export default function WaterQualityPage() {
                 <X size={22} />
               </button>
             </div>
-            <div style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div className="responsive-modal-body" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
                 <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Upload PDF</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <button
                     type="button"
                     disabled={mineralPdfActionState.disabled}
@@ -1501,7 +1501,7 @@ export default function WaterQualityPage() {
               </div>
               <div>
                 <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Manual Entry</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -1535,9 +1535,9 @@ export default function WaterQualityPage() {
 
       {/* -- LAB REPORT MODAL --------------------------------- */}
       {isLabModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '26px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div className="responsive-modal-header" style={{ padding: '26px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '1.45rem', fontWeight: 850 }}>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 650 }}>Enter results manually or upload a lab PDF, then review before confirmation.</p>
@@ -1547,8 +1547,8 @@ export default function WaterQualityPage() {
               </button>
             </div>
 
-            <form onSubmit={handleCreateManualLabReport} style={{ padding: '26px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
+            <form className="responsive-modal-body" onSubmit={handleCreateManualLabReport} style={{ padding: '26px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="responsive-four-column" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label className="form-label">Entry Mode</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
@@ -1595,7 +1595,7 @@ export default function WaterQualityPage() {
               </div>
 
               {labEntryMode === 'pdf_upload' && !editingLabReportId && (
-                <div style={{ border: '1px solid var(--border)', borderRadius: '16px', padding: '18px', background: 'var(--bg-mid)', display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'center' }}>
+                <div className="responsive-two-column" style={{ border: '1px solid var(--border)', borderRadius: '16px', padding: '18px', background: 'var(--bg-mid)', display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'center' }}>
                   <div>
                     <label className="form-label">Upload Lab PDF</label>
                     <input
@@ -1717,9 +1717,9 @@ export default function WaterQualityPage() {
 
       {/* -- LOG MODAL ------------------------------------------ */}
       {isModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)', flexShrink: 0 }}>
+        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
+          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
+            <div className="responsive-modal-header" style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)', flexShrink: 0 }}>
               <div>
                 <h2 style={{ fontSize: '1.18rem', fontWeight: 850 }}>Log Parameters</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '3px', fontWeight: 650 }}>Sync environmental readings with Orson AI.</p>
@@ -1730,7 +1730,7 @@ export default function WaterQualityPage() {
             </div>
 
             <form onSubmit={handleAddWQ} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-              <div style={{ padding: '20px 22px', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minHeight: 0 }}>
+              <div className="responsive-modal-body responsive-form-grid" style={{ padding: '20px 22px', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minHeight: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">Target Pond</label>
                   <select
@@ -1780,7 +1780,7 @@ export default function WaterQualityPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', padding: '16px 22px', background: '#FFFFFF', flexShrink: 0 }}>
+              <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', padding: '16px 22px', background: '#FFFFFF', flexShrink: 0 }}>
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 700, cursor: 'pointer'

@@ -497,7 +497,7 @@ export default function AssetInventoryPage() {
                   <AlertCircle size={20} />
                   {t.asset.needsAttention}
                 </h2>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
+                <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '16px' }}>
                   {assets.filter(a => a.condition === 'Needs Repair').map(asset => (
                     <div key={asset.id} className="glass-card" style={{ 
                       padding: '16px', 
@@ -567,7 +567,7 @@ export default function AssetInventoryPage() {
             </div>
 
             {/* List */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '18px' }}>
+            <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '18px' }}>
               {filteredAssets.map(asset => (
                 <div key={asset.id} className="glass-card" style={{ 
                   background: asset.condition === 'Needs Repair' ? 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)' : 'var(--bg-card)', 
@@ -633,17 +633,17 @@ export default function AssetInventoryPage() {
 
       {/* -- MODALS --------------------------------------------- */}
       {isModalOpen && (
-        <div style={{
+        <div className="responsive-modal-overlay" style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
         }}>
-          <div className="glass-card animate-fade-up" style={{ 
+          <div className="glass-card responsive-modal animate-fade-up" style={{
             width: '100%', maxWidth: modalType === 'history' ? '800px' : '600px', background: 'white', padding: '0', 
             overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)',
             maxHeight: '90vh', display: 'flex', flexDirection: 'column'
           }}>
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+            <div className="responsive-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 800 }}>
                   {modalType === 'add' ? 'Add New Asset' :
@@ -658,7 +658,7 @@ export default function AssetInventoryPage() {
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
+            <div className="responsive-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
               {modalType === 'scanReferral' ? (
                 <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
                   <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
@@ -745,7 +745,7 @@ export default function AssetInventoryPage() {
                         <label style={{ fontSize: '13px', fontWeight: 700 }}>Asset Name *</label>
                         <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <label style={{ fontSize: '13px', fontWeight: 700 }}>Category *</label>
                           <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -789,7 +789,7 @@ export default function AssetInventoryPage() {
 
                   {modalType === 'maintenance' && (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <label style={{ fontSize: '13px', fontWeight: 700 }}>Maintenance Type *</label>
                           <select value={formData.maintType} onChange={e => setFormData({...formData, maintType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -805,7 +805,7 @@ export default function AssetInventoryPage() {
                         <label style={{ fontSize: '13px', fontWeight: 700 }}>Description *</label>
                         <textarea rows={3} required value={formData.maintDesc} onChange={e => setFormData({...formData, maintDesc: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', resize: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                      <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <label style={{ fontSize: '13px', fontWeight: 700 }}>Cost (Rp)</label>
                           <input type="number" value={formData.maintCost} onChange={e => setFormData({...formData, maintCost: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />

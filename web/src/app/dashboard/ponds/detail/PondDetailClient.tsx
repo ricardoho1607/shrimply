@@ -755,12 +755,12 @@ export default function PondDetailClient() {
   ].filter((item) => item.status);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="pond-detail-page" style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
 
       {/* Breadcrumbs & Actions */}
-      <div className="glass-card animate-fade-up" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-          <Link href="/dashboard/ponds" style={{
+      <div className="glass-card animate-fade-up pond-detail-toolbar" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+        <div className="pond-detail-identity" style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
+          <Link href="/dashboard/ponds" className="pond-detail-back" style={{
             width: '42px', height: '42px', borderRadius: '12px', background: 'var(--glass-bg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
             border: '1px solid var(--border)', textDecoration: 'none', transition: 'all 0.2s',
@@ -803,7 +803,7 @@ export default function PondDetailClient() {
             </div>
           </div>
         {canEditPond && (
-          <div style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
+          <div className="pond-detail-actions" style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
             {isActiveCycle(pond) ? (
               <button onClick={() => {
                 setEndCycleForm(prev => ({ ...prev, cycleEndedAt: today }));
@@ -1313,6 +1313,37 @@ export default function PondDetailClient() {
           font-weight: 800;
           text-transform: uppercase;
           letter-spacing: 0.04em;
+        }
+        @media (max-width: 767px) {
+          .pond-detail-page {
+            gap: 24px !important;
+          }
+          .pond-detail-toolbar {
+            align-items: stretch !important;
+            flex-direction: column !important;
+            padding: 16px !important;
+          }
+          .pond-detail-identity {
+            width: 100%;
+          }
+          .pond-detail-back {
+            flex: 0 0 42px;
+          }
+          .pond-detail-actions {
+            width: 100%;
+            display: grid !important;
+            grid-template-columns: minmax(0, 1fr) 44px;
+            gap: 8px !important;
+          }
+          .pond-detail-actions > :last-child {
+            grid-column: 1 / -1;
+          }
+          .pond-detail-actions .dashboard-action {
+            width: 100%;
+            min-width: 0;
+            justify-content: center;
+            padding: 0 10px !important;
+          }
         }
       `}</style>
     </div>
