@@ -196,6 +196,8 @@ feed: {
   permissionDenied: '权限被拒绝',
   permissionMessage: '只有技术员和所有者才能添加饲料数据。',
   dailyFeed: '每日饲料',
+  dailyFeedUsed: '今日饲料用量',
+  notLoggedYet: '尚未记录',
   addFeedData: '添加饲料数据',
   feed: '饲料',
   feedPlaceholder: '例如：25.5',

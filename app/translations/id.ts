@@ -196,6 +196,8 @@ feed: {
   permissionDenied: 'Izin Ditolak',
   permissionMessage: 'Hanya teknisi dan pemilik yang dapat menambahkan data pakan.',
   dailyFeed: 'Pakan Harian',
+  dailyFeedUsed: 'Pakan yang digunakan hari ini',
+  notLoggedYet: 'Belum dicatat',
   addFeedData: 'Tambah Data Pakan',
   feed: 'Pakan',
   feedPlaceholder: 'mis., 25.5',

@@ -109,6 +109,24 @@ export default function FeedManagementScreen() {
     });
   }, [activePonds, company?.timeZone, getTodayFeedRecord]);
 
+  const todayFeedSummary = useMemo(() => {
+    let totalKg = 0;
+    let hasLoggedFeed = false;
+
+    activePonds.forEach((pond) => {
+      const amount = Number(getTodayFeedRecord(pond)?.feedData?.totalDailyFeed);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      totalKg += amount;
+      hasLoggedFeed = true;
+    });
+
+    return { totalKg, hasLoggedFeed };
+  }, [activePonds, getTodayFeedRecord]);
+
+  const todayFeedSummaryValue = todayFeedSummary.hasLoggedFeed
+    ? `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(todayFeedSummary.totalKg)} kg`
+    : t.feed.notLoggedYet;
+
   const handleSave = async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
@@ -233,6 +251,15 @@ export default function FeedManagementScreen() {
         <View style={styles.header}>
           <Ionicons name="fish-outline" size={28} color="#315f57" />
           <Text style={styles.headerTitle}>{t.feed.title}</Text>
+        </View>
+
+        <View
+          style={styles.dailyFeedSummary}
+          accessible
+          accessibilityLabel={`${t.feed.dailyFeedUsed}: ${todayFeedSummaryValue}`}
+        >
+          <Text style={styles.dailyFeedSummaryLabel}>{t.feed.dailyFeedUsed}</Text>
+          <Text style={styles.dailyFeedSummaryValue}>{todayFeedSummaryValue}</Text>
         </View>
 
         {enterpriseOwnerView ? (
@@ -419,6 +446,23 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f4f8fc" },
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Platform.OS === 'android' ? 16 : 20, paddingTop: Platform.OS === 'android' ? 16 : 20, paddingBottom: Platform.OS === 'android' ? 16 : 20 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', color: '#0d2137', marginLeft: Platform.OS === 'android' ? 10 : 12 },
+  dailyFeedSummary: {
+    minHeight: 48,
+    marginHorizontal: Platform.OS === 'android' ? 16 : 20,
+    marginBottom: Platform.OS === 'android' ? 12 : 16,
+    paddingHorizontal: Platform.OS === 'android' ? 14 : 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#dce8f2',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dailyFeedSummaryLabel: { flex: 1, color: '#315f57', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
+  dailyFeedSummaryValue: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 16 : 17, fontWeight: '800', textAlign: 'right' },
   scrollContent: { padding: Platform.OS === 'android' ? 16 : 20, paddingTop: 0, paddingBottom: 100 },
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 60 : 80 },
   emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 22 : 24, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 16 : 20 },

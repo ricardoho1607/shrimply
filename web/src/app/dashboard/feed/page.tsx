@@ -462,6 +462,29 @@ export default function FeedRecordsPage() {
     return accessiblePonds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [accessiblePonds, searchTerm]);
 
+  const todayFeedSummary = useMemo(() => {
+    let totalKg = 0;
+    let hasLoggedFeed = false;
+
+    accessiblePonds.forEach((pond) => {
+      const todayRecord = (pond.samplings || []).find((sampling) => (
+        !isBaselineSampling(sampling)
+        && sampling.date === today
+        && sampling.feedData
+      ));
+      const amount = Number(todayRecord?.feedData?.totalDailyFeed);
+      if (!Number.isFinite(amount) || amount <= 0) return;
+      totalKg += amount;
+      hasLoggedFeed = true;
+    });
+
+    return { totalKg, hasLoggedFeed };
+  }, [accessiblePonds, today]);
+
+  const todayFeedSummaryValue = todayFeedSummary.hasLoggedFeed
+    ? `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(todayFeedSummary.totalKg)} kg`
+    : t.feed.notLoggedYet;
+
   const selectedPondForHistory = useMemo(
     () => accessiblePonds.find((pond) => pond.id === selectedPondIdForHistory) || null,
     [accessiblePonds, selectedPondIdForHistory],
@@ -519,11 +542,11 @@ export default function FeedRecordsPage() {
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
       {/* Toolbar */}
-      <div className="glass-card dashboard-toolbar-card animate-fade-up">
+      <div className="glass-card dashboard-toolbar-card animate-fade-up" style={{ flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input
-            placeholder="Search ponds..."
+            placeholder={t.feed.searchPonds}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
@@ -547,9 +570,30 @@ export default function FeedRecordsPage() {
             className="dashboard-action dashboard-action-primary"
           >
             <Plus size={20} />
-            <span>New Feed Log</span>
+            <span>{t.feed.newFeedLog}</span>
           </button>
         )}
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            flexBasis: '100%',
+            minHeight: '40px',
+            padding: '10px 4px 0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '16px',
+            borderTop: '1px solid var(--border)',
+          }}
+        >
+          <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 750 }}>
+            {t.feed.dailyFeedUsed}
+          </span>
+          <strong style={{ color: 'var(--text-primary)', fontSize: '17px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+            {todayFeedSummaryValue}
+          </strong>
+        </div>
       </div>
 
       {/* Pond Grid */}

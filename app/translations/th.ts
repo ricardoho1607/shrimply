@@ -196,6 +196,8 @@ feed: {
   permissionDenied: 'การอนุญาตถูกปฏิเสธ',
   permissionMessage: 'เฉพาะช่างเทคนิคและเจ้าของเท่านั้นที่สามารถเพิ่มข้อมูลอาหารได้',
   dailyFeed: 'อาหารรายวัน',
+  dailyFeedUsed: 'อาหารที่ใช้วันนี้',
+  notLoggedYet: 'ยังไม่ได้บันทึก',
   addFeedData: 'เพิ่มข้อมูลอาหาร',
   feed: 'อาหาร',
   feedPlaceholder: 'เช่น 25.5',

@@ -196,6 +196,8 @@ feed: {
   permissionDenied: 'Permission Denied',
   permissionMessage: 'Only technicians, owners, and co-owners can add feed data.',
   dailyFeed: 'Daily Feed',
+  dailyFeedUsed: 'Daily feed used today',
+  notLoggedYet: 'Not logged yet',
   addFeedData: 'Add Feed Data',
   feed: 'Feed',
   feedPlaceholder: 'e.g., 25.5',
