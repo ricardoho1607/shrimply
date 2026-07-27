@@ -101,6 +101,7 @@ interface FeedAdditiveStore {
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
   reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string) => Promise<void>;
+  deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string) => Promise<void>;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
@@ -580,6 +581,118 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     ).catch((error) => {
       console.error('Error creating low-stock notification after daily feed reconciliation:', error);
     })));
+  },
+
+  deleteDailyFeedRecord: async (pondId, samplingId, date, updatedBy) => {
+    const { currentCompanyId } = get();
+    if (!currentCompanyId) throw new Error(DAILY_FEED_ERROR_CODES.companyUnavailable);
+
+    const pondRef = doc(db, 'companies', currentCompanyId, 'ponds', pondId);
+    await runTransaction(db, async (tx) => {
+      const pondSnapshot = await tx.get(pondRef);
+      if (!pondSnapshot.exists()) return;
+
+      const pondData = pondSnapshot.data() as ReturnType<typeof usePondStore.getState>['ponds'][number];
+      const samplings = Array.isArray(pondData.samplings) ? [...pondData.samplings] : [];
+      const samplingIndex = samplings.findIndex((sampling) => (
+        sampling.id === samplingId &&
+        sampling.date === date &&
+        Boolean(sampling.feedData)
+      ));
+      if (samplingIndex < 0) return;
+
+      const feedData = samplings[samplingIndex].feedData;
+      const allocations = normalizeFeedAllocations(feedData);
+      if (allocations.length === 0) {
+        throw new Error(DAILY_FEED_ERROR_CODES.feedRecordMissingInventory);
+      }
+
+      const feedEntries = [];
+      for (const allocation of allocations) {
+        const feedRef = doc(db, 'companies', currentCompanyId, 'feeds', allocation.inventoryFeedId);
+        feedEntries.push({
+          feedId: allocation.inventoryFeedId,
+          feedRef,
+          snapshot: await tx.get(feedRef),
+        });
+      }
+
+      const feedRecordId = buildDailyFeedRecordId(pondId, date);
+      const adjustmentTimestamp = Date.now();
+      for (const { feedId, feedRef, snapshot } of feedEntries) {
+        if (!snapshot.exists()) {
+          throw new Error(DAILY_FEED_ERROR_CODES.inventoryNotFound);
+        }
+
+        const feed = snapshot.data() as Feed;
+        const quantityToRestore = getDailyFeedUsageTotal(feed.usageHistory, pondId, date);
+        if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
+
+        const matchingUsage = (feed.usageHistory || [])
+          .filter((usage) => (
+            isDailyFeedUsage(usage, pondId, date) &&
+            Number(usage.quantity) > 0
+          ))
+          .slice()
+          .reverse()
+          .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
+        const historicalUnitPrice = matchingUsage
+          ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
+          : 0;
+        const currentStock = Number(feed.totalStock) || 0;
+        const currentCost = Number(feed.totalCost) || 0;
+        const fallbackUnitPrice = currentStock > 0 ? currentCost / currentStock : 0;
+        const unitPrice = historicalUnitPrice || fallbackUnitPrice;
+        if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+          throw new Error(DAILY_FEED_ERROR_CODES.missingCost);
+        }
+
+        tx.update(feedRef, {
+          usageHistory: arrayUnion({
+            id: `${feedRecordId}:${feedId}:deleted:${adjustmentTimestamp}`,
+            date,
+            quantity: -quantityToRestore,
+            unitPrice,
+            totalCost: -(quantityToRestore * unitPrice),
+            pondId,
+            cycleId: feedData?.cycleId || pondData.cycleId || null,
+            cycleName: feedData?.cycleName || pondData.cycleName || null,
+            pondCycleId: feedData?.pondCycleId || pondData.pondCycleId || pondId,
+            notes: 'Deleted feed record returned to inventory',
+            source: DAILY_FEED_USAGE_SOURCE,
+            feedRecordId,
+            createdAt: Timestamp.now(),
+          }),
+          totalStock: currentStock + quantityToRestore,
+          totalCost: currentCost + (quantityToRestore * unitPrice),
+          lastUpdated: serverTimestamp(),
+        });
+      }
+
+      const samplingWithoutFeedData = { ...samplings[samplingIndex] };
+      delete samplingWithoutFeedData.feedData;
+      samplings[samplingIndex] = samplingWithoutFeedData;
+      tx.update(pondRef, {
+        samplings,
+        updatedAt: serverTimestamp(),
+        updatedBy,
+      });
+    });
+
+    usePondStore.setState((state) => ({
+      ponds: state.ponds.map((pond) => {
+        if (pond.id !== pondId) return pond;
+        return {
+          ...pond,
+          samplings: (pond.samplings || []).map((sampling) => {
+            if (sampling.id !== samplingId || sampling.date !== date || !sampling.feedData) return sampling;
+            const samplingWithoutFeedData = { ...sampling };
+            delete samplingWithoutFeedData.feedData;
+            return samplingWithoutFeedData;
+          }),
+        };
+      }),
+    }));
   },
 
   deleteFeed: async (feedId) => {

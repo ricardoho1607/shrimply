@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   History,
@@ -13,7 +13,8 @@ import {
   ChevronRight,
   ArrowRight,
   ClipboardList,
-  TriangleAlert
+  TriangleAlert,
+  Trash2
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import {
@@ -150,8 +151,13 @@ export default function FeedRecordsPage() {
   const [isModalOpen, setModalOpen] = useState(false);
   const [selectedPondIdForHistory, setSelectedPondIdForHistory] = useState<string | null>(null);
   const [editingFeedRecord, setEditingFeedRecord] = useState<{ pondId: string; date: string; id: string } | null>(null);
+  const [deletingFeedRecord, setDeletingFeedRecord] = useState<FeedHistoryEntry | null>(null);
+  const [revealedFeedRecordId, setRevealedFeedRecordId] = useState<string | null>(null);
+  const [isDeletingFeedRecord, setIsDeletingFeedRecord] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
+  const historyTouchStartXRef = useRef<number | null>(null);
+  const suppressHistoryClickRef = useRef(false);
 
   // Form State
   const [formData, setFormData] = useState<FeedFormData>({
@@ -530,7 +536,149 @@ export default function FeedRecordsPage() {
       })),
     });
     setSelectedPondIdForHistory(null);
+    setRevealedFeedRecordId(null);
     setModalOpen(true);
+  };
+
+  const openHistoryDrawer = (pondId: string) => {
+    setRevealedFeedRecordId(null);
+    setSelectedPondIdForHistory(pondId);
+  };
+
+  const closeHistoryDrawer = () => {
+    setRevealedFeedRecordId(null);
+    setSelectedPondIdForHistory(null);
+  };
+
+  const handleHistoryPointerStart = (event: React.PointerEvent) => {
+    historyTouchStartXRef.current = event.clientX;
+    suppressHistoryClickRef.current = false;
+  };
+
+  const handleHistoryPointerEnd = (recordId: string, event: React.PointerEvent) => {
+    const startX = historyTouchStartXRef.current;
+    const endX = event.clientX;
+    historyTouchStartXRef.current = null;
+    if (startX === null) return;
+
+    const distance = endX - startX;
+    if (distance < -48) {
+      setRevealedFeedRecordId(recordId);
+      suppressHistoryClickRef.current = true;
+    } else if (distance > 36) {
+      setRevealedFeedRecordId(null);
+      suppressHistoryClickRef.current = true;
+    }
+  };
+
+  const handleDeleteFeedRecord = async () => {
+    if (!companyId || !user || !selectedPondForHistory || !deletingFeedRecord || !canEditFeed || isDeletingFeedRecord) return;
+    if (!accessiblePonds.some((pond) => pond.id === selectedPondForHistory.id)) return;
+    setIsDeletingFeedRecord(true);
+
+    try {
+      const pondRef = doc(db, 'companies', companyId, 'ponds', selectedPondForHistory.id);
+      await runTransaction(db, async (transaction) => {
+        const pondDoc = await transaction.get(pondRef);
+        if (!pondDoc.exists()) return;
+
+        const pondData = pondDoc.data();
+        const samplings = Array.isArray(pondData.samplings) ? [...pondData.samplings] : [];
+        const samplingIndex = samplings.findIndex((sampling) => (
+          sampling.id === deletingFeedRecord.id &&
+          sampling.date === deletingFeedRecord.date &&
+          Boolean(sampling.feedData)
+        ));
+        if (samplingIndex < 0) return;
+
+        const feedData = samplings[samplingIndex].feedData as FeedData;
+        const allocations = normalizeFeedAllocations(feedData);
+        if (allocations.length === 0) {
+          throw new Error(t.feedHistory.deleteInventoryMissing);
+        }
+
+        const feedSnapshots = new Map<string, DocumentSnapshot<DocumentData>>();
+        for (const allocation of allocations) {
+          const feedRef = doc(db, 'companies', companyId, 'feeds', allocation.inventoryFeedId);
+          feedSnapshots.set(allocation.inventoryFeedId, await transaction.get(feedRef));
+        }
+
+        const feedRecordId = buildDailyFeedRecordId(selectedPondForHistory.id, deletingFeedRecord.date);
+        const adjustmentTimestamp = Date.now();
+        for (const allocation of allocations) {
+          const feedId = allocation.inventoryFeedId;
+          const feedDoc = feedSnapshots.get(feedId);
+          if (!feedDoc?.exists()) throw new Error(t.feed.inventoryNotFound);
+
+          const inventoryFeed = feedDoc.data() as InventoryFeed;
+          const quantityToRestore = getDailyFeedUsageTotal(
+            inventoryFeed.usageHistory,
+            selectedPondForHistory.id,
+            deletingFeedRecord.date,
+          );
+          if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
+
+          const matchingUsage = (inventoryFeed.usageHistory || [])
+            .filter((usage) => (
+              isDailyFeedUsage(usage, selectedPondForHistory.id, deletingFeedRecord.date) &&
+              Number(usage.quantity) > 0
+            ))
+            .slice()
+            .reverse()
+            .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
+          const historicalUnitPrice = matchingUsage
+            ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
+            : 0;
+          const currentStock = Number(inventoryFeed.totalStock) || 0;
+          const currentCost = Number(inventoryFeed.totalCost) || 0;
+          const fallbackUnitPrice = currentStock > 0 ? currentCost / currentStock : 0;
+          const unitPrice = historicalUnitPrice || fallbackUnitPrice;
+          if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
+            throw new Error(t.feed.missingFeedCost);
+          }
+
+          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
+          transaction.update(feedRef, {
+            usageHistory: arrayUnion({
+              id: `${feedRecordId}:${feedId}:deleted:${adjustmentTimestamp}`,
+              date: deletingFeedRecord.date,
+              quantity: -quantityToRestore,
+              unitPrice,
+              totalCost: -(quantityToRestore * unitPrice),
+              pondId: selectedPondForHistory.id,
+              cycleId: feedData.cycleId || pondData.cycleId || null,
+              cycleName: feedData.cycleName || pondData.cycleName || null,
+              pondCycleId: feedData.pondCycleId || pondData.pondCycleId || selectedPondForHistory.id,
+              notes: 'Deleted feed record returned to inventory',
+              source: DAILY_FEED_USAGE_SOURCE,
+              feedRecordId,
+              createdAt: Timestamp.now(),
+            }),
+            totalStock: currentStock + quantityToRestore,
+            totalCost: currentCost + (quantityToRestore * unitPrice),
+            lastUpdated: serverTimestamp(),
+          });
+        }
+
+        const samplingWithoutFeedData = { ...samplings[samplingIndex] };
+        delete samplingWithoutFeedData.feedData;
+        samplings[samplingIndex] = samplingWithoutFeedData;
+        transaction.update(pondRef, {
+          samplings,
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        });
+      });
+
+      setDeletingFeedRecord(null);
+      setRevealedFeedRecordId(null);
+      alert(t.feedHistory.deleteSuccess);
+    } catch (error) {
+      console.error('Error deleting feed record:', error);
+      alert(error instanceof Error ? error.message : t.feedHistory.deleteFailed);
+    } finally {
+      setIsDeletingFeedRecord(false);
+    }
   };
 
   const closeFeedModal = () => {
@@ -608,7 +756,7 @@ export default function FeedRecordsPage() {
             const latest = getLatestFeed(pond as Pond);
             return latest ? `${latest.totalDailyFeed} kg` : undefined;
           }}
-          onSelect={(pond) => setSelectedPondIdForHistory(pond.id)}
+          onSelect={(pond) => openHistoryDrawer(pond.id)}
         />
       ) : (
         <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
@@ -627,7 +775,7 @@ export default function FeedRecordsPage() {
                     </div>
                   </div>
                   <button
-                    onClick={() => setSelectedPondIdForHistory(pond.id)}
+                    onClick={() => openHistoryDrawer(pond.id)}
                     style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', color: 'var(--primary)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
                     onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
                     onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
@@ -687,7 +835,7 @@ export default function FeedRecordsPage() {
                   <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>{t.feedHistory.title}</p>
                 </div>
               </div>
-              <button aria-label="Close feed history" onClick={() => setSelectedPondIdForHistory(null)} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
+              <button aria-label="Close feed history" onClick={closeHistoryDrawer} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={20} />
               </button>
             </div>
@@ -710,25 +858,117 @@ export default function FeedRecordsPage() {
               )}
               {selectedFeedHistory.length > 0 && (
                 <div style={{ overflow: 'hidden', borderRadius: '14px', background: '#FFFFFF', border: '1px solid #DCE8F2' }}>
-                  {selectedFeedHistory.map((log, i) => (
-                    <button
-                      type="button"
-                      key={log.id || log.date}
-                      onClick={() => openHistoryEditor(log)}
-                      disabled={!canEditFeed}
-                      aria-label={canEditFeed ? `${t.feedHistory.editTitle}: ${log.date}, ${log.feedData.totalDailyFeed} kg` : undefined}
-                      style={{ width: '100%', minHeight: '58px', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', border: 'none', borderBottom: i < selectedFeedHistory.length - 1 ? '1px solid #EEF3F6' : 'none', background: '#FFFFFF', cursor: canEditFeed ? 'pointer' : 'default', textAlign: 'left' }}
-                    >
-                      <span style={{ color: '#334E68', fontSize: '14px', fontWeight: 650 }}>
-                        {new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F4C75', fontSize: '16px', fontWeight: 850, whiteSpace: 'nowrap' }}>
-                        {log.feedData.totalDailyFeed} kg {canEditFeed && <ChevronRight size={18} color="#6B8AA0" />}
-                      </span>
-                    </button>
-                  ))}
+                  {selectedFeedHistory.map((log, i) => {
+                    const recordId = log.id || log.date;
+                    const isRevealed = revealedFeedRecordId === recordId;
+                    return (
+                      <div
+                        key={recordId}
+                        style={{
+                          position: 'relative',
+                          overflow: 'hidden',
+                          borderBottom: i < selectedFeedHistory.length - 1 ? '1px solid #EEF3F6' : 'none',
+                        }}
+                      >
+                        {canEditFeed && (
+                          <button
+                            type="button"
+                            aria-label={`${t.feedHistory.deleteAction}: ${log.date}`}
+                            onClick={() => setDeletingFeedRecord(log)}
+                            style={{ position: 'absolute', inset: '0 0 0 auto', width: '104px', border: 'none', background: '#E74C3C', color: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', fontSize: '12px', fontWeight: 850, cursor: 'pointer' }}
+                          >
+                            <Trash2 size={19} />
+                            {t.feedHistory.deleteAction}
+                          </button>
+                        )}
+                        <div
+                          role={canEditFeed ? 'button' : undefined}
+                          tabIndex={canEditFeed ? 0 : undefined}
+                          aria-label={canEditFeed ? `${t.feedHistory.editTitle}: ${log.date}, ${log.feedData.totalDailyFeed} kg` : undefined}
+                          onPointerDown={canEditFeed ? handleHistoryPointerStart : undefined}
+                          onPointerUp={canEditFeed ? (event) => handleHistoryPointerEnd(recordId, event) : undefined}
+                          onPointerCancel={() => {
+                            historyTouchStartXRef.current = null;
+                          }}
+                          onClick={() => {
+                            if (suppressHistoryClickRef.current) {
+                              suppressHistoryClickRef.current = false;
+                              return;
+                            }
+                            openHistoryEditor(log);
+                          }}
+                          onKeyDown={(event) => {
+                            if (canEditFeed && (event.key === 'Enter' || event.key === ' ')) {
+                              event.preventDefault();
+                              openHistoryEditor(log);
+                            }
+                          }}
+                          style={{ position: 'relative', zIndex: 1, width: '100%', minHeight: '58px', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', background: '#FFFFFF', cursor: canEditFeed ? 'pointer' : 'default', textAlign: 'left', transform: isRevealed ? 'translateX(-104px)' : 'translateX(0)', transition: 'transform 180ms ease' }}
+                        >
+                          <span style={{ color: '#334E68', fontSize: '14px', fontWeight: 650 }}>
+                            {new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F4C75', fontSize: '16px', fontWeight: 850, whiteSpace: 'nowrap' }}>
+                            {log.feedData.totalDailyFeed} kg
+                            {canEditFeed && (
+                              <button
+                                type="button"
+                                className="feed-history-desktop-delete"
+                                aria-label={`${t.feedHistory.deleteAction}: ${log.date}`}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setDeletingFeedRecord(log);
+                                }}
+                                onKeyDown={(event) => event.stopPropagation()}
+                              >
+                                <Trash2 size={17} />
+                              </button>
+                            )}
+                            {canEditFeed && <ChevronRight size={18} color="#6B8AA0" />}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deletingFeedRecord && selectedPondForHistory && (
+        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(15, 23, 42, 0.55)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div role="alertdialog" aria-modal="true" aria-labelledby="delete-feed-title" className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '460px', padding: '28px', background: '#FFFFFF', textAlign: 'center' }}>
+            <div style={{ width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '50%', background: '#FDECEC', color: '#E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Trash2 size={25} />
+            </div>
+            <h2 id="delete-feed-title" style={{ margin: 0, color: 'var(--text-primary)', fontSize: '21px', fontWeight: 900 }}>{t.feedHistory.deleteTitle}</h2>
+            <p style={{ margin: '10px 0 0', color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, fontWeight: 600 }}>
+              {t.feedHistory.deleteMessage
+                .replace('{amount}', String(deletingFeedRecord.feedData.totalDailyFeed))
+                .replace('{date}', new Date(deletingFeedRecord.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}
+            </p>
+            <div style={{ marginTop: '18px', padding: '12px 14px', borderRadius: '12px', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', lineHeight: 1.5, fontWeight: 750 }}>
+              {t.feedHistory.deleteInventoryNote}
+            </div>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
+              <button
+                type="button"
+                onClick={() => setDeletingFeedRecord(null)}
+                disabled={isDeletingFeedRecord}
+                style={{ flex: 1, minHeight: '48px', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--text-muted)', fontWeight: 850, cursor: 'pointer' }}
+              >
+                {t.actions.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteFeedRecord}
+                disabled={isDeletingFeedRecord}
+                style={{ flex: 1.4, minHeight: '48px', padding: '0 12px', borderRadius: '12px', border: 'none', background: '#E74C3C', color: '#FFFFFF', fontWeight: 900, cursor: isDeletingFeedRecord ? 'wait' : 'pointer', opacity: isDeletingFeedRecord ? 0.65 : 1 }}
+              >
+                {isDeletingFeedRecord ? t.feedHistory.deleting : t.feedHistory.confirmDelete}
+              </button>
             </div>
           </div>
         </div>
@@ -879,6 +1119,23 @@ export default function FeedRecordsPage() {
         @keyframes drawerSlide {
           from { transform: translateX(100%); }
           to { transform: translateX(0); }
+        }
+        .feed-history-desktop-delete {
+          width: 34px;
+          height: 34px;
+          border: 1px solid #f5c2c0;
+          border-radius: 9px;
+          background: #fff5f5;
+          color: #e74c3c;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        @media (max-width: 768px) {
+          .feed-history-desktop-delete {
+            display: none;
+          }
         }
       `}</style>
     </div>

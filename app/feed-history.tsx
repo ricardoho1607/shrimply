@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { usePondStore, FeedData, Pond, Sampling } from './store/pondStore';
 import { Feed, useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { useLanguage } from '../context/LanguageContext';
@@ -35,12 +37,14 @@ export default function FeedHistoryScreen() {
   const { pondId, pondName } = useLocalSearchParams();
   const { ponds, updateSampling } = usePondStore();
   const { user, company } = useAuth();
-  const { setCurrentCompanyId, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
+  const { setCurrentCompanyId, reconcileDailyFeedAllocations, deleteDailyFeedRecord } = useFeedAdditiveStore();
   const { t } = useLanguage();
   const [inventoryFeeds, setInventoryFeeds] = useState<Feed[]>([]);
   const [editingRecord, setEditingRecord] = useState<FeedHistoryRecord | null>(null);
+  const [deletingRecord, setDeletingRecord] = useState<FeedHistoryRecord | null>(null);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const submitLockRef = useRef(false);
 
   const resolvedPondId = Array.isArray(pondId) ? pondId[0] : pondId;
@@ -182,6 +186,35 @@ export default function FeedHistoryScreen() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!deletingRecord || !pond || !user?.uid || !canEditFeed || isDeleting) return;
+    setIsDeleting(true);
+    const errorTitle = t.messages?.error || 'Error';
+
+    try {
+      await deleteDailyFeedRecord(pond.id, deletingRecord.id, deletingRecord.date, user.uid);
+      setDeletingRecord(null);
+      Alert.alert(t.messages?.success || 'Success', t.feedHistory.deleteSuccess);
+    } catch (error: any) {
+      console.error('Failed to delete historical feed data:', error);
+      const errorMessages: Record<string, string> = {
+        [DAILY_FEED_ERROR_CODES.companyUnavailable]: t.feed.companyUnavailable,
+        [DAILY_FEED_ERROR_CODES.feedRecordMissingInventory]: t.feedHistory.deleteInventoryMissing,
+        [DAILY_FEED_ERROR_CODES.inventoryNotFound]: t.feed.inventoryNotFound,
+        [DAILY_FEED_ERROR_CODES.missingCost]: t.feed.missingFeedCost,
+      };
+      Alert.alert(errorTitle, errorMessages[error?.message] || t.feedHistory.deleteFailed);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const deleteMessage = deletingRecord
+    ? t.feedHistory.deleteMessage
+      .replace('{amount}', String(deletingRecord.totalDailyFeed))
+      .replace('{date}', formatDate(deletingRecord.date))
+    : '';
+
   const allocationTotal = sumFeedAllocations(feedAllocations.map((allocation) => ({
     inventoryFeedId: allocation.inventoryFeedId,
     quantityKg: Number(allocation.quantityKg) || 0,
@@ -198,7 +231,7 @@ export default function FeedHistoryScreen() {
           headerShadowVisible: false,
         }} />
       <StatusBar barStyle="light-content" backgroundColor="#0d2137" />
-      <View style={styles.container}>
+      <GestureHandlerRootView style={styles.container}>
         {canEditFeed && feedHistory.length > 0 && (
           <View style={styles.editHint}>
             <Ionicons name="create-outline" size={18} color="#0F4C75" />
@@ -218,20 +251,40 @@ export default function FeedHistoryScreen() {
               keyExtractor={(item) => item.id || item.date}
               showsVerticalScrollIndicator={false}
               ItemSeparatorComponent={() => <View style={styles.separator} />}
-              renderItem={({ item: record }) => (
-                <TouchableOpacity
-                  style={styles.historyRow}
-                  onPress={() => openEditor(record)}
-                  disabled={!canEditFeed}
-                  accessibilityRole={canEditFeed ? 'button' : undefined}
-                  accessibilityLabel={canEditFeed ? `${formatDate(record.date)}, ${record.totalDailyFeed} kg, ${t.feedHistory.editTitle}` : undefined}
+              renderItem={({ item: record }) => canEditFeed ? (
+                <Swipeable
+                  overshootRight={false}
+                  rightThreshold={40}
+                  renderRightActions={() => (
+                    <TouchableOpacity
+                      style={styles.swipeDeleteButton}
+                      onPress={() => setDeletingRecord(record)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${t.feedHistory.deleteAction}: ${formatDate(record.date)}`}
+                    >
+                      <Ionicons name="trash-outline" size={21} color="#FFFFFF" />
+                      <Text style={styles.swipeDeleteText}>{t.feedHistory.deleteAction}</Text>
+                    </TouchableOpacity>
+                  )}
                 >
+                  <TouchableOpacity
+                    style={styles.historyRow}
+                    onPress={() => openEditor(record)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${formatDate(record.date)}, ${record.totalDailyFeed} kg, ${t.feedHistory.editTitle}`}
+                  >
+                    <Text style={styles.dateText}>{formatDate(record.date)}</Text>
+                    <View style={styles.feedAmountContainer}>
+                      <Text style={styles.feedAmount}>{record.totalDailyFeed} kg</Text>
+                      <Ionicons name="chevron-forward" size={18} color="#6B8AA0" />
+                    </View>
+                  </TouchableOpacity>
+                </Swipeable>
+              ) : (
+                <View style={styles.historyRow}>
                   <Text style={styles.dateText}>{formatDate(record.date)}</Text>
-                  <View style={styles.feedAmountContainer}>
-                    <Text style={styles.feedAmount}>{record.totalDailyFeed} kg</Text>
-                    {canEditFeed && <Ionicons name="chevron-forward" size={18} color="#6B8AA0" />}
-                  </View>
-                </TouchableOpacity>
+                  <Text style={styles.feedAmount}>{record.totalDailyFeed} kg</Text>
+                </View>
               )}
             />
           </View>
@@ -345,7 +398,46 @@ export default function FeedHistoryScreen() {
             </View>
           </View>
         </Modal>
-      </View>
+
+        <Modal
+          visible={Boolean(deletingRecord)}
+          animationType="fade"
+          transparent
+          onRequestClose={() => !isDeleting && setDeletingRecord(null)}
+        >
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmCard}>
+              <View style={styles.confirmIcon}>
+                <Ionicons name="trash-outline" size={26} color="#E74C3C" />
+              </View>
+              <Text style={styles.confirmTitle}>{t.feedHistory.deleteTitle}</Text>
+              <Text style={styles.confirmMessage}>{deleteMessage}</Text>
+              <View style={styles.inventoryRestoreNote}>
+                <Ionicons name="return-down-back-outline" size={18} color="#0F4C75" />
+                <Text style={styles.inventoryRestoreText}>{t.feedHistory.deleteInventoryNote}</Text>
+              </View>
+              <View style={styles.confirmActions}>
+                <TouchableOpacity
+                  style={styles.confirmCancelButton}
+                  onPress={() => setDeletingRecord(null)}
+                  disabled={isDeleting}
+                >
+                  <Text style={styles.confirmCancelText}>{t.actions.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmDeleteButton, isDeleting && styles.disabledButton]}
+                  onPress={handleDelete}
+                  disabled={isDeleting}
+                >
+                  <Text style={styles.confirmDeleteText}>
+                    {isDeleting ? t.feedHistory.deleting : t.feedHistory.confirmDelete}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      </GestureHandlerRootView>
     </>
   );
 }
@@ -359,6 +451,8 @@ const styles = StyleSheet.create({
   emptySubtitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, marginTop: 8, textAlign: 'center', lineHeight: Platform.OS === 'android' ? 20 : 22 },
   historyCard: { flexShrink: 1, margin: Platform.OS === 'android' ? 16 : 20, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: '#DCE8F2', overflow: 'hidden' },
   historyRow: { minHeight: 58, paddingHorizontal: 16, paddingVertical: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  swipeDeleteButton: { width: 96, backgroundColor: '#E74C3C', alignItems: 'center', justifyContent: 'center', gap: 3 },
+  swipeDeleteText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   separator: { height: 1, backgroundColor: '#EEF3F6', marginHorizontal: 16 },
   dateText: { color: '#334E68', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', flexShrink: 1 },
   feedAmount: { color: '#0F4C75', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '800' },
@@ -395,4 +489,16 @@ const styles = StyleSheet.create({
   updateButton: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: '#0F4C75', alignItems: 'center' },
   updateButtonText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   disabledButton: { opacity: 0.6 },
+  confirmOverlay: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.55)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  confirmCard: { width: '100%', maxWidth: 420, padding: 24, borderRadius: 20, backgroundColor: '#FFFFFF', alignItems: 'center' },
+  confirmIcon: { width: 54, height: 54, borderRadius: 27, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FDECEC', marginBottom: 14 },
+  confirmTitle: { color: '#0D2137', fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  confirmMessage: { color: '#526D82', fontSize: 14, lineHeight: 21, textAlign: 'center', marginTop: 9 },
+  inventoryRestoreNote: { width: '100%', flexDirection: 'row', alignItems: 'center', gap: 9, padding: 12, marginTop: 18, borderRadius: 12, backgroundColor: '#EAF4FB' },
+  inventoryRestoreText: { flex: 1, color: '#0F4C75', fontSize: 13, lineHeight: 18, fontWeight: '700' },
+  confirmActions: { width: '100%', flexDirection: 'row', gap: 10, marginTop: 22 },
+  confirmCancelButton: { flex: 1, minHeight: 48, borderRadius: 12, borderWidth: 1, borderColor: '#DCE8F2', alignItems: 'center', justifyContent: 'center' },
+  confirmCancelText: { color: '#334E68', fontSize: 14, fontWeight: '800' },
+  confirmDeleteButton: { flex: 1.4, minHeight: 48, paddingHorizontal: 10, borderRadius: 12, backgroundColor: '#E74C3C', alignItems: 'center', justifyContent: 'center' },
+  confirmDeleteText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800', textAlign: 'center' },
 });

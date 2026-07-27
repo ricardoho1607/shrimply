@@ -6,6 +6,7 @@ export const DAILY_FEED_ERROR_CODES = {
   invalidAmount: 'DAILY_FEED_INVALID_AMOUNT',
   invalidAllocation: 'DAILY_FEED_INVALID_ALLOCATION',
   inventoryNotFound: 'DAILY_FEED_INVENTORY_NOT_FOUND',
+  feedRecordMissingInventory: 'DAILY_FEED_RECORD_MISSING_INVENTORY',
   insufficientStock: 'DAILY_FEED_INSUFFICIENT_STOCK',
   missingCost: 'DAILY_FEED_MISSING_COST',
 } as const;
