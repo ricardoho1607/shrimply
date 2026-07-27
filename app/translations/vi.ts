@@ -240,8 +240,10 @@ feedHistory: {
   confirmDelete: 'Xóa và hoàn trả thức ăn',
   deleting: 'Đang xóa...',
   deleteSuccess: 'Đã xóa mục thức ăn và hoàn trả thức ăn vào kho.',
+  deleteSuccessWithoutInventory: 'Đã xóa mục thức ăn. Không thể hoàn trả loại thức ăn đã bị xóa khỏi kho trước đó.',
   deleteFailed: 'Không thể xóa mục thức ăn. Vui lòng thử lại.',
   deleteInventoryMissing: 'Không thể xóa mục này vì thiếu thông tin thức ăn trong kho.',
+  deleteMissingInventoryNote: 'Thức ăn trong kho được liên kết không còn tồn tại. Lịch sử sẽ bị xóa nhưng không thể hoàn trả thức ăn đó.',
 },
 companyDetails: {
   title: 'Chi Tiết Công Ty',

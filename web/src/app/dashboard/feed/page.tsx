@@ -49,6 +49,7 @@ import {
   isEnterpriseOwner,
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
+import { normalizeFarmDateKey } from '../../../../../shared/farmDate';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -87,6 +88,8 @@ interface Pond {
   cycleName?: string;
   pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
+  docStart?: string;
+  cycleStartedAt?: string;
   createdAt?: { toDate?: () => Date; seconds?: number };
   updatedAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -175,6 +178,17 @@ export default function FeedRecordsPage() {
     userId: user?.uid,
     blocks: farmBlocks,
   }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
+  const selectedFormPond = useMemo(
+    () => accessiblePonds.find((pond) => pond.id === formData.pondId),
+    [accessiblePonds, formData.pondId],
+  );
+  const selectedPondStartDate = normalizeFarmDateKey(
+    selectedFormPond?.cycleStartedAt || selectedFormPond?.docStart,
+    company?.timeZone,
+  );
+  const minimumFeedDate = selectedPondStartDate && selectedPondStartDate <= today
+    ? selectedPondStartDate
+    : today;
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
@@ -575,6 +589,7 @@ export default function FeedRecordsPage() {
     if (!companyId || !user || !selectedPondForHistory || !deletingFeedRecord || !canEditFeed || isDeletingFeedRecord) return;
     if (!accessiblePonds.some((pond) => pond.id === selectedPondForHistory.id)) return;
     setIsDeletingFeedRecord(true);
+    let missingInventory = false;
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', selectedPondForHistory.id);
@@ -598,17 +613,28 @@ export default function FeedRecordsPage() {
         }
 
         const feedSnapshots = new Map<string, DocumentSnapshot<DocumentData>>();
-        for (const allocation of allocations) {
-          const feedRef = doc(db, 'companies', companyId, 'feeds', allocation.inventoryFeedId);
-          feedSnapshots.set(allocation.inventoryFeedId, await transaction.get(feedRef));
+        const matchingInventoryFeedIds = inventoryFeeds
+          .filter((feed) => getDailyFeedUsageTotal(
+            feed.usageHistory,
+            selectedPondForHistory.id,
+            deletingFeedRecord.date,
+          ) > 0)
+          .map((feed) => feed.id);
+        const feedIds = Array.from(new Set([
+          ...allocations.map((allocation) => allocation.inventoryFeedId),
+          ...matchingInventoryFeedIds,
+        ]));
+        for (const feedId of feedIds) {
+          const feedRef = doc(db, 'companies', companyId, 'feeds', feedId);
+          feedSnapshots.set(feedId, await transaction.get(feedRef));
         }
 
         const feedRecordId = buildDailyFeedRecordId(selectedPondForHistory.id, deletingFeedRecord.date);
         const adjustmentTimestamp = Date.now();
-        for (const allocation of allocations) {
-          const feedId = allocation.inventoryFeedId;
+        let restoredQuantity = 0;
+        for (const feedId of feedIds) {
           const feedDoc = feedSnapshots.get(feedId);
-          if (!feedDoc?.exists()) throw new Error(t.feed.inventoryNotFound);
+          if (!feedDoc?.exists()) continue;
 
           const inventoryFeed = feedDoc.data() as InventoryFeed;
           const quantityToRestore = getDailyFeedUsageTotal(
@@ -617,6 +643,7 @@ export default function FeedRecordsPage() {
             deletingFeedRecord.date,
           );
           if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
+          restoredQuantity += quantityToRestore;
 
           const matchingUsage = (inventoryFeed.usageHistory || [])
             .filter((usage) => (
@@ -659,6 +686,7 @@ export default function FeedRecordsPage() {
             lastUpdated: serverTimestamp(),
           });
         }
+        missingInventory = restoredQuantity + 0.000001 < sumFeedAllocations(allocations);
 
         const samplingWithoutFeedData = { ...samplings[samplingIndex] };
         delete samplingWithoutFeedData.feedData;
@@ -672,7 +700,9 @@ export default function FeedRecordsPage() {
 
       setDeletingFeedRecord(null);
       setRevealedFeedRecordId(null);
-      alert(t.feedHistory.deleteSuccess);
+      alert(missingInventory
+        ? t.feedHistory.deleteSuccessWithoutInventory
+        : t.feedHistory.deleteSuccess);
     } catch (error) {
       console.error('Error deleting feed record:', error);
       alert(error instanceof Error ? error.message : t.feedHistory.deleteFailed);
@@ -685,6 +715,17 @@ export default function FeedRecordsPage() {
     setModalOpen(false);
     setEditingFeedRecord(null);
   };
+
+  const deletionHasMissingInventory = deletingFeedRecord
+    ? inventoryFeeds.reduce(
+      (total, feed) => total + getDailyFeedUsageTotal(
+        feed.usageHistory,
+        selectedPondForHistory?.id || '',
+        deletingFeedRecord.date,
+      ),
+      0,
+    ) + 0.000001 < sumFeedAllocations(normalizeFeedAllocations(deletingFeedRecord.feedData))
+    : false;
 
   return (
     <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -950,7 +991,9 @@ export default function FeedRecordsPage() {
                 .replace('{date}', new Date(deletingFeedRecord.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}
             </p>
             <div style={{ marginTop: '18px', padding: '12px 14px', borderRadius: '12px', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', lineHeight: 1.5, fontWeight: 750 }}>
-              {t.feedHistory.deleteInventoryNote}
+              {deletionHasMissingInventory
+                ? t.feedHistory.deleteMissingInventoryNote
+                : t.feedHistory.deleteInventoryNote}
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '24px' }}>
               <button
@@ -1001,7 +1044,19 @@ export default function FeedRecordsPage() {
                     required
                     disabled={Boolean(editingFeedRecord)}
                     value={formData.pondId}
-                    onChange={e => setFormData({...formData, pondId: e.target.value})}
+                    onChange={e => {
+                      const pondId = e.target.value;
+                      const pond = accessiblePonds.find((item) => item.id === pondId);
+                      const pondStartDate = normalizeFarmDateKey(
+                        pond?.cycleStartedAt || pond?.docStart,
+                        company?.timeZone,
+                      );
+                      setFormData((current) => ({
+                        ...current,
+                        pondId,
+                        date: pondStartDate && current.date < pondStartDate ? today : current.date,
+                      }));
+                    }}
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
                   >
                     <option value="">Choose a pond...</option>
@@ -1011,7 +1066,16 @@ export default function FeedRecordsPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</label>
-                  <input type="date" disabled={Boolean(editingFeedRecord)} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }} />
+                  <input
+                    type="date"
+                    required
+                    disabled={Boolean(editingFeedRecord) || !formData.pondId}
+                    min={minimumFeedDate}
+                    max={today}
+                    value={formData.date}
+                    onChange={e => setFormData({...formData, date: e.target.value})}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord || !formData.pondId ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }}
+                  />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>

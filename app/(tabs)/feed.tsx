@@ -1,4 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from "react";
 import { 
@@ -21,7 +22,7 @@ import {
   normalizeFeedAllocations,
   sumFeedAllocations,
 } from '../../shared/feedInventoryUsage';
-import { getFarmDateKey } from '../../shared/farmDate';
+import { getFarmDateKey, normalizeFarmDateKey } from '../../shared/farmDate';
 import { filterEnterpriseRecordsForUser, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
@@ -30,6 +31,15 @@ interface FeedAllocationInput {
   inventoryFeedId: string;
   quantityKg: string;
 }
+
+const dateKeyToLocalDate = (dateKey: string): Date => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Date(year, month - 1, day, 12);
+};
+
+const localDateToDateKey = (date: Date): string => (
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+);
 
 const Input = React.memo(({ label, value, onChange, placeholder = "", disabled = false }: any) => (
   <View style={styles.inputContainer}>
@@ -73,6 +83,10 @@ export default function FeedManagementScreen() {
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
+  const farmToday = getFarmDateKey(new Date(), company?.timeZone);
+  const [feedDate, setFeedDate] = useState(farmToday);
+  const [tempFeedDate, setTempFeedDate] = useState(dateKeyToLocalDate(farmToday));
+  const [showFeedDatePicker, setShowFeedDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -94,10 +108,38 @@ export default function FeedManagementScreen() {
     }
   }, [company?.timeZone, setCurrentCompanyId, user?.companyId]);
 
-  const getTodayFeedRecord = React.useCallback((pond: any) => {
-    const today = getFarmDateKey(new Date(), company?.timeZone);
-    return pond.samplings.find((s: any) => s.feedData && s.date === today);
-  }, [company?.timeZone]);
+  const getFeedRecordForDate = React.useCallback((pond: any, date: string) => (
+    Array.isArray(pond?.samplings)
+      ? pond.samplings.find((sampling: any) => sampling.feedData && sampling.date === date)
+      : undefined
+  ), []);
+
+  const getTodayFeedRecord = React.useCallback((pond: any) => (
+    getFeedRecordForDate(pond, farmToday)
+  ), [farmToday, getFeedRecordForDate]);
+
+  const selectedPondRecord = useMemo(
+    () => activePonds.find((pond) => pond.pondName === selectedPond),
+    [activePonds, selectedPond],
+  );
+  const selectedPondStartDate = normalizeFarmDateKey(
+    selectedPondRecord?.cycleStartedAt || selectedPondRecord?.docStart,
+    company?.timeZone,
+  );
+  const minimumFeedDate = selectedPondStartDate && selectedPondStartDate <= farmToday
+    ? selectedPondStartDate
+    : farmToday;
+
+  const loadFeedAllocations = React.useCallback((pondName: string | null, date: string) => {
+    const pond = activePonds.find((item) => item.pondName === pondName);
+    const feedRecord = pond ? getFeedRecordForDate(pond, date) : undefined;
+    setFeedAllocations(feedRecord?.feedData
+      ? normalizeFeedAllocations(feedRecord.feedData).map((allocation) => ({
+        inventoryFeedId: allocation.inventoryFeedId,
+        quantityKg: String(allocation.quantityKg),
+      }))
+      : []);
+  }, [activePonds, getFeedRecordForDate]);
 
   const allFeedRecords = useMemo(() => {
     const today = getFarmDateKey(new Date(), company?.timeZone);
@@ -182,9 +224,8 @@ export default function FeedManagementScreen() {
       setIsSubmitting(false);
       return;
     }
-    const today = getFarmDateKey(new Date(), company?.timeZone);
-    const todayRecord = getTodayFeedRecord(pond);
-    const previousAllocations = normalizeFeedAllocations(todayRecord?.feedData);
+    const selectedDateRecord = getFeedRecordForDate(pond, feedDate);
+    const previousAllocations = normalizeFeedAllocations(selectedDateRecord?.feedData);
 
     const feedData = {
       totalDailyFeed: totalDailyFeed.toFixed(2),
@@ -197,12 +238,14 @@ export default function FeedManagementScreen() {
         previousAllocations,
         parsedAllocations,
         pond.id,
-        today,
+        feedDate,
       );
 
-      addFeedData(pond.id, feedData);
+      addFeedData(pond.id, feedData, feedDate);
       setSelectedPond(null);
       setFeedAllocations([]);
+      setFeedDate(farmToday);
+      setTempFeedDate(dateKeyToLocalDate(farmToday));
       setIsModalVisible(false);
     } catch (error: any) {
       console.error('Failed to save feed data:', error);
@@ -223,22 +266,35 @@ export default function FeedManagementScreen() {
 
   const handlePondSelection = (pondName: string) => {
     setSelectedPond(pondName);
-    const pond = ponds.find(p => p.pondName === pondName);
-    const todayRecord = pond ? getTodayFeedRecord(pond) : null;
-    
-    if (todayRecord?.feedData) {
-      setFeedAllocations(normalizeFeedAllocations(todayRecord.feedData).map((allocation) => ({
-        inventoryFeedId: allocation.inventoryFeedId,
-        quantityKg: String(allocation.quantityKg),
-      })));
-    } else {
-      setFeedAllocations([]);
-    }
+    const pond = activePonds.find((item) => item.pondName === pondName);
+    const startDate = normalizeFarmDateKey(pond?.cycleStartedAt || pond?.docStart, company?.timeZone);
+    const nextDate = startDate && feedDate < startDate ? farmToday : feedDate;
+    setFeedDate(nextDate);
+    setTempFeedDate(dateKeyToLocalDate(nextDate));
+    loadFeedAllocations(pondName, nextDate);
+  };
+
+  const applyFeedDate = (date: Date) => {
+    const nextDate = localDateToDateKey(date);
+    setFeedDate(nextDate);
+    setTempFeedDate(dateKeyToLocalDate(nextDate));
+    loadFeedAllocations(selectedPond, nextDate);
+  };
+
+  const openModal = () => {
+    const today = getFarmDateKey(new Date(), company?.timeZone);
+    setFeedDate(today);
+    setTempFeedDate(dateKeyToLocalDate(today));
+    setShowFeedDatePicker(false);
+    setIsModalVisible(true);
   };
 
   const closeModal = () => {
     setSelectedPond(null);
     setFeedAllocations([]);
+    setFeedDate(farmToday);
+    setTempFeedDate(dateKeyToLocalDate(farmToday));
+    setShowFeedDatePicker(false);
     submitLockRef.current = false;
     setIsSubmitting(false);
     setIsModalVisible(false);
@@ -315,7 +371,7 @@ export default function FeedManagementScreen() {
         )}
 
         {canEditPonds && (
-          <TouchableOpacity style={styles.floatingButton} onPress={() => setIsModalVisible(true)}>
+          <TouchableOpacity style={styles.floatingButton} onPress={openModal}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}
@@ -329,7 +385,7 @@ export default function FeedManagementScreen() {
                   onPress={closeModal}
                   style={styles.closeButton}
                   accessibilityRole="button"
-                  accessibilityLabel="Close"
+                  accessibilityLabel={t.actions.cancel}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <Ionicons name="close" size={24} color="#dce8f2" />
@@ -351,6 +407,27 @@ export default function FeedManagementScreen() {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
+                </View>
+
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>{t.forms.date}</Text>
+                  <TouchableOpacity
+                    style={[styles.dateInput, !selectedPond && styles.inputDisabled]}
+                    onPress={() => {
+                      setTempFeedDate(dateKeyToLocalDate(feedDate));
+                      setShowFeedDatePicker(true);
+                    }}
+                    disabled={!selectedPond}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t.forms.date}: ${dateKeyToLocalDate(feedDate).toLocaleDateString()}`}
+                    accessibilityState={{ disabled: !selectedPond }}
+                  >
+                    <Ionicons name="calendar-outline" size={20} color="#0F4C75" />
+                    <Text style={styles.dateInputText}>
+                      {dateKeyToLocalDate(feedDate).toLocaleDateString()}
+                    </Text>
+                    <Ionicons name="chevron-down" size={18} color="#6b8aa0" />
+                  </TouchableOpacity>
                 </View>
 
                 <View style={styles.inputContainer}>
@@ -434,6 +511,50 @@ export default function FeedManagementScreen() {
                   </TouchableOpacity>
                 </View>
               </ScrollView>
+
+              {showFeedDatePicker && selectedPond && (
+                <View style={styles.datePickerContainer}>
+                  <DateTimePicker
+                    value={tempFeedDate}
+                    mode="date"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    minimumDate={dateKeyToLocalDate(minimumFeedDate)}
+                    maximumDate={dateKeyToLocalDate(farmToday)}
+                    onChange={(event, date) => {
+                      if (event.type === 'dismissed') {
+                        setShowFeedDatePicker(false);
+                        return;
+                      }
+                      const nextDate = date || tempFeedDate;
+                      setTempFeedDate(nextDate);
+                      if (Platform.OS !== 'ios') {
+                        applyFeedDate(nextDate);
+                        setShowFeedDatePicker(false);
+                      }
+                    }}
+                    themeVariant="light"
+                  />
+                  {Platform.OS === 'ios' && (
+                    <View style={styles.datePickerButtons}>
+                      <TouchableOpacity
+                        style={styles.datePickerCancelButton}
+                        onPress={() => setShowFeedDatePicker(false)}
+                      >
+                        <Text style={styles.datePickerCancelText}>{t.actions.cancel}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.datePickerConfirmButton}
+                        onPress={() => {
+                          applyFeedDate(tempFeedDate);
+                          setShowFeedDatePicker(false);
+                        }}
+                      >
+                        <Text style={styles.datePickerConfirmText}>{t.actions.confirm}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </View>
         </Modal>
@@ -488,6 +609,14 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   inputDisabled: { backgroundColor: '#edf3f8', color: '#315f57' },
   inputHint: { color: '#6b8aa0', fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  dateInput: { minHeight: 50, borderWidth: 1, borderColor: '#d9e8f2', paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#f4f8fc', flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dateInputText: { flex: 1, color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
+  datePickerContainer: { borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 20 : 0 },
+  datePickerButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  datePickerCancelButton: { paddingHorizontal: 18, paddingVertical: 12 },
+  datePickerConfirmButton: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10, backgroundColor: '#0F4C75' },
+  datePickerCancelText: { color: '#e74c3c', fontSize: 14, fontWeight: '700' },
+  datePickerConfirmText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   feedWarning: { flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f6c453', backgroundColor: '#fff8e6' },
   feedWarningTextContainer: { flex: 1 },
   feedWarningTitle: { color: '#92400e', fontSize: 13, fontWeight: '700', marginBottom: 2 },

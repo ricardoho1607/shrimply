@@ -13,6 +13,7 @@ import {
   getDailyFeedUsageTotal,
   isDailyFeedUsage,
   normalizeFeedAllocations,
+  sumFeedAllocations,
   type FeedAllocation,
 } from '../../shared/feedInventoryUsage';
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
@@ -101,7 +102,7 @@ interface FeedAdditiveStore {
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
   reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string) => Promise<void>;
-  deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string) => Promise<void>;
+  deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string, candidateFeedIds?: string[]) => Promise<{ missingInventory: boolean }>;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
@@ -583,11 +584,12 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     })));
   },
 
-  deleteDailyFeedRecord: async (pondId, samplingId, date, updatedBy) => {
+  deleteDailyFeedRecord: async (pondId, samplingId, date, updatedBy, candidateFeedIds = []) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error(DAILY_FEED_ERROR_CODES.companyUnavailable);
 
     const pondRef = doc(db, 'companies', currentCompanyId, 'ponds', pondId);
+    let missingInventory = false;
     await runTransaction(db, async (tx) => {
       const pondSnapshot = await tx.get(pondRef);
       if (!pondSnapshot.exists()) return;
@@ -608,10 +610,14 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       }
 
       const feedEntries = [];
-      for (const allocation of allocations) {
-        const feedRef = doc(db, 'companies', currentCompanyId, 'feeds', allocation.inventoryFeedId);
+      const feedIds = Array.from(new Set([
+        ...allocations.map((allocation) => allocation.inventoryFeedId),
+        ...candidateFeedIds.filter(Boolean),
+      ]));
+      for (const feedId of feedIds) {
+        const feedRef = doc(db, 'companies', currentCompanyId, 'feeds', feedId);
         feedEntries.push({
-          feedId: allocation.inventoryFeedId,
+          feedId,
           feedRef,
           snapshot: await tx.get(feedRef),
         });
@@ -619,14 +625,14 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
       const feedRecordId = buildDailyFeedRecordId(pondId, date);
       const adjustmentTimestamp = Date.now();
+      let restoredQuantity = 0;
       for (const { feedId, feedRef, snapshot } of feedEntries) {
-        if (!snapshot.exists()) {
-          throw new Error(DAILY_FEED_ERROR_CODES.inventoryNotFound);
-        }
+        if (!snapshot.exists()) continue;
 
         const feed = snapshot.data() as Feed;
         const quantityToRestore = getDailyFeedUsageTotal(feed.usageHistory, pondId, date);
         if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
+        restoredQuantity += quantityToRestore;
 
         const matchingUsage = (feed.usageHistory || [])
           .filter((usage) => (
@@ -668,6 +674,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           lastUpdated: serverTimestamp(),
         });
       }
+      missingInventory = restoredQuantity + 0.000001 < sumFeedAllocations(allocations);
 
       const samplingWithoutFeedData = { ...samplings[samplingIndex] };
       delete samplingWithoutFeedData.feedData;
@@ -693,6 +700,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         };
       }),
     }));
+
+    return { missingInventory };
   },
 
   deleteFeed: async (feedId) => {

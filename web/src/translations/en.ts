@@ -149,8 +149,10 @@ feedHistory: {
   confirmDelete: 'Delete and restore feed',
   deleting: 'Deleting...',
   deleteSuccess: 'Feed entry deleted and feed returned to inventory.',
+  deleteSuccessWithoutInventory: 'Feed entry deleted. An inventory feed that was already missing could not be restored.',
   deleteFailed: 'Feed entry could not be deleted. Please try again.',
   deleteInventoryMissing: 'This entry cannot be deleted because its inventory feed details are missing.',
+  deleteMissingInventoryNote: 'The linked feed inventory no longer exists. The history entry will be deleted, but that feed cannot be restored.',
 },
 companyDetails: {
   title: 'Company Details',

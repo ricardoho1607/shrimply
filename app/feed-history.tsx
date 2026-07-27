@@ -24,6 +24,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import {
   DAILY_FEED_ERROR_CODES,
+  getDailyFeedUsageTotal,
   normalizeFeedAllocations,
   sumFeedAllocations,
 } from '../shared/feedInventoryUsage';
@@ -192,9 +193,23 @@ export default function FeedHistoryScreen() {
     const errorTitle = t.messages?.error || 'Error';
 
     try {
-      await deleteDailyFeedRecord(pond.id, deletingRecord.id, deletingRecord.date, user.uid);
+      const matchingInventoryFeedIds = inventoryFeeds
+        .filter((feed) => getDailyFeedUsageTotal(feed.usageHistory, pond.id, deletingRecord.date) > 0)
+        .map((feed) => feed.id);
+      const result = await deleteDailyFeedRecord(
+        pond.id,
+        deletingRecord.id,
+        deletingRecord.date,
+        user.uid,
+        matchingInventoryFeedIds,
+      );
       setDeletingRecord(null);
-      Alert.alert(t.messages?.success || 'Success', t.feedHistory.deleteSuccess);
+      Alert.alert(
+        t.messages?.success || 'Success',
+        result.missingInventory
+          ? t.feedHistory.deleteSuccessWithoutInventory
+          : t.feedHistory.deleteSuccess,
+      );
     } catch (error: any) {
       console.error('Failed to delete historical feed data:', error);
       const errorMessages: Record<string, string> = {
@@ -214,6 +229,12 @@ export default function FeedHistoryScreen() {
       .replace('{amount}', String(deletingRecord.totalDailyFeed))
       .replace('{date}', formatDate(deletingRecord.date))
     : '';
+  const deletionHasMissingInventory = deletingRecord
+    ? inventoryFeeds.reduce(
+      (total, feed) => total + getDailyFeedUsageTotal(feed.usageHistory, pond?.id || '', deletingRecord.date),
+      0,
+    ) + 0.000001 < sumFeedAllocations(normalizeFeedAllocations(deletingRecord))
+    : false;
 
   const allocationTotal = sumFeedAllocations(feedAllocations.map((allocation) => ({
     inventoryFeedId: allocation.inventoryFeedId,
@@ -414,7 +435,11 @@ export default function FeedHistoryScreen() {
               <Text style={styles.confirmMessage}>{deleteMessage}</Text>
               <View style={styles.inventoryRestoreNote}>
                 <Ionicons name="return-down-back-outline" size={18} color="#0F4C75" />
-                <Text style={styles.inventoryRestoreText}>{t.feedHistory.deleteInventoryNote}</Text>
+                <Text style={styles.inventoryRestoreText}>
+                  {deletionHasMissingInventory
+                    ? t.feedHistory.deleteMissingInventoryNote
+                    : t.feedHistory.deleteInventoryNote}
+                </Text>
               </View>
               <View style={styles.confirmActions}>
                 <TouchableOpacity

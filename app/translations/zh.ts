@@ -240,8 +240,10 @@ feedHistory: {
   confirmDelete: '删除并退回饲料',
   deleting: '正在删除...',
   deleteSuccess: '投喂记录已删除，饲料已退回库存。',
+  deleteSuccessWithoutInventory: '投喂记录已删除。无法恢复之前已不存在的库存饲料。',
   deleteFailed: '无法删除投喂记录，请重试。',
   deleteInventoryMissing: '无法删除此记录，因为缺少库存饲料信息。',
+  deleteMissingInventoryNote: '关联的库存饲料已不存在。历史记录将被删除，但该饲料无法退回库存。',
 },
 companyDetails: {
   title: '公司详情',

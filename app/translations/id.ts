@@ -240,8 +240,10 @@ feedHistory: {
   confirmDelete: 'Hapus dan kembalikan pakan',
   deleting: 'Menghapus...',
   deleteSuccess: 'Catatan pakan dihapus dan pakan dikembalikan ke inventaris.',
+  deleteSuccessWithoutInventory: 'Catatan pakan dihapus. Pakan inventaris yang sudah tidak tersedia tidak dapat dikembalikan.',
   deleteFailed: 'Catatan pakan tidak dapat dihapus. Silakan coba lagi.',
   deleteInventoryMissing: 'Catatan ini tidak dapat dihapus karena detail pakan inventaris tidak tersedia.',
+  deleteMissingInventoryNote: 'Inventaris pakan terkait sudah tidak tersedia. Catatan riwayat akan dihapus, tetapi pakan tersebut tidak dapat dikembalikan.',
 },
 companyDetails: {
   title: 'Detail Perusahaan',

@@ -202,7 +202,7 @@ interface PondStore {
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; }) => void;
-  addFeedData: (pondId: string, record: FeedData) => void;
+  addFeedData: (pondId: string, record: FeedData, date: string) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
   getPondById: (pondId: string) => Pond | undefined; getPondSamplingData: (pondName: string) => Sampling[]; getSamplingDataFlat: () => (Sampling & { pondName: string })[];
@@ -707,8 +707,10 @@ export const usePondStore = create<PondStore>()(
         if (updatedPond) state.firebaseSync?.syncPond('update', updatedPond);
       },
 
-      addFeedData: (pondId, record) => {
-        const today = getFarmDateKey(new Date(), get().currentTimeZone);
+      addFeedData: (pondId, record, date) => {
+        const recordDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
+          ? date
+          : getFarmDateKey(new Date(), get().currentTimeZone);
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -716,7 +718,7 @@ export const usePondStore = create<PondStore>()(
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             const feedRecord = { ...record, ...cycleFields };
             
-            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === today);
+            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === recordDate);
             
             let updatedSamplings;
             if (existingIndex >= 0) {
@@ -726,7 +728,7 @@ export const usePondStore = create<PondStore>()(
                   : s
               );
             } else {
-              updatedSamplings = [...p.samplings, { id: `feed-${Date.now()}`, date: today, mbw: 0, mortality: 0, feed: 0, ...cycleFields, feedData: feedRecord }];
+              updatedSamplings = [...p.samplings, { id: `feed-${Date.now()}`, date: recordDate, mbw: 0, mortality: 0, feed: 0, ...cycleFields, feedData: feedRecord }];
             }
             
             return { ...p, samplings: updatedSamplings };
