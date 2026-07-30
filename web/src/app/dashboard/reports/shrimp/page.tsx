@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  BarChart3, 
-  Download, 
   Loader2, 
   Waves, 
   TrendingUp,
@@ -34,6 +32,10 @@ import {
   localizePdfHtml,
   type PdfLanguage,
 } from '../../../../../../shared/pdfReportI18n';
+import {
+  buildSamplingGrowthMovementRows,
+  renderSamplingGrowthMovementChartSvg,
+} from '../../../../../../shared/samplingGrowthMovementChart';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -117,7 +119,7 @@ interface ShrimpReportExportData {
   technician?: string;
   companyName?: string;
   ponds: Pond[];
-  chartUrl: string | null;
+  chartSvg: string;
 }
 
 type Html2PdfWorker = {
@@ -326,7 +328,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 
 /* --- PDF Generation HTML Template -------------------------- */
 const generateShrimpReportHTML = (data: ShrimpReportExportData, language: PdfLanguage): string => {
-  const { farmName, technician, companyName, ponds, chartUrl } = data;
+  const { farmName, technician, companyName, ponds, chartSvg } = data;
   const global = getGlobalAverages(ponds);
   const stats = global.stats || [];
   const midcyclePonds = ponds.filter((pond: Pond) => pond.baselineDate || pond.cycleStartMode === 'midcycle');
@@ -398,7 +400,7 @@ const generateShrimpReportHTML = (data: ShrimpReportExportData, language: PdfLan
           </table>
         ` : '<p style="margin: 0; color: #475569;">No confirmed lab analysis was attached to the selected ponds at export time.</p>'}
       </div>
-      ${chartUrl ? `<div style="margin-top: 20px; text-align: center;"><img src="${chartUrl}" style="width: 100%; max-height: 300px; object-fit: contain;" /></div>` : ''}
+      <div style="margin-top: 28px; width: 100%; page-break-inside: avoid;">${chartSvg}</div>
     </body>
     </html>
   `, language);
@@ -461,35 +463,27 @@ export default function ShrimpReportsPage() {
   const global = useMemo(() => getGlobalAverages(activePonds, company?.timeZone), [activePonds, company?.timeZone]);
   const growthSeries = useMemo(() => buildGrowthSeries(activePonds), [activePonds]);
 
-  const chartUrl = useMemo(() => {
-    if (growthSeries.length === 0) return null;
-    const datasets = growthSeries.map((series) => ({
+  const growthChartSvg = useMemo(() => {
+    const rows = buildSamplingGrowthMovementRows(growthSeries.map((series) => ({
       label: series.label,
-      borderColor: series.color,
-      backgroundColor: series.color,
-      data: series.data,
-      fill: false,
-      showLine: true
-    }));
-    const chartConfig = {
-      type: 'scatter',
-      data: { datasets },
-      options: {
-        title: { display: true, text: 'Growth Trajectory' },
-        scales: {
-          xAxes: [{ scaleLabel: { display: true, labelString: 'DOC' } }],
-          yAxes: [{ scaleLabel: { display: true, labelString: 'MBW (g)' }, ticks: { beginAtZero: true } }]
-        }
-      }
-    };
-    return `https://quickchart.io/chart?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=800&h=350&bkg=white`;
-  }, [growthSeries]);
+      samples: series.data.map((point) => ({
+        doc: point.x,
+        mbw: point.y,
+      })),
+    })));
+
+    return renderSamplingGrowthMovementChartSvg(rows, {
+      language: currentLanguage,
+      width: 1000,
+      height: 350,
+    });
+  }, [currentLanguage, growthSeries]);
 
   const handleGenerateReport = async () => {
     setExportLoading(true);
     try {
       const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
-      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartUrl }, currentLanguage);
+      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartSvg: growthChartSvg }, currentLanguage);
       const element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);

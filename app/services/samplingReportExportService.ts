@@ -12,6 +12,10 @@ import {
   localizePdfText,
   type PdfLanguage,
 } from '../../shared/pdfReportI18n';
+import {
+  buildSamplingGrowthMovementRows,
+  renderSamplingGrowthMovementChartSvg,
+} from '../../shared/samplingGrowthMovementChart';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -239,94 +243,6 @@ const getReportAnalysis = (ponds: PondData[], language: PdfLanguage) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateGrowthChartSvg = (ponds: PondData[], language: PdfLanguage): string => {
-  const chartNumber = (value: number, decimals: number) => formatPdfNumber(value, language, {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
-  const colors = ['#0F4C75', '#27AE60', '#E74C3C', '#F39C12', '#7C3AED', '#34495E', '#16A085', '#D35400'];
-  const series = ponds.map((pond, index) => ({
-    label: pond.pondNumber,
-    color: colors[index % colors.length],
-    points: pond.samplingHistory
-      .map((sampling) => ({ x: toFiniteNumber(sampling.doc), y: getSamplingWeight(sampling) }))
-      .filter((point) => point.x > 0 && point.y > 0),
-  }));
-  const allPoints = series.flatMap((item) => item.points);
-  const width = 760;
-  const height = 165;
-  const chartLeft = 58;
-  const chartRight = 18;
-  const chartTop = 24;
-  const chartBottom = 38;
-  const chartWidth = width - chartLeft - chartRight;
-  const chartHeight = height - chartTop - chartBottom;
-
-  if (allPoints.length === 0) {
-    return `
-      <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-        <rect x="0" y="0" width="${width}" height="${height}" rx="0" fill="#ffffff" fill-opacity="0.52" stroke="none" />
-        <text x="${width / 2}" y="80" text-anchor="middle" font-family="Arial" font-size="13" font-weight="700" fill="#64748B">No valid MBW sampling points available</text>
-      </svg>
-    `;
-  }
-
-  const minDoc = Math.min(...allPoints.map((point) => point.x));
-  const maxDoc = Math.max(...allPoints.map((point) => point.x));
-  const minWeight = Math.min(...allPoints.map((point) => point.y));
-  const maxWeight = Math.max(...allPoints.map((point) => point.y));
-  const xMin = Math.max(0, minDoc - 1);
-  const xMax = maxDoc === xMin ? xMin + 1 : maxDoc + 1;
-  const yMin = Math.max(0, minWeight - 0.5);
-  const yMax = maxWeight === yMin ? yMin + 1 : maxWeight + 0.5;
-  const xScale = (value: number) => chartLeft + ((value - xMin) / (xMax - xMin)) * chartWidth;
-  const yScale = (value: number) => chartTop + chartHeight - ((value - yMin) / (yMax - yMin)) * chartHeight;
-  const xTicks = Array.from({ length: 5 }, (_, index) => xMin + ((xMax - xMin) * index) / 4);
-  const yTicks = Array.from({ length: 4 }, (_, index) => yMin + ((yMax - yMin) * index) / 3);
-
-  const grid = [
-    ...xTicks.map((tick) => {
-      const x = xScale(tick);
-      return `<line x1="${x}" y1="${chartTop}" x2="${x}" y2="${chartTop + chartHeight}" stroke="#E5E7EB" stroke-width="1" />`;
-    }),
-    ...yTicks.map((tick) => {
-      const y = yScale(tick);
-      return `<line x1="${chartLeft}" y1="${y}" x2="${chartLeft + chartWidth}" y2="${y}" stroke="#E5E7EB" stroke-width="1" />`;
-    }),
-  ].join('');
-
-  const labels = [
-    ...xTicks.map((tick) => `<text x="${xScale(tick)}" y="${height - 18}" text-anchor="middle" font-family="Arial" font-size="9" fill="#64748B">${chartNumber(tick, 0)}</text>`),
-    ...yTicks.map((tick) => `<text x="${chartLeft - 8}" y="${yScale(tick) + 3}" text-anchor="end" font-family="Arial" font-size="9" fill="#64748B">${chartNumber(tick, 1)}</text>`),
-  ].join('');
-
-  const lines = series.map((item) => {
-    const points = item.points.map((point) => `${xScale(point.x)},${yScale(point.y)}`).join(' ');
-    const circles = item.points.map((point) => `<circle cx="${xScale(point.x)}" cy="${yScale(point.y)}" r="3" fill="#ffffff" stroke="${item.color}" stroke-width="2" />`).join('');
-    return `${points ? `<polyline points="${points}" fill="none" stroke="${item.color}" stroke-width="2" />` : ''}${circles}`;
-  }).join('');
-
-  const legend = series.map((item, index) => {
-    const x = chartLeft + index * 72;
-    return `<rect x="${x}" y="${height - 11}" width="12" height="5" fill="${item.color}" /><text x="${x + 16}" y="${height - 6}" font-family="Arial" font-size="8" fill="#475569">${escapeXml(item.label)}</text>`;
-  }).join('');
-
-  return `
-    <svg viewBox="0 0 ${width} ${height}" width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${width}" height="${height}" rx="0" fill="#ffffff" fill-opacity="0.52" stroke="none" />
-      <text x="${width / 2}" y="15" text-anchor="middle" font-family="Arial" font-size="12" font-weight="700" fill="#64748B">Growth Trajectory (MBW by DOC)</text>
-      ${grid}
-      <line x1="${chartLeft}" y1="${chartTop + chartHeight}" x2="${chartLeft + chartWidth}" y2="${chartTop + chartHeight}" stroke="#CBD5E1" stroke-width="1" />
-      <line x1="${chartLeft}" y1="${chartTop}" x2="${chartLeft}" y2="${chartTop + chartHeight}" stroke="#CBD5E1" stroke-width="1" />
-      ${labels}
-      ${lines}
-      ${legend}
-      <text x="${width / 2}" y="${height - 2}" text-anchor="middle" font-family="Arial" font-size="8" fill="#64748B">Days of Culture (DOC)</text>
-      <text x="13" y="${chartTop + chartHeight / 2}" text-anchor="middle" font-family="Arial" font-size="8" fill="#64748B" transform="rotate(-90 13 ${chartTop + chartHeight / 2})">MBW (g)</text>
-    </svg>
-  `;
-};
-
 const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
   const {
     farmName,
@@ -465,7 +381,19 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
   const lowFcrNote = averages.totalFeed > 0 && averages.avgFCR < 0.5
     ? '<br/><strong>FCR Note:</strong> Average FCR is unusually low, which usually means feed history is incomplete or only partial feed records are available.'
     : '';
-  const chartSvg = generateGrowthChartSvg(ponds, language);
+  const chartRows = buildSamplingGrowthMovementRows(ponds.map((pond) => ({
+    label: pond.pondNumber,
+    samples: pond.samplingHistory.map((sampling) => ({
+      mbw: getSamplingWeight(sampling),
+      doc: sampling.doc,
+    })),
+  })));
+  const chartSvg = renderSamplingGrowthMovementChartSvg(chartRows, {
+    language,
+    width: 1000,
+    height: 195,
+    compact: true,
+  });
 
   return localizePdfHtml(`
     <!DOCTYPE html>
@@ -530,7 +458,7 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
         .subtitle { font-size: 8px; color: #4A5568; }
         .divider { height: 2px; background: linear-gradient(to right, #0F4C75, #3282B8); margin: 7px 0 9px; border-radius: 2px; }
         .summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; margin-bottom: 8px; }
-        .summary-card { background: transparent; border-left: 3px solid #0F4C75; padding: 5px 7px; border-radius: 0; }
+        .summary-card { background: transparent; padding: 5px 7px; border-radius: 0; }
         .summary-label { font-size: 7px; color: #4A5568; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 2px; }
         .summary-value { font-size: 13px; font-weight: 800; color: #26384A; }
         .summary-unit { font-size: 7px; color: #4A5568; margin-left: 2px; }
@@ -547,22 +475,23 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
         .bad { color: #C0392B; font-weight: 800; }
         .totals-row td { background: rgba(232, 244, 248, 0.74); font-weight: 800; border-top: 2px solid #0F4C75; border-bottom: 1px solid #0F4C75; }
         .chart-panel { padding: 0; background: transparent; border: 0; border-radius: 0; margin-bottom: 8px; }
+        .growth-chart-panel { margin-top: 12px; }
         .panel-title { font-size: 11px; font-weight: 800; color: #0F4C75; margin-bottom: 5px; }
-        .chart-svg { width: 100%; height: 128px; border-radius: 0; background: transparent; }
+        .chart-svg { width: 100%; height: 140px; border-radius: 0; background: transparent; }
         .indicator-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
-        .indicator { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 5px; background: transparent; border-radius: 0; border-left: 2px solid #0F4C75; }
+        .indicator { display: flex; justify-content: space-between; align-items: center; gap: 4px; padding: 5px; background: transparent; border-radius: 0; }
         .indicator-label { font-size: 7px; color: #4A5568; }
         .indicator-value { font-size: 8px; font-weight: 800; color: #0F4C75; text-align: right; }
-        .notes { margin-top: 8px; padding: 7px; background: transparent; border-left: 3px solid #F59E0B; border-radius: 0; font-size: 6.6px; color: #92400E; line-height: 1.25; }
+        .notes { margin-top: 8px; padding: 7px; background: transparent; border-radius: 0; font-size: 6.6px; color: #92400E; line-height: 1.25; }
         .notes-title { font-weight: 800; margin-bottom: 3px; color: #B45309; }
         .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 8px; }
-        .analysis-box { min-height: 104px; padding: 11px; background: rgba(255, 255, 255, 0.52); border-radius: 0; border: 0; border-left: 4px solid #0F4C75; }
-        .analysis-box.risk { background: rgba(255, 255, 255, 0.52); border-left-color: #F59E0B; }
+        .analysis-box { min-height: 104px; padding: 11px; background: rgba(255, 255, 255, 0.52); border-radius: 0; border: 0; }
+        .analysis-box.risk { background: rgba(255, 255, 255, 0.52); }
         .analysis-title { font-size: 12px; font-weight: 800; color: #0F4C75; margin-bottom: 7px; }
         .analysis-box.risk .analysis-title { color: #B45309; }
         .analysis-list { margin-left: 13px; font-size: 8px; color: #26384A; line-height: 1.35; }
         .analysis-list li { margin-bottom: 5px; }
-        .lab-section { margin-top: 10px; padding: 9px; background: rgba(255, 255, 255, 0.52); border-left: 4px solid #3282B8; }
+        .lab-section { margin-top: 10px; padding: 9px; background: rgba(255, 255, 255, 0.52); }
         .lab-table { margin-top: 7px; }
         .lab-table th { font-size: 7px; }
         .lab-table td { font-size: 6.5px; white-space: normal; line-height: 1.25; text-align: left; padding: 4px; }
@@ -625,8 +554,7 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
               </tbody>
             </table>
           </div>
-          <div class="chart-panel">
-            <div class="panel-title">Growth Chart</div>
+          <div class="chart-panel growth-chart-panel">
             <div class="chart-svg">${chartSvg}</div>
           </div>
           <div class="chart-panel">
