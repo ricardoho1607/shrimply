@@ -30,6 +30,10 @@ import {
   isBaselineSampling,
   toFiniteNumber,
 } from '../../../../../../shared/pondCalculations';
+import {
+  localizePdfHtml,
+  type PdfLanguage,
+} from '../../../../../../shared/pdfReportI18n';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -115,8 +119,6 @@ interface ShrimpReportExportData {
   ponds: Pond[];
   chartUrl: string | null;
 }
-
-type TranslationDictionary = Record<string, unknown>;
 
 type Html2PdfWorker = {
   from: (element: HTMLElement) => {
@@ -323,7 +325,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 };
 
 /* --- PDF Generation HTML Template -------------------------- */
-const generateShrimpReportHTML = (data: ShrimpReportExportData, t: TranslationDictionary): string => {
+const generateShrimpReportHTML = (data: ShrimpReportExportData, language: PdfLanguage): string => {
   const { farmName, technician, companyName, ponds, chartUrl } = data;
   const global = getGlobalAverages(ponds);
   const stats = global.stats || [];
@@ -366,7 +368,7 @@ const generateShrimpReportHTML = (data: ShrimpReportExportData, t: TranslationDi
       `;
     }).join('');
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head><meta charset="utf-8"></head>
@@ -399,11 +401,11 @@ const generateShrimpReportHTML = (data: ShrimpReportExportData, t: TranslationDi
       ${chartUrl ? `<div style="margin-top: 20px; text-align: center;"><img src="${chartUrl}" style="width: 100%; max-height: 300px; object-fit: contain;" /></div>` : ''}
     </body>
     </html>
-  `;
+  `, language);
 };
 
 export default function ShrimpReportsPage() {
-  const { t } = useLanguage();
+  const { currentLanguage } = useLanguage();
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
   const [exportLoading, setExportLoading] = useState(false);
@@ -487,7 +489,7 @@ export default function ShrimpReportsPage() {
     setExportLoading(true);
     try {
       const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
-      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartUrl }, t);
+      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartUrl }, currentLanguage);
       const element = document.createElement('div');
       element.innerHTML = html;
       document.body.appendChild(element);

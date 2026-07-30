@@ -4,6 +4,14 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+import {
+  formatPdfDate,
+  formatPdfDateTime,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -45,8 +53,8 @@ interface CashFlowData {
     dividendsPaid: number;
     ownerWithdrawals: number;
   };
-  currencyCode?: string;
-  currencySymbol?: string;
+  currencyCode: string;
+  currencySymbol: string;
 }
 
 const loadBase64Asset = async (assetModule: number): Promise<string> => {
@@ -72,32 +80,17 @@ const loadCashFlowBrandAssets = async (): Promise<PdfBrandAssets> => {
   return { backgroundBase64, logoBase64 };
 };
 
-const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
-  const localeMap: Record<string, string> = {
-    'USD': 'en-US',
-    'IDR': 'id-ID',
-    'THB': 'th-TH',
-    'VND': 'vi-VN',
-    'CNY': 'zh-CN'
-  };
-  
-  const locale = localeMap[currencyCode] || 'id-ID';
-  const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+const formatCurrency = (amount: number, currencyCode: string, currencySymbol: string, language: PdfLanguage): string => {
+  const decimalPlaces = currencyCode === 'IDR' || currencyCode === 'VND' ? 0 : 2;
+  const formatted = formatPdfNumber(amount, language, {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  });
   
   return `${currencySymbol} ${formatted}`;
 };
 
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-};
+const formatDate = (dateStr: string, language: PdfLanguage): string => formatPdfDate(dateStr, language);
 
 const calculateCashFlowTotals = (data: CashFlowData) => {
   const { openingBalance, operatingActivities, investingActivities, financingActivities } = data;
@@ -154,7 +147,7 @@ const calculateCashFlowTotals = (data: CashFlowData) => {
   };
 };
 
-const getCashFlowAnalysis = (data: CashFlowData) => {
+const getCashFlowAnalysis = (data: CashFlowData, language: PdfLanguage) => {
   const {
     openingBalance,
     operatingActivities,
@@ -170,6 +163,7 @@ const getCashFlowAnalysis = (data: CashFlowData) => {
     netCashChange,
     closingBalance,
   } = calculateCashFlowTotals(data);
+  const money = (amount: number) => formatCurrency(amount, data.currencyCode, data.currencySymbol, language);
 
   const operatingOutflows = operatingActivities.paymentToSuppliers + operatingActivities.paymentForExpenses + Math.max(-operatingActivities.otherOperatingCash, 0);
   const ownerFunding = financingActivities.capitalContributed + financingActivities.loansReceived;
@@ -187,9 +181,9 @@ const getCashFlowAnalysis = (data: CashFlowData) => {
   ].sort((a, b) => b.amount - a.amount)[0];
 
   const executiveSummary = [
-    `Opening cash was ${formatCurrency(openingBalance)}. Cash inflows totaled ${formatCurrency(totalInflows)}, cash outflows totaled ${formatCurrency(totalOutflows)}, and net cash movement was ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}.`,
-    `Closing cash was ${closingBalance >= 0 ? formatCurrency(closingBalance) : `(${formatCurrency(Math.abs(closingBalance))})`}. Liquidity status is ${liquidityStatus}, based on the ending cash position and recorded outflows for the period.`,
-    `The largest cash movement driver was ${mainDriver.label}, which ${mainDriver.value >= 0 ? 'increased' : 'reduced'} cash by ${formatCurrency(Math.abs(mainDriver.value))}.`,
+    `Opening cash was ${money(openingBalance)}. Cash inflows totaled ${money(totalInflows)}, cash outflows totaled ${money(totalOutflows)}, and net cash movement was ${netCashChange >= 0 ? money(netCashChange) : `(${money(Math.abs(netCashChange))})`}.`,
+    `Closing cash was ${closingBalance >= 0 ? money(closingBalance) : `(${money(Math.abs(closingBalance))})`}. Liquidity status is ${liquidityStatus}, based on the ending cash position and recorded outflows for the period.`,
+    `The largest cash movement driver was ${mainDriver.label}, which ${mainDriver.value >= 0 ? 'increased' : 'reduced'} cash by ${money(Math.abs(mainDriver.value))}.`,
   ];
 
   const riskAssessment = [
@@ -217,7 +211,7 @@ const getCashFlowAnalysis = (data: CashFlowData) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): string => {
+const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
   const { 
     startDate, 
     endDate, 
@@ -225,7 +219,9 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
     openingBalance,
     operatingActivities,
     investingActivities,
-    financingActivities
+    financingActivities,
+    currencyCode,
+    currencySymbol,
   } = data;
 
   const {
@@ -235,9 +231,10 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
     netCashChange,
     closingBalance,
   } = calculateCashFlowTotals(data);
-  const reportAnalysis = getCashFlowAnalysis(data);
+  const reportAnalysis = getCashFlowAnalysis(data, language);
+  const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol, language);
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -247,19 +244,28 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         @page { size: 612px 792px; margin: 0; }
-        html { width: 100%; min-height: 100%; }
+        html { width: 100%; height: 100%; }
         body {
           width: 100%;
-          min-height: 100%;
+          height: 100%;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          padding: 40px 44px;
           color: #2C3E50;
           background: #0F4C75;
-          font-size: 14px;
-          line-height: 1.6;
+          font-size: 12px;
+          line-height: 1.4;
         }
+        .pdf-page {
+          width: 100%;
+          height: 100%;
+          padding: 38px 44px 34px;
+          position: relative;
+          overflow: hidden;
+          background: #0F4C75;
+          page-break-after: always;
+        }
+        .pdf-page:last-child { page-break-after: auto; }
         .page-bg {
-          position: fixed;
+          position: absolute;
           inset: -14px;
           width: calc(100% + 28px);
           height: calc(100% + 28px);
@@ -267,63 +273,112 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
           z-index: 0;
         }
         .page-logo {
-          position: fixed;
-          top: 30px;
-          right: 38px;
+          position: absolute;
+          top: -6px;
+          right: 0;
           width: 64px;
           height: 64px;
           object-fit: contain;
-          z-index: 2;
         }
         .report-content {
           position: relative;
           z-index: 1;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
-        .header { margin-bottom: 30px; padding-right: 82px; min-height: 62px; }
-        .title { font-size: 32px; font-weight: 700; color: #27AE60; margin-bottom: 8px; }
-        .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; }
-        .subtitle { font-size: 14px; color: #2C3E50; }
-        .date-range { font-size: 14px; color: #2C3E50; margin-bottom: 30px; }
-        .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 20px 0; border-radius: 2px; }
-        .section { margin-bottom: 25px; }
-        .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(240, 249, 244, 0.78); padding: 10px 12px; border-left: 4px solid #27AE60; border-radius: 0; }
-        .line-item { display: flex; justify-content: space-between; padding: 8px 0 8px 20px; border-bottom: 1px solid #ECF0F1; }
+        .header, .section, .summary-box, .note, .analysis-section, .activity-grid, .cash-position-grid {
+          flex-shrink: 0;
+        }
+        .header { position: relative; margin-bottom: 10px; padding-right: 82px; min-height: 58px; }
+        .title { font-size: 28px; font-weight: 700; color: #27AE60; margin-bottom: 6px; }
+        .company-name { font-size: 14px; color: #2C3E50; margin-bottom: 3px; }
+        .subtitle { font-size: 12px; color: #2C3E50; }
+        .date-range { font-size: 12px; color: #2C3E50; }
+        .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 10px 0 12px; border-radius: 2px; }
+        .section { margin-bottom: 10px; page-break-inside: avoid; break-inside: avoid; }
+        .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(240, 249, 244, 0.78); padding: 7px 0; border-left: 4px solid #27AE60; border-radius: 0; }
+        .line-item { display: flex; justify-content: space-between; padding: 5px 0 5px 18px; border-bottom: 1px solid #ECF0F1; }
         .line-item.main { padding-left: 0; font-weight: 600; color: #34495E; }
-        .line-item.indent { padding-left: 30px; color: #7F8C8D; font-size: 13px; }
-        .line-item.subtotal { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; background: rgba(248, 250, 251, 0.72); padding-left: 12px; padding-right: 12px; border-radius: 0; }
-        .line-item.total { font-weight: 700; font-size: 16px; border-bottom: 3px solid #34495E; padding: 15px 12px; margin-top: 12px; color: #2C3E50; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
-        .line-item.balance { font-weight: 700; font-size: 16px; padding: 12px; background: rgba(235, 245, 251, 0.76); border-radius: 0; border: 2px solid #3498DB; }
-        .line-item.closing { font-weight: 700; font-size: 17px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 15px 12px; margin-top: 15px; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
+        .line-item.indent { padding-left: 26px; color: #7F8C8D; font-size: 12px; }
+        .line-item.subtotal { font-weight: 700; font-size: 14px; border-bottom: 2px solid #34495E; padding: 8px 10px; margin-top: 5px; color: #2C3E50; background: rgba(248, 250, 251, 0.72); border-radius: 0; }
+        .line-item.total { font-weight: 700; font-size: 15px; border-bottom: 3px solid #34495E; padding: 10px 12px; margin-top: 6px; color: #2C3E50; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
+        .line-item.balance { font-weight: 700; font-size: 15px; padding: 9px 12px; background: rgba(235, 245, 251, 0.76); border-radius: 0; border: 2px solid #3498DB; }
+        .line-item.closing { font-weight: 700; font-size: 16px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 10px 12px; margin-top: 7px; background: rgba(240, 249, 244, 0.78); border-radius: 0; }
         .line-item.closing.negative { color: #C0392B; border-bottom: 3px double #C0392B; background: rgba(250, 219, 216, 0.78); }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
         .amount.positive { color: #2D7A4F; }
         .amount.negative { color: #C0392B; }
         .amount.neutral { color: #2C3E50; }
         .currency { font-size: 12px; color: #2C3E50; display: block; text-align: right; margin-top: 2px; }
-        .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 15px; margin-top: 30px; border-radius: 0; }
-        .summary-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-        .summary-item.highlight { font-weight: 700; font-size: 16px; color: #2C3E50; border-top: 2px solid #BDC3C7; margin-top: 10px; padding-top: 12px; }
-        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ECF0F1; font-size: 12px; color: #2C3E50; text-align: center; }
-        .note { background: rgba(255, 249, 230, 0.78); border-left: 4px solid #F39C12; padding: 12px; margin-top: 20px; border-radius: 0; font-size: 12px; color: #856404; }
+        .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 10px 12px; margin-top: 8px; border-radius: 0; page-break-inside: avoid; break-inside: avoid; }
+        .summary-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+        .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 6px; padding-top: 7px; }
+        .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #2C3E50; display: flex; justify-content: space-between; gap: 12px; }
+        .note { background: rgba(255, 249, 230, 0.78); border-left: 4px solid #F39C12; padding: 9px 12px; margin-top: 8px; border-radius: 0; font-size: 11px; color: #856404; page-break-inside: avoid; break-inside: avoid; }
         .activity-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 10px; font-weight: 700; text-transform: uppercase; margin-left: 8px; }
         .badge-operating { background: #D5F4E6; color: #27AE60; }
         .badge-investing { background: #FFF3CD; color: #F39C12; }
         .badge-financing { background: #D6EAF8; color: #3498DB; }
         .analysis-section {
-          page-break-before: always;
-          break-before: page;
-          page-break-inside: avoid;
-          break-inside: avoid;
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 12px;
           margin-top: 0;
         }
+        .activity-grid, .cash-position-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 12px;
+        }
+        .activity-grid .section, .cash-position-grid .section {
+          margin-bottom: 0;
+        }
+        .activity-grid .section-title {
+          min-height: 42px;
+          font-size: 12px;
+          line-height: 1.3;
+          padding-top: 4px;
+          padding-bottom: 4px;
+        }
+        .activity-grid .activity-badge {
+          display: block;
+          margin: 3px 0 0;
+        }
+        .activity-grid .line-item {
+          gap: 8px;
+          font-size: 11px;
+          padding-top: 3px;
+          padding-bottom: 3px;
+        }
+        .activity-grid .line-item > span:first-child {
+          flex: 1;
+        }
+        .activity-grid .amount {
+          white-space: nowrap;
+        }
+        .activity-grid .line-item.subtotal {
+          align-items: flex-start;
+          font-size: 12px;
+          padding: 6px 8px;
+        }
+        .cash-position-grid .line-item {
+          align-items: flex-start;
+          gap: 8px;
+          font-size: 13px;
+          padding: 8px 10px;
+        }
+        .cash-position-grid .line-item > span:first-child {
+          flex: 1;
+        }
+        .cash-position-grid .line-item > div {
+          white-space: nowrap;
+        }
         .analysis-box {
           page-break-inside: avoid;
           break-inside: avoid;
-          min-height: 180px;
-          padding: 16px;
+          min-height: 0;
+          padding: 12px;
           background: rgba(248, 250, 251, 0.72);
           border: 1px solid #DDEAF3;
           border-left: 4px solid #27AE60;
@@ -335,7 +390,7 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
           border-left-color: #F39C12;
         }
         .analysis-title {
-          font-size: 15px;
+          font-size: 14px;
           font-weight: 700;
           color: #27AE60;
           margin-bottom: 8px;
@@ -345,25 +400,66 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
         }
         .analysis-list {
           margin-left: 18px;
-          font-size: 12px;
+          font-size: 11px;
           color: #2C3E50;
-          line-height: 1.45;
+          line-height: 1.4;
         }
         .analysis-list li {
-          margin-bottom: 8px;
+          margin-bottom: 5px;
+        }
+        body { color: #111827; }
+        .page-logo { filter: grayscale(1); }
+        .title, .company-name, .subtitle, .date-range, .section-title,
+        .line-item, .line-item.main, .line-item.indent,
+        .line-item.subtotal, .line-item.total, .line-item.balance,
+        .line-item.closing, .line-item.closing.negative,
+        .amount, .amount.positive, .amount.negative, .amount.neutral,
+        .currency, .summary-item, .summary-item.highlight, .note,
+        .activity-badge, .badge-operating, .badge-investing,
+        .badge-financing, .analysis-title,
+        .analysis-box.risk .analysis-title, .analysis-list, .footer {
+          color: #111827;
+        }
+        .divider { background: #374151; }
+        .section-title, .line-item.subtotal, .line-item.total,
+        .line-item.balance, .line-item.closing,
+        .line-item.closing.negative, .summary-box, .note,
+        .activity-badge, .badge-operating, .badge-investing,
+        .badge-financing, .analysis-box, .analysis-box.risk {
+          background: #FFFFFF;
+          border-color: #6B7280;
+        }
+        .section-title {
+          padding-left: 0;
+          border-left: 0;
+          border-bottom: 1px solid #6B7280;
+        }
+        .activity-badge {
+          padding: 0;
+          margin-left: 8px;
+          font-weight: 600;
+        }
+        .summary-box, .note {
+          border: 1px solid #6B7280;
+          border-left-width: 1px;
+        }
+        .analysis-box, .analysis-box.risk {
+          border: 1px solid #9CA3AF;
+          border-left: 3px solid #4B5563;
         }
       </style>
     </head>
     <body>
-      <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
-      <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
-      <div class="report-content">
-        <div class="header">
-          <div class="title">Statement of Cash Flows</div>
-          <div class="company-name">${companyName}</div>
-          <div class="subtitle">Cash Flow Statement (Direct Method)</div>
-          <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
-        </div>
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="report-content">
+          <div class="header">
+            <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">Statement of Cash Flows</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">Cash Flow Statement (Direct Method)</div>
+            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+          </div>
       
       <div class="divider"></div>
       
@@ -372,8 +468,8 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
         <div class="line-item balance">
           <span>Cash at Beginning of Period</span>
           <div>
-            <span class="amount neutral">${formatCurrency(openingBalance)}</span>
-            <span class="currency">IDR</span>
+            <span class="amount neutral">${money(openingBalance)}</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
       </div>
@@ -388,32 +484,32 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
         ${operatingActivities.cashFromSales > 0 ? `
         <div class="line-item main">
           <span>Cash Received from Sales</span>
-          <span class="amount positive">${formatCurrency(operatingActivities.cashFromSales)}</span>
+          <span class="amount positive">${money(operatingActivities.cashFromSales)}</span>
         </div>` : ''}
         
         ${operatingActivities.cashFromCustomers > 0 ? `
         <div class="line-item main">
           <span>Cash Received from Customers</span>
-          <span class="amount positive">${formatCurrency(operatingActivities.cashFromCustomers)}</span>
+          <span class="amount positive">${money(operatingActivities.cashFromCustomers)}</span>
         </div>` : ''}
         
         ${operatingActivities.paymentToSuppliers > 0 ? `
         <div class="line-item main">
           <span>Cash Paid to Suppliers</span>
-          <span class="amount negative">(${formatCurrency(operatingActivities.paymentToSuppliers)})</span>
+          <span class="amount negative">(${money(operatingActivities.paymentToSuppliers)})</span>
         </div>` : ''}
         
         ${operatingActivities.paymentForExpenses > 0 ? `
         <div class="line-item main">
           <span>Cash Paid for Operating Expenses</span>
-          <span class="amount negative">(${formatCurrency(operatingActivities.paymentForExpenses)})</span>
+          <span class="amount negative">(${money(operatingActivities.paymentForExpenses)})</span>
         </div>` : ''}
         
         ${operatingActivities.otherOperatingCash !== 0 ? `
         <div class="line-item main">
           <span>Other Operating Cash ${operatingActivities.otherOperatingCash > 0 ? 'Receipts' : 'Payments'}</span>
           <span class="amount ${operatingActivities.otherOperatingCash > 0 ? 'positive' : 'negative'}">
-            ${operatingActivities.otherOperatingCash > 0 ? formatCurrency(operatingActivities.otherOperatingCash) : `(${formatCurrency(Math.abs(operatingActivities.otherOperatingCash))})`}
+            ${operatingActivities.otherOperatingCash > 0 ? money(operatingActivities.otherOperatingCash) : `(${money(Math.abs(operatingActivities.otherOperatingCash))})`}
           </span>
         </div>` : ''}
         
@@ -421,13 +517,14 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
           <span>Net Cash from Operating Activities</span>
           <div>
             <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">
-              ${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}
+              ${netOperatingCash >= 0 ? money(netOperatingCash) : `(${money(Math.abs(netOperatingCash))})`}
             </span>
-            <span class="currency">IDR</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
       </div>
-      
+
+      <div class="activity-grid">
       <!-- INVESTING ACTIVITIES -->
       <div class="section">
         <div class="section-title">
@@ -438,25 +535,25 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
         ${investingActivities.saleOfAssets > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Sale of Assets</span>
-          <span class="amount positive">${formatCurrency(investingActivities.saleOfAssets)}</span>
+          <span class="amount positive">${money(investingActivities.saleOfAssets)}</span>
         </div>` : ''}
         
         ${investingActivities.saleOfInvestments > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Sale of Investments</span>
-          <span class="amount positive">${formatCurrency(investingActivities.saleOfInvestments)}</span>
+          <span class="amount positive">${money(investingActivities.saleOfInvestments)}</span>
         </div>` : ''}
         
         ${investingActivities.purchaseOfAssets > 0 ? `
         <div class="line-item main">
           <span>Purchase of Property & Equipment</span>
-          <span class="amount negative">(${formatCurrency(investingActivities.purchaseOfAssets)})</span>
+          <span class="amount negative">(${money(investingActivities.purchaseOfAssets)})</span>
         </div>` : ''}
         
         ${investingActivities.purchaseOfInvestments > 0 ? `
         <div class="line-item main">
           <span>Purchase of Investments</span>
-          <span class="amount negative">(${formatCurrency(investingActivities.purchaseOfInvestments)})</span>
+          <span class="amount negative">(${money(investingActivities.purchaseOfInvestments)})</span>
         </div>` : ''}
         
         ${netInvestingCash === 0 ? `
@@ -469,76 +566,97 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
           <span>Net Cash from Investing Activities</span>
           <div>
             <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">
-              ${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}
+              ${netInvestingCash >= 0 ? money(netInvestingCash) : `(${money(Math.abs(netInvestingCash))})`}
             </span>
-            <span class="currency">IDR</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
       </div>
-      
+
       <!-- FINANCING ACTIVITIES -->
       <div class="section">
         <div class="section-title">
           Cash Flows from Financing Activities
           <span class="activity-badge badge-financing">Financing</span>
         </div>
-        
+
         ${financingActivities.loansReceived > 0 ? `
         <div class="line-item main">
           <span>Proceeds from Loans</span>
-          <span class="amount positive">${formatCurrency(financingActivities.loansReceived)}</span>
+          <span class="amount positive">${money(financingActivities.loansReceived)}</span>
         </div>` : ''}
-        
+
         ${financingActivities.capitalContributed > 0 ? `
         <div class="line-item main">
           <span>Capital Contributed by Owners</span>
-          <span class="amount positive">${formatCurrency(financingActivities.capitalContributed)}</span>
+          <span class="amount positive">${money(financingActivities.capitalContributed)}</span>
         </div>` : ''}
-        
+
         ${financingActivities.loanRepayments > 0 ? `
         <div class="line-item main">
           <span>Repayment of Loans</span>
-          <span class="amount negative">(${formatCurrency(financingActivities.loanRepayments)})</span>
+          <span class="amount negative">(${money(financingActivities.loanRepayments)})</span>
         </div>` : ''}
-        
+
         ${financingActivities.dividendsPaid > 0 ? `
         <div class="line-item main">
           <span>Dividends Paid</span>
-          <span class="amount negative">(${formatCurrency(financingActivities.dividendsPaid)})</span>
+          <span class="amount negative">(${money(financingActivities.dividendsPaid)})</span>
         </div>` : ''}
-        
+
         ${financingActivities.ownerWithdrawals > 0 ? `
         <div class="line-item main">
           <span>Owner Withdrawals</span>
-          <span class="amount negative">(${formatCurrency(financingActivities.ownerWithdrawals)})</span>
+          <span class="amount negative">(${money(financingActivities.ownerWithdrawals)})</span>
         </div>` : ''}
-        
+
         ${netFinancingCash === 0 ? `
         <div class="line-item main">
           <span>No Financing Activities</span>
           <span class="amount neutral">-</span>
         </div>` : ''}
-        
+
         <div class="line-item subtotal">
           <span>Net Cash from Financing Activities</span>
           <div>
             <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">
-              ${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}
+              ${netFinancingCash >= 0 ? money(netFinancingCash) : `(${money(Math.abs(netFinancingCash))})`}
             </span>
-            <span class="currency">IDR</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
       </div>
-      
+      </div>
+
+      <div class="footer">
+        <span>Generated by Shrimply - ${companyName}</span>
+        <span>Page 1 of 2</span>
+      </div>
+        </div>
+      </div>
+
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="report-content">
+          <div class="header">
+            <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">Cash Flow Summary</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">Closing Cash Position, Executive Review, and Liquidity Risks</div>
+            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+          </div>
+          <div class="divider"></div>
+
+      <div class="cash-position-grid">
       <!-- NET CHANGE -->
       <div class="section">
         <div class="line-item total">
           <span>Net Increase/(Decrease) in Cash</span>
           <div>
             <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">
-              ${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}
+              ${netCashChange >= 0 ? money(netCashChange) : `(${money(Math.abs(netCashChange))})`}
             </span>
-            <span class="currency">IDR</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
       </div>
@@ -548,29 +666,30 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
         <div class="line-item closing ${closingBalance < 0 ? 'negative' : ''}">
           <span>Cash at End of Period</span>
           <div>
-            <span class="amount ${closingBalance >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(closingBalance))}</span>
-            <span class="currency">IDR</span>
+            <span class="amount ${closingBalance >= 0 ? 'positive' : 'negative'}">${money(Math.abs(closingBalance))}</span>
+            <span class="currency">${currencyCode}</span>
           </div>
         </div>
+      </div>
       </div>
       
       <!-- SUMMARY BOX -->
       <div class="summary-box">
         <div class="summary-item">
           <span>Operating Activities:</span>
-          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">${netOperatingCash >= 0 ? formatCurrency(netOperatingCash) : `(${formatCurrency(Math.abs(netOperatingCash))})`}</span>
+          <span class="amount ${netOperatingCash >= 0 ? 'positive' : 'negative'}">${netOperatingCash >= 0 ? money(netOperatingCash) : `(${money(Math.abs(netOperatingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Investing Activities:</span>
-          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">${netInvestingCash >= 0 ? formatCurrency(netInvestingCash) : `(${formatCurrency(Math.abs(netInvestingCash))})`}</span>
+          <span class="amount ${netInvestingCash >= 0 ? 'positive' : 'negative'}">${netInvestingCash >= 0 ? money(netInvestingCash) : `(${money(Math.abs(netInvestingCash))})`}</span>
         </div>
         <div class="summary-item">
           <span>Financing Activities:</span>
-          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">${netFinancingCash >= 0 ? formatCurrency(netFinancingCash) : `(${formatCurrency(Math.abs(netFinancingCash))})`}</span>
+          <span class="amount ${netFinancingCash >= 0 ? 'positive' : 'negative'}">${netFinancingCash >= 0 ? money(netFinancingCash) : `(${money(Math.abs(netFinancingCash))})`}</span>
         </div>
         <div class="summary-item highlight">
           <span>Net Change in Cash:</span>
-          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">${netCashChange >= 0 ? formatCurrency(netCashChange) : `(${formatCurrency(Math.abs(netCashChange))})`}</span>
+          <span class="amount ${netCashChange >= 0 ? 'positive' : 'negative'}">${netCashChange >= 0 ? money(netCashChange) : `(${money(Math.abs(netCashChange))})`}</span>
         </div>
       </div>
       
@@ -592,24 +711,26 @@ const generateCashFlowHTML = (data: CashFlowData, brandAssets: PdfBrandAssets): 
           </ul>
         </div>
       </div>
-      
+
       <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
+        <span>Generated on ${formatPdfDateTime(new Date(), language, {
+          year: 'numeric',
+          month: 'long',
           day: 'numeric'
-        })} - ${companyName}
+        })}</span>
+        <span>Page 2 of 2</span>
       </div>
+        </div>
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-export const exportCashFlowPDF = async (data: CashFlowData) => {
+export const exportCashFlowPDF = async (data: CashFlowData, language: PdfLanguage = 'en') => {
   try {
     const brandAssets = await loadCashFlowBrandAssets();
-    const html = generateCashFlowHTML(data, brandAssets);
+    const html = generateCashFlowHTML(data, brandAssets, language);
     
     const { uri } = await Print.printToFileAsync({
       html,
@@ -641,21 +762,21 @@ export const exportCashFlowPDF = async (data: CashFlowData) => {
     if (canShare) {
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share Cash Flow Statement',
+        dialogTitle: localizePdfText('Share Cash Flow Statement', language),
         UTI: 'com.adobe.pdf',
       });
     } else {
       Alert.alert(
-        'PDF Generated',
-        `Your cash flow statement has been saved to: ${newUri}`,
-        [{ text: 'OK' }]
+        localizePdfText('PDF Generated', language),
+        localizePdfText(`Your cash flow statement has been saved to: ${newUri}`, language),
+        [{ text: localizePdfText('OK', language) }]
       );
     }
     
     return newUri;
   } catch (error) {
     console.error('Error generating PDF:', error);
-    Alert.alert('Error', 'Failed to generate PDF report');
+    Alert.alert(localizePdfText('Error', language), localizePdfText('Failed to generate PDF report', language));
     throw error;
   }
 };
@@ -668,7 +789,9 @@ export const prepareCashFlowData = (
   openingBalance: number,
   operatingActivities: CashFlowData['operatingActivities'],
   investingActivities: CashFlowData['investingActivities'],
-  financingActivities: CashFlowData['financingActivities']
+  financingActivities: CashFlowData['financingActivities'],
+  currencyCode: string,
+  currencySymbol: string,
 ): CashFlowData => {
   return {
     period,
@@ -679,5 +802,7 @@ export const prepareCashFlowData = (
     operatingActivities,
     investingActivities,
     financingActivities,
+    currencyCode,
+    currencySymbol,
   };
 };

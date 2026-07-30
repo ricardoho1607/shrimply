@@ -4,6 +4,14 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+import {
+  formatPdfDate,
+  formatPdfDateTime,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -32,8 +40,8 @@ interface FinancialData {
   totalOtherExpenses: number;
   otherExpenseBreakdown: ExpenseBreakdown;
   netProfit: number;
-  currencyCode?: string;
-  currencySymbol?: string;
+  currencyCode: string;
+  currencySymbol: string;
 }
 
 const loadBase64Asset = async (assetModule: number): Promise<string> => {
@@ -59,32 +67,17 @@ const loadProfitLossBrandAssets = async (): Promise<PdfBrandAssets> => {
   return { backgroundBase64, logoBase64 };
 };
 
-const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
-  const localeMap: Record<string, string> = {
-    'USD': 'en-US',
-    'IDR': 'id-ID',
-    'THB': 'th-TH',
-    'VND': 'vi-VN',
-    'CNY': 'zh-CN'
-  };
-  
-  const locale = localeMap[currencyCode] || 'id-ID';
-  const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+const formatCurrency = (amount: number, currencyCode: string, currencySymbol: string, language: PdfLanguage): string => {
+  const decimalPlaces = currencyCode === 'IDR' || currencyCode === 'VND' ? 0 : 2;
+  const formatted = formatPdfNumber(amount, language, {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  });
   
   return `${currencySymbol} ${formatted}`;
 };
 
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-};
+const formatDate = (dateStr: string, language: PdfLanguage): string => formatPdfDate(dateStr, language);
 
 const getLargestBreakdownItem = (breakdown: ExpenseBreakdown | RevenueBreakdown): { category: string; amount: number } | null => {
   const entries = Object.entries(breakdown).filter(([, amount]) => amount > 0);
@@ -94,7 +87,7 @@ const getLargestBreakdownItem = (breakdown: ExpenseBreakdown | RevenueBreakdown)
   return { category, amount };
 };
 
-const getProfitLossAnalysis = (data: FinancialData) => {
+const getProfitLossAnalysis = (data: FinancialData, language: PdfLanguage) => {
   const {
     totalRevenue,
     revenueBreakdown,
@@ -107,6 +100,7 @@ const getProfitLossAnalysis = (data: FinancialData) => {
     totalOtherExpenses,
     netProfit,
   } = data;
+  const money = (amount: number) => formatCurrency(amount, data.currencyCode, data.currencySymbol, language);
 
   const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : null;
   const operatingMargin = totalRevenue > 0 ? (operatingIncome / totalRevenue) * 100 : null;
@@ -119,7 +113,7 @@ const getProfitLossAnalysis = (data: FinancialData) => {
 
   const executiveSummary = [
     totalRevenue > 0
-      ? `Total revenue for the period was ${formatCurrency(totalRevenue)}. Gross profit was ${formatCurrency(grossProfit)} and net ${netProfit >= 0 ? 'income' : 'loss'} was ${formatCurrency(Math.abs(netProfit))}.`
+      ? `Total revenue for the period was ${money(totalRevenue)}. Gross profit was ${money(grossProfit)} and net ${netProfit >= 0 ? 'income' : 'loss'} was ${money(Math.abs(netProfit))}.`
       : 'No revenue was recorded for this period, so profitability cannot be fully assessed from the available data.',
     grossMargin !== null
       ? `Gross margin was ${grossMargin.toFixed(2)}% and net margin was ${netMargin?.toFixed(2) ?? '0.00'}%. This result should be interpreted alongside COGS and operating expenses to judge sustainability.`
@@ -153,7 +147,7 @@ const getProfitLossAnalysis = (data: FinancialData) => {
   }
 
   if (totalOtherExpenses > 0) {
-    riskAssessment.push(`Non-operating or other expenses totaled ${formatCurrency(totalOtherExpenses)} and reduced the final net result.`);
+    riskAssessment.push(`Non-operating or other expenses totaled ${money(totalOtherExpenses)} and reduced the final net result.`);
   }
 
   if (operatingMargin !== null && operatingMargin < 0) {
@@ -163,7 +157,7 @@ const getProfitLossAnalysis = (data: FinancialData) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets): string => {
+const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
   const { 
     startDate, 
     endDate, 
@@ -178,11 +172,14 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
     operatingIncome,
     totalOtherExpenses,
     otherExpenseBreakdown,
-    netProfit
+    netProfit,
+    currencyCode,
+    currencySymbol,
   } = data;
-  const reportAnalysis = getProfitLossAnalysis(data);
+  const reportAnalysis = getProfitLossAnalysis(data, language);
+  const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol, language);
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -288,6 +285,29 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
           margin-bottom: 8px;
         }
         .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #4A5568; text-align: center; }
+        body, .pdf-page { color: #111827; }
+        .header-logo { filter: grayscale(1); }
+        .title, .company-name, .subtitle, .date-range, .section-title,
+        .line-item, .line-item.category, .line-item.total, .line-item.gross,
+        .line-item.net, .amount, .amount.positive, .amount.negative,
+        .currency, .summary-item, .summary-item.highlight, .analysis-title,
+        .analysis-box.risk .analysis-title, .analysis-list, .footer {
+          color: #111827;
+        }
+        .divider { background: #374151; }
+        .line-item.gross, .line-item.net, .summary-box, .analysis-box,
+        .analysis-box.risk {
+          background: #FFFFFF;
+          border-color: #6B7280;
+        }
+        .summary-box {
+          border: 1px solid #6B7280;
+          border-left-width: 1px;
+        }
+        .analysis-box, .analysis-box.risk {
+          border: 1px solid #9CA3AF;
+          border-left: 3px solid #4B5563;
+        }
       </style>
     </head>
     <body>
@@ -299,7 +319,7 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             <div class="title">Income Statement</div>
             <div class="company-name">${companyName}</div>
             <div class="subtitle">Multi-Step Profit & Loss</div>
-            <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
           </div>
 
           <div class="divider"></div>
@@ -310,12 +330,12 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             ${Object.entries(revenueBreakdown).map(([category, amount]) => `
               <div class="line-item category">
                 <span>${category}</span>
-                <span class="amount">${formatCurrency(amount)}</span>
+                <span class="amount">${money(amount)}</span>
               </div>
             `).join('')}
             <div class="line-item total">
               <span>Total Revenue</span>
-              <span class="amount">${formatCurrency(totalRevenue)}</span>
+              <span class="amount">${money(totalRevenue)}</span>
             </div>
           </div>
 
@@ -325,20 +345,20 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             ${Object.entries(cogsBreakdown).map(([category, amount]) => `
               <div class="line-item category">
                 <span>${category}</span>
-                <span class="amount">${formatCurrency(amount)}</span>
+                <span class="amount">${money(amount)}</span>
               </div>
             `).join('')}
             ${Object.keys(cogsBreakdown).length === 0 ? '<div class="line-item category"><span>No COGS recorded</span><span class="amount">-</span></div>' : ''}
             <div class="line-item total">
               <span>Total Cost of Goods Sold</span>
-              <span class="amount">(${formatCurrency(totalCOGS)})</span>
+              <span class="amount">(${money(totalCOGS)})</span>
             </div>
           </div>
 
           <!-- GROSS PROFIT -->
           <div class="line-item gross">
             <span>Gross Profit</span>
-            <span class="amount">${formatCurrency(grossProfit)}</span>
+            <span class="amount">${money(grossProfit)}</span>
           </div>
           <br/>
 
@@ -348,20 +368,20 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             ${Object.entries(opexBreakdown).map(([category, amount]) => `
               <div class="line-item category">
                 <span>${category}</span>
-                <span class="amount">${formatCurrency(amount)}</span>
+                <span class="amount">${money(amount)}</span>
               </div>
             `).join('')}
             ${Object.keys(opexBreakdown).length === 0 ? '<div class="line-item category"><span>No Operating Expenses recorded</span><span class="amount">-</span></div>' : ''}
             <div class="line-item total">
               <span>Total Operating Expenses</span>
-              <span class="amount">(${formatCurrency(totalOPEX)})</span>
+              <span class="amount">(${money(totalOPEX)})</span>
             </div>
           </div>
 
           <!-- OPERATING INCOME -->
           <div class="line-item gross">
             <span>Operating Income (EBITDA)</span>
-            <span class="amount">${formatCurrency(operatingIncome)}</span>
+            <span class="amount">${money(operatingIncome)}</span>
           </div>
           <br/>
 
@@ -372,22 +392,22 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             ${Object.entries(otherExpenseBreakdown).map(([category, amount]) => `
               <div class="line-item category">
                 <span>${category}</span>
-                <span class="amount">${formatCurrency(amount)}</span>
+                <span class="amount">${money(amount)}</span>
               </div>
             `).join('')}
             <div class="line-item total">
               <span>Total Non-Operating Expenses</span>
-              <span class="amount">(${formatCurrency(totalOtherExpenses)})</span>
+              <span class="amount">(${money(totalOtherExpenses)})</span>
             </div>
           </div>
           ` : ''}
 
           <!-- NET PROFIT -->
           <div class="line-item net ${netProfit >= 0 ? '' : 'negative'}">
-            <span style="color: ${netProfit >= 0 ? '#2D7A4F' : '#C0392B'}">Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
+            <span>Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
             <div>
-              <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(netProfit))}</span>
-              <span class="currency">IDR</span>
+              <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(netProfit))}</span>
+              <span class="currency">${currencyCode}</span>
             </div>
           </div>
         </div>
@@ -401,7 +421,7 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
             <div class="title">Profit & Loss Analysis</div>
             <div class="company-name">${companyName}</div>
             <div class="subtitle">Margin and risk review</div>
-            <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+            <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
           </div>
 
           <div class="divider"></div>
@@ -437,7 +457,7 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
           </div>
 
           <div class="footer">
-            Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString('en-US', {
+            Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language, {
               year: 'numeric',
               month: 'long',
               day: 'numeric'
@@ -448,13 +468,13 @@ const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-export const exportFinancialPDF = async (data: FinancialData) => {
+export const exportFinancialPDF = async (data: FinancialData, language: PdfLanguage = 'en') => {
   try {
     const brandAssets = await loadProfitLossBrandAssets();
-    const html = generateProfitLossHTML(data, brandAssets);
+    const html = generateProfitLossHTML(data, brandAssets, language);
     
     const { uri } = await Print.printToFileAsync({
       html,
@@ -486,21 +506,21 @@ export const exportFinancialPDF = async (data: FinancialData) => {
     if (canShare) {
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share Profit & Loss Statement',
+        dialogTitle: localizePdfText('Share Profit & Loss Statement', language),
         UTI: 'com.adobe.pdf',
       });
     } else {
       Alert.alert(
-        'PDF Generated',
-        `Your financial report has been saved to: ${newUri}`,
-        [{ text: 'OK' }]
+        localizePdfText('PDF Generated', language),
+        localizePdfText(`Your financial report has been saved to: ${newUri}`, language),
+        [{ text: localizePdfText('OK', language) }]
       );
     }
     
     return newUri;
   } catch (error) {
     console.error('Error generating PDF:', error);
-    Alert.alert('Error', 'Failed to generate PDF report');
+    Alert.alert(localizePdfText('Error', language), localizePdfText('Failed to generate PDF report', language));
     throw error;
   }
 };
@@ -520,7 +540,9 @@ export const prepareFinancialData = (
   operatingIncome: number,
   totalOtherExpenses: number,
   otherExpenseBreakdown: ExpenseBreakdown,
-  netProfit: number
+  netProfit: number,
+  currencyCode: string,
+  currencySymbol: string,
 ): FinancialData => {
   return {
     period,
@@ -538,5 +560,7 @@ export const prepareFinancialData = (
     totalOtherExpenses,
     otherExpenseBreakdown,
     netProfit,
+    currencyCode,
+    currencySymbol,
   };
 };

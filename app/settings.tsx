@@ -10,7 +10,6 @@ import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
 import { hasWaterQualityData, usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
-import { format } from 'date-fns';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 import { useDataBackup } from './hooks/useDataBackup';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -256,13 +255,13 @@ export default function Settings() {
 
       await exportPondReportPDF({
         companyName: company?.companyName || 'My Farm',
-        reportDate: format(new Date(), 'PPP'),
+        reportDate: new Date().toISOString(),
         totalPonds: ponds.length,
         totalArea,
         totalBiomass,
         avgSR,
         ponds: reportPonds,
-      });
+      }, currentLanguage);
 
     } catch (error) {
       console.error('Export failed:', error);

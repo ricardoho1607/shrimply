@@ -49,7 +49,7 @@ export default function CycleReportScreen() {
   const { cycleId } = useLocalSearchParams<{ cycleId?: string }>();
   const { user, company } = useAuth();
   const { formatCurrency } = useCurrency();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   useFirebaseSync();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -151,6 +151,7 @@ export default function CycleReportScreen() {
         report,
         companyName: company?.companyName || 'Shrimply Farm',
         formatCurrency,
+        language: currentLanguage,
       });
     } catch (error) {
       console.error('Failed to export Cycle Report PDF:', error);

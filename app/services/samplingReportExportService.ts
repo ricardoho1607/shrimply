@@ -4,6 +4,14 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+import {
+  formatPdfDate,
+  formatPdfDateTime,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -80,18 +88,6 @@ const loadSamplingReportBrandAssets = async (): Promise<PdfBrandAssets> => {
   return { backgroundBase64, logoBase64 };
 };
 
-const formatNumber = (num: number, decimals: number = 2): string => {
-  const safeNumber = Number.isFinite(num) ? num : 0;
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  }).format(safeNumber);
-};
-
-const formatOptionalNumber = (num: number | undefined, decimals: number = 2): string => {
-  return Number.isFinite(num) ? formatNumber(num as number, decimals) : '-';
-};
-
 const toFiniteNumber = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
@@ -109,33 +105,6 @@ const escapeXml = (value: string): string => (
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&apos;')
 );
-
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-};
-
-const formatShortDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return '-';
-
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: '2-digit',
-  });
-};
-
-const formatCompactNumber = (num: number, decimals: number = 0): string => {
-  const safeNumber = Number.isFinite(num) ? num : 0;
-  if (Math.abs(safeNumber) >= 1000000) return `${formatNumber(safeNumber / 1000000, 1)}M`;
-  if (Math.abs(safeNumber) >= 10000) return `${formatNumber(safeNumber / 1000, 1)}k`;
-  return formatNumber(safeNumber, decimals);
-};
 
 const calculateAverages = (ponds: PondData[]) => {
   const latestSamplings = ponds
@@ -179,7 +148,11 @@ const getLatestSampling = (pond: PondData): SamplingData | undefined => {
   return pond.samplingHistory[pond.samplingHistory.length - 1];
 };
 
-const getReportAnalysis = (ponds: PondData[]) => {
+const getReportAnalysis = (ponds: PondData[], language: PdfLanguage) => {
+  const reportNumber = (value: number, decimals = 2) => formatPdfNumber(value, language, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   const latestSamplings = ponds
     .map((pond) => ({ pond, sampling: getLatestSampling(pond), previousABW: getPreviousABW(pond) }))
     .filter((item): item is { pond: PondData; sampling: SamplingData; previousABW: number } => Boolean(item.sampling));
@@ -227,7 +200,7 @@ const getReportAnalysis = (ponds: PondData[]) => {
   })[0];
 
   const executiveSummary = [
-    `The report covers ${latestSamplings.length} sampled pond${latestSamplings.length === 1 ? '' : 's'} out of ${ponds.length} selected pond${ponds.length === 1 ? '' : 's'}. Average ABW/MBW is ${formatNumber(avgABW)} g, average ADG is ${formatNumber(avgADG, 2)} g/day, average survival is ${formatNumber(avgSR, 0)}%, and average FCR is ${formatNumber(avgFCR, 2)}.`,
+    `The report covers ${latestSamplings.length} sampled pond${latestSamplings.length === 1 ? '' : 's'} out of ${ponds.length} selected pond${ponds.length === 1 ? '' : 's'}. Average ABW/MBW is ${reportNumber(avgABW)} g, average ADG is ${reportNumber(avgADG, 2)} g/day, average survival is ${reportNumber(avgSR, 0)}%, and average FCR is ${reportNumber(avgFCR, 2)}.`,
     avgADG >= 0.25
       ? 'Growth performance is currently strong based on the latest sampled records.'
       : avgADG >= 0.15
@@ -266,7 +239,11 @@ const getReportAnalysis = (ponds: PondData[]) => {
   return { executiveSummary, riskAssessment };
 };
 
-const generateGrowthChartSvg = (ponds: PondData[]): string => {
+const generateGrowthChartSvg = (ponds: PondData[], language: PdfLanguage): string => {
+  const chartNumber = (value: number, decimals: number) => formatPdfNumber(value, language, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
   const colors = ['#0F4C75', '#27AE60', '#E74C3C', '#F39C12', '#7C3AED', '#34495E', '#16A085', '#D35400'];
   const series = ponds.map((pond, index) => ({
     label: pond.pondNumber,
@@ -319,8 +296,8 @@ const generateGrowthChartSvg = (ponds: PondData[]): string => {
   ].join('');
 
   const labels = [
-    ...xTicks.map((tick) => `<text x="${xScale(tick)}" y="${height - 18}" text-anchor="middle" font-family="Arial" font-size="9" fill="#64748B">${formatNumber(tick, 0)}</text>`),
-    ...yTicks.map((tick) => `<text x="${chartLeft - 8}" y="${yScale(tick) + 3}" text-anchor="end" font-family="Arial" font-size="9" fill="#64748B">${formatNumber(tick, 1)}</text>`),
+    ...xTicks.map((tick) => `<text x="${xScale(tick)}" y="${height - 18}" text-anchor="middle" font-family="Arial" font-size="9" fill="#64748B">${chartNumber(tick, 0)}</text>`),
+    ...yTicks.map((tick) => `<text x="${chartLeft - 8}" y="${yScale(tick) + 3}" text-anchor="end" font-family="Arial" font-size="9" fill="#64748B">${chartNumber(tick, 1)}</text>`),
   ].join('');
 
   const lines = series.map((item) => {
@@ -350,7 +327,7 @@ const generateGrowthChartSvg = (ponds: PondData[]): string => {
   `;
 };
 
-const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBrandAssets): string => {
+const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
   const {
     farmName,
     block,
@@ -362,15 +339,33 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
   } = data;
 
   const averages = calculateAverages(ponds);
-  const reportAnalysis = getReportAnalysis(ponds);
+  const reportAnalysis = getReportAnalysis(ponds, language);
   const midcyclePonds = ponds.filter((pond) => pond.isMidcycleBaseline);
-  const generatedAt = new Date().toLocaleString('en-US', {
+  const generatedAt = formatPdfDateTime(new Date(), language, {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
+  const formatNumber = (value: number, decimals = 2) => formatPdfNumber(value, language, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  const formatOptionalNumber = (value: number | undefined, decimals = 2) =>
+    Number.isFinite(value) ? formatNumber(value as number, decimals) : '-';
+  const formatDate = (value: string) => formatPdfDate(value, language);
+  const formatShortDate = (value: string) => formatPdfDate(value, language, {
+    month: 'short',
+    day: 'numeric',
+    year: '2-digit',
+  });
+  const formatCompactNumber = (value: number, decimals = 0) => {
+    const safeValue = Number.isFinite(value) ? value : 0;
+    if (Math.abs(safeValue) >= 1000000) return `${formatNumber(safeValue / 1000000, 1)}M`;
+    if (Math.abs(safeValue) >= 10000) return `${formatNumber(safeValue / 1000, 1)}k`;
+    return formatNumber(safeValue, decimals);
+  };
 
   const renderHeader = (title = 'Sampling Report') => `
     <div class="header">
@@ -405,8 +400,8 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
 
     return `
       <tr class="${index % 2 === 0 ? 'row-alt' : ''}">
-        <td class="strong">${pond.pondNumber}</td>
-        <td>${formatShortDate(pond.stockingDate)}</td>
+        <td class="strong pond-cell">${escapeXml(pond.pondNumber)}</td>
+        <td class="stock-date-cell">${formatShortDate(pond.stockingDate)}</td>
         <td>${latestSampling ? formatNumber(toFiniteNumber(latestSampling.doc), 0) : '-'}</td>
         <td>${formatCompactNumber(toFiniteNumber(pond.area), 0)}</td>
         <td>${formatCompactNumber(initialStock, 0)}</td>
@@ -470,9 +465,9 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
   const lowFcrNote = averages.totalFeed > 0 && averages.avgFCR < 0.5
     ? '<br/><strong>FCR Note:</strong> Average FCR is unusually low, which usually means feed history is incomplete or only partial feed records are available.'
     : '';
-  const chartSvg = generateGrowthChartSvg(ponds);
+  const chartSvg = generateGrowthChartSvg(ponds, language);
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -542,7 +537,9 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
         .table-container { width: 100%; margin-bottom: 8px; }
         table { width: 100%; border-collapse: collapse; background: transparent; table-layout: fixed; box-shadow: none; }
         th { background: rgba(15, 76, 117, 0.90); color: white; padding: 4px 2px; text-align: center; font-size: 5.8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1px; border-right: 1px solid rgba(255,255,255,0.22); line-height: 1.05; }
-        td { padding: 5px 2px; text-align: center; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); white-space: nowrap; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, 0.50); }
+        td { padding: 5px 2px; text-align: center; vertical-align: middle; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); white-space: normal; overflow: hidden; line-height: 1.15; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, 0.50); }
+        .pond-cell { padding-left: 4px; padding-right: 4px; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+        .stock-date-cell { overflow-wrap: normal; word-break: normal; }
         .row-alt td { background: rgba(255, 255, 255, 0.64); }
         .strong { font-weight: 800; }
         .good { color: #2D7A4F; font-weight: 800; }
@@ -586,6 +583,24 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
           </div>
           <div class="table-container">
             <table>
+              <colgroup>
+                <col style="width:17%" />
+                <col style="width:8.5%" />
+                <col style="width:4.5%" />
+                <col style="width:4.5%" />
+                <col style="width:7%" />
+                <col style="width:5%" />
+                <col style="width:6%" />
+                <col style="width:5.5%" />
+                <col style="width:4.8%" />
+                <col style="width:4.8%" />
+                <col style="width:4.8%" />
+                <col style="width:5.3%" />
+                <col style="width:5.3%" />
+                <col style="width:4.8%" />
+                <col style="width:6%" />
+                <col style="width:6.2%" />
+              </colgroup>
               <thead>
                 <tr>
                   <th>Pond</th><th>Stock<br/>Date</th><th>DOC</th><th>Area<br/>m2</th><th>Stock</th><th>Dens.</th><th>Prev<br/>MBW</th><th>MBW</th><th>ADG</th><th>Size</th><th>SR</th><th>Bio</th><th>Feed</th><th>FCR</th><th>Mort</th><th>Mort %</th>
@@ -660,13 +675,13 @@ const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBr
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-export const exportSamplingReportPDF = async (data: SamplingReportData) => {
+export const exportSamplingReportPDF = async (data: SamplingReportData, language: PdfLanguage = 'en') => {
   try {
     const brandAssets = await loadSamplingReportBrandAssets();
-    const html = generateSamplingReportHTML(data, brandAssets);
+    const html = generateSamplingReportHTML(data, brandAssets, language);
     
     const { uri } = await Print.printToFileAsync({
       html,
@@ -699,21 +714,21 @@ export const exportSamplingReportPDF = async (data: SamplingReportData) => {
     if (canShare) {
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share Shrimp Sampling Report',
+        dialogTitle: localizePdfText('Share Shrimp Sampling Report', language),
         UTI: 'com.adobe.pdf',
       });
     } else {
       Alert.alert(
-        'PDF Generated',
-        `Your sampling report has been saved to: ${newUri}`,
-        [{ text: 'OK' }]
+        localizePdfText('PDF Generated', language),
+        localizePdfText(`Your sampling report has been saved to: ${newUri}`, language),
+        [{ text: localizePdfText('OK', language) }]
       );
     }
     
     return newUri;
   } catch (error) {
     console.error('Error generating shrimp PDF:', error);
-    Alert.alert('Error', 'Failed to generate sampling report PDF');
+    Alert.alert(localizePdfText('Error', language), localizePdfText('Failed to generate sampling report PDF', language));
     throw error;
   }
 };

@@ -27,8 +27,8 @@ export default function FinancialReportsPage() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
-  const { t } = useLanguage();
-  const { formatCurrency } = useCurrency();
+  const { t, currentLanguage } = useLanguage();
+  const { formatCurrency, currencyConfig } = useCurrency();
   const { cycles } = usePondStore();
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
 
@@ -258,6 +258,10 @@ export default function FinancialReportsPage() {
     return `${startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
   };
 
+  const withSelectedCurrency = (label: string) => (
+    `${label.replace(/\s*\([^)]*\)\s*$/, '')} (${currencyConfig.symbol})`
+  );
+
   const handleGenerateReport = async () => {
     setGenerating(true);
     try {
@@ -268,14 +272,17 @@ export default function FinancialReportsPage() {
           revenueTotals.total, revenueTotals.byCategory, 
           totalCOGSPL, cogsCategoryBreakdown, grossProfitPL, 
           totalOPEX, opexCategoryBreakdown, operatingIncome, 
-          totalOtherExpenses, otherExpenseBreakdown, netProfitPL));
+          totalOtherExpenses, otherExpenseBreakdown, netProfitPL,
+          currencyConfig.code, currencyConfig.symbol), currentLanguage);
       } else if (selectedReportType === 'cash-flow') {
         await exportCashFlowPDF(prepareCashFlowData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
-          company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing));
+          company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing,
+          currencyConfig.code, currencyConfig.symbol), currentLanguage);
       } else if (selectedReportType === 'cogs') {
         await exportCOGSPDF(prepareCOGSData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
           company?.companyName || company?.id || 'Company', openingInventory, purchases, directLabor,
-          directMaterials, closingInventory, revenueTotals.total, cogsCategoryBreakdown));
+          directMaterials, closingInventory, revenueTotals.total, cogsCategoryBreakdown,
+          currencyConfig.code, currencyConfig.symbol), currentLanguage);
       }
       Alert.alert('Success', t.financialReports?.reportGenerated || 'Financial report generated and ready to share!');
     } catch (error) {
@@ -398,12 +405,12 @@ export default function FinancialReportsPage() {
             <Text style={styles.sectionTitle}>{t.financialReports?.inventoryValues || 'Inventory Values'}</Text>
             <View style={styles.inventoryInputs}>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{t.financialReports?.openingInventory || 'Opening Inventory (Rp)'}</Text>
+                <Text style={styles.dateLabel}>{withSelectedCurrency(t.financialReports?.openingInventory || 'Opening Inventory')}</Text>
                 <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={openingInventory.toString()} onChangeText={(text) => setOpeningInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{t.financialReports?.closingInventory || 'Closing Inventory (Rp)'}</Text>
+                <Text style={styles.dateLabel}>{withSelectedCurrency(t.financialReports?.closingInventory || 'Closing Inventory')}</Text>
                 <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={closingInventory.toString()} onChangeText={(text) => setClosingInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>

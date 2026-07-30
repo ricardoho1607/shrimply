@@ -4,6 +4,14 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Alert } from 'react-native';
+import {
+  formatPdfDate,
+  formatPdfDateTime,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -28,8 +36,8 @@ export interface COGSData {
   grossProfit: number;
   grossProfitMargin: number;
   categoryBreakdown: { [category: string]: number };
-  currencyCode?: string;
-  currencySymbol?: string;
+  currencyCode: string;
+  currencySymbol: string;
 }
 
 const loadBase64Asset = async (assetModule: number): Promise<string> => {
@@ -55,32 +63,17 @@ const loadCOGSBrandAssets = async (): Promise<PdfBrandAssets> => {
   return { backgroundBase64, logoBase64 };
 };
 
-const formatCurrency = (amount: number, currencyCode: string = 'IDR', currencySymbol: string = 'Rp'): string => {
-  const localeMap: Record<string, string> = {
-    'USD': 'en-US',
-    'IDR': 'id-ID',
-    'THB': 'th-TH',
-    'VND': 'vi-VN',
-    'CNY': 'zh-CN'
-  };
-  
-  const locale = localeMap[currencyCode] || 'id-ID';
-  const formatted = new Intl.NumberFormat(locale, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(amount);
+const formatCurrency = (amount: number, currencyCode: string, currencySymbol: string, language: PdfLanguage): string => {
+  const decimalPlaces = currencyCode === 'IDR' || currencyCode === 'VND' ? 0 : 2;
+  const formatted = formatPdfNumber(amount, language, {
+    minimumFractionDigits: decimalPlaces,
+    maximumFractionDigits: decimalPlaces,
+  });
   
   return `${currencySymbol} ${formatted}`;
 };
 
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-};
+const formatDate = (dateStr: string, language: PdfLanguage): string => formatPdfDate(dateStr, language);
 
 export const prepareCOGSData = (
   period: string,
@@ -93,7 +86,9 @@ export const prepareCOGSData = (
   directMaterials: number,
   closingInventory: number,
   revenue: number,
-  categoryBreakdown: { [category: string]: number }
+  categoryBreakdown: { [category: string]: number },
+  currencyCode: string,
+  currencySymbol: string,
 ): COGSData => {
   const totalCOGS = openingInventory + purchases + directLabor + directMaterials - closingInventory;
   const grossProfit = revenue - totalCOGS;
@@ -114,10 +109,12 @@ export const prepareCOGSData = (
     grossProfit,
     grossProfitMargin,
     categoryBreakdown,
+    currencyCode,
+    currencySymbol,
   };
 };
 
-const buildCOGSReportAnalysis = (data: COGSData) => {
+const buildCOGSReportAnalysis = (data: COGSData, language: PdfLanguage) => {
   const costEntries = Object.entries(data.categoryBreakdown || {})
     .filter(([, amount]) => Number.isFinite(amount) && amount > 0)
     .sort(([, a], [, b]) => b - a);
@@ -129,10 +126,10 @@ const buildCOGSReportAnalysis = (data: COGSData) => {
     : 0;
 
   const executiveSummary = [
-    `Total COGS for the selected period is ${formatCurrency(data.totalCOGS, data.currencyCode, data.currencySymbol)} against revenue of ${formatCurrency(data.revenue, data.currencyCode, data.currencySymbol)}.`,
+    `Total COGS for the selected period is ${formatCurrency(data.totalCOGS, data.currencyCode, data.currencySymbol, language)} against revenue of ${formatCurrency(data.revenue, data.currencyCode, data.currencySymbol, language)}.`,
     data.grossProfit >= 0
-      ? `Gross profit is ${formatCurrency(data.grossProfit, data.currencyCode, data.currencySymbol)}, with a gross margin of ${data.grossProfitMargin.toFixed(2)}%.`
-      : `The report shows a gross loss of ${formatCurrency(Math.abs(data.grossProfit), data.currencyCode, data.currencySymbol)}, so direct production costs exceeded recorded revenue.`,
+      ? `Gross profit is ${formatCurrency(data.grossProfit, data.currencyCode, data.currencySymbol, language)}, with a gross margin of ${data.grossProfitMargin.toFixed(2)}%.`
+      : `The report shows a gross loss of ${formatCurrency(Math.abs(data.grossProfit), data.currencyCode, data.currencySymbol, language)}, so direct production costs exceeded recorded revenue.`,
   ];
 
   if (largestCost) {
@@ -180,7 +177,7 @@ const buildCOGSReportAnalysis = (data: COGSData) => {
   return { executiveSummary, riskAssessment, recommendations, dataQualityNotes };
 };
 
-const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string => {
+const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
   const { 
     startDate, 
     endDate, 
@@ -200,10 +197,25 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
   } = data;
 
   const goodsAvailable = openingInventory + purchases + directLabor + directMaterials;
-  const reportAnalysis = buildCOGSReportAnalysis(data);
-  const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol);
+  const reportAnalysis = buildCOGSReportAnalysis(data, language);
+  const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol, language);
+  const sortedCategoryEntries = Object.entries(categoryBreakdown).sort(([, a], [, b]) => b - a);
+  const breakdownPageCount = Math.max(1, Math.ceil(sortedCategoryEntries.length / 12));
+  const breakdownChunkSize = sortedCategoryEntries.length > 0
+    ? Math.ceil(sortedCategoryEntries.length / breakdownPageCount)
+    : 0;
+  const breakdownPages = sortedCategoryEntries.length > 0
+    ? Array.from(
+        { length: breakdownPageCount },
+        (_, index) => sortedCategoryEntries.slice(
+          index * breakdownChunkSize,
+          (index + 1) * breakdownChunkSize,
+        ),
+      )
+    : [[]];
+  const totalPageCount = breakdownPages.length + 2;
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -213,19 +225,28 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         @page { size: 612px 792px; margin: 0; }
-        html { width: 100%; min-height: 100%; }
+        html { width: 100%; height: 100%; }
         body {
           width: 100%;
-          min-height: 100%;
+          height: 100%;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          padding: 40px 44px;
           color: #2C3E50;
           background: #0F4C75;
-          font-size: 14px;
-          line-height: 1.6;
+          font-size: 12px;
+          line-height: 1.4;
         }
+        .pdf-page {
+          width: 100%;
+          height: 100%;
+          padding: 38px 44px 34px;
+          position: relative;
+          overflow: hidden;
+          background: #0F4C75;
+          page-break-after: always;
+        }
+        .pdf-page:last-child { page-break-after: auto; }
         .page-bg {
-          position: fixed;
+          position: absolute;
           inset: -14px;
           width: calc(100% + 28px);
           height: calc(100% + 28px);
@@ -233,234 +254,323 @@ const generateCOGSHTML = (data: COGSData, brandAssets: PdfBrandAssets): string =
           z-index: 0;
         }
         .page-logo {
-          position: fixed;
-          top: 30px;
-          right: 38px;
+          position: absolute;
+          top: -6px;
+          right: 0;
           width: 64px;
           height: 64px;
           object-fit: contain;
-          z-index: 2;
         }
         .report-content {
           position: relative;
           z-index: 1;
+          height: 100%;
+          display: flex;
+          flex-direction: column;
         }
-        .header { margin-bottom: 30px; padding-right: 82px; min-height: 62px; }
-        .title { font-size: 32px; font-weight: 700; color: #27AE60; margin-bottom: 8px; }
-        .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; }
-        .subtitle { font-size: 14px; color: #2C3E50; }
-        .date-range { font-size: 14px; color: #2C3E50; margin-bottom: 30px; }
-        .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 20px 0; border-radius: 2px; }
-        .section { margin-bottom: 25px; }
-        .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ECF0F1; }
+        .header, .section, .metric-box, .summary-box, .analysis-grid {
+          flex-shrink: 0;
+        }
+        .header { position: relative; z-index: 2; margin-bottom: 10px; padding-right: 82px; min-height: 58px; }
+        .title { font-size: 28px; font-weight: 700; color: #27AE60; margin-bottom: 6px; }
+        .company-name { font-size: 14px; color: #2C3E50; margin-bottom: 3px; }
+        .subtitle { font-size: 12px; color: #2C3E50; }
+        .date-range { font-size: 12px; color: #2C3E50; }
+        .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 10px 0 12px; border-radius: 2px; }
+        .section { margin-bottom: 12px; page-break-inside: avoid; break-inside: avoid; }
+        .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .line-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #ECF0F1; }
         .line-item.category { font-weight: 600; color: #34495E; padding-left: 0; }
-        .line-item.subcategory { color: #7F8C8D; padding-left: 20px; font-size: 13px; }
-        .line-item.total { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; }
-        .line-item.subtotal { font-weight: 600; font-size: 14px; border-bottom: 1px solid #BDC3C7; padding: 10px 0; margin-top: 8px; color: #34495E; background: rgba(248, 250, 251, 0.72); padding-left: 10px; padding-right: 10px; }
-        .line-item.gross-profit { font-weight: 700; font-size: 16px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 15px 0; margin-top: 15px; }
-        .line-item.gross-loss { font-weight: 700; font-size: 16px; color: #E74C3C; border-bottom: 3px double #E74C3C; padding: 15px 0; margin-top: 15px; }
+        .line-item.subcategory { color: #7F8C8D; padding-left: 18px; font-size: 12px; }
+        .line-item.total { font-weight: 700; font-size: 14px; border-bottom: 2px solid #34495E; padding: 9px 0; margin-top: 5px; color: #2C3E50; }
+        .line-item.subtotal { font-weight: 600; font-size: 13px; border-bottom: 1px solid #BDC3C7; padding: 8px 10px; margin-top: 5px; color: #34495E; background: rgba(248, 250, 251, 0.72); }
+        .line-item.gross-profit { font-weight: 700; font-size: 15px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 10px 0; margin-top: 8px; }
+        .line-item.gross-loss { font-weight: 700; font-size: 15px; color: #E74C3C; border-bottom: 3px double #E74C3C; padding: 10px 0; margin-top: 8px; }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
         .amount.positive { color: #27AE60; }
         .amount.negative { color: #E74C3C; }
         .currency { font-size: 12px; color: #2C3E50; display: block; text-align: right; margin-top: 2px; }
-        .metric-box { background: rgba(39, 174, 96, 0.88); color: white; padding: 20px; margin-bottom: 20px; border-radius: 0; text-align: center; }
-        .metric-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .metric-value { font-size: 32px; font-weight: 700; }
-        .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 15px; margin-top: 30px; border-radius: 0; }
-        .summary-item { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; }
-        .summary-item.highlight { font-weight: 700; font-size: 16px; color: #2C3E50; border-top: 2px solid #BDC3C7; margin-top: 10px; padding-top: 12px; }
-        .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 20px; }
-        .analysis-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #0F4C75; padding: 13px; border-radius: 0; }
+        .metric-box { display: flex; align-items: center; justify-content: space-between; background: rgba(39, 174, 96, 0.88); color: white; padding: 10px 12px; margin-bottom: 12px; border-radius: 0; text-align: left; page-break-inside: avoid; break-inside: avoid; }
+        .metric-label { font-size: 12px; opacity: 0.9; text-transform: uppercase; letter-spacing: 0.5px; }
+        .metric-value { font-size: 24px; font-weight: 700; }
+        .summary-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #27AE60; padding: 10px 12px; margin-top: 10px; border-radius: 0; page-break-inside: avoid; break-inside: avoid; }
+        .summary-item { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+        .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 6px; padding-top: 7px; }
+        .analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .analysis-box { background: rgba(248, 250, 251, 0.72); border-left: 4px solid #0F4C75; padding: 12px; border-radius: 0; page-break-inside: avoid; break-inside: avoid; }
         .analysis-box.risk { border-left-color: #F59E0B; }
         .analysis-box.recommendation { border-left-color: #27AE60; }
-        .analysis-box.quality { border-left-color: #64748B; grid-column: 1 / -1; }
+        .analysis-box.quality { border-left-color: #64748B; }
         .analysis-title { font-size: 12px; font-weight: 800; color: #0F4C75; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
         .analysis-box.risk .analysis-title { color: #B45309; }
         .analysis-box.recommendation .analysis-title { color: #166534; }
         .analysis-list { padding-left: 16px; font-size: 11px; line-height: 1.45; color: #2C3E50; }
         .analysis-list li { margin-bottom: 5px; }
-        .breakdown-item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #ECF0F1; }
+        .breakdown-item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #ECF0F1; }
         .breakdown-item:last-child { border-bottom: none; }
         .percentage { font-size: 12px; color: #95A5A6; margin-left: 8px; }
-        .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ECF0F1; font-size: 12px; color: #2C3E50; text-align: center; }
+        .footer { margin-top: auto; padding-top: 12px; border-top: 1px solid rgba(15, 76, 117, 0.18); font-size: 10px; color: #2C3E50; display: flex; justify-content: space-between; gap: 12px; }
+        body { color: #111827; }
+        .page-logo { filter: grayscale(1); }
+        .title, .company-name, .subtitle, .date-range, .section-title,
+        .line-item, .line-item.category, .line-item.subcategory,
+        .line-item.total, .line-item.subtotal, .line-item.gross-profit,
+        .line-item.gross-loss, .amount, .amount.positive, .amount.negative,
+        .currency, .metric-label, .metric-value, .summary-item,
+        .summary-item.highlight, .analysis-title,
+        .analysis-box.risk .analysis-title,
+        .analysis-box.recommendation .analysis-title,
+        .analysis-list, .breakdown-item, .percentage, .footer {
+          color: #111827;
+        }
+        .divider { background: #374151; }
+        .metric-box, .line-item.subtotal, .summary-box, .analysis-box,
+        .analysis-box.risk, .analysis-box.recommendation,
+        .analysis-box.quality {
+          background: #FFFFFF;
+          border-color: #6B7280;
+        }
+        .metric-box {
+          border: 2px solid #374151;
+        }
+        .summary-box {
+          border: 1px solid #6B7280;
+          border-left-width: 1px;
+        }
+        .analysis-box, .analysis-box.risk, .analysis-box.recommendation,
+        .analysis-box.quality {
+          border: 1px solid #9CA3AF;
+          border-left: 3px solid #4B5563;
+        }
+        .line-item.gross-profit, .line-item.gross-loss {
+          border-color: #374151;
+        }
       </style>
     </head>
     <body>
-      <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
-      <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
-      <div class="report-content">
-        <div class="header">
-          <div class="title">Cost of Goods Sold</div>
-          <div class="company-name">${companyName}</div>
-          <div class="subtitle">COGS Report</div>
-          <div class="date-range">For ${formatDate(startDate)} - ${formatDate(endDate)}</div>
-        </div>
-      
-      <div class="metric-box">
-        <div class="metric-label">Gross Profit Margin</div>
-        <div class="metric-value">${grossProfitMargin.toFixed(2)}%</div>
-      </div>
-      
-      <div class="divider"></div>
-      
-      <div class="section">
-        <div class="section-title">COGS Calculation</div>
-        <div class="line-item category">
-          <span>Opening Inventory</span>
-          <div>
-            <span class="amount">${money(openingInventory)}</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="report-content">
+          <div class="header">
+            <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">Cost of Goods Sold</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">COGS Report</div>
+            <div class="date-range">For ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
           </div>
-        </div>
-        <div class="line-item subcategory">
-          <span>Add: Purchases (Feed & Materials)</span>
-          <span class="amount">${money(purchases)}</span>
-        </div>
-        <div class="line-item subcategory">
-          <span>Add: Direct Labor</span>
-          <span class="amount">${money(directLabor)}</span>
-        </div>
-        <div class="line-item subcategory">
-          <span>Add: Direct Materials (Pond Additives)</span>
-          <span class="amount">${money(directMaterials)}</span>
-        </div>
-        <div class="line-item subtotal">
-          <span>Goods Available for Sale</span>
-          <div>
-            <span class="amount">${money(goodsAvailable)}</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
+          <div class="divider"></div>
+
+          <div class="section">
+            <div class="section-title">COGS Calculation</div>
+            <div class="line-item category">
+              <span>Opening Inventory</span>
+              <div>
+                <span class="amount">${money(openingInventory)}</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item subcategory">
+              <span>Add: Purchases (Feed & Materials)</span>
+              <span class="amount">${money(purchases)}</span>
+            </div>
+            <div class="line-item subcategory">
+              <span>Add: Direct Labor</span>
+              <span class="amount">${money(directLabor)}</span>
+            </div>
+            <div class="line-item subcategory">
+              <span>Add: Direct Materials (Pond Additives)</span>
+              <span class="amount">${money(directMaterials)}</span>
+            </div>
+            <div class="line-item subtotal">
+              <span>Goods Available for Sale</span>
+              <div>
+                <span class="amount">${money(goodsAvailable)}</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item category">
+              <span>Less: Closing Inventory</span>
+              <div>
+                <span class="amount negative">(${money(closingInventory)})</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item total">
+              <span>Total Cost of Goods Sold</span>
+              <div>
+                <span class="amount negative">${money(totalCOGS)}</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="line-item category">
-          <span>Less: Closing Inventory</span>
-          <div>
-            <span class="amount negative">(${money(closingInventory)})</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
+
+          <div class="section">
+            <div class="section-title">Gross Profit Analysis</div>
+            <div class="line-item category">
+              <span>Total Revenue</span>
+              <div>
+                <span class="amount positive">${money(revenue)}</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item category">
+              <span>Less: Cost of Goods Sold</span>
+              <div>
+                <span class="amount negative">(${money(totalCOGS)})</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item ${grossProfit >= 0 ? 'gross-profit' : 'gross-loss'}">
+              <span>Gross ${grossProfit >= 0 ? 'Profit' : 'Loss'}</span>
+              <div>
+                <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
+                <span class="currency">${currencyCode}</span>
+              </div>
+            </div>
+            <div class="line-item category">
+              <span>Gross Profit Margin</span>
+              <span class="amount ${grossProfitMargin >= 0 ? 'positive' : 'negative'}">${grossProfitMargin.toFixed(2)}%</span>
+            </div>
           </div>
-        </div>
-        <div class="line-item total">
-          <span>Total Cost of Goods Sold</span>
-          <div>
-            <span class="amount negative">${money(totalCOGS)}</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
+
+          <div class="footer">
+            <span>Generated by Shrimply - ${companyName}</span>
+            <span>Page 1 of ${totalPageCount}</span>
           </div>
-        </div>
-      </div>
-      
-      <div class="section">
-        <div class="section-title">Gross Profit Analysis</div>
-        <div class="line-item category">
-          <span>Total Revenue</span>
-          <div>
-            <span class="amount positive">${money(revenue)}</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
-          </div>
-        </div>
-        <div class="line-item category">
-          <span>Less: Cost of Goods Sold</span>
-          <div>
-            <span class="amount negative">(${money(totalCOGS)})</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
-          </div>
-        </div>
-        <div class="line-item ${grossProfit >= 0 ? 'gross-profit' : 'gross-loss'}">
-          <span>Gross ${grossProfit >= 0 ? 'Profit' : 'Loss'}</span>
-          <div>
-            <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
-            <span class="currency">${currencyCode || 'IDR'}</span>
-          </div>
-        </div>
-        <div class="line-item category">
-          <span>Gross Profit Margin</span>
-          <span class="amount ${grossProfitMargin >= 0 ? 'positive' : 'negative'}">${grossProfitMargin.toFixed(2)}%</span>
-        </div>
-      </div>
-      
-      ${Object.keys(categoryBreakdown).length > 0 ? `
-        <div class="section">
-          <div class="section-title">Direct Costs Breakdown</div>
-          ${Object.entries(categoryBreakdown)
-            .sort(([, a], [, b]) => b - a)
-            .map(([category, amount]) => {
-              const percentage = totalCOGS > 0 ? (amount / totalCOGS * 100).toFixed(1) : '0.0';
-              return `
-                <div class="breakdown-item">
-                  <span>${category}</span>
-                  <span>
-                    ${money(amount)}
-                    <span class="percentage">(${percentage}%)</span>
-                  </span>
-                </div>
-              `;
-            })
-            .join('')}
-        </div>
-      ` : ''}
-      
-      <div class="summary-box">
-        <div class="summary-item">
-          <span>Total Revenue:</span>
-          <span class="amount positive">${money(revenue)}</span>
-        </div>
-        <div class="summary-item">
-          <span>Cost of Goods Sold:</span>
-          <span class="amount negative">${money(totalCOGS)}</span>
-        </div>
-        <div class="summary-item highlight">
-          <span>${grossProfit >= 0 ? 'Gross Profit:' : 'Gross Loss:'}</span>
-          <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
-        </div>
-        <div class="summary-item">
-          <span>Gross Profit Margin:</span>
-          <span class="amount ${grossProfitMargin >= 0 ? 'positive' : 'negative'}">${grossProfitMargin.toFixed(2)}%</span>
         </div>
       </div>
 
-      <div class="analysis-grid">
-        <div class="analysis-box">
-          <div class="analysis-title">Executive Summary</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
+      ${breakdownPages.map((entries, pageIndex) => {
+        const pageNumber = pageIndex + 2;
+        const isFirstBreakdownPage = pageIndex === 0;
+        const isContinuation = pageIndex > 0;
+
+        return `
+          <div class="pdf-page">
+            <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+            <div class="report-content">
+              <div class="header">
+                <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+                <div class="title">COGS Cost Breakdown</div>
+                <div class="company-name">${companyName}</div>
+                <div class="subtitle">${isContinuation ? 'Direct Costs Breakdown - Continued' : 'Detailed Direct Costs and Period Summary'}</div>
+                <div class="date-range">For ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+              </div>
+              <div class="divider"></div>
+
+              ${isFirstBreakdownPage ? `
+                <div class="metric-box">
+                  <div class="metric-label">Gross Profit Margin</div>
+                  <div class="metric-value">${grossProfitMargin.toFixed(2)}%</div>
+                </div>
+              ` : ''}
+
+              <div class="section">
+                <div class="section-title">Direct Costs Breakdown${isContinuation ? ' (Continued)' : ''}</div>
+                ${entries.length > 0
+                  ? entries.map(([category, amount]) => {
+                      const percentage = totalCOGS > 0 ? (amount / totalCOGS * 100).toFixed(1) : '0.0';
+                      return `
+                        <div class="breakdown-item">
+                          <span>${category}</span>
+                          <span>
+                            ${money(amount)}
+                            <span class="percentage">(${percentage}%)</span>
+                          </span>
+                        </div>
+                      `;
+                    }).join('')
+                  : '<div class="breakdown-item"><span>No detailed direct-cost categories available</span><span>-</span></div>'}
+              </div>
+
+              ${isFirstBreakdownPage ? `
+                <div class="summary-box">
+                  <div class="summary-item">
+                    <span>Total Revenue:</span>
+                    <span class="amount positive">${money(revenue)}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span>Cost of Goods Sold:</span>
+                    <span class="amount negative">${money(totalCOGS)}</span>
+                  </div>
+                  <div class="summary-item highlight">
+                    <span>${grossProfit >= 0 ? 'Gross Profit:' : 'Gross Loss:'}</span>
+                    <span class="amount ${grossProfit >= 0 ? 'positive' : 'negative'}">${money(Math.abs(grossProfit))}</span>
+                  </div>
+                  <div class="summary-item">
+                    <span>Gross Profit Margin:</span>
+                    <span class="amount ${grossProfitMargin >= 0 ? 'positive' : 'negative'}">${grossProfitMargin.toFixed(2)}%</span>
+                  </div>
+                </div>
+              ` : ''}
+
+              <div class="footer">
+                <span>Generated by Shrimply - ${companyName}</span>
+                <span>Page ${pageNumber} of ${totalPageCount}</span>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+
+      <div class="pdf-page">
+        <img class="page-bg" src="data:image/png;base64,${brandAssets.backgroundBase64}" alt="" />
+        <div class="report-content">
+          <div class="header">
+            <img class="page-logo" src="data:image/png;base64,${brandAssets.logoBase64}" alt="Shrimply" />
+            <div class="title">COGS Analysis</div>
+            <div class="company-name">${companyName}</div>
+            <div class="subtitle">Executive Review, Risks, Recommendations, and Data Quality</div>
+            <div class="date-range">For ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+          </div>
+          <div class="divider"></div>
+
+          <div class="analysis-grid">
+            <div class="analysis-box">
+              <div class="analysis-title">Executive Summary</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.executiveSummary.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="analysis-box risk">
+              <div class="analysis-title">Risk Assessment</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="analysis-box recommendation">
+              <div class="analysis-title">Recommendations</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.recommendations.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+            <div class="analysis-box quality">
+              <div class="analysis-title">Assumptions and Data Quality</div>
+              <ul class="analysis-list">
+                ${reportAnalysis.dataQualityNotes.map((item) => `<li>${item}</li>`).join('')}
+              </ul>
+            </div>
+          </div>
+
+          <div class="footer">
+            <span>Generated on ${formatPdfDateTime(new Date(), language, {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            })}</span>
+            <span>Page ${totalPageCount} of ${totalPageCount}</span>
+          </div>
         </div>
-        <div class="analysis-box risk">
-          <div class="analysis-title">Risk Assessment</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.riskAssessment.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-        <div class="analysis-box recommendation">
-          <div class="analysis-title">Recommendations</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.recommendations.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-        <div class="analysis-box quality">
-          <div class="analysis-title">Assumptions and Data Quality</div>
-          <ul class="analysis-list">
-            ${reportAnalysis.dataQualityNotes.map((item) => `<li>${item}</li>`).join('')}
-          </ul>
-        </div>
-      </div>
-      
-      <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric'
-        })} - ${companyName}
-      </div>
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-export const exportCOGSPDF = async (data: COGSData) => {
+export const exportCOGSPDF = async (data: COGSData, language: PdfLanguage = 'en') => {
   try {
     const brandAssets = await loadCOGSBrandAssets();
-    const html = generateCOGSHTML(data, brandAssets);
+    const html = generateCOGSHTML(data, brandAssets, language);
     
     const { uri } = await Print.printToFileAsync({
       html,
@@ -492,21 +602,21 @@ export const exportCOGSPDF = async (data: COGSData) => {
     if (canShare) {
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share COGS Report',
+        dialogTitle: localizePdfText('Share COGS Report', language),
         UTI: 'com.adobe.pdf',
       });
     } else {
       Alert.alert(
-        'PDF Generated',
-        `Your COGS report has been saved to: ${newUri}`,
-        [{ text: 'OK' }]
+        localizePdfText('PDF Generated', language),
+        localizePdfText(`Your COGS report has been saved to: ${newUri}`, language),
+        [{ text: localizePdfText('OK', language) }]
       );
     }
     
     return newUri;
   } catch (error) {
     console.error('Error generating COGS PDF:', error);
-    Alert.alert('Error', 'Failed to generate COGS PDF report');
+    Alert.alert(localizePdfText('Error', language), localizePdfText('Failed to generate COGS PDF report', language));
     throw error;
   }
 };

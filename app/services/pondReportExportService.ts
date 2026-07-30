@@ -2,8 +2,14 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Alert, Platform } from 'react-native';
-import { Pond } from '../store/pondStore';
+import { Alert } from 'react-native';
+import {
+  formatPdfDate,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 interface PondReportData {
   companyName: string;
@@ -32,16 +38,11 @@ interface PondReportData {
   }>;
 }
 
-const formatDate = (date: Date): string => {
-  return date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
-};
+const generatePondReportHTML = (data: PondReportData, language: PdfLanguage): string => {
+  const number = (value: number, maximumFractionDigits = 0) =>
+    formatPdfNumber(value, language, { maximumFractionDigits });
 
-const generatePondReportHTML = (data: PondReportData): string => {
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -150,7 +151,7 @@ const generatePondReportHTML = (data: PondReportData): string => {
         </div>
         <div class="header-right">
           <div class="report-info">Generated on:</div>
-          <div style="font-weight: 600;">${data.reportDate}</div>
+          <div style="font-weight: 600;">${formatPdfDate(data.reportDate, language, { year: 'numeric', month: 'long', day: 'numeric' })}</div>
         </div>
       </div>
 
@@ -160,7 +161,7 @@ const generatePondReportHTML = (data: PondReportData): string => {
           <div class="stat-label">Total Ponds</div>
         </div>
         <div class="stat-card">
-          <div class="stat-value">${data.totalArea.toLocaleString()} m²</div>
+          <div class="stat-value">${number(data.totalArea)} m²</div>
           <div class="stat-label">Total Farm Area</div>
         </div>
         <div class="stat-card">
@@ -191,10 +192,10 @@ const generatePondReportHTML = (data: PondReportData): string => {
           ${data.ponds.map(pond => `
             <tr>
               <td style="font-weight: 600;">${pond.name}</td>
-              <td class="numeric">${pond.area.toLocaleString()}</td>
+              <td class="numeric">${number(pond.area)}</td>
               <td class="numeric">${pond.density}</td>
               <td class="numeric">${pond.doc}</td>
-              <td class="numeric">${pond.population.toLocaleString()}</td>
+              <td class="numeric">${number(pond.population)}</td>
               <td class="numeric">${pond.biomass.toFixed(1)}</td>
               <td class="numeric">${pond.sr}%</td>
               <td class="numeric">${pond.fcr}</td>
@@ -240,12 +241,12 @@ const generatePondReportHTML = (data: PondReportData): string => {
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-export const exportPondReportPDF = async (data: PondReportData) => {
+export const exportPondReportPDF = async (data: PondReportData, language: PdfLanguage = 'en') => {
   try {
-    const html = generatePondReportHTML(data);
+    const html = generatePondReportHTML(data, language);
     
     const { uri } = await Print.printToFileAsync({
       html,
@@ -267,21 +268,21 @@ export const exportPondReportPDF = async (data: PondReportData) => {
     if (canShare) {
       await Sharing.shareAsync(newUri, {
         mimeType: 'application/pdf',
-        dialogTitle: 'Share Comprehensive Pond Report',
+        dialogTitle: localizePdfText('Share Comprehensive Pond Report', language),
         UTI: 'com.adobe.pdf',
       });
     } else {
       Alert.alert(
-        'Report Generated',
-        `Your pond report has been saved to: ${newUri}`,
-        [{ text: 'OK' }]
+        localizePdfText('Report Generated', language),
+        localizePdfText(`Your pond report has been saved to: ${newUri}`, language),
+        [{ text: localizePdfText('OK', language) }]
       );
     }
     
     return newUri;
   } catch (error) {
     console.error('Error generating PDF:', error);
-    Alert.alert('Error', 'Failed to generate PDF report');
+    Alert.alert(localizePdfText('Error', language), localizePdfText('Failed to generate PDF report', language));
     throw error;
   }
 };

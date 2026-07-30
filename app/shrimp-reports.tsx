@@ -15,7 +15,7 @@ const isAndroid = Platform.OS === 'android';
 export default function ShrimpReportsScreen() {
   const router = useRouter();
   const { user, company } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
   const [loading, setLoading] = useState(false);
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
@@ -105,7 +105,7 @@ export default function ShrimpReportsScreen() {
         t.shrimpReports?.mainBlock || 'Main Block', user?.name || t.shrimpReports?.unknown || 'Unknown',
         new Date().toISOString(), `${t.shrimpReports?.cultureCycle || 'Culture Cycle'} ${new Date().getFullYear()}`,
         company?.companyName || t.shrimpReports?.myCompany || 'My Company', pondDataForPDF);
-      await exportSamplingReportPDF(reportData);
+      await exportSamplingReportPDF(reportData, currentLanguage);
       Alert.alert(t.shrimpReports?.success || 'Success', 
         t.shrimpReports?.reportGenerated || 'Sampling report has been generated successfully!');
     } catch (error) {

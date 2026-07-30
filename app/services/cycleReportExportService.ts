@@ -3,6 +3,13 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import type { CycleReport, CycleReportPond } from './cycleReportService';
+import {
+  formatPdfDate,
+  formatPdfNumber,
+  localizePdfHtml,
+  localizePdfText,
+  type PdfLanguage,
+} from '../../shared/pdfReportI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background-portrait.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -11,6 +18,7 @@ type ExportCycleReportInput = {
   report: CycleReport;
   companyName: string;
   formatCurrency: (amount: number) => string;
+  language: PdfLanguage;
 };
 
 const loadBase64Asset = async (assetModule: number) => {
@@ -21,8 +29,8 @@ const loadBase64Asset = async (assetModule: number) => {
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 };
 
-const safeNumber = (value: number, digits = 0) =>
-  Number.isFinite(value) ? value.toLocaleString('en-US', { maximumFractionDigits: digits }) : '-';
+const safeNumber = (value: number, digits = 0, language: PdfLanguage = 'en') =>
+  Number.isFinite(value) ? formatPdfNumber(value, language, { maximumFractionDigits: digits }) : '-';
 
 const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/&/g, '&amp;')
@@ -31,37 +39,36 @@ const escapeHtml = (value: unknown) => String(value ?? '')
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&#39;');
 
-const formatDate = (value?: string) => {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return '-';
-  return date.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
 const chunks = <T,>(items: T[], size: number): T[][] => {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size));
   return result;
 };
 
-const pondRow = (pond: CycleReportPond) => `
+const renderPondRow = (pond: CycleReportPond, language: PdfLanguage) => `
   <tr>
     <td>${escapeHtml(pond.pondName)}</td><td>${escapeHtml(pond.supplier || '-')}</td>
-    <td>${safeNumber(pond.doc)}</td><td>${pond.hasFinalHarvest ? `${safeNumber(pond.finalHarvestMbw, 2)} g` : '-'}</td>
-    <td>${safeNumber(pond.harvestedBiomass, 1)} kg</td><td>${safeNumber(pond.harvestedPopulation)}</td>
-    <td>${pond.hasFinalHarvest ? `${safeNumber(pond.actualSurvivalRate, 1)}%` : '-'}</td>
-    <td>${pond.hasFinalHarvest && pond.actualFcr > 0 ? safeNumber(pond.actualFcr, 2) : '-'}</td>
+    <td>${safeNumber(pond.doc, 0, language)}</td><td>${pond.hasFinalHarvest ? `${safeNumber(pond.finalHarvestMbw, 2, language)} g` : '-'}</td>
+    <td>${safeNumber(pond.harvestedBiomass, 1, language)} kg</td><td>${safeNumber(pond.harvestedPopulation, 0, language)}</td>
+    <td>${pond.hasFinalHarvest ? `${safeNumber(pond.actualSurvivalRate, 1, language)}%` : '-'}</td>
+    <td>${pond.hasFinalHarvest && pond.actualFcr > 0 ? safeNumber(pond.actualFcr, 2, language) : '-'}</td>
   </tr>`;
 
-const closureRow = (pond: CycleReportPond) => `
+const renderClosureRow = (pond: CycleReportPond, language: PdfLanguage) => `
   <tr>
     <td>${escapeHtml(pond.pondName)}</td><td>${escapeHtml(pond.supplier || '-')}</td>
     <td><span class="reason">${escapeHtml(pond.closureReason || 'other')}</span></td>
-    <td>${safeNumber(pond.doc)}</td><td>${pond.latestMbw > 0 ? `${safeNumber(pond.latestMbw, 2)} g` : '-'}</td>
-    <td>${safeNumber(pond.harvestedBiomass, 1)} kg</td>
+    <td>${safeNumber(pond.doc, 0, language)}</td><td>${pond.latestMbw > 0 ? `${safeNumber(pond.latestMbw, 2, language)} g` : '-'}</td>
+    <td>${safeNumber(pond.harvestedBiomass, 1, language)} kg</td>
   </tr>`;
 
-export const generateCycleReportHtml = ({ report, companyName, formatCurrency }: ExportCycleReportInput, backgroundBase64: string, logoBase64: string) => {
+export const generateCycleReportHtml = ({ report, companyName, formatCurrency, language }: ExportCycleReportInput, backgroundBase64: string, logoBase64: string) => {
+  const safeNumber = (value: number, digits = 0) =>
+    Number.isFinite(value) ? formatPdfNumber(value, language, { maximumFractionDigits: digits }) : '-';
+  const formatDate = (value?: string) =>
+    value ? formatPdfDate(value, language, { day: '2-digit', month: 'short', year: 'numeric' }) : '-';
+  const pondRow = (pond: CycleReportPond) => renderPondRow(pond, language);
+  const closureRow = (pond: CycleReportPond) => renderClosureRow(pond, language);
   const harvested = report.ponds.filter((pond) => !pond.isNonHarvestClosure);
   const closures = report.ponds.filter((pond) => pond.isNonHarvestClosure);
   const harvestedPages = chunks(harvested, 7);
@@ -111,10 +118,10 @@ export const generateCycleReportHtml = ({ report, companyName, formatCurrency }:
   const generatedDate = formatDate(new Date().toISOString());
   const renderPage = (body: string, index: number) => `<div class="pdf-page"><img class="page-bg" src="data:image/png;base64,${backgroundBase64}"/><div class="shell"><header><img class="logo" src="data:image/png;base64,${logoBase64}"/><div><h1>Cycle Report</h1><p>${escapeHtml(companyName)} | ${escapeHtml(report.cycle.cycleName)}</p></div><span class="closed">CLOSED</span></header><main>${body}</main><footer><span>Generated by Shrimply | ${generatedDate}</span><b>Page ${index + 1} of ${bodies.length}</b></footer></div></div>`;
 
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
+  return localizePdfHtml(`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>
     *{box-sizing:border-box} @page{size:612pt 792pt;margin:0} html,body{margin:0;padding:0} body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:#16324A;background:#0F4C75}
     .pdf-page{width:612pt;height:792pt;padding:0;position:relative;overflow:hidden;page-break-inside:avoid;break-inside:avoid}.page-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}.shell{position:absolute;inset:30pt 40pt 25pt;z-index:1;display:flex;flex-direction:column}.shell header{height:66pt;display:flex;align-items:center;border-bottom:1.5pt solid #3282B8;gap:10pt}.logo{width:48pt;height:48pt;object-fit:contain;background:transparent}.shell header h1{margin:0;color:#0F4C75;font-size:21pt;text-transform:uppercase}.shell header p{margin:3pt 0 0;color:#5D7488;font-size:8pt}.closed{margin-left:auto;border:1pt solid #98D0AC;background:#EAF7EF;color:#2D8A57;border-radius:12pt;padding:5pt 10pt;font-size:7pt;font-weight:800}main{flex:1;padding-top:12pt;overflow:hidden}h2{font-size:13pt;color:#0F4C75;margin:0 0 10pt;text-transform:uppercase}h3{font-size:9pt;color:#0F4C75;margin:12pt 0 7pt;text-transform:uppercase}label{display:block;color:#5D7488;font-size:6.8pt;text-transform:uppercase;margin-bottom:6pt}.meta,.summary-strip,.profit-grid{display:grid;gap:8pt}.meta{grid-template-columns:repeat(4,1fr);background:#fff;border:1pt solid #D7E7F2;border-radius:10pt;padding:12pt}.meta>div+div{border-left:1pt solid #D7E7F2;padding-left:10pt}.meta b,.summary-strip b,.profit-grid b{font-size:10pt}.metrics{display:grid;grid-template-columns:1fr 1fr;gap:9pt;margin-top:10pt}.metric{height:78pt;background:#fff;border:1pt solid #D7E7F2;border-left:4pt solid #0F4C75;border-radius:9pt;padding:11pt}.metric.blue{border-left-color:#3282B8}.metric.green{border-left-color:#2D8A57}.metric strong{display:block;font-size:15pt;color:#0F4C75}.metric.green strong{color:#2D8A57}.metric small{display:block;color:#5D7488;font-size:6.8pt;margin-top:10pt}section{background:#fff;border:1pt solid #D7E7F2;border-radius:9pt;padding:10pt 14pt;margin-top:10pt}section p{font-size:8pt;line-height:1.45;margin:0}.highlights{display:grid;grid-template-columns:1.7fr 1fr 1fr;gap:0;font-size:8pt}.highlights>*{padding:6pt 0;border-bottom:1pt solid #D7E7F2}.highlights em{text-align:right;color:#0F4C75;font-style:normal;font-weight:700}.summary-strip{grid-template-columns:repeat(3,1fr);margin-bottom:12pt}.summary-strip>div,.profit-grid>div{background:#EAF4FB;border:1pt solid #D7E7F2;border-radius:9pt;padding:11pt}.summary-strip b{font-size:12pt;color:#0F4C75}table{width:100%;border-collapse:collapse;table-layout:fixed;background:#fff;font-size:6.7pt}th{background:#0F4C75;color:#fff;text-align:left;padding:7pt 4pt;line-height:1.15}td{padding:8pt 4pt;border:1pt solid #D7E7F2;vertical-align:middle;word-break:break-word}th:nth-child(1){width:8%}th:nth-child(2){width:19%}.reason{background:#FFF5DF;color:#B76E00;border-radius:8pt;padding:3pt 5pt;text-transform:uppercase;font-weight:800}.closure-title{margin-top:14pt}.basis{margin-top:12pt;padding:8pt 11pt}.basis h3{margin:0 0 5pt}.basis p{font-size:6.9pt}.cost-table{font-size:8pt}.cost-table th:nth-child(1){width:44%}.cost-table th:nth-child(2){width:36%}.cost-table td:nth-child(n+2){text-align:right}.cost-table .total{background:#EAF4FB;font-weight:800}.bars>div{display:grid;grid-template-columns:105pt 1fr 40pt;gap:8pt;align-items:center;margin:8pt 0;font-size:7pt}.bars i{height:8pt;background:#E5EEF4;border-radius:5pt;overflow:hidden}.bars u{display:block;height:100%;background:#0F4C75;border-radius:5pt}.bars b{text-align:right}.profit-grid{grid-template-columns:repeat(4,1fr);margin-bottom:10pt}.profit-grid>div{background:#fff}.profit-grid .positive{background:#EAF7EF}.profit-grid .positive b{color:#2D8A57}footer{height:20pt;border-top:1pt solid #D7E7F2;padding-top:7pt;display:flex;justify-content:space-between;color:#5D7488;font-size:6.5pt}
-  </style></head><body>${bodies.map(renderPage).join('')}</body></html>`;
+  </style></head><body>${bodies.map(renderPage).join('')}</body></html>`, language);
 };
 
 export const exportCycleReportPDF = async (input: ExportCycleReportInput) => {
@@ -128,6 +135,6 @@ export const exportCycleReportPDF = async (input: ExportCycleReportInput) => {
   const filename = `CycleReport_${safeCompany}_${safeCycle}.pdf`;
   const outputUri = `${FileSystem.documentDirectory}${filename}`;
   await FileSystem.copyAsync({ from: uri, to: outputUri });
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(outputUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Share Cycle Report' });
+  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(outputUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: localizePdfText('Share Cycle Report', input.language) });
   return outputUri;
 };

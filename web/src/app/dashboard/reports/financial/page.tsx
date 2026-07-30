@@ -16,7 +16,14 @@ import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { useRouter } from 'next/navigation';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getFarmPeriodDateKeys, isDateKeyInRange } from '../../../../../../shared/farmDate';
+import {
+  formatPdfDate,
+  formatPdfDateTime,
+  localizePdfHtml,
+  type PdfLanguage,
+} from '../../../../../../shared/pdfReportI18n';
 import { useFinanceRecords } from '@/hooks/useDashboardData';
 
 /* --- Types ----------------------------------------------- */
@@ -106,24 +113,17 @@ type Html2PdfFactory = () => Html2PdfWorker;
 
 /* --- Helper Functions ------------------------------------ */
 
-const formatDate = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'short', 
-    day: 'numeric' 
-  });
-};
+const formatDate = (dateStr: string, language: PdfLanguage): string => formatPdfDate(dateStr, language);
 
 /* --- HTML Generators (1:1 Mobile Parity) --------------- */
-const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number) => string, currencyCode: string): string => {
+const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number) => string, currencyCode: string, language: PdfLanguage): string => {
   const { 
     startDate, endDate, companyName, totalRevenue, revenueBreakdown,
     totalCOGS, cogsBreakdown, grossProfit, totalOPEX, opexBreakdown,
     operatingIncome, netProfit
   } = data;
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -132,11 +132,11 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 13px; line-height: 1.5; }
         .header { margin-bottom: 25px; }
-        .title { font-size: 28px; font-weight: 700; color: #0F4C75; margin-bottom: 6px; }
+        .title { font-size: 28px; font-weight: 700; color: #111827; margin-bottom: 6px; }
         .company-name { font-size: 14px; color: #2C3E50; margin-bottom: 3px; font-weight: 600; }
         .subtitle { font-size: 13px; color: #4A5568; }
         .date-range { font-size: 13px; color: #2C3E50; margin-bottom: 20px; }
-        .divider { height: 3px; background: linear-gradient(to right, #0F4C75, #3282B8); margin: 15px 0; border-radius: 2px; }
+        .divider { height: 3px; background: #374151; margin: 15px 0; border-radius: 2px; }
         .section { margin-bottom: 20px; }
         .section-title { font-size: 14px; font-weight: 700; color: #2C3E50; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #BDC3C7; padding-bottom: 4px; }
         .line-item { display: flex; justify-content: space-between; padding: 6px 0; }
@@ -145,10 +145,10 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
         .line-item.gross { font-weight: 700; font-size: 15px; border-top: 2px solid #34495E; border-bottom: 1px solid #34495E; padding: 10px 0; margin-top: 8px; color: #2C3E50; background: #F8FAFB; padding-left: 10px; padding-right: 10px; }
         .line-item.net { font-weight: 700; font-size: 16px; border-bottom: 3px double #34495E; border-top: 2px solid #34495E; padding: 12px 10px; margin-top: 10px; background: #F0F4F8; }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
-        .amount.positive { color: #2D7A4F; }
-        .amount.negative { color: #C0392B; }
+        .amount.positive { color: #111827; }
+        .amount.negative { color: #111827; }
         .currency { font-size: 11px; color: #4A5568; display: inline-block; margin-left: 4px; }
-        .summary-box { background: #F8FAFB; border-left: 4px solid #0F4C75; padding: 12px; margin-top: 25px; border-radius: 4px; }
+        .summary-box { background: #FFFFFF; border: 1px solid #6B7280; padding: 12px; margin-top: 25px; border-radius: 0; }
         .summary-item { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
         .summary-item.highlight { font-weight: 700; font-size: 15px; color: #2C3E50; border-top: 1px solid #BDC3C7; margin-top: 8px; padding-top: 8px; }
         .footer { margin-top: 30px; padding-top: 15px; border-top: 1px solid #ECF0F1; font-size: 11px; color: #4A5568; text-align: center; }
@@ -159,7 +159,7 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
         <div class="title">Income Statement</div>
         <div class="company-name">${companyName}</div>
         <div class="subtitle">Multi-Step Profit & Loss</div>
-        <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+        <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
       </div>
       <div class="divider"></div>
       <div class="section">
@@ -212,7 +212,7 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
       </div>
       <br/>
       <div class="line-item net ${netProfit >= 0 ? '' : 'negative'}">
-        <span style="color: ${netProfit >= 0 ? '#2D7A4F' : '#C0392B'}">Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
+        <span>Net ${netProfit >= 0 ? 'Income' : 'Loss'}</span>
         <div>
           <span class="amount ${netProfit >= 0 ? 'positive' : 'negative'}">${formatCurrency(Math.abs(netProfit))}</span>
           <span class="currency">${currencyCode}</span>
@@ -229,14 +229,14 @@ const generateProfitLossHTML = (data: FinancialData, formatCurrency: (v: number)
         </div>
       </div>
       <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString()} - ${companyName}
+        Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language)} - ${companyName}
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: number) => string): string => {
+const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: number) => string, language: PdfLanguage): string => {
   const { startDate, endDate, companyName, openingBalance, operating, investing, financing } = data;
   const netOperating = operating.cashFromSales + operating.cashFromCustomers - operating.paymentToSuppliers - operating.paymentForExpenses;
   const netInvesting = investing.saleOfAssets - investing.purchaseOfAssets;
@@ -244,7 +244,7 @@ const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: numb
   const netChange = netOperating + netInvesting + netFinancing;
   const closingBalance = openingBalance + netChange;
 
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -253,19 +253,19 @@ const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: numb
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
         .header { margin-bottom: 30px; }
-        .title { font-size: 32px; font-weight: 700; color: #0F4C75; margin-bottom: 8px; }
+        .title { font-size: 32px; font-weight: 700; color: #111827; margin-bottom: 8px; }
         .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; }
         .date-range { font-size: 14px; color: #2C3E50; margin-bottom: 30px; }
-        .divider { height: 3px; background: linear-gradient(to right, #0F4C75, #3282B8); margin: 20px 0; border-radius: 2px; }
+        .divider { height: 3px; background: #374151; margin: 20px 0; border-radius: 2px; }
         .section { margin-bottom: 25px; }
-        .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; background: #F0F9F4; padding: 10px 12px; border-left: 4px solid #0F4C75; border-radius: 4px; }
+        .section-title { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 12px; text-transform: uppercase; background: #FFFFFF; padding: 8px 0; border-bottom: 1px solid #6B7280; }
         .line-item { display: flex; justify-content: space-between; padding: 8px 0 8px 20px; border-bottom: 1px solid #ECF0F1; }
-        .line-item.subtotal { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; background: #F8FAFB; padding-left: 12px; padding-right: 12px; }
-        .line-item.balance { font-weight: 700; font-size: 16px; padding: 12px; background: #EBF5FB; border-radius: 4px; border: 2px solid #3498DB; }
-        .line-item.closing { font-weight: 700; font-size: 17px; color: #27AE60; border-bottom: 3px double #27AE60; padding: 15px 12px; margin-top: 15px; background: #F0F9F4; }
+        .line-item.subtotal { font-weight: 700; font-size: 15px; border-bottom: 2px solid #374151; padding: 12px; margin-top: 8px; color: #111827; background: #FFFFFF; }
+        .line-item.balance { font-weight: 700; font-size: 16px; padding: 12px; background: #FFFFFF; border: 1px solid #6B7280; }
+        .line-item.closing { font-weight: 700; font-size: 17px; color: #111827; border-bottom: 3px double #374151; padding: 15px 12px; margin-top: 15px; background: #FFFFFF; }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
-        .amount.positive { color: #2D7A4F; }
-        .amount.negative { color: #C0392B; }
+        .amount.positive { color: #111827; }
+        .amount.negative { color: #111827; }
         .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ECF0F1; font-size: 12px; color: #2C3E50; text-align: center; }
       </style>
     </head>
@@ -273,7 +273,7 @@ const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: numb
       <div class="header">
         <div class="title">Statement of Cash Flows</div>
         <div class="company-name">${companyName}</div>
-        <div class="date-range">For the period ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+        <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
       </div>
       <div class="divider"></div>
       <div class="section">
@@ -300,16 +300,16 @@ const generateCashFlowHTML = (data: CashFlowReportData, formatCurrency: (v: numb
         </div>
       </div>
       <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString()} - ${companyName}
+        Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language)} - ${companyName}
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
-const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => string): string => {
+const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => string, language: PdfLanguage): string => {
   const { startDate, endDate, companyName, openingInventory, purchases, directLabor, directMaterials, closingInventory, revenue, totalCOGS, grossProfit, grossProfitMargin } = data;
-  return `
+  return localizePdfHtml(`
     <!DOCTYPE html>
     <html>
     <head>
@@ -318,19 +318,19 @@ const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => s
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
         .header { margin-bottom: 30px; }
-        .title { font-size: 32px; font-weight: 700; color: #27AE60; margin-bottom: 8px; }
+        .title { font-size: 32px; font-weight: 700; color: #111827; margin-bottom: 8px; }
         .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; }
-        .divider { height: 3px; background: linear-gradient(to right, #27AE60, #2ECC71); margin: 20px 0; border-radius: 2px; }
+        .divider { height: 3px; background: #374151; margin: 20px 0; border-radius: 2px; }
         .section { margin-bottom: 25px; }
         .section-title { font-size: 15px; font-weight: 700; color: #2C3E50; margin-bottom: 12px; text-transform: uppercase; }
         .line-item { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ECF0F1; }
         .line-item.total { font-weight: 700; font-size: 15px; border-bottom: 2px solid #34495E; padding: 12px 0; margin-top: 8px; color: #2C3E50; }
-        .line-item.subtotal { font-weight: 600; font-size: 14px; border-bottom: 1px solid #BDC3C7; padding: 10px 0; margin-top: 8px; background: #F8FAFB; padding-left: 10px; padding-right: 10px; }
-        .metric-box { background: linear-gradient(135deg, #0F4C75 0%, #3282B8 100%); color: white; padding: 20px; margin-bottom: 20px; border-radius: 8px; text-align: center; }
+        .line-item.subtotal { font-weight: 600; font-size: 14px; border-bottom: 1px solid #6B7280; padding: 10px; margin-top: 8px; background: #FFFFFF; }
+        .metric-box { background: #FFFFFF; color: #111827; padding: 20px; margin-bottom: 20px; border: 2px solid #374151; text-align: center; }
         .metric-value { font-size: 32px; font-weight: 700; }
         .amount { text-align: right; font-variant-numeric: tabular-nums; }
-        .amount.positive { color: #27AE60; }
-        .amount.negative { color: #E74C3C; }
+        .amount.positive { color: #111827; }
+        .amount.negative { color: #111827; }
         .footer { margin-top: 40px; padding-top: 20px; border-top: 2px solid #ECF0F1; font-size: 12px; color: #2C3E50; text-align: center; }
       </style>
     </head>
@@ -338,7 +338,7 @@ const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => s
       <div class="header">
         <div class="title">Cost of Goods Sold</div>
         <div class="company-name">${companyName}</div>
-        <div class="date-range">For ${formatDate(startDate)} - ${formatDate(endDate)}</div>
+        <div class="date-range">For ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
       </div>
       <div class="metric-box">
         <div style="font-size: 13px; opacity: 0.9; margin-bottom: 8px;">GROSS PROFIT MARGIN</div>
@@ -358,18 +358,19 @@ const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => s
         <div class="section-title">Gross Profit Analysis</div>
         <div class="line-item"><span>Total Revenue</span><span class="amount positive">${formatCurrency(revenue)}</span></div>
         <div class="line-item"><span>Less: Cost of Goods Sold</span><span class="amount negative">(${formatCurrency(totalCOGS)})</span></div>
-        <div class="line-item total" style="color: #27AE60; border-bottom: 3px double #27AE60; font-size: 18px;"><span>Gross Profit</span><span class="amount">${formatCurrency(grossProfit)}</span></div>
+        <div class="line-item total" style="color: #111827; border-bottom: 3px double #374151; font-size: 18px;"><span>Gross Profit</span><span class="amount">${formatCurrency(grossProfit)}</span></div>
       </div>
       <div class="footer">
-        Generated by Shrimply Aquaculture Management on ${new Date().toLocaleString()} - ${companyName}
+        Generated by Shrimply Aquaculture Management on ${formatPdfDateTime(new Date(), language)} - ${companyName}
       </div>
     </body>
     </html>
-  `;
+  `, language);
 };
 
 export default function FinancialReportsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
+  const { currentLanguage } = useLanguage();
   const router = useRouter();
   const { company, loading: authLoading } = useAuth();
   const [selectedReport, setSelectedReport] = useState('profit-loss');
@@ -457,7 +458,7 @@ export default function FinancialReportsPage() {
           operatingIncome: totalRev - totalCOGS - totalOPEX,
           netProfit: totalRev - totalCOGS - totalOPEX
         };
-        html = generateProfitLossHTML(data, formatCurrency, currencyConfig.code);
+        html = generateProfitLossHTML(data, formatCurrency, currencyConfig.code, currentLanguage);
         fileName = `ProfitLoss_${company?.companyName || 'Farm'}_${selectedPeriod}.pdf`;
       } else if (selectedReport === 'cash-flow') {
         const operating = {
@@ -475,7 +476,7 @@ export default function FinancialReportsPage() {
           investing: { purchaseOfAssets: 0, saleOfAssets: 0 },
           financing: { loansReceived: 0, loanRepayments: 0, ownerWithdrawals: 0 }
         };
-        html = generateCashFlowHTML(data, formatCurrency);
+        html = generateCashFlowHTML(data, formatCurrency, currentLanguage);
         fileName = `CashFlow_${company?.companyName || 'Farm'}_${selectedPeriod}.pdf`;
       } else if (selectedReport === 'cogs') {
         const purchases = filteredExpenses.filter(e => normalizeCategory(e.category) === 'Feed').reduce((s, e) => s + e.amount, 0);
@@ -495,7 +496,7 @@ export default function FinancialReportsPage() {
           grossProfit: totalRev - totalCOGS,
           grossProfitMargin: totalRev > 0 ? ((totalRev - totalCOGS) / totalRev) * 100 : 0
         };
-        html = generateCOGSHTML(data, formatCurrency);
+        html = generateCOGSHTML(data, formatCurrency, currentLanguage);
         fileName = `COGS_${company?.companyName || 'Farm'}_${selectedPeriod}.pdf`;
       } else if (selectedReport === 'harvest-projections') {
         // Redirect to projections page for full tool
@@ -599,7 +600,7 @@ export default function FinancialReportsPage() {
               <h2 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px' }}>Inventory Adjustment</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Opening Inventory (Rp)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Opening Inventory ({currencyConfig.symbol})</label>
                   <input 
                     type="number" 
                     value={openingInventory} 
@@ -609,7 +610,7 @@ export default function FinancialReportsPage() {
                   />
                 </div>
                 <div>
-                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Closing Inventory (Rp)</label>
+                  <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Closing Inventory ({currencyConfig.symbol})</label>
                   <input 
                     type="number" 
                     value={closingInventory} 
