@@ -1227,7 +1227,7 @@ asset: {
   // Asset Card
   inStorage: 'In Storage',
   overdue: 'OVERDUE',
-  util: 'util',
+  util: 'time in use',
   transfer: 'Transfer',
   return: 'Return',
   log: 'Log',

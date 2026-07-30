@@ -1433,7 +1433,7 @@ companySetup: {
     // Asset Card
     inStorage: 'Di Penyimpanan',
     overdue: 'TERLAMBAT',
-    util: 'util',
+    util: 'waktu digunakan',
     transfer: 'Transfer',
     return: 'Kembalikan',
     log: 'Catat',

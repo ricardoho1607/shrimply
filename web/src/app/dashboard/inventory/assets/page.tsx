@@ -530,6 +530,7 @@ export default function AssetInventoryPage() {
               <div style={{ position: 'relative', flex: 1, minWidth: '280px' }}>
                 <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
                 <input 
+                  className="asset-readable-placeholder"
                   placeholder="Search assets by name or serial number..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
@@ -580,19 +581,19 @@ export default function AssetInventoryPage() {
                   borderLeft: asset.condition === 'Needs Repair' ? '6px solid #e74c3c' : '1px solid var(--border)'
                 }}>
                   <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ display: 'flex', gap: '14px' }}>
+                    <div style={{ display: 'flex', gap: '14px', flex: 1, minWidth: 0 }}>
                       <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)', flexShrink: 0 }}>
                         <Construction size={21} />
                       </div>
-                      <div>
-                        <h3 style={{ fontSize: '17px', fontWeight: 850 }}>{asset.name}</h3>
-                        <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{asset.category} {asset.serialNumber ? `• SN: ${asset.serialNumber}` : ''}</p>
+                      <div style={{ minWidth: 0 }}>
+                        <h3 style={{ fontSize: '17px', fontWeight: 850, overflowWrap: 'anywhere' }}>{asset.name}</h3>
+                        <p style={{ fontSize: '13px', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>{asset.category} {asset.serialNumber ? `• SN: ${asset.serialNumber}` : ''}</p>
                         <div style={{ fontSize: '12px', fontWeight: 800, marginTop: '4px', color: asset.condition === 'Needs Repair' ? '#991B1B' : '#27ae60' }}>
                           {asset.condition}
                         </div>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
+                    <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                       <button className="btn-secondary" style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('history', asset)}><History size={16} /></button>
                       {canManageAssets && (
                         <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} /></button>
@@ -644,14 +645,14 @@ export default function AssetInventoryPage() {
             maxHeight: '90vh', display: 'flex', flexDirection: 'column'
           }}>
             <div className="responsive-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-              <div>
+              <div style={{ minWidth: 0, paddingRight: '12px' }}>
                 <h2 style={{ fontSize: '20px', fontWeight: 800 }}>
                   {modalType === 'add' ? 'Add New Asset' :
                    modalType === 'transfer' ? 'Transfer Asset' :
                    modalType === 'maintenance' ? 'Log Maintenance' :
                    modalType === 'history' ? 'Asset History' : 'Return to Storage'}
                 </h2>
-                {selectedAsset && <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px', fontWeight: 600 }}>{selectedAsset.name}</p>}
+                {selectedAsset && <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px', fontWeight: 600, overflowWrap: 'anywhere' }}>{selectedAsset.name}</p>}
               </div>
               <button onClick={() => setModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}>
                 <X size={20} />
@@ -697,7 +698,7 @@ export default function AssetInventoryPage() {
                   </button>
                 </div>
               ) : modalType === 'history' && selectedAsset ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: 0 }}>
                   <div>
                     <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Wrench size={18} /> Maintenance History
@@ -705,12 +706,12 @@ export default function AssetInventoryPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {selectedAsset.maintenanceHistory?.length === 0 ? <p style={{ color: 'var(--text-faint)', textAlign: 'center', padding: '24px', background: 'var(--bg-mid)', borderRadius: '12px' }}>No records found.</p> : 
                       [...selectedAsset.maintenanceHistory].reverse().map(m => (
-                        <div key={m.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                            <span style={{ color: 'var(--text-primary)' }}>{m.description}</span>
-                            <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>{formatDate(m.date)}</span>
+                        <div key={m.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 700, minWidth: 0 }}>
+                            <span style={{ color: 'var(--text-primary)', minWidth: 0, flex: '1 1 220px', overflowWrap: 'anywhere' }}>{m.description}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(m.date)}</span>
                           </div>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                             {m.type} • {m.technician} • <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{formatCurrency(m.cost || 0)}</span>
                           </div>
                         </div>
@@ -724,12 +725,12 @@ export default function AssetInventoryPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {selectedAsset.transferHistory?.length === 0 ? <p style={{ color: 'var(--text-faint)', textAlign: 'center', padding: '24px', background: 'var(--bg-mid)', borderRadius: '12px' }}>No records found.</p> : 
                       [...selectedAsset.transferHistory].reverse().map(t => (
-                        <div key={t.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
-                            <span style={{ color: 'var(--text-primary)' }}>{t.from} → {t.to}</span>
-                            <span style={{ fontSize: '12px', color: 'var(--text-faint)' }}>{formatDate(t.date)}</span>
+                        <div key={t.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 700, minWidth: 0 }}>
+                            <span style={{ color: 'var(--text-primary)', minWidth: 0, flex: '1 1 220px', overflowWrap: 'anywhere' }}>{t.from} → {t.to}</span>
+                            <span style={{ fontSize: '12px', color: 'var(--text-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t.date)}</span>
                           </div>
-                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px' }}>
+                          <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                             {t.purpose} {t.returned ? `• Returned: ${formatDate(t.returned)}` : <span style={{color: 'var(--primary)', fontWeight: 700}}>• Currently with {t.to}</span>}
                           </div>
                         </div>
@@ -774,7 +775,7 @@ export default function AssetInventoryPage() {
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <label style={{ fontSize: '13px', fontWeight: 700 }}>Transfer To *</label>
-                        <input required value={formData.to} onChange={e => setFormData({...formData, to: e.target.value})} placeholder="Person name" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
+                        <input className="asset-readable-placeholder" required value={formData.to} onChange={e => setFormData({...formData, to: e.target.value})} placeholder="Person name" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <label style={{ fontSize: '13px', fontWeight: 700 }}>Purpose</label>

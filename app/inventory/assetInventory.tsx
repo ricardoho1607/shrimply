@@ -18,6 +18,7 @@ const CATEGORIES = ['Equipment', 'Infrastructure', 'Vehicles', 'Tools', 'Technol
 const CONDITIONS = ['Excellent', 'Good', 'Fair', 'Poor', 'Needs Repair'];
 const SEVERITIES = ['Low', 'Medium', 'High'];
 const MAINTENANCE_TYPES: MaintenanceType[] = ['Preventive', 'Corrective', 'Inspection', 'Repair', 'Upgrade'];
+const PLACEHOLDER_TEXT_COLOR = '#526B7D';
 
 const MAINTENANCE_TYPE_COLORS: Record<MaintenanceType, string> = {
   Preventive: '#27ae60', Corrective: '#f39c12', Inspection: '#315f57', Repair: '#e74c3c', Upgrade: '#9b59b6'
@@ -445,7 +446,7 @@ export default function AssetInventoryScreen() {
     const frequency = store.getMaintenanceFrequency(selectedAsset.id);
     
     return (
-      <ScrollView style={styles.historyScroll} contentContainerStyle={{ paddingBottom: 60 }}>
+      <ScrollView style={styles.historyScroll} contentContainerStyle={styles.historyScrollContent}>
         {selectedAsset.photos.length > 0 && (
           <ScrollView horizontal style={{ marginBottom: 16 }}>
             {selectedAsset.photos.map((uri, i) => 
@@ -506,7 +507,7 @@ export default function AssetInventoryScreen() {
               </View>
               <View style={styles.historyContent}>
                 <View style={styles.maintenanceHeader}>
-                  <Text style={styles.historyQty}>{m.description}</Text>
+                  <Text style={[styles.historyQty, styles.maintenanceDescription]}>{m.description}</Text>
                   <View style={[styles.typeTag, { backgroundColor: MAINTENANCE_TYPE_COLORS[m.type] + '20' }]}>
                     <Text style={styles.typeText}>{m.type}</Text>
                   </View>
@@ -557,7 +558,8 @@ export default function AssetInventoryScreen() {
     <View style={styles.input}>
       <Text style={styles.label}>{label}</Text>
       <TextInput placeholder={placeholder} value={value} onChangeText={onChange} 
-        style={[styles.textInput, props?.multiline && styles.textArea]} {...props} />
+        style={[styles.textInput, props?.multiline && styles.textArea]} {...props}
+        placeholderTextColor={PLACEHOLDER_TEXT_COLOR} />
     </View>
   );
 
@@ -623,7 +625,8 @@ export default function AssetInventoryScreen() {
         {activeTab === 'all' && (
           <View style={styles.searchContainer}>
             <TextInput placeholder={t.asset?.searchPlaceholder || "Search assets or serial numbers..."} 
-              value={searchQuery} onChangeText={setSearchQuery} style={styles.textInput} />
+              value={searchQuery} onChangeText={setSearchQuery} style={styles.textInput}
+              placeholderTextColor={PLACEHOLDER_TEXT_COLOR} />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
               {CATEGORIES.map(cat => (
                 <TouchableOpacity key={cat} style={[styles.chip, categoryFilter === cat && styles.chipActive]} 
@@ -977,12 +980,12 @@ const styles = StyleSheet.create({
   cardActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 7 : 8 },
   qrBtn: { padding: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 7 : 8 },
   deleteBtn: { padding: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 7 : 8 },
-  holderSection: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderTopWidth: 1, borderTopColor: '#f4f8fc', marginBottom: Platform.OS === 'android' ? 7 : 8 },
-  holderText: { flex: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137' },
+  holderSection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderTopWidth: 1, borderTopColor: '#f4f8fc', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  holderText: { flex: 1, minWidth: 0, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137' },
   overdueTag: { backgroundColor: '#e74c3c', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
   overdueText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFF' },
-  utilizationTag: { backgroundColor: '#315f57', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
-  utilizationText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFF' },
+  utilizationTag: { flexShrink: 0, backgroundColor: '#315f57', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
+  utilizationText: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFF' },
   actions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 7 : 8 },
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Platform.OS === 'android' ? 5 : 6, paddingVertical: Platform.OS === 'android' ? 9 : 10, borderRadius: Platform.OS === 'android' ? 9 : 10, backgroundColor: '#315f57' },
   actionBtnSec: { backgroundColor: 'transparent', borderWidth: 2, borderColor: '#f39c12' },
@@ -992,8 +995,8 @@ const styles = StyleSheet.create({
   emptySub: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginTop: Platform.OS === 'android' ? 7 : 8, textAlign: 'center', paddingHorizontal: Platform.OS === 'android' ? 28 : 32 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: Platform.OS === 'android' ? 20 : 24, borderTopRightRadius: Platform.OS === 'android' ? 20 : 24, maxHeight: '90%', shadowColor: '#dce8f2', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: Platform.OS === 'android' ? 18 : 20, borderBottomWidth: 1, borderBottomColor: '#f4f8fc' },
-  modalTitle: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 18 : 20, borderBottomWidth: 1, borderBottomColor: '#f4f8fc' },
+  modalTitle: { flex: 1, minWidth: 0, fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137' },
   form: { maxHeight: Platform.OS === 'android' ? 450 : 500 },
   formContent: { padding: Platform.OS === 'android' ? 18 : 20 },
   input: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
@@ -1026,22 +1029,24 @@ const styles = StyleSheet.create({
   rescanBtn: { marginTop: Platform.OS === 'android' ? 18 : 20, paddingHorizontal: Platform.OS === 'android' ? 20 : 24, paddingVertical: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#315f57' },
   rescanText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#FFF' },
   historyScroll: { maxHeight: Platform.OS === 'android' ? 450 : 500 },
+  historyScrollContent: { paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 16 : 18, paddingBottom: 60 },
   historyImage: { width: Platform.OS === 'android' ? 110 : 120, height: Platform.OS === 'android' ? 110 : 120, borderRadius: Platform.OS === 'android' ? 10 : 12, marginRight: Platform.OS === 'android' ? 7 : 8 },
-  statsGrid: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
-  statCard: { flex: 1, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 10 : 12, alignItems: 'center' },
-  statLabel: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#0d2137', marginBottom: 4, textAlign: 'center', fontWeight: '500' },
-  statValue: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137' },
-  historyTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 10 : 12 },
+  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  statCard: { flexGrow: 1, flexBasis: '28%', minWidth: 84, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 10 : 12, alignItems: 'center' },
+  statLabel: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 10 : 11, color: '#0d2137', marginBottom: 4, textAlign: 'center', fontWeight: '500' },
+  statValue: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: 'bold', color: '#0d2137', textAlign: 'center' },
+  historyTitle: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   emptyHistory: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', fontStyle: 'italic', textAlign: 'center', paddingVertical: Platform.OS === 'android' ? 18 : 20 },
-  historyItem: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#f4f8fc', padding: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12 },
+  historyItem: { width: '100%', flexDirection: 'row', alignItems: 'flex-start', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#f4f8fc', padding: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12 },
   historyIcon: { width: Platform.OS === 'android' ? 34 : 36, height: Platform.OS === 'android' ? 34 : 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  historyContent: { flex: 1 },
-  historyQty: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137', marginBottom: 4 },
-  historyDate: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', marginBottom: Platform.OS === 'android' ? 5 : 6 },
-  historyNotes: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', marginTop: 2 },
-  maintenanceHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 },
-  typeTag: { paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
-  typeText: { fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '700', color: '#0d2137' },
+  historyContent: { flex: 1, minWidth: 0 },
+  historyQty: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137', marginBottom: 4 },
+  historyDate: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 11 : 12, color: '#315f57', marginBottom: Platform.OS === 'android' ? 5 : 6 },
+  historyNotes: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', marginTop: 2 },
+  maintenanceHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: Platform.OS === 'android' ? 7 : 8, marginBottom: 4 },
+  maintenanceDescription: { flex: 1, minWidth: 0, marginBottom: 0 },
+  typeTag: { flexShrink: 0, paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
+  typeText: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '700', color: '#0d2137' },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   loadingText: { fontSize: Platform.OS === 'android' ? 15 : 16, color: '#0d2137', fontWeight: '500' },
 });

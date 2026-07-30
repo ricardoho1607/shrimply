@@ -1104,7 +1104,7 @@ companySetup: {
     currentlyCheckedOut: 'ยืมออกไปอยู่',
     inStorage: 'ในคลัง',
     overdue: 'เกินกำหนด',
-    util: 'ใช้',
+    util: 'เวลาที่ใช้งาน',
     transfer: 'โอน',
     return: 'คืน',
     log: 'บันทึก',

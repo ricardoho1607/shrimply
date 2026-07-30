@@ -1328,7 +1328,7 @@ companySetup: {
     currentlyCheckedOut: 'Hiện đang chuyển giao',
     inStorage: 'Trong kho',
     overdue: 'QUÁ HẠN',
-    util: 'sd',
+    util: 'thời gian sử dụng',
     transfer: 'Chuyển giao',
     return: 'Trả lại',
     log: 'Ghi',

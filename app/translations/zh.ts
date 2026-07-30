@@ -1451,7 +1451,7 @@ companySetup: {
     // Asset Card
     inStorage: '在库',
     overdue: '逾期',
-    util: '使用率',
+    util: '使用时间',
     transfer: '转移',
     return: '归还',
     log: '记录',

@@ -2353,3 +2353,8 @@ nav.scrolled {
     font-size: 1.16rem;
   }
 }
+
+.asset-readable-placeholder::placeholder {
+  color: #526b7d;
+  opacity: 1;
+}
