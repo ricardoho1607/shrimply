@@ -26,6 +26,12 @@ test('admin detail URL sync does not restore a user after navigating to the over
   assert.equal(core.shouldSyncAdminSelection('user-123', 'user-456'), true);
 });
 
+test('admin home links use native navigation to clear the selected-user query', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf8');
+  assert.doesNotMatch(source, /from ['"]next\/link['"]/);
+  assert.match(source, /<a href="\/admin"/);
+});
+
 test('masks email and phone values without exposing full PII', () => {
   assert.equal(core.maskEmail('ayu.pratama@example.com'), 'ay••••••••@example.com');
   assert.equal(core.maskPhone('+62 812-3456-7890'), '+•• ••• ••• 7890');
