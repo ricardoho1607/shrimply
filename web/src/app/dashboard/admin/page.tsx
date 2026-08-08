@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { collection, collectionGroup, getDocs } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { onIdTokenChanged } from 'firebase/auth';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -29,7 +30,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import Link from 'next/link';
-import { app, db } from '@/lib/firebase';
+import { app, auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { AdminCompanyTable, AdminRecentUsers } from './AdminCoreLists';
 import { AdminFollowUpQueue } from './AdminFollowUpQueue';
@@ -132,8 +133,6 @@ type TesterRequest = {
   emailDeliveryStatus: string;
   emailDeliveryReason: string;
 };
-
-const ADMIN_EMAILS = ['ricardofransiskusho@gmail.com'];
 
 const formatNumber = (value: number) => value.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
@@ -1294,6 +1293,8 @@ function UsagePanel({ metrics }: { metrics: AdminMetrics }) {
 
 export default function HiddenAdminPage() {
   const { user } = useAuth();
+  const [isAllowed, setIsAllowed] = useState(false);
+  const [authorizationResolved, setAuthorizationResolved] = useState(false);
   const [period, setPeriod] = useState<Period>(7);
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [dataSource, setDataSource] = useState<DataSource>(null);
@@ -1317,7 +1318,22 @@ export default function HiddenAdminPage() {
     setSelectedUser(null);
   };
 
-  const isAllowed = useMemo(() => ADMIN_EMAILS.includes(String(user?.email || '').toLowerCase()), [user?.email]);
+  useEffect(() => onIdTokenChanged(auth, async (firebaseUser) => {
+    if (!firebaseUser) {
+      setIsAllowed(false);
+      setAuthorizationResolved(true);
+      return;
+    }
+    try {
+      const token = await firebaseUser.getIdTokenResult(true);
+      setIsAllowed(token.claims.platformOwner === true || token.claims.platformRole === 'owner');
+    } catch (claimError) {
+      console.error('Failed to verify platform-owner claim:', claimError);
+      setIsAllowed(false);
+    } finally {
+      setAuthorizationResolved(true);
+    }
+  }), []);
 
   const loadMetrics = useCallback(async () => {
     if (!isAllowed) return;
@@ -1409,6 +1425,10 @@ export default function HiddenAdminPage() {
     });
   }, [loadMetrics]);
 
+  if (!authorizationResolved) {
+    return <AdminLoadingSkeleton />;
+  }
+
   if (!isAllowed) {
     return (
       <div className="dashboard-page-relaxed" style={{ maxWidth: 900, margin: '0 auto' }}>
@@ -1416,7 +1436,7 @@ export default function HiddenAdminPage() {
           <div className="dashboard-hero-copy">
             <span className="dashboard-hero-eyebrow">Restricted</span>
             <h1 className="dashboard-hero-title">Admin access denied</h1>
-            <p className="dashboard-hero-subtitle">This page is hidden and restricted to the Shrimply founder account.</p>
+            <p className="dashboard-hero-subtitle">This page requires the dedicated Shrimply platform-owner custom claim.</p>
           </div>
           <div style={{ width: '64px', height: '64px', borderRadius: '20px', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <EyeOff size={34} />

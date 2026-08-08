@@ -52,10 +52,12 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
+  calculatePondMortalityForDate,
   calculatePondMetricsWithHarvest,
   detectFeedBiomassMismatchInsight,
   getSamplingMbw,
   isBaselineSampling,
+  type SharedMortalityRecord,
 } from '../../../../../../shared/pondCalculations';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -126,6 +128,7 @@ interface Pond {
   blockId?: string;
   blockName?: string;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  mortalityRecords?: SharedMortalityRecord[];
   latestLabStatus?: LabReportStatus & {
     byType?: {
       water_quality?: LabReportStatus;
@@ -715,6 +718,7 @@ export default function PondDetailClient() {
     const latest = sorted[sorted.length - 1] || { mbw: 0, mortality: 0, feed: 0 };
     const docStart = new Date(pond.docStart);
     const biologicalMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone);
+    const todayMortality = calculatePondMortalityForDate(pond, today, company?.timeZone);
     const feedBiomassInsight = detectFeedBiomassMismatchInsight(pond);
 
     const chartData = sorted
@@ -734,13 +738,15 @@ export default function PondDetailClient() {
       adg: biologicalMetrics.adg,
       lastRecordedMBW: biologicalMetrics.latestMbw,
       size: biologicalMetrics.size,
+      todayMortality: todayMortality.totalMortality,
+      todayObservedMortality: todayMortality.observedRecovered,
       totalMortality: biologicalMetrics.totalMortality,
       totalMortalityWeight: biologicalMetrics.totalMortalityWeight,
       totalFeed: biologicalMetrics.totalFeedConsumed,
       fcr: biologicalMetrics.biomassGainFCR,
       feedBiomassInsight
     };
-  }, [company?.timeZone, pond]);
+  }, [company?.timeZone, pond, today]);
 
   if (loading || (isEnterpriseTechnician && blocksLoading)) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   if (!pond || !hasPondAccess) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
@@ -1066,6 +1072,8 @@ export default function PondDetailClient() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
                     { label: 'Current Population', value: `${metrics?.population.toLocaleString()} pcs`, icon: Users },
+                    { label: "Today's Mortality", value: `${metrics?.todayMortality.toLocaleString()} pcs`, icon: Activity },
+                    { label: 'Observed/Recovered Today', value: `${metrics?.todayObservedMortality.toLocaleString()} pcs`, icon: Activity },
                     { label: 'Total Mortality', value: `${metrics?.totalMortality.toLocaleString()} pcs`, icon: Activity },
                     { label: 'Total Mort. Weight', value: `${metrics?.totalMortalityWeight.toFixed(2)} kg`, icon: Wind },
                     { label: 'Total Feed Used', value: `${metrics?.totalFeed.toFixed(1)} kg`, icon: ShoppingBag },

@@ -336,9 +336,12 @@
 
 @media print {
   .headerActions,
-  .tabs,
-  :global(aside),
-  :global(header) {
+  .tabs {
+    display: none !important;
+  }
+
+  :global(body):has(.page) :global(aside),
+  :global(body):has(.page) :global(header) {
     display: none !important;
   }
 

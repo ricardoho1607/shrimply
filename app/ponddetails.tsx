@@ -10,7 +10,7 @@ import {
 import { usePondStore, type Pond, type Sampling, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
-import { detectFeedBiomassMismatchInsight, getSamplingMbw } from '../shared/pondCalculations';
+import { calculatePondMortalityForDate, detectFeedBiomassMismatchInsight, getSamplingMbw } from '../shared/pondCalculations';
 import { 
   collection, 
   query, 
@@ -422,6 +422,11 @@ export default function PondDetails() {
     const latestSampling = getLatestSamplingData();
     const doc = getPondCurrentDoc(pond, company?.timeZone);
     const totalMortality = harvestAdjustedMetrics.totalMortality;
+    const todayMortality = calculatePondMortalityForDate(
+      pond,
+      getFarmDateKey(new Date(), company?.timeZone),
+      company?.timeZone,
+    );
     
     const currentPopulation = harvestAdjustedMetrics.currentPopulation;
     const estBiomass = harvestAdjustedMetrics.currentBiomass;
@@ -439,10 +444,9 @@ export default function PondDetails() {
           : '0.00'
         );
     
-    const mortalityPieces = latestSampling?.mortality || 0;
-    const mortalityWeight = latestSampling 
-      ? (latestSampling.mortality * getSamplingMbw(latestSampling)) / 1000
-      : 0;
+    const mortalityPieces = todayMortality.totalMortality;
+    const mortalityWeight = todayMortality.totalMortalityWeight;
+    const observedMortalityPieces = todayMortality.observedRecovered;
       
     const totalMortalityWeight = harvestAdjustedMetrics.totalMortalityWeight;
 
@@ -468,6 +472,7 @@ export default function PondDetails() {
       fcr,
       mortalityPieces,
       mortalityWeight,
+      observedMortalityPieces,
       totalMortalityWeight,
       pondSamplingData,
       feedBiomassInsight
@@ -602,6 +607,7 @@ export default function PondDetails() {
     fcr,
     mortalityPieces,
     mortalityWeight,
+    observedMortalityPieces,
     totalMortalityWeight,
     pondSamplingData,
     feedBiomassInsight
@@ -803,9 +809,14 @@ export default function PondDetails() {
               <View style={styles.columnContainer}>
                 <View style={styles.column}>
                   <DataRow 
-                    label={t.shrimp.mortality} 
+                    label={t.home.todayMortality}
                     value={mortalityPieces} 
                     unit="pcs" 
+                  />
+                  <DataRow
+                    label={t.home.todayObservedMortality}
+                    value={observedMortalityPieces}
+                    unit="pcs"
                   />
                   <DataRow 
                     label={`${t.home.total} ${t.shrimp.mortality}`} 
@@ -819,7 +830,7 @@ export default function PondDetails() {
                 </View>
                 <View style={styles.column}>
                   <DataRow 
-                    label={t.home.mortalityWeight} 
+                    label={t.home.todayMortalityWeight}
                     value={mortalityWeight.toFixed(2)} 
                     unit="kg" 
                   />

@@ -155,7 +155,6 @@ export function AdminFollowUpQueue({
                     padding: '10px',
                     borderRadius: '8px',
                     border: '1px solid var(--border)',
-                    borderLeft: `3px solid ${style.color}`,
                     background: '#fff',
                     textAlign: 'left',
                     cursor: 'pointer',

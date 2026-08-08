@@ -7,7 +7,7 @@ import {
   withHarvestReference,
   type HarvestTrackingPond,
 } from './harvestCalculations';
-import { calculatePondMetricsWithHarvest } from './pondCalculations';
+import { calculatePondMetricsWithHarvest, calculatePondMortalityForDate } from './pondCalculations';
 
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
@@ -55,6 +55,23 @@ export const runHarvestCalculationsSelfTest = () => {
   assertClose(mortalityMetrics.adjustedSR, 99.5, 'daily mortality updates SR');
   assertClose(mortalityMetrics.currentBiomass, 995, 'daily mortality updates biomass');
   assertClose(mortalityMetrics.totalMortalityWeight, 5, 'daily mortality uses MBW snapshot for mortality weight');
+
+  const withRepeatedDailyMortality = {
+    ...withDailyMortality,
+    mortalityRecords: [
+      ...withDailyMortality.mortalityRecords,
+      { id: 'mortality-4', date: '2026-07-11', observationType: 'estimated_total' as const, count: 200, mbwAtRecord: 10 },
+    ],
+  };
+  const dailyMortality = calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-11');
+  assertClose(dailyMortality.totalMortality, 700, 'same-day mortality entries are added together');
+  assertClose(dailyMortality.totalMortalityWeight, 7, 'same-day mortality weight is added together');
+  assertClose(dailyMortality.observedRecovered, 0, 'observed mortality is separated from estimated mortality');
+  assertClose(
+    calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-12').observedRecovered,
+    250,
+    'observed mortality remains visible for its recorded day',
+  );
 
   const laterHarvest = withHarvestReference(afterNewSampling, { biomass: 50, size: 100, harvestType: 'partial' as const });
   const afterLaterHarvest = applyHarvestImpactToPond(afterNewSampling, laterHarvest, '2026-07-15', 2);
