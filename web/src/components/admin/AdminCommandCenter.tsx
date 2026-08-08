@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase';
 import { createAdminIntelligenceRepository } from '@/lib/admin/adminRepository';
+import { shouldSyncAdminSelection } from '@/lib/admin/adminCore';
 import type { AccountIntelligence, AdminDirectoryFilters, AdminDirectoryResponse } from '@/lib/admin/types';
 import { AccountDetail } from './AccountDetail';
 import { AdminSidebar, MobilePanelButton } from './AdminSidebar';
@@ -111,8 +112,8 @@ export default function AdminCommandCenter() {
     return () => { active = false; };
   }, [loadAccount]);
   useEffect(() => {
-    if (!selectedId) return;
-    if (searchParams.get('user') === selectedId) return;
+    const requestedId = searchParams.get('user');
+    if (!selectedId || !shouldSyncAdminSelection(requestedId, selectedId)) return;
     const current = new URLSearchParams(searchParams.toString());
     current.set('user', selectedId);
     router.replace(`/admin?${current.toString()}`, { scroll: false });

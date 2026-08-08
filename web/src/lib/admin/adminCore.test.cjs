@@ -19,6 +19,13 @@ test('admin overview renders at /admin without redirecting to the dashboard rout
   assert.doesNotMatch(source, /dashboard\/admin['"]/);
 });
 
+test('admin detail URL sync does not restore a user after navigating to the overview', () => {
+  assert.equal(core.shouldSyncAdminSelection(null, 'user-123'), false);
+  assert.equal(core.shouldSyncAdminSelection('', 'user-123'), false);
+  assert.equal(core.shouldSyncAdminSelection('user-123', 'user-123'), false);
+  assert.equal(core.shouldSyncAdminSelection('user-123', 'user-456'), true);
+});
+
 test('masks email and phone values without exposing full PII', () => {
   assert.equal(core.maskEmail('ayu.pratama@example.com'), 'ay••••••••@example.com');
   assert.equal(core.maskPhone('+62 812-3456-7890'), '+•• ••• ••• 7890');
