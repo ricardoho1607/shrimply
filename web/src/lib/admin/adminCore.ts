@@ -10,6 +10,10 @@ import type {
 
 const clamp = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
+export const resolveAdminView = (userId: string | null | undefined): 'overview' | 'user-detail' => (
+  userId?.trim() ? 'user-detail' : 'overview'
+);
+
 export const maskEmail = (email: string): string => {
   const normalized = email.trim();
   const at = normalized.indexOf('@');

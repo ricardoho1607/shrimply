@@ -17,8 +17,8 @@ import type { ReactNode } from 'react';
 import styles from '@/app/admin/admin.module.css';
 
 const items = [
-  { label: 'Command Center', icon: LayoutGrid, active: true },
-  { label: 'Users', icon: Users },
+  { label: 'Command Center', icon: LayoutGrid, href: '/dashboard/admin' },
+  { label: 'Users', icon: Users, active: true },
   { label: 'Farms', icon: Building2 },
   { label: 'Subscriptions', icon: CreditCard },
   { label: 'Support', icon: Headphones },
@@ -46,15 +46,13 @@ export function AdminSidebar({ ownerName, ownerEmail, onSignOut, collapsed, onTo
         </button>
       </div>
       <nav className={styles.navList}>
-        {items.map(({ label, icon: Icon, active }) => (
-          <button
-            type="button"
-            key={label}
-            className={`${styles.navItem} ${active ? styles.navItemActive : ''}`}
-            aria-current={active ? 'page' : undefined}
-            aria-disabled={!active}
-            title={active ? label : `${label} is outside the current User Intelligence MVP`}
-          >
+        {items.map(({ label, icon: Icon, active, href }) => href ? (
+          <Link key={label} href={href} className={styles.navItem} style={{ cursor: 'pointer', textDecoration: 'none' }} title={label}>
+            <Icon size={17} aria-hidden="true" />
+            <span>{label}</span>
+          </Link>
+        ) : (
+          <button type="button" key={label} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`} aria-current={active ? 'page' : undefined} aria-disabled={!active} title={active ? label : `${label} is outside the current User Intelligence MVP`}>
             <Icon size={17} aria-hidden="true" />
             <span>{label}</span>
           </button>
