@@ -4,6 +4,13 @@ const test = require('node:test');
 
 const core = require('/tmp/shrimply-admin-core/adminCore.js');
 
+test('admin opens the overall overview unless a user is explicitly selected', () => {
+  assert.equal(core.resolveAdminView(null), 'overview');
+  assert.equal(core.resolveAdminView(''), 'overview');
+  assert.equal(core.resolveAdminView('  '), 'overview');
+  assert.equal(core.resolveAdminView('user-123'), 'user-detail');
+});
+
 test('masks email and phone values without exposing full PII', () => {
   assert.equal(core.maskEmail('ayu.pratama@example.com'), 'ay••••••••@example.com');
   assert.equal(core.maskPhone('+62 812-3456-7890'), '+•• ••• ••• 7890');
