@@ -663,12 +663,7 @@ export const usePondStore = create<PondStore>()(
           pondCycleId: record.pondCycleId || pond.pondCycleId || pondId,
         };
         const existingRecords = pond.mortalityRecords || [];
-        const existingIndex = existingRecords.findIndex((item) => item.date === normalizedRecord.date);
-        const mortalityRecords = existingIndex >= 0
-          ? existingRecords.map((item, index) => index === existingIndex
-            ? { ...normalizedRecord, id: item.id }
-            : item)
-          : [...existingRecords, normalizedRecord];
+        const mortalityRecords = [...existingRecords, normalizedRecord];
         const updatedPond = { ...pond, mortalityRecords };
 
         set((current) => ({

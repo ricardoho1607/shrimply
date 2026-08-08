@@ -1932,3 +1932,4 @@ Object.assign(exports, require("./orsonLearning")({
   admin,
   assertCompanyMemberForCallable,
 }));
+Object.assign(exports, require("./adminIntelligence")({ admin }));
