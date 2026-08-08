@@ -1,21 +1,17 @@
 'use client';
 
-import { Suspense, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
+import AdminOverview from '@/app/dashboard/admin/page';
 import AdminCommandCenter from '@/components/admin/AdminCommandCenter';
 import { resolveAdminView } from '@/lib/admin/adminCore';
 
 function AdminRoute() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const selectedUserId = searchParams.get('user');
   const view = resolveAdminView(selectedUserId);
 
-  useEffect(() => {
-    if (view === 'overview') router.replace('/dashboard/admin');
-  }, [router, view]);
-
-  if (view === 'overview') return null;
+  if (view === 'overview') return <AdminOverview />;
   return <AdminCommandCenter />;
 }
 

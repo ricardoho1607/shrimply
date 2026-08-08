@@ -1,5 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const test = require('node:test');
 
 const core = require('/tmp/shrimply-admin-core/adminCore.js');
@@ -9,6 +11,12 @@ test('admin opens the overall overview unless a user is explicitly selected', ()
   assert.equal(core.resolveAdminView(''), 'overview');
   assert.equal(core.resolveAdminView('  '), 'overview');
   assert.equal(core.resolveAdminView('user-123'), 'user-detail');
+});
+
+test('admin overview renders at /admin without redirecting to the dashboard route', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/app/admin/page.tsx'), 'utf8');
+  assert.match(source, /return <AdminOverview \/>/);
+  assert.doesNotMatch(source, /dashboard\/admin['"]/);
 });
 
 test('masks email and phone values without exposing full PII', () => {

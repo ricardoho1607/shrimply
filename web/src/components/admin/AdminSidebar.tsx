@@ -17,7 +17,7 @@ import type { ReactNode } from 'react';
 import styles from '@/app/admin/admin.module.css';
 
 const items = [
-  { label: 'Command Center', icon: LayoutGrid, href: '/dashboard/admin' },
+  { label: 'Command Center', icon: LayoutGrid, href: '/admin' },
   { label: 'Users', icon: Users, active: true },
   { label: 'Farms', icon: Building2 },
   { label: 'Subscriptions', icon: CreditCard },
