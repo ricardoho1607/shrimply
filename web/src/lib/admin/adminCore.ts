@@ -14,6 +14,15 @@ export const resolveAdminView = (userId: string | null | undefined): 'overview' 
   userId?.trim() ? 'user-detail' : 'overview'
 );
 
+export const shouldSyncAdminSelection = (
+  requestedUserId: string | null | undefined,
+  selectedUserId: string | null | undefined,
+): boolean => Boolean(
+  requestedUserId?.trim()
+  && selectedUserId?.trim()
+  && requestedUserId !== selectedUserId
+);
+
 export const maskEmail = (email: string): string => {
   const normalized = email.trim();
   const at = normalized.indexOf('@');
