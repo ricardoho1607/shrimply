@@ -11,6 +11,7 @@ export default {
     runtimeVersion: '3.1.0',
     updates: {
       url: 'https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db',
+      checkAutomatically: 'NEVER',
     },
     assetBundlePatterns: ['**/*'],
 

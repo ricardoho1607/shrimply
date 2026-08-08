@@ -145,7 +145,7 @@ export default function FinancePage() {
               itemId: feed.id, type: 'feed' as const 
             }))
           ),
-          ...feedAdditiveStore.additives.flatMap(additive => 
+          ...feedAdditiveStore.additives.filter(additive => additive.inventoryKind !== 'treatmentMix').flatMap(additive =>
             (additive.stockInHistory || []).map(stock => ({ 
               ...stock, itemName: additive.additiveName, category: CATEGORIES[1], 
               itemId: additive.id, type: 'additive' as const 

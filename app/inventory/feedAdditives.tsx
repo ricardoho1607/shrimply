@@ -9,6 +9,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { NotificationService } from '../services/notificationService';
 import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedAdditiveStore';
 import { isPondCycleActive, usePondStore } from './../store/pondStore';
+import TreatmentMixesScreen from './treatmentMixes';
 
 type FormData = {
   itemName: string;
@@ -53,7 +54,7 @@ export default function FeedAdditivesScreen() {
   const { formatCurrency } = useCurrency();
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
 
-  const [activeTab, setActiveTab] = useState<'dashboard' | ItemType>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | ItemType | 'mix'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
   const [modalType, setModalType] = useState<ModalType>('add');
@@ -113,7 +114,10 @@ export default function FeedAdditivesScreen() {
   }, [searchQuery, categoryFilter]);
 
   const filteredFeeds = useMemo(() => filterItems(store.feeds, 'feedType'), [store.feeds, searchQuery, categoryFilter]);
-  const filteredAdditives = useMemo(() => filterItems(store.additives, 'category'), [store.additives, searchQuery, categoryFilter]);
+  const filteredAdditives = useMemo(
+    () => filterItems(store.additives.filter(item => item.inventoryKind !== 'treatmentMix'), 'category'),
+    [store.additives, searchQuery, categoryFilter],
+  );
 
   const pondUsageSummary = useMemo(() => {
     const map: Record<string, number> = {};
@@ -474,16 +478,16 @@ export default function FeedAdditivesScreen() {
 
       <View style={styles.container}>
         <View style={styles.tabs}>
-          {(['dashboard', 'feed', 'additive'] as const).map((tab) => (
+          {(['dashboard', 'feed', 'additive', 'mix'] as const).map((tab) => (
             <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
               <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
-                {tab === 'dashboard' ? t.inventory.dashboard : tab === 'feed' ? t.inventory.feeds : t.inventory.additives}
+                {tab === 'dashboard' ? t.inventory.dashboard : tab === 'feed' ? t.inventory.feeds : tab === 'additive' ? t.inventory.additives : t.inventory.treatmentMix.tabLabel}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {activeTab !== 'dashboard' && (
+        {(activeTab === 'feed' || activeTab === 'additive') && (
           <View style={styles.searchContainer}>
             <View style={styles.searchRow}>
               <TextInput
@@ -507,6 +511,9 @@ export default function FeedAdditivesScreen() {
           </View>
         )}
 
+        {activeTab === 'mix' ? (
+          <TreatmentMixesScreen embedded />
+        ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {activeTab === 'dashboard' && (
             <>
@@ -637,6 +644,7 @@ export default function FeedAdditivesScreen() {
             )
           )}
         </ScrollView>
+        )}
       </View>
 
       <Modal visible={menuModalVisible} animationType="fade" transparent>

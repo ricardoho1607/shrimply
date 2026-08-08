@@ -89,6 +89,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
       id: 'inventory',
       children: [
         { label: getString(t.nav.inventoryFeeds, 'Feeds & Additives'), href: '/dashboard/inventory/feeds' },
+        { label: 'Treatment Mixes', href: '/dashboard/inventory/treatment-mixes' },
         { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
       ]
     },

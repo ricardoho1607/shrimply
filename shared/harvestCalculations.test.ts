@@ -50,11 +50,11 @@ export const runHarvestCalculationsSelfTest = () => {
     ],
   };
   const mortalityMetrics = calculatePondMetricsWithHarvest(withDailyMortality);
-  assertClose(mortalityMetrics.totalMortality, 500, 'only estimated total mortality is deducted');
-  assertClose(mortalityMetrics.currentPopulation, 99_500, 'daily mortality updates standing population');
-  assertClose(mortalityMetrics.adjustedSR, 99.5, 'daily mortality updates SR');
-  assertClose(mortalityMetrics.currentBiomass, 995, 'daily mortality updates biomass');
-  assertClose(mortalityMetrics.totalMortalityWeight, 5, 'daily mortality uses MBW snapshot for mortality weight');
+  assertClose(mortalityMetrics.totalMortality, 750, 'all recorded mortality is added to the cumulative total');
+  assertClose(mortalityMetrics.currentPopulation, 99_250, 'daily mortality updates standing population');
+  assertClose(mortalityMetrics.adjustedSR, 99.25, 'daily mortality updates SR');
+  assertClose(mortalityMetrics.currentBiomass, 992.5, 'daily mortality updates biomass');
+  assertClose(mortalityMetrics.totalMortalityWeight, 7.5, 'daily mortality uses MBW snapshot for mortality weight');
 
   const withRepeatedDailyMortality = {
     ...withDailyMortality,
@@ -67,6 +67,11 @@ export const runHarvestCalculationsSelfTest = () => {
   assertClose(dailyMortality.totalMortality, 700, 'same-day mortality entries are added together');
   assertClose(dailyMortality.totalMortalityWeight, 7, 'same-day mortality weight is added together');
   assertClose(dailyMortality.observedRecovered, 0, 'observed mortality is separated from estimated mortality');
+  assertClose(
+    calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-12').totalMortality,
+    250,
+    'observed mortality contributes to the daily and cumulative totals',
+  );
   assertClose(
     calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-12').observedRecovered,
     250,

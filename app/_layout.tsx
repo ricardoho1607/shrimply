@@ -240,7 +240,7 @@ function RootLayoutNav() {
 
 function RootLayout() {
   useEffect(() => {
-    if (__DEV__ || Platform.OS === 'web' || hasCheckedForStartupUpdate || !Updates.isEnabled) return;
+    if (__DEV__ || Platform.OS !== 'android' || hasCheckedForStartupUpdate || !Updates.isEnabled) return;
 
     hasCheckedForStartupUpdate = true;
 

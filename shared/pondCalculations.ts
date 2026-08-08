@@ -143,9 +143,9 @@ export const isBaselineSampling = (sampling: Pick<SharedSampling, 'isBaselineEst
 
 export const getMortalityPopulationDeduction = (
   record: Pick<SharedMortalityRecord, 'observationType' | 'count'>,
-): number => record.observationType === 'estimated_total'
-  ? Math.max(0, toFiniteNumber(record.count))
-  : 0;
+): number => record.observationType === 'none_observed'
+  ? 0
+  : Math.max(0, toFiniteNumber(record.count));
 
 export interface PondMortalityForDate {
   totalMortality: number;

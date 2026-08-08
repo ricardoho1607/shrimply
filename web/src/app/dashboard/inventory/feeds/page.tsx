@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   Plus,
   Search,
@@ -73,6 +74,7 @@ interface InventoryItem {
   itemName: string;
   brand?: string;
   category: string;
+  inventoryKind?: 'additive' | 'treatmentMix';
   unit?: string;
   reorderLevel?: number;
   stockInHistory: StockHistory[];
@@ -94,7 +96,8 @@ export default function InventoryFeedsPage() {
   const { user, company } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
-  const { feeds, additives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
+  const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
+  const additives = useMemo(() => allAdditives.filter((item) => item.inventoryKind !== 'treatmentMix'), [allAdditives]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
@@ -426,6 +429,14 @@ export default function InventoryFeedsPage() {
 
         {canEditInventory && (
           <div className="dashboard-action-row">
+            <Link
+              href="/dashboard/inventory/treatment-mixes"
+              className="dashboard-action dashboard-action-secondary"
+              style={{ minHeight: '44px', fontSize: '13px', fontWeight: 850, textDecoration: 'none' }}
+            >
+              <FlaskConical size={18} />
+              Treatment Mixes
+            </Link>
             <button
               className="dashboard-action dashboard-action-secondary"
               onClick={() => { setItemType('feed'); handleOpenModal('add'); }}

@@ -17,6 +17,31 @@ import {
   type FeedAllocation,
 } from '../../shared/feedInventoryUsage';
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
+import {
+  ASSUMED_POND_DEPTH_METERS,
+  calculateFifoConsumption,
+  calculateTreatmentDoseLiters,
+  roundInventoryCost,
+  roundInventoryQuantity,
+} from '../../shared/treatmentMix';
+
+export interface TreatmentMixComponent {
+  additiveId: string;
+  additiveName: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface TreatmentMixBatchComponent extends TreatmentMixComponent {
+  unitPrice: number;
+  totalCost: number;
+}
+
+export interface TreatmentMixRecipe {
+  yieldLiters: number;
+  components: TreatmentMixComponent[];
+  notes?: string;
+}
 
 export interface StockHistory {
   id: string;
@@ -27,6 +52,11 @@ export interface StockHistory {
   batch?: string;
   expiry?: string;
   unit?: string;
+  source?: 'stockIn' | 'treatmentMixProduction';
+  treatmentMixId?: string;
+  treatmentMixName?: string;
+  components?: TreatmentMixBatchComponent[];
+  totalCost?: number;
   createdAt: Timestamp | any;
 }
 
@@ -43,6 +73,14 @@ export interface UsageHistory {
   notes?: string;
   source?: string;
   feedRecordId?: string;
+  treatmentMixId?: string;
+  treatmentMixName?: string;
+  batchId?: string;
+  ppm?: number;
+  pondName?: string;
+  pondAreaM2?: number;
+  assumedDepthM?: number;
+  pondVolumeLiters?: number;
   createdAt: Timestamp | any;
 }
 
@@ -67,6 +105,8 @@ export interface Additive {
   companyId: string;
   additiveName: string;
   category: 'Water Conditioner' | 'Probiotic' | 'Mineral' | 'Vitamin' | 'Other';
+  inventoryKind?: 'additive' | 'treatmentMix';
+  treatmentMixRecipe?: TreatmentMixRecipe;
   unit?: string;
   reorderLevel?: number;
   stockInHistory: StockHistory[];
@@ -108,6 +148,9 @@ interface FeedAdditiveStore {
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
   stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { batch?: string; expiry?: string; unit?: string }) => Promise<void>;
   useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
+  createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string }) => Promise<string>;
+  makeTreatmentMixBatch: (treatmentMixId: string) => Promise<void>;
+  useTreatmentMix: (treatmentMixId: string, pond: { id: string; name: string; areaM2: number }, ppm: number, notes?: string) => Promise<{ quantityLiters: number; totalCost: number }>;
   deleteAdditive: (additiveId: string) => Promise<void>;
   updateAdditive: (additiveId: string, patch: Partial<Additive>) => Promise<void>;
   getMetrics: () => FeedAdditiveMetrics;
@@ -120,6 +163,148 @@ interface FeedAdditiveStore {
 }
 
 const isoDate = (d = new Date(), timeZone?: string) => getFarmDateKey(d, timeZone);
+
+type ProduceTreatmentMixInput = {
+  companyId: string;
+  treatmentMixId: string;
+  treatmentMixName?: string;
+  recipe?: TreatmentMixRecipe;
+  createNew: boolean;
+  timeZone: string;
+};
+
+const produceTreatmentMixBatch = async ({
+  companyId,
+  treatmentMixId,
+  treatmentMixName,
+  recipe: requestedRecipe,
+  createNew,
+  timeZone,
+}: ProduceTreatmentMixInput) => {
+  const treatmentMixRef = doc(db, 'companies', companyId, 'additives', treatmentMixId);
+  const batchId = doc(collection(db, 'companies', companyId, 'treatmentMixBatches')).id;
+
+  await runTransaction(db, async (tx) => {
+    const mixSnapshot = await tx.get(treatmentMixRef);
+    if (createNew && mixSnapshot.exists()) throw new Error('Treatment mix already exists');
+    if (!createNew && !mixSnapshot.exists()) throw new Error('Treatment mix not found');
+
+    const existingMix = mixSnapshot.exists() ? mixSnapshot.data() as Additive : null;
+    if (existingMix && existingMix.inventoryKind !== 'treatmentMix') throw new Error('Selected item is not a treatment mix');
+
+    const name = (treatmentMixName || existingMix?.additiveName || '').trim();
+    const recipe = requestedRecipe || existingMix?.treatmentMixRecipe;
+    if (!name) throw new Error('Treatment mix name is required');
+    if (!recipe || !Number.isFinite(recipe.yieldLiters) || recipe.yieldLiters <= 0) throw new Error('Final mix volume must be greater than zero');
+
+    const components = recipe.components
+      .map((component) => ({ ...component, quantity: Number(component.quantity) }))
+      .filter((component) => Number.isFinite(component.quantity) && component.quantity > 0);
+    if (components.length === 0) throw new Error('Select at least one additive');
+    if (new Set(components.map((component) => component.additiveId)).size !== components.length) throw new Error('Each additive can only be included once');
+
+    const componentRefs = components.map((component) => doc(db, 'companies', companyId, 'additives', component.additiveId));
+    const componentSnapshots = await Promise.all(componentRefs.map((ref) => tx.get(ref)));
+    const shortages: string[] = [];
+    const deductions = componentSnapshots.map((snapshot, index) => {
+      const component = components[index];
+      if (!snapshot.exists()) throw new Error(`${component.additiveName} no longer exists`);
+      const additive = snapshot.data() as Additive;
+      if (additive.inventoryKind === 'treatmentMix') throw new Error('Treatment mixes cannot be used as recipe ingredients');
+      const unit = additive.unit || 'kg';
+      if (unit !== component.unit) throw new Error(`${additive.additiveName} unit changed from ${component.unit} to ${unit}`);
+      const available = Number(additive.totalStock) || 0;
+      if (available + 0.0005 < component.quantity) shortages.push(`${additive.additiveName}: need ${component.quantity} ${unit}, available ${available} ${unit}`);
+      return { ref: componentRefs[index], additive, component };
+    });
+    if (shortages.length > 0) throw new Error(`Insufficient stock:\n${shortages.join('\n')}`);
+
+    const now = Timestamp.now();
+    const date = isoDate(now.toDate(), timeZone);
+    let batchCost = 0;
+    const batchComponents: TreatmentMixBatchComponent[] = [];
+
+    for (const { ref, additive, component } of deductions) {
+      const cost = calculateFifoConsumption(additive.stockInHistory || [], additive.usageHistory || [], component.quantity);
+      batchCost += cost.totalCost;
+      batchComponents.push({
+        ...component,
+        additiveName: additive.additiveName,
+        unitPrice: cost.unitPrice,
+        totalCost: cost.totalCost,
+      });
+      const usage: UsageHistory = {
+        id: `${batchId}-${component.additiveId}`,
+        date,
+        quantity: component.quantity,
+        unitPrice: cost.unitPrice,
+        totalCost: cost.totalCost,
+        source: 'treatmentMixProduction',
+        treatmentMixId,
+        treatmentMixName: name,
+        batchId,
+        createdAt: now,
+      };
+      tx.update(ref, {
+        usageHistory: arrayUnion(usage),
+        totalStock: roundInventoryQuantity((additive.totalStock || 0) - component.quantity),
+        totalCost: cost.remainingCost,
+        lastUpdated: serverTimestamp(),
+      });
+    }
+
+    batchCost = roundInventoryCost(batchCost);
+    const stock: StockHistory = {
+      id: batchId,
+      date,
+      quantity: roundInventoryQuantity(recipe.yieldLiters),
+      price: roundInventoryCost(batchCost / recipe.yieldLiters),
+      totalCost: batchCost,
+      unit: 'L',
+      source: 'treatmentMixProduction',
+      treatmentMixId,
+      treatmentMixName: name,
+      components: batchComponents,
+      ...(recipe.notes ? { notes: recipe.notes } : {}),
+      createdAt: now,
+    };
+
+    const savedRecipe: TreatmentMixRecipe = {
+      yieldLiters: roundInventoryQuantity(recipe.yieldLiters),
+      components: components.map((component, index) => ({
+        ...component,
+        additiveName: deductions[index].additive.additiveName,
+      })),
+      ...(recipe.notes ? { notes: recipe.notes } : {}),
+    };
+
+    if (createNew) {
+      tx.set(treatmentMixRef, {
+        id: treatmentMixId,
+        companyId,
+        additiveName: name,
+        category: 'Other',
+        inventoryKind: 'treatmentMix',
+        treatmentMixRecipe: savedRecipe,
+        unit: 'L',
+        reorderLevel: 0,
+        stockInHistory: [stock],
+        usageHistory: [],
+        totalStock: stock.quantity,
+        totalCost: batchCost,
+        lastUpdated: serverTimestamp(),
+        createdAt: serverTimestamp(),
+      } satisfies Partial<Additive>);
+    } else {
+      tx.update(treatmentMixRef, {
+        stockInHistory: arrayUnion(stock),
+        totalStock: roundInventoryQuantity((existingMix?.totalStock || 0) + stock.quantity),
+        totalCost: roundInventoryCost((existingMix?.totalCost || 0) + batchCost),
+        lastUpdated: serverTimestamp(),
+      });
+    }
+  });
+};
 
 // Helper to check low stock and create notification
 const checkLowStock = async (
@@ -744,6 +929,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         companyId: currentCompanyId,
         additiveName: additive.additiveName || 'Unnamed Additive',
         category: (additive.category as any) || 'Other',
+        inventoryKind: 'additive',
         unit: additive.unit || 'kg',
         reorderLevel: typeof additive.reorderLevel === 'number' ? additive.reorderLevel : 0,
         stockInHistory: additive.stockInHistory || [],
@@ -882,6 +1068,92 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     }
   },
 
+  createTreatmentMix: async ({ name, yieldLiters, components, notes }) => {
+    const { currentCompanyId, currentTimeZone, additives } = get();
+    if (!currentCompanyId) throw new Error('No company selected');
+    const normalizedName = name.trim();
+    if (!normalizedName) throw new Error('Treatment mix name is required');
+    if (additives.some((item) => item.additiveName.trim().toLowerCase() === normalizedName.toLowerCase())) {
+      throw new Error('An additive or treatment mix with this name already exists');
+    }
+    const ref = doc(collection(db, 'companies', currentCompanyId, 'additives'));
+    await produceTreatmentMixBatch({
+      companyId: currentCompanyId,
+      treatmentMixId: ref.id,
+      treatmentMixName: normalizedName,
+      recipe: {
+        yieldLiters,
+        components,
+        ...(notes?.trim() ? { notes: notes.trim() } : {}),
+      },
+      createNew: true,
+      timeZone: currentTimeZone,
+    });
+    return ref.id;
+  },
+
+  makeTreatmentMixBatch: async (treatmentMixId) => {
+    const { currentCompanyId, currentTimeZone } = get();
+    if (!currentCompanyId) throw new Error('No company selected');
+    await produceTreatmentMixBatch({
+      companyId: currentCompanyId,
+      treatmentMixId,
+      createNew: false,
+      timeZone: currentTimeZone,
+    });
+  },
+
+  useTreatmentMix: async (treatmentMixId, pond, ppm, notes) => {
+    const { currentCompanyId, currentTimeZone } = get();
+    if (!currentCompanyId) throw new Error('No company selected');
+    const dose = calculateTreatmentDoseLiters(pond.areaM2, ppm, ASSUMED_POND_DEPTH_METERS);
+    const treatmentMixRef = doc(db, 'companies', currentCompanyId, 'additives', treatmentMixId);
+    const activePond = usePondStore.getState().ponds.find((item) => item.id === pond.id);
+    let consumedCost = 0;
+
+    await runTransaction(db, async (tx) => {
+      const snapshot = await tx.get(treatmentMixRef);
+      if (!snapshot.exists()) throw new Error('Treatment mix not found');
+      const mix = snapshot.data() as Additive;
+      if (mix.inventoryKind !== 'treatmentMix') throw new Error('Selected item is not a treatment mix');
+      if ((mix.totalStock || 0) + 0.0005 < dose.requiredMixLiters) {
+        throw new Error(`Insufficient ${mix.additiveName}: need ${dose.requiredMixLiters} L, available ${mix.totalStock || 0} L`);
+      }
+
+      const cost = calculateFifoConsumption(mix.stockInHistory || [], mix.usageHistory || [], dose.requiredMixLiters);
+      consumedCost = cost.totalCost;
+      const usage: UsageHistory = {
+        id: doc(collection(db, 'companies', currentCompanyId, 'treatmentMixUsage')).id,
+        date: isoDate(new Date(), currentTimeZone),
+        quantity: dose.requiredMixLiters,
+        unitPrice: cost.unitPrice,
+        totalCost: cost.totalCost,
+        source: 'treatmentMixApplication',
+        treatmentMixId,
+        treatmentMixName: mix.additiveName,
+        pondId: pond.id,
+        pondName: pond.name,
+        pondAreaM2: pond.areaM2,
+        ppm,
+        assumedDepthM: ASSUMED_POND_DEPTH_METERS,
+        pondVolumeLiters: dose.pondVolumeLiters,
+        ...(activePond?.cycleId ? { cycleId: activePond.cycleId } : {}),
+        ...(activePond?.cycleName ? { cycleName: activePond.cycleName } : {}),
+        ...(activePond?.pondCycleId ? { pondCycleId: activePond.pondCycleId } : {}),
+        ...(notes?.trim() ? { notes: notes.trim() } : {}),
+        createdAt: Timestamp.now(),
+      };
+      tx.update(treatmentMixRef, {
+        usageHistory: arrayUnion(usage),
+        totalStock: roundInventoryQuantity((mix.totalStock || 0) - dose.requiredMixLiters),
+        totalCost: cost.remainingCost,
+        lastUpdated: serverTimestamp(),
+      });
+    });
+
+    return { quantityLiters: dose.requiredMixLiters, totalCost: consumedCost };
+  },
+
   deleteAdditive: async (additiveId) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
@@ -916,7 +1188,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       await checkLowStock(feed, 'feed', currentCompanyId);
     }
     
-    for (const additive of additives) {
+    for (const additive of additives.filter((item) => item.inventoryKind !== 'treatmentMix')) {
       await checkLowStock(additive, 'additive', currentCompanyId);
     }
     
@@ -965,7 +1237,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       }, 0);
 
     const lowStockCount = feeds.filter(f => typeof f.reorderLevel === 'number' && f.totalStock <= (f.reorderLevel || 0)).length
-      + additives.filter(a => typeof a.reorderLevel === 'number' && a.totalStock <= (a.reorderLevel || 0)).length;
+      + additives.filter(a => a.inventoryKind !== 'treatmentMix' && typeof a.reorderLevel === 'number' && a.totalStock <= (a.reorderLevel || 0)).length;
 
     const now = new Date();
     const nearExpiryCount = (() => {
@@ -1028,7 +1300,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       });
     });
 
-    additives.forEach((a) => {
+    additives.filter((item) => item.inventoryKind !== 'treatmentMix').forEach((a) => {
       (a.stockInHistory || []).forEach((h) => {
         txs.push({
           id: h.id,
@@ -1075,7 +1347,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       }
     });
 
-    additives.forEach((a) => {
+    additives.filter((item) => item.inventoryKind !== 'treatmentMix').forEach((a) => {
       if (typeof a.reorderLevel === 'number' ? a.totalStock <= a.reorderLevel : a.totalStock <= threshold) {
         low.push({ id: a.id, type: 'Additive', name: a.additiveName, stock: a.totalStock, unit: a.unit || 'kg' });
       }
@@ -1109,7 +1381,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     };
 
     feeds.forEach((f) => check(f, 'Feed'));
-    additives.forEach((a) => check(a, 'Additive'));
+    additives.filter((item) => item.inventoryKind !== 'treatmentMix').forEach((a) => check(a, 'Additive'));
     return items;
   },
 
@@ -1121,7 +1393,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         below.push({ id: f.id, type: 'Feed', name: f.feedName, stock: f.totalStock, reorderLevel: f.reorderLevel });
       }
     });
-    additives.forEach((a) => {
+    additives.filter((item) => item.inventoryKind !== 'treatmentMix').forEach((a) => {
       if (typeof a.reorderLevel === 'number' && a.totalStock <= a.reorderLevel) {
         below.push({ id: a.id, type: 'Additive', name: a.additiveName, stock: a.totalStock, reorderLevel: a.reorderLevel });
       }
