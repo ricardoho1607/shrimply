@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import Image from 'next/image';
 import {
   Building2,
@@ -38,19 +37,19 @@ export function AdminSidebar({ ownerName, ownerEmail, onSignOut, collapsed, onTo
   return (
     <aside className={styles.sidebar} aria-label="Shrimply Admin navigation">
       <div className={styles.brandRow}>
-        <Link href="/admin" className={styles.brand} aria-label="Shrimply Admin home">
+        <a href="/admin" className={styles.brand} aria-label="Shrimply Admin home">
           <Image className={styles.brandLogo} src="/shrimplylogo_v2.webp" width={500} height={160} alt="Shrimply" priority />
-        </Link>
+        </a>
         <button type="button" className={styles.sidebarToggle} onClick={onToggle} aria-label={collapsed ? 'Expand admin navigation' : 'Collapse admin navigation'} aria-expanded={!collapsed} title={collapsed ? 'Expand menu' : 'Collapse menu'}>
           <Menu size={20} />
         </button>
       </div>
       <nav className={styles.navList}>
         {items.map(({ label, icon: Icon, active, href }) => href ? (
-          <Link key={label} href={href} className={styles.navItem} style={{ cursor: 'pointer', textDecoration: 'none' }} title={label}>
+          <a key={label} href={href} className={styles.navItem} style={{ cursor: 'pointer', textDecoration: 'none' }} title={label}>
             <Icon size={17} aria-hidden="true" />
             <span>{label}</span>
-          </Link>
+          </a>
         ) : (
           <button type="button" key={label} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`} aria-current={active ? 'page' : undefined} aria-disabled={!active} title={active ? label : `${label} is outside the current User Intelligence MVP`}>
             <Icon size={17} aria-hidden="true" />
