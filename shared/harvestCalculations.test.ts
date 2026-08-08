@@ -78,6 +78,23 @@ export const runHarvestCalculationsSelfTest = () => {
     'observed mortality remains visible for its recorded day',
   );
 
+  const withRepeatedDailyMortality = {
+    ...withDailyMortality,
+    mortalityRecords: [
+      ...withDailyMortality.mortalityRecords,
+      { id: 'mortality-4', date: '2026-07-11', observationType: 'estimated_total' as const, count: 200, mbwAtRecord: 10 },
+    ],
+  };
+  const dailyMortality = calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-11');
+  assertClose(dailyMortality.totalMortality, 700, 'same-day mortality entries are added together');
+  assertClose(dailyMortality.totalMortalityWeight, 7, 'same-day mortality weight is added together');
+  assertClose(dailyMortality.observedRecovered, 0, 'observed mortality is separated from estimated mortality');
+  assertClose(
+    calculatePondMortalityForDate(withRepeatedDailyMortality, '2026-07-12').observedRecovered,
+    250,
+    'observed mortality remains visible for its recorded day',
+  );
+
   const laterHarvest = withHarvestReference(afterNewSampling, { biomass: 50, size: 100, harvestType: 'partial' as const });
   const afterLaterHarvest = applyHarvestImpactToPond(afterNewSampling, laterHarvest, '2026-07-15', 2);
   const oldHarvestRemoved = reverseHarvestImpactOnPond(afterLaterHarvest, harvest);

@@ -195,6 +195,54 @@ export const calculatePondMortalityForDate = (
   };
 };
 
+export interface PondMortalityForDate {
+  totalMortality: number;
+  totalMortalityWeight: number;
+  observedRecovered: number;
+}
+
+export const calculatePondMortalityForDate = (
+  pond: SharedPond,
+  date: unknown,
+  timeZone?: string,
+): PondMortalityForDate => {
+  const dateKey = normalizeFarmDateKey(date, timeZone);
+  if (!dateKey) return { totalMortality: 0, totalMortalityWeight: 0, observedRecovered: 0 };
+
+  const samplingsForDate = (pond.samplings || []).filter((sampling) =>
+    !isBaselineSampling(sampling) && normalizeFarmDateKey(sampling.date, timeZone) === dateKey,
+  );
+  const recordsForDate = (pond.mortalityRecords || []).filter((record) =>
+    normalizeFarmDateKey(record.date, timeZone) === dateKey,
+  );
+
+  const samplingMortality = samplingsForDate.reduce(
+    (sum, sampling) => sum + Math.max(0, toFiniteNumber(sampling.mortality)),
+    0,
+  );
+  const samplingMortalityWeight = samplingsForDate.reduce(
+    (sum, sampling) => sum + (Math.max(0, toFiniteNumber(sampling.mortality)) * getSamplingMbw(sampling)) / 1000,
+    0,
+  );
+  const recordedMortality = recordsForDate.reduce(
+    (sum, record) => sum + getMortalityPopulationDeduction(record),
+    0,
+  );
+  const recordedMortalityWeight = recordsForDate.reduce((sum, record) => {
+    const count = getMortalityPopulationDeduction(record);
+    return sum + (count * Math.max(0, toFiniteNumber(record.mbwAtRecord))) / 1000;
+  }, 0);
+  const observedRecovered = recordsForDate
+    .filter((record) => record.observationType === 'observed_recovered')
+    .reduce((sum, record) => sum + Math.max(0, toFiniteNumber(record.count)), 0);
+
+  return {
+    totalMortality: samplingMortality + recordedMortality,
+    totalMortalityWeight: samplingMortalityWeight + recordedMortalityWeight,
+    observedRecovered,
+  };
+};
+
 export const getSamplingFeedAmount = (sampling: Pick<SharedSampling, 'feed' | 'feedData'>): number => {
   const samplingFeed = toFiniteNumber(sampling.feed);
   if (samplingFeed > 0) return samplingFeed;
