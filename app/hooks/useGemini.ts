@@ -154,11 +154,12 @@ export const useGemini = () => {
         try {
           const functions = getFunctions(app);
           const getMortalityContext = httpsCallable<
-            { companyId: string; pondId: string; windowEnd?: string },
+            { operation: 'mortality_context'; companyId: string; pondId: string; windowEnd?: string },
             OrsonMortalityDiagnosticContext
-          >(functions, 'getOrsonMortalityContext');
+          >(functions, 'generateOrsonResponse');
           const contextResult = await withOrsonTimeout(
             getMortalityContext({
+              operation: 'mortality_context',
               companyId: options.companyId,
               pondId: diagnosticPondId,
               windowEnd: analysis.promptPackage.mortalityTrace?.windowEnd,

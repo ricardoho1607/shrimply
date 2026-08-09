@@ -345,21 +345,11 @@ const shiftDateKey = (dateKey, days) => {
   return date.toISOString().slice(0, 10);
 };
 
-exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30, invoker: "public" }, async (request) => {
-  const uid = request.auth?.uid;
-  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
-  const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
-  if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
-
-  const db = admin.firestore();
-  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+const loadOrsonMortalityContext = async (db, company, companyId, pondId, requestedEndDate) => {
   const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(pondId);
   const pondSnap = await pondRef.get();
   if (!pondSnap.exists) throw new HttpsError("not-found", "Pond not found.");
   const pond = pondSnap.data() || {};
-  const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
-    ? request.data.windowEnd
-    : null;
   const endDate = requestedEndDate || farmDateKey(company.timeZone);
   const startDate = shiftDateKey(endDate, -13);
   const unavailableSources = [];
@@ -447,17 +437,41 @@ exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30, invoker: "public
   }
 
   return { pondId, labHistory, treatments, harvests, unavailableSources };
+};
+
+exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
+  const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
+  if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+
+  const db = admin.firestore();
+  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+  const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
+    ? request.data.windowEnd
+    : null;
+  return loadOrsonMortalityContext(db, company, companyId, pondId, requestedEndDate);
 });
 
 exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApiKeySecret] }, async (request) => {
   const uid = request.auth?.uid;
   const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
+  const operation = request.data?.operation === "mortality_context" ? "mortality_context" : "generate";
   const systemInstruction = typeof request.data?.systemInstruction === "string" ? request.data.systemInstruction : "";
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt : "";
   const mode = request.data?.mode === "mortality_diagnostic" ? "mortality_diagnostic" : "standard";
 
   const db = admin.firestore();
-  await assertCompanyMemberForCallable(db, uid, companyId);
+  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+
+  if (operation === "mortality_context") {
+    const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
+    if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+    const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
+      ? request.data.windowEnd
+      : null;
+    return loadOrsonMortalityContext(db, company, companyId, pondId, requestedEndDate);
+  }
 
   if (!systemInstruction.trim() || !prompt.trim()) {
     throw new HttpsError("invalid-argument", "Orson prompt data is required.");
