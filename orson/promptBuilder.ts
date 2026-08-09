@@ -6,7 +6,9 @@ import {
 } from './sourceOfTruth';
 import { selectOrsonKnowledge } from './knowledge/knowledgeSelector';
 import type { SelectedKnowledge } from './knowledge/knowledgeTypes';
+import { isMortalityDiagnosticQuestion } from './mortalityDiagnostic';
 import type {
+  OrsonAnalysisMode,
   Orson72HourOutlook,
   OrsonPondMetrics,
   OrsonPromptPackage,
@@ -15,6 +17,7 @@ import type {
   OrsonQuestionIntent,
   OrsonRiskReport,
   OrsonRiskSeverity,
+  OrsonMortalityTrace,
 } from './types';
 
 const FARM_SPECIFIC_PATTERNS = [
@@ -168,6 +171,7 @@ export const buildOrsonQuestionFocus = (
   const requestedDirection = detectRequestedDirection(question);
 
   return {
+    analysisMode: isMortalityDiagnosticQuestion(question) ? 'mortality_diagnostic' : 'standard',
     intent,
     focusedPondName: focusedPayload?.pondName ?? null,
     focusedPondId: focusedPayload?.pondId ?? null,
@@ -272,7 +276,7 @@ export const buildOrsonPromptPayload = (
   };
 };
 
-export const buildOrsonSystemInstruction = (): string => {
+export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'): string => {
   return [
     `IDENTITY: You are Orson, Shrimply's aquaculture intelligence assistant.`,
     `PRODUCT PROMISE: ${ORSON_PRODUCT_PROMISE}`,
@@ -318,6 +322,16 @@ export const buildOrsonSystemInstruction = (): string => {
     '- Keep routine answers under 5 sentences unless the user asks for detail.',
     '- Prioritize critical and warning findings before watch/info findings.',
     '- Do not provide exact chemical dose rates unless the app payload includes pond volume, product concentration, and farm protocol.',
+    ...(mode === 'mortality_diagnostic' ? [
+      '',
+      'MORTALITY DIAGNOSTIC SAFETY:',
+      '- Use ORSON MORTALITY TRACE to explain the dated sequence across the previous 14 farm-calendar days.',
+      '- Rank environmental, operational, and biological contributors by evidence; timing alone does not prove causation.',
+      '- A declining feed allocation is only a low-confidence appetite proxy unless direct tray or appetite observations exist.',
+      '- Account for partial harvest before interpreting lower feed, biomass, population, survival, or mortality rate.',
+      '- Name a pathogen or disease only when confirmed lab evidence explicitly supports it; otherwise use suspected or cannot-be-ruled-out language.',
+      '- Separate immediate actions, actions within 24-48 hours, monitoring, missing data, and the 72-hour outlook.',
+    ] : []),
   ].join('\n');
 };
 
@@ -326,6 +340,7 @@ export const buildOrsonPromptContext = (
   questionFocus: OrsonQuestionFocus,
   selectedKnowledge: SelectedKnowledge,
   totalPondCount = payloads.length,
+  mortalityTrace: OrsonMortalityTrace | null = null,
 ): string => {
   const compactPayloads = payloads.map((payload) => ({
     pond: payload.pondName,
@@ -383,6 +398,7 @@ export const buildOrsonPromptContext = (
       requested_direction: questionFocus.requestedDirection,
       is_pond_specific: questionFocus.isPondSpecific,
       should_summarize: questionFocus.shouldSummarize,
+      ...(questionFocus.analysisMode === 'mortality_diagnostic' ? { analysis_mode: questionFocus.analysisMode } : {}),
     }, null, 2),
     '',
     'ORSON SELECTED KNOWLEDGE:',
@@ -409,8 +425,12 @@ export const buildOrsonPromptContext = (
       })),
       missing_data_questions: selectedKnowledge.missingDataQuestions,
       source_labels: selectedKnowledge.sourceLabels,
-    }, null, 2),
+    }),
     '',
+    ...(mortalityTrace ? [
+      `ORSON MORTALITY TRACE:\n${JSON.stringify(mortalityTrace)}`,
+      '',
+    ] : []),
     `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads, null, 2)}`,
   ].join('\n');
 };
@@ -420,13 +440,23 @@ export const buildOrsonPromptPackage = (params: {
   metrics: OrsonPondMetrics[];
   reports: OrsonRiskReport[];
   outlooks: Orson72HourOutlook[];
+  mortalityTrace?: OrsonMortalityTrace | null;
 }): OrsonPromptPackage => {
   const payloads = params.metrics.map((metrics, index) => buildOrsonPromptPayload(
     metrics,
     params.reports[index],
     params.outlooks[index],
   ));
-  const questionFocus = buildOrsonQuestionFocus(params.userMessage, payloads);
+  const detectedFocus = buildOrsonQuestionFocus(params.userMessage, payloads);
+  const questionFocus = params.mortalityTrace
+    ? {
+        ...detectedFocus,
+        analysisMode: 'mortality_diagnostic' as const,
+        focusedPondName: params.mortalityTrace.pondName,
+        focusedPondId: params.mortalityTrace.pondId,
+        isPondSpecific: true,
+      }
+    : detectedFocus;
   const orderedPayloads = orderPayloadsForQuestion(payloads, questionFocus);
   const selectedKnowledge = selectOrsonKnowledge({
     userMessage: params.userMessage,
@@ -435,12 +465,23 @@ export const buildOrsonPromptPackage = (params: {
   });
 
   return {
-    systemInstruction: buildOrsonSystemInstruction(),
-    context: buildOrsonPromptContext(orderedPayloads, questionFocus, selectedKnowledge, params.metrics.length),
+    systemInstruction: buildOrsonSystemInstruction(questionFocus.analysisMode),
+    context: buildOrsonPromptContext(
+      orderedPayloads,
+      questionFocus,
+      selectedKnowledge,
+      params.metrics.length,
+      params.mortalityTrace ?? null,
+    ),
     userMessage: params.userMessage,
-    cacheKey: buildOrsonCacheKey(params.userMessage, orderedPayloads),
-    isFarmSpecific: isFarmSpecificQuestion(params.userMessage),
+    cacheKey: questionFocus.analysisMode === 'mortality_diagnostic'
+      ? null
+      : buildOrsonCacheKey(params.userMessage, orderedPayloads),
+    isFarmSpecific: questionFocus.analysisMode === 'mortality_diagnostic'
+      ? true
+      : isFarmSpecificQuestion(params.userMessage),
     questionFocus,
+    mortalityTrace: params.mortalityTrace ?? null,
   };
 };
 

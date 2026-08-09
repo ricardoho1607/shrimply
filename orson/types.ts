@@ -5,6 +5,8 @@ export interface OrsonNormalizedFeedData {
   inventoryFeedId: string | null;
 }
 
+export type OrsonAnalysisMode = 'standard' | 'mortality_diagnostic';
+
 export type OrsonLabStatusLevel = 'good' | 'info' | 'watch' | 'warning' | 'critical';
 
 export interface OrsonLabStatusSummary {
@@ -35,6 +37,9 @@ export interface OrsonNormalizedRecord {
   kinds: OrsonRecordKind[];
   mbwG: OrsonNumber;
   mortalityCount: OrsonNumber;
+  mortalityObservedCount: OrsonNumber;
+  mortalityObservationType: 'estimated_total' | 'observed_recovered' | 'none_observed' | null;
+  mortalityNotes: string | null;
   feedKg: OrsonNumber;
   phMorning: OrsonNumber;
   phEvening: OrsonNumber;
@@ -61,6 +66,13 @@ export interface OrsonNormalizedPond {
   totalHarvestedBiomassKg: OrsonNumber;
   totalHarvestedPopulation: OrsonNumber;
   totalHarvestedFeedKg: OrsonNumber;
+  partialHarvestCount: OrsonNumber;
+  postHarvestBaselineDate: string | null;
+  postHarvestRemainingBiomassKg: OrsonNumber;
+  postHarvestRemainingPopulation: OrsonNumber;
+  postHarvestReferenceSamplingId: string | null;
+  postHarvestReferenceSamplingDate: string | null;
+  postHarvestReferenceMbwG: OrsonNumber;
   cycleStartMode: 'new' | 'midcycle';
   baselineDate: string | null;
   baselineDoc: OrsonNumber;
@@ -280,6 +292,7 @@ export type OrsonQuestionIntent =
   | 'general';
 
 export interface OrsonQuestionFocus {
+  analysisMode: OrsonAnalysisMode;
   intent: OrsonQuestionIntent;
   focusedPondName: string | null;
   focusedPondId: string | null;
@@ -289,6 +302,114 @@ export interface OrsonQuestionFocus {
   shouldSummarize: boolean;
 }
 
+export interface OrsonDiagnosticLabRecord {
+  labReportId: string;
+  sampleDate: string | null;
+  reportType: string | null;
+  status: OrsonLabStatusLevel | null;
+  mainIssue: string | null;
+  keyRisks: string[];
+  recommendations: string[];
+  findings: {
+    severity: OrsonRiskSeverity;
+    title: string;
+    summary: string;
+    evidence: string[];
+  }[];
+}
+
+export interface OrsonDiagnosticTreatmentEvent {
+  id: string;
+  date: string;
+  additiveId: string;
+  additiveName: string;
+  category: string | null;
+  quantity: OrsonNumber;
+  unit: string | null;
+  ppm: OrsonNumber;
+  pondVolumeLiters: OrsonNumber;
+  notes: string | null;
+}
+
+export interface OrsonDiagnosticHarvestEvent {
+  id: string;
+  date: string;
+  harvestType: 'partial' | 'final' | null;
+  biomassKg: number;
+  population: number;
+}
+
+export interface OrsonMortalityDiagnosticContext {
+  pondId: string;
+  labHistory: OrsonDiagnosticLabRecord[];
+  treatments: OrsonDiagnosticTreatmentEvent[];
+  harvests: OrsonDiagnosticHarvestEvent[];
+  unavailableSources: string[];
+}
+
+export interface OrsonMortalityBaseline {
+  observationCount: number;
+  medianRatePer100k: OrsonNumber;
+  madRatePer100k: OrsonNumber;
+  latestRatePer100k: OrsonNumber;
+  increaseRatio: OrsonNumber;
+  robustZScore: OrsonNumber;
+  isSpike: boolean;
+  confidence: 'low' | 'medium' | 'high';
+  reason: string;
+}
+
+export interface OrsonAppetiteProxy {
+  status: 'possible_decline' | 'explained_by_harvest' | 'no_signal' | 'insufficient_data';
+  confidence: 'low';
+  feedChangePercent: OrsonNumber;
+  feedPressureChangePercent: OrsonNumber;
+  evidence: string[];
+}
+
+export interface OrsonMortalityTimelineDay {
+  date: string;
+  mortalityCount: OrsonNumber;
+  mortalityRatePer100k: OrsonNumber;
+  estimatedPopulation: OrsonNumber;
+  feedKg: OrsonNumber;
+  feedPressureRatio: OrsonNumber;
+  mbwG: OrsonNumber;
+  doMinimumMgL: OrsonNumber;
+  phSwing: OrsonNumber;
+  salinityPpt: OrsonNumber;
+  transparencyCm: OrsonNumber;
+  temperatureC: OrsonNumber;
+  events: string[];
+}
+
+export interface OrsonDiagnosticHypothesis {
+  id: string;
+  category: 'environmental' | 'operational' | 'biological';
+  title: string;
+  severity: OrsonRiskSeverity;
+  confidence: 'low' | 'medium' | 'high';
+  supportingEvidence: string[];
+  opposingEvidence: string[];
+  confirmationNeeded: string[];
+  recommendation: string;
+}
+
+export interface OrsonMortalityTrace {
+  pondId: string | null;
+  pondName: string;
+  windowStart: string;
+  windowEnd: string;
+  eventDate: string | null;
+  latestMortalityCount: OrsonNumber;
+  baseline: OrsonMortalityBaseline;
+  appetiteProxy: OrsonAppetiteProxy;
+  timeline: OrsonMortalityTimelineDay[];
+  hypotheses: OrsonDiagnosticHypothesis[];
+  missingData: string[];
+  unavailableSources: string[];
+}
+
 export interface OrsonPromptPackage {
   systemInstruction: string;
   context: string;
@@ -296,6 +417,7 @@ export interface OrsonPromptPackage {
   cacheKey: string | null;
   isFarmSpecific: boolean;
   questionFocus: OrsonQuestionFocus;
+  mortalityTrace: OrsonMortalityTrace | null;
 }
 
 export interface OrsonHarvestProjectionInput {

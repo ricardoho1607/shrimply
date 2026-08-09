@@ -257,6 +257,14 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
       ? firstNumber(record.mortality, record.count) ?? 0
       : 0
     : firstNumber(record.mortality, record.dead, record.deaths);
+  const mortalityObservationType = record.mortalityObservationType === 'estimated_total'
+    || record.mortalityObservationType === 'observed_recovered'
+    || record.mortalityObservationType === 'none_observed'
+    ? record.mortalityObservationType
+    : null;
+  const mortalityObservedCount = mortalityObservationType
+    ? firstNumber(record.mortality, record.count) ?? 0
+    : firstNumber(record.mortality, record.dead, record.deaths);
 
   const normalized: OrsonNormalizedRecord = {
     id: firstString(record.id),
@@ -266,6 +274,9 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
     kinds: recordKinds(record, feedData),
     mbwG,
     mortalityCount,
+    mortalityObservedCount,
+    mortalityObservationType,
+    mortalityNotes: firstString(record.notes),
     feedKg,
     phMorning: firstNumber(record.phMorning),
     phEvening: firstNumber(record.phEvening),
@@ -338,6 +349,13 @@ export const normalizePondData = (
     totalHarvestedBiomassKg: firstNumber(pond.totalHarvestedBiomass, pond.harvestedBiomass),
     totalHarvestedPopulation: firstNumber(pond.totalHarvestedPopulation, pond.harvestedPopulation),
     totalHarvestedFeedKg: firstNumber(pond.totalHarvestedFeed, pond.harvestedFeed),
+    partialHarvestCount: firstNumber(pond.partialHarvestCount),
+    postHarvestBaselineDate: normalizeDateString(pond.postHarvestBaselineDate),
+    postHarvestRemainingBiomassKg: firstNumber(pond.postHarvestRemainingBiomass),
+    postHarvestRemainingPopulation: firstNumber(pond.postHarvestRemainingPopulation),
+    postHarvestReferenceSamplingId: firstString(pond.postHarvestReferenceSamplingId),
+    postHarvestReferenceSamplingDate: normalizeDateString(pond.postHarvestReferenceSamplingDate),
+    postHarvestReferenceMbwG: firstNumber(pond.postHarvestReferenceMbw),
     cycleStartMode: pond.cycleStartMode === 'midcycle' ? 'midcycle' : 'new',
     baselineDate: normalizeDateString(pond.baselineDate),
     baselineDoc: firstNumber(pond.baselineDoc),

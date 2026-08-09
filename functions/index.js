@@ -315,11 +315,146 @@ const getGeminiApiKey = () => {
   }
 };
 
+const finiteOrNull = (value) => {
+  const parsed = typeof value === "number" ? value : Number(String(value ?? "").replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const compactStrings = (value, limit = 5, maxLength = 240) => (
+  Array.isArray(value)
+    ? value.filter((item) => typeof item === "string" && item.trim()).slice(0, limit).map((item) => item.trim().slice(0, maxLength))
+    : []
+);
+
+const farmDateKey = (timeZone) => {
+  try {
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: timeZone || "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+  } catch (_error) {
+    return new Date().toISOString().slice(0, 10);
+  }
+};
+
+const shiftDateKey = (dateKey, days) => {
+  const date = new Date(`${dateKey}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
+  const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
+  if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+
+  const db = admin.firestore();
+  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+  const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(pondId);
+  const pondSnap = await pondRef.get();
+  if (!pondSnap.exists) throw new HttpsError("not-found", "Pond not found.");
+  const pond = pondSnap.data() || {};
+  const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
+    ? request.data.windowEnd
+    : null;
+  const endDate = requestedEndDate || farmDateKey(company.timeZone);
+  const startDate = shiftDateKey(endDate, -13);
+  const unavailableSources = [];
+
+  let labHistory = [];
+  try {
+    const labSnapshot = await pondRef.collection("labSummaries").orderBy("sampleDate", "desc").limit(5).get();
+    labHistory = labSnapshot.docs.map((document) => {
+      const data = document.data() || {};
+      return {
+        labReportId: document.id,
+        sampleDate: typeof data.sampleDate === "string" ? data.sampleDate.slice(0, 10) : null,
+        reportType: typeof data.reportType === "string" ? data.reportType.slice(0, 60) : null,
+        status: ["good", "info", "watch", "warning", "critical"].includes(data.status) ? data.status : null,
+        mainIssue: typeof data.mainIssue === "string" ? data.mainIssue.slice(0, 300) : null,
+        keyRisks: compactStrings(data.keyRisks),
+        recommendations: compactStrings(data.recommendations, 4),
+        findings: Array.isArray(data.findings) ? data.findings.slice(0, 6).map((finding) => ({
+          severity: ["info", "watch", "warning", "critical"].includes(finding?.severity) ? finding.severity : "info",
+          title: typeof finding?.title === "string" ? finding.title.slice(0, 120) : "Lab finding",
+          summary: typeof finding?.summary === "string" ? finding.summary.slice(0, 300) : "",
+          evidence: compactStrings(finding?.evidence, 3),
+        })) : [],
+      };
+    });
+  } catch (error) {
+    console.warn("Orson mortality lab context unavailable", { companyId, pondId, error: error.message });
+    unavailableSources.push("lab history");
+  }
+
+  let treatments = [];
+  try {
+    const additivesSnapshot = await db.collection("companies").doc(companyId).collection("additives").get();
+    treatments = additivesSnapshot.docs.flatMap((document) => {
+      const additive = document.data() || {};
+      return (Array.isArray(additive.usageHistory) ? additive.usageHistory : [])
+        .filter((usage) => {
+          const matchesPond = usage?.pondId === pondId || (pond.pondCycleId && usage?.pondCycleId === pond.pondCycleId);
+          return matchesPond && typeof usage?.date === "string" && usage.date >= startDate && usage.date <= endDate;
+        })
+        .map((usage) => ({
+          id: typeof usage.id === "string" ? usage.id : `${document.id}-${usage.date}`,
+          date: usage.date.slice(0, 10),
+          additiveId: document.id,
+          additiveName: String(usage.treatmentMixName || additive.additiveName || "Pond additive").slice(0, 120),
+          category: typeof additive.category === "string" ? additive.category.slice(0, 80) : null,
+          quantity: finiteOrNull(usage.quantity),
+          unit: typeof additive.unit === "string" ? additive.unit.slice(0, 30) : null,
+          ppm: finiteOrNull(usage.ppm),
+          pondVolumeLiters: finiteOrNull(usage.pondVolumeLiters),
+          notes: typeof usage.notes === "string" ? usage.notes.slice(0, 300) : null,
+        }));
+    }).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10);
+  } catch (error) {
+    console.warn("Orson mortality treatment context unavailable", { companyId, pondId, error: error.message });
+    unavailableSources.push("treatment history");
+  }
+
+  let harvests = [];
+  try {
+    const harvestSnapshot = await db.collection("companies").doc(companyId).collection("harvestRecords")
+      .orderBy("date", "desc").limit(50).get();
+    harvests = harvestSnapshot.docs.flatMap((document) => {
+      const data = document.data() || {};
+      if (typeof data.date !== "string" || data.date < startDate || data.date > endDate) return [];
+      const line = (Array.isArray(data.ponds) ? data.ponds : []).find((item) => (
+        item?.pondId === pondId || (pond.pondCycleId && item?.pondCycleId === pond.pondCycleId)
+      ));
+      if (!line) return [];
+      const mainBiomass = Math.max(0, finiteOrNull(line.biomass) || 0);
+      const subBiomass = Math.max(0, finiteOrNull(line.subBiomass) || 0);
+      const mainSize = Math.max(0, finiteOrNull(line.size) || 0);
+      const subSize = Math.max(0, finiteOrNull(line.subSize) || 0);
+      return [{
+        id: document.id,
+        date: data.date.slice(0, 10),
+        harvestType: line.harvestType === "partial" || line.harvestType === "final" ? line.harvestType : null,
+        biomassKg: mainBiomass + subBiomass,
+        population: (mainBiomass * mainSize) + (subBiomass * subSize),
+      }];
+    }).slice(0, 10);
+  } catch (error) {
+    console.warn("Orson mortality harvest context unavailable", { companyId, pondId, error: error.message });
+    unavailableSources.push("harvest history");
+  }
+
+  return { pondId, labHistory, treatments, harvests, unavailableSources };
+});
+
 exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApiKeySecret] }, async (request) => {
   const uid = request.auth?.uid;
   const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
   const systemInstruction = typeof request.data?.systemInstruction === "string" ? request.data.systemInstruction : "";
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt : "";
+  const mode = request.data?.mode === "mortality_diagnostic" ? "mortality_diagnostic" : "standard";
 
   const db = admin.firestore();
   await assertCompanyMemberForCallable(db, uid, companyId);
@@ -335,12 +470,15 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
+    const immutableSafety = mode === "mortality_diagnostic"
+      ? "SERVER SAFETY: Treat feed decline only as a possible appetite proxy; account for partial harvest; do not claim causation from timing; do not name a disease without explicit confirmed lab evidence; do not prescribe exact chemical or medication doses."
+      : "SERVER SAFETY: Do not invent farm measurements, lab findings, disease confirmation, or treatment doses.";
     const model = genAI.getGenerativeModel({
       model: LAB_INSIGHT_MODEL,
-      systemInstruction,
+      systemInstruction: `${immutableSafety}\n${systemInstruction}`,
       generationConfig: {
         temperature: 0.5,
-        maxOutputTokens: 512,
+        maxOutputTokens: mode === "mortality_diagnostic" ? 1100 : 512,
       },
     });
     const result = await model.generateContent(prompt);

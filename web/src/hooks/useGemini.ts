@@ -17,7 +17,11 @@ import {
 } from '../../../orson/promptBuilder';
 import { normalizeOrsonCalibration } from '../../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../../orson/predictionSnapshot';
-import type { OrsonCalibrationProfile, OrsonHarvestProjection } from '../../../orson/types';
+import type {
+  OrsonCalibrationProfile,
+  OrsonHarvestProjection,
+  OrsonMortalityDiagnosticContext,
+} from '../../../orson/types';
 
 // Types for the chat history
 interface Message {
@@ -116,12 +120,60 @@ export const useGemini = () => {
         }
       }
 
-      const analysis = buildOrsonAnalysis(
+      let analysis = buildOrsonAnalysis(
         allPonds as Parameters<typeof buildOrsonAnalysis>[0],
         userMessage,
         new Date(),
         calibration,
       );
+      if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
+        setLoading(false);
+        return analysis.diagnosticRequest.status === 'ambiguous'
+          ? 'More than one pond has recent mortality. Name the pond so I can trace its previous 14 days without mixing pond histories.'
+          : 'I could not find a recent mortality record to investigate. Name the pond and record the mortality observation first.';
+      }
+
+      if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.pondId && options.companyId) {
+        const diagnosticPondId = analysis.diagnosticRequest.pondId;
+        try {
+          const functions = getFunctions(app);
+          const getMortalityContext = httpsCallable<
+            { companyId: string; pondId: string; windowEnd?: string },
+            OrsonMortalityDiagnosticContext
+          >(functions, 'getOrsonMortalityContext');
+          const contextResult = await withTimeout(
+            getMortalityContext({
+              companyId: options.companyId,
+              pondId: diagnosticPondId,
+              windowEnd: analysis.promptPackage.mortalityTrace?.windowEnd,
+            }),
+            8000,
+            'Orson diagnostic context timed out.',
+          );
+          analysis = buildOrsonAnalysis(
+            allPonds as Parameters<typeof buildOrsonAnalysis>[0],
+            userMessage,
+            new Date(),
+            calibration,
+            contextResult.data,
+          );
+        } catch (contextError) {
+          console.warn('Orson mortality context could not be loaded; using pond records only.', contextError);
+          analysis = buildOrsonAnalysis(
+            allPonds as Parameters<typeof buildOrsonAnalysis>[0],
+            userMessage,
+            new Date(),
+            calibration,
+            {
+              pondId: diagnosticPondId,
+              labHistory: [],
+              treatments: [],
+              harvests: [],
+              unavailableSources: ['lab history', 'treatment history', 'harvest history'],
+            },
+          );
+        }
+      }
       void createRiskNotifications(options.companyId, analysis);
 
       const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
@@ -147,7 +199,7 @@ export const useGemini = () => {
       await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat', options.timeZone);
 
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string },
+        { companyId?: string; systemInstruction: string; prompt: string; mode: 'standard' | 'mortality_diagnostic' },
         { text?: string }
       >(functions, 'generateOrsonResponse');
 
@@ -156,6 +208,7 @@ export const useGemini = () => {
           companyId: options.companyId,
           systemInstruction: analysis.promptPackage.systemInstruction,
           prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+          mode: analysis.promptPackage.questionFocus.analysisMode,
         }),
         ORSON_MODEL_TIMEOUT_MS,
         'Orson is taking too long to respond. Please try again.'

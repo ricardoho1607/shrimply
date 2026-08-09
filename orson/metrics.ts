@@ -284,6 +284,12 @@ const toSharedPond = (pond: OrsonNormalizedPond): SharedPond => ({
   baselineCumulativeFeed: pond.baselineCumulativeFeedKg,
   totalHarvestedPopulation: pond.totalHarvestedPopulation,
   totalHarvestedBiomass: pond.totalHarvestedBiomassKg,
+  postHarvestBaselineDate: pond.postHarvestBaselineDate,
+  postHarvestRemainingBiomass: pond.postHarvestRemainingBiomassKg,
+  postHarvestRemainingPopulation: pond.postHarvestRemainingPopulation,
+  postHarvestReferenceSamplingId: pond.postHarvestReferenceSamplingId,
+  postHarvestReferenceSamplingDate: pond.postHarvestReferenceSamplingDate,
+  postHarvestReferenceMbw: pond.postHarvestReferenceMbwG,
   samplings: pond.records.map((record) => ({
     id: record.id ?? undefined,
     date: record.date ?? undefined,
