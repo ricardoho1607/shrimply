@@ -345,7 +345,7 @@ const shiftDateKey = (dateKey, days) => {
   return date.toISOString().slice(0, 10);
 };
 
-exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request) => {
+exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30, invoker: "public" }, async (request) => {
   const uid = request.auth?.uid;
   const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
   const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
