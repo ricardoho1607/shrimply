@@ -275,6 +275,37 @@ service cloud.firestore {
         && validOptionalUsageCount(data.functions, 'projection', 5);
     }
 
+    function aiUsageChatCount(data) {
+      return 'chat' in data.functions ? data.functions.chat : 0;
+    }
+
+    function aiUsageProjectionCount(data) {
+      return 'projection' in data.functions ? data.functions.projection : 0;
+    }
+
+    function validLegacyAiUsageCreate(data, usageDateId) {
+      return validAiUsagePayload(data, usageDateId)
+        && (
+          (aiUsageChatCount(data) == 1 && aiUsageProjectionCount(data) == 0)
+          || (aiUsageChatCount(data) == 0 && aiUsageProjectionCount(data) == 1)
+        );
+    }
+
+    function validLegacyAiUsageUpdate(data, usageDateId) {
+      return validAiUsagePayload(data, usageDateId)
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['functions', 'updatedAt'])
+        && (
+          (
+            aiUsageChatCount(data) == aiUsageChatCount(resource.data) + 1
+            && aiUsageProjectionCount(data) == aiUsageProjectionCount(resource.data)
+          )
+          || (
+            aiUsageProjectionCount(data) == aiUsageProjectionCount(resource.data) + 1
+            && aiUsageChatCount(data) == aiUsageChatCount(resource.data)
+          )
+        );
+    }
+
     function validActivitySessionPayload(data, companyId) {
       return data.keys().hasOnly([
           'companyId',
@@ -890,11 +921,23 @@ service cloud.firestore {
         allow write: if isCompanyManager(companyId);
       }
 
+      // Legacy client-visible counters. Existing installed clients still reserve
+      // here before calling Orson, so keep that path backward-compatible but prevent
+      // resets, jumps, or changes to both counters in one write.
       match /aiUsage/{usageDateId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create, update: if isCompanyMember(companyId)
-          && validAiUsagePayload(request.resource.data, usageDateId);
+        allow create: if isCompanyMember(companyId)
+          && validLegacyAiUsageCreate(request.resource.data, usageDateId);
+        allow update: if isCompanyMember(companyId)
+          && validLegacyAiUsageUpdate(request.resource.data, usageDateId);
         allow delete: if false;
+      }
+
+      // Authoritative Orson quotas live here. Only Cloud Functions/Admin SDK writes
+      // these counters; client SDKs can never reserve, reset, or forge them.
+      match /orsonUsage/{usageDateId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
       }
 
       match /orsonPredictions/{predictionId} {

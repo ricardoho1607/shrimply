@@ -8,7 +8,6 @@ import { buildOrsonAnalysis } from '../../../orson/pipeline';
 import {
   type OrsonAiFunction,
   isOrsonDailyLimitError,
-  reserveOrsonRequest,
 } from '@/lib/orsonAiUsage';
 import {
   cleanOrsonResponse,
@@ -43,6 +42,23 @@ type SendMessageOptions = {
 // Cache Configuration
 const CACHE_PREFIX = 'orson_cache_';
 const CACHE_EXPIRY = 1000 * 60 * 60 * 24 * 7; // 7 Days
+
+const getRemoteOrsonLimit = (error: any): {
+  aiFunction: OrsonAiFunction;
+  limit: number;
+  used: number;
+} | null => {
+  const code = typeof error?.code === 'string' ? error.code : '';
+  const details = error?.details ?? error?.customData?.details;
+  if (code !== 'functions/resource-exhausted' && code !== 'resource-exhausted') return null;
+  if (!details || (details.aiFunction !== 'chat' && details.aiFunction !== 'projection')) return null;
+  if (!Number.isFinite(details.limit) || !Number.isFinite(details.used)) return null;
+  return {
+    aiFunction: details.aiFunction,
+    limit: Number(details.limit),
+    used: Number(details.used),
+  };
+};
 
 export const useGemini = () => {
   const [loading, setLoading] = useState(false);
@@ -138,12 +154,11 @@ export const useGemini = () => {
         try {
           const functions = getFunctions(app);
           const getMortalityContext = httpsCallable<
-            { operation: 'mortality_context'; companyId: string; pondId: string; windowEnd?: string },
+            { companyId: string; pondId: string; windowEnd?: string },
             OrsonMortalityDiagnosticContext
-          >(functions, 'generateOrsonResponse');
+          >(functions, 'getOrsonMortalityContext');
           const contextResult = await withTimeout(
             getMortalityContext({
-              operation: 'mortality_context',
               companyId: options.companyId,
               pondId: diagnosticPondId,
               windowEnd: analysis.promptPackage.mortalityTrace?.windowEnd,
@@ -197,19 +212,17 @@ export const useGemini = () => {
           console.warn('Orson prediction snapshot could not be recorded.', predictionError);
         }
       }
-      await reserveOrsonRequest(db, options.companyId, options.aiFunction ?? 'chat', options.timeZone);
-
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string; mode: 'standard' | 'mortality_diagnostic' },
+        { companyId?: string; prompt: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
         { text?: string }
       >(functions, 'generateOrsonResponse');
 
       const result = await withTimeout(
         generateOrsonResponse({
           companyId: options.companyId,
-          systemInstruction: analysis.promptPackage.systemInstruction,
           prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
           mode: analysis.promptPackage.questionFocus.analysisMode,
+          aiFunction: options.aiFunction ?? 'chat',
         }),
         ORSON_MODEL_TIMEOUT_MS,
         'Orson is taking too long to respond. Please try again.'
@@ -247,9 +260,20 @@ export const useGemini = () => {
         return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
       }
 
+      const remoteLimit = getRemoteOrsonLimit(err);
+      if (remoteLimit) {
+        const label = remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';
+        const limitMessage = `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after the daily reset.`;
+        if (latestRequestId.current === requestId) {
+          setError("Daily limit reached.");
+        }
+        return limitMessage;
+      }
+
+      // Keep support for the legacy local error shape during rollout.
       if (isOrsonDailyLimitError(err)) {
         const label = err.aiFunction === 'projection' ? 'projection analysis' : 'chat';
-        const limitMessage = `Today's Orson ${label} limit is full (${err.used}/${err.limit}). This keeps Shrimply inside the Gemini free tier while there are no paying customers yet. Please try again after the daily reset.`;
+        const limitMessage = `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after the daily reset.`;
         if (latestRequestId.current === requestId) {
           setError("Daily limit reached.");
         }

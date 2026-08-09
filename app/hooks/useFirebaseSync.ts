@@ -116,7 +116,7 @@ export const useFirebaseSync = () => {
   
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [pendingStorageReady, setPendingStorageReady] = useState(false);
-  const [unsubscribeCallbacks, setUnsubscribeCallbacks] = useState<(() => void)[]>([]);
+  const unsubscribeCallbacksRef = useRef<(() => void)[]>([]);
   const pendingChangesRef = useRef<PendingChange[]>([]);
   
   // Track current company to detect account switches
@@ -194,14 +194,14 @@ export const useFirebaseSync = () => {
       console.log(`Account switched from ${currentCompanyRef.current} to ${companyId}, cleaning up...`);
       
       // Cleanup listeners
-      unsubscribeCallbacks.forEach(unsub => {
+      unsubscribeCallbacksRef.current.forEach(unsub => {
         try {
           unsub();
         } catch (error) {
           console.error('Error unsubscribing:', error);
         }
       });
-      setUnsubscribeCallbacks([]);
+      unsubscribeCallbacksRef.current = [];
       listenersSetUp.current = false;
       initialLoadComplete.current = false;
       
@@ -222,14 +222,14 @@ export const useFirebaseSync = () => {
 
     return () => {
       console.log('Cleaning up Firebase listeners');
-      unsubscribeCallbacks.forEach(unsub => {
+      unsubscribeCallbacksRef.current.forEach(unsub => {
         try {
           unsub();
         } catch (error) {
           console.error('Error unsubscribing:', error);
         }
       });
-      setUnsubscribeCallbacks([]);
+      unsubscribeCallbacksRef.current = [];
       listenersSetUp.current = false;
       initialLoadComplete.current = false;
     };
@@ -457,7 +457,7 @@ export const useFirebaseSync = () => {
       );
       newUnsubscribeCallbacks.push(unsubscribeHarvest);
 
-      setUnsubscribeCallbacks(newUnsubscribeCallbacks);
+      unsubscribeCallbacksRef.current = newUnsubscribeCallbacks;
     } catch (error) {
       console.error('Error setting up Firebase listeners:', error);
       setSyncStatus(prev => ({ ...prev, error: 'Failed to connect to Firebase' }));
