@@ -31,5 +31,11 @@ jobs:
           npx eslint src/hooks/useGemini.ts
           npx tsc --noEmit
 
+      - name: Set up Java 21 for Firestore emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Compile Firestore rules in emulator
         run: npx firebase-tools emulators:exec --only firestore --project demo-shrimply "echo firestore-rules-ok"
