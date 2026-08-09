@@ -32,6 +32,14 @@ export interface StartablePondCycleRecord {
 export interface OpenFarmCycle {
   id: string;
   cycleName: string;
+  status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+  blockIds?: string[] | null;
+  blockNames?: string[] | null;
+  blockId?: string | null;
+  blockName?: string | null;
+  plannedPondIds?: string[] | null;
+  stockingStartDate?: string;
+  stockingEndDate?: string;
 }
 
 export type StartPondCycleErrorCode =
@@ -40,7 +48,9 @@ export type StartPondCycleErrorCode =
   | 'invalidPlValue'
   | 'invalidSupplier'
   | 'invalidStartDate'
-  | 'baselineMbwRequired';
+  | 'baselineMbwRequired'
+  | 'blockMismatch'
+  | 'cycleMismatch';
 
 export class StartPondCycleError extends Error {
   constructor(public readonly code: StartPondCycleErrorCode) {
@@ -101,7 +111,7 @@ export async function startPondCycle({
   activeCycle: OpenFarmCycle;
   form: StartPondCycleFormValue;
   today: string;
-  activePonds: Array<{ id: string; pondName: string; cycleStatus?: 'active' | 'ended' }>;
+  activePonds: { id: string; pondName: string; cycleStatus?: 'active' | 'ended' }[];
 }): Promise<string> {
   const hasDuplicate = activePonds.some((activePond) => (
     activePond.id !== pond.id
@@ -109,6 +119,17 @@ export async function startPondCycle({
     && getPhysicalPondKey(activePond.pondName) === getPhysicalPondKey(pond.pondName)
   ));
   if (hasDuplicate) throw new StartPondCycleError('duplicate');
+  const assignedBlockIds = activeCycle.blockIds?.length
+    ? activeCycle.blockIds
+    : activeCycle.blockId
+      ? [activeCycle.blockId]
+      : [];
+  if (assignedBlockIds.length > 0 && (!pond.blockId || !assignedBlockIds.includes(pond.blockId))) {
+    throw new StartPondCycleError('blockMismatch');
+  }
+  if (!activeCycle.blockIds?.length && activeCycle.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(pond.id)) {
+    throw new StartPondCycleError('cycleMismatch');
+  }
 
   const pondArea = Number(pond.pondArea ?? pond.area);
   const density = Number(String(form.density).trim().replace(',', '.'));
@@ -150,6 +171,7 @@ export async function startPondCycle({
     cycleId: activeCycle.id,
     cycleName: activeCycle.cycleName,
     pondCycleId: pondRef.id,
+    physicalPondId: pond.id,
     ...(baselinePopulation !== undefined ? { estimatedPopulation: baselinePopulation } : {}),
     ...(baselineSurvivalRate !== undefined ? { estimatedSurvivalRate: baselineSurvivalRate } : {}),
     ...(baselineFeed !== undefined ? { cumulativeFeedToDate: baselineFeed } : {}),
@@ -201,6 +223,21 @@ export async function startPondCycle({
       updatedBy: userId,
     });
   }
+
+  const stockingStartDate = [activeCycle.stockingStartDate, form.docStart]
+    .filter((date): date is string => Boolean(date))
+    .sort()[0];
+  const stockingEndDate = [activeCycle.stockingEndDate, form.docStart]
+    .filter((date): date is string => Boolean(date))
+    .sort()
+    .at(-1);
+  batch.update(doc(db, 'companies', companyId, 'cycles', activeCycle.id), {
+    status: 'stocking',
+    stockingStartDate,
+    stockingEndDate,
+    updatedAt: serverTimestamp(),
+    updatedBy: userId,
+  });
 
   await batch.commit();
   return pondRef.id;

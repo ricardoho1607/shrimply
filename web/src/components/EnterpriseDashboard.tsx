@@ -250,7 +250,11 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     } catch (startError) {
       console.error('Failed to start enterprise pond cycle:', startError);
       const errorCode = startError instanceof StartPondCycleError ? startError.code : 'failed';
-      alert(t.startPondCycle.errors[errorCode]);
+      alert(errorCode === 'blockMismatch'
+        ? t.enterpriseCycle.pondBlockMismatch
+        : errorCode === 'cycleMismatch'
+          ? t.enterpriseCycle.pondCycleMismatch
+          : t.startPondCycle.errors[errorCode]);
     } finally {
       setStartingPondCycle(false);
     }

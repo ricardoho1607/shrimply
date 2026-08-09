@@ -135,6 +135,14 @@ export function useCompanyCycles<T>(sort: 'asc' | 'desc' = 'asc') {
   return useCompanySubcollection<T>('cycles', constraints);
 }
 
+export function useCompanyFeeds<T>() {
+  return useCompanySubcollection<T>('feeds');
+}
+
+export function useCompanyAdditives<T>() {
+  return useCompanySubcollection<T>('additives');
+}
+
 export function useCompanyHarvestRecords<T>(sort: 'asc' | 'desc' = 'desc') {
   const constraints = useMemo(() => [orderBy('date', sort)], [sort]);
   return useCompanySubcollection<T>('harvestRecords', constraints);

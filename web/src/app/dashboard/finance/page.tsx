@@ -4,7 +4,6 @@ import React, { useState, useMemo } from 'react';
 import { 
   Wallet, 
   TrendingUp, 
-  Plus, 
   Search, 
   Calendar, 
   Trash2, 
@@ -28,8 +27,17 @@ import { db } from '@/lib/firebase';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useDebouncedValue, useFinanceRecords } from '@/hooks/useDashboardData';
+import {
+  useCompanyCycles,
+  useCompanyPonds,
+  useDebouncedValue,
+  useFinanceRecords,
+} from '@/hooks/useDashboardData';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import {
+  allocateExpenseAcrossCyclePonds,
+  getOpenFinanceCycles,
+} from '../../../../../shared/financeCycleAllocation';
 
 /* --- Types --------------------------------------------------- */
 interface Transaction {
@@ -44,20 +52,30 @@ interface Transaction {
   addedByName: string;
   timestamp: number;
   type: 'expense' | 'income';
+  cycleId?: string;
+  cycleName?: string;
 }
+
+interface FinanceCycle { id: string; cycleName: string; status?: string; blockName?: string; blockNames?: string[] }
+interface FinancePond { id: string; pondName: string; cycleId?: string; pondCycleId?: string }
 
 export default function FinancePage() {
   const { t } = useLanguage();
+  const generalCategoryLabel = t.financeCycle.general;
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
   const today = useFarmDateKey(company?.timeZone);
 
-  const EXPENSE_CATEGORIES = [t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, 'Feed', 'Chemicals', 'Probiotics'];
+  const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics];
   const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome];
   const PAYMENT_TYPES = [t.finance.cash, t.finance.bankTransfer, t.finance.mobilePayment];
 
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'income'>('overview');
   const { expenses, revenues: income, loading } = useFinanceRecords<Transaction, Transaction>();
+  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
+  const { data: ponds, loading: pondsLoading } = useCompanyPonds<FinancePond>();
+  const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
+  const [cycleScope, setCycleScope] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -72,26 +90,34 @@ export default function FinancePage() {
     amount: '',
     paymentType: PAYMENT_TYPES[0],
     reference: '',
-    notes: ''
+    notes: '',
+    cycleId: activeCycles[0]?.id || '',
   });
 
+  const scopedExpenses = useMemo(() => cycleScope === 'all'
+    ? expenses
+    : expenses.filter((expense) => expense.cycleId === cycleScope), [cycleScope, expenses]);
+  const scopedIncome = useMemo(() => cycleScope === 'all'
+    ? income
+    : income.filter((record) => record.cycleId === cycleScope), [cycleScope, income]);
+
   const stats = useMemo(() => {
-    const totalExpense = expenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const totalIncome = income.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const totalExpense = scopedExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
+    const totalIncome = scopedIncome.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
     const profit = totalIncome - totalExpense;
     
-    return { totalExpense, totalIncome, profit, count: expenses.length + income.length };
-  }, [expenses, income]);
+    return { totalExpense, totalIncome, profit, count: scopedExpenses.length + scopedIncome.length };
+  }, [scopedExpenses, scopedIncome]);
 
   const filteredTransactions = useMemo(() => {
-    const target = activeTab === 'expenses' ? expenses : income;
+    const target = activeTab === 'expenses' ? scopedExpenses : scopedIncome;
     const normalizedSearch = debouncedSearchQuery.trim().toLowerCase();
     if (!normalizedSearch) return target;
     return target.filter(t => 
       t.item.toLowerCase().includes(normalizedSearch) || 
       t.category.toLowerCase().includes(normalizedSearch)
     );
-  }, [expenses, income, activeTab, debouncedSearchQuery]);
+  }, [scopedExpenses, scopedIncome, activeTab, debouncedSearchQuery]);
 
   const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,11 +125,24 @@ export default function FinancePage() {
     setIsSubmitting(true);
 
     const collectionName = formType === 'expense' ? 'expenses' : 'revenues';
+    const selectedCycle = activeCycles.find((cycle) => cycle.id === formData.cycleId);
+    const amount = Number(formData.amount);
+    if (!selectedCycle) {
+      alert(t.financeCycle.selectCycleMessage);
+      setIsSubmitting(false);
+      return;
+    }
 
     try {
       await addDoc(collection(db, 'companies', company.id, collectionName), {
         ...formData,
-        amount: Number(formData.amount),
+        amount,
+        cycleId: selectedCycle?.id || '',
+        cycleName: selectedCycle?.cycleName || '',
+        ...(formType === 'expense' ? {
+          allocationMethod: selectedCycle ? 'equal_per_pond' : null,
+          pondAllocations: allocateExpenseAcrossCyclePonds(amount, selectedCycle?.id, ponds),
+        } : {}),
         addedBy: user.uid,
         addedByName: user.name || 'Unknown',
         timestamp: new Date(formData.date).getTime(),
@@ -114,7 +153,7 @@ export default function FinancePage() {
       resetForm();
     } catch (err) {
       console.error(err);
-      alert("Failed to save transaction.");
+      alert(t.financeCycle.saveFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -124,7 +163,8 @@ export default function FinancePage() {
     setFormData({
       date: today,
       category: formType === 'expense' ? EXPENSE_CATEGORIES[0] : INCOME_CATEGORIES[0],
-      item: '', amount: '', paymentType: PAYMENT_TYPES[0], reference: '', notes: ''
+      item: '', amount: '', paymentType: PAYMENT_TYPES[0], reference: '', notes: '',
+      cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope,
     });
   };
 
@@ -150,25 +190,38 @@ export default function FinancePage() {
     );
   }
 
-  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
+  if (loading || cyclesLoading || pondsLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
     <div className="dashboard-page">
       <div className="dashboard-action-row">
           <button 
-            onClick={() => { setFormType('income'); setFormData({...formData, date: today, category: INCOME_CATEGORIES[0]}); setIsModalOpen(true); }}
+            onClick={() => { setFormType('income'); setFormData({...formData, date: today, category: INCOME_CATEGORIES[0], cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope}); setIsModalOpen(true); }}
             className="btn-secondary" 
             style={{ border: '1px solid #27AE60', color: '#27AE60', background: 'rgba(39, 174, 96, 0.05)' }}
           >
             <ArrowUpRight size={18} /> {t.finance.addRevenue}
           </button>
           <button 
-            onClick={() => { setFormType('expense'); setFormData({...formData, date: today, category: EXPENSE_CATEGORIES[0]}); setIsModalOpen(true); }}
+            onClick={() => { setFormType('expense'); setFormData({...formData, date: today, category: EXPENSE_CATEGORIES[0], cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope}); setIsModalOpen(true); }}
             className="btn-primary" 
             style={{ background: '#ef4444', border: 'none' }}
           >
             <ArrowDownRight size={20} /> {t.finance.addExpense}
           </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '14px' }}>
+        <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
+        <select
+          id="finance-cycle-filter"
+          value={cycleScope}
+          onChange={(event) => setCycleScope(event.target.value)}
+          style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontWeight: 800, outline: 'none' }}
+        >
+          {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}{cycle.blockNames?.length ? ` — ${cycle.blockNames.join(', ')}` : cycle.blockName ? ` — ${cycle.blockName}` : ''}</option>)}
+          <option value="all">{t.financeCycle.allHistory}</option>
+        </select>
       </div>
 
       {/* Summary Cards */}
@@ -217,14 +270,14 @@ export default function FinancePage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '32px', borderBottom: '1px solid var(--border)', padding: '0 8px', overflowX: 'auto' }}>
-        {[
+        {([
           { id: 'overview', label: t.finance.overview, icon: BarChart3 },
           { id: 'income', label: t.finance.revenues, icon: ArrowUpRight },
           { id: 'expenses', label: t.finance.expenses, icon: ArrowDownRight }
-        ].map(tab => (
+        ] as const).map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => setActiveTab(tab.id)}
             style={{
               padding: '16px 4px',
               display: 'flex',
@@ -334,10 +387,11 @@ export default function FinancePage() {
               <thead>
                 <tr style={{ textAlign: 'left', background: 'var(--bg-mid)', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Category</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.category}</th>
                   <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.itemDescription}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Amount</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</th>
                   <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.paymentType}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.cycle}</th>
                   <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}></th>
                 </tr>
               </thead>
@@ -366,6 +420,7 @@ export default function FinancePage() {
                       <div style={{ fontSize: '13px', fontWeight: 700 }}>{t.paymentType}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || 'No Ref'}</div>
                     </td>
+                    <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 700 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
@@ -393,32 +448,44 @@ export default function FinancePage() {
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: formType === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: formType === 'income' ? '#27AE60' : '#ef4444', border: '1px solid var(--border)' }}>
                   <DollarSign size={24} />
                 </div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>Log {formType === 'income' ? t.finance.revenue : t.finance.expenses}</h2>
+                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>{t.financeCycle.logTransaction.replace('{{type}}', formType === 'income' ? t.finance.revenue : t.finance.expenses)}</h2>
               </div>
               <button onClick={() => setIsModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handlePost} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <form className="responsive-modal-body" onSubmit={handlePost} style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '16px', rowGap: '14px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.forms.date}</label>
-                  <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
+                  <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={e => e.preventDefault()} onPaste={e => e.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Category</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.category}</label>
                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {(formType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.allocateToCycle}</label>
+                  <select required value={formData.cycleId} onChange={e => setFormData({...formData, cycleId: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    <option value="" disabled>{t.financeCycle.selectCycle}</option>
+                    {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
+                  </select>
+                  {formType === 'expense' && formData.cycleId ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                    {t.financeCycle.splitAcrossPonds
+                      .replace('{{count}}', String(ponds.filter((pond) => pond.cycleId === formData.cycleId).length))
+                      .replace('{{cycleName}}', activeCycles.find((cycle) => cycle.id === formData.cycleId)?.cycleName || t.financeCycle.cycle)}
+                  </span> : null}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.finance.itemDescription}</label>
                   <input required value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} placeholder={t.finance.enterDescription} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Amount ({currencyConfig.symbol})</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</label>
                   <input type="number" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.finance.paymentType}</label>
                   <select value={formData.paymentType} onChange={e => setFormData({...formData, paymentType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {PAYMENT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
@@ -426,7 +493,7 @@ export default function FinancePage() {
                 </div>
               </div>
 
-              <div className="responsive-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+              <div className="responsive-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
                 <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px', fontWeight: 700 }}>{t.actions.cancel}</button>
                 <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', background: formType === 'income' ? '#27AE60' : '#ef4444', border: 'none', fontWeight: 800 }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : `${t.actions.save} ${formType === 'income' ? t.finance.revenue : t.finance.expenses}`}

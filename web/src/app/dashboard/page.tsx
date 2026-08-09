@@ -46,7 +46,7 @@ import {
   type SharedMortalityRecord,
 } from '../../../../shared/pondCalculations';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
-import EnterpriseDashboard from '@/components/EnterpriseDashboard';
+import EnterpriseDashboard from '@/components/EnterpriseCycleDashboard';
 import ProfileCompletionCard from '@/components/ProfileCompletionCard';
 import {
   filterEnterpriseRecordsForUser,

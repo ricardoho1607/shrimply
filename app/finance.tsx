@@ -13,14 +13,21 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
 import financeService, { Expense, ExpenseInput } from './services/financeService';
 import revenueService, { Revenue, RevenueInput } from './services/revenueService';
-import { getActiveFarmCycle, usePondStore } from './store/pondStore';
+import { usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { getFarmDateKey, getFarmPeriodDateKeys, isDateKeyInRange } from '../shared/farmDate';
+import AppDatePicker from './components/forms/AppDatePicker';
+import CycleSelector from './components/forms/CycleSelector';
+import {
+  allocateExpenseAcrossCyclePonds,
+  getOpenFinanceCycles,
+} from '../shared/financeCycleAllocation';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
 
 const COLORS: Record<string, string> = {
+  General: '#607D8B',
   Feed: '#0d2137', 'Pond Additives': '#315f57', Labor: '#dbe7df',
   Repairs: '#0d2137', Utilities: '#5DADE2', Miscellaneous: '#85C1E9',
   'Shrimp Sales': '#27AE60', Consultation: '#2ECC71',
@@ -31,7 +38,7 @@ const { width: screenWidth } = Dimensions.get('window');
 
 type FormData = {
   date: string; category: string; item: string; amount: string; paymentType: string;
-  reference: string; linkedInventory: string; notes: string;
+  reference: string; linkedInventory: string; notes: string; cycleId: string;
 };
 
 export default function FinancePage() {
@@ -39,11 +46,12 @@ export default function FinancePage() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { harvestRecords, cycles } = usePondStore();
-  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
+  const { harvestRecords, cycles, ponds } = usePondStore();
+  const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
   const CATEGORIES = [
+    t.financeCycle.general,
     t.inventory?.feeds || 'Feed',
     t.inventory?.additives || 'Pond Additives',
     t.finance?.labor || 'Labor',
@@ -71,7 +79,7 @@ export default function FinancePage() {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState<'expense' | 'revenue'>('expense');
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('Today');
-  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
+  const [cycleScope, setCycleScope] = useState('all');
   const [filterCategory, setFilterCategory] = useState(t.finance?.all || 'All');
   const [submitting, setSubmitting] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -91,7 +99,16 @@ export default function FinancePage() {
     reference: '', 
     linkedInventory: '', 
     notes: '',
+    cycleId: activeCycles[0]?.id || '',
   });
+
+  const selectedFormCycle = cycles.find((cycle) => cycle.id === formData.cycleId);
+  const formCycleOptions = selectedFormCycle && !activeCycles.some((cycle) => cycle.id === selectedFormCycle.id)
+    ? [...activeCycles, selectedFormCycle]
+    : activeCycles;
+  const selectedFormCyclePonds = selectedFormCycle
+    ? ponds.filter((pond) => pond.cycleId === selectedFormCycle.id)
+    : [];
 
   const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
@@ -141,13 +158,13 @@ export default function FinancePage() {
         const allStockIns = [
           ...feedAdditiveStore.feeds.flatMap(feed => 
             (feed.stockInHistory || []).map(stock => ({ 
-              ...stock, itemName: feed.feedName, category: CATEGORIES[0], 
+              ...stock, itemName: feed.feedName, category: t.inventory?.feeds || 'Feed',
               itemId: feed.id, type: 'feed' as const 
             }))
           ),
           ...feedAdditiveStore.additives.filter(additive => additive.inventoryKind !== 'treatmentMix').flatMap(additive =>
             (additive.stockInHistory || []).map(stock => ({ 
-              ...stock, itemName: additive.additiveName, category: CATEGORIES[1], 
+              ...stock, itemName: additive.additiveName, category: t.inventory?.additives || 'Pond Additives',
               itemId: additive.id, type: 'additive' as const 
             }))
           )
@@ -323,17 +340,29 @@ export default function FinancePage() {
       return;
     }
 
+    const selectedCycle = cycles.find((cycle) => cycle.id === formData.cycleId);
+    if (!selectedCycle) {
+      Alert.alert(t.financeCycle.selectCycleTitle, t.financeCycle.selectCycleMessage);
+      return;
+    }
+
     setSubmitting(true);
     try {
       const baseData = {
         date: formData.date, category: formData.category, item: formData.item, amount,
         paymentType: formData.paymentType, reference: formData.reference, notes: formData.notes,
-        cycleId: activeFarmCycle?.id,
-        cycleName: activeFarmCycle?.cycleName,
+        cycleId: selectedCycle?.id || '',
+        cycleName: selectedCycle?.cycleName || '',
       };
 
       if (formType === 'expense') {
-        const expenseData: ExpenseInput = { ...baseData, linkedInventory: formData.linkedInventory };
+        const pondAllocations = allocateExpenseAcrossCyclePonds(amount, selectedCycle?.id, ponds);
+        const expenseData: ExpenseInput = {
+          ...baseData,
+          linkedInventory: formData.linkedInventory,
+          allocationMethod: selectedCycle ? 'equal_per_pond' : null,
+          pondAllocations,
+        };
         if (editingExpense) {
           await financeService.updateExpense(company.id, editingExpense.id, expenseData);
           Alert.alert('Success', `${t.finance?.expenses || 'Expense'} updated successfully`);
@@ -377,6 +406,7 @@ export default function FinancePage() {
       date: item.date, category: item.category, item: item.item, amount: item.amount.toString(),
       paymentType: item.paymentType, reference: item.reference,
       linkedInventory: isExpense ? (item as Expense).linkedInventory || '' : '', notes: item.notes,
+      cycleId: item.cycleId || '',
     });
     if (isExpense) setEditingExpense(item as Expense);
     else setEditingRevenue(item as Revenue);
@@ -423,14 +453,15 @@ export default function FinancePage() {
       date: getFarmDateKey(new Date(), company?.timeZone),
       category: formType === 'expense' ? CATEGORIES[0] : REVENUE_CATEGORIES[0],
       item: '', amount: '', paymentType: TRANSLATED_PAYMENT_TYPES[0], reference: '', linkedInventory: '', notes: '',
+      cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope,
     });
     setEditingExpense(null);
     setEditingRevenue(null);
   };
 
   const getCycleScopedData = <T extends { cycleId?: string }>(data: T[]) => {
-    if (cycleScope === 'all' || !activeFarmCycle) return data;
-    return data.filter((item) => item.cycleId === activeFarmCycle.id);
+    if (cycleScope === 'all') return data;
+    return data.filter((item) => item.cycleId === cycleScope);
   };
 
   const getFilteredData = <T extends { date: string; category?: string; cycleId?: string }>(data: T[], useCategory = true) => {
@@ -494,7 +525,7 @@ export default function FinancePage() {
       currentDate.setMonth(currentDate.getMonth() + 1);
     }
     return months;
-  }, [expenses, revenues, activeFarmCycle?.id, cycleScope]);
+  }, [expenses, revenues, cycleScope]);
 
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
@@ -534,6 +565,9 @@ export default function FinancePage() {
           </Text>
           <Text style={styles.ledgerMetaText}>
             <Ionicons name="card-outline" size={12} color="#95A5A6" /> {item.paymentType}
+          </Text>
+          <Text style={styles.ledgerMetaText}>
+            <Ionicons name="repeat-outline" size={12} color="#95A5A6" /> {item.cycleName || t.financeCycle.general}
           </Text>
         </View>
         {item.reference && !isSynced && <Text style={styles.ledgerReference}>Ref: {item.reference}</Text>}
@@ -601,7 +635,7 @@ export default function FinancePage() {
       </SafeAreaView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.periodContainer}>
+        <View style={[styles.periodContainer, styles.datePeriodContainer]}>
           {PERIOD_OPTIONS.map(period => (
             <TouchableOpacity key={period}
               style={[styles.periodTab, selectedPeriod === period && styles.periodTabActive]}
@@ -613,21 +647,17 @@ export default function FinancePage() {
           ))}
         </View>
 
-        <View style={styles.periodContainer}>
-          {[
-            { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
-            { key: 'all', label: 'All History' },
-          ].map((scope) => (
-            <TouchableOpacity
-              key={scope.key}
-              style={[styles.periodTab, cycleScope === scope.key && styles.periodTabActive]}
-              onPress={() => setCycleScope(scope.key as 'current' | 'all')}
-            >
-              <Text style={[styles.periodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
-                {scope.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.cycleFilterContainer}>
+          <CycleSelector
+            value={cycleScope}
+            options={activeCycles}
+            onChange={setCycleScope}
+            includeAllHistory
+            placeholder={t.financeCycle.selectCycle}
+            allHistoryLabel={t.financeCycle.allHistory}
+            sheetEyebrow={t.financeCycle.cycle}
+            sheetTitle={t.financeCycle.selectCycle}
+          />
         </View>
 
         <View style={styles.summaryContainer}>
@@ -908,14 +938,40 @@ export default function FinancePage() {
 
             <ScrollView style={styles.formContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Date {t.finance?.required || '*'}</Text>
-                <TextInput style={styles.formInput} value={formData.date}
-                  onChangeText={(text) => setFormData(prev => ({ ...prev, date: text }))}
-                  placeholder="YYYY-MM-DD" placeholderTextColor="#6b8aa0" />
+                <AppDatePicker
+                  label={`Date ${t.finance?.required || '*'}`}
+                  value={formData.date}
+                  maximumDate={new Date()}
+                  onChange={(date) => setFormData((current) => ({
+                    ...current,
+                    date: getFarmDateKey(date, company?.timeZone),
+                  }))}
+                  cancelLabel={t.actions.cancel}
+                  confirmLabel={t.actions.confirm}
+                />
               </View>
 
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Category {t.finance?.required || '*'}</Text>
+                <CycleSelector
+                  label={t.financeCycle.allocateToCycle}
+                  value={formData.cycleId}
+                  options={formCycleOptions}
+                  onChange={(cycleId) => setFormData((current) => ({ ...current, cycleId }))}
+                  placeholder={t.financeCycle.selectCycle}
+                  sheetEyebrow={t.financeCycle.cycle}
+                  sheetTitle={t.financeCycle.selectCycle}
+                />
+                {formType === 'expense' && selectedFormCycle ? (
+                  <Text style={styles.allocationHint}>
+                    {t.financeCycle.splitAcrossPonds
+                      .replace('{{count}}', String(selectedFormCyclePonds.length))
+                      .replace('{{cycleName}}', selectedFormCycle.cycleName)}
+                  </Text>
+                ) : null}
+              </View>
+
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>{t.financeCycle.category} {t.finance?.required || '*'}</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroll}>
                   {(formType === 'expense' ? CATEGORIES : REVENUE_CATEGORIES).map(cat => (
                     <TouchableOpacity key={cat}
@@ -1017,11 +1073,13 @@ const styles = StyleSheet.create({
   syncToggleLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#2C3E50', marginBottom: 2 },
   syncToggleSubtext: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#7F8C8D' },
   content: { flex: 1 },
-  periodContainer: { flexDirection: 'row', margin: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  periodContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  datePeriodContainer: { marginTop: Platform.OS === 'android' ? 12 : 14, marginBottom: 6 },
   periodTab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', justifyContent: 'center', borderRadius: Platform.OS === 'android' ? 7 : 8 },
   periodTabActive: { backgroundColor: '#3498DB' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 13 : 14, lineHeight: Platform.OS === 'android' ? 17 : 19, fontWeight: '600', color: '#7F8C8D', textAlign: 'center' },
   periodTabTextActive: { color: '#FFFFFF' },
+  cycleFilterContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 12 : 14 },
   summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12 },
   summaryRowLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#7F8C8D', textTransform: 'uppercase', letterSpacing: 0.5 },
@@ -1116,22 +1174,23 @@ const styles = StyleSheet.create({
   emptyStateSubtext: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#BDC3C7', marginTop: 4 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(44, 62, 80, 0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFFFFF', borderTopLeftRadius: Platform.OS === 'android' ? 20 : 24, borderTopRightRadius: Platform.OS === 'android' ? 20 : 24, maxHeight: '92%' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: Platform.OS === 'android' ? 18 : 20, borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingVertical: Platform.OS === 'android' ? 15 : 16, borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
   modalTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: '700', color: '#2C3E50' },
-  formContent: { padding: Platform.OS === 'android' ? 18 : 20 },
-  formGroup: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
-  formLabel: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#34495E', marginBottom: Platform.OS === 'android' ? 7 : 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  formInput: { backgroundColor: '#F8FAFB', borderWidth: 1, borderColor: '#ECF0F1', borderRadius: Platform.OS === 'android' ? 9 : 10, padding: Platform.OS === 'android' ? 12 : 14, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#2C3E50' },
+  formContent: { paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 15 : 16 },
+  formGroup: { marginBottom: Platform.OS === 'android' ? 13 : 14 },
+  formLabel: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#34495E', marginBottom: 5, textTransform: 'uppercase', letterSpacing: 0.5 },
+  formInput: { backgroundColor: '#F8FAFB', borderWidth: 1, borderColor: '#ECF0F1', borderRadius: Platform.OS === 'android' ? 9 : 10, paddingHorizontal: Platform.OS === 'android' ? 12 : 13, paddingVertical: Platform.OS === 'android' ? 10 : 11, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#2C3E50' },
   formTextArea: { height: Platform.OS === 'android' ? 90 : 100, textAlignVertical: 'top' },
-  categoryScroll: { marginTop: 4 },
-  categoryOption: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 9 : 10, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10, marginRight: Platform.OS === 'android' ? 7 : 8, borderWidth: 1, borderColor: '#ECF0F1' },
+  categoryScroll: { marginTop: 0 },
+  categoryOption: { paddingHorizontal: Platform.OS === 'android' ? 13 : 14, paddingVertical: Platform.OS === 'android' ? 8 : 9, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10, marginRight: Platform.OS === 'android' ? 7 : 8, borderWidth: 1, borderColor: '#ECF0F1' },
   categoryOptionActive: { backgroundColor: '#3498DB', borderColor: '#3498DB' },
   categoryOptionText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
   categoryOptionTextActive: { color: '#FFFFFF' },
-  paymentOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 9 : 10 },
-  paymentOption: { flex: 1, minWidth: Platform.OS === 'android' ? 95 : 100, paddingVertical: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderWidth: 1, borderColor: '#ECF0F1' },
+  allocationHint: { marginTop: 7, color: '#60798A', fontSize: 11, lineHeight: 16, fontWeight: '600' },
+  paymentOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  paymentOption: { flex: 1, flexBasis: 0, minWidth: 0, minHeight: Platform.OS === 'android' ? 44 : 48, paddingHorizontal: 4, paddingVertical: Platform.OS === 'android' ? 8 : 9, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#ECF0F1' },
   paymentOptionActive: { backgroundColor: '#3498DB', borderColor: '#3498DB' },
-  paymentOptionText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
+  paymentOptionText: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#7F8C8D', textAlign: 'center' },
   paymentOptionTextActive: { color: '#FFFFFF' },
   submitButton: { flexDirection: 'row', backgroundColor: '#3498DB', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: Platform.OS === 'android' ? 10 : 12, alignItems: 'center', justifyContent: 'center', marginTop: Platform.OS === 'android' ? 7 : 8, marginBottom: Platform.OS === 'android' ? 28 : 32, gap: Platform.OS === 'android' ? 7 : 8, shadowColor: '#3498DB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   submitButtonDisabled: { opacity: 0.6 },

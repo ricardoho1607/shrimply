@@ -218,6 +218,41 @@ service cloud.firestore {
         );
     }
 
+    function validEnterprisePondCycle(companyId, data) {
+      return !('businessSize' in companyDoc(companyId).data)
+        || companyDoc(companyId).data.businessSize != 'enterprise'
+        || isCompanyOwnerRole(companyId)
+        || !('cycleId' in data)
+        || (
+          data.cycleId is string
+          && exists(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId))
+          && (
+            (
+              'blockIds' in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data
+              && get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data.blockIds is list
+              && data.blockId in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data.blockIds
+            )
+            || (
+              !('blockIds' in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data)
+              && (
+                !('blockId' in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data)
+                || get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data.blockId == data.blockId
+              )
+            )
+          )
+          && (
+            'blockIds' in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data
+            ||
+            !('plannedPondIds' in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data)
+            || get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data.plannedPondIds.size() == 0
+            || (
+              'physicalPondId' in data
+              && data.physicalPondId in get(/databases/$(database)/documents/companies/$(companyId)/cycles/$(data.cycleId)).data.plannedPondIds
+            )
+          )
+        );
+    }
+
     function validJoinRequestCreate(data) {
       return validNonEmptyString(data.companyId)
         && data.userId == request.auth.uid
@@ -782,7 +817,8 @@ service cloud.firestore {
       match /ponds/{pondId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow create, update: if isCompanyOperator(companyId)
-          && validEnterprisePondBlock(companyId, request.resource.data);
+          && validEnterprisePondBlock(companyId, request.resource.data)
+          && validEnterprisePondCycle(companyId, request.resource.data);
         allow delete: if isCompanyOperator(companyId)
           && validEnterprisePondBlock(companyId, resource.data);
 

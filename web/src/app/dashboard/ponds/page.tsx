@@ -684,7 +684,11 @@ export default function PondsPage() {
     } catch (error) {
       console.error('Error starting new cycle:', error);
       const errorCode = error instanceof StartPondCycleError ? error.code : 'failed';
-      alert(t.startPondCycle.errors[errorCode]);
+      alert(errorCode === 'blockMismatch'
+        ? t.enterpriseCycle.pondBlockMismatch
+        : errorCode === 'cycleMismatch'
+          ? t.enterpriseCycle.pondCycleMismatch
+          : t.startPondCycle.errors[errorCode]);
     } finally {
       setStartingPondCycle(false);
     }

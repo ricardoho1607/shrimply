@@ -1,6 +1,5 @@
 // app/marketplace/create-buyer-listing.tsx - Android Optimized
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
@@ -20,6 +19,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useMarketplaceStore } from '../store/marketplaceStore';
 import * as Location from 'expo-location';
+import AppDatePicker from '../components/forms/AppDatePicker';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -94,7 +94,6 @@ const CreateBuyerListingScreen = () => {
 
   const [gettingLocation, setGettingLocation] = useState(false);
 
-  const [showExpiryDatePicker, setShowExpiryDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateForm = useCallback((key: keyof FormData, value: any) => {
@@ -485,10 +484,14 @@ const CreateBuyerListingScreen = () => {
               {t.CreateBuyerListingScreen.listingExpiresOn} <Text style={styles.required}>{t.CreateBuyerListingScreen.required}</Text>
             </Text>
             <Text style={styles.inputHint}>{t.CreateBuyerListingScreen.maximum30Days}</Text>
-            <TouchableOpacity style={styles.dateButton} onPress={() => setShowExpiryDatePicker(true)}>
-              <Text style={styles.dateText}>{formData.expiryDate.toLocaleDateString()}</Text>
-              <Ionicons name="calendar-outline" size={Platform.OS === 'android' ? 18 : 20} color="#315f57" />
-            </TouchableOpacity>
+            <AppDatePicker
+              value={formData.expiryDate}
+              minimumDate={new Date()}
+              maximumDate={maxExpiryDate}
+              onChange={(date) => updateForm('expiryDate', date > maxExpiryDate ? maxExpiryDate : date)}
+              cancelLabel={t.actions.cancel}
+              confirmLabel={t.actions.confirm}
+            />
           </View>
         </View>
 
@@ -508,23 +511,6 @@ const CreateBuyerListingScreen = () => {
         </View>
       </ScrollView>
 
-      {showExpiryDatePicker && (
-        <DateTimePicker 
-          value={formData.expiryDate} 
-          mode="date" 
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          textColor="#0d2137"
-          onChange={(_, date) => { 
-            setShowExpiryDatePicker(false); 
-            if (date) {
-              const limitedDate = date > maxExpiryDate ? maxExpiryDate : date;
-              updateForm('expiryDate', limitedDate);
-            }
-          }} 
-          minimumDate={new Date()} 
-          maximumDate={maxExpiryDate} 
-        />
-      )}
     </View>
   );
 };
@@ -725,21 +711,6 @@ const styles = StyleSheet.create({
     color: '#315f57' 
   },
   topDayTextActive: { color: '#FFFFFF' },
-  
-  dateButton: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between', 
-    borderWidth: 1, 
-    borderColor: '#e8f2f9', 
-    borderRadius: Platform.OS === 'android' ? 10 : 12, 
-    padding: Platform.OS === 'android' ? 14 : 16, 
-    backgroundColor: '#FFFFFF' 
-  },
-  dateText: { 
-    fontSize: Platform.OS === 'android' ? 14 : 16, 
-    color: '#0d2137' 
-  },
   
   buttonContainer: { 
     flexDirection: 'row', 

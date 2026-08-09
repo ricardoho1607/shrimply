@@ -34,6 +34,11 @@ import {
   filterEnterpriseRecordsForUser,
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
+import { isEnterpriseCycleOpen } from '../../../../../shared/enterpriseCycles';
+import {
+  harvestRecordMatchesCycle,
+  isHistoricalHarvestRecord,
+} from '../../../../../shared/harvestCycleScope';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -42,6 +47,8 @@ interface HarvestPond {
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
+  blockId?: string;
+  blockName?: string;
   harvestType?: HarvestType;
   partialHarvestNumber?: number;
   harvestReferenceSamplingId?: string | null;
@@ -60,6 +67,8 @@ interface HarvestRecord {
   date: string;
   cycleId?: string;
   cycleName?: string;
+  blockId?: string;
+  blockName?: string;
   ponds: HarvestPond[];
   createdAt?: { toDate?: () => Date; seconds?: number };
 }
@@ -87,6 +96,18 @@ interface Pond {
   cycleStatus?: 'active' | 'ended';
 }
 
+interface FarmCycle {
+  id: string;
+  cycleName: string;
+  status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+  blockIds?: string[];
+  blockNames?: string[];
+  blockId?: string;
+  blockName?: string;
+  plannedStartDate?: string;
+  stockingStartDate?: string;
+}
+
 interface DashboardUser {
   uid: string;
   role?: string;
@@ -101,6 +122,7 @@ export default function HarvestPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
   const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
+  const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DashboardUser | null>(null);
@@ -109,6 +131,8 @@ export default function HarvestPage() {
   const [isModalOpen, setModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
+  const [selectedCycleId, setSelectedCycleId] = useState('');
+  const [historyCycleId, setHistoryCycleId] = useState('all');
 
   // Form State
   const [formData, setFormData] = useState({
@@ -130,6 +154,45 @@ export default function HarvestPage() {
     userId: user?.uid,
     blocks: farmBlocks,
   }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
+  const activePonds = useMemo(
+    () => accessiblePonds.filter((pond) => pond.cycleStatus !== 'ended'),
+    [accessiblePonds],
+  );
+  const accessibleCycleIds = useMemo(() => new Set(
+    accessiblePonds.map((pond) => pond.cycleId).filter((cycleId): cycleId is string => Boolean(cycleId)),
+  ), [accessiblePonds]);
+  const activeCycles = useMemo(() => {
+    const openCycles = cycles.filter(isEnterpriseCycleOpen);
+    const linkedCycles = openCycles.filter((cycle) => accessibleCycleIds.has(cycle.id));
+    const availableCycles = linkedCycles.length > 0
+      ? linkedCycles
+      : activePonds.length > 0 && openCycles[0]
+        ? [openCycles[0]]
+        : [];
+    return availableCycles.sort((first, second) => first.cycleName.localeCompare(second.cycleName, undefined, { numeric: true }));
+  }, [accessibleCycleIds, activePonds.length, cycles]);
+  const historicalCycles = useMemo(() => cycles
+    .filter((cycle) => !isEnterpriseCycleOpen(cycle) && accessibleCycleIds.has(cycle.id))
+    .sort((first, second) => first.cycleName.localeCompare(second.cycleName, undefined, { numeric: true })),
+  [accessibleCycleIds, cycles]);
+  const effectiveSelectedCycleId = activeCycles.some((cycle) => cycle.id === selectedCycleId)
+    ? selectedCycleId
+    : activeCycles[0]?.id || '';
+  const selectedCycle = useMemo(
+    () => activeCycles.find((cycle) => cycle.id === effectiveSelectedCycleId),
+    [activeCycles, effectiveSelectedCycleId],
+  );
+  const selectedCyclePonds = useMemo(
+    () => activePonds.filter((pond) => (
+      pond.cycleId === effectiveSelectedCycleId || (!pond.cycleId && activeCycles.length === 1)
+    )),
+    [activeCycles.length, activePonds, effectiveSelectedCycleId],
+  );
+  const selectedCyclePondIds = useMemo(
+    () => new Set(selectedCyclePonds.map((pond) => pond.id)),
+    [selectedCyclePonds],
+  );
+  const activePondIds = useMemo(() => new Set(activePonds.map((pond) => pond.id)), [activePonds]);
   const accessiblePondIds = useMemo(
     () => new Set(accessiblePonds.map((pond) => pond.id)),
     [accessiblePonds],
@@ -168,8 +231,7 @@ export default function HarvestPage() {
                   cycleName: doc.data().cycleName,
                   pondCycleId: doc.data().pondCycleId || doc.id,
                   cycleStatus: doc.data().cycleStatus
-                } as Pond))
-                .filter(pond => pond.cycleStatus !== 'ended'));
+                } as Pond)));
             });
             // Load Harvest Records
             const q = query(collection(db, 'companies', cid, 'harvestRecords'), orderBy('date', 'desc'));
@@ -187,13 +249,36 @@ export default function HarvestPage() {
     return () => unsubAuth();
   }, []);
 
+  useEffect(() => {
+    if (!companyId) return;
+
+    return onSnapshot(collection(db, 'companies', companyId, 'cycles'), (snapshot) => {
+      setCycles(snapshot.docs.map((cycleDoc) => {
+        const data = cycleDoc.data();
+        return {
+          id: cycleDoc.id,
+          cycleName: data.cycleName || t.harvestCycle.productionCycle,
+          status: ['planning', 'stocking', 'active', 'closing', 'closed'].includes(data.status)
+            ? data.status
+            : 'active',
+          blockIds: Array.isArray(data.blockIds) ? data.blockIds : [],
+          blockNames: Array.isArray(data.blockNames) ? data.blockNames : [],
+          blockId: data.blockId,
+          blockName: data.blockName,
+          plannedStartDate: data.plannedStartDate,
+          stockingStartDate: data.stockingStartDate,
+        } as FarmCycle;
+      }));
+    });
+  }, [companyId, t.harvestCycle.productionCycle]);
+
   const handleAddHarvest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId || !user) return;
     if (!canEditHarvest) return;
 
     try {
-      const selectedPond = accessiblePonds.find(p => p.id === formData.pondId);
+      const selectedPond = selectedCyclePonds.find(p => p.id === formData.pondId);
       if (!selectedPond) return;
       const removal = calculateHarvestRemoval(formData);
       const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass;
@@ -212,14 +297,18 @@ export default function HarvestPage() {
       const newRecord: HarvestRecord = {
         id: harvestRef.id,
         date: formData.date,
-        cycleId: selectedPond.cycleId,
-        cycleName: selectedPond.cycleName,
+        cycleId: selectedPond.cycleId || selectedCycle?.id,
+        cycleName: selectedPond.cycleName || selectedCycle?.cycleName,
+        blockId: selectedPond.blockId || selectedCycle?.blockId,
+        blockName: selectedPond.blockName || selectedCycle?.blockName || selectedCycle?.blockNames?.[0],
         ponds: [{
           pondId: formData.pondId,
           pondName: selectedPond.pondName,
-          cycleId: selectedPond.cycleId,
-          cycleName: selectedPond.cycleName,
+          cycleId: selectedPond.cycleId || selectedCycle?.id,
+          cycleName: selectedPond.cycleName || selectedCycle?.cycleName,
           pondCycleId: selectedPond.pondCycleId || selectedPond.id,
+          blockId: selectedPond.blockId,
+          blockName: selectedPond.blockName,
           harvestType: formData.harvestType,
           biomass: formData.biomass,
           size: formData.size,
@@ -282,12 +371,12 @@ export default function HarvestPage() {
       });
     } catch (error) {
       console.error('Error adding harvest record:', error);
-      alert('Failed to log harvest.');
+      alert(t.harvestCycle.saveFailed);
     }
   };
 
   const handleDeleteRecord = async (recordId: string) => {
-    if (!companyId || !user || !window.confirm('Delete this harvest record?')) return;
+    if (!companyId || !user || !window.confirm(t.harvestCycle.deleteConfirm)) return;
     if (!canEditHarvest) return;
     const localRecord = harvestRecords.find((record) => record.id === recordId);
     if (
@@ -327,7 +416,9 @@ export default function HarvestPage() {
     }
   };
 
-  const activePondIds = useMemo(() => new Set(accessiblePonds.map((pond) => pond.id)), [accessiblePonds]);
+  const openCycleIds = useMemo(() => new Set(
+    cycles.filter(isEnterpriseCycleOpen).map((cycle) => cycle.id),
+  ), [cycles]);
   const accessibleHarvestRecords = useMemo(() => harvestRecords
     .map((record) => ({
       ...record,
@@ -340,16 +431,19 @@ export default function HarvestPage() {
     return Boolean(record?.ponds.every((pond) => accessiblePondIds.has(pond.pondId)));
   }, [accessiblePondIds, company?.businessSize, harvestRecords, user?.role]);
 
-  const isCurrentCycleHarvest = useCallback((harvest: HarvestRecord) => {
-    if (harvest.ponds.some((pond) => activePondIds.has(pond.pondId))) return true;
-    return Boolean(harvest.cycleId && accessiblePonds.some((pond) => pond.cycleId === harvest.cycleId));
-  }, [accessiblePonds, activePondIds]);
-
   const visibleHarvestRecords = useMemo(() => {
     return accessibleHarvestRecords.filter((harvest) =>
-      harvestFilter === 'current' ? isCurrentCycleHarvest(harvest) : !isCurrentCycleHarvest(harvest)
+      harvestFilter === 'current'
+        ? Boolean(effectiveSelectedCycleId && (
+          harvestRecordMatchesCycle(harvest, effectiveSelectedCycleId)
+          || harvest.ponds.some((pond) => selectedCyclePondIds.has(pond.pondId))
+        ))
+        : historyCycleId === 'all'
+          ? isHistoricalHarvestRecord(harvest, openCycleIds)
+            && !harvest.ponds.some((pond) => activePondIds.has(pond.pondId))
+          : harvestRecordMatchesCycle(harvest, historyCycleId)
     );
-  }, [accessibleHarvestRecords, harvestFilter, isCurrentCycleHarvest]);
+  }, [accessibleHarvestRecords, activePondIds, effectiveSelectedCycleId, harvestFilter, historyCycleId, openCycleIds, selectedCyclePondIds]);
 
   const filteredRecords = useMemo(() => {
     return visibleHarvestRecords.filter(r =>
@@ -389,19 +483,22 @@ export default function HarvestPage() {
         <div style={{ position: 'relative', flex: 1 }}>
           <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input
-            placeholder="Search by pond name..."
+            placeholder={t.harvestCycle.searchPond}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{ padding: '10px 16px 10px 40px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', width: '100%', fontSize: '14px', outline: 'none' }}
           />
         </div>
         {canEditHarvest && (
-          <button className="dashboard-action dashboard-action-primary" onClick={() => {
-            setFormData(prev => ({ ...prev, date: today }));
+          <button
+            className="dashboard-action dashboard-action-primary"
+            disabled={selectedCyclePonds.length === 0}
+            onClick={() => {
+            setFormData(prev => ({ ...prev, date: today, pondId: '' }));
             setModalOpen(true);
-          }}>
+          }} style={selectedCyclePonds.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
             <Plus size={20} />
-            <span>Log Harvest</span>
+            <span>{t.harvestCycle.logHarvest}</span>
           </button>
         )}
       </div>
@@ -410,17 +507,17 @@ export default function HarvestPage() {
       <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#27ae60', marginBottom: '10px' }}><DollarSign size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Estimated Revenue</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{t.harvestCycle.totalEstimatedRevenue}</div>
           <div style={{ fontSize: '21px', fontWeight: 800 }}>{formatCurrency(totalRevenue)}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#0d2137', marginBottom: '10px' }}><Scale size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Harvested Biomass</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{t.harvestCycle.totalHarvestedBiomass}</div>
           <div style={{ fontSize: '21px', fontWeight: 800 }}>{totalBiomass.toLocaleString()}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#3282B8', marginBottom: '10px' }}><History size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{harvestFilter === 'current' ? 'Current Cycle Records' : 'Historical Records'}</div>
+          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{harvestFilter === 'current' ? t.harvestCycle.currentCycleRecords : t.harvestCycle.historicalRecordLabel}</div>
           <div style={{ fontSize: '21px', fontWeight: 800 }}>{visibleHarvestRecords.length}</div>
         </div>
       </div>
@@ -429,17 +526,19 @@ export default function HarvestPage() {
       <div className="glass-card" style={{ padding: '24px', background: '#FFFFFF' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '18px' }}>{harvestFilter === 'current' ? 'Current Cycle Harvests' : 'Harvest History'}</h3>
+            <h3 style={{ fontSize: '18px' }}>{harvestFilter === 'current' ? selectedCycle?.cycleName || t.harvestCycle.currentHarvests : t.harvestCycle.harvestHistory}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '4px' }}>
               {harvestFilter === 'current'
-                ? `${ponds.length} active pond${ponds.length === 1 ? '' : 's'} available for harvest`
-                : 'Completed or inactive cycle harvest records'}
+                ? t.harvestCycle.activePondsAvailable
+                  .replace('{{blockName}}', selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockFallback)
+                  .replace('{{count}}', String(selectedCyclePonds.length))
+                : t.harvestCycle.completedRecords}
             </p>
           </div>
           <div style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
             {[
-              { key: 'current' as const, label: 'Current Cycle' },
-              { key: 'history' as const, label: 'History' },
+              { key: 'current' as const, label: t.harvestCycle.currentCycle },
+              { key: 'history' as const, label: t.harvestCycle.history },
             ].map((item) => (
               <button
                 key={item.key}
@@ -461,12 +560,44 @@ export default function HarvestPage() {
           </div>
         </div>
 
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 360px)', marginBottom: '20px' }}>
+          {harvestFilter === 'current' ? (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {t.harvestCycle.productionCycle}
+              <select
+                value={effectiveSelectedCycleId}
+                onChange={(event) => setSelectedCycleId(event.target.value)}
+                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}
+              >
+                <option value="">{t.harvestCycle.selectActiveCycle}</option>
+                {activeCycles.map((cycle) => (
+                  <option key={cycle.id} value={cycle.id}>
+                    {cycle.cycleName}{cycle.blockName || cycle.blockNames?.[0] ? ` — ${cycle.blockName || cycle.blockNames?.[0]}` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {t.harvestCycle.cycleHistory}
+              <select
+                value={historyCycleId}
+                onChange={(event) => setHistoryCycleId(event.target.value)}
+                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}
+              >
+                <option value="all">{t.harvestCycle.allHistory}</option>
+                {historicalCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}><Loader2 className="animate-spin" /></div>
         ) : filteredRecords.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '60px', color: 'var(--text-muted)' }}>
             <Wallet size={48} style={{ opacity: 0.1, margin: '0 auto 16px' }} />
-            <p>{harvestFilter === 'current' ? 'No current cycle harvest records found.' : 'No historical harvest records found.'}</p>
+            <p>{harvestFilter === 'current' ? t.harvestCycle.noCurrentRecords : t.harvestCycle.noHistoricalRecords}</p>
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -475,7 +606,10 @@ export default function HarvestPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <Calendar size={18} color="var(--primary)" />
-                    <span style={{ fontSize: '15px', fontWeight: 700 }}>{new Date(record.date).toLocaleDateString()}</span>
+                    <div>
+                      <div style={{ fontSize: '15px', fontWeight: 700 }}>{new Date(record.date).toLocaleDateString()}</div>
+                      {record.cycleName ? <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 700 }}>{record.cycleName}{record.blockName ? ` · ${record.blockName}` : ''}</div> : null}
+                    </div>
                   </div>
                   {canEditHarvest && canModifyHarvestRecord(record.id) ? (
                     <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
@@ -491,15 +625,15 @@ export default function HarvestPage() {
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Biomass</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvest.totalBiomass}</span>
                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{parseFloat(p.biomass) + (parseFloat(p.subBiomass) || 0)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Avg. Size</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvest.averageSize}</span>
                           <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.size} <span style={{ fontSize: '11px' }}>pcs/kg</span></span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Revenue</span>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.finance.revenue}</span>
                           <span style={{ fontSize: '13px', fontWeight: 700, color: '#27ae60' }}>
                             {formatCurrency((parseFloat(p.biomass) * parseFloat(p.price)) + (parseFloat(p.subBiomass) * parseFloat(p.subPrice)))}
                           </span>
@@ -520,7 +654,7 @@ export default function HarvestPage() {
           <div className="glass-card responsive-modal" style={{ width: '100%', maxWidth: '700px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 800 }}>Log Harvest</h2>
+                <h2 style={{ fontSize: '24px', fontWeight: 800 }}>{t.harvestCycle.logHarvest}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
               <button onClick={() => setModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '50%', padding: '8px', cursor: 'pointer' }}>
@@ -529,23 +663,32 @@ export default function HarvestPage() {
             </div>
 
             <form className="responsive-modal-body" onSubmit={handleAddHarvest} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 800 }}>{selectedCycle?.cycleName}</div>
+                  <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>{selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockNotAssigned}</div>
+                </div>
+                <div style={{ flexShrink: 0, alignSelf: 'center', padding: '7px 10px', borderRadius: '999px', background: '#EAF6FD', color: '#0F4C75', fontSize: '11px', fontWeight: 800 }}>
+                  {selectedCyclePonds.length} {t.harvest.pond}
+                </div>
+              </div>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Select Pond</label>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.selectPond}</label>
                   <select
                     required
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}
                   >
-                    <option value="">Choose a pond...</option>
-                    {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
+                    <option value="">{t.harvestCycle.choosePond}</option>
+                    {selectedCyclePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Harvest Date</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.harvestDate}</label>
+                  <input type="date" max={today} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={(event) => event.preventDefault()} onPaste={(event) => event.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -575,18 +718,18 @@ export default function HarvestPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>Avg. Size (pcs/kg)</label>
+                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.averageSize}</label>
                   <input required min="0.01" step="0.01" type="number" value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: 'span 2', padding: '24px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
                   <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>Main Biomass (kg)</label>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>{t.harvestCycle.mainBiomass}</label>
                       <input required min="0.01" type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>Main Price ({currencyConfig.symbol}/kg)</label>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>{t.harvestCycle.mainPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
                       <input required min="0.01" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
@@ -595,15 +738,15 @@ export default function HarvestPage() {
 
                   <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Biomass (Optional)</label>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subBiomass}</label>
                       <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Size (pcs/kg)</label>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subSize}</label>
                       <input required={Boolean(formData.subBiomass || formData.subPrice)} min="0.01" step="0.01" type="number" value={formData.subSize} onChange={e => setFormData({...formData, subSize: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>Sub Price ({currencyConfig.symbol}/kg, Optional)</label>
+                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
                       <input required={Boolean(formData.subBiomass || formData.subSize)} min="0.01" type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
@@ -611,8 +754,8 @@ export default function HarvestPage() {
               </div>
 
               <div className="responsive-modal-footer" style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>Save Harvest</button>
+                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>{t.actions.cancel}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>{t.actions.save} {t.harvest.harvest}</button>
               </div>
             </form>
           </div>

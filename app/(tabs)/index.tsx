@@ -1,6 +1,5 @@
 // app/(tabs)/index.tsx - Fully translated version with keyboard handling
 import { Ionicons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import { deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
@@ -21,10 +20,12 @@ import {
   canManageEnterpriseFarmCycle,
   filterEnterpriseRecordsForUser,
   isEnterpriseOwner,
+  type FarmBlock,
 } from '../../shared/enterpriseBlocks';
-import EnterpriseDashboard from '../components/enterprise/EnterpriseDashboard';
+import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboard';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import ProfileCompletionCard from '../components/onboarding/ProfileCompletionCard';
+import AppDatePicker from '../components/forms/AppDatePicker';
 
 interface FormData {
   pondName: string; 
@@ -41,6 +42,7 @@ interface FormData {
   baselineSurvivalRate: string;
   baselineCumulativeFeed: string;
   cyclePondId: string;
+  cycleId: string;
   selectedPond: string; 
   mbw: string; 
   feed: string; 
@@ -140,29 +142,6 @@ const InputField = React.memo(({
 ));
 InputField.displayName = 'InputField';
 
-const DateInput = React.memo(({ 
-  label, 
-  date, 
-  onPress 
-}: { 
-  label: string; 
-  date: Date; 
-  onPress: () => void 
-}) => {
-  const displayDate = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
-
-  return (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>{label}</Text>
-      <TouchableOpacity style={styles.dateInput} onPress={onPress}>
-        <Text style={styles.dateText}>{displayDate.toLocaleDateString()}</Text>
-        <Ionicons name="calendar-outline" size={20} color="#dce8f2" />
-      </TouchableOpacity>
-    </View>
-  );
-});
-DateInput.displayName = 'DateInput';
-
 export default function PondManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
@@ -198,15 +177,11 @@ export default function PondManagementScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
   const [modalType, setModalType] = useState<'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline'>('pond');
-  const [datePickerField, setDatePickerField] = useState<'docStart' | 'samplingDate' | 'mortalityDate' | 'baselineDate'>('docStart');
-  const [tempDate, setTempDate] = useState(new Date());
-  const tempDateRef = useRef(new Date());
-  const originalDateRef = useRef(new Date());
   const [cycleNameDraft, setCycleNameDraft] = useState('');
+  const [selectedDashboardCycleId, setSelectedDashboardCycleId] = useState('');
   const [cycleManagerExpanded, setCycleManagerExpanded] = useState(false);
   const [editingBaselinePondId, setEditingBaselinePondId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
@@ -224,6 +199,7 @@ export default function PondManagementScreen() {
     baselineSurvivalRate: '',
     baselineCumulativeFeed: '',
     cyclePondId: '',
+    cycleId: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -283,6 +259,7 @@ export default function PondManagementScreen() {
     baselineSurvivalRate: '',
     baselineCumulativeFeed: '',
     cyclePondId: '',
+    cycleId: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -413,7 +390,25 @@ export default function PondManagementScreen() {
         .sort()[0],
     };
   }, [accessiblePonds, cycles.length, t.farmCycle.currentCycle]);
-  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles) || inferredFarmCycle, [cycles, inferredFarmCycle]);
+  const accessibleFarmCycles = useMemo(() => {
+    if (!isEnterpriseFarm || user?.role !== 'technician') return cycles;
+    const assignedBlockIds = new Set(availableEnterpriseBlocks.map((block) => block.id));
+    return cycles.filter((cycle) => (
+      cycle.blockIds?.some((blockId) => assignedBlockIds.has(blockId))
+      ||
+      (cycle.blockId && assignedBlockIds.has(cycle.blockId))
+      || (!cycle.blockId && accessiblePonds.some((pond) => pond.cycleId === cycle.id))
+    ));
+  }, [accessiblePonds, availableEnterpriseBlocks, cycles, isEnterpriseFarm, user?.role]);
+  const openAccessibleFarmCycles = useMemo(
+    () => accessibleFarmCycles.filter((cycle) => ['planning', 'stocking', 'active'].includes(cycle.status)),
+    [accessibleFarmCycles],
+  );
+  const activeFarmCycle = useMemo(() => (
+    openAccessibleFarmCycles.find((cycle) => cycle.id === selectedDashboardCycleId)
+    || getActiveFarmCycle(accessibleFarmCycles)
+    || inferredFarmCycle
+  ), [accessibleFarmCycles, inferredFarmCycle, openAccessibleFarmCycles, selectedDashboardCycleId]);
   const currentCyclePonds = useMemo(() => {
     if (!activeFarmCycle) return activePonds;
     return accessiblePonds
@@ -439,6 +434,11 @@ export default function PondManagementScreen() {
   useEffect(() => {
     setCycleNameDraft(activeFarmCycle?.cycleName || '');
   }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
+
+  useEffect(() => {
+    if (!activeFarmCycle || activeFarmCycle.id === selectedDashboardCycleId) return;
+    setSelectedDashboardCycleId(activeFarmCycle.id);
+  }, [activeFarmCycle, selectedDashboardCycleId]);
 
   const getLatestSampling = useCallback((pondId: string): Sampling | null => {
     const pond = accessiblePonds.find(p => p.id === pondId);
@@ -593,7 +593,8 @@ export default function PondManagementScreen() {
       setIsSubmitting(false);
       return;
     }
-    if (isEnterpriseFarm && !activeFarmCycle) {
+    const selectedFarmCycle = cycles.find((cycle) => cycle.id === formData.cycleId) || activeFarmCycle;
+    if (isEnterpriseFarm && !selectedFarmCycle) {
       Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -623,6 +624,23 @@ export default function PondManagementScreen() {
 
     if (activePhysicalPondNames.has(getPhysicalPondKey(sourcePond.pondName))) {
       Alert.alert(t.messages.error, t.farmCycle.activeDuplicateMessage.replace('{{pondName}}', sourcePond.pondName));
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    const selectedCycleBlockIds = selectedFarmCycle?.blockIds?.length
+      ? selectedFarmCycle.blockIds
+      : selectedFarmCycle?.blockId
+        ? [selectedFarmCycle.blockId]
+        : [];
+    if (selectedCycleBlockIds.length > 0 && (!sourcePond.blockId || !selectedCycleBlockIds.includes(sourcePond.blockId))) {
+      Alert.alert(t.messages.error, t.enterpriseCycle.pondBlockMismatch);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+    if (!selectedFarmCycle?.blockIds?.length && selectedFarmCycle?.plannedPondIds?.length && !selectedFarmCycle.plannedPondIds.includes(sourcePond.id)) {
+      Alert.alert(t.messages.error, t.enterpriseCycle.pondCycleMismatch);
       submitLockRef.current = false;
       setIsSubmitting(false);
       return;
@@ -663,8 +681,8 @@ export default function PondManagementScreen() {
       ...(Number.isNaN(baselinePopulationValue) ? {} : { estimatedPopulation: baselinePopulationValue }),
       ...(Number.isNaN(baselineSurvivalValue) ? {} : { estimatedSurvivalRate: baselineSurvivalValue }),
       ...(Number.isNaN(baselineFeedValue) ? {} : { cumulativeFeedToDate: baselineFeedValue }),
-      ...(activeFarmCycle?.id ? { cycleId: activeFarmCycle.id } : {}),
-      ...(activeFarmCycle?.cycleName ? { cycleName: activeFarmCycle.cycleName } : {}),
+      ...(selectedFarmCycle?.id ? { cycleId: selectedFarmCycle.id } : {}),
+      ...(selectedFarmCycle?.cycleName ? { cycleName: selectedFarmCycle.cycleName } : {}),
     }] : [];
 
     addPond({
@@ -684,8 +702,9 @@ export default function PondManagementScreen() {
       totalHarvestedBiomass: 0,
       totalHarvestedPopulation: 0,
       totalHarvestedFeed: 0,
-      cycleId: activeFarmCycle?.id,
-      cycleName: activeFarmCycle?.cycleName,
+      physicalPondId: sourcePond.id,
+      cycleId: selectedFarmCycle?.id,
+      cycleName: selectedFarmCycle?.cycleName,
       cycleStatus: 'active',
       cycleStartedAt: docStartString,
       cycleStartMode,
@@ -700,11 +719,21 @@ export default function PondManagementScreen() {
         baselineSource: 'user_midcycle_estimate',
       }),
     });
+    if (selectedFarmCycle) {
+      const stockingDates = [selectedFarmCycle.stockingStartDate, selectedFarmCycle.stockingEndDate, docStartString]
+        .filter((date): date is string => Boolean(date))
+        .sort();
+      updateFarmCycle(selectedFarmCycle.id, {
+        status: 'stocking',
+        stockingStartDate: stockingDates[0],
+        stockingEndDate: stockingDates[stockingDates.length - 1],
+      });
+    }
 
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
-  }, [activeFarmCycle, activePhysicalPondNames, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, formData, formatLocalDateKey, isEnterpriseFarm, startablePondOptions, t]);
+  }, [activeFarmCycle, activePhysicalPondNames, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, startablePondOptions, t, updateFarmCycle]);
 
   const handleAddSamplingData = useCallback(() => {
     if (submitLockRef.current) return;
@@ -1100,36 +1129,103 @@ export default function PondManagementScreen() {
     );
   }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, persistFarmCycleClose, router, t, user?.role, user?.uid]);
 
-  const handleStartEnterpriseFarmCycle = useCallback(() => {
-    if (!isEnterpriseOwner(company?.businessSize, user?.role) || activeFarmCycle) return;
-    addFarmCycle();
-  }, [activeFarmCycle, addFarmCycle, company?.businessSize, user?.role]);
-
-  const handleDateChange = useCallback((
-    confirmed: boolean, 
-    selectedDate?: Date
-  ) => {
-    if (confirmed) {
-      updateForm(datePickerField, normalizeDateValue(selectedDate || tempDateRef.current));
-    } else if (Platform.OS === 'ios') {
-      updateForm(datePickerField, normalizeDateValue(originalDateRef.current));
+  const handleSaveEnterpriseProductionCycle = useCallback((input: {
+    cycle?: FarmCycle;
+    cycleName: string;
+    block: FarmBlock;
+    stockingDate: string;
+    ponds: { pond: PhysicalPond; density: number; supplier: string }[];
+  }) => {
+    const cycle = input.cycle || addFarmCycle({
+      cycleName: input.cycleName,
+      status: 'active',
+      blockIds: [input.block.id],
+      blockNames: [input.block.name],
+      plannedStartDate: input.stockingDate,
+      stockingStartDate: input.stockingDate,
+      stockingEndDate: input.stockingDate,
+    });
+    if (input.cycle) {
+      updateFarmCycle(cycle.id, {
+        status: 'active',
+        stockingStartDate: cycle.stockingStartDate || input.stockingDate,
+        stockingEndDate: input.stockingDate,
+      });
     }
-    setShowDatePicker(false);
-  }, [datePickerField, normalizeDateValue, updateForm]);
+    const startedAt = Date.now();
+    input.ponds.forEach(({ pond, density, supplier }, index) => {
+      const pondCycleId = `${startedAt}-${index}`;
+      addPond({
+        id: pondCycleId,
+        pondName: pond.pondName,
+        pondArea: pond.pondArea,
+        blockId: input.block.id,
+        blockName: input.block.name,
+        density,
+        initialPopulation: pond.pondArea * density,
+        docStart: input.stockingDate,
+        supplier,
+        plSupplier: supplier,
+        initialWeight: 0.5,
+        samplings: [],
+        mortalityRecords: [],
+        totalHarvestedBiomass: 0,
+        totalHarvestedPopulation: 0,
+        totalHarvestedFeed: 0,
+        physicalPondId: pond.id,
+        previousCyclePondId: pond.id,
+        cycleId: cycle.id,
+        cycleName: cycle.cycleName,
+        pondCycleId,
+        cycleStatus: 'active',
+        cycleStartedAt: input.stockingDate,
+        cycleStartMode: 'new',
+      });
+    });
+  }, [addFarmCycle, addPond, updateFarmCycle]);
 
-  const openDatePicker = useCallback((field?: 'docStart' | 'samplingDate' | 'mortalityDate' | 'baselineDate') => {
-    const nextField = field || (modalType === 'sampling'
-      ? 'samplingDate'
-      : modalType === 'mortality'
-        ? 'mortalityDate'
-        : 'docStart');
-    const nextDate = normalizeDateValue(formData[nextField]);
-    setDatePickerField(nextField);
-    originalDateRef.current = nextDate;
-    tempDateRef.current = nextDate;
-    setTempDate(nextDate);
-    setShowDatePicker(true);
-  }, [modalType, formData, normalizeDateValue]);
+  const handleCreateEnterprisePhysicalPond = useCallback(async (input: {
+    pondName: string;
+    pondArea: number;
+    block: FarmBlock;
+  }) => {
+    const pondKey = getPhysicalPondKey(input.pondName);
+    const alreadyExists = physicalPonds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey)
+      || ponds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey);
+    if (alreadyExists) throw new Error(`${input.pondName} already exists.`);
+
+    addPhysicalPond({
+      id: Date.now().toString(),
+      pondName: input.pondName,
+      pondArea: input.pondArea,
+      blockId: input.block.id,
+      blockName: input.block.name,
+      status: 'idle',
+    });
+  }, [addPhysicalPond, physicalPonds, ponds]);
+
+  const handleEditEnterpriseCycle = useCallback((cycle: FarmCycle, input: { cycleName: string; blocks: FarmBlock[] }) => {
+    updateFarmCycle(cycle.id, {
+      cycleName: input.cycleName,
+      blockIds: input.blocks.map((block) => block.id),
+      blockNames: input.blocks.map((block) => block.name),
+    });
+  }, [updateFarmCycle]);
+
+  const handleCloseEnterpriseBlockCycle = useCallback((cycle: FarmCycle) => {
+    const activePondsForCycle = ponds.filter((pond) => pond.cycleId === cycle.id && isPondCycleActive(pond));
+    if (activePondsForCycle.length > 0) {
+      Alert.alert(
+        t.farmCycle.endCycleTitle,
+        `End the active pond cycles first: ${activePondsForCycle.map((pond) => pond.pondName).join(', ')}`,
+      );
+      return;
+    }
+    updateFarmCycle(cycle.id, {
+      status: 'closed',
+      closedAt: getFarmDateKey(new Date(), company?.timeZone),
+    });
+  }, [company?.timeZone, ponds, t.farmCycle.endCycleTitle, updateFarmCycle]);
 
   const openModal = useCallback((type: 'pond' | 'sampling' | 'mortality' | 'cycle' | 'baseline') => {
     if (type === 'pond' && isEnterpriseFarm && availableEnterpriseBlocks.length === 1) {
@@ -1139,11 +1235,6 @@ export default function PondManagementScreen() {
     setMenuModalVisible(false); 
     setModalVisible(true);
   }, [availableEnterpriseBlocks, isEnterpriseFarm]);
-
-  const openEnterprisePondCycle = useCallback((pond: Pond | PhysicalPond) => {
-    setFormData((current) => ({ ...current, cyclePondId: pond.id }));
-    openModal('cycle');
-  }, [openModal]);
 
   const openBaselineEditModal = useCallback((pond: Pond) => {
     const baselineSampling = (pond.samplings || [])
@@ -1392,7 +1483,7 @@ export default function PondManagementScreen() {
   const renderPondForm = useMemo(() => (
     <>
       <Text style={styles.inputHint}>
-        Add the physical pond first. Density, supplier, stocking date, and PL details are added when you start a cycle.
+        {t.enterpriseCycle.addPhysicalPondHint}
       </Text>
       {isEnterpriseFarm && (
         <View style={styles.inputContainer}>
@@ -1437,11 +1528,15 @@ export default function PondManagementScreen() {
       <Text style={styles.inputHint}>
         {t.midcycleOnboarding.baselineEditHint}
       </Text>
-      <DateInput
-        label={t.midcycleOnboarding.baselineDate}
-        date={formData.baselineDate}
-        onPress={() => openDatePicker('baselineDate')}
-      />
+      <View style={styles.inputContainer}>
+        <AppDatePicker
+          label={t.midcycleOnboarding.baselineDate}
+          value={formData.baselineDate}
+          onChange={(date) => updateForm('baselineDate', date)}
+          cancelLabel={t.actions.cancel}
+          confirmLabel={t.actions.confirm}
+        />
+      </View>
       <InputField
         label={t.midcycleOnboarding.currentMbw}
         value={formData.baselineMbw}
@@ -1472,7 +1567,7 @@ export default function PondManagementScreen() {
         hint={t.midcycleOnboarding.feedUsedSoFarHint}
       />
     </>
-  ), [formData, openDatePicker, t, updateForm]);
+  ), [formData, t, updateForm]);
 
   const renderSamplingForm = useMemo(() => (
     <>
@@ -1518,13 +1613,17 @@ export default function PondManagementScreen() {
         placeholder={t.home.feedHint} 
         keyboardType="numeric" 
       />
-      <DateInput 
-        label={t.forms.samplingDate} 
-        date={formData.samplingDate} 
-        onPress={openDatePicker} 
-      />
+      <View style={styles.inputContainer}>
+        <AppDatePicker
+          label={t.forms.samplingDate}
+          value={formData.samplingDate}
+          onChange={(date) => updateForm('samplingDate', date)}
+          cancelLabel={t.actions.cancel}
+          confirmLabel={t.actions.confirm}
+        />
+      </View>
     </>
-  ), [formData, activePonds, updateForm, openDatePicker, t]);
+  ), [formData, activePonds, updateForm, t]);
 
   const renderMortalityForm = useMemo(() => {
     const observationOptions: { value: MortalityObservationType; label: string }[] = [
@@ -1601,11 +1700,15 @@ export default function PondManagementScreen() {
           />
         )}
 
-        <DateInput
-          label={t.home.mortalityDate}
-          date={formData.mortalityDate}
-          onPress={() => openDatePicker('mortalityDate')}
-        />
+        <View style={styles.inputContainer}>
+          <AppDatePicker
+            label={t.home.mortalityDate}
+            value={formData.mortalityDate}
+            onChange={(date) => updateForm('mortalityDate', date)}
+            cancelLabel={t.actions.cancel}
+            confirmLabel={t.actions.confirm}
+          />
+        </View>
 
         <InputField
           label={t.home.mortalityNotes}
@@ -1616,7 +1719,7 @@ export default function PondManagementScreen() {
         />
       </>
     );
-  }, [activePonds, formData.mortalityCount, formData.mortalityDate, formData.mortalityNotes, formData.mortalityObservationType, formData.selectedPond, openDatePicker, t, updateForm]);
+  }, [activePonds, formData.mortalityCount, formData.mortalityDate, formData.mortalityNotes, formData.mortalityObservationType, formData.selectedPond, t, updateForm]);
 
   const renderCycleForm = useMemo(() => (
     <>
@@ -1681,11 +1784,15 @@ export default function PondManagementScreen() {
         placeholder={t.home.densityHint}
         keyboardType="numeric"
       />
-      <DateInput
-        label={t.forms.startDate}
-        date={formData.docStart}
-        onPress={() => openDatePicker('docStart')}
-      />
+      <View style={styles.inputContainer}>
+        <AppDatePicker
+          label={t.forms.startDate}
+          value={formData.docStart}
+          onChange={(date) => updateForm('docStart', date)}
+          cancelLabel={t.actions.cancel}
+          confirmLabel={t.actions.confirm}
+        />
+      </View>
       <InputField
         label={t.forms.supplier}
         value={formData.supplier}
@@ -1734,30 +1841,110 @@ export default function PondManagementScreen() {
         </>
       )}
     </>
-  ), [formData, openDatePicker, startablePondOptions, t, updateForm]);
+  ), [formData, startablePondOptions, t, updateForm]);
+
+  const dataEntryModal = (
+    <Modal visible={modalVisible} animationType="slide" transparent>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalContainer}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {modalType === 'pond'
+                  ? t.home.addNewPond
+                  : modalType === 'cycle'
+                    ? t.farmCycle.addCycle
+                    : modalType === 'baseline'
+                      ? t.enterpriseCycle.editBaseline
+                      : modalType === 'mortality'
+                        ? t.home.addDailyMortality
+                        : t.home.addSamplingData}
+              </Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#dce8f2" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.modalScrollView}
+              contentContainerStyle={styles.modalScrollContent}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+              bounces={false}
+            >
+              {modalType === 'pond'
+                ? renderPondForm
+                : modalType === 'cycle'
+                  ? renderCycleForm
+                  : modalType === 'baseline'
+                    ? renderBaselineForm
+                    : modalType === 'mortality'
+                      ? renderMortalityForm
+                      : renderSamplingForm}
+
+              <View style={styles.buttonContainer}>
+                <TouchableOpacity style={styles.cancelButton} onPress={() => setModalVisible(false)}>
+                  <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.addButton, isSubmitting && { opacity: 0.6 }]}
+                  onPress={modalType === 'pond'
+                    ? handleAddPond
+                    : modalType === 'cycle'
+                      ? handleAddCycle
+                      : modalType === 'baseline'
+                        ? handleUpdateBaseline
+                        : modalType === 'mortality'
+                          ? handleAddMortalityRecord
+                          : handleAddSamplingData}
+                  disabled={isSubmitting}
+                >
+                  <Text style={styles.addButtonText}>
+                    {modalType === 'pond'
+                      ? t.home.addPondButton
+                      : modalType === 'cycle'
+                        ? t.enterpriseCycle.startCycle
+                        : modalType === 'baseline'
+                          ? t.enterpriseCycle.saveBaseline
+                          : modalType === 'mortality'
+                            ? t.home.saveMortality
+                            : t.home.addDataButton}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+
+          </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+
   if (isEnterpriseOwner(company?.businessSize, user?.role)) {
     return (
-      <EnterpriseDashboard
-        ponds={ponds}
-        physicalPonds={physicalPonds}
-        blocks={enterpriseBlocks.blocks}
-        technicians={enterpriseBlocks.technicians}
-        activeFarmCycle={activeFarmCycle}
-        cyclesCount={cycles.length}
-        currentCyclePonds={currentCyclePonds}
-        activeCyclePonds={activeCyclePonds}
-        cycleNameDraft={cycleNameDraft}
-        timeZone={company?.timeZone}
-        loading={enterpriseBlocks.loading}
-        error={enterpriseBlocks.error}
-        onCycleNameChange={setCycleNameDraft}
-        onRenameCycle={handleRenameFarmCycle}
-        onCloseCycle={handleCloseFarmCycle}
-        onStartCycle={handleStartEnterpriseFarmCycle}
-        onStartPondCycle={openEnterprisePondCycle}
-        createBlock={enterpriseBlocks.createBlock}
-        assignBlockTechnician={enterpriseBlocks.assignBlockTechnician}
-      />
+      <>
+        <EnterpriseDashboard
+          ponds={ponds}
+          physicalPonds={physicalPonds}
+          blocks={enterpriseBlocks.blocks}
+          technicians={enterpriseBlocks.technicians}
+          cycles={cycles}
+          timeZone={company?.timeZone}
+          loading={enterpriseBlocks.loading}
+          error={enterpriseBlocks.error}
+        onSaveProductionCycle={handleSaveEnterpriseProductionCycle}
+          onCreatePond={handleCreateEnterprisePhysicalPond}
+          onEditCycle={handleEditEnterpriseCycle}
+          onCloseCycle={handleCloseEnterpriseBlockCycle}
+          createBlock={enterpriseBlocks.createBlock}
+          assignBlockTechnician={enterpriseBlocks.assignBlockTechnician}
+        />
+        {dataEntryModal}
+      </>
     );
   }
 
@@ -1836,6 +2023,21 @@ export default function PondManagementScreen() {
 
           {cycleManagerExpanded && currentCyclePonds.length > 0 ? (
             <>
+              {isEnterpriseFarm && openAccessibleFarmCycles.length > 1 ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cycleSwitcherRow}>
+                  {openAccessibleFarmCycles.map((cycle) => (
+                    <TouchableOpacity
+                      key={cycle.id}
+                      style={[styles.cycleSwitcherChip, cycle.id === activeFarmCycle?.id && styles.cycleSwitcherChipActive]}
+                      onPress={() => setSelectedDashboardCycleId(cycle.id)}
+                    >
+                      <Text style={[styles.cycleSwitcherText, cycle.id === activeFarmCycle?.id && styles.cycleSwitcherTextActive]}>
+                        {cycle.cycleName}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              ) : null}
               <View style={styles.cycleStatsRow}>
                 <View style={styles.cycleStat}>
                   <Text style={styles.cycleStatValue}>{currentCyclePonds.length}</Text>
@@ -2044,130 +2246,7 @@ export default function PondManagementScreen() {
           </TouchableWithoutFeedback>
         </Modal>
 
-        <Modal visible={modalVisible} animationType="slide" transparent>
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <KeyboardAvoidingView 
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={styles.modalContainer}
-            >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {modalType === 'pond'
-                    ? t.home.addNewPond
-                    : modalType === 'cycle'
-                      ? t.farmCycle.addCycle
-                      : modalType === 'baseline'
-                        ? 'Edit Baseline'
-                        : modalType === 'mortality'
-                          ? t.home.addDailyMortality
-                          : t.home.addSamplingData}
-                </Text>
-                <TouchableOpacity 
-                  onPress={() => setModalVisible(false)} 
-                  style={styles.closeButton}
-                >
-                  <Ionicons name="close" size={24} color="#dce8f2" />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView 
-                showsVerticalScrollIndicator={false} 
-                style={styles.modalScrollView}
-                contentContainerStyle={styles.modalScrollContent}
-                keyboardShouldPersistTaps="handled"
-                nestedScrollEnabled={true}
-                bounces={false}
-              >
-                {modalType === 'pond'
-                  ? renderPondForm
-                  : modalType === 'cycle'
-                    ? renderCycleForm
-                    : modalType === 'baseline'
-                      ? renderBaselineForm
-                      : modalType === 'mortality'
-                        ? renderMortalityForm
-                        : renderSamplingForm}
-
-                <View style={styles.buttonContainer}>
-                  <TouchableOpacity 
-                    style={styles.cancelButton} 
-                    onPress={() => setModalVisible(false)}
-                  >
-                    <Text style={styles.cancelButtonText}>
-                      {t.actions.cancel}
-                    </Text>
-                  </TouchableOpacity>
-	                  <TouchableOpacity 
-	                    style={[styles.addButton, isSubmitting && { opacity: 0.6 }]} 
-	                    onPress={modalType === 'pond'
-	                      ? handleAddPond
-                      : modalType === 'cycle'
-                          ? handleAddCycle
-                          : modalType === 'baseline'
-                            ? handleUpdateBaseline
-	                          : modalType === 'mortality'
-	                            ? handleAddMortalityRecord
-	                            : handleAddSamplingData}
-	                    disabled={isSubmitting}
-	                  >
-                    <Text style={styles.addButtonText}>
-                      {modalType === 'pond'
-                        ? t.home.addPondButton
-                        : modalType === 'cycle'
-                          ? 'Start Cycle'
-                        : modalType === 'baseline'
-                            ? 'Save Baseline'
-                            : modalType === 'mortality'
-                              ? t.home.saveMortality
-                              : t.home.addDataButton}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-
-              {showDatePicker && (
-                <View style={styles.datePickerContainer}>
-                  <DateTimePicker 
-                    value={normalizeDateValue(tempDate)}
-                    mode="date" 
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, date) => {
-                      const nextDate = normalizeDateValue(date || tempDateRef.current);
-                      tempDateRef.current = nextDate;
-                      setTempDate(nextDate);
-                      if (Platform.OS === 'ios') {
-                        updateForm(datePickerField, nextDate);
-                      } else {
-                        handleDateChange(event.type !== 'dismissed', nextDate);
-                      }
-                    }}
-                    themeVariant="light" 
-                  />
-                  <View style={styles.datePickerButtons}>
-                    <TouchableOpacity 
-                      style={styles.datePickerCancelButton} 
-                      onPress={() => handleDateChange(false)}
-                    >
-                      <Text style={styles.datePickerCancelText}>
-                        {t.actions.cancel}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                      style={styles.datePickerConfirmButton} 
-                      onPress={() => handleDateChange(true, tempDateRef.current)}
-                    >
-                      <Text style={styles.datePickerConfirmText}>
-                        {t.actions.confirm}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
-            </View>
-          </KeyboardAvoidingView>
-        </TouchableWithoutFeedback>
-        </Modal>
+        {dataEntryModal}
       </View>
     </>
   );
@@ -2283,6 +2362,30 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '900',
+  },
+  cycleSwitcherRow: {
+    gap: 8,
+    paddingTop: 14,
+  },
+  cycleSwitcherChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#d7e7f1',
+    backgroundColor: '#f4f8fc',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  cycleSwitcherChipActive: {
+    borderColor: '#0F4C75',
+    backgroundColor: '#0F4C75',
+  },
+  cycleSwitcherText: {
+    color: '#5E7485',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  cycleSwitcherTextActive: {
+    color: '#FFFFFF',
   },
   cycleStatsRow: {
     flexDirection: 'row',
@@ -2864,22 +2967,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   
-  dateInput: { 
-    borderWidth: 1, 
-    borderColor: '#e8f2f9', 
-    padding: Platform.OS === 'android' ? 14 : 16, 
-    borderRadius: 12, 
-    backgroundColor: '#FFFFFF', 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center' 
-  },
-  
-  dateText: { 
-    color: '#0d2137', 
-    fontSize: Platform.OS === 'android' ? 15 : 16 
-  },
-  
   pondSelector: { 
     maxHeight: 50 
   },
@@ -2955,43 +3042,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold', 
   },
   
-  datePickerContainer: { 
-    backgroundColor: '#0d2137', 
-    borderTopWidth: 1, 
-    borderTopColor: '#315f57', 
-    padding: 16 
-  },
-  
-  datePickerButtons: { 
-    flexDirection: 'row', 
-    justifyContent: 'flex-end', 
-    marginTop: 16 
-  },
-  
-  datePickerCancelButton: { 
-    paddingVertical: Platform.OS === 'android' ? 8 : 10, 
-    paddingHorizontal: Platform.OS === 'android' ? 16 : 20, 
-    marginRight: 12, 
-    borderRadius: 8, 
-    backgroundColor: '#315f57' 
-  },
-  
-  datePickerCancelText: { 
-    color: '#f4f8fc', 
-    fontWeight: '600',
-    fontSize: Platform.OS === 'android' ? 14 : 15
-  },
-  
-  datePickerConfirmButton: { 
-    paddingVertical: Platform.OS === 'android' ? 8 : 10, 
-    paddingHorizontal: Platform.OS === 'android' ? 16 : 20, 
-    borderRadius: 8, 
-    backgroundColor: '#dce8f2' 
-  },
-  
-  datePickerConfirmText: { 
-    color: '#0d2137', 
-    fontWeight: 'bold',
-    fontSize: Platform.OS === 'android' ? 14 : 15
-  }
 });

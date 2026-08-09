@@ -21,6 +21,7 @@ import { db } from '@/config/firebase';
 import { getFarmDateKey } from '../shared/farmDate';
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
+import AppDatePicker from './components/forms/AppDatePicker';
 
 const InputField = React.memo(({ 
   label, 
@@ -51,25 +52,6 @@ const InputField = React.memo(({
   </View>
 ));
 InputField.displayName = 'InputField';
-
-const DateInput = React.memo(({ 
-  label, 
-  date, 
-  onPress 
-}: { 
-  label: string; 
-  date: Date; 
-  onPress: () => void 
-}) => (
-  <View style={styles.inputContainer}>
-    <Text style={styles.inputLabel}>{label}</Text>
-    <TouchableOpacity style={styles.dateInput} onPress={onPress}>
-      <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>
-      <Ionicons name="calendar-outline" size={20} color="#dce8f2" />
-    </TouchableOpacity>
-  </View>
-));
-DateInput.displayName = 'DateInput';
 
 const DataRow = React.memo(({ 
   label, 
@@ -926,7 +908,18 @@ export default function PondDetails() {
               >
                 <Text style={styles.cycleHint}>{pond.pondName} and {pond.pondArea.toLocaleString()} m² will be reused. Enter new stocking details for this cycle.</Text>
                 <EditInputField label={t.forms.density} value={newCycleForm.density} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, density: value }))} keyboardType="numeric" />
-                <EditInputField label={t.forms.startDate} value={newCycleForm.docStart} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, docStart: value }))} />
+                <View style={styles.editInputContainer}>
+                  <AppDatePicker
+                    label={t.forms.startDate}
+                    value={newCycleForm.docStart}
+                    onChange={(date) => setNewCycleForm((prev) => ({
+                      ...prev,
+                      docStart: getFarmDateKey(date, company?.timeZone),
+                    }))}
+                    cancelLabel={t.actions.cancel}
+                    confirmLabel={t.actions.confirm}
+                  />
+                </View>
                 <EditInputField label={t.forms.plValue} value={newCycleForm.plValue} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plValue: value }))} keyboardType="numeric" />
                 <EditInputField label="PL Supplier" value={newCycleForm.plSupplier} onChangeText={(value) => setNewCycleForm(prev => ({ ...prev, plSupplier: value }))} />
               </ScrollView>
@@ -1026,6 +1019,4 @@ const styles = StyleSheet.create({
   inputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', color: '#0d2137' },
   inputHint: { color: '#0d2137', fontSize: 12, marginTop: 4, fontStyle: 'italic' },
-  dateInput: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  dateText: { color: '#0d2137', fontSize: 16 },
 });

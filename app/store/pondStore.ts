@@ -14,6 +14,7 @@ import {
   withHarvestReference,
   type HarvestType,
 } from '../../shared/harvestCalculations';
+import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
 
 export {
   getPondBaselineFeed,
@@ -40,7 +41,7 @@ export interface FeedData {
   pondCycleId?: string;
 }
 export interface HarvestData { biomass: string; size: string; pricePerKg: string; subBiomass: string; subSize: string; subPricePerKg: string; cycleId?: string; cycleName?: string; pondCycleId?: string; }
-export interface HarvestRecord { id: string; date: string; cycleId?: string; cycleName?: string; ponds: { pondId: string; pondName: string; cycleId?: string; cycleName?: string; pondCycleId?: string; harvestType?: HarvestType; partialHarvestNumber?: number; harvestReferenceSamplingId?: string | null; harvestReferenceSamplingDate?: string | null; harvestReferenceMbw?: number | string | null; biomass: string; size: string; price: string; subBiomass: string; subSize: string; subPrice: string; }[]; }
+export interface HarvestRecord { id: string; date: string; cycleId?: string; cycleName?: string; blockId?: string; blockName?: string; ponds: { pondId: string; pondName: string; cycleId?: string; cycleName?: string; pondCycleId?: string; blockId?: string; blockName?: string; harvestType?: HarvestType; partialHarvestNumber?: number; harvestReferenceSamplingId?: string | null; harvestReferenceSamplingDate?: string | null; harvestReferenceMbw?: number | string | null; biomass: string; size: string; price: string; subBiomass: string; subSize: string; subPrice: string; }[]; }
 
 export type PondCycleStatus = 'active' | 'ended';
 export type PondCycleEndReason = 'harvested' | 'disease' | 'reset' | 'other';
@@ -50,7 +51,14 @@ export interface FarmCycle {
   id: string;
   cycleName: string;
   status: FarmCycleStatus;
+  blockIds?: string[];
+  blockNames?: string[];
+  blockId?: string;
+  blockName?: string;
+  plannedPondIds?: string[];
+  assignedTechnicianId?: string | null;
   plannedStartDate?: string;
+  plannedStockingEndDate?: string;
   stockingStartDate?: string;
   stockingEndDate?: string;
   closedAt?: string;
@@ -123,6 +131,7 @@ export type LabReportStatus = {
 
 export interface Pond {
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number; initialStock?: number; docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  physicalPondId?: string;
   blockId?: string;
   blockName?: string;
   mortalityRecords?: MortalityRecord[];
@@ -514,10 +523,20 @@ export const usePondStore = create<PondStore>()(
       addHarvestRecord: (record) => {
         const ponds = get().ponds;
         const firstPond = ponds.find((pond) => record.ponds.some((item) => item.pondId === pond.id));
+        const resolvedCycleId = record.cycleId || firstPond?.cycleId;
+        const resolvedHarvestPonds = record.ponds.map((harvestPond) => ({
+          cycleId: harvestPond.cycleId || ponds.find((pond) => pond.id === harvestPond.pondId)?.cycleId,
+        }));
+        if (resolvedCycleId && !harvestPondsBelongToCycle(resolvedHarvestPonds, resolvedCycleId)) {
+          console.warn('Skipped harvest record: all ponds must belong to the same production cycle.');
+          return;
+        }
         const recordWithCycle: HarvestRecord = {
           ...record,
-          cycleId: record.cycleId || firstPond?.cycleId,
+          cycleId: resolvedCycleId,
           cycleName: record.cycleName || firstPond?.cycleName,
+          blockId: record.blockId || firstPond?.blockId,
+          blockName: record.blockName || firstPond?.blockName,
           ponds: record.ponds.map((harvestPond) => {
             const pond = ponds.find((item) => item.id === harvestPond.pondId);
             const partialHarvestNumber = harvestPond.harvestType === 'partial'
@@ -529,6 +548,8 @@ export const usePondStore = create<PondStore>()(
               cycleId: harvestPond.cycleId || pond?.cycleId,
               cycleName: harvestPond.cycleName || pond?.cycleName,
               pondCycleId: harvestPond.pondCycleId || pond?.pondCycleId || pond?.id,
+              blockId: harvestPond.blockId || pond?.blockId,
+              blockName: harvestPond.blockName || pond?.blockName,
             });
           }),
         };

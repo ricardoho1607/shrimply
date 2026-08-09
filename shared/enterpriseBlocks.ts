@@ -55,6 +55,8 @@ export interface EnterpriseSampling extends SharedSampling {
 export interface EnterprisePond extends SharedPond {
   id: string;
   pondName: string;
+  physicalPondId?: string | null;
+  previousCyclePondId?: string | null;
   blockId?: string | null;
   blockName?: string | null;
   cycleId?: string | null;

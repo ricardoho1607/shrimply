@@ -15,6 +15,7 @@ import {
   DocumentData 
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
+import type { PondCostAllocation } from '../../shared/financeCycleAllocation';
 
 export interface Expense {
   id: string;
@@ -27,6 +28,8 @@ export interface Expense {
   cycleName?: string;
   pondCycleId?: string;
   pondId?: string;
+  allocationMethod?: 'equal_per_pond' | null;
+  pondAllocations?: PondCostAllocation[];
   paymentType: string;
   reference: string;
   linkedInventory?: string;
@@ -47,6 +50,8 @@ export interface ExpenseInput {
   cycleName?: string;
   pondCycleId?: string;
   pondId?: string;
+  allocationMethod?: 'equal_per_pond' | null;
+  pondAllocations?: PondCostAllocation[];
   paymentType: string;
   reference: string;
   linkedInventory?: string;

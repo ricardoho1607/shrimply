@@ -5,12 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, Camera } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import QRCode from 'react-native-qrcode-svg';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { getFarmDateKey } from '../../shared/farmDate';
 import { useAuth } from '../../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { useAssetStore, type Asset, type MaintenanceType } from '../store/assetStore';
 import { useLanguage } from '../../context/LanguageContext';
+import AppDatePicker from '../components/forms/AppDatePicker';
 
 type ModalType = 'add' | 'transfer' | 'maintenance' | 'history' | 'return' | 'qr-view' | 'qr-scan';
 
@@ -54,7 +54,6 @@ export default function AssetInventoryScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
-  const [datePickerField, setDatePickerField] = useState<'purchaseDate' | 'expectedReturn' | 'nextMaintenance' | null>(null);
 
   useEffect(() => {
     if (company?.id) {
@@ -117,17 +116,9 @@ export default function AssetInventoryScreen() {
     setSelectedAsset(null);
     setScanned(false);
     setHasPermission(null);
-    setDatePickerField(null);
   };
 
   const formatDateValue = (date: Date) => getFarmDateKey(date, company?.timeZone);
-
-  const getDatePickerValue = (field: 'purchaseDate' | 'expectedReturn' | 'nextMaintenance') => {
-    const value = formData[field];
-    if (!value) return new Date();
-    const parsed = new Date(value);
-    return Number.isFinite(parsed.getTime()) ? parsed : new Date();
-  };
 
   const renderDateField = (
     label: string,
@@ -135,11 +126,13 @@ export default function AssetInventoryScreen() {
     field: 'purchaseDate' | 'expectedReturn' | 'nextMaintenance'
   ) => (
     <View style={styles.input}>
-      <Text style={styles.label}>{label}</Text>
-      <TouchableOpacity style={styles.dateButton} onPress={() => setDatePickerField(field)}>
-        <Text style={styles.dateButtonText}>{value || formatDateValue(new Date())}</Text>
-        <Ionicons name="calendar-outline" size={20} color="#315f57" />
-      </TouchableOpacity>
+      <AppDatePicker
+        label={label}
+        value={value}
+        onChange={(date) => setFormData((prev) => ({ ...prev, [field]: formatDateValue(date) }))}
+        cancelLabel={t.actions.cancel}
+        confirmLabel={t.actions.confirm}
+      />
     </View>
   );
 
@@ -902,20 +895,6 @@ export default function AssetInventoryScreen() {
                 </View>
               </ScrollView>
             )}
-            {datePickerField && (
-              <DateTimePicker
-                value={getDatePickerValue(datePickerField)}
-                mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                onChange={(_, date) => {
-                  const field = datePickerField;
-                  if (Platform.OS !== 'ios') setDatePickerField(null);
-                  if (date) {
-                    setFormData((prev) => ({ ...prev, [field]: formatDateValue(date) }));
-                  }
-                }}
-              />
-            )}
           </View>
         </View>
       </Modal>
@@ -950,8 +929,6 @@ const styles = StyleSheet.create({
   tabTextActive: { color: '#FFF' },
   searchContainer: { padding: Platform.OS === 'android' ? 14 : 16 },
   textInput: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', fontSize: Platform.OS === 'android' ? 14 : 15, borderWidth: 1, borderColor: '#E8F4F8' },
-  dateButton: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 12 : 14, borderWidth: 1, borderColor: '#E8F4F8', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  dateButtonText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 14 : 15 },
   chip: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderRadius: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#f4f8fc', marginRight: Platform.OS === 'android' ? 7 : 8, borderWidth: 1, borderColor: '#E8F4F8' },
   chipActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
   chipText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#0d2137' },

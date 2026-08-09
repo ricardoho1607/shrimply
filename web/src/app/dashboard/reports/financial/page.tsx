@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   TrendingUp, 
   Calculator, 
@@ -24,7 +24,13 @@ import {
   localizePdfHtml,
   type PdfLanguage,
 } from '../../../../../../shared/pdfReportI18n';
-import { useFinanceRecords } from '@/hooks/useDashboardData';
+import {
+  useCompanyAdditives,
+  useCompanyCycles,
+  useCompanyFeeds,
+  useFinanceRecords,
+} from '@/hooks/useDashboardData';
+import { getOpenFinanceCycles } from '../../../../../../shared/financeCycleAllocation';
 
 /* --- Types ----------------------------------------------- */
 interface Expense {
@@ -33,6 +39,8 @@ interface Expense {
   category: string;
   date: string;
   description: string;
+  cycleId?: string;
+  reference?: string;
 }
 
 interface Revenue {
@@ -41,7 +49,12 @@ interface Revenue {
   category: string;
   date: string;
   description: string;
+  cycleId?: string;
 }
+
+interface FinanceCycle { id: string; cycleName: string; status?: string }
+interface InventoryUsage { date?: string; cycleId?: string; totalCost?: number }
+interface InventoryItem { id: string; usageHistory?: InventoryUsage[] }
 
 interface FinancialData {
   startDate: string;
@@ -370,14 +383,19 @@ const generateCOGSHTML = (data: COGSReportData, formatCurrency: (v: number) => s
 
 export default function FinancialReportsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
-  const { currentLanguage } = useLanguage();
+  const { currentLanguage, t } = useLanguage();
   const router = useRouter();
   const { company, loading: authLoading } = useAuth();
   const [selectedReport, setSelectedReport] = useState('profit-loss');
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
+  const [cycleScope, setCycleScope] = useState('all');
   const [exportLoading, setExportLoading] = useState(false);
   const { expenses, revenues, loading: financeLoading } = useFinanceRecords<Expense, Revenue>();
-  const loading = authLoading || financeLoading;
+  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
+  const { data: feeds, loading: feedsLoading } = useCompanyFeeds<InventoryItem>();
+  const { data: additives, loading: additivesLoading } = useCompanyAdditives<InventoryItem>();
+  const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
+  const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading;
 
   // COGS Inventory State
   const [openingInventory, setOpeningInventory] = useState(0);
@@ -413,8 +431,29 @@ export default function FinancialReportsPage() {
   };
 
   const { startDate, endDate, startDateKey, endDateKey } = getDateRange();
-  const filteredExpenses = expenses.filter(e => isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone));
-  const filteredRevenues = revenues.filter(r => isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone));
+  const filteredExpenses = expenses.filter(e => (
+    (cycleScope === 'all' || e.cycleId === cycleScope)
+    && isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)
+  ));
+  const filteredRevenues = revenues.filter(r => (
+    (cycleScope === 'all' || r.cycleId === cycleScope)
+    && isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone)
+  ));
+  const usageMatchesScope = (usage: InventoryUsage) => Boolean(
+    usage.date
+    && usage.cycleId
+    && (cycleScope === 'all' || usage.cycleId === cycleScope)
+    && isDateKeyInRange(usage.date, startDateKey, endDateKey, company?.timeZone)
+  );
+  const feedUsageCost = feeds.flatMap((feed) => feed.usageHistory || [])
+    .filter(usageMatchesScope)
+    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
+  const additiveUsageCost = additives.flatMap((additive) => additive.usageHistory || [])
+    .filter(usageMatchesScope)
+    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
+  const cycleProductionExpenses = filteredExpenses.filter((expense) => (
+    Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
+  ));
 
   // Financial Calculations for Preview
   const totalRev = filteredRevenues.reduce((s, r) => s + r.amount, 0);
@@ -433,13 +472,14 @@ export default function FinancialReportsPage() {
         const revBreakdown: Record<string, number> = {};
         filteredRevenues.forEach(r => revBreakdown[r.category] = (revBreakdown[r.category] || 0) + r.amount);
         
-        const COGS_CATS = ['Feed', 'Pond Additives', 'Labor'];
-        const cogsExp = filteredExpenses.filter(e => COGS_CATS.includes(normalizeCategory(e.category)));
+        const cogsExp = cycleProductionExpenses;
         const cogsBreakdown: Record<string, number> = {};
+        if (feedUsageCost) cogsBreakdown[t.financeCycle.feedUsage] = feedUsageCost;
+        if (additiveUsageCost) cogsBreakdown[t.financeCycle.additiveUsage] = additiveUsageCost;
         cogsExp.forEach(e => cogsBreakdown[e.category] = (cogsBreakdown[e.category] || 0) + e.amount);
-        const totalCOGS = cogsExp.reduce((s, e) => s + e.amount, 0);
+        const totalCOGS = feedUsageCost + additiveUsageCost + cogsExp.reduce((s, e) => s + e.amount, 0);
         
-        const opexExp = filteredExpenses.filter(e => !COGS_CATS.includes(normalizeCategory(e.category)));
+        const opexExp = filteredExpenses.filter(e => !e.cycleId && !e.reference?.startsWith('INVENTORY-'));
         const opexBreakdown: Record<string, number> = {};
         opexExp.forEach(e => opexBreakdown[e.category] = (opexBreakdown[e.category] || 0) + e.amount);
         const totalOPEX = opexExp.reduce((s, e) => s + e.amount, 0);
@@ -479,9 +519,10 @@ export default function FinancialReportsPage() {
         html = generateCashFlowHTML(data, formatCurrency, currentLanguage);
         fileName = `CashFlow_${company?.companyName || 'Farm'}_${selectedPeriod}.pdf`;
       } else if (selectedReport === 'cogs') {
-        const purchases = filteredExpenses.filter(e => normalizeCategory(e.category) === 'Feed').reduce((s, e) => s + e.amount, 0);
-        const labor = filteredExpenses.filter(e => normalizeCategory(e.category) === 'Labor').reduce((s, e) => s + e.amount, 0);
-        const totalCOGS = openingInventory + purchases + labor - closingInventory;
+        const purchases = feedUsageCost + cycleProductionExpenses.filter(e => normalizeCategory(e.category) === 'Feed').reduce((s, e) => s + e.amount, 0);
+        const labor = cycleProductionExpenses.filter(e => normalizeCategory(e.category) === 'Labor').reduce((s, e) => s + e.amount, 0);
+        const materials = additiveUsageCost + cycleProductionExpenses.filter(e => !['Feed', 'Labor'].includes(normalizeCategory(e.category))).reduce((s, e) => s + e.amount, 0);
+        const totalCOGS = openingInventory + purchases + labor + materials - closingInventory;
         const data = {
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString(),
@@ -489,7 +530,7 @@ export default function FinancialReportsPage() {
           openingInventory,
           purchases,
           directLabor: labor,
-          directMaterials: 0,
+          directMaterials: materials,
           closingInventory,
           revenue: totalRev,
           totalCOGS,
@@ -580,7 +621,7 @@ export default function FinancialReportsPage() {
 
           {/* Period Selection */}
           <div>
-            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>Select Period</h2>
+            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>{t.financeCycle.selectPeriod}</h2>
             <div className="dashboard-segmented-tabs" style={{ width: '100%' }}>
               {PERIOD_OPTIONS.map(period => (
                 <button
@@ -593,11 +634,23 @@ export default function FinancialReportsPage() {
                 </button>
               ))}
             </div>
+            <div className="dashboard-segmented-tabs" style={{ width: '100%', marginTop: '8px', overflowX: 'auto' }}>
+              {[...activeCycles.map((cycle) => ({ key: cycle.id, label: cycle.cycleName })), { key: 'all', label: t.financeCycle.allHistory }].map((scope) => (
+                <button
+                  key={scope.key}
+                  onClick={() => setCycleScope(scope.key)}
+                  className={`dashboard-segmented-tab ${cycleScope === scope.key ? 'active' : ''}`}
+                  style={{ minWidth: '110px' }}
+                >
+                  {scope.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {selectedReport === 'cogs' && (
             <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px' }}>Inventory Adjustment</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div>
                   <label style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'block', marginBottom: '8px' }}>Opening Inventory ({currencyConfig.symbol})</label>

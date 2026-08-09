@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useRef, useState } from "react";
 import { 
@@ -26,6 +25,7 @@ import { getFarmDateKey, normalizeFarmDateKey } from '../../shared/farmDate';
 import { filterEnterpriseRecordsForUser, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
+import AppDatePicker from '../components/forms/AppDatePicker';
 
 interface FeedAllocationInput {
   inventoryFeedId: string;
@@ -85,8 +85,6 @@ export default function FeedManagementScreen() {
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
   const farmToday = getFarmDateKey(new Date(), company?.timeZone);
   const [feedDate, setFeedDate] = useState(farmToday);
-  const [tempFeedDate, setTempFeedDate] = useState(dateKeyToLocalDate(farmToday));
-  const [showFeedDatePicker, setShowFeedDatePicker] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -245,7 +243,6 @@ export default function FeedManagementScreen() {
       setSelectedPond(null);
       setFeedAllocations([]);
       setFeedDate(farmToday);
-      setTempFeedDate(dateKeyToLocalDate(farmToday));
       setIsModalVisible(false);
     } catch (error: any) {
       console.error('Failed to save feed data:', error);
@@ -270,22 +267,18 @@ export default function FeedManagementScreen() {
     const startDate = normalizeFarmDateKey(pond?.cycleStartedAt || pond?.docStart, company?.timeZone);
     const nextDate = startDate && feedDate < startDate ? farmToday : feedDate;
     setFeedDate(nextDate);
-    setTempFeedDate(dateKeyToLocalDate(nextDate));
     loadFeedAllocations(pondName, nextDate);
   };
 
   const applyFeedDate = (date: Date) => {
     const nextDate = localDateToDateKey(date);
     setFeedDate(nextDate);
-    setTempFeedDate(dateKeyToLocalDate(nextDate));
     loadFeedAllocations(selectedPond, nextDate);
   };
 
   const openModal = () => {
     const today = getFarmDateKey(new Date(), company?.timeZone);
     setFeedDate(today);
-    setTempFeedDate(dateKeyToLocalDate(today));
-    setShowFeedDatePicker(false);
     setIsModalVisible(true);
   };
 
@@ -293,8 +286,6 @@ export default function FeedManagementScreen() {
     setSelectedPond(null);
     setFeedAllocations([]);
     setFeedDate(farmToday);
-    setTempFeedDate(dateKeyToLocalDate(farmToday));
-    setShowFeedDatePicker(false);
     submitLockRef.current = false;
     setIsSubmitting(false);
     setIsModalVisible(false);
@@ -410,24 +401,16 @@ export default function FeedManagementScreen() {
                 </View>
 
                 <View style={styles.inputContainer}>
-                  <Text style={styles.inputLabel}>{t.forms.date}</Text>
-                  <TouchableOpacity
-                    style={[styles.dateInput, !selectedPond && styles.inputDisabled]}
-                    onPress={() => {
-                      setTempFeedDate(dateKeyToLocalDate(feedDate));
-                      setShowFeedDatePicker(true);
-                    }}
+                  <AppDatePicker
+                    label={t.forms.date}
+                    value={feedDate}
+                    minimumDate={dateKeyToLocalDate(minimumFeedDate)}
+                    maximumDate={dateKeyToLocalDate(farmToday)}
                     disabled={!selectedPond}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t.forms.date}: ${dateKeyToLocalDate(feedDate).toLocaleDateString()}`}
-                    accessibilityState={{ disabled: !selectedPond }}
-                  >
-                    <Ionicons name="calendar-outline" size={20} color="#0F4C75" />
-                    <Text style={styles.dateInputText}>
-                      {dateKeyToLocalDate(feedDate).toLocaleDateString()}
-                    </Text>
-                    <Ionicons name="chevron-down" size={18} color="#6b8aa0" />
-                  </TouchableOpacity>
+                    onChange={applyFeedDate}
+                    cancelLabel={t.actions.cancel}
+                    confirmLabel={t.actions.confirm}
+                  />
                 </View>
 
                 <View style={styles.inputContainer}>
@@ -512,49 +495,6 @@ export default function FeedManagementScreen() {
                 </View>
               </ScrollView>
 
-              {showFeedDatePicker && selectedPond && (
-                <View style={styles.datePickerContainer}>
-                  <DateTimePicker
-                    value={tempFeedDate}
-                    mode="date"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    minimumDate={dateKeyToLocalDate(minimumFeedDate)}
-                    maximumDate={dateKeyToLocalDate(farmToday)}
-                    onChange={(event, date) => {
-                      if (event.type === 'dismissed') {
-                        setShowFeedDatePicker(false);
-                        return;
-                      }
-                      const nextDate = date || tempFeedDate;
-                      setTempFeedDate(nextDate);
-                      if (Platform.OS !== 'ios') {
-                        applyFeedDate(nextDate);
-                        setShowFeedDatePicker(false);
-                      }
-                    }}
-                    themeVariant="light"
-                  />
-                  {Platform.OS === 'ios' && (
-                    <View style={styles.datePickerButtons}>
-                      <TouchableOpacity
-                        style={styles.datePickerCancelButton}
-                        onPress={() => setShowFeedDatePicker(false)}
-                      >
-                        <Text style={styles.datePickerCancelText}>{t.actions.cancel}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.datePickerConfirmButton}
-                        onPress={() => {
-                          applyFeedDate(tempFeedDate);
-                          setShowFeedDatePicker(false);
-                        }}
-                      >
-                        <Text style={styles.datePickerConfirmText}>{t.actions.confirm}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              )}
             </View>
           </View>
         </Modal>
@@ -609,14 +549,6 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   inputDisabled: { backgroundColor: '#edf3f8', color: '#315f57' },
   inputHint: { color: '#6b8aa0', fontSize: 12, lineHeight: 17, marginBottom: 10 },
-  dateInput: { minHeight: 50, borderWidth: 1, borderColor: '#d9e8f2', paddingHorizontal: 14, borderRadius: 12, backgroundColor: '#f4f8fc', flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dateInputText: { flex: 1, color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
-  datePickerContainer: { borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 20 : 0 },
-  datePickerButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  datePickerCancelButton: { paddingHorizontal: 18, paddingVertical: 12 },
-  datePickerConfirmButton: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 10, backgroundColor: '#0F4C75' },
-  datePickerCancelText: { color: '#e74c3c', fontSize: 14, fontWeight: '700' },
-  datePickerConfirmText: { color: '#FFFFFF', fontSize: 14, fontWeight: '700' },
   feedWarning: { flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f6c453', backgroundColor: '#fff8e6' },
   feedWarningTextContainer: { flex: 1 },
   feedWarningTitle: { color: '#92400e', fontSize: 13, fontWeight: '700', marginBottom: 2 },

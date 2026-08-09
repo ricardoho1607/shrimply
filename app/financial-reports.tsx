@@ -12,13 +12,17 @@ import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportSe
 import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExportService';
 import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
 import { normalizeCategory } from './utils/categoryNormalizer';
-import { getActiveFarmCycle, usePondStore } from './store/pondStore';
+import { usePondStore } from './store/pondStore';
+import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import {
   getFarmDateKey,
   getFarmPeriodDateKeys,
   isDateKeyInRange,
   normalizeFarmDateKey,
 } from '../shared/farmDate';
+import AppDatePicker from './components/forms/AppDatePicker';
+import CycleSelector from './components/forms/CycleSelector';
+import { getOpenFinanceCycles } from '../shared/financeCycleAllocation';
 
 type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
@@ -30,7 +34,8 @@ export default function FinancialReportsPage() {
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { cycles } = usePondStore();
-  const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
+  const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
+  const feedAdditiveStore = useFeedAdditiveStore();
 
   const REPORT_TYPES: ReportType[] = [
     { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
@@ -55,7 +60,7 @@ export default function FinancialReportsPage() {
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('This Month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
-  const [cycleScope, setCycleScope] = useState<'current' | 'all'>('current');
+  const [cycleScope, setCycleScope] = useState('all');
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -77,6 +82,8 @@ export default function FinancialReportsPage() {
       return;
     }
     loadData();
+    feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
+    feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
   }, [company?.id]);
 
   const loadData = async () => {
@@ -135,8 +142,8 @@ export default function FinancialReportsPage() {
   const getFilteredData = () => {
     const { startDateKey, endDateKey } = getDateRange();
     const scopeFinance = <T extends { cycleId?: string }>(items: T[]) =>
-      cycleScope === 'current' && activeFarmCycle
-        ? items.filter((item) => !item.cycleId || item.cycleId === activeFarmCycle.id)
+      cycleScope !== 'all'
+        ? items.filter((item) => item.cycleId === cycleScope)
         : items;
 
     return {
@@ -158,28 +165,50 @@ export default function FinancialReportsPage() {
   const profit = revenueTotals.total - expenseTotals.total;
 
 
-  const COGS_CATEGORIES = ['Feed', 'Pond Additives', 'Labor'];
-  const cogsExpenses = filteredExpenses.filter(e => COGS_CATEGORIES.includes(normalizeCategory(e.category)));
-  const purchases = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Feed').reduce((sum, e) => sum + e.amount, 0);
-  const directMaterials = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Pond Additives').reduce((sum, e) => sum + e.amount, 0);
-  const directLabor = cogsExpenses.filter(e => normalizeCategory(e.category) === 'Labor').reduce((sum, e) => sum + e.amount, 0);
+  const { startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey } = getDateRange();
+  const usageMatchesScope = (usage: { date?: string; cycleId?: string }) => Boolean(
+    usage.date
+    && usage.cycleId
+    && (cycleScope === 'all' || usage.cycleId === cycleScope)
+    && isDateKeyInRange(usage.date, cogsStartDateKey, cogsEndDateKey, company?.timeZone)
+  );
+  const feedUsageCost = feedAdditiveStore.feeds.flatMap((feed) => feed.usageHistory || [])
+    .filter(usageMatchesScope)
+    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
+  const additiveUsageCost = feedAdditiveStore.additives.flatMap((additive) => additive.usageHistory || [])
+    .filter(usageMatchesScope)
+    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
+
+  const cycleProductionExpenses = filteredExpenses.filter((expense) => (
+    Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
+  ));
+  const purchases = feedUsageCost + cycleProductionExpenses
+    .filter((expense) => normalizeCategory(expense.category) === 'Feed')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const directLabor = cycleProductionExpenses
+    .filter((expense) => normalizeCategory(expense.category) === 'Labor')
+    .reduce((sum, expense) => sum + expense.amount, 0);
+  const directMaterials = additiveUsageCost + cycleProductionExpenses
+    .filter((expense) => !['Feed', 'Labor'].includes(normalizeCategory(expense.category)))
+    .reduce((sum, expense) => sum + expense.amount, 0);
   const totalCOGSInventory = openingInventory + purchases + directLabor + directMaterials - closingInventory; // For COGS Report
 
   // P&L Metrics — use English display names in breakdowns so PDF always shows clean labels
   const cogsCategoryBreakdown: { [key: string]: number } = {};
-  cogsExpenses.forEach(exp => {
+  if (feedUsageCost) cogsCategoryBreakdown[t.financeCycle.feedUsage] = feedUsageCost;
+  if (additiveUsageCost) cogsCategoryBreakdown[t.financeCycle.additiveUsage] = additiveUsageCost;
+  cycleProductionExpenses.forEach(exp => {
     const key = normalizeCategory(exp.category);
     cogsCategoryBreakdown[key] = (cogsCategoryBreakdown[key] || 0) + exp.amount;
   });
-  const totalCOGSPL = cogsExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const totalCOGSPL = feedUsageCost + additiveUsageCost + cycleProductionExpenses.reduce((sum, e) => sum + e.amount, 0);
   const grossProfitPL = revenueTotals.total - totalCOGSPL;
 
-  const OPERATING_CATEGORIES = ['Utilities', 'Miscellaneous', 'Maintenance', 'Salaries', 'Marketing', 'Rent'];
   const NON_OPEX_CATEGORIES = ['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend'];
 
   const opexExpenses = filteredExpenses.filter(e => {
     const norm = normalizeCategory(e.category);
-    return !COGS_CATEGORIES.includes(norm) && !NON_OPEX_CATEGORIES.includes(norm);
+    return !e.cycleId && !e.reference?.startsWith('INVENTORY-') && !NON_OPEX_CATEGORIES.includes(norm);
   });
   const opexCategoryBreakdown: { [key: string]: number } = {};
   opexExpenses.forEach(exp => {
@@ -367,34 +396,42 @@ export default function FinancialReportsPage() {
             ))}
           </View>
 
-          <View style={[styles.periodContainer, styles.cyclePeriodContainer]}>
-            {[
-              { key: 'current', label: activeFarmCycle?.cycleName || 'Current Cycle' },
-              { key: 'all', label: 'All History' },
-            ].map((scope) => (
-              <TouchableOpacity
-                key={scope.key}
-                style={[styles.periodTab, styles.cyclePeriodTab, cycleScope === scope.key && styles.periodTabActive]}
-                onPress={() => setCycleScope(scope.key as 'current' | 'all')}
-              >
-                <Text style={[styles.periodTabText, styles.cyclePeriodTabText, cycleScope === scope.key && styles.periodTabTextActive]}>
-                  {scope.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.cycleSelectorContainer}>
+            <CycleSelector
+              value={cycleScope}
+              options={activeCycles}
+              onChange={setCycleScope}
+              includeAllHistory
+              placeholder={t.financeCycle.selectCycle}
+              allHistoryLabel={t.financeCycle.allHistory}
+              sheetEyebrow={t.financeCycle.cycle}
+              sheetTitle={t.financeCycle.selectCycle}
+            />
           </View>
 
           {selectedPeriod === 'Custom' && (
             <View style={styles.customDateContainer}>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{t.financialReports?.startDate || 'Start Date'}</Text>
-                <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
-                  placeholderTextColor="#6b8aa0" value={customStartDate} onChangeText={setCustomStartDate} />
+                <AppDatePicker
+                  label={t.financialReports?.startDate || 'Start Date'}
+                  value={customStartDate}
+                  placeholder={t.financialReports?.datePlaceholder || 'Select date'}
+                  maximumDate={new Date()}
+                  onChange={(date) => setCustomStartDate(getFarmDateKey(date, company?.timeZone))}
+                  cancelLabel={t.actions.cancel}
+                  confirmLabel={t.actions.confirm}
+                />
               </View>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{t.financialReports?.endDate || 'End Date'}</Text>
-                <TextInput style={styles.dateInput} placeholder={t.financialReports?.datePlaceholder || 'YYYY-MM-DD'}
-                  placeholderTextColor="#6b8aa0" value={customEndDate} onChangeText={setCustomEndDate} />
+                <AppDatePicker
+                  label={t.financialReports?.endDate || 'End Date'}
+                  value={customEndDate}
+                  placeholder={t.financialReports?.datePlaceholder || 'Select date'}
+                  maximumDate={new Date()}
+                  onChange={(date) => setCustomEndDate(getFarmDateKey(date, company?.timeZone))}
+                  cancelLabel={t.actions.cancel}
+                  confirmLabel={t.actions.confirm}
+                />
               </View>
             </View>
           )}
@@ -661,13 +698,11 @@ const styles = StyleSheet.create({
   comingSoonText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase' },
   selectedCheck: { position: 'absolute', top: 8, right: 8 },
   periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  cyclePeriodContainer: { marginTop: Platform.OS === 'android' ? 10 : 12 },
+  cycleSelectorContainer: { marginTop: Platform.OS === 'android' ? 8 : 10 },
   periodTab: { flex: 1, minWidth: '30%', paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#F8FAFB' },
   periodTabActive: { backgroundColor: '#3498DB' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#7F8C8D' },
   periodTabTextActive: { color: '#FFFFFF' },
-  cyclePeriodTab: { paddingHorizontal: 8, justifyContent: 'center' },
-  cyclePeriodTabText: { lineHeight: Platform.OS === 'android' ? 16 : 18, textAlign: 'center' },
   customDateContainer: { marginTop: Platform.OS === 'android' ? 14 : 16, gap: Platform.OS === 'android' ? 10 : 12 },
   dateInputGroup: { gap: 8 },
   dateLabel: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#34495E' },

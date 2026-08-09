@@ -1,4 +1,21 @@
 .page { display: flex; flex-direction: column; gap: 16px; }
+.enterpriseTitleBar { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.enterpriseTitleBar h1 { margin: 0; color: var(--text-primary); font-size: 1.65rem; }
+.enterpriseTitleCopy { min-width: 0; }
+.enterpriseTitleCopy p { margin: 4px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .8rem; font-weight: 700; }
+.enterpriseTitleActions { display: flex; align-items: center; gap: 9px; }
+.enterpriseTitleActions .displayButton, .enterpriseTitleActions .addButton { min-height: 42px; padding: 0 14px; text-decoration: none; }
+.enterpriseSummary { border: 1px solid var(--border); border-radius: 22px; background: linear-gradient(135deg, #fff 0%, #f1f8fc 100%); padding: 24px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: start; box-shadow: 0 14px 36px rgba(15, 76, 117, .06); }
+.enterpriseSummary h1 { margin: 5px 0 6px; color: var(--text-primary); font-size: 1.65rem; }
+.enterpriseSummary p { margin: 0; color: var(--text-muted); max-width: 660px; line-height: 1.55; font-size: .88rem; }
+.summaryButtons { display: flex; align-items: center; gap: 9px; }
+.summaryButtons .displayButton, .summaryButtons .addButton { min-height: 44px; padding: 0 16px; }
+.enterpriseSummaryStats { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.enterpriseSummaryStats span { min-width: 0; border: 1px solid rgba(15, 76, 117, .08); border-radius: 14px; background: rgba(255, 255, 255, .84); padding: 13px 15px; display: flex; flex-direction: column; gap: 3px; }
+.enterpriseSummaryStats b { color: var(--primary); font-size: 1.25rem; }
+.enterpriseSummaryStats small { color: var(--text-muted); font-size: .7rem; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; }
+.enterpriseSummaryStats .summaryRisk { background: #fff7ed; border-color: #fed7aa; }
+.enterpriseSummaryStats .summaryRisk b { color: #b45309; }
 .cycleCard { border: 1px solid var(--border); border-radius: 20px; background: #fff; padding: 18px; box-shadow: 0 8px 24px rgba(15, 76, 117, .04); }
 .cycleCardCollapsed { border-radius: 14px; padding: 8px 12px; box-shadow: 0 4px 12px rgba(15, 76, 117, .03); }
 .cycleCardHeader { width: 100%; min-height: 32px; border: 0; background: transparent; color: inherit; padding: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; text-align: left; font: inherit; cursor: pointer; }
@@ -69,14 +86,88 @@
 .pondTile span { display: block; }
 .pondTile small { display: block; margin-top: 4px; font-size: .65rem; opacity: .8; }
 .noPonds { padding: 2px 20px 20px; margin: 0; }
+.blockCycleBody { border-top: 1px solid var(--border); background: #f8fbfd; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.blockCycleToolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 3px 3px; color: var(--text-muted); font-size: .72rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; }
+.blockCycleToolbar button { border: 0; border-radius: 10px; background: var(--primary-dim); color: var(--primary); padding: 8px 11px; display: inline-flex; align-items: center; gap: 6px; font: inherit; cursor: pointer; }
+.emptyCycleButton { width: 100%; min-height: 76px; border: 1px dashed #9ec5dc; border-radius: 14px; background: #fff; color: var(--primary); display: flex; align-items: center; justify-content: center; gap: 8px; font-weight: 850; cursor: pointer; }
+.productionCycle { border: 1px solid var(--border); border-radius: 15px; background: #fff; overflow: hidden; }
+.productionCycleHeader { width: 100%; background: transparent; color: inherit; padding: 12px; display: flex; align-items: center; gap: 10px; }
+.productionCycleToggle { min-width: 0; flex: 1; border: 0; background: transparent; color: inherit; padding: 2px; display: flex; align-items: center; gap: 12px; text-align: left; font: inherit; cursor: pointer; }
+.productionCycleIcon { width: 38px; height: 38px; flex: 0 0 38px; border-radius: 11px; background: var(--primary-dim); color: var(--primary); display: grid; place-items: center; }
+.productionCycleCopy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.productionCycleCopy > span { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.productionCycleCopy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); font-size: .94rem; }
+.productionCycleCopy em { flex: 0 0 auto; border-radius: 999px; background: #eef2f6; color: #64748b; padding: 4px 7px; font-size: .58rem; font-style: normal; font-weight: 850; text-transform: uppercase; }
+.productionCycleCopy small { color: var(--text-muted); font-size: .72rem; font-weight: 700; }
+.editCycleButton { flex: 0 0 auto; border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--primary); padding: 8px 11px; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .72rem; font-weight: 850; cursor: pointer; }
+.productionCycleCounts { flex: 0 0 auto; min-width: 48px; display: flex; flex-direction: column; align-items: center; }
+.productionCycleCounts b { color: var(--text-primary); }
+.productionCycleCounts small { color: var(--text-muted); font-size: .62rem; }
+.productionCycleStatus { flex: 0 0 auto; border-radius: 999px; background: #e8f3fa; color: #0f4c75; padding: 6px 9px; font-size: .62rem; font-weight: 900; text-transform: uppercase; }
+.productionCycleStatus_planning { background: #eef2f6; color: #64748b; }
+.productionCycleStatus_stocking { background: #fff4d6; color: #8a5a00; }
+.productionCycleStatus_active { background: #eaf7ee; color: #1f6a39; }
+.productionCycleStatus_closed { background: #edf0f3; color: #5c6670; }
+.productionCycleBody { border-top: 1px solid var(--border); padding: 14px; }
+.productionCycleProgress { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.productionCycleProgress span { border-radius: 11px; background: var(--bg-mid); padding: 9px 10px; display: flex; flex-direction: column; gap: 2px; }
+.productionCycleProgress b { color: var(--primary); font-size: .9rem; }
+.productionCycleProgress small { color: var(--text-muted); font-size: .62rem; font-weight: 750; }
+.cycleBlockList { display: flex; flex-direction: column; gap: 10px; }
+.cycleBlock { border: 1px solid var(--border); border-radius: 14px; background: #f8fbfd; overflow: hidden; }
+.cycleBlockHeader { min-height: 58px; display: flex; align-items: center; gap: 11px; padding: 0 12px 0 0; }
+.cycleBlockHeader .blockRisk { width: 5px; }
+.cycleBlockHeader > div { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.cycleBlockHeader strong { color: var(--text-primary); font-size: .86rem; }
+.cycleBlockHeader small { color: var(--text-muted); font-size: .66rem; font-weight: 700; }
+.cycleBlock .cyclePondPreview { padding: 0 12px 12px; }
+.cyclePondPreview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.cyclePondPreview .pondTile { aspect-ratio: auto; min-height: 68px; }
+.plannedPond { background: #fff; border-color: #76a9c8; border-style: dashed; color: #0f4c75; cursor: default; }
+.productionCycleActions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.productionCycleActions button, .productionCycleActions a { border: 1px solid var(--border); border-radius: 10px; background: #fff; color: var(--primary); padding: 8px 11px; display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: .72rem; font-weight: 850; text-decoration: none; cursor: pointer; }
+.productionCycleActions button:last-child { margin-left: auto; color: #b42318; }
+.productionCycleActions button:disabled { opacity: .45; cursor: not-allowed; }
+.editCycleActions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.editCycleActions a, .editCycleActions button { border: 1px solid var(--border); border-radius: 11px; background: #fff; padding: 10px 12px; color: var(--primary); font: inherit; font-size: .75rem; font-weight: 850; text-decoration: none; cursor: pointer; }
+.editCycleActions button { color: #b42318; }
+.editCycleActions button:disabled { opacity: .45; cursor: not-allowed; }
+.addMenuGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.addMenuGrid button { min-height: 96px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; font: inherit; font-weight: 850; cursor: pointer; }
+.addMenuGrid button:disabled { opacity: .45; cursor: not-allowed; }
+.dateFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.setupProgress { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); padding: 14px; display: flex; flex-direction: column; gap: 4px; }
+.setupProgress strong { color: var(--text-primary); font-size: .9rem; }
+.setupProgress small { color: var(--text-muted); font-size: .72rem; }
+.setupPondList { display: flex; flex-direction: column; gap: 9px; }
+.setupPondCard { border: 1px solid var(--border); border-radius: 14px; background: #fff; overflow: hidden; }
+.setupPondCardExpanded { border-color: #8fb7d1; }
+.setupPondHeader { width: 100%; min-height: 64px; border: 0; background: #fff; color: var(--primary); padding: 12px 14px; display: flex; align-items: center; gap: 10px; text-align: left; cursor: pointer; }
+.setupPondHeader > span { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.setupPondHeader b { color: var(--text-primary); font-size: .88rem; }
+.setupPondHeader small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .7rem; }
+.setupPondForm { border-top: 1px solid var(--border); background: var(--bg-mid); padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.setupActions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
+.setupActions .saveButton { width: 100%; }
+.backButton { border: 1px solid var(--border); border-radius: 14px; background: #fff; color: var(--primary); padding: 13px 18px; font: inherit; font-weight: 800; cursor: pointer; }
+.pondSelector { min-width: 0; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); padding: 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.pondSelector legend { padding: 0 6px; color: var(--text-muted); font-size: .72rem; font-weight: 850; text-transform: uppercase; letter-spacing: .05em; }
+.pondSelector > label { min-width: 0; border: 1px solid var(--border); border-radius: 11px; background: #fff; padding: 10px; display: flex; flex-direction: row; align-items: center; gap: 8px; color: var(--text-primary); font-size: .78rem; text-transform: none; letter-spacing: normal; cursor: pointer; }
+.pondSelector > label input { width: 16px; height: 16px; padding: 0; flex: 0 0 16px; }
+.pondSelector > label span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; }
+.pondSelector > label small { color: var(--text-muted); font-size: .65rem; }
+.pondSelector .pondSelectorChecked { border-color: #3282b8; background: #eaf6fd; }
+.pondSelector > p { grid-column: 1 / -1; margin: 4px; color: var(--text-muted); }
 .empty, .loading { border: 1px solid var(--border); border-radius: 22px; padding: 42px; text-align: center; background: #fff; }
 .empty p { color: var(--text-muted); margin: 8px auto 22px; max-width: 520px; }
 .error { color: #b42318; }
 .overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 42, 60, .45); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; padding: 24px; }
-.modal { width: min(560px, 100%); border-radius: 24px; background: #fff; padding: 28px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 30px 80px rgba(15, 42, 60, .22); }
-.modalHeader { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; }
-.modalHeader h2 { margin: 0 0 5px; color: var(--text-primary); }
-.iconButton { border: 1px solid var(--border); background: var(--bg-mid); width: 38px; height: 38px; border-radius: 11px; cursor: pointer; display: grid; place-items: center; }
+.modal { width: min(560px, 100%); max-height: min(90dvh, 860px); overflow-y: auto; border-radius: 24px; background: #fff; padding: 26px 28px 28px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 30px 80px rgba(15, 42, 60, .22); }
+.modalHeader { min-height: 40px; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.modalHeader > div { min-width: 0; flex: 1; padding-top: 1px; }
+.modalHeader h2 { margin: 0 0 5px; color: var(--text-primary); line-height: 1.25; }
+.modalHeader p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
+.iconButton { flex: 0 0 40px; border: 1px solid var(--border); background: var(--bg-mid); color: var(--text-primary); width: 40px; height: 40px; padding: 0; border-radius: 12px; cursor: pointer; display: grid; place-items: center; }
 .modal label { display: flex; flex-direction: column; gap: 8px; color: var(--text-muted); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 800; }
 .modal input, .modal select { width: 100%; padding: 14px 15px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-mid); color: var(--text-primary); font: inherit; text-transform: none; letter-spacing: normal; }
 .stablePanel { display: flex; align-items: center; gap: 10px; padding: 15px; border-radius: 13px; background: #eaf7ee; color: #1f6a39; font-weight: 700; }
@@ -87,6 +178,24 @@
 .mortalityPanel span { display: flex; flex-direction: column; gap: 3px; }
 .mortalityPanel small { color: var(--text-muted); }
 @media (max-width: 640px) {
+  .enterpriseTitleBar { align-items: stretch; flex-direction: column; }
+  .enterpriseTitleActions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .enterpriseTitleActions .displayButton, .enterpriseTitleActions .addButton { width: 100%; padding-inline: 8px; }
+  .enterpriseSummary { grid-template-columns: 1fr; padding: 18px; }
+  .enterpriseSummary .displayButton { width: 100%; height: 44px; }
+  .summaryButtons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summaryButtons .displayButton, .summaryButtons .addButton { width: 100%; padding-inline: 10px; }
+  .enterpriseSummaryStats { grid-column: 1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .productionCycleHeader { align-items: center; }
+  .productionCycleCopy { flex-basis: auto; }
+  .productionCycleStatus { order: 4; margin-left: 50px; }
+  .productionCycleProgress { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cyclePondPreview { gap: 6px; }
+  .cyclePondPreview .pondTile { min-height: 60px; border-radius: 8px; padding: 3px; font-size: .6rem; }
+  .addMenuGrid { grid-template-columns: 1fr; }
+  .addMenuGrid button { min-height: 58px; flex-direction: row; }
+  .dateFieldGrid, .pondSelector { grid-template-columns: 1fr; }
+  .setupPondForm { grid-template-columns: 1fr; }
   .cycleStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cycleActions { flex-wrap: wrap; }
   .cycleActions input { flex-basis: 100%; }
@@ -103,6 +212,6 @@
     max-height: calc(100dvh - 10px - var(--safe-area-top));
     overflow-y: auto;
     border-radius: 22px 22px 0 0;
-    padding: 22px 18px calc(22px + var(--safe-area-bottom));
+    padding: 18px 18px calc(22px + var(--safe-area-bottom));
   }
 }
