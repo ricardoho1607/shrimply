@@ -1,4 +1,4 @@
-name: Apply guarded P0 hardening patch
+name: Validate P0 hardening
 
 on:
   push:
@@ -6,34 +6,30 @@ on:
       - agent/p0-orson-sync-hardening
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: agent/p0-orson-sync-hardening
-          fetch-depth: 0
 
-      - name: Apply guarded source patch
-        run: python3 .github/scripts/apply_p0.py
+      - name: Validate backend syntax
+        run: node --check functions/index.js
 
-      - name: Validate backend syntax and patch whitespace
-        run: |
-          node --check functions/index.js
-          git diff --check
-
-      - name: Validate targeted mobile lint
+      - name: Validate mobile hooks
         run: |
           npm ci --ignore-scripts
           npx eslint app/hooks/useGemini.ts app/hooks/useFirebaseSync.ts
 
-      - name: Commit source changes
+      - name: Validate web Orson hook
+        working-directory: web
         run: |
-          git config user.name "Shrimply P0 Fix Bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add functions/index.js firestore.rules app/hooks/useGemini.ts app/hooks/useFirebaseSync.ts web/src/hooks/useGemini.ts
-          git commit -m "harden Orson quota and Firebase listener cleanup"
-          git push origin HEAD:agent/p0-orson-sync-hardening
+          npm ci --ignore-scripts
+          npx eslint src/hooks/useGemini.ts
+          npx tsc --noEmit
+
+      - name: Compile Firestore rules in emulator
+        run: npx firebase-tools emulators:exec --only firestore --project demo-shrimply "echo firestore-rules-ok"
