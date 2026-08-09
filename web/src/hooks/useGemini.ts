@@ -39,19 +39,33 @@ type SendMessageOptions = {
   };
 };
 
+type RemoteOrsonError = {
+  code?: unknown;
+  details?: unknown;
+  customData?: { details?: unknown };
+};
+
+type RemoteOrsonLimitDetails = {
+  aiFunction?: unknown;
+  limit?: unknown;
+  used?: unknown;
+};
+
 // Cache Configuration
 const CACHE_PREFIX = 'orson_cache_';
 const CACHE_EXPIRY = 1000 * 60 * 60 * 24 * 7; // 7 Days
 
-const getRemoteOrsonLimit = (error: any): {
+const getRemoteOrsonLimit = (error: unknown): {
   aiFunction: OrsonAiFunction;
   limit: number;
   used: number;
 } | null => {
-  const code = typeof error?.code === 'string' ? error.code : '';
-  const details = error?.details ?? error?.customData?.details;
+  const candidate = (error && typeof error === 'object' ? error : {}) as RemoteOrsonError;
+  const code = typeof candidate.code === 'string' ? candidate.code : '';
+  const rawDetails = candidate.details ?? candidate.customData?.details;
+  const details = (rawDetails && typeof rawDetails === 'object' ? rawDetails : {}) as RemoteOrsonLimitDetails;
   if (code !== 'functions/resource-exhausted' && code !== 'resource-exhausted') return null;
-  if (!details || (details.aiFunction !== 'chat' && details.aiFunction !== 'projection')) return null;
+  if (details.aiFunction !== 'chat' && details.aiFunction !== 'projection') return null;
   if (!Number.isFinite(details.limit) || !Number.isFinite(details.used)) return null;
   return {
     aiFunction: details.aiFunction,
