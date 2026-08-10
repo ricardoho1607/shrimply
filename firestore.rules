@@ -27,7 +27,11 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/companies/$(companyId))
         && (
           companyDoc(companyId).data.ownerId == request.auth.uid
-          || companyDoc(companyId).data.teamMembers.hasAny([request.auth.uid])
+          || (
+            companyDoc(companyId).data.teamMembers.hasAny([request.auth.uid])
+            && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+            && userDoc().data.companyId == companyId
+          )
         );
     }
 
@@ -775,22 +779,9 @@ service cloud.firestore {
           && validUserPayload(request.resource.data)
           && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
+          && (!('companyId' in resource.data) || resource.data.companyId == null || resource.data.companyId == request.resource.data.companyId)
           && isCompanyOwner(request.resource.data.companyId)
           && validRequiredCompanySetup(companyDoc(request.resource.data.companyId).data)
-        )
-        || (
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
-          && request.resource.data.companyId != null
-          && isCompanyOwnerRole(request.resource.data.companyId)
-          && validStaffRoleValue(request.resource.data.role)
-        )
-        || (
-          request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'role', 'hasCompletedSetup', 'lastActive'])
-          && resource.data.companyId != null
-          && isCompanyOwnerRole(resource.data.companyId)
-          && !(resource.data.role in ['owner', 'co-owner'])
-          && request.resource.data.companyId == null
-          && request.resource.data.role == null
         )
       );
       allow delete: if false;
@@ -802,34 +793,27 @@ service cloud.firestore {
 
     match /companies/{companyId} {
       allow create: if signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && (!('companyId' in userDoc().data) || userDoc().data.companyId == null)
         && validCompanyPayload(request.resource.data)
         && validRequiredCompanySetup(request.resource.data)
         && request.resource.data.ownerId == request.auth.uid
         && request.resource.data.teamMembers.hasAny([request.auth.uid]);
       allow read: if signedIn() && (
         isFounderAdmin()
-        || resource.data.ownerId == request.auth.uid
-        || resource.data.teamMembers.hasAny([request.auth.uid])
+        || isCompanyMember(companyId)
       );
       allow update: if isCompanyMember(companyId)
         && validCompanyPayload(request.resource.data)
         && request.resource.data.ownerId == resource.data.ownerId
         && (
-          isCompanyOwner(companyId)
-          || (
-            isCompanyOwnerRole(companyId)
-            && request.resource.data.diff(resource.data).changedKeys().hasOnly(['teamMembers', 'updatedAt'])
-            && request.resource.data.teamMembers.hasAny([request.auth.uid])
-          )
-          || (
-            isCompanyManager(companyId)
-            && !request.resource.data.diff(resource.data).changedKeys().hasAny([
-              'ownerId',
-              'teamMembers',
-              'pendingInvites',
-              'isVerified'
-            ])
-          )
+          isCompanyManager(companyId)
+          && !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'ownerId',
+            'teamMembers',
+            'pendingInvites',
+            'isVerified'
+          ])
         );
       allow delete: if isCompanyOwner(companyId);
 
@@ -1002,14 +986,22 @@ service cloud.firestore {
     }
 
     match /joinRequests/{requestId} {
-      allow create: if signedIn() && validJoinRequestCreate(request.resource.data);
+      allow create: if false;
       allow read: if signedIn() && (
         isFounderAdmin()
         || resource.data.userId == request.auth.uid
         || isCompanyOwnerRole(resource.data.companyId)
       );
-      allow update: if signedIn() && isCompanyOwnerRole(resource.data.companyId);
+      allow update: if false;
       allow delete: if false;
+    }
+
+    match /companyInvites/{inviteId} {
+      allow read, write: if false;
+    }
+
+    match /securityRateLimits/{limitId} {
+      allow read, write: if false;
     }
 
     match /notifications/{notificationId} {

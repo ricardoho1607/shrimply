@@ -28,22 +28,6 @@ import { auth } from '../config/firebase';
 
 WebBrowser.maybeCompleteAuthSession();
 
-interface InviteInfo {
-  email: string;
-  role: 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
-  message?: string;
-}
-
-const ROLE_DEFINITIONS = {
-  owner: 'Farm Owner',
-  'co-owner': 'Co-owner',
-  manager: 'Farm Manager',
-  technician: 'Aquaculture Technician',
-  mechanic: 'Mechanic',
-  admin: 'System Administrator',
-  buyer: 'Buyer'
-};
-
 const GoogleSignInButton = ({ loading, signInWithGoogle, inviteToken }: {
   loading: boolean;
   signInWithGoogle: (inviteToken?: string, idToken?: string) => Promise<void>;
@@ -97,8 +81,6 @@ export default function AuthScreen() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [keepMeSignedIn, setKeepMeSignedIn] = useState(true);
-  const [inviteInfo, setInviteInfo] = useState<InviteInfo | null>(null);
-
   // Get safe area insets for proper spacing
   const insets = useSafeAreaInsets();
 
@@ -106,7 +88,7 @@ export default function AuthScreen() {
   const logoTranslateY = useMemo(() => new Animated.Value(0), []);
   const logoOpacity = useMemo(() => new Animated.Value(1), []);
 
-  const { signIn, signUp, signInWithGoogle, loading, checkInviteToken } = useAuth();
+  const { signIn, signUp, signInWithGoogle, loading } = useAuth();
   const params = useLocalSearchParams();
   const inviteToken = useMemo(() => params.token as string, [params.token]);
   const isFormValid = useMemo(() => email.trim() && password.trim(), [email, password]);
@@ -158,22 +140,8 @@ export default function AuthScreen() {
 
   useEffect(() => {
     if (!inviteToken) return;
-    const handleInviteToken = async () => {
-      try {
-        const invite = await checkInviteToken(inviteToken);
-        if (invite) {
-          setInviteInfo(invite);
-          setEmail(invite.email);
-          setIsLogin(false);
-        } else {
-          Alert.alert('Invalid Invitation', 'This invitation link is invalid or has expired.');
-        }
-      } catch (error) {
-        console.error('Error checking invite token:', error);
-      }
-    };
-    handleInviteToken();
-  }, [inviteToken, checkInviteToken]);
+    setIsLogin(false);
+  }, [inviteToken]);
 
   const handleAuth = useCallback(async () => {
     if (!isFormValid) return Alert.alert('Error', 'Please fill in all fields');
@@ -185,7 +153,10 @@ export default function AuthScreen() {
       }
     } catch (error: any) {
       console.error('Authentication failed:', error);
-      Alert.alert('Error', isLogin ? 'We could not sign you in. Please check your details and try again.' : 'We could not create your account. Please check your details and try again.');
+      const fallbackMessage = isLogin
+        ? 'We could not sign you in. Please check your details and try again.'
+        : 'We could not create your account. Please check your details and try again.';
+      Alert.alert('Error', inviteToken && error instanceof Error ? error.message : fallbackMessage);
     }
   }, [isFormValid, isLogin, signIn, signUp, email, password, inviteToken, keepMeSignedIn]);
 
@@ -208,36 +179,33 @@ export default function AuthScreen() {
   const toggleAuthMode = useCallback(() => {
     if (!loading) {
       setIsLogin(prev => !prev);
-      setEmail(inviteInfo?.email || '');
+      setEmail('');
       setPassword('');
     }
-  }, [loading, inviteInfo?.email]);
+  }, [loading]);
 
   const InviteBanner = useMemo(() => {
-    if (!inviteInfo) return null;
+    if (!inviteToken) return null;
     return (
       <View style={styles.inviteBanner}>
         <View style={styles.inviteIconContainer}>
           <Ionicons name="mail-open" size={24} color="#0d2137" />
         </View>
-        <Text style={styles.inviteTitle}>You're Invited!</Text>
-        <Text style={styles.inviteMessage}>Join as a {ROLE_DEFINITIONS[inviteInfo.role]}</Text>
-        {inviteInfo.message && (
-          <Text style={styles.invitePersonalMessage}>"{inviteInfo.message}"</Text>
-        )}
+        <Text style={styles.inviteTitle}>{'You’re Invited!'}</Text>
+        <Text style={styles.inviteMessage}>Use the invited email address to join the team.</Text>
       </View>
     );
-  }, [inviteInfo]);
+  }, [inviteToken]);
 
   const formTitle = useMemo(() => {
-    if (inviteInfo) return isLogin ? 'Sign in to join' : 'Create your account';
+    if (inviteToken) return isLogin ? 'Sign in to join' : 'Create your account';
     return isLogin ? 'Welcome Back' : 'Welcome';
-  }, [inviteInfo, isLogin]);
+  }, [inviteToken, isLogin]);
 
   const buttonText = useMemo(() => {
-    if (inviteInfo) return isLogin ? 'Sign In & Join Team' : 'Create Account & Join';
+    if (inviteToken) return isLogin ? 'Sign In & Join Team' : 'Create Account & Join';
     return isLogin ? 'Sign In' : 'Sign Up';
-  }, [inviteInfo, isLogin]);
+  }, [inviteToken, isLogin]);
 
   if (!fontsLoaded) return (
     <SafeAreaView style={[styles.container, styles.loadingContainer]}>
@@ -272,7 +240,7 @@ export default function AuthScreen() {
             <View style={styles.inputContainer}>
               <Ionicons name="mail-outline" size={20} color="#315f57" style={styles.inputIcon} />
               <TextInput
-                style={[styles.input, inviteInfo && styles.inputReadonly]}
+                style={styles.input}
                 placeholder="Email"
                 placeholderTextColor="#6b8aa0"
                 value={email}
@@ -280,11 +248,10 @@ export default function AuthScreen() {
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!loading && !inviteInfo}
+                editable={!loading}
                 autoComplete="email"
                 textContentType="emailAddress"
               />
-              {inviteInfo && <Ionicons name="lock-closed" size={16} color="#dce8f2" />}
             </View>
 
             <View style={styles.inputContainer}>
@@ -323,7 +290,7 @@ export default function AuthScreen() {
                 </Text>
               </TouchableOpacity>
 
-              {isLogin && !inviteInfo && (
+              {isLogin && (
                 <TouchableOpacity style={styles.forgotPasswordButton} onPress={handleForgotPassword} disabled={loading}>
                   <Text style={styles.forgotPasswordText}>Forgot?</Text>
                 </TouchableOpacity>
@@ -350,25 +317,14 @@ export default function AuthScreen() {
               inviteToken={inviteToken}
             />
 
-            {!inviteInfo && (
-              <TouchableOpacity style={styles.switchButton} onPress={toggleAuthMode} disabled={loading}>
-                <Text style={[styles.switchText, loading && styles.switchTextDisabled]}>
-                  {isLogin ? "I'm a new user. " : "Already have an account? "}
-                  <Text style={[styles.switchLinkText, loading && styles.switchTextDisabled]}>
-                    {isLogin ? 'Sign Up' : 'Sign In'}
-                  </Text>
+            <TouchableOpacity style={styles.switchButton} onPress={toggleAuthMode} disabled={loading}>
+              <Text style={[styles.switchText, loading && styles.switchTextDisabled]}>
+                {isLogin ? "I'm a new user. " : "Already have an account? "}
+                <Text style={[styles.switchLinkText, loading && styles.switchTextDisabled]}>
+                  {isLogin ? 'Sign Up' : 'Sign In'}
                 </Text>
-              </TouchableOpacity>
-            )}
-
-            {inviteInfo && !isLogin && (
-              <TouchableOpacity style={styles.switchButton} onPress={() => setIsLogin(true)} disabled={loading}>
-                <Text style={[styles.switchText, loading && styles.switchTextDisabled]}>
-                  Already have an account?
-                  <Text style={[styles.switchLinkText, loading && styles.switchTextDisabled]}> Sign In </Text>
-                </Text>
-              </TouchableOpacity>
-            )}
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </KeyboardAvoidingView>

@@ -9,7 +9,9 @@
     "ios": "expo run:ios",
     "web": "expo start --web --host 127.0.0.1",
     "lint": "expo lint",
-    "check:android-release": "node ./scripts/check-android-release-integrity.js"
+    "check:android-release": "node ./scripts/check-android-release-integrity.js",
+    "test:team-security": "node --test functions/teamAccessPolicy.test.js functions/teamAccessRules.test.js",
+    "test:team-security:emulator": "node --test functions/teamAccessRules.emulator.test.js"
   },
   "dependencies": {
     "@expo-google-fonts/libre-baskerville": "^0.4.2",
@@ -63,6 +65,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/react": "~19.1.10",
     "babel-plugin-transform-import-meta": "^2.3.3",
     "babel-plugin-transform-remove-console": "^6.9.4",

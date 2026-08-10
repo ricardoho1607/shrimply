@@ -12,10 +12,11 @@ import {
   browserLocalPersistence,
   browserSessionPersistence,
   sendPasswordResetEmail,
+  sendEmailVerification,
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
-  arrayUnion, serverTimestamp, onSnapshot, addDoc, writeBatch, deleteField
+  serverTimestamp, onSnapshot, deleteField
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
@@ -84,7 +85,7 @@ interface PendingInvite {
   inviteToken: string;
   inviteDate: string;
   message?: string;
-  status: 'pending' | 'accepted' | 'expired';
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
   companyId?: string;
 }
 
@@ -272,6 +273,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const acceptInviteAfterAuth = async (inviteToken?: string) => {
     if (!inviteToken) return;
+    if (!auth.currentUser?.emailVerified) {
+      if (auth.currentUser) {
+        try {
+          await sendEmailVerification(auth.currentUser);
+        } finally {
+          await firebaseSignOut(auth);
+        }
+      }
+      throw new Error('Verification email sent. Verify your email, then reopen the invitation link to join the company.');
+    }
+    await auth.currentUser.getIdToken(true);
     const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await acceptCompanyInvite({ inviteToken });
   };
@@ -428,27 +440,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
     if (!user) throw new Error('User must be authenticated to request joining a company');
     if (user.companyId) throw new Error('You are already part of a company');
-
-    const existingRequestQuery = query(
-      collection(db, 'joinRequests'),
-      where('userId', '==', user.uid),
-      where('companyId', '==', request.companyId),
-      where('status', '==', 'pending')
-    );
-    const existingRequests = await getDocs(existingRequestQuery);
-    if (!existingRequests.empty) throw new Error('You already have a pending request for this company');
-
-    const joinRequest: Record<string, unknown> = {
-      companyId: request.companyId,
-      userId: user.uid,
-      userName: user.name || user.email.split('@')[0],
-      userEmail: user.email,
-      requestedRole: request.requestedRole,
-      requestedAt: new Date().toISOString(),
-      status: 'pending',
-    };
-    if (request.message) joinRequest.message = request.message;
-    await addDoc(collection(db, 'joinRequests'), joinRequest);
+    if (!auth.currentUser?.emailVerified) {
+      if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+      throw new Error('Verification email sent. Verify your email before requesting company access.');
+    }
+    await auth.currentUser.getIdToken(true);
+    const createJoinRequest = httpsCallable(firebaseFunctions, 'createCompanyJoinRequest');
+    await createJoinRequest(request);
   }, [user]);
 
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
@@ -499,59 +497,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
-
-    const requestRef = doc(db, 'joinRequests', requestId);
-    const requestDoc = await getDoc(requestRef);
-    if (!requestDoc.exists()) throw new Error('Join request not found');
-
-    const requestData = requestDoc.data() as JoinRequest;
-    if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
-    if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
-
-    const nextTeamMembers = Array.from(new Set([
-      ...(Array.isArray(company.teamMembers) ? company.teamMembers : []),
-      user.uid,
-      requestData.userId,
-    ]));
-    const batch = writeBatch(db);
-    batch.update(requestRef, {
-      status: 'approved',
-      processedBy: user.uid,
-      processedAt: new Date().toISOString(),
-    });
-    batch.update(doc(db, 'companies', company.id), {
-      teamMembers: arrayUnion(user.uid, requestData.userId),
-      updatedAt: serverTimestamp(),
-    });
-    batch.update(doc(db, 'users', requestData.userId), {
-      companyId: company.id,
-      role: requestData.requestedRole,
-      hasCompletedSetup: true,
-      lastActive: serverTimestamp(),
-    });
-    await batch.commit();
-    await syncPublicCompanyMemberCount(company.id, { ...company, teamMembers: nextTeamMembers }).catch((syncError) => {
-      console.warn('Public company member count sync failed after approval:', syncError);
-    });
+    const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
+    await processJoinRequest({ requestId, decision: 'approve' });
     await refreshCompanyData();
   }, [company, refreshCompanyData, user]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
-
-    const requestRef = doc(db, 'joinRequests', requestId);
-    const requestDoc = await getDoc(requestRef);
-    if (!requestDoc.exists()) throw new Error('Join request not found');
-
-    const requestData = requestDoc.data() as JoinRequest;
-    if (requestData.companyId !== company.id) throw new Error('Join request does not belong to this company');
-    if (requestData.status !== 'pending') throw new Error('Join request has already been processed');
-
-    await updateDoc(requestRef, {
-      status: 'rejected',
-      processedBy: user.uid,
-      processedAt: new Date().toISOString(),
-    });
+    const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
+    await processJoinRequest({ requestId, decision: 'reject' });
   }, [company, user]);
 
   const value = useMemo(() => {
