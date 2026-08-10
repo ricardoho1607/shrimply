@@ -32,6 +32,14 @@ const geminiApiKeySecret = defineSecret("GEMINI_API_KEY");
 const TESTER_REQUEST_ADMIN_EMAIL = "ricardofransiskusho@gmail.com";
 const LEGACY_INVITE_TTL_MS = 30 * DAY_MS;
 const MAX_INVITE_TOKEN_LENGTH = 256;
+const TEAM_ACCESS_OPERATIONS = Object.freeze({
+  createCompanyInvite: "createCompanyInvite",
+  revokeCompanyInvite: "revokeCompanyInvite",
+  listCompanyInvites: "listCompanyInvites",
+  createCompanyJoinRequest: "createCompanyJoinRequest",
+  processCompanyJoinRequest: "processCompanyJoinRequest",
+  removeCompanyMember: "removeCompanyMember",
+});
 
 const sanitizeTesterText = (value, maxLength = 400) => (
   typeof value === "string" ? value.trim().slice(0, maxLength) : ""
@@ -355,6 +363,15 @@ exports.listCompanyInvites = onCall(async (request) => {
 });
 
 exports.acceptCompanyInvite = onCall(async (request) => {
+  const operation = typeof request.data?.operation === "string" ? request.data.operation : "";
+  if (operation) {
+    const handlerName = TEAM_ACCESS_OPERATIONS[operation];
+    const handler = handlerName ? exports[handlerName] : null;
+    if (!handler?.run) throw new HttpsError("invalid-argument", "Unsupported team access operation.");
+    const { operation: _operation, ...operationData } = request.data;
+    return handler.run({ ...request, data: operationData });
+  }
+
   const uid = request.auth?.uid;
   const authEmail = request.auth?.token?.email;
   const inviteToken = typeof request.data?.inviteToken === "string" ? request.data.inviteToken.trim() : "";

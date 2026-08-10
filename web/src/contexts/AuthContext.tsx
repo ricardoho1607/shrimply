@@ -445,8 +445,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Verification email sent. Verify your email before requesting company access.');
     }
     await auth.currentUser.getIdToken(true);
-    const createJoinRequest = httpsCallable(firebaseFunctions, 'createCompanyJoinRequest');
-    await createJoinRequest(request);
+    const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await teamAccess({ operation: 'createCompanyJoinRequest', ...request });
   }, [user]);
 
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
@@ -497,15 +497,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
-    const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
-    await processJoinRequest({ requestId, decision: 'approve' });
+    const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'approve' });
     await refreshCompanyData();
   }, [company, refreshCompanyData, user]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
-    const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
-    await processJoinRequest({ requestId, decision: 'reject' });
+    const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
   }, [company, user]);
 
   const value = useMemo(() => {

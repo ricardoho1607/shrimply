@@ -668,8 +668,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       throw new Error('Verification email sent. Verify your email before requesting company access.');
     }
     await auth.currentUser.getIdToken(true);
-    const createJoinRequest = httpsCallable(firebaseFunctions, 'createCompanyJoinRequest');
-    await createJoinRequest(request);
+    const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await teamAccess({ operation: 'createCompanyJoinRequest', ...request });
   }, [user]);
 
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
@@ -736,8 +736,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
     try {
-      const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
-      await processJoinRequest({ requestId, decision: 'approve' });
+      const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+      await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'approve' });
       await refreshCompanyData();
     } catch (error) {
       console.error('Error approving join request:', error);
@@ -748,8 +748,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
     try {
-      const processJoinRequest = httpsCallable(firebaseFunctions, 'processCompanyJoinRequest');
-      await processJoinRequest({ requestId, decision: 'reject' });
+      const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+      await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
     } catch (error) {
       console.error('Error rejecting join request:', error);
       throw error;
@@ -765,8 +765,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isProtectedOwnerRole(memberRole) || memberId === company.ownerId) {
         throw new Error('Owners and co-owners cannot be removed from the team');
       }
-      const removeCompanyMember = httpsCallable(firebaseFunctions, 'removeCompanyMember');
-      await removeCompanyMember({ companyId: company.id, memberId });
+      const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+      await teamAccess({ operation: 'removeCompanyMember', companyId: company.id, memberId });
       await refreshCompanyData();
     } catch (error) {
       console.error('Error removing member:', error);
@@ -782,10 +782,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     await auth.currentUser.getIdToken(true);
     const createInvite = httpsCallable<
-      { companyId: string; email: string; role: StaffRole; message?: string },
+      { operation: 'createCompanyInvite'; companyId: string; email: string; role: StaffRole; message?: string },
       CompanyInviteResult
-    >(firebaseFunctions, 'createCompanyInvite');
-    const response = await createInvite({ companyId: company.id, ...inviteData });
+    >(firebaseFunctions, 'acceptCompanyInvite');
+    const response = await createInvite({ operation: 'createCompanyInvite', companyId: company.id, ...inviteData });
     return response.data;
   }, [user, company]);
 
@@ -849,10 +849,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     if (isOwnerRole(user?.role) && auth.currentUser?.emailVerified) {
       const listInvites = httpsCallable<
-        { companyId: string },
+        { operation: 'listCompanyInvites'; companyId: string },
         { invites: { id: string; email: string; role: UserRole; status: string; createdAt: number | null }[] }
-      >(firebaseFunctions, 'listCompanyInvites');
-      const response = await listInvites({ companyId: company.id });
+      >(firebaseFunctions, 'acceptCompanyInvite');
+      const response = await listInvites({ operation: 'listCompanyInvites', companyId: company.id });
       response.data.invites.forEach((invite) => {
         if (invite.status !== 'pending') return;
         members.push({

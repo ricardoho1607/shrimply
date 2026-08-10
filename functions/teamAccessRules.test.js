@@ -33,9 +33,16 @@ test("mobile and web join decisions use trusted callables", () => {
     const source = read(clientPath);
     assert.match(source, /createCompanyJoinRequest/);
     assert.match(source, /processCompanyJoinRequest/);
+    assert.match(source, /httpsCallable\(firebaseFunctions, ['"]acceptCompanyInvite['"]\)/);
     assert.doesNotMatch(source, /addDoc\(collection\(db, ['"]joinRequests['"]/);
     assert.doesNotMatch(source, /batch\.update\(doc\(db, ['"]joinRequests['"]/);
   }
+});
+
+test("team operations can use the existing public callable during IAM rollout", () => {
+  const source = read("functions/index.js");
+  assert.match(source, /TEAM_ACCESS_OPERATIONS = Object\.freeze/);
+  assert.match(source, /return handler\.run\(\{ \.\.\.request, data: operationData \}\)/);
 });
 
 test("legacy invite secrets are no longer created or logged by the mobile client", () => {
