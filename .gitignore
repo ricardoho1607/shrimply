@@ -26,6 +26,12 @@ build/
 .env.local
 *.jks
 *.keystore
+credentials.json
+*.p12
+*.pfx
+*.pk8
+*.pepk
+*service-account*.json
 google-services.json
 
 # Misc

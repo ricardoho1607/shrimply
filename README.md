@@ -2,6 +2,14 @@
 
 This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
 
+## Android production releases
+
+- The production package is `com.shrimply.tech.investashrimp`.
+- Production AABs must use the EAS `production` profile with remote credentials.
+- Run `npm run check:android-release` before starting a production build.
+- Direct Gradle release builds fail unless a non-debug release signing configuration is explicitly injected.
+- Never commit upload keystores, signing passwords, `credentials.json`, or Play service-account files.
+
 ## Get started
 
 1. Install dependencies

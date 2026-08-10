@@ -110,9 +110,6 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds
@@ -129,6 +126,19 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+    }
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def releaseTask = taskGraph.allTasks.find { task ->
+        task.project == project && ['bundleRelease', 'assembleRelease'].contains(task.name)
+    }
+    def releaseSigningConfig = android.buildTypes.release.signingConfig
+
+    if (releaseTask != null && (releaseSigningConfig == null || releaseSigningConfig.name == 'debug')) {
+        throw new GradleException(
+            'Release signing credentials are not configured. Use the EAS production profile or inject an explicit non-debug release signing configuration.'
+        )
     }
 }
 
