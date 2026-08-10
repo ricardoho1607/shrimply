@@ -45,6 +45,7 @@ const formatMetric = (value: number | null | undefined, unit: string, decimals =
 
 const getRemoteOrsonLimit = (error: any): {
   aiFunction: OrsonAiFunction;
+  quota: OrsonAiFunction | 'total';
   limit: number;
   used: number;
 } | null => {
@@ -55,6 +56,7 @@ const getRemoteOrsonLimit = (error: any): {
   if (!Number.isFinite(details.limit) || !Number.isFinite(details.used)) return null;
   return {
     aiFunction: details.aiFunction,
+    quota: details.quota === 'total' ? 'total' : details.aiFunction,
     limit: Number(details.limit),
     used: Number(details.used),
   };
@@ -211,13 +213,16 @@ export const useGemini = () => {
         }
       }
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; prompt: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
+        { companyId?: string; systemInstruction: string; prompt: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
         { text?: string }
       >(functions, 'generateOrsonResponse');
 
       const result = await withOrsonTimeout(
         generateOrsonResponse({
           companyId: options.companyId,
+          // Retained until older deployed Functions no longer require this field.
+          // The hardened Function ignores it and builds its own server instruction.
+          systemInstruction: analysis.promptPackage.systemInstruction,
           prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
@@ -247,7 +252,9 @@ export const useGemini = () => {
 
       const remoteLimit = getRemoteOrsonLimit(err);
       if (remoteLimit) {
-        const label = remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';
+        const label = remoteLimit.quota === 'total'
+          ? 'request'
+          : remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';
         setError("Daily limit reached.");
         return `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after the daily reset.`;
       }

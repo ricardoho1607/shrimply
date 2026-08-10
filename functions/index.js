@@ -4,6 +4,11 @@ const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const {
+  ORSON_DAILY_LIMITS,
+  evaluateOrsonQuota,
+  resolveOrsonAiFunction,
+} = require("./orsonRequestPolicy");
 
 admin.initializeApp();
 
@@ -453,10 +458,9 @@ exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request
   return loadOrsonMortalityContext(db, company, companyId, pondId, requestedEndDate);
 });
 
-const ORSON_DAILY_LIMITS = Object.freeze({ chat: 20, projection: 5 });
 const ORSON_MAX_PROMPT_CHARS = 60000;
 
-const buildServerOrsonSystemInstruction = (mode = "standard") => [
+const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat") => [
   "IDENTITY: You are Orson, Shrimply's aquaculture intelligence assistant.",
   "PRODUCT PROMISE: Orson provides biological risk detection and 72-hour outlooks from farm data.",
   "",
@@ -490,6 +494,9 @@ const buildServerOrsonSystemInstruction = (mode = "standard") => [
   "- State confidence and missing data when they materially affect the conclusion.",
   "- Prioritize critical and warning findings before watch/info findings.",
   "- Do not provide exact chemical dose rates unless the payload includes pond volume, product concentration, and farm protocol.",
+  ...(aiFunction === "chat" ? [
+    "- Do not calculate or provide a structured harvest projection or operating-profit comparison in chat. Direct the user to Shrimply's Harvest Projection screen for that analysis.",
+  ] : []),
   "",
   "UNSUPPORTED CLAIMS:",
   "- Do not claim guaranteed disease prediction; Orson detects biological risk patterns and stress signals.",
@@ -509,7 +516,6 @@ const buildServerOrsonSystemInstruction = (mode = "standard") => [
 ].join("\n");
 
 const reserveServerOrsonRequest = async (db, companyId, aiFunction, timeZone) => {
-  const limit = ORSON_DAILY_LIMITS[aiFunction];
   const dateKey = farmDateKey(timeZone);
   const usageRef = db.collection("companies").doc(companyId).collection("orsonUsage").doc(dateKey);
 
@@ -517,30 +523,31 @@ const reserveServerOrsonRequest = async (db, companyId, aiFunction, timeZone) =>
     const usageSnap = await transaction.get(usageRef);
     const usage = usageSnap.exists ? usageSnap.data() || {} : {};
     const functions = usage.functions && typeof usage.functions === "object" ? usage.functions : {};
-    const chat = Number.isInteger(functions.chat) && functions.chat >= 0 ? functions.chat : 0;
-    const projection = Number.isInteger(functions.projection) && functions.projection >= 0 ? functions.projection : 0;
-    const currentCount = aiFunction === "projection" ? projection : chat;
+    const quota = evaluateOrsonQuota(functions, aiFunction);
 
-    if (currentCount >= limit) {
-      throw new HttpsError("resource-exhausted", `Orson ${aiFunction} daily limit reached (${currentCount}/${limit}).`, {
+    if (!quota.allowed) {
+      throw new HttpsError("resource-exhausted", `Orson ${quota.quota} daily limit reached (${quota.used}/${quota.limit}).`, {
         aiFunction,
-        limit,
-        used: currentCount,
+        quota: quota.quota,
+        limit: quota.limit,
+        used: quota.used,
         dateKey,
       });
     }
 
-    const nextCount = currentCount + 1;
     transaction.set(usageRef, {
       dateKey,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      functions: {
-        chat: aiFunction === "chat" ? nextCount : chat,
-        projection: aiFunction === "projection" ? nextCount : projection,
-      },
+      functions: quota.next,
     }, { merge: true });
 
-    return { dateKey, aiFunction, limit, used: nextCount, remaining: Math.max(limit - nextCount, 0) };
+    return {
+      dateKey,
+      aiFunction,
+      limit: ORSON_DAILY_LIMITS[aiFunction],
+      used: quota.next[aiFunction],
+      remaining: Math.max(ORSON_DAILY_LIMITS[aiFunction] - quota.next[aiFunction], 0),
+    };
   });
 };
 
@@ -550,7 +557,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
   const operation = request.data?.operation === "mortality_context" ? "mortality_context" : "generate";
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt.trim() : "";
   const mode = request.data?.mode === "mortality_diagnostic" ? "mortality_diagnostic" : "standard";
-  const aiFunction = request.data?.aiFunction === "projection" ? "projection" : "chat";
+  const aiFunction = resolveOrsonAiFunction(request.data);
 
   const db = admin.firestore();
   const company = await assertCompanyMemberForCallable(db, uid, companyId);
@@ -587,7 +594,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({
       model: LAB_INSIGHT_MODEL,
-      systemInstruction: buildServerOrsonSystemInstruction(mode),
+      systemInstruction: buildServerOrsonSystemInstruction(mode, aiFunction),
       generationConfig: {
         temperature: 0.5,
         maxOutputTokens: mode === "mortality_diagnostic" ? 1100 : 512,
