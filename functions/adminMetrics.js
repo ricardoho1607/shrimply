@@ -1,5 +1,5 @@
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
-const admin = require("firebase-admin");
+const admin = require("./firebaseAdmin");
 
 const ADMIN_EMAILS = new Set(["ricardofransiskusho@gmail.com"]);
 

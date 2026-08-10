@@ -2,7 +2,7 @@ const { onDocumentCreated, onDocumentUpdated, onDocumentWritten } = require("fir
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
-const admin = require("firebase-admin");
+const admin = require("./firebaseAdmin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const {
   ORSON_DAILY_LIMITS,
