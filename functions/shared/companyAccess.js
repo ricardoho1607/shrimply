@@ -1,0 +1,33 @@
+const { HttpsError } = require("firebase-functions/v2/https");
+
+const assertCompanyMemberForCallable = async (db, uid, companyId) => {
+  if (!uid) {
+    throw new HttpsError("unauthenticated", "You must be signed in.");
+  }
+  if (
+    !companyId
+    || typeof companyId !== "string"
+    || companyId !== companyId.trim()
+    || companyId.length > 160
+    || companyId.includes("/")
+  ) {
+    throw new HttpsError("invalid-argument", "companyId is required.");
+  }
+
+  const [companySnap, userSnap] = await Promise.all([
+    db.collection("companies").doc(companyId).get(),
+    db.collection("users").doc(uid).get(),
+  ]);
+  if (!companySnap.exists) {
+    throw new HttpsError("not-found", "Company not found.");
+  }
+  const company = companySnap.data() || {};
+  const user = userSnap.exists ? userSnap.data() : null;
+  const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
+  if (company.ownerId !== uid && !(teamMembers.includes(uid) && user?.companyId === companyId)) {
+    throw new HttpsError("permission-denied", "You do not have access to this company.");
+  }
+  return company;
+};
+
+module.exports = { assertCompanyMemberForCallable };

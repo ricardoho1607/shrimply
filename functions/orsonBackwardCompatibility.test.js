@@ -15,7 +15,7 @@ test("new clients retain the legacy callable fields during the backend rollout",
 });
 
 test("the backend and rules retain installed-client data paths", () => {
-  const backend = read("functions/index.js");
+  const backend = read("functions/orson.js");
   const rules = read("firestore.rules");
 
   assert.match(backend, /request\.data\?\.operation === ["']mortality_context["']/);

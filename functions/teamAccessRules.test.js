@@ -23,7 +23,7 @@ test("company membership requires reciprocal company and user records", () => {
 });
 
 test("join requests use one transactional record per user", () => {
-  const source = read("functions/index.js");
+  const source = read("functions/teamAccess.js");
   assert.match(source, /collection\("joinRequests"\)\.doc\(uid\)/);
   assert.match(source, /runTransaction[\s\S]*?transaction\.get\(requestRef\)[\s\S]*?transaction\.set\(requestRef/);
 });
@@ -40,7 +40,7 @@ test("mobile and web join decisions use trusted callables", () => {
 });
 
 test("team operations can use the existing public callable during IAM rollout", () => {
-  const source = read("functions/index.js");
+  const source = read("functions/teamAccess.js");
   assert.match(source, /TEAM_ACCESS_OPERATIONS = Object\.freeze/);
   assert.match(source, /return handler\.run\(\{ \.\.\.request, data: operationData \}\)/);
 });

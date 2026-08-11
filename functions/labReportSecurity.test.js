@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
-const functionsSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+const functionsSource = fs.readFileSync(path.join(__dirname, "orson.js"), "utf8");
 const rules = fs.readFileSync(path.join(root, "firestore.rules"), "utf8");
 
 test("confirmed lab processing bounds client-controlled ponds before server writes", () => {

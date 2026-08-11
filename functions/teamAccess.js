@@ -1,0 +1,592 @@
+const { HttpsError, onCall } = require("firebase-functions/v2/https");
+const admin = require("./firebaseAdmin");
+const {
+  STAFF_ROLES,
+  buildSecureInvite,
+  evaluateInviteAcceptance,
+  evaluateJoinApproval,
+  hashInviteToken,
+  normalizeEmail,
+  toMillis: policyToMillis,
+} = require("./teamAccessPolicy");
+
+const DAY_MS = 1000 * 60 * 60 * 24;
+const LEGACY_INVITE_TTL_MS = 30 * DAY_MS;
+const MAX_INVITE_TOKEN_LENGTH = 256;
+const TEAM_ACCESS_OPERATIONS = Object.freeze({
+  createCompanyInvite: "createCompanyInvite",
+  revokeCompanyInvite: "revokeCompanyInvite",
+  listCompanyInvites: "listCompanyInvites",
+  createCompanyJoinRequest: "createCompanyJoinRequest",
+  processCompanyJoinRequest: "processCompanyJoinRequest",
+  removeCompanyMember: "removeCompanyMember",
+});
+const isVerifiedAuth = (request) => request.auth?.token?.email_verified === true;
+
+const isCompanyOwnerOrCoOwner = (company, user, uid) => (
+  company?.ownerId === uid
+  || (
+    Array.isArray(company?.teamMembers)
+    && company.teamMembers.includes(uid)
+    && user?.companyId === company.id
+    && user?.role === "co-owner"
+  )
+);
+
+const publicMemberCountFor = (company, additionalMemberId = null, removedMemberId = null) => new Set([
+  ...(Array.isArray(company?.teamMembers) ? company.teamMembers : []),
+  company?.ownerId,
+  additionalMemberId,
+].filter((memberId) => (
+  typeof memberId === "string"
+  && memberId.trim()
+  && memberId !== removedMemberId
+))).size;
+
+const inviteAcceptanceError = (reason) => {
+  if (reason === "email-unverified") {
+    return new HttpsError("failed-precondition", "Verify your email address before accepting this invitation.");
+  }
+  if (reason === "already-in-another-company") {
+    return new HttpsError("failed-precondition", "Leave your current company before joining another company.");
+  }
+  return new HttpsError("permission-denied", "This invitation cannot be accepted.");
+};
+
+const enforceInviteAttemptLimit = async (db, uid) => {
+  const rateRef = db.collection("securityRateLimits").doc(`inviteAccept_${uid}`);
+  const nowMs = Date.now();
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(rateRef);
+    const data = snapshot.exists ? snapshot.data() : {};
+    const windowStartedAtMs = policyToMillis(data.windowStartedAt) || 0;
+    const currentCount = typeof data.count === "number" ? data.count : 0;
+    const inCurrentWindow = nowMs - windowStartedAtMs < 15 * 60 * 1000;
+    if (inCurrentWindow && currentCount >= 20) {
+      throw new HttpsError("resource-exhausted", "Too many invitation attempts. Try again later.");
+    }
+    transaction.set(rateRef, {
+      count: inCurrentWindow ? currentCount + 1 : 1,
+      windowStartedAt: inCurrentWindow && windowStartedAtMs
+        ? admin.firestore.Timestamp.fromMillis(windowStartedAtMs)
+        : admin.firestore.Timestamp.fromMillis(nowMs),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+};
+
+exports.createCompanyInvite = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const authEmail = request.auth?.token?.email;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  const email = normalizeEmail(request.data?.email);
+  const role = typeof request.data?.role === "string" ? request.data.role.trim() : "";
+  const message = typeof request.data?.message === "string" ? request.data.message.trim().slice(0, 500) : "";
+
+  if (!uid || !authEmail) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before creating invitations.");
+  if (!companyId || companyId.length > 160 || !isValidEmail(email) || !STAFF_ROLES.has(role)) {
+    throw new HttpsError("invalid-argument", "A valid company, email, and role are required.");
+  }
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const userRef = db.collection("users").doc(uid);
+  const generated = buildSecureInvite({ companyId, email, role, createdBy: uid, message });
+  const { createdAtMs, expiresAtMs, ...record } = generated.record;
+  const inviteRef = db.collection("companyInvites").doc(generated.inviteId);
+  await db.runTransaction(async (transaction) => {
+    const [companySnap, userSnap, existingInvites] = await Promise.all([
+      transaction.get(companyRef),
+      transaction.get(userRef),
+      transaction.get(db.collection("companyInvites").where("companyId", "==", companyId)),
+    ]);
+    if (!companySnap.exists) throw new HttpsError("not-found", "Company not found.");
+
+    const company = { ...companySnap.data(), id: companySnap.id };
+    const user = userSnap.exists ? userSnap.data() : null;
+    if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+      throw new HttpsError("permission-denied", "Only company owners and co-owners can create invitations.");
+    }
+    if (role === "co-owner" && company.ownerId !== uid) {
+      throw new HttpsError("permission-denied", "Only the company owner can invite a co-owner.");
+    }
+
+    const pendingSecureInvites = existingInvites.docs.filter((document) => document.data().status === "pending");
+    const pendingLegacyInvites = Array.isArray(company.pendingInvites)
+      ? company.pendingInvites.filter((invite) => invite.status === "pending")
+      : [];
+    if (pendingSecureInvites.some((document) => normalizeEmail(document.data().emailNormalized) === email)) {
+      throw new HttpsError("already-exists", "This email already has a pending invitation.");
+    }
+    if (pendingSecureInvites.length + pendingLegacyInvites.length >= 50) {
+      throw new HttpsError("resource-exhausted", "Revoke unused invitations before creating more.");
+    }
+    const recentInviteCount = existingInvites.docs.filter((document) => (
+      Date.now() - (policyToMillis(document.data().createdAt) || 0) < 60 * 60 * 1000
+    )).length;
+    if (recentInviteCount >= 20) {
+      throw new HttpsError("resource-exhausted", "Invitation creation is temporarily limited. Try again later.");
+    }
+
+    transaction.create(inviteRef, {
+      ...record,
+      createdAt: admin.firestore.Timestamp.fromMillis(createdAtMs),
+      expiresAt: admin.firestore.Timestamp.fromMillis(expiresAtMs),
+    });
+  });
+
+  return {
+    inviteId: generated.inviteId,
+    inviteToken: generated.token,
+    inviteLink: `shrimply://auth?token=${encodeURIComponent(generated.token)}`,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+  };
+});
+
+exports.revokeCompanyInvite = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const inviteId = typeof request.data?.inviteId === "string" ? request.data.inviteId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before revoking invitations.");
+  if (!/^[a-f0-9]{64}$/.test(inviteId)) throw new HttpsError("invalid-argument", "A valid invite ID is required.");
+
+  const db = admin.firestore();
+  const inviteRef = db.collection("companyInvites").doc(inviteId);
+  await db.runTransaction(async (transaction) => {
+    const inviteSnap = await transaction.get(inviteRef);
+    if (!inviteSnap.exists) throw new HttpsError("not-found", "Invitation not found.");
+    const invite = inviteSnap.data();
+    const companyRef = db.collection("companies").doc(invite.companyId);
+    const userRef = db.collection("users").doc(uid);
+    const [companySnap, userSnap] = await Promise.all([
+      transaction.get(companyRef),
+      transaction.get(userRef),
+    ]);
+    const company = companySnap.exists ? { ...companySnap.data(), id: companySnap.id } : null;
+    const user = userSnap.exists ? userSnap.data() : null;
+    if (!company || !isCompanyOwnerOrCoOwner(company, user, uid)) {
+      throw new HttpsError("permission-denied", "You cannot revoke this invitation.");
+    }
+    if (invite.status !== "pending") throw new HttpsError("failed-precondition", "Invitation is no longer pending.");
+    transaction.update(inviteRef, {
+      status: "revoked",
+      revokedAt: admin.firestore.FieldValue.serverTimestamp(),
+      revokedBy: uid,
+    });
+  });
+  return { success: true };
+});
+
+exports.listCompanyInvites = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before viewing invitations.");
+  if (!companyId || companyId.length > 160) throw new HttpsError("invalid-argument", "A valid company is required.");
+
+  const db = admin.firestore();
+  const [companySnap, userSnap, invitesSnap] = await Promise.all([
+    db.collection("companies").doc(companyId).get(),
+    db.collection("users").doc(uid).get(),
+    db.collection("companyInvites").where("companyId", "==", companyId).get(),
+  ]);
+  const company = companySnap.exists ? { ...companySnap.data(), id: companySnap.id } : null;
+  const user = userSnap.exists ? userSnap.data() : null;
+  if (!company || !isCompanyOwnerOrCoOwner(company, user, uid)) {
+    throw new HttpsError("permission-denied", "You cannot view these invitations.");
+  }
+
+  return {
+    invites: invitesSnap.docs.map((document) => {
+      const invite = document.data();
+      return {
+        id: document.id,
+        email: invite.emailNormalized,
+        role: invite.role,
+        message: invite.message || null,
+        status: invite.status,
+        createdAt: policyToMillis(invite.createdAt),
+        expiresAt: policyToMillis(invite.expiresAt),
+        acceptedAt: policyToMillis(invite.acceptedAt),
+        acceptedBy: invite.acceptedBy || null,
+      };
+    }),
+  };
+});
+
+exports.acceptCompanyInvite = onCall(async (request) => {
+  const operation = typeof request.data?.operation === "string" ? request.data.operation : "";
+  if (operation) {
+    const handlerName = TEAM_ACCESS_OPERATIONS[operation];
+    const handler = handlerName ? exports[handlerName] : null;
+    if (!handler?.run) throw new HttpsError("invalid-argument", "Unsupported team access operation.");
+    const { operation: _operation, ...operationData } = request.data;
+    return handler.run({ ...request, data: operationData });
+  }
+
+  const uid = request.auth?.uid;
+  const authEmail = request.auth?.token?.email;
+  const inviteToken = typeof request.data?.inviteToken === "string" ? request.data.inviteToken.trim() : "";
+
+  if (!uid || !authEmail) throw new HttpsError("unauthenticated", "You must be signed in to accept an invite.");
+  if (!isVerifiedAuth(request)) throw inviteAcceptanceError("email-unverified");
+  if (!inviteToken || inviteToken.length > MAX_INVITE_TOKEN_LENGTH) {
+    throw new HttpsError("invalid-argument", "A valid invite token is required.");
+  }
+
+  const db = admin.firestore();
+  await enforceInviteAttemptLimit(db, uid);
+  const secureInviteRef = db.collection("companyInvites").doc(hashInviteToken(inviteToken));
+  const secureInviteSnap = await secureInviteRef.get();
+  let inviteMode = secureInviteSnap.exists ? "secure" : "legacy";
+  let targetCompanyRef = secureInviteSnap.exists
+    ? db.collection("companies").doc(secureInviteSnap.data().companyId)
+    : null;
+
+  if (!targetCompanyRef) {
+    const companiesSnapshot = await db.collection("companies").get();
+    for (const companyDoc of companiesSnapshot.docs) {
+      const companyData = companyDoc.data();
+      const invite = Array.isArray(companyData.pendingInvites)
+        ? companyData.pendingInvites.find((item) => item.inviteToken === inviteToken && item.status === "pending")
+        : null;
+      if (invite) {
+        targetCompanyRef = companyDoc.ref;
+        break;
+      }
+    }
+  }
+
+  if (!targetCompanyRef) throw inviteAcceptanceError("invite-not-pending");
+
+  const result = await db.runTransaction(async (transaction) => {
+    const companyRef = targetCompanyRef;
+    const userRef = db.collection("users").doc(uid);
+    const publicProfileRef = db.collection("publicCompanyProfiles").doc(companyRef.id);
+    const reads = [
+      transaction.get(companyRef),
+      transaction.get(userRef),
+      transaction.get(publicProfileRef),
+      transaction.get(db.collection("companies").where("ownerId", "==", uid)),
+    ];
+    if (inviteMode === "secure") reads.push(transaction.get(secureInviteRef));
+    const [companySnap, userSnap, publicProfileSnap, ownedCompaniesSnap, secureSnap] = await Promise.all(reads);
+    if (!companySnap.exists) throw inviteAcceptanceError("invite-not-pending");
+
+    const company = companySnap.data();
+    const user = userSnap.exists ? userSnap.data() : {};
+    let invite;
+    let updatedInvites = null;
+
+    if (inviteMode === "secure") {
+      invite = secureSnap?.exists ? secureSnap.data() : null;
+    } else {
+      const pendingInvites = Array.isArray(company.pendingInvites) ? company.pendingInvites : [];
+      const inviteIndex = pendingInvites.findIndex((item) => item.inviteToken === inviteToken && item.status === "pending");
+      const legacyInvite = inviteIndex >= 0 ? pendingInvites[inviteIndex] : null;
+      const inviteDateMs = legacyInvite ? policyToMillis(legacyInvite.expiresAt) ?? policyToMillis(legacyInvite.inviteDate) : null;
+      invite = legacyInvite ? {
+        ...legacyInvite,
+        companyId: companyRef.id,
+        emailNormalized: normalizeEmail(legacyInvite.email),
+        expiresAtMs: policyToMillis(legacyInvite.expiresAt)
+          ?? (inviteDateMs === null ? 0 : inviteDateMs + LEGACY_INVITE_TTL_MS),
+      } : null;
+      if (legacyInvite) {
+        updatedInvites = pendingInvites.map((item, index) => (
+          index === inviteIndex ? {
+            ...item,
+            status: "accepted",
+            acceptedAt: admin.firestore.Timestamp.now(),
+            acceptedBy: uid,
+          } : item
+        ));
+      }
+    }
+
+    const evaluation = evaluateInviteAcceptance({
+      invite,
+      authEmail,
+      emailVerified: true,
+      currentCompanyId: user.companyId
+        || ownedCompaniesSnap.docs.find((document) => document.id !== companyRef.id)?.id
+        || null,
+    });
+    if (!evaluation.allowed) throw inviteAcceptanceError(evaluation.reason);
+
+    transaction.update(companyRef, {
+      teamMembers: admin.firestore.FieldValue.arrayUnion(uid),
+      ...(updatedInvites ? { pendingInvites: updatedInvites } : {}),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.set(userRef, {
+      ...(!userSnap.exists ? {
+        id: uid,
+        uid,
+        email: normalizeEmail(authEmail),
+        joinedDate: new Date().toISOString(),
+      } : {}),
+      companyId: companyRef.id,
+      role: evaluation.role,
+      invitedBy: invite.createdBy || invite.invitedBy || null,
+      hasCompletedSetup: true,
+      lastActive: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    if (inviteMode === "secure") {
+      transaction.update(secureInviteRef, {
+        status: "accepted",
+        acceptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        acceptedBy: uid,
+      });
+    }
+    if (publicProfileSnap.exists && publicProfileSnap.data()?.isPublicProfile === true) {
+      transaction.set(publicProfileRef, {
+        publicMemberCount: publicMemberCountFor(company, uid),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    return { companyId: companyRef.id, role: evaluation.role };
+  });
+
+  return result;
+});
+
+exports.createCompanyJoinRequest = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const authEmail = request.auth?.token?.email;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  const requestedRole = typeof request.data?.requestedRole === "string" ? request.data.requestedRole.trim() : "";
+  const message = typeof request.data?.message === "string" ? request.data.message.trim().slice(0, 1000) : "";
+
+  if (!uid || !authEmail) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before requesting company access.");
+  if (!companyId || companyId.length > 160 || !STAFF_ROLES.has(requestedRole)) {
+    throw new HttpsError("invalid-argument", "A valid company and staff role are required.");
+  }
+
+  const db = admin.firestore();
+  const userRef = db.collection("users").doc(uid);
+  const companyRef = db.collection("companies").doc(companyId);
+  const requestRef = db.collection("joinRequests").doc(uid);
+  await db.runTransaction(async (transaction) => {
+    const [userSnap, companySnap, existingRequests, ownedCompanies, requestSnap] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(companyRef),
+      transaction.get(db.collection("joinRequests").where("userId", "==", uid)),
+      transaction.get(db.collection("companies").where("ownerId", "==", uid)),
+      transaction.get(requestRef),
+    ]);
+    if (!userSnap.exists) throw new HttpsError("failed-precondition", "Complete account setup before requesting company access.");
+    if (!companySnap.exists) throw new HttpsError("not-found", "Company not found.");
+
+    const user = userSnap.data();
+    if (user.companyId || !ownedCompanies.empty) throw new HttpsError("failed-precondition", "You already belong to a company.");
+    const pendingRequest = existingRequests.docs.find((document) => document.data().status === "pending");
+    if (pendingRequest) throw new HttpsError("already-exists", "You already have a pending company request.");
+    const latestRequestAt = existingRequests.docs.reduce((latest, document) => (
+      Math.max(latest, policyToMillis(document.data().requestedAt) || 0)
+    ), 0);
+    if (latestRequestAt && Date.now() - latestRequestAt < 60_000) {
+      throw new HttpsError("resource-exhausted", "Wait before submitting another company request.");
+    }
+
+    const now = admin.firestore.Timestamp.now();
+    transaction.set(requestRef, {
+      companyId,
+      userId: uid,
+      userName: typeof user.name === "string" && user.name.trim()
+        ? user.name.trim().slice(0, 120)
+        : normalizeEmail(authEmail).split("@")[0],
+      userEmail: normalizeEmail(authEmail),
+      requestedRole,
+      requestedAt: now,
+      createdAt: requestSnap.exists ? requestSnap.data().createdAt || now : now,
+      status: "pending",
+      ...(message ? { message } : {}),
+    });
+  });
+  return { requestId: requestRef.id, status: "pending" };
+});
+
+exports.processCompanyJoinRequest = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const requestId = typeof request.data?.requestId === "string" ? request.data.requestId.trim() : "";
+  const decision = request.data?.decision;
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before managing company access.");
+  if (!requestId || requestId.length > 160 || !["approve", "reject"].includes(decision)) {
+    throw new HttpsError("invalid-argument", "A valid request and decision are required.");
+  }
+
+  const db = admin.firestore();
+  const requestRef = db.collection("joinRequests").doc(requestId);
+  return db.runTransaction(async (transaction) => {
+    const requestSnap = await transaction.get(requestRef);
+    if (!requestSnap.exists) throw new HttpsError("not-found", "Join request not found.");
+    const joinRequest = requestSnap.data();
+    if (joinRequest.status !== "pending") throw new HttpsError("failed-precondition", "Join request has already been processed.");
+
+    const companyRef = db.collection("companies").doc(joinRequest.companyId);
+    const actorRef = db.collection("users").doc(uid);
+    const targetUserRef = db.collection("users").doc(joinRequest.userId);
+    const publicProfileRef = db.collection("publicCompanyProfiles").doc(joinRequest.companyId);
+    const [companySnap, actorSnap, targetUserSnap, publicProfileSnap, targetOwnedCompaniesSnap] = await Promise.all([
+      transaction.get(companyRef),
+      transaction.get(actorRef),
+      transaction.get(targetUserRef),
+      transaction.get(publicProfileRef),
+      transaction.get(db.collection("companies").where("ownerId", "==", joinRequest.userId)),
+    ]);
+    if (!companySnap.exists || !targetUserSnap.exists) throw new HttpsError("not-found", "Company or user not found.");
+
+    const company = { ...companySnap.data(), id: companySnap.id };
+    const actor = actorSnap.exists ? actorSnap.data() : null;
+    if (!isCompanyOwnerOrCoOwner(company, actor, uid)) {
+      throw new HttpsError("permission-denied", "Only company owners and co-owners can process join requests.");
+    }
+
+    const processedAt = admin.firestore.FieldValue.serverTimestamp();
+    if (decision === "reject") {
+      transaction.update(requestRef, {
+        status: "rejected",
+        processedBy: uid,
+        processedAt,
+      });
+      return { status: "rejected" };
+    }
+
+    const targetUser = targetUserSnap.data();
+    const evaluation = evaluateJoinApproval({
+      request: joinRequest,
+      currentCompanyId: targetUser.companyId
+        || targetOwnedCompaniesSnap.docs.find((document) => document.id !== joinRequest.companyId)?.id
+        || null,
+    });
+    if (!evaluation.allowed) {
+      const code = evaluation.reason === "already-in-another-company" ? "failed-precondition" : "permission-denied";
+      throw new HttpsError(code, "This join request cannot be approved.");
+    }
+    if (evaluation.role === "co-owner" && company.ownerId !== uid) {
+      throw new HttpsError("permission-denied", "Only the company owner can approve a co-owner.");
+    }
+
+    transaction.update(requestRef, {
+      status: "approved",
+      processedBy: uid,
+      processedAt,
+    });
+    transaction.update(companyRef, {
+      teamMembers: admin.firestore.FieldValue.arrayUnion(joinRequest.userId),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    transaction.update(targetUserRef, {
+      companyId: joinRequest.companyId,
+      role: evaluation.role,
+      hasCompletedSetup: true,
+      lastActive: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (publicProfileSnap.exists && publicProfileSnap.data()?.isPublicProfile === true) {
+      transaction.set(publicProfileRef, {
+        publicMemberCount: publicMemberCountFor(company, joinRequest.userId),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+    return { status: "approved", companyId: joinRequest.companyId, role: evaluation.role };
+  });
+});
+
+exports.removeCompanyMember = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  const memberId = typeof request.data?.memberId === "string" ? request.data.memberId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before managing company access.");
+  if (!companyId || !memberId || companyId.length > 160 || memberId.length > 160) {
+    throw new HttpsError("invalid-argument", "A valid company and member are required.");
+  }
+  if (memberId === uid) throw new HttpsError("failed-precondition", "You cannot remove yourself.");
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const actorRef = db.collection("users").doc(uid);
+  const targetUserRef = db.collection("users").doc(memberId);
+  const publicProfileRef = db.collection("publicCompanyProfiles").doc(companyId);
+  const targetAuthUser = await admin.auth().getUser(memberId).catch(() => null);
+
+  await db.runTransaction(async (transaction) => {
+    const [companySnap, actorSnap, targetUserSnap, publicProfileSnap] = await Promise.all([
+      transaction.get(companyRef),
+      transaction.get(actorRef),
+      transaction.get(targetUserRef),
+      transaction.get(publicProfileRef),
+    ]);
+    if (!companySnap.exists || !targetUserSnap.exists) throw new HttpsError("not-found", "Company or member not found.");
+
+    const company = { ...companySnap.data(), id: companySnap.id };
+    const actor = actorSnap.exists ? actorSnap.data() : null;
+    const targetUser = targetUserSnap.data();
+    if (!isCompanyOwnerOrCoOwner(company, actor, uid)) {
+      throw new HttpsError("permission-denied", "Only company owners and co-owners can remove members.");
+    }
+    if (company.ownerId === memberId || ["owner", "co-owner"].includes(targetUser.role)) {
+      throw new HttpsError("failed-precondition", "Owners and co-owners cannot be removed.");
+    }
+    if (!Array.isArray(company.teamMembers) || !company.teamMembers.includes(memberId)) {
+      throw new HttpsError("not-found", "Member is not part of this company.");
+    }
+
+    const secureInviteQuery = db.collection("companyInvites").where("companyId", "==", companyId);
+    const joinRequestQuery = db.collection("joinRequests").where("userId", "==", memberId);
+    const [secureInviteSnap, joinRequestSnap] = await Promise.all([
+      transaction.get(secureInviteQuery),
+      transaction.get(joinRequestQuery),
+    ]);
+    const targetEmail = normalizeEmail(targetAuthUser?.email || targetUser.email);
+    const revokedAt = admin.firestore.FieldValue.serverTimestamp();
+    secureInviteSnap.docs.forEach((inviteDoc) => {
+      const invite = inviteDoc.data();
+      if (invite.status === "pending" && normalizeEmail(invite.emailNormalized) === targetEmail) {
+        transaction.update(inviteDoc.ref, { status: "revoked", revokedAt, revokedBy: uid });
+      }
+    });
+    joinRequestSnap.docs.forEach((joinRequestDoc) => {
+      const joinRequest = joinRequestDoc.data();
+      if (joinRequest.companyId === companyId && joinRequest.status === "pending") {
+        transaction.update(joinRequestDoc.ref, {
+          status: "rejected",
+          processedAt: revokedAt,
+          processedBy: uid,
+          rejectionReason: "member-removed",
+        });
+      }
+    });
+
+    const pendingInvites = Array.isArray(company.pendingInvites) ? company.pendingInvites : [];
+    const updatedInvites = pendingInvites.map((invite) => (
+      invite.status === "pending" && normalizeEmail(invite.email) === targetEmail
+        ? { ...invite, status: "revoked", revokedAt: admin.firestore.Timestamp.now(), revokedBy: uid }
+        : invite
+    ));
+    transaction.update(companyRef, {
+      teamMembers: admin.firestore.FieldValue.arrayRemove(memberId),
+      pendingInvites: updatedInvites,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    if (targetUser.companyId === companyId) {
+      transaction.update(targetUserRef, {
+        companyId: null,
+        role: null,
+        hasCompletedSetup: false,
+        lastActive: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    }
+    if (publicProfileSnap.exists && publicProfileSnap.data()?.isPublicProfile === true) {
+      transaction.set(publicProfileRef, {
+        publicMemberCount: publicMemberCountFor(company, null, memberId),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  });
+  return { success: true };
+});
