@@ -174,6 +174,8 @@ const checkOverdueAssets = async (companyId: string, assets: Asset[]) => {
   }
 };
 
+let assetInitializationVersion = 0;
+
 // Helper function to convert Firestore data to Asset
 const firestoreToAsset = (id: string, data: any): Asset => {
   const convertDate = (field: any) => {
@@ -318,10 +320,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   setCurrentCompanyId: (id) => set({ currentCompanyId: id }),
 
   initializeForCompany: async (companyId) => {
+    const initializationVersion = ++assetInitializationVersion;
     set({ loading: true, error: null });
     
     // Enable offline persistence
     await enableOfflinePersistence();
+
+    if (initializationVersion !== assetInitializationVersion) return;
     
     // Unsubscribe from previous listener if exists
     const { unsubscribe } = get();
@@ -683,6 +688,7 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   },
 
   cleanup: () => {
+    assetInitializationVersion += 1;
     const { unsubscribe } = get();
     if (unsubscribe) {
       unsubscribe();
