@@ -15,7 +15,7 @@ import {
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
 import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, normalizePondLifecycle } from './../store/pondStore';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import {
   applyHarvestImpactToPond,
   getNextPartialHarvestNumber,
@@ -23,6 +23,7 @@ import {
   withHarvestReference,
 } from '../../shared/harvestCalculations';
 import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
+import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -101,6 +102,29 @@ const applyPendingPhysicalPondChanges = (
         ...pond,
         status: pond.status === 'active' ? 'active' : 'idle',
       });
+    });
+
+  return Array.from(merged.values());
+};
+
+const applyPendingEntityChanges = <T extends { id: string }>(
+  serverEntities: T[],
+  pendingChanges: PendingChange[],
+  type: PendingChange['type'],
+): T[] => {
+  const merged = new Map(serverEntities.map((entity) => [entity.id, entity]));
+
+  pendingChanges
+    .filter((change) => change.type === type)
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .forEach((change) => {
+      const entity = change.data as T | undefined;
+      if (!entity?.id) return;
+      if (change.action === 'delete') {
+        merged.delete(entity.id);
+      } else {
+        merged.set(entity.id, { ...merged.get(entity.id), ...entity });
+      }
     });
 
   return Array.from(merged.values());
@@ -194,15 +218,30 @@ const useFirebaseSyncController = () => {
     persistPendingChanges();
   }, [pendingChanges, pendingStorageKey, pendingStorageReady]);
 
-  const setupRealtimeListeners = useCallback((companyId: string) => {
+  const setupRealtimeListeners = useCallback((userId: string, companyId: string) => {
     const newUnsubscribeCallbacks: (() => void)[] = [];
+    const isActiveFarmIdentity = () => {
+      const state = usePondStore.getState();
+      return state.currentCompanyId === companyId && state.farmCacheUserId === userId;
+    };
+    const persistCurrentFarmSnapshot = (fromCache: boolean) => {
+      const state = usePondStore.getState();
+      if (!isActiveFarmIdentity()) return;
+      scheduleFarmCachePersist(
+        userId,
+        companyId,
+        state,
+        fromCache ? state.lastFarmCacheUpdate : Date.now(),
+      );
+    };
     try {
       // Listen to ponds collection
       const cyclesQuery = query(collection(db, 'companies', companyId, 'cycles'));
 
-      const unsubscribeCycles = onSnapshot(cyclesQuery,
+      const unsubscribeCycles = onSnapshot(cyclesQuery, { includeMetadataChanges: true },
         (snapshot) => {
           try {
+            if (!isActiveFarmIdentity()) return;
             const serverCycles: FarmCycle[] = [];
             snapshot.forEach(doc => {
               const data = doc.data();
@@ -240,7 +279,14 @@ const useFirebaseSyncController = () => {
               };
               return getTime(a) - getTime(b);
             });
-            usePondStore.setState({ cycles: serverCycles });
+            usePondStore.setState({
+              cycles: applyPendingEntityChanges(serverCycles, pendingChangesRef.current, 'cycle'),
+              farmCacheStatus: 'ready',
+              lastFarmCacheUpdate: snapshot.metadata.fromCache
+                ? usePondStore.getState().lastFarmCacheUpdate
+                : Date.now(),
+            });
+            persistCurrentFarmSnapshot(snapshot.metadata.fromCache);
           } catch (error) {
             console.error('Error processing cycles snapshot:', error);
             setSyncStatus(prev => ({ ...prev, error: 'Error processing cycle data' }));
@@ -259,9 +305,10 @@ const useFirebaseSyncController = () => {
         orderBy('createdAt', 'asc')
       );
 
-      const unsubscribePhysicalPonds = onSnapshot(physicalPondsQuery,
+      const unsubscribePhysicalPonds = onSnapshot(physicalPondsQuery, { includeMetadataChanges: true },
         (snapshot) => {
           try {
+            if (!isActiveFarmIdentity()) return;
             const serverPhysicalPonds: PhysicalPond[] = [];
             snapshot.forEach(doc => {
               const data = doc.data();
@@ -284,7 +331,12 @@ const useFirebaseSyncController = () => {
                 serverPhysicalPonds,
                 pendingChangesRef.current
               ),
+              farmCacheStatus: 'ready',
+              lastFarmCacheUpdate: snapshot.metadata.fromCache
+                ? usePondStore.getState().lastFarmCacheUpdate
+                : Date.now(),
             });
+            persistCurrentFarmSnapshot(snapshot.metadata.fromCache);
           } catch (error) {
             console.error('Error processing physical ponds snapshot:', error);
             setSyncStatus(prev => ({ ...prev, error: 'Error processing physical pond data' }));
@@ -303,9 +355,10 @@ const useFirebaseSyncController = () => {
         orderBy('createdAt', 'asc')
       );
 
-      const unsubscribePonds = onSnapshot(pondsQuery, 
+      const unsubscribePonds = onSnapshot(pondsQuery, { includeMetadataChanges: true },
         (snapshot) => {
           try {
+            if (!isActiveFarmIdentity()) return;
             const serverPonds: Pond[] = [];
             
             snapshot.forEach(doc => {
@@ -356,15 +409,24 @@ const useFirebaseSyncController = () => {
             });
 
             // Only update if this is the initial load or if we have actual changes
+            const mergedPonds = applyPendingEntityChanges(serverPonds, pendingChangesRef.current, 'pond')
+              .map(normalizePondLifecycle);
             const currentPonds = usePondStore.getState().ponds;
             const hasChanges = !initialLoadComplete.current || 
-              JSON.stringify(currentPonds) !== JSON.stringify(serverPonds);
+              JSON.stringify(currentPonds) !== JSON.stringify(mergedPonds);
 
             if (hasChanges) {
               console.log(`Updating local store with ${serverPonds.length} ponds from server`);
-              usePondStore.setState({ ponds: serverPonds });
+              usePondStore.setState({
+                ponds: mergedPonds,
+                farmCacheStatus: 'ready',
+                lastFarmCacheUpdate: snapshot.metadata.fromCache
+                  ? usePondStore.getState().lastFarmCacheUpdate
+                  : Date.now(),
+              });
               initialLoadComplete.current = true;
             }
+            persistCurrentFarmSnapshot(snapshot.metadata.fromCache);
             
             setSyncStatus(prev => ({ ...prev, lastSync: new Date(), error: undefined }));
           } catch (error) {
@@ -386,9 +448,10 @@ const useFirebaseSyncController = () => {
         orderBy('date', 'asc')
       );
 
-      const unsubscribeHarvest = onSnapshot(harvestQuery,
+      const unsubscribeHarvest = onSnapshot(harvestQuery, { includeMetadataChanges: true },
         (snapshot) => {
           try {
+            if (!isActiveFarmIdentity()) return;
             const serverHarvestRecords: HarvestRecord[] = [];
             
             snapshot.forEach(doc => {
@@ -402,7 +465,14 @@ const useFirebaseSyncController = () => {
               });
             });
 
-            usePondStore.setState({ harvestRecords: serverHarvestRecords });
+            usePondStore.setState({
+              harvestRecords: applyPendingEntityChanges(serverHarvestRecords, pendingChangesRef.current, 'harvest'),
+              farmCacheStatus: 'ready',
+              lastFarmCacheUpdate: snapshot.metadata.fromCache
+                ? usePondStore.getState().lastFarmCacheUpdate
+                : Date.now(),
+            });
+            persistCurrentFarmSnapshot(snapshot.metadata.fromCache);
             console.log(`Received ${serverHarvestRecords.length} harvest records from server`);
           } catch (error) {
             console.error('Error processing harvest records snapshot:', error);
@@ -426,14 +496,14 @@ const useFirebaseSyncController = () => {
 
   // Setup real-time listeners when company is available.
   useEffect(() => {
-    if (!activeCompanyId || !user?.uid) {
+    if (!activeCompanyId || !user?.uid || !pendingStorageReady) {
       listenerOwner.stop();
       initialLoadComplete.current = false;
       return;
     }
 
     if (__DEV__) console.log(`[FirebaseSync] initialize company ${activeCompanyId}`);
-    listenerOwner.start(activeCompanyId, () => setupRealtimeListeners(activeCompanyId));
+    listenerOwner.start(activeCompanyId, () => setupRealtimeListeners(user.uid, activeCompanyId));
 
     return () => {
       const didStop = listenerOwner.stop(activeCompanyId);
@@ -442,7 +512,7 @@ const useFirebaseSyncController = () => {
         if (__DEV__) console.log(`[FirebaseSync] cleanup company ${activeCompanyId}`);
       }
     };
-  }, [activeCompanyId, listenerOwner, setupRealtimeListeners, user?.uid]);
+  }, [activeCompanyId, listenerOwner, pendingStorageReady, setupRealtimeListeners, user?.uid]);
 
   const commitChanges = useCallback(async (changes: PendingChange[]): Promise<string[]> => {
     if (!activeCompanyId || !user || changes.length === 0) return [];
@@ -822,7 +892,7 @@ export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    pondStore.switchAccount(activeCompanyId, company?.timeZone);
+    pondStore.switchAccount(activeCompanyId, company?.timeZone, user.uid);
     pondStore.setFirebaseSync({
       syncPond: firebaseSync.syncPond,
       syncPhysicalPond: firebaseSync.syncPhysicalPond,
@@ -847,6 +917,24 @@ export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
     firebaseSync.syncSampling,
     user?.uid,
   ]);
+
+  useEffect(() => {
+    if (!activeCompanyId || !user?.uid) return;
+
+    const flushCache = () => {
+      void flushFarmCachePersist(user.uid, activeCompanyId).catch((error) => {
+        console.error('[FarmCache] flush failed:', error);
+      });
+    };
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState !== 'active') flushCache();
+    });
+
+    return () => {
+      subscription.remove();
+      flushCache();
+    };
+  }, [activeCompanyId, user?.uid]);
 
   return createElement(FirebaseSyncContext.Provider, { value: firebaseSync }, children);
 };

@@ -31,6 +31,14 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../shared/onboarding';
+import {
+  hydrateFarmCache,
+  loadActiveAuthBootstrap,
+  loadCompanyAuthBootstrap,
+  persistAuthBootstrap,
+  removeAuthBootstrap,
+  removeFarmCache,
+} from '../app/services/farmCache';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -178,6 +186,8 @@ interface AuthContextType {
   needsRoleSelection: boolean;
   needsSetup: boolean;
   isBuyer: boolean;
+  isUsingCachedFarmData: boolean;
+  isCompanyAuthoritativelyResolved: boolean;
   getCompanyLocationData: () => LocationData | null;
   getCompanyLocationString: () => string;
 }
@@ -208,7 +218,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [companyResolved, setCompanyResolved] = useState(true);
   const [loading, setLoading] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [cachedFarmAvailable, setCachedFarmAvailable] = useState(false);
   const previousCompanyRef = useRef<Company | null>(null);
+  const authGenerationRef = useRef(0);
   const timeZoneMigrationRef = useRef<Set<string>>(new Set());
   const publicMemberCountSyncRef = useRef<Map<string, number>>(new Map());
   const clearPondData = usePondStore((state) => state.clearData);
@@ -221,23 +233,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean) => {
+  const setupCompanyListener = useCallback((userData: User) => {
+    const companyId = userData.companyId;
+    if (!companyId) return () => undefined;
+
     setCompanyResolved(false);
-    return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
+    return onSnapshot(doc(db, 'companies', companyId), { includeMetadataChanges: true }, (companyDoc) => {
+      const isAuthoritative = !companyDoc.metadata.fromCache;
       if (companyDoc.exists()) {
-        const companyData = companyDoc.data() as Company;
-        usePondStore.getState().switchAccount(companyId, companyData.timeZone);
+        const companyData = { ...companyDoc.data(), id: companyDoc.id } as Company;
+        usePondStore.getState().switchAccount(companyId, companyData.timeZone, userData.uid);
         
         if (JSON.stringify(previousCompanyRef.current) !== JSON.stringify(companyData)) {
           previousCompanyRef.current = companyData;
           setCompany(companyData);
         }
 
+        void persistAuthBootstrap(
+          userData.uid,
+          companyId,
+          { ...userData },
+          { ...companyData },
+        ).catch((error) => console.error('[FarmCache] auth bootstrap persistence failed:', error));
+
         const publicMemberCount = new Set([
           ...(Array.isArray(companyData.teamMembers) ? companyData.teamMembers : []),
           companyData.ownerId,
         ].filter((memberId): memberId is string => typeof memberId === 'string' && Boolean(memberId.trim()))).size;
-        if ((canSyncPublicProfile || companyData.ownerId === auth.currentUser?.uid)
+        if ((isOwnerRole(userData.role) || companyData.ownerId === auth.currentUser?.uid)
           && (companyData.isPublicProfile === true || companyData.isSearchable === true)
           && publicMemberCountSyncRef.current.get(companyId) !== publicMemberCount) {
           publicMemberCountSyncRef.current.set(companyId, publicMemberCount);
@@ -286,20 +309,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }, 2000);
         }
-      } else {
+      } else if (isAuthoritative) {
+        const currentStore = usePondStore.getState();
+        if (currentStore.currentCompanyId === companyId && currentStore.farmCacheUserId === userData.uid) {
+          currentStore.clearData();
+        }
+        setCachedFarmAvailable(false);
         if (previousCompanyRef.current !== null) {
           previousCompanyRef.current = null;
           setCompany(null);
         }
+        void Promise.all([
+          removeFarmCache(userData.uid, companyId),
+          removeAuthBootstrap(userData.uid, companyId),
+        ]).catch((error) => console.error('[FarmCache] invalidation failed:', error));
       }
-      setCompanyResolved(true);
-    }, (error) => {
+      if (isAuthoritative) {
+        setCompanyResolved(true);
+        setCachedFarmAvailable(false);
+      }
+    }, (error: { code?: string }) => {
       console.error('Error listening to company data:', error);
-      if (previousCompanyRef.current !== null) {
+      if (error.code === 'permission-denied') {
+        const currentStore = usePondStore.getState();
+        if (currentStore.currentCompanyId === companyId && currentStore.farmCacheUserId === userData.uid) {
+          currentStore.clearData();
+        }
         previousCompanyRef.current = null;
         setCompany(null);
+        setCachedFarmAvailable(false);
+        setCompanyResolved(true);
+        void Promise.all([
+          removeFarmCache(userData.uid, companyId),
+          removeAuthBootstrap(userData.uid, companyId),
+        ]).catch((cacheError) => console.error('[FarmCache] revocation cleanup failed:', cacheError));
       }
-      setCompanyResolved(true);
     });
   }, []);
 
@@ -310,6 +354,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (!isMounted) return;
+      const generation = ++authGenerationRef.current;
       if (userUnsubscribe) {
         userUnsubscribe();
         userUnsubscribe = null;
@@ -320,47 +365,138 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (firebaseUser) {
-        userUnsubscribe = onSnapshot(
-          doc(db, 'users', firebaseUser.uid),
-          async (userDoc) => {
-            if (!isMounted) return;
-            if (userDoc.exists()) {
-              const userData = userDoc.data() as User;
-              setUser(userData);
-
-              if (companyUnsubscribe) {
-                companyUnsubscribe();
-                companyUnsubscribe = null;
-              }
-              if (userData.companyId) {
-                companyUnsubscribe = setupCompanyListener(userData.companyId, isOwnerRole(userData.role));
-              } else {
-                previousCompanyRef.current = null;
-                setCompany(null);
-                setCompanyResolved(true);
-              }
-            } else {
-              const newUser: User = {
-                id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email || '',
-                hasCompletedSetup: false, joinedDate: new Date().toISOString(), lastActive: new Date().toISOString()
-              };
-              await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-              setUser(newUser);
-              previousCompanyRef.current = null;
-              setCompany(null);
-              setCompanyResolved(true);
-            }
-            setInitializing(false);
-          },
-          (error) => {
-            console.error('Error listening to user data:', error);
-            if (isMounted) setInitializing(false);
-          }
-        );
-      } else {
+        clearPondData();
         setUser(null);
         previousCompanyRef.current = null;
         setCompany(null);
+        setCachedFarmAvailable(false);
+        setCompanyResolved(false);
+        setInitializing(true);
+
+        void (async () => {
+          try {
+            const activeBootstrap = await loadActiveAuthBootstrap(firebaseUser.uid);
+            if (!isMounted || generation !== authGenerationRef.current) return;
+
+            if (activeBootstrap) {
+              const cacheHit = await hydrateFarmCache(
+                firebaseUser.uid,
+                activeBootstrap.companyId,
+                activeBootstrap.company.timeZone as string | undefined,
+              );
+              if (!isMounted || generation !== authGenerationRef.current) return;
+              if (cacheHit) {
+                const cachedUser = activeBootstrap.user as unknown as User;
+                const cachedCompany = activeBootstrap.company as unknown as Company;
+                setUser(cachedUser);
+                previousCompanyRef.current = cachedCompany;
+                setCompany(cachedCompany);
+                setCachedFarmAvailable(true);
+                setInitializing(false);
+              }
+            }
+
+            userUnsubscribe = onSnapshot(
+              doc(db, 'users', firebaseUser.uid),
+              async (userDoc) => {
+                if (!isMounted || generation !== authGenerationRef.current) return;
+                if (userDoc.exists()) {
+                  const userData = { ...userDoc.data(), id: userDoc.id, uid: firebaseUser.uid } as User;
+                  setUser(userData);
+
+                  if (companyUnsubscribe) {
+                    companyUnsubscribe();
+                    companyUnsubscribe = null;
+                  }
+                  if (userData.companyId) {
+                    const currentStore = usePondStore.getState();
+                    const sameCachedIdentity = currentStore.currentCompanyId === userData.companyId
+                      && currentStore.farmCacheUserId === firebaseUser.uid
+                      && currentStore.farmCacheStatus === 'ready';
+
+                    if (!sameCachedIdentity) {
+                      setCachedFarmAvailable(false);
+                      previousCompanyRef.current = null;
+                      setCompany(null);
+                      setCompanyResolved(false);
+                      const companyBootstrap = await loadCompanyAuthBootstrap(firebaseUser.uid, userData.companyId);
+                      if (!isMounted || generation !== authGenerationRef.current) return;
+                      const cacheHit = await hydrateFarmCache(
+                        firebaseUser.uid,
+                        userData.companyId,
+                        companyBootstrap?.company.timeZone as string | undefined,
+                      );
+                      if (!isMounted || generation !== authGenerationRef.current) return;
+                      if (cacheHit && companyBootstrap) {
+                        const cachedCompany = companyBootstrap.company as unknown as Company;
+                        previousCompanyRef.current = cachedCompany;
+                        setCompany(cachedCompany);
+                        setCachedFarmAvailable(true);
+                        void persistAuthBootstrap(
+                          firebaseUser.uid,
+                          userData.companyId,
+                          { ...userData },
+                          { ...cachedCompany },
+                        ).catch((error) => console.error('[FarmCache] active binding update failed:', error));
+                      }
+                    }
+
+                    companyUnsubscribe = setupCompanyListener(userData);
+                  } else {
+                    const previousIdentity = usePondStore.getState();
+                    if (previousIdentity.currentCompanyId && previousIdentity.farmCacheUserId === firebaseUser.uid) {
+                      const previousCompanyId = previousIdentity.currentCompanyId;
+                      previousIdentity.clearData();
+                      void Promise.all([
+                        removeFarmCache(firebaseUser.uid, previousCompanyId),
+                        removeAuthBootstrap(firebaseUser.uid, previousCompanyId),
+                      ]).catch((error) => console.error('[FarmCache] detached company cleanup failed:', error));
+                    }
+                    setCachedFarmAvailable(false);
+                    previousCompanyRef.current = null;
+                    setCompany(null);
+                    setCompanyResolved(true);
+                  }
+                } else if (!userDoc.metadata.fromCache) {
+                  const newUser: User = {
+                    id: firebaseUser.uid, uid: firebaseUser.uid, email: firebaseUser.email || '',
+                    hasCompletedSetup: false, joinedDate: new Date().toISOString(), lastActive: new Date().toISOString()
+                  };
+                  await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
+                  clearPondData();
+                  setCachedFarmAvailable(false);
+                  setUser(newUser);
+                  previousCompanyRef.current = null;
+                  setCompany(null);
+                  setCompanyResolved(true);
+                }
+                setInitializing(false);
+              },
+              (error: { code?: string }) => {
+                console.error('Error listening to user data:', error);
+                if (!isMounted || generation !== authGenerationRef.current) return;
+                if (error.code === 'permission-denied') {
+                  clearPondData();
+                  setCachedFarmAvailable(false);
+                  setUser(null);
+                  previousCompanyRef.current = null;
+                  setCompany(null);
+                  setCompanyResolved(true);
+                }
+                setInitializing(false);
+              }
+            );
+          } catch (error) {
+            console.error('[FarmCache] bootstrap failed:', error);
+            if (isMounted && generation === authGenerationRef.current) setInitializing(false);
+          }
+        })();
+      } else {
+        clearPondData();
+        setUser(null);
+        previousCompanyRef.current = null;
+        setCompany(null);
+        setCachedFarmAvailable(false);
         setCompanyResolved(true);
         setInitializing(false);
       }
@@ -372,7 +508,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userUnsubscribe) userUnsubscribe();
       if (companyUnsubscribe) companyUnsubscribe();
     };
-  }, [setupCompanyListener]);
+  }, [clearPondData, setupCompanyListener]);
 
   const refreshCompanyData = useCallback(async (overrideCompanyId?: string) => {
     const targetCompanyId = overrideCompanyId || user?.companyId;
@@ -545,6 +681,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
     previousCompanyRef.current = null;
     setCompany(null);
+    setCachedFarmAvailable(false);
     setCompanyResolved(true);
     // Redirection is handled automatically by RootLayoutNav based on auth state
   };
@@ -903,7 +1040,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       user: effectiveUser,
       company,
-      loading: loading || initializing || (!!user?.companyId && !companyResolved),
+      loading: loading || initializing || (!!user?.companyId && !companyResolved && !cachedFarmAvailable),
       signIn,
       signUp,
       signInWithGoogle,
@@ -925,12 +1062,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!user,
       needsRoleSelection: !!user && !effectiveRole,
       needsSetup: !!effectiveUser && !!effectiveRole
-        && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
+        && !isUserOnboardingComplete(effectiveUser, company, companyResolved || cachedFarmAvailable),
       isBuyer: effectiveRole === 'buyer',
+      isUsingCachedFarmData: cachedFarmAvailable && !companyResolved,
+      isCompanyAuthoritativelyResolved: companyResolved,
       getCompanyLocationData,
       getCompanyLocationString,
     };
-  }, [user, company, companyResolved, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
+  }, [user, company, companyResolved, cachedFarmAvailable, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
        getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, getTeamMembers, acceptInvite,
        refreshUserData, refreshCompanyData, getCompanyLocationData, getCompanyLocationString]);
 

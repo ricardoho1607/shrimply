@@ -197,8 +197,10 @@ export const normalizePondLifecycle = (pond: Pond): Pond => ({
   cycleStartMode: pond.cycleStartMode || 'new',
 });
 
+export type FarmCacheStatus = 'idle' | 'hydrating' | 'ready' | 'miss';
+
 interface PondStore {
-  ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
+  ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
   firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
@@ -218,28 +220,31 @@ interface PondStore {
   
   calculatePondMetricsWithHarvest: (pond: Pond) => PondMetricsWithHarvest;
   
-  switchAccount: (companyId: string, timeZone?: string) => void; clearData: () => void; setFirebaseSync: (sync: PondStore['firebaseSync']) => void;
+  switchAccount: (companyId: string, timeZone?: string, userId?: string) => void; clearData: () => void; setFirebaseSync: (sync: PondStore['firebaseSync']) => void;
   backupToFirebase: (userId: string) => Promise<void>; restoreFromFirebase: (userId: string) => Promise<void>;
 }
 
 export const usePondStore = create<PondStore>()(
     (set, get) => ({
-      ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
+      ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined, farmCacheUserId: undefined, farmCacheStatus: 'idle', lastFarmCacheUpdate: undefined, isBackingUp: false, isRestoring: false, lastBackupTime: undefined, firebaseSync: undefined,
       
       setFirebaseSync: (sync) => set({ firebaseSync: sync }),
       
-      switchAccount: (companyId: string, timeZone?: string) => {
+      switchAccount: (companyId: string, timeZone?: string, userId?: string) => {
         const state = get();
         const resolvedTimeZone = resolveFarmTimeZone(timeZone);
-        if (state.currentCompanyId !== companyId) {
+        const userChanged = Boolean(userId && state.farmCacheUserId && state.farmCacheUserId !== userId);
+        if (state.currentCompanyId !== companyId || userChanged) {
           console.log(`Switching account from ${state.currentCompanyId} to ${companyId}`);
-          set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId, currentTimeZone: resolvedTimeZone });
+          set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: companyId, currentTimeZone: resolvedTimeZone, farmCacheUserId: userId, farmCacheStatus: 'miss', lastFarmCacheUpdate: undefined });
         } else if (state.currentTimeZone !== resolvedTimeZone) {
-          set({ currentTimeZone: resolvedTimeZone });
+          set({ currentTimeZone: resolvedTimeZone, ...(userId ? { farmCacheUserId: userId } : {}) });
+        } else if (userId && state.farmCacheUserId !== userId) {
+          set({ farmCacheUserId: userId });
         }
       },
       
-      clearData: () => set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined }),
+      clearData: () => set({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [], currentCompanyId: undefined, currentTimeZone: undefined, farmCacheUserId: undefined, farmCacheStatus: 'idle', lastFarmCacheUpdate: undefined }),
       
       backupToFirebase: async (userId: string) => { console.log('Legacy backupToFirebase called - real-time sync handles this now'); return Promise.resolve(); },
       restoreFromFirebase: async (userId: string) => { console.log('Legacy restoreFromFirebase called - real-time sync handles this now'); return Promise.resolve(); },
