@@ -2,6 +2,10 @@ const crypto = require("crypto");
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const {
+  enforceFixedWindowLimits,
+  logCallableAppCheckStatus,
+} = require("./abuseProtection");
+const {
   DEFAULT_ADJUSTMENT,
   normalizeAdjustment,
   normalizePondNameKey,
@@ -519,7 +523,19 @@ module.exports = ({ admin, assertCompanyMemberForCallable }) => {
     const pondId = safeString(request.data?.pondId, 160);
     const db = admin.firestore();
     await assertCompanyMemberForCallable(db, uid, companyId);
-    if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+    if (!pondId || pondId.includes("/")) throw new HttpsError("invalid-argument", "pondId is required.");
+    await enforceFixedWindowLimits({
+      db,
+      admin,
+      limits: [{
+        namespace: "orsonPredictionBurst",
+        scope: `user:${uid}`,
+        limit: 30,
+        windowMs: 60_000,
+        message: "Too many Orson prediction requests. Try again shortly.",
+      }],
+    });
+    logCallableAppCheckStatus(request, "recordOrsonPrediction");
 
     const companyRef = db.collection("companies").doc(companyId);
     const [pondSnap, calibrationSnap] = await Promise.all([

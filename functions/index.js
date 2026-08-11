@@ -5,6 +5,10 @@ const { defineSecret } = require("firebase-functions/params");
 const admin = require("./firebaseAdmin");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const {
+  enforceFixedWindowLimits,
+  logCallableAppCheckStatus,
+} = require("./abuseProtection");
+const {
   ORSON_DAILY_LIMITS,
   evaluateOrsonQuota,
   resolveOrsonAiFunction,
@@ -28,7 +32,9 @@ const LAB_EXTRACTION_MODEL = "gemini-2.5-flash";
 const LAB_INSIGHT_MODEL = "gemini-2.5-flash-lite";
 const LAB_PDF_EXTRACTION_COOLDOWN_MS = 48 * 60 * 60 * 1000;
 const LAB_PDF_EXTRACTION_PENDING_MS = 10 * 60 * 1000;
+const LAB_MAX_POND_RESULTS = 200;
 const geminiApiKeySecret = defineSecret("GEMINI_API_KEY");
+const resendApiKeySecret = defineSecret("RESEND_API_KEY");
 const TESTER_REQUEST_ADMIN_EMAIL = "ricardofransiskusho@gmail.com";
 const LEGACY_INVITE_TTL_MS = 30 * DAY_MS;
 const MAX_INVITE_TOKEN_LENGTH = 256;
@@ -55,7 +61,12 @@ const escapeHtml = (value) => String(value || "")
   .replace(/'/g, "&#39;");
 
 const sendTesterRequestEmail = async (requestData) => {
-  const apiKey = process.env.RESEND_API_KEY || "";
+  let apiKey = "";
+  try {
+    apiKey = resendApiKeySecret.value() || process.env.RESEND_API_KEY || "";
+  } catch (_error) {
+    apiKey = process.env.RESEND_API_KEY || "";
+  }
   if (!apiKey) {
     return {
       status: "skipped",
@@ -106,7 +117,7 @@ const sendTesterRequestEmail = async (requestData) => {
   };
 };
 
-exports.requestAndroidTesterAccess = onCall(async (request) => {
+exports.requestAndroidTesterAccess = onCall({ secrets: [resendApiKeySecret] }, async (request) => {
   const name = sanitizeTesterText(request.data?.name, 120);
   const email = sanitizeTesterText(request.data?.email, 200).toLowerCase();
   const company = sanitizeTesterText(request.data?.company, 160);
@@ -123,6 +134,31 @@ exports.requestAndroidTesterAccess = onCall(async (request) => {
   }
 
   const db = admin.firestore();
+  const clientIp = sanitizeTesterText(
+    request.rawRequest?.ip || request.rawRequest?.socket?.remoteAddress,
+    120,
+  );
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [
+      {
+        namespace: "testerEmailDaily",
+        scope: `email:${email}`,
+        limit: 3,
+        windowMs: DAY_MS,
+        message: "Too many tester requests for this email. Try again tomorrow.",
+      },
+      {
+        namespace: "testerIpDaily",
+        scope: clientIp ? `ip:${clientIp}` : null,
+        limit: 10,
+        windowMs: DAY_MS,
+        message: "Too many tester requests from this network. Try again tomorrow.",
+      },
+    ],
+  });
+  logCallableAppCheckStatus(request, "requestAndroidTesterAccess");
   const requestRef = db.collection("testerRequests").doc(encodeURIComponent(email));
   const now = admin.firestore.FieldValue.serverTimestamp();
   const payload = {
@@ -788,7 +824,13 @@ const assertCompanyMemberForCallable = async (db, uid, companyId) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
-  if (!companyId || typeof companyId !== "string") {
+  if (
+    !companyId
+    || typeof companyId !== "string"
+    || companyId !== companyId.trim()
+    || companyId.length > 160
+    || companyId.includes("/")
+  ) {
     throw new HttpsError("invalid-argument", "companyId is required.");
   }
 
@@ -942,12 +984,26 @@ const loadOrsonMortalityContext = async (db, company, companyId, pondId, request
 
 exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request) => {
   const uid = request.auth?.uid;
-  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
-  const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
-  if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  const pondId = typeof request.data?.pondId === "string" ? request.data.pondId.trim() : "";
+  if (!pondId || pondId.length > 160 || pondId.includes("/")) {
+    throw new HttpsError("invalid-argument", "pondId is required.");
+  }
 
   const db = admin.firestore();
   const company = await assertCompanyMemberForCallable(db, uid, companyId);
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "orsonContextBurst",
+      scope: `user:${uid}`,
+      limit: 20,
+      windowMs: 60_000,
+      message: "Too many Orson context requests. Try again shortly.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "getOrsonMortalityContext");
   const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
     ? request.data.windowEnd
     : null;
@@ -1049,7 +1105,7 @@ const reserveServerOrsonRequest = async (db, companyId, aiFunction, timeZone) =>
 
 exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApiKeySecret] }, async (request) => {
   const uid = request.auth?.uid;
-  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId : "";
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
   const operation = request.data?.operation === "mortality_context" ? "mortality_context" : "generate";
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt.trim() : "";
   const mode = request.data?.mode === "mortality_diagnostic" ? "mortality_diagnostic" : "standard";
@@ -1061,8 +1117,22 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
   // Keep the data-only path for already-installed clients. It does not invoke the
   // model and therefore does not consume server AI quota.
   if (operation === "mortality_context") {
-    const pondId = typeof request.data?.pondId === "string" ? request.data.pondId : "";
-    if (!pondId) throw new HttpsError("invalid-argument", "pondId is required.");
+    const pondId = typeof request.data?.pondId === "string" ? request.data.pondId.trim() : "";
+    if (!pondId || pondId.length > 160 || pondId.includes("/")) {
+      throw new HttpsError("invalid-argument", "pondId is required.");
+    }
+    await enforceFixedWindowLimits({
+      db,
+      admin,
+      limits: [{
+        namespace: "orsonContextBurst",
+        scope: `user:${uid}`,
+        limit: 20,
+        windowMs: 60_000,
+        message: "Too many Orson context requests. Try again shortly.",
+      }],
+    });
+    logCallableAppCheckStatus(request, "generateOrsonResponse:mortality_context");
     const requestedEndDate = typeof request.data?.windowEnd === "string" && /^\d{4}-\d{2}-\d{2}$/.test(request.data.windowEnd)
       ? request.data.windowEnd
       : null;
@@ -1080,6 +1150,19 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
   if (!apiKey) {
     throw new HttpsError("failed-precondition", "GEMINI_API_KEY is not configured for Orson.");
   }
+
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "orsonPaidBurst",
+      scope: `user:${uid}`,
+      limit: 6,
+      windowMs: 60_000,
+      message: "Too many Orson requests. Try again shortly.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "generateOrsonResponse");
 
   // This server-only transaction is the authoritative quota. Legacy aiUsage
   // counters may still be written by older clients during rollout, but cannot
@@ -1862,10 +1945,10 @@ Confirmed deterministic findings:
 ${JSON.stringify(summaries)}
 `;
 
-const generateLabInsights = async (summaries) => {
+const generateLabInsights = async (summaries, allowPaidGeneration = true) => {
   const fallback = buildDeterministicLabInsights(summaries);
   const apiKey = getGeminiApiKey();
-  if (!apiKey || summaries.length === 0) {
+  if (!allowPaidGeneration || !apiKey || summaries.length === 0) {
     return {
       ...fallback,
       model: "deterministic",
@@ -1903,15 +1986,10 @@ const generateLabInsights = async (summaries) => {
 
 exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", secrets: [geminiApiKeySecret] }, async (request) => {
   const uid = request.auth?.uid;
-  const companyId = request.data?.companyId;
-  const labReportId = request.data?.labReportId;
-  if (!labReportId || typeof labReportId !== "string") {
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  const labReportId = typeof request.data?.labReportId === "string" ? request.data.labReportId.trim() : "";
+  if (!labReportId || labReportId.length > 160 || labReportId.includes("/")) {
     throw new HttpsError("invalid-argument", "labReportId is required.");
-  }
-
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw new HttpsError("failed-precondition", "Gemini API key is not configured for functions.");
   }
 
   const db = admin.firestore();
@@ -1927,6 +2005,11 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
       code: error.code || null,
     });
     throw new HttpsError("permission-denied", "The lab extraction service cannot access this company yet. Please try again in a minute or two.");
+  }
+
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) {
+    throw new HttpsError("failed-precondition", "Gemini API key is not configured for functions.");
   }
 
   const reportRef = db.collection("companies").doc(companyId).collection("labReports").doc(labReportId);
@@ -1963,6 +2046,19 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
   if (report.extraction?.status === "complete" && report.extraction?.sourceHash === sourceHash && Array.isArray(report.pondResults)) {
     return { pondResults: report.pondResults, cached: true };
   }
+
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "labExtractionUserBurst",
+      scope: `user:${uid}`,
+      limit: 4,
+      windowMs: 60 * 60 * 1000,
+      message: "Too many lab extraction requests. Try again later.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "extractLabReportFromPdf");
 
   const requestedReportType = report.reportType === "plankton" ? "plankton" : "water_quality";
   const { typeKey: labUsageTypeKey, usageRef: labUsageRef } = await reserveLabPdfExtraction(db, companyId, requestedReportType, labReportId, uid);
@@ -2190,11 +2286,47 @@ exports.processConfirmedLabReport = onDocumentWritten({
   }
 
   const db = admin.firestore();
-  const pondResults = Array.isArray(report.pondResults) ? report.pondResults : [];
+  const candidatePondResults = (Array.isArray(report.pondResults) ? report.pondResults : [])
+    .slice(0, LAB_MAX_POND_RESULTS)
+    .filter((result) => (
+      result
+      && typeof result.pondId === "string"
+      && result.pondId.length > 0
+      && result.pondId.length <= 160
+      && !result.pondId.includes("/")
+    ));
+  const pondIds = [...new Set(candidatePondResults.map((result) => result.pondId))];
+  const pondSnapshots = pondIds.length > 0
+    ? await db.getAll(...pondIds.map((pondId) => db.collection("companies").doc(companyId).collection("ponds").doc(pondId)))
+    : [];
+  const existingPondIds = new Set(pondSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.id));
+  const pondResults = candidatePondResults.filter((result) => existingPondIds.has(result.pondId));
   const summaries = pondResults
-    .filter((result) => result && result.pondId)
     .map((result) => analyzeLabPondResult(result, report.sampleDate));
-  const insights = await generateLabInsights(summaries);
+  let allowPaidInsights = summaries.length > 0;
+  if (allowPaidInsights) {
+    try {
+      await enforceFixedWindowLimits({
+        db,
+        admin,
+        limits: [{
+          namespace: "labInsightsCompanyDaily",
+          scope: `company:${companyId}`,
+          limit: 10,
+          windowMs: DAY_MS,
+          message: "Daily lab insight generation limit reached.",
+        }],
+      });
+    } catch (error) {
+      if (error?.code !== "resource-exhausted") throw error;
+      allowPaidInsights = false;
+      console.warn("Lab insights used the deterministic fallback after reaching the company limit", {
+        companyId,
+        labReportId,
+      });
+    }
+  }
+  const insights = await generateLabInsights(summaries, allowPaidInsights);
 
   const batch = db.batch();
   const criticalCount = summaries.filter((summary) => summary.overallSeverity === "critical").length;

@@ -1,5 +1,9 @@
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const {
+  enforceFixedWindowLimits,
+  logCallableAppCheckStatus,
+} = require("./abuseProtection");
+const {
   adoptionPercentage,
   deriveAccountStatus,
   getInitials,
@@ -74,6 +78,18 @@ const createDirectoryHandler = (admin) => onCall({ timeoutSeconds: 60, memory: "
   const page = Math.max(1, Math.min(500, Number(request.data?.page) || 1));
   const pageSize = Math.max(5, Math.min(50, Number(request.data?.pageSize) || 10));
   const db = admin.firestore();
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "adminDirectoryBurst",
+      scope: `user:${request.auth.uid}`,
+      limit: 12,
+      windowMs: 60_000,
+      message: "Too many admin directory requests. Try again shortly.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "searchAdminAccounts");
   const [usersSnapshot, companiesSnapshot] = await Promise.all([
     db.collection("users").limit(2000).get(),
     db.collection("companies").limit(2000).get(),
@@ -157,6 +173,18 @@ const createDeleteUserHandler = (admin) => onCall({ timeoutSeconds: 120, memory:
   if (request.auth.uid === userId) throw new HttpsError("failed-precondition", "You cannot delete your own platform-owner account.");
 
   const db = admin.firestore();
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "adminDeleteUserBurst",
+      scope: `user:${request.auth.uid}`,
+      limit: 3,
+      windowMs: 60 * 60 * 1000,
+      message: "Too many account deletion requests. Try again later.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "deleteAdminUser");
   const userRef = db.collection("users").doc(userId);
   const userDocument = await userRef.get();
   if (!userDocument.exists) throw new HttpsError("not-found", "User account not found.");
@@ -250,6 +278,18 @@ const createAccountHandler = (admin) => onCall({ timeoutSeconds: 60, memory: "51
   const userId = normalizeText(request.data?.userId, 160);
   if (!userId) throw new HttpsError("invalid-argument", "userId is required.");
   const db = admin.firestore();
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "adminAccountBurst",
+      scope: `user:${request.auth.uid}`,
+      limit: 20,
+      windowMs: 60_000,
+      message: "Too many admin account requests. Try again shortly.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "getAdminAccountIntelligence");
   const userDocument = await db.collection("users").doc(userId).get();
   if (!userDocument.exists) throw new HttpsError("not-found", "User account not found.");
   const user = userDocument.data() || {};

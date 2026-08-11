@@ -1,4 +1,9 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
+import {
+  initializeAppCheck,
+  ReCaptchaV3Provider,
+  type AppCheck,
+} from "firebase/app-check";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
@@ -15,8 +20,19 @@ const firebaseConfig = {
 
 // Initialize Firebase for SSR compatibility
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+let appCheck: AppCheck | null = null;
+const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
+if (typeof window !== "undefined" && appCheckSiteKey) {
+  if (process.env.NODE_ENV !== "production") {
+    (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
+  }
+  appCheck = initializeAppCheck(app, {
+    provider: new ReCaptchaV3Provider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  });
+}
 const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-export { app, auth, db, storage };
+export { app, appCheck, auth, db, storage };

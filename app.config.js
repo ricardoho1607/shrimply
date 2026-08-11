@@ -3,12 +3,12 @@ export default {
   expo: {
     name: 'Shrimply',
     slug: 'investashrimp',
-    version: '3.1.0',
+    version: '3.2.0',
     orientation: 'portrait',
     icon: './assets/images/app-icon.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
-    runtimeVersion: '3.1.0',
+    runtimeVersion: '3.2.0',
     updates: {
       url: 'https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db',
       checkAutomatically: 'NEVER',
@@ -29,7 +29,7 @@ export default {
 
     android: {
       package: 'com.shrimply.tech.investashrimp',
-      googleServicesFile: './google-services.json',
+      googleServicesFile: process.env.GOOGLE_SERVICES_JSON || './google-services.json',
       adaptiveIcon: {
         foregroundImage: './assets/images/adaptive-icon.png',
         backgroundColor: '#ffffff',

@@ -1,7 +1,24 @@
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const admin = require("./firebaseAdmin");
+const { hasPlatformOwnerClaim } = require("./adminIntelligenceCore");
+const {
+  enforceFixedWindowLimits,
+  logCallableAppCheckStatus,
+} = require("./abuseProtection");
 
 const ADMIN_EMAILS = new Set(["ricardofransiskusho@gmail.com"]);
+
+const assertFounder = (request, action) => {
+  const uid = request.auth?.uid;
+  const email = String(request.auth?.token?.email || "").toLowerCase();
+  if (!uid) {
+    throw new HttpsError("unauthenticated", `You must be signed in to ${action}.`);
+  }
+  if (!ADMIN_EMAILS.has(email) || !hasPlatformOwnerClaim(request.auth)) {
+    throw new HttpsError("permission-denied", "This action requires the founder account and platform-owner claim.");
+  }
+  return uid;
+};
 
 const toDate = (value) => {
   if (!value) return null;
@@ -309,23 +326,26 @@ const getCompanyUserIds = async (db, companyId, company) => {
 };
 
 exports.hardDeleteCompany = onCall({ timeoutSeconds: 540, memory: "1GiB" }, async (request) => {
-  const uid = request.auth?.uid;
-  const email = String(request.auth?.token?.email || "").toLowerCase();
+  const uid = assertFounder(request, "delete a company");
   const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
 
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "You must be signed in to delete a company.");
-  }
-
-  if (!ADMIN_EMAILS.has(email)) {
-    throw new HttpsError("permission-denied", "This action is restricted to the founder account.");
-  }
-
-  if (!companyId) {
+  if (!companyId || companyId.length > 160 || companyId.includes("/")) {
     throw new HttpsError("invalid-argument", "Company ID is required.");
   }
 
   const db = admin.firestore();
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "adminDeleteCompanyBurst",
+      scope: `user:${uid}`,
+      limit: 3,
+      windowMs: 60 * 60 * 1000,
+      message: "Too many company deletion requests. Try again later.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "hardDeleteCompany");
   const companyRef = db.collection("companies").doc(companyId);
   const companySnapshot = await companyRef.get();
 
@@ -381,20 +401,23 @@ exports.hardDeleteCompany = onCall({ timeoutSeconds: 540, memory: "1GiB" }, asyn
 });
 
 exports.getAdminMetrics = onCall(async (request) => {
-  const uid = request.auth?.uid;
-  const email = String(request.auth?.token?.email || "").toLowerCase();
-
-  if (!uid) {
-    throw new HttpsError("unauthenticated", "You must be signed in to view admin metrics.");
-  }
-
-  if (!ADMIN_EMAILS.has(email)) {
-    throw new HttpsError("permission-denied", "This admin page is restricted to the founder account.");
-  }
+  const uid = assertFounder(request, "view admin metrics");
 
   const periodDays = Number(request.data?.days) === 30 ? 30 : 7;
   const since = startOfPeriod(periodDays);
   const db = admin.firestore();
+  await enforceFixedWindowLimits({
+    db,
+    admin,
+    limits: [{
+      namespace: "adminMetricsBurst",
+      scope: `user:${uid}`,
+      limit: 6,
+      windowMs: 60_000,
+      message: "Too many admin metrics requests. Try again shortly.",
+    }],
+  });
+  logCallableAppCheckStatus(request, "getAdminMetrics");
 
   let usersSnapshot;
   let companiesSnapshot;
