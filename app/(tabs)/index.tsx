@@ -9,7 +9,6 @@ import {
   Keyboard, TouchableWithoutFeedback
 } from 'react-native';
 import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, type PhysicalPond, type MortalityObservationType, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from '.././store/pondStore';
-import { useFirebaseSync } from '.././hooks/useFirebaseSync';
 import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
@@ -168,11 +167,7 @@ export default function PondManagementScreen() {
     updateFarmCycle,
     closeFarmCycle,
     calculatePondMetricsWithHarvest, 
-    switchAccount, 
-    setFirebaseSync 
   } = usePondStore();
-  
-  const firebaseSync = useFirebaseSync();
   
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
@@ -216,29 +211,6 @@ export default function PondManagementScreen() {
       setIsSubmitting(false);
     }
   }, [modalVisible]);
-
-  useEffect(() => {
-    if (company?.id) {
-      switchAccount(company.id, company.timeZone);
-      setFirebaseSync({
-        syncPond: firebaseSync.syncPond,
-        syncPhysicalPond: firebaseSync.syncPhysicalPond,
-        syncSampling: firebaseSync.syncSampling,
-        syncHarvestRecord: firebaseSync.syncHarvestRecord,
-        syncCycle: firebaseSync.syncCycle,
-      });
-    }
-  }, [
-    company?.id,
-    company?.timeZone,
-    firebaseSync.syncPond, 
-    firebaseSync.syncPhysicalPond,
-    firebaseSync.syncSampling, 
-    firebaseSync.syncHarvestRecord, 
-    firebaseSync.syncCycle,
-    switchAccount, 
-    setFirebaseSync
-  ]);
 
   const updateForm = useCallback((key: keyof FormData, value: any) => 
     setFormData(prev => ({ ...prev, [key]: value })), 

@@ -1,5 +1,5 @@
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
-import { useEffect, useCallback, useState, useRef } from 'react';
+import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   doc, 
@@ -22,6 +22,7 @@ import {
   reverseHarvestImpactOnPond,
   withHarvestReference,
 } from '../../shared/harvestCalculations';
+import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -47,7 +48,7 @@ const NetInfo = Platform.OS === 'web'
   : require('@react-native-community/netinfo').default;
 
 
-interface SyncStatus {
+export interface SyncStatus {
   isOnline: boolean;
   isSyncing: boolean;
   lastSync?: Date;
@@ -105,9 +106,10 @@ const applyPendingPhysicalPondChanges = (
   return Array.from(merged.values());
 };
 
-export const useFirebaseSync = () => {
-  const { user, company } = useAuth();
-  const pendingStorageKey = user?.uid && company?.id ? `shrimply:pending-sync:${user.uid}:${company.id}` : null;
+const useFirebaseSyncController = () => {
+  const { user, company, isBuyer } = useAuth();
+  const activeCompanyId = user && !isBuyer ? company?.id : undefined;
+  const pendingStorageKey = user?.uid && activeCompanyId ? `shrimply:pending-sync:${user.uid}:${activeCompanyId}` : null;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: false,
     isSyncing: false,
@@ -116,12 +118,8 @@ export const useFirebaseSync = () => {
   
   const [pendingChanges, setPendingChanges] = useState<PendingChange[]>([]);
   const [pendingStorageReady, setPendingStorageReady] = useState(false);
-  const unsubscribeCallbacksRef = useRef<(() => void)[]>([]);
+  const [listenerOwner] = useState(createFirebaseSyncListenerOwner);
   const pendingChangesRef = useRef<PendingChange[]>([]);
-  
-  // Track current company to detect account switches
-  const currentCompanyRef = useRef<string | null>(null);
-  const listenersSetUp = useRef(false);
   const initialLoadComplete = useRef(false);
 
   useEffect(() => {
@@ -138,9 +136,10 @@ export const useFirebaseSync = () => {
 
     const loadPendingChanges = async () => {
       setPendingStorageReady(false);
+      pendingChangesRef.current = [];
+      setPendingChanges([]);
 
       if (!pendingStorageKey) {
-        setPendingChanges([]);
         setPendingStorageReady(true);
         return;
       }
@@ -167,6 +166,16 @@ export const useFirebaseSync = () => {
   }, [pendingStorageKey]);
 
   useEffect(() => {
+    setSyncStatus((previous) => ({
+      ...previous,
+      isSyncing: false,
+      lastSync: undefined,
+      pendingChanges: 0,
+      error: undefined,
+    }));
+  }, [activeCompanyId, user?.uid]);
+
+  useEffect(() => {
     if (!pendingStorageKey || !pendingStorageReady) return;
 
     const persistPendingChanges = async () => {
@@ -185,64 +194,11 @@ export const useFirebaseSync = () => {
     persistPendingChanges();
   }, [pendingChanges, pendingStorageKey, pendingStorageReady]);
 
-  // Clean up listeners when company changes (account switch)
-  useEffect(() => {
-    const companyId = company?.id;
-
-    // If company changed, cleanup previous listeners
-    if (currentCompanyRef.current && currentCompanyRef.current !== companyId) {
-      console.log(`Account switched from ${currentCompanyRef.current} to ${companyId}, cleaning up...`);
-      
-      // Cleanup listeners
-      unsubscribeCallbacksRef.current.forEach(unsub => {
-        try {
-          unsub();
-        } catch (error) {
-          console.error('Error unsubscribing:', error);
-        }
-      });
-      unsubscribeCallbacksRef.current = [];
-      listenersSetUp.current = false;
-      initialLoadComplete.current = false;
-      
-      // Clear local data for account switch
-      usePondStore.setState({ ponds: [], physicalPonds: [], cycles: [], harvestRecords: [] });
-    }
-
-    currentCompanyRef.current = companyId || null;
-  }, [company?.id]);
-
-  // Setup real-time listeners when company is available
-  useEffect(() => {
-    if (!company?.id || !user || listenersSetUp.current) return;
-
-    console.log(`Setting up real-time sync for company: ${company.id}`);
-    setupRealtimeListeners();
-    listenersSetUp.current = true;
-
-    return () => {
-      console.log('Cleaning up Firebase listeners');
-      unsubscribeCallbacksRef.current.forEach(unsub => {
-        try {
-          unsub();
-        } catch (error) {
-          console.error('Error unsubscribing:', error);
-        }
-      });
-      unsubscribeCallbacksRef.current = [];
-      listenersSetUp.current = false;
-      initialLoadComplete.current = false;
-    };
-  }, [company?.id, user?.uid]);
-
-  const setupRealtimeListeners = useCallback(() => {
-    if (!company?.id) return;
-
+  const setupRealtimeListeners = useCallback((companyId: string) => {
+    const newUnsubscribeCallbacks: (() => void)[] = [];
     try {
-      const newUnsubscribeCallbacks: (() => void)[] = [];
-
       // Listen to ponds collection
-      const cyclesQuery = query(collection(db, 'companies', company.id, 'cycles'));
+      const cyclesQuery = query(collection(db, 'companies', companyId, 'cycles'));
 
       const unsubscribeCycles = onSnapshot(cyclesQuery,
         (snapshot) => {
@@ -296,9 +252,10 @@ export const useFirebaseSync = () => {
         }
       );
       newUnsubscribeCallbacks.push(unsubscribeCycles);
+      if (__DEV__) console.log('[FirebaseSync] cycles listener attached');
 
       const physicalPondsQuery = query(
-        collection(db, 'companies', company.id, 'physicalPonds'),
+        collection(db, 'companies', companyId, 'physicalPonds'),
         orderBy('createdAt', 'asc')
       );
 
@@ -339,9 +296,10 @@ export const useFirebaseSync = () => {
         }
       );
       newUnsubscribeCallbacks.push(unsubscribePhysicalPonds);
+      if (__DEV__) console.log('[FirebaseSync] physicalPonds listener attached');
 
       const pondsQuery = query(
-        collection(db, 'companies', company.id, 'ponds'),
+        collection(db, 'companies', companyId, 'ponds'),
         orderBy('createdAt', 'asc')
       );
 
@@ -420,10 +378,11 @@ export const useFirebaseSync = () => {
         }
       );
       newUnsubscribeCallbacks.push(unsubscribePonds);
+      if (__DEV__) console.log('[FirebaseSync] ponds listener attached');
 
       // Listen to harvest records collection
       const harvestQuery = query(
-        collection(db, 'companies', company.id, 'harvestRecords'),
+        collection(db, 'companies', companyId, 'harvestRecords'),
         orderBy('date', 'asc')
       );
 
@@ -456,16 +415,37 @@ export const useFirebaseSync = () => {
         }
       );
       newUnsubscribeCallbacks.push(unsubscribeHarvest);
-
-      unsubscribeCallbacksRef.current = newUnsubscribeCallbacks;
+      if (__DEV__) console.log('[FirebaseSync] harvestRecords listener attached');
     } catch (error) {
+      newUnsubscribeCallbacks.splice(0).forEach((unsubscribe) => unsubscribe());
       console.error('Error setting up Firebase listeners:', error);
       setSyncStatus(prev => ({ ...prev, error: 'Failed to connect to Firebase' }));
     }
-  }, [company?.id]);
+    return newUnsubscribeCallbacks;
+  }, []);
+
+  // Setup real-time listeners when company is available.
+  useEffect(() => {
+    if (!activeCompanyId || !user?.uid) {
+      listenerOwner.stop();
+      initialLoadComplete.current = false;
+      return;
+    }
+
+    if (__DEV__) console.log(`[FirebaseSync] initialize company ${activeCompanyId}`);
+    listenerOwner.start(activeCompanyId, () => setupRealtimeListeners(activeCompanyId));
+
+    return () => {
+      const didStop = listenerOwner.stop(activeCompanyId);
+      if (didStop) {
+        initialLoadComplete.current = false;
+        if (__DEV__) console.log(`[FirebaseSync] cleanup company ${activeCompanyId}`);
+      }
+    };
+  }, [activeCompanyId, listenerOwner, setupRealtimeListeners, user?.uid]);
 
   const commitChanges = useCallback(async (changes: PendingChange[]): Promise<string[]> => {
-    if (!company?.id || !user || changes.length === 0) return [];
+    if (!activeCompanyId || !user || changes.length === 0) return [];
 
     try {
       const batch = writeBatch(db);
@@ -477,7 +457,7 @@ export const useFirebaseSync = () => {
           let didProcess = false;
 
           if (change.type === 'pond') {
-            const pondRef = doc(db, 'companies', company.id, 'ponds', change.data.id);
+            const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.data.id);
             
             if (change.action === 'create' || change.action === 'update') {
               const pondData = {
@@ -499,7 +479,7 @@ export const useFirebaseSync = () => {
             }
           } 
           else if (change.type === 'physicalPond') {
-            const physicalPondRef = doc(db, 'companies', company.id, 'physicalPonds', change.data.id);
+            const physicalPondRef = doc(db, 'companies', activeCompanyId, 'physicalPonds', change.data.id);
             if (change.action === 'create' || change.action === 'update') {
               const physicalPondData = {
                 ...removeUndefinedFields(change.data),
@@ -520,7 +500,7 @@ export const useFirebaseSync = () => {
             }
           }
           else if (change.type === 'cycle') {
-            const cycleRef = doc(db, 'companies', company.id, 'cycles', change.data.id);
+            const cycleRef = doc(db, 'companies', activeCompanyId, 'cycles', change.data.id);
             if (change.action === 'create' || change.action === 'update') {
               const cycleData = {
                 ...removeUndefinedFields(change.data),
@@ -542,8 +522,8 @@ export const useFirebaseSync = () => {
           }
           else if (change.type === 'harvest') {
             const harvestRef = change.data.id ? 
-              doc(db, 'companies', company.id, 'harvestRecords', change.data.id) :
-              doc(collection(db, 'companies', company.id, 'harvestRecords'));
+              doc(db, 'companies', activeCompanyId, 'harvestRecords', change.data.id) :
+              doc(collection(db, 'companies', activeCompanyId, 'harvestRecords'));
 
             await runTransaction(db, async (transaction) => {
               const harvestSnapshot = await transaction.get(harvestRef);
@@ -555,7 +535,7 @@ export const useFirebaseSync = () => {
                 ? ({ id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord)
                 : (change.data as HarvestRecord);
               const uniquePondIds = Array.from(new Set(sourceRecord.ponds.map((pond) => pond.pondId)));
-              const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', company.id, 'ponds', pondId));
+              const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', activeCompanyId, 'ponds', pondId));
               const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
               const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
 
@@ -625,7 +605,7 @@ export const useFirebaseSync = () => {
             didProcess = true;
           }
           else if (change.type === 'sampling' && change.pondId) {
-            const pondRef = doc(db, 'companies', company.id, 'ponds', change.pondId);
+            const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.pondId);
             const pondDoc = await getDoc(pondRef);
             
             if (pondDoc.exists()) {
@@ -665,7 +645,7 @@ export const useFirebaseSync = () => {
       console.error('Error syncing changes:', error);
       throw error;
     }
-  }, [company?.id, user]);
+  }, [activeCompanyId, user]);
 
   // Add pending change to queue
   const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>) => {
@@ -703,7 +683,7 @@ export const useFirebaseSync = () => {
 
   // Sync pending changes to Firebase
   const syncPendingChanges = useCallback(async () => {
-    if (!company?.id || !user || pendingChanges.length === 0 || syncStatus.isSyncing) return;
+    if (!activeCompanyId || !user || pendingChanges.length === 0 || syncStatus.isSyncing) return;
 
     setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
 
@@ -732,20 +712,24 @@ export const useFirebaseSync = () => {
     } finally {
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
-  }, [commitChanges, company?.id, user, pendingChanges, syncStatus.isSyncing]);
+  }, [activeCompanyId, commitChanges, user, pendingChanges, syncStatus.isSyncing]);
 
   // Monitor network status after the sync callback is available.
   useEffect(() => {
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = NetInfo.addEventListener((state: any) => {
       const isOnline = state.isConnected === true;
       setSyncStatus(prev => ({ ...prev, isOnline }));
 
       if (isOnline && pendingChangesRef.current.length > 0) {
-        setTimeout(() => syncPendingChanges(), 1000);
+        retryTimer = setTimeout(() => syncPendingChanges(), 1000);
       }
     });
 
-    return unsubscribe;
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      unsubscribe();
+    };
   }, [syncPendingChanges]);
 
   useEffect(() => {
@@ -818,4 +802,59 @@ export const useFirebaseSync = () => {
     triggerManualSync,
     hasPendingChanges: pendingChanges.length > 0
   };
+};
+
+export type FirebaseSyncContextValue = ReturnType<typeof useFirebaseSyncController>;
+
+const FirebaseSyncContext = createContext<FirebaseSyncContextValue | null>(null);
+
+export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
+  const firebaseSync = useFirebaseSyncController();
+  const { user, company, isBuyer } = useAuth();
+  const activeCompanyId = user && !isBuyer ? company?.id : undefined;
+
+  useEffect(() => {
+    const pondStore = usePondStore.getState();
+
+    if (!activeCompanyId || !user?.uid) {
+      pondStore.setFirebaseSync(undefined);
+      pondStore.clearData();
+      return;
+    }
+
+    pondStore.switchAccount(activeCompanyId, company?.timeZone);
+    pondStore.setFirebaseSync({
+      syncPond: firebaseSync.syncPond,
+      syncPhysicalPond: firebaseSync.syncPhysicalPond,
+      syncSampling: firebaseSync.syncSampling,
+      syncHarvestRecord: firebaseSync.syncHarvestRecord,
+      syncCycle: firebaseSync.syncCycle,
+    });
+
+    return () => {
+      const currentStore = usePondStore.getState();
+      if (currentStore.currentCompanyId === activeCompanyId) {
+        currentStore.setFirebaseSync(undefined);
+      }
+    };
+  }, [
+    activeCompanyId,
+    company?.timeZone,
+    firebaseSync.syncCycle,
+    firebaseSync.syncHarvestRecord,
+    firebaseSync.syncPhysicalPond,
+    firebaseSync.syncPond,
+    firebaseSync.syncSampling,
+    user?.uid,
+  ]);
+
+  return createElement(FirebaseSyncContext.Provider, { value: firebaseSync }, children);
+};
+
+export const useFirebaseSync = (): FirebaseSyncContextValue => {
+  const firebaseSync = useContext(FirebaseSyncContext);
+  if (!firebaseSync) {
+    throw new Error('useFirebaseSync must be used within FirebaseSyncProvider');
+  }
+  return firebaseSync;
 };

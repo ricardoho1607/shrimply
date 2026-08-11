@@ -13,6 +13,7 @@ import { ActivityIndicator, Platform, Text, useWindowDimensions, View } from 're
 import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from './components/sidebarComponents';
 import { useNotificationChecker } from './hooks/useNotificationChecker';
 import { useMobileActivityTracker } from './hooks/useMobileActivityTracker';
+import { FirebaseSyncProvider } from './hooks/useFirebaseSync';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
 let hasCheckedForStartupUpdate = false;
@@ -266,9 +267,11 @@ function RootLayout() {
       <CurrencyProvider>
         <LanguageCurrencySync>
           <AuthProvider>
-            <SidebarProvider>
-              <RootLayoutNav />
-            </SidebarProvider>
+            <FirebaseSyncProvider>
+              <SidebarProvider>
+                <RootLayoutNav />
+              </SidebarProvider>
+            </FirebaseSyncProvider>
           </AuthProvider>
         </LanguageCurrencySync>
       </CurrencyProvider>

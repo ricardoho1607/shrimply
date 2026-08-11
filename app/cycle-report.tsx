@@ -15,7 +15,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useLanguage } from '../context/LanguageContext';
-import { useFirebaseSync } from './hooks/useFirebaseSync';
 import { financeService, type Expense } from './services/financeService';
 import { buildCycleReport, type CycleReport } from './services/cycleReportService';
 import { exportCycleReportPDF } from './services/cycleReportExportService';
@@ -50,7 +49,6 @@ export default function CycleReportScreen() {
   const { user, company } = useAuth();
   const { formatCurrency } = useCurrency();
   const { t, currentLanguage } = useLanguage();
-  useFirebaseSync();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingFinance, setLoadingFinance] = useState(false);
