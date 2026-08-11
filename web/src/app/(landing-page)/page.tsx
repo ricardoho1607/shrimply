@@ -3,6 +3,7 @@ import Navbar from '@/components/Navbar';
 import Footer from '@/components/Footer';
 import Cursor from '@/components/Cursor';
 import RevealOnScroll from '@/components/RevealOnScroll';
+import { GOOGLE_PLAY_URL } from '@/config/site';
 import { 
   LayoutGrid, 
   Activity, 
@@ -291,7 +292,7 @@ export default function LandingPage() {
           </p>
           <div className="mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
             <Link href="/auth/join" className="btn-primary" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Start Your Free Trial</Link>
-            <Link href="/download" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download App</Link>
+            <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download on Google Play</a>
           </div>
         </div>
       </section>

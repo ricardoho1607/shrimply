@@ -1,3 +1,5 @@
+export const GOOGLE_PLAY_URL = "https://play.google.com/store/apps/details?id=com.shrimply.tech.investashrimp";
+
 export const SITE_CONFIG = {
   name: "Shrimply",
   url: process.env.NEXT_PUBLIC_SITE_URL || "https://www.shrimplytech.com",

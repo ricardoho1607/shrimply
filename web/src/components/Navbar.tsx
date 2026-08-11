@@ -4,13 +4,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
+import { GOOGLE_PLAY_URL } from '@/config/site';
 
 const navItems = [
   { href: '/', label: 'Home' },
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/resources', label: 'Resources' },
   { href: '/about', label: 'About' },
-  { href: '/download', label: 'Download App' },
+  { href: GOOGLE_PLAY_URL, label: 'Download App', external: true },
 ];
 
 export default function Navbar() {
@@ -137,6 +138,8 @@ export default function Navbar() {
             href={item.href}
             className="nav-link"
             style={isActive(item.href) ? { color: 'var(--sky)' } : {}}
+            target={item.external ? '_blank' : undefined}
+            rel={item.external ? 'noopener noreferrer' : undefined}
           >
             {item.label}
           </Link>
@@ -216,6 +219,8 @@ export default function Navbar() {
                 boxShadow: '0 12px 28px rgba(13, 33, 55, 0.05)',
               }}
               onClick={closeMenu}
+              target={item.external ? '_blank' : undefined}
+              rel={item.external ? 'noopener noreferrer' : undefined}
             >
               {item.label}
             </Link>

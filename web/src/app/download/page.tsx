@@ -1,5 +1,5 @@
 import { canonicalUrl, coreSeoPages, seoMetadata } from "@/config/seo";
-import { SITE_CONFIG } from "@/config/site";
+import { GOOGLE_PLAY_URL, SITE_CONFIG } from "@/config/site";
 import DownloadPageContent from "./DownloadPageContent";
 
 const page = coreSeoPages.find(item => item.path === "/download");
@@ -21,7 +21,7 @@ const downloadPageJsonLd = {
     "Shrimply iPhone web app",
     "Add to Home Screen",
     "Shrimply Android app",
-    "Android closed testing",
+    "Shrimply on Google Play",
     "Shrimp farm management app",
   ],
 };
@@ -32,8 +32,9 @@ const softwareApplicationJsonLd = {
   name: "Shrimply",
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web, iOS, Android",
-  description: "Shrimply is available as an installable web app on iPhone and through a closed Android testing track.",
+  description: "Shrimply is available as an installable web app on iPhone and as a native Android app on Google Play.",
   url: canonicalUrl("/download"),
+  downloadUrl: GOOGLE_PLAY_URL,
   isPartOf: {
     "@type": "SoftwareApplication",
     name: SITE_CONFIG.name,
@@ -43,7 +44,7 @@ const softwareApplicationJsonLd = {
     "@type": "Offer",
     price: "0",
     priceCurrency: "USD",
-    availability: "https://schema.org/LimitedAvailability",
+    availability: "https://schema.org/InStock",
   },
 };
 

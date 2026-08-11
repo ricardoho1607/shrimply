@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import {
-  AlertCircle,
   CheckCircle2,
   MonitorSmartphone,
   Share,
@@ -13,8 +12,8 @@ import {
 import Cursor from "@/components/Cursor";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import { GOOGLE_PLAY_URL } from "@/config/site";
 import { useLanguage } from "@/contexts/LanguageContext";
-import DownloadRequestForm from "./DownloadRequestForm";
 
 export default function DownloadPageContent() {
   const { t } = useLanguage();
@@ -40,6 +39,9 @@ export default function DownloadPageContent() {
               </div>
 
               <div className="mobile-cta-row download-hero-actions">
+                <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" className="btn-primary">
+                  {copy.downloadAndroid}
+                </a>
                 <Link href="/auth" className="btn-primary">{copy.openWebApp}</Link>
                 <Link href="/vannamei-shrimp-farming-app" className="btn-outline">{copy.viewFeatures}</Link>
               </div>
@@ -83,12 +85,19 @@ export default function DownloadPageContent() {
 
           <div className="download-request-card">
             <div className="download-card-kicker">
-              <AlertCircle size={20} />
+              <CheckCircle2 size={20} />
               {copy.testerRequestKicker}
             </div>
             <h2 className="feature-title download-card-title">{copy.testerRequestTitle}</h2>
             <p className="download-card-copy">{copy.testerRequestBody}</p>
-            <DownloadRequestForm />
+            <a
+              href={GOOGLE_PLAY_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-primary download-install-action"
+            >
+              {copy.downloadAndroid}
+            </a>
           </div>
         </div>
       </section>
