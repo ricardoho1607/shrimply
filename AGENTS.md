@@ -257,6 +257,7 @@ Final response should include:
 ### Response Style
 
 - Use minimal wording and lead with the outcome.
+- Explain outcomes in plain English and briefly define any unavoidable technical terms.
 - Include only the important result, files changed, verification, blockers, and remaining risks.
 - Keep progress updates to one short sentence.
 - Prefer 3 to 6 concise bullets where appropriate.

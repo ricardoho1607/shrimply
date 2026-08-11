@@ -1,5 +1,5 @@
 // app/shrimp-reports.tsx - Optimized with Android Consistency
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform, StatusBar } from 'react-native';

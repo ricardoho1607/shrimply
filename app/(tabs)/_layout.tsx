@@ -1,5 +1,5 @@
 // app/(tabs)/_layout.tsx
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { Tabs } from 'expo-router';
 import { Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native';

@@ -1,5 +1,5 @@
 // app/marketplace/create-buyer-listing.tsx - Android Optimized
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {

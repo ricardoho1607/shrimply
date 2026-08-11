@@ -21,7 +21,7 @@ import {
   getDocs 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';

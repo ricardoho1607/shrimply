@@ -6,7 +6,7 @@ import {
   Dimensions, Platform, PermissionsAndroid,
 } from 'react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from '../components/MapWrapper';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';

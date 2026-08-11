@@ -41,7 +41,7 @@ export default function LandingPage() {
           </p>
           <div className="animate-hero hero-actions" style={{ animationDelay: '0.98s', display: 'flex', gap: '16px' }}>
             <Link href="/how-it-works" className="btn-primary">See the Platform</Link>
-            <Link href="/auth/join" className="btn-outline">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-outline">Start Free Trial</Link>
           </div>
         </div>
         <div className="hero-right">
@@ -291,7 +291,7 @@ export default function LandingPage() {
             Built by farmers, for farmers. Experience the clarity your operation deserves.
           </p>
           <div className="mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center', alignItems: 'center' }}>
-            <Link href="/auth/join" className="btn-primary" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Start Your Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Start Your Free Trial</Link>
             <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" className="btn-outline" style={{ padding: '18px 46px', fontSize: '0.8rem' }}>Download on Google Play</a>
           </div>
         </div>

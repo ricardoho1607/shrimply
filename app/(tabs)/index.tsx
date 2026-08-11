@@ -1,5 +1,5 @@
 // app/(tabs)/index.tsx - Fully translated version with keyboard handling
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';

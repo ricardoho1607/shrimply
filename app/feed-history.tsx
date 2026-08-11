@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';

@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLanguage } from '../../../context/LanguageContext';
 import { getCompanyProfileCompletion, type CompanyProfileLike } from '../../../shared/onboarding';
 

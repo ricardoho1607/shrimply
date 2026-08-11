@@ -1,5 +1,5 @@
 // app/(tabs)/indexbuyer.tsx - Buyer home page for monitoring suppliers
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import React, { useMemo, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';

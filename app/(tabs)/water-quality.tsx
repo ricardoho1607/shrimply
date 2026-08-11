@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';

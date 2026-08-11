@@ -1,6 +1,6 @@
 import React, { useEffect } from "react";
 import { FlatList, StyleSheet, Text, View, StatusBar, Platform } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useLocalSearchParams, useNavigation } from 'expo-router';
 import { hasWaterQualityData, usePondStore, type Sampling } from "./store/pondStore";
 import { useLanguage } from '.././context/LanguageContext';

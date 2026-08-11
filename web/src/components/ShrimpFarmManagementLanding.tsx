@@ -74,7 +74,7 @@ export default function ShrimpFarmManagementLanding() {
             disease alerts, and reporting into one aquaculture operating system.
           </p>
           <div className="animate-hero mobile-cta-row seo-hero-actions" style={{ animationDelay: "0.98s" }}>
-            <Link href="/auth/join" className="btn-primary">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Start Free Trial</Link>
             <Link href="/how-it-works" className="btn-outline">See How It Works</Link>
           </div>
         </div>
@@ -305,7 +305,7 @@ export default function ShrimpFarmManagementLanding() {
             production, inventory, finance, reporting, and biological risk.
           </p>
           <div className="mobile-cta-row">
-            <Link href="/auth/join" className="btn-primary">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Start Free Trial</Link>
             <Link href="/vannamei-shrimp-farming-app" className="btn-outline">Vannamei App</Link>
           </div>
         </div>

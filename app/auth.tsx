@@ -1,6 +1,6 @@
 // app/auth.tsx - Fixed for Android navigation bar spacing
 import { LibreBaskerville_400Regular, LibreBaskerville_700Bold, useFonts } from '@expo-google-fonts/libre-baskerville';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Google from 'expo-auth-session/providers/google';
 import { sendPasswordResetEmail } from 'firebase/auth';
 import { useLocalSearchParams } from 'expo-router';

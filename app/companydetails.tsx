@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';

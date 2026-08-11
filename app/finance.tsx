@@ -1,5 +1,5 @@
 // app/finance.tsx - Optimized with consistent Android styles
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
 import {
@@ -7,7 +7,7 @@ import {
   Modal, Dimensions, Switch, Platform, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PieChart } from 'react-native-chart-kit';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useCurrency } from '../context/CurrencyContext';
@@ -35,6 +35,66 @@ const COLORS: Record<string, string> = {
 };
 
 const { width: screenWidth } = Dimensions.get('window');
+
+type ExpensePieDatum = {
+  name: string;
+  population: number;
+  color: string;
+};
+
+const pointOnCircle = (centerX: number, centerY: number, radius: number, angle: number) => {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: centerX + radius * Math.cos(radians),
+    y: centerY + radius * Math.sin(radians),
+  };
+};
+
+const createPieSlicePath = (
+  centerX: number,
+  centerY: number,
+  radius: number,
+  startAngle: number,
+  endAngle: number,
+) => {
+  const start = pointOnCircle(centerX, centerY, radius, endAngle);
+  const end = pointOnCircle(centerX, centerY, radius, startAngle);
+  const largeArcFlag = endAngle - startAngle > 180 ? 1 : 0;
+  return [
+    `M ${centerX} ${centerY}`,
+    `L ${start.x} ${start.y}`,
+    `A ${radius} ${radius} 0 ${largeArcFlag} 0 ${end.x} ${end.y}`,
+    'Z',
+  ].join(' ');
+};
+
+const ExpensePieChart = ({ data, width, height }: { data: ExpensePieDatum[]; width: number; height: number }) => {
+  const total = data.reduce((sum, item) => sum + item.population, 0);
+  const radius = height / 2.5;
+  const centerX = width / 4 + 15;
+  const centerY = height / 2;
+  let startAngle = 0;
+
+  return (
+    <Svg
+      width={width}
+      height={height}
+      accessible
+      accessibilityLabel="Expense distribution chart"
+      accessibilityRole="image"
+    >
+      {data.map((item) => {
+        const sweepAngle = total > 0 ? (item.population / total) * 360 : 0;
+        const endAngle = startAngle + sweepAngle;
+        const slicePath = createPieSlicePath(centerX, centerY, radius, startAngle, endAngle);
+        startAngle = endAngle;
+        return sweepAngle >= 359.999
+          ? <Circle key={item.name} cx={centerX} cy={centerY} r={radius} fill={item.color} />
+          : <Path key={item.name} d={slicePath} fill={item.color} />;
+      })}
+    </Svg>
+  );
+};
 
 type FormData = {
   date: string; category: string; item: string; amount: string; paymentType: string;
@@ -530,7 +590,6 @@ export default function FinancePage() {
   const createPieChartData = (byCategory: Record<string, number>) =>
     Object.entries(byCategory).map(([name, population]) => ({
       name, population, color: COLORS[name] || '#dbe7df',
-      legendFontColor: '#7F8C8D', legendFontSize: Platform.OS === 'android' ? 10 : 11,
     }));
 
   const expensePieChartData = createPieChartData(expenseTotals.byCategory);
@@ -785,9 +844,7 @@ export default function FinancePage() {
               <Text style={styles.chartTitle}>{t.finance?.expenseDistribution || 'Expense Distribution'}</Text>
               {expensePieChartData.length > 0 ? (
                 <>
-                  <PieChart data={expensePieChartData} width={screenWidth - 64} height={200}
-                    chartConfig={{ color: (opacity = 1) => `rgba(52, 152, 219, ${opacity})` }}
-                    accessor="population" backgroundColor="transparent" paddingLeft="15" hasLegend={false} absolute />
+                  <ExpensePieChart data={expensePieChartData} width={screenWidth - 64} height={200} />
                   <View style={styles.legend}>
                     {Object.entries(expenseTotals.byCategory).map(([category, amount]) => (
                       <View key={category} style={styles.legendItem}>

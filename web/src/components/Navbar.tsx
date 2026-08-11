@@ -147,10 +147,10 @@ export default function Navbar() {
       </div>
 
       <div className="desktop-actions">
-        <Link href="/auth" className="signin-link">
+        <Link href="/auth" prefetch={false} className="signin-link">
           Sign In
         </Link>
-        <Link href="/auth/join" className="btn-primary get-started-link">
+        <Link href="/auth/join" prefetch={false} className="btn-primary get-started-link">
           Get Started
         </Link>
       </div>
@@ -230,6 +230,7 @@ export default function Navbar() {
         <div className="drawer-actions">
           <Link
             href="/auth"
+            prefetch={false}
             className="drawer-signin"
             style={{
               minHeight: '54px',
@@ -252,6 +253,7 @@ export default function Navbar() {
           </Link>
           <Link
             href="/auth/join"
+            prefetch={false}
             className="btn-primary drawer-primary"
             style={{
               width: '100%',

@@ -3,7 +3,7 @@ import {
   FlatList, View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, 
   RefreshControl, Alert, Switch, Platform, Modal, ActivityIndicator, TextInput
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useMarketplaceStore, type BuyerListing } from './store/marketplaceStore';

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState, useMemo } from 'react';

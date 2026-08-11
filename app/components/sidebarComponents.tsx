@@ -1,5 +1,5 @@
 // app/components/SidebarComponents.tsx
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {

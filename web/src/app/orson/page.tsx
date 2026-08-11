@@ -212,7 +212,7 @@ export default function HowItWorksPage() {
             Experience the power of biological intelligence today. Start your first pond with Orson.
           </p>
           <div className="r d4 mobile-cta-row" style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-            <Link href="/auth/join" className="btn-primary">Try Shrimply for Free</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Try Shrimply for Free</Link>
             <Link href="/" className="btn-outline">Back to Home</Link>
           </div>
         </div>

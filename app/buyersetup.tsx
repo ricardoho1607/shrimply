@@ -4,7 +4,7 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView,
   ScrollView, Alert, ActivityIndicator, Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';

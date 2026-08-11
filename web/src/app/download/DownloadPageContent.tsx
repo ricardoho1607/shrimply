@@ -42,7 +42,7 @@ export default function DownloadPageContent() {
                 <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" className="btn-primary">
                   {copy.downloadAndroid}
                 </a>
-                <Link href="/auth" className="btn-primary">{copy.openWebApp}</Link>
+                <Link href="/auth" prefetch={false} className="btn-primary">{copy.openWebApp}</Link>
                 <Link href="/vannamei-shrimp-farming-app" className="btn-outline">{copy.viewFeatures}</Link>
               </div>
             </div>
@@ -61,7 +61,7 @@ export default function DownloadPageContent() {
                 <InstallStep number="3" icon={CheckCircle2} title={copy.stepHomeTitle} body={copy.stepHomeBody} />
               </ol>
 
-              <Link href="/auth" className="btn-primary download-install-action">
+              <Link href="/auth" prefetch={false} className="btn-primary download-install-action">
                 {copy.openDashboard}
               </Link>
             </aside>
