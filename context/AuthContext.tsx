@@ -32,6 +32,8 @@ import * as Google from 'expo-auth-session/providers/google';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../shared/onboarding';
 import {
+  clearUserFarmCaches,
+  enableFarmCacheForUser,
   hydrateFarmCache,
   loadActiveAuthBootstrap,
   loadCompanyAuthBootstrap,
@@ -365,6 +367,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (firebaseUser) {
+        enableFarmCacheForUser(firebaseUser.uid);
         clearPondData();
         setUser(null);
         previousCompanyRef.current = null;
@@ -668,21 +671,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (user) {
+    const userId = user?.uid ?? auth.currentUser?.uid;
+    if (userId) {
       try {
-        await updateDoc(doc(db, 'users', user.uid), { lastActive: serverTimestamp() });
+        await updateDoc(doc(db, 'users', userId), { lastActive: serverTimestamp() });
       } catch (error) {
         console.error('Error updating last active during sign out:', error);
       }
     }
-    await firebaseSignOut(auth);
-    clearPondData();
-    clearBuyerData();
-    setUser(null);
-    previousCompanyRef.current = null;
-    setCompany(null);
-    setCachedFarmAvailable(false);
-    setCompanyResolved(true);
+    try {
+      if (userId) await clearUserFarmCaches(userId);
+    } catch (error) {
+      console.error('[FarmCache] logout cleanup failed:', error);
+    }
+    try {
+      await firebaseSignOut(auth);
+    } finally {
+      clearPondData();
+      clearBuyerData();
+      setUser(null);
+      previousCompanyRef.current = null;
+      setCompany(null);
+      setCachedFarmAvailable(false);
+      setCompanyResolved(true);
+    }
     // Redirection is handled automatically by RootLayoutNav based on auth state
   };
 

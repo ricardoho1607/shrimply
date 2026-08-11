@@ -6,6 +6,8 @@ import {
   createFarmCacheSnapshot,
   getAuthBootstrapKey,
   getFarmCacheKey,
+  getPendingSyncKey,
+  isUserScopedCacheKey,
   parseAuthBootstrapSnapshot,
   parseFarmCacheSnapshot,
 } from './farmCache.ts';
@@ -14,6 +16,15 @@ test('scopes farm and auth cache keys by user and company', () => {
   assert.notEqual(getFarmCacheKey('user-a', 'company-a'), getFarmCacheKey('user-b', 'company-a'));
   assert.notEqual(getFarmCacheKey('user-a', 'company-a'), getFarmCacheKey('user-a', 'company-b'));
   assert.notEqual(getAuthBootstrapKey('user-a', 'company-a'), getAuthBootstrapKey('user-a', 'company-b'));
+});
+
+test('identifies every user-scoped cache key for logout cleanup', () => {
+  const userId = 'user-a';
+  assert.equal(isUserScopedCacheKey(getFarmCacheKey(userId, 'company-a'), userId), true);
+  assert.equal(isUserScopedCacheKey(getAuthBootstrapKey(userId, 'company-a'), userId), true);
+  assert.equal(isUserScopedCacheKey(getPendingSyncKey(userId, 'company-a'), userId), true);
+  assert.equal(isUserScopedCacheKey(getFarmCacheKey('user-b', 'company-a'), userId), false);
+  assert.equal(isUserScopedCacheKey('unrelated:key', userId), false);
 });
 
 test('rejects a farm cache belonging to another user or company', () => {

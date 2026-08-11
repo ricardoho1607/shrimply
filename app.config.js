@@ -3,12 +3,12 @@ export default {
   expo: {
     name: 'Shrimply',
     slug: 'investashrimp',
-    version: '3.2.0',
+    version: '3.2.1',
     orientation: 'portrait',
     icon: './assets/images/app-icon.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
-    runtimeVersion: '3.2.0',
+    runtimeVersion: '3.2.1',
     updates: {
       url: 'https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db',
       checkAutomatically: 'NEVER',
@@ -76,6 +76,12 @@ export default {
       'expo-font',
       '@react-native-community/datetimepicker',
       'expo-web-browser',
+      [
+        'expo-secure-store',
+        {
+          faceIDPermission: false,
+        },
+      ],
       [
         'expo-location',
         {

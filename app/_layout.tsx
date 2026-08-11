@@ -14,9 +14,9 @@ import { RegularSidebar, BuyerSidebar, StaticSidebar, StaticBuyerSidebar } from 
 import { useNotificationChecker } from './hooks/useNotificationChecker';
 import { useMobileActivityTracker } from './hooks/useMobileActivityTracker';
 import { FirebaseSyncProvider } from './hooks/useFirebaseSync';
+import { StartupUpdateManager } from './components/StartupUpdateManager';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
-let hasCheckedForStartupUpdate = false;
 
 if (sentryDsn) {
   Sentry.init({
@@ -240,31 +240,10 @@ function RootLayoutNav() {
 }
 
 function RootLayout() {
-  useEffect(() => {
-    if (__DEV__ || Platform.OS !== 'android' || hasCheckedForStartupUpdate || !Updates.isEnabled) return;
-
-    hasCheckedForStartupUpdate = true;
-
-    const applyStartupUpdate = async () => {
-      try {
-        const checkResult = await Updates.checkForUpdateAsync();
-        if (!checkResult.isAvailable) return;
-
-        const fetchResult = await Updates.fetchUpdateAsync();
-        if (fetchResult.isNew) {
-          await Updates.reloadAsync();
-        }
-      } catch (error) {
-        console.log('Startup update check failed:', error);
-      }
-    };
-
-    applyStartupUpdate();
-  }, []);
-
   return (
     <LanguageProvider>
       <CurrencyProvider>
+        <StartupUpdateManager />
         <LanguageCurrencySync>
           <AuthProvider>
             <FirebaseSyncProvider>

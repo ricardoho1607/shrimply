@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   FARM_CACHE_VERSION,
   createAuthBootstrapSnapshot,
@@ -19,6 +18,13 @@ import {
   type PhysicalPond,
   type Pond,
 } from '../store/pondStore';
+import {
+  clearProtectedStorageForUser,
+  enableProtectedStorageForUser,
+  readProtectedItem,
+  removeProtectedItem,
+  writeProtectedItem,
+} from './protectedStorage';
 
 interface FarmStateForCache {
   ponds: Pond[];
@@ -50,6 +56,10 @@ const clearPendingWrite = (key: string): void => {
   const pending = pendingWrites.get(key);
   if (pending) clearTimeout(pending.timer);
   pendingWrites.delete(key);
+};
+
+export const enableFarmCacheForUser = (userId: string): void => {
+  enableProtectedStorageForUser(userId);
 };
 
 const selectHarvestRecordsForCache = (state: FarmStateForCache): HarvestRecord[] => {
@@ -93,13 +103,13 @@ export const hydrateFarmCache = async (
   const key = getFarmCacheKey(userId, companyId);
 
   try {
-    const raw = await AsyncStorage.getItem(key);
+    const raw = await readProtectedItem(userId, key);
     const snapshot = raw ? parseFarmCacheSnapshot(raw, userId, companyId) : null;
     const currentState = usePondStore.getState();
     if (currentState.currentCompanyId !== companyId || currentState.farmCacheUserId !== userId) return false;
 
     if (!snapshot) {
-      if (raw) await AsyncStorage.removeItem(key);
+      if (raw) await removeProtectedItem(key);
       usePondStore.setState({ farmCacheStatus: 'miss' });
       logCache(raw ? `invalid cache removed for ${companyId}` : `cache miss for ${companyId}`);
       return false;
@@ -120,6 +130,7 @@ export const hydrateFarmCache = async (
     return true;
   } catch (error) {
     console.error('[FarmCache] hydration failed:', error);
+    await removeProtectedItem(key).catch(() => undefined);
     const currentState = usePondStore.getState();
     if (currentState.currentCompanyId === companyId && currentState.farmCacheUserId === userId) {
       usePondStore.setState({ farmCacheStatus: 'miss' });
@@ -141,7 +152,7 @@ const writeFarmCache = async (
     harvestRecords: selectHarvestRecordsForCache(state),
     currentTimeZone: state.currentTimeZone,
   }, { lastSyncedAt });
-  await AsyncStorage.setItem(getFarmCacheKey(userId, companyId), JSON.stringify(snapshot));
+  await writeProtectedItem(userId, getFarmCacheKey(userId, companyId), JSON.stringify(snapshot));
   logCache(`persisted ${companyId}`);
 };
 
@@ -179,7 +190,14 @@ export const flushFarmCachePersist = async (userId: string, companyId: string): 
 export const removeFarmCache = async (userId: string, companyId: string): Promise<void> => {
   const key = getFarmCacheKey(userId, companyId);
   clearPendingWrite(key);
-  await AsyncStorage.removeItem(key);
+  await removeProtectedItem(key);
+};
+
+export const clearUserFarmCaches = async (userId: string): Promise<void> => {
+  for (const [key, pending] of pendingWrites) {
+    if (pending.userId === userId) clearPendingWrite(key);
+  }
+  await clearProtectedStorageForUser(userId);
 };
 
 export const persistAuthBootstrap = async (
@@ -189,9 +207,17 @@ export const persistAuthBootstrap = async (
   company: Record<string, unknown>,
 ): Promise<void> => {
   const snapshot = createAuthBootstrapSnapshot(userId, companyId, user, company);
-  await AsyncStorage.multiSet([
-    [getAuthBootstrapKey(userId, companyId), JSON.stringify(snapshot)],
-    [getAuthBindingKey(userId), JSON.stringify({ version: FARM_CACHE_VERSION, userId, companyId })],
+  await Promise.all([
+    writeProtectedItem(
+      userId,
+      getAuthBootstrapKey(userId, companyId),
+      JSON.stringify(snapshot),
+    ),
+    writeProtectedItem(
+      userId,
+      getAuthBindingKey(userId),
+      JSON.stringify({ version: FARM_CACHE_VERSION, userId, companyId }),
+    ),
   ]);
 };
 
@@ -201,12 +227,13 @@ export const loadCompanyAuthBootstrap = async (
 ): Promise<AuthBootstrapSnapshot | null> => {
   try {
     const key = getAuthBootstrapKey(userId, companyId);
-    const raw = await AsyncStorage.getItem(key);
+    const raw = await readProtectedItem(userId, key);
     const snapshot = raw ? parseAuthBootstrapSnapshot(raw, userId, companyId) : null;
-    if (raw && !snapshot) await AsyncStorage.removeItem(key);
+    if (raw && !snapshot) await removeProtectedItem(key);
     return snapshot;
   } catch (error) {
     console.error('[FarmCache] auth bootstrap read failed:', error);
+    await removeProtectedItem(getAuthBootstrapKey(userId, companyId)).catch(() => undefined);
     return null;
   }
 };
@@ -214,24 +241,25 @@ export const loadCompanyAuthBootstrap = async (
 export const loadActiveAuthBootstrap = async (userId: string): Promise<AuthBootstrapSnapshot | null> => {
   try {
     const bindingKey = getAuthBindingKey(userId);
-    const rawBinding = await AsyncStorage.getItem(bindingKey);
+    const rawBinding = await readProtectedItem(userId, bindingKey);
     const binding = rawBinding ? parseAuthBindingSnapshot(rawBinding, userId) : null;
     if (!binding) {
-      if (rawBinding) await AsyncStorage.removeItem(bindingKey);
+      if (rawBinding) await removeProtectedItem(bindingKey);
       return null;
     }
     return loadCompanyAuthBootstrap(userId, binding.companyId);
   } catch (error) {
     console.error('[FarmCache] active auth binding read failed:', error);
+    await removeProtectedItem(getAuthBindingKey(userId)).catch(() => undefined);
     return null;
   }
 };
 
 export const removeAuthBootstrap = async (userId: string, companyId: string): Promise<void> => {
   const bindingKey = getAuthBindingKey(userId);
-  const rawBinding = await AsyncStorage.getItem(bindingKey);
+  const rawBinding = await readProtectedItem(userId, bindingKey);
   const binding = rawBinding ? parseAuthBindingSnapshot(rawBinding, userId) : null;
   const keys = [getAuthBootstrapKey(userId, companyId)];
   if (binding?.companyId === companyId || !binding) keys.push(bindingKey);
-  await AsyncStorage.multiRemove(keys);
+  await Promise.all(keys.map(removeProtectedItem));
 };

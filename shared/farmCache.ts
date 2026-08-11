@@ -3,6 +3,7 @@ export const FARM_CACHE_VERSION = 1;
 const FARM_CACHE_PREFIX = 'shrimply:farm-cache';
 const AUTH_BOOTSTRAP_PREFIX = 'shrimply:auth-bootstrap';
 const AUTH_BINDING_PREFIX = 'shrimply:auth-binding';
+const PENDING_SYNC_PREFIX = 'shrimply:pending-sync';
 
 const encodeKeyPart = (value: string): string => encodeURIComponent(value);
 
@@ -14,6 +15,17 @@ export const getAuthBootstrapKey = (userId: string, companyId: string): string =
 
 export const getAuthBindingKey = (userId: string): string =>
   `${AUTH_BINDING_PREFIX}:v${FARM_CACHE_VERSION}:${encodeKeyPart(userId)}`;
+
+export const getPendingSyncKey = (userId: string, companyId: string): string =>
+  `${PENDING_SYNC_PREFIX}:${encodeKeyPart(userId)}:${encodeKeyPart(companyId)}`;
+
+export const isUserScopedCacheKey = (key: string, userId: string): boolean => {
+  const encodedUserId = encodeKeyPart(userId);
+  return key.startsWith(`${FARM_CACHE_PREFIX}:v${FARM_CACHE_VERSION}:${encodedUserId}:`)
+    || key.startsWith(`${AUTH_BOOTSTRAP_PREFIX}:v${FARM_CACHE_VERSION}:${encodedUserId}:`)
+    || key === getAuthBindingKey(userId)
+    || key.startsWith(`${PENDING_SYNC_PREFIX}:${encodedUserId}:`);
+};
 
 export interface FarmCacheData {
   ponds: unknown[];

@@ -1,6 +1,5 @@
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
 import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
   doc, 
   collection, 
@@ -24,6 +23,8 @@ import {
 } from '../../shared/harvestCalculations';
 import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
+import { readProtectedItem, removeProtectedItem, writeProtectedItem } from '../services/protectedStorage';
+import { getPendingSyncKey } from '../../shared/farmCache';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -133,7 +134,10 @@ const applyPendingEntityChanges = <T extends { id: string }>(
 const useFirebaseSyncController = () => {
   const { user, company, isBuyer } = useAuth();
   const activeCompanyId = user && !isBuyer ? company?.id : undefined;
-  const pendingStorageKey = user?.uid && activeCompanyId ? `shrimply:pending-sync:${user.uid}:${activeCompanyId}` : null;
+  const activeUserId = user?.uid;
+  const pendingStorageKey = activeUserId && activeCompanyId
+    ? getPendingSyncKey(activeUserId, activeCompanyId)
+    : null;
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({
     isOnline: false,
     isSyncing: false,
@@ -163,13 +167,13 @@ const useFirebaseSyncController = () => {
       pendingChangesRef.current = [];
       setPendingChanges([]);
 
-      if (!pendingStorageKey) {
+      if (!pendingStorageKey || !activeUserId) {
         setPendingStorageReady(true);
         return;
       }
 
       try {
-        const raw = await AsyncStorage.getItem(pendingStorageKey);
+        const raw = await readProtectedItem(activeUserId, pendingStorageKey);
         if (cancelled) return;
         const parsed = raw ? JSON.parse(raw) : [];
         const restoredChanges = Array.isArray(parsed) ? parsed : [];
@@ -187,7 +191,7 @@ const useFirebaseSyncController = () => {
     return () => {
       cancelled = true;
     };
-  }, [pendingStorageKey]);
+  }, [activeUserId, pendingStorageKey]);
 
   useEffect(() => {
     setSyncStatus((previous) => ({
@@ -200,14 +204,14 @@ const useFirebaseSyncController = () => {
   }, [activeCompanyId, user?.uid]);
 
   useEffect(() => {
-    if (!pendingStorageKey || !pendingStorageReady) return;
+    if (!activeUserId || !pendingStorageKey || !pendingStorageReady) return;
 
     const persistPendingChanges = async () => {
       try {
         if (pendingChanges.length === 0) {
-          await AsyncStorage.removeItem(pendingStorageKey);
+          await removeProtectedItem(pendingStorageKey);
         } else {
-          await AsyncStorage.setItem(pendingStorageKey, JSON.stringify(pendingChanges));
+          await writeProtectedItem(activeUserId, pendingStorageKey, JSON.stringify(pendingChanges));
         }
       } catch (error) {
         console.error('Error saving pending sync queue:', error);
@@ -216,7 +220,7 @@ const useFirebaseSyncController = () => {
     };
 
     persistPendingChanges();
-  }, [pendingChanges, pendingStorageKey, pendingStorageReady]);
+  }, [activeUserId, pendingChanges, pendingStorageKey, pendingStorageReady]);
 
   const setupRealtimeListeners = useCallback((userId: string, companyId: string) => {
     const newUnsubscribeCallbacks: (() => void)[] = [];
