@@ -525,8 +525,8 @@ function MetricCard({ label, value, helper, icon: Icon }: { label: string; value
         <Icon size={21} strokeWidth={2.25} />
       </div>
       <div>
-        <div style={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 760, marginBottom: '8px' }}>{label}</div>
-        <div style={{ fontSize: '1.58rem', color: 'var(--text-primary)', fontWeight: 760, lineHeight: 1.05, letterSpacing: 0, fontFamily: 'var(--sans)' }}>{value}</div>
+        <div style={{ fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '8px' }}>{label}</div>
+        <div style={{ fontSize: '1.58rem', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.05, letterSpacing: 0, fontFamily: 'var(--jakarta)' }}>{value}</div>
         <div style={{ marginTop: '10px', fontSize: '0.81rem', color: 'var(--text-muted)', lineHeight: 1.5, fontWeight: 500 }}>{helper}</div>
       </div>
     </div>
@@ -554,8 +554,8 @@ async function copyText(value: string) {
 function MetricLine({ label, value }: { label: string; value: number }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', padding: '12px 0', borderBottom: '1px solid var(--border)' }}>
-      <span style={{ color: 'var(--text-muted)', fontWeight: 650 }}>{label}</span>
-      <span style={{ color: 'var(--text-primary)', fontWeight: 760, fontFamily: 'var(--sans)' }}>{formatNumber(value)}</span>
+      <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{label}</span>
+      <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontFamily: 'var(--jakarta)' }}>{formatNumber(value)}</span>
     </div>
   );
 }
@@ -589,7 +589,7 @@ function AdminShellStyles() {
         background: #f8fafc;
         color: var(--text-primary);
         overflow: hidden;
-        font-family: var(--sans), "Plus Jakarta Sans", Inter, system-ui, sans-serif;
+        font-family: var(--jakarta), "Plus Jakarta Sans", Inter, system-ui, sans-serif;
         letter-spacing: 0;
       }
       .shrimply-admin-shell.admin-shell-no-inspector {
@@ -678,7 +678,7 @@ function AdminShellStyles() {
         padding: 0 12px;
         background: transparent;
         color: rgba(255, 255, 255, 0.84);
-        font-weight: 700;
+        font-weight: 600;
         cursor: pointer;
       }
       .admin-nav-button.active {
@@ -713,7 +713,7 @@ function AdminShellStyles() {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 760;
+        font-weight: 600;
         flex-shrink: 0;
       }
       .admin-sidebar-profile-copy {
@@ -726,7 +726,7 @@ function AdminShellStyles() {
         max-width: 100%;
         color: #fff;
         font-size: 0.76rem;
-        font-weight: 760;
+        font-weight: 600;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -751,7 +751,7 @@ function AdminShellStyles() {
         color: rgba(255, 255, 255, 0.45);
         font-size: 0.66rem;
         text-align: center;
-        font-weight: 650;
+        font-weight: 600;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -814,7 +814,7 @@ function AdminShellStyles() {
       .shrimply-admin-shell .dashboard-action {
         border-radius: 7px !important;
         min-height: 38px;
-        font-weight: 700 !important;
+        font-weight: 600 !important;
       }
       .shrimply-admin-shell table th,
       .shrimply-admin-shell table td {
@@ -983,11 +983,11 @@ function AdminInspectorPanel({
       <aside className="shrimply-admin-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
           <div style={{ minWidth: 0 }}>
-            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 760, margin: 0, lineHeight: 1.2 }}>{user.name || 'Unnamed user'}</h2>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650, marginTop: 8, wordBreak: 'break-word' }}>{user.email || 'Email unavailable'}</div>
+            <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{user.name || 'Unnamed user'}</h2>
+            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: 8, wordBreak: 'break-word' }}>{user.email || 'Email unavailable'}</div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <span style={{ padding: '5px 9px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 700 }}>{user.role || 'No role'}</span>
+            <span style={{ padding: '5px 9px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 600 }}>{user.role || 'No role'}</span>
             <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
               <X size={16} />
             </button>
@@ -1010,11 +1010,11 @@ function AdminInspectorPanel({
           </button>
         </div>
         <section className="admin-card" style={{ padding: 16, marginBottom: 22, background: '#f8fbff' }}>
-          <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 760, marginBottom: 8 }}>
+          <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 600, marginBottom: 8 }}>
             <CheckCircle2 size={17} color="var(--primary)" />
             Recommended next action
           </div>
-          <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.84rem', fontWeight: 700 }}>
+          <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.84rem', fontWeight: 600 }}>
             {pendingRequest
               ? `Ask the company owner to approve or reject the pending request for ${pendingRequest.companyName || pendingRequest.companyId}.`
               : !user.companyId && user.role !== 'buyer'
@@ -1023,7 +1023,7 @@ function AdminInspectorPanel({
           </p>
         </section>
         <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
-          <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 10px' }}>User details</h3>
+          <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 600, margin: '0 0 10px' }}>User details</h3>
           {[
             ['Email', user.email || 'Unavailable'],
             ['Role', user.role || 'No role'],
@@ -1032,7 +1032,7 @@ function AdminInspectorPanel({
             ['Joined', formatDate(user.joinedAt)],
             ['Last active', formatDate(user.lastActive)],
           ].map(([label, value]) => (
-            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650 }}>
+            <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
               <span>{label}</span>
               <span style={{ color: 'var(--text-primary)', textAlign: 'right', wordBreak: 'break-word' }}>{value}</span>
             </div>
@@ -1046,7 +1046,7 @@ function AdminInspectorPanel({
     return (
       <aside className="shrimply-admin-panel">
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
-          <div style={{ color: 'var(--text-muted)', fontWeight: 650 }}>Select a company to inspect details.</div>
+          <div style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Select a company to inspect details.</div>
           <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
             <X size={16} />
           </button>
@@ -1066,13 +1066,13 @@ function AdminInspectorPanel({
     <aside className="shrimply-admin-panel">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
         <div style={{ minWidth: 0 }}>
-          <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 760, margin: 0, lineHeight: 1.2 }}>{company.companyName}</h2>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650, marginTop: 8 }}>
+          <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{company.companyName}</h2>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: 8 }}>
             Company ID: {company.id.slice(0, 12)}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <span style={{ padding: '5px 9px', borderRadius: 999, background: health.bg, color: health.tone, fontSize: '0.68rem', fontWeight: 700 }}>{health.label}</span>
+          <span style={{ padding: '5px 9px', borderRadius: 999, background: health.bg, color: health.tone, fontSize: '0.68rem', fontWeight: 600 }}>{health.label}</span>
           <button className="admin-inspector-close" type="button" onClick={onClose} aria-label="Close details">
             <X size={16} />
           </button>
@@ -1097,11 +1097,11 @@ function AdminInspectorPanel({
       </div>
 
       <section style={{ padding: 14, borderRadius: 8, background: '#fff7f7', border: '1px solid #fecaca', marginBottom: 22 }}>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#b91c1c', fontWeight: 760, fontSize: '0.84rem', marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', color: '#b91c1c', fontWeight: 600, fontSize: '0.84rem', marginBottom: 8 }}>
           <Trash2 size={16} />
           Delete company and linked users
         </div>
-        <p style={{ margin: '0 0 12px', color: '#7f1d1d', lineHeight: 1.45, fontSize: '0.8rem', fontWeight: 700 }}>
+        <p style={{ margin: '0 0 12px', color: '#7f1d1d', lineHeight: 1.45, fontSize: '0.8rem', fontWeight: 600 }}>
           This permanently wipes the company, nested company data, linked user records, and matching Auth users.
         </p>
         <button
@@ -1114,7 +1114,7 @@ function AdminInspectorPanel({
             background: '#dc2626',
             border: '1px solid #b91c1c',
             color: '#fff',
-            fontWeight: 760,
+            fontWeight: 600,
           }}
         >
           {deletingCompanyId === company.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
@@ -1123,11 +1123,11 @@ function AdminInspectorPanel({
       </section>
 
       <section className="admin-card" style={{ padding: 16, marginBottom: 22, background: '#f8fbff' }}>
-        <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 760, marginBottom: 8 }}>
+        <div style={{ display: 'flex', gap: 9, alignItems: 'center', color: 'var(--text-primary)', fontWeight: 600, marginBottom: 8 }}>
           <CheckCircle2 size={17} color="var(--primary)" />
           Recommended next action
         </div>
-        <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.84rem', fontWeight: 700 }}>{recommendedAction}</p>
+        <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5, fontSize: '0.84rem', fontWeight: 600 }}>{recommendedAction}</p>
         {company.ownerEmail && (
           <a href={`mailto:${company.ownerEmail}`} className="dashboard-action dashboard-action-primary" style={{ marginTop: 14, textDecoration: 'none', display: 'inline-flex' }}>
             <Mail size={14} />
@@ -1137,7 +1137,7 @@ function AdminInspectorPanel({
       </section>
 
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginBottom: 22 }}>
-        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 10px' }}>Company details</h3>
+        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 600, margin: '0 0 10px' }}>Company details</h3>
         {[
           ['Owner', company.ownerEmail || 'Unavailable'],
           ['Industry', company.farmType || 'Unavailable'],
@@ -1146,7 +1146,7 @@ function AdminInspectorPanel({
           ['Active cycles', company.activeCycleCount],
           ['Status', health.label],
         ].map(([label, value]) => (
-          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650 }}>
+          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 14, padding: '8px 0', color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600 }}>
             <span>{label}</span>
             <span style={{ color: label === 'Status' ? health.tone : 'var(--text-primary)', textAlign: 'right' }}>{value}</span>
           </div>
@@ -1154,7 +1154,7 @@ function AdminInspectorPanel({
       </section>
 
       <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginBottom: 22 }}>
-        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 760, margin: '0 0 14px' }}>Statistics</h3>
+        <h3 style={{ fontSize: '0.86rem', color: 'var(--text-primary)', fontWeight: 600, margin: '0 0 14px' }}>Statistics</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
           {[
             ['Ponds', company.pondCount],
@@ -1169,7 +1169,7 @@ function AdminInspectorPanel({
               <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
                 <ChevronRight size={14} />
               </div>
-              <div style={{ color: 'var(--text-primary)', fontWeight: 760, fontSize: '1rem' }}>{value}</div>
+              <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '1rem' }}>{value}</div>
               <div style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.68rem' }}>{label}</div>
             </div>
           ))}
@@ -1188,12 +1188,12 @@ function TesterRequestsPanel({ requests }: { requests: TesterRequest[] }) {
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '18px', marginBottom: '22px', flexWrap: 'wrap' }}>
         <div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 999, background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
             <Smartphone size={15} />
             Android closed testing
           </div>
-          <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.18rem', fontWeight: 760 }}>Tester access requests</h2>
-          <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontWeight: 650, fontSize: '0.86rem' }}>
+          <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.18rem', fontWeight: 600 }}>Tester access requests</h2>
+          <p style={{ margin: '8px 0 0', color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.86rem' }}>
             {formatNumber(requests.length)} total requests, {formatNumber(pendingCount)} pending, {formatNumber(sentEmailCount)} email notifications sent.
           </p>
         </div>
@@ -1211,15 +1211,15 @@ function TesterRequestsPanel({ requests }: { requests: TesterRequest[] }) {
             <article key={request.id} className="admin-card" style={{ padding: '18px', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '18px', alignItems: 'start' }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                  <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 800 }}>{request.name || 'Unnamed requester'}</h3>
-                  <span style={{ borderRadius: 999, padding: '4px 8px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 800 }}>
+                  <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 600 }}>{request.name || 'Unnamed requester'}</h3>
+                  <span style={{ borderRadius: 999, padding: '4px 8px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 600 }}>
                     {request.platform || 'android'}
                   </span>
-                  <span style={{ borderRadius: 999, padding: '4px 8px', background: request.emailDeliveryStatus === 'sent' ? '#dcfce7' : '#fef3c7', color: request.emailDeliveryStatus === 'sent' ? '#166534' : '#92400e', fontSize: '0.68rem', fontWeight: 800 }}>
+                  <span style={{ borderRadius: 999, padding: '4px 8px', background: request.emailDeliveryStatus === 'sent' ? '#dcfce7' : '#fef3c7', color: request.emailDeliveryStatus === 'sent' ? '#166534' : '#92400e', fontSize: '0.68rem', fontWeight: 600 }}>
                     Email {request.emailDeliveryStatus}
                   </span>
                 </div>
-                <div style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.82rem', wordBreak: 'break-word', marginBottom: '10px' }}>
+                <div style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem', wordBreak: 'break-word', marginBottom: '10px' }}>
                   {request.email || 'Email unavailable'}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '10px', marginBottom: request.reason ? '12px' : 0 }}>
@@ -1229,11 +1229,11 @@ function TesterRequestsPanel({ requests }: { requests: TesterRequest[] }) {
                   <TesterMini label="Device" value={request.androidDevice || 'Not provided'} />
                 </div>
                 {request.reason ? (
-                  <p style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 650, fontSize: '0.86rem', lineHeight: 1.5 }}>
+                  <p style={{ margin: 0, color: 'var(--text-primary)', fontWeight: 600, fontSize: '0.86rem', lineHeight: 1.5 }}>
                     {request.reason}
                   </p>
                 ) : null}
-                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '12px', color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 700 }}>
+                <div style={{ display: 'flex', gap: '14px', flexWrap: 'wrap', marginTop: '12px', color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 600 }}>
                   <span>Requested {formatDate(request.lastRequestedAt || request.createdAt)}</span>
                   <span>Count: {request.requestCount}</span>
                   <span>Status: {request.status}</span>
@@ -1263,8 +1263,8 @@ function TesterRequestsPanel({ requests }: { requests: TesterRequest[] }) {
 function TesterMini({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ minWidth: 0 }}>
-      <div style={{ color: 'var(--text-muted)', fontSize: '0.66rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>{label}</div>
-      <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>{value}</div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.66rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '3px' }}>{label}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={value}>{value}</div>
     </div>
   );
 }
@@ -1274,7 +1274,7 @@ function UsagePanel({ metrics }: { metrics: AdminMetrics }) {
     <div className="glass-card" style={{ padding: '24px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
         <div>
-          <div style={{ fontSize: '1.08rem', color: 'var(--text-primary)', fontWeight: 760 }}>Request counters</div>
+          <div style={{ fontSize: '1.08rem', color: 'var(--text-primary)', fontWeight: 600 }}>Request counters</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.86rem' }}>AI usage and optional API log collections</div>
         </div>
         <FileText size={22} color="var(--primary)" />
@@ -1456,13 +1456,13 @@ export default function HiddenAdminPage() {
           <div className="admin-topbar">
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
-                <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.48rem', lineHeight: 1.14, fontWeight: 760, letterSpacing: 0 }}>Shrimply Admin</h1>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '5px 9px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 700 }}>
+                <h1 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.48rem', lineHeight: 1.14, fontWeight: 600, letterSpacing: 0 }}>Shrimply Admin</h1>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '5px 9px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.68rem', fontWeight: 600 }}>
                   <ShieldCheck size={12} />
                   Founder only
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 650 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
                 <span>{metrics ? `Last updated: ${formatDate(metrics.generatedAt)}` : 'Private route'}</span>
                 <DataSourceBadge source={dataSource} updatedAt={metrics?.generatedAt} />
               </div>
@@ -1489,7 +1489,7 @@ export default function HiddenAdminPage() {
           <div className="admin-card" style={{ padding: '16px', display: 'flex', gap: '14px', alignItems: 'flex-start', borderColor: '#ef444433', background: '#fff7f7' }}>
             <AlertTriangle size={22} color="#ef4444" />
             <div>
-              <div style={{ color: '#991b1b', fontWeight: 760, marginBottom: '4px' }}>Admin metrics unavailable</div>
+              <div style={{ color: '#991b1b', fontWeight: 600, marginBottom: '4px' }}>Admin metrics unavailable</div>
               <div style={{ color: '#7f1d1d', fontSize: '0.9rem', lineHeight: 1.5 }}>{error}</div>
             </div>
           </div>

@@ -290,7 +290,7 @@ export default function MarketplacePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.9 }}>{t.MarketplaceScreen.activeListings}</div>
-              <div style={{ fontSize: '28px', fontWeight: 800 }}>{listings.length}</div>
+              <div style={{ fontSize: '28px', fontWeight: 600 }}>{listings.length}</div>
             </div>
             <Store size={24} style={{ opacity: 0.8 }} />
           </div>
@@ -299,7 +299,7 @@ export default function MarketplacePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Visible Results</div>
-              <div style={{ fontSize: '28px', fontWeight: 800, color: 'var(--text-primary)' }}>{filteredListings.length}</div>
+              <div style={{ fontSize: '28px', fontWeight: 600, color: 'var(--text-primary)' }}>{filteredListings.length}</div>
             </div>
             <TrendingUp size={24} color="#059669" />
           </div>
@@ -308,7 +308,7 @@ export default function MarketplacePage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
               <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>My Offers</div>
-              <div style={{ fontSize: '28px', fontWeight: 800 }}>{myListingsCount}</div>
+              <div style={{ fontSize: '28px', fontWeight: 600 }}>{myListingsCount}</div>
               <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{totalViews} total views in current feed</div>
             </div>
             <CheckCircle2 size={24} color="var(--primary)" />
@@ -335,11 +335,11 @@ export default function MarketplacePage() {
             <div style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
               <button 
                 onClick={() => setActiveFilter('all')}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'all' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 700, cursor: 'pointer', boxShadow: activeFilter === 'all' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'all' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'all' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'all' ? 'var(--primary)' : 'var(--text-muted)' }}
               >{t.MarketplaceScreen.allListings}</button>
               <button 
                 onClick={() => setActiveFilter('my')}
-                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'my' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 700, cursor: 'pointer', boxShadow: activeFilter === 'my' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'my' ? 'var(--primary)' : 'var(--text-muted)' }}
+                style={{ padding: '8px 16px', borderRadius: '8px', border: 'none', background: activeFilter === 'my' ? '#FFF' : 'transparent', fontSize: '13px', fontWeight: 600, cursor: 'pointer', boxShadow: activeFilter === 'my' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none', color: activeFilter === 'my' ? 'var(--primary)' : 'var(--text-muted)' }}
               >{t.MarketplaceScreen.myPosts}</button>
             </div>
           </div>
@@ -351,7 +351,7 @@ export default function MarketplacePage() {
                 <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--bg-mid)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
                   <Store size={32} />
                 </div>
-                <h3 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px', color: 'var(--text-primary)' }}>No matching listings</h3>
+                <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>No matching listings</h3>
                 <p style={{ color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto' }}>Try a different city or switch back to all listings to broaden the feed.</p>
               </div>
             ) : filteredListings.map((listing) => (
@@ -368,14 +368,14 @@ export default function MarketplacePage() {
                         <Store size={22} />
                       </div>
                       <div>
-                        <h3 style={{ fontSize: '16px', fontWeight: 800 }}>{listing.companyName}</h3>
+                        <h3 style={{ fontSize: '16px', fontWeight: 600 }}>{listing.companyName}</h3>
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <MapPin size={12} /> {listing.city}, {listing.country}
                         </p>
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <div style={{ padding: '4px 10px', borderRadius: '6px', background: listing.paymentMethod === 'cash' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(15, 76, 117, 0.1)', color: listing.paymentMethod === 'cash' ? '#059669' : 'var(--primary)', fontSize: '10px', fontWeight: 800, textTransform: 'uppercase' }}>
+                      <div style={{ padding: '4px 10px', borderRadius: '6px', background: listing.paymentMethod === 'cash' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(15, 76, 117, 0.1)', color: listing.paymentMethod === 'cash' ? '#059669' : 'var(--primary)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>
                         {listing.paymentMethod === 'cash' ? (t.MarketplaceScreen.cod || 'COD') : `${t.CreateBuyerListingScreen.termsOfPayment || 'TOP'} ${listing.topDays}${t.CreateBuyerListingScreen.days || 'D'}`}
                       </div>
                       {(listing.companyId === company?.id || listing.userId === user?.uid) && (
@@ -402,8 +402,8 @@ export default function MarketplacePage() {
                       const price = listing.priceList[priceListKeyForSize(size)];
                       return (
                         <div key={size} style={{ textAlign: 'center' }}>
-                          <div style={{ fontSize: '10px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{t.shrimp.size} {size}</div>
-                          <div style={{ fontSize: '13px', fontWeight: 800 }}>{price ? formatCurrency(price) : '--'}</div>
+                          <div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{t.shrimp.size} {size}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 600 }}>{price ? formatCurrency(price) : '--'}</div>
                         </div>
                       );
                     })}
@@ -414,7 +414,7 @@ export default function MarketplacePage() {
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Clock size={12} /> {new Date(listing.postedDate).toLocaleDateString()}</span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Eye size={12} /> {listing.viewCount}</span>
                     </div>
-                    <button style={{ color: 'var(--primary)', fontWeight: 700, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <button style={{ color: 'var(--primary)', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
                       {t.MarketplaceScreen.details || 'Details'} <ArrowUpRight size={12} />
                     </button>
                   </div>
@@ -430,12 +430,12 @@ export default function MarketplacePage() {
           
           {/* Market Trends */}
           <div className="glass-card" style={{ padding: '24px', background: '#FFFFFF' }}>
-            <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <TrendingUp size={18} color="#059669" /> {t.buyer.marketInsights}
             </h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
-                <p style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{t.MarketplaceScreen.globalDemandIndex}</p>
+                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>{t.MarketplaceScreen.globalDemandIndex}</p>
                 <div style={{ height: '6px', width: '100%', background: 'rgba(0,0,0,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
                   <div style={{ height: '100%', width: '75%', background: '#059669' }} />
                 </div>
@@ -444,11 +444,11 @@ export default function MarketplacePage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>{t.MarketplaceScreen.topRegion}</span>
-                  <span style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{t.MarketplaceScreen.topRegionName || 'East Java'}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{t.MarketplaceScreen.topRegionName || 'East Java'}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
                   <span style={{ color: '#64748b', fontWeight: 600 }}>{t.MarketplaceScreen.avgSize50}</span>
-                  <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{formatCurrency(6.45)}/{t.common.kg}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{formatCurrency(6.45)}/{t.common.kg}</span>
                 </div>
               </div>
             </div>
@@ -456,18 +456,18 @@ export default function MarketplacePage() {
 
           {/* Quick Info */}
           <div style={{ background: 'var(--bg-mid)', padding: '24px', borderRadius: '24px', border: '1px solid var(--border)' }}>
-            <h4 style={{ fontSize: '15px', fontWeight: 800, marginBottom: '16px', color: 'var(--text-primary)' }}>{t.MarketplaceScreen.howItWorks}</h4>
+            <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', color: 'var(--text-primary)' }}>{t.MarketplaceScreen.howItWorks}</h4>
             <ul style={{ padding: 0, margin: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <li style={{ fontSize: '13px', display: 'flex', gap: '12px', color: '#1e293b', lineHeight: 1.4 }}>
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, flexShrink: 0 }}>1</div>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>1</div>
                 <span>{t.MarketplaceScreen.step1}</span>
               </li>
               <li style={{ fontSize: '13px', display: 'flex', gap: '12px', color: '#1e293b', lineHeight: 1.4 }}>
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, flexShrink: 0 }}>2</div>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>2</div>
                 <span>{t.MarketplaceScreen.step2}</span>
               </li>
               <li style={{ fontSize: '13px', display: 'flex', gap: '12px', color: '#1e293b', lineHeight: 1.4 }}>
-                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 800, flexShrink: 0 }}>3</div>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 600, flexShrink: 0 }}>3</div>
                 <span>{t.MarketplaceScreen.step3}</span>
               </li>
             </ul>
@@ -487,7 +487,7 @@ export default function MarketplacePage() {
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                   <Plus size={24} />
                 </div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>{editingId ? t.CreateBuyerListingScreen.updateListing : t.CreateBuyerListingScreen.publishRequirement}</h2>
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{editingId ? t.CreateBuyerListingScreen.updateListing : t.CreateBuyerListingScreen.publishRequirement}</h2>
               </div>
               <button onClick={() => { setPostModalOpen(false); setEditingId(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={24} /></button>
             </div>
@@ -497,15 +497,15 @@ export default function MarketplacePage() {
               {/* Basic Info */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.companyName}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.companyName}</label>
                   <input required value={newListing.buyerName} onChange={e => setNewListing({...newListing, buyerName: e.target.value})} placeholder={t.CreateBuyerListingScreen.yourCompanyName} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.city}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.city}</label>
                   <input required value={newListing.city} onChange={e => setNewListing({...newListing, city: e.target.value})} placeholder={t.CreateBuyerListingScreen.cityExample} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.deliveryAddress}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.deliveryAddress}</label>
                   <input required value={newListing.deliveryLocation} onChange={e => setNewListing({...newListing, deliveryLocation: e.target.value})} placeholder={t.CreateBuyerListingScreen.deliveryPlaceholder} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
               </div>
@@ -513,7 +513,7 @@ export default function MarketplacePage() {
               {/* Payment Terms */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.paymentMethod}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.paymentMethod}</label>
                   <select value={newListing.paymentMethod} onChange={e => setNewListing({...newListing, paymentMethod: e.target.value as 'cash' | 'top'})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}>
                     <option value="cash">{t.CreateBuyerListingScreen.cashOnDelivery}</option>
                     <option value="top">{t.CreateBuyerListingScreen.termsOfPayment}</option>
@@ -521,7 +521,7 @@ export default function MarketplacePage() {
                 </div>
                 {newListing.paymentMethod === 'top' && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.topDays}</label>
+                    <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.topDays}</label>
                     <input type="number" value={newListing.topDays} onChange={e => setNewListing({...newListing, topDays: e.target.value})} placeholder="e.g. 7" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                   </div>
                 )}
@@ -529,13 +529,13 @@ export default function MarketplacePage() {
 
               {/* Price List Matrix */}
               <div>
-                <h3 style={{ fontSize: '15px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Tag size={18} color="var(--primary)" /> {t.CreateBuyerListingScreen.buyingPriceList}
                 </h3>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                   {[30, 40, 50, 60, 70, 80, 90, 100].map(size => (
                     <div key={size} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)' }}>Size {size}</label>
+                      <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)' }}>Size {size}</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -556,7 +556,7 @@ export default function MarketplacePage() {
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.CreateBuyerListingScreen.additionalNotes}</label>
+                <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.additionalNotes}</label>
                 <textarea value={newListing.additionalNotes} onChange={e => setNewListing({...newListing, additionalNotes: e.target.value})} placeholder={t.CreateBuyerListingScreen.notesPlaceholder} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', minHeight: '80px', resize: 'none' }} />
               </div>
 
@@ -583,7 +583,7 @@ export default function MarketplacePage() {
                   <Store size={28} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{selectedListing.companyName}</h2>
+                  <h2 style={{ fontSize: '22px', fontWeight: 600 }}>{selectedListing.companyName}</h2>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Buyer Requirement • ID: {selectedListing.id.slice(-6)}</p>
                 </div>
               </div>
@@ -600,29 +600,29 @@ export default function MarketplacePage() {
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <MapPin size={20} color="var(--primary)" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Delivery To</div>
-                    <div style={{ fontSize: '14px', fontWeight: 800 }}>{selectedListing.city}, {selectedListing.country}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Delivery To</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{selectedListing.city}, {selectedListing.country}</div>
                   </div>
                 </div>
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <CreditCard size={20} color="#059669" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Payment</div>
-                    <div style={{ fontSize: '14px', fontWeight: 800 }}>{selectedListing.paymentMethod === 'cash' ? 'Cash on Delivery' : `${selectedListing.topDays} Days TOP`}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Payment</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{selectedListing.paymentMethod === 'cash' ? 'Cash on Delivery' : `${selectedListing.topDays} Days TOP`}</div>
                   </div>
                 </div>
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.05)', display: 'flex', gap: '12px', alignItems: 'center', gridColumn: 'span 2' }}>
                   <Clock size={20} color="#EF4444" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Expiry Date</div>
-                    <div style={{ fontSize: '14px', fontWeight: 800 }}>{new Date(selectedListing.expiryDate).toLocaleDateString()}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Expiry Date</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{new Date(selectedListing.expiryDate).toLocaleDateString()}</div>
                   </div>
                 </div>
               </div>
 
               {/* Price Table */}
               <div>
-                <h4 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h4 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Tag size={18} color="var(--primary)" /> {t.CreateBuyerListingScreen.buyingPriceList}
                 </h4>
                 <div className="glass-card" style={{ padding: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
@@ -639,8 +639,8 @@ export default function MarketplacePage() {
                         if (!price) return null;
                         return (
                           <tr key={size} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 700 }}>Size {size}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 800, textAlign: 'right', color: 'var(--primary)' }}>${price.toFixed(2)}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600 }}>Size {size}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600, textAlign: 'right', color: 'var(--primary)' }}>${price.toFixed(2)}</td>
                           </tr>
                         );
                       })}
@@ -652,7 +652,7 @@ export default function MarketplacePage() {
               {/* Additional Notes */}
               {selectedListing.additionalNotes && (
                 <div style={{ padding: '20px', borderRadius: '16px', background: '#fff9f2', border: '1px solid #fee2e2' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 800, marginBottom: '8px', color: '#d97706' }}>Special Instructions</h4>
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#d97706' }}>Special Instructions</h4>
                   <p style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.6 }}>{selectedListing.additionalNotes}</p>
                 </div>
               )}

@@ -431,7 +431,7 @@ export default function AssetInventoryPage() {
               style={{
                 minHeight: '44px',
                 fontSize: '13px',
-                fontWeight: 850,
+                fontWeight: 600,
                 letterSpacing: '0',
                 textTransform: 'none'
               }}
@@ -486,14 +486,14 @@ export default function AssetInventoryPage() {
                   </div>
                   <span className="dashboard-kpi-label">{t.asset.totalMaintenanceCost}</span>
                 </div>
-                <div className="dashboard-kpi-value">{formatCurrency(metrics.totalMaintCost)}</div>
+                <div className="dashboard-kpi-value" style={{ whiteSpace: 'nowrap' }}>{formatCurrency(metrics.totalMaintCost)}</div>
               </div>
             </div>
 
             {/* Needs Attention Section */}
             {assets.filter(a => a.condition === 'Needs Repair').length > 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <h2 style={{ fontSize: '18px', fontWeight: 800, color: '#e74c3c', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 600, color: '#e74c3c', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <AlertCircle size={20} />
                   {t.asset.needsAttention}
                 </h2>
@@ -510,7 +510,7 @@ export default function AssetInventoryPage() {
                       color: '#991B1B'
                     }}>
                       <div>
-                        <div style={{ fontWeight: 800 }}>{asset.name}</div>
+                        <div style={{ fontWeight: 600 }}>{asset.name}</div>
                         <div style={{ fontSize: '12px', color: 'rgba(153, 27, 27, 0.8)' }}>{asset.category} • {asset.serialNumber || 'No SN'}</div>
                       </div>
                       {canLogMaintenance && (
@@ -586,9 +586,9 @@ export default function AssetInventoryPage() {
                         <Construction size={21} />
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <h3 style={{ fontSize: '17px', fontWeight: 850, overflowWrap: 'anywhere' }}>{asset.name}</h3>
+                        <h3 style={{ fontSize: '17px', fontWeight: 600, overflowWrap: 'anywhere' }}>{asset.name}</h3>
                         <p style={{ fontSize: '13px', color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>{asset.category} {asset.serialNumber ? `• SN: ${asset.serialNumber}` : ''}</p>
-                        <div style={{ fontSize: '12px', fontWeight: 800, marginTop: '4px', color: asset.condition === 'Needs Repair' ? '#991B1B' : '#27ae60' }}>
+                        <div style={{ fontSize: '12px', fontWeight: 600, marginTop: '4px', color: asset.condition === 'Needs Repair' ? '#991B1B' : '#27ae60' }}>
                           {asset.condition}
                         </div>
                       </div>
@@ -646,7 +646,7 @@ export default function AssetInventoryPage() {
           }}>
             <div className="responsive-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div style={{ minWidth: 0, paddingRight: '12px' }}>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>
                   {modalType === 'add' ? 'Add New Asset' :
                    modalType === 'transfer' ? 'Transfer Asset' :
                    modalType === 'maintenance' ? 'Log Maintenance' :
@@ -666,7 +666,7 @@ export default function AssetInventoryPage() {
                     <QrCode size={40} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '12px' }}>Use Mobile App to Scan</h3>
+                    <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '12px' }}>Use Mobile App to Scan</h3>
                     <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px', margin: '0 auto', fontSize: '15px' }}>
                       To {referralSource === 'add' ? 'add a new asset' : 'log maintenance'} using a QR code, please use the <strong style={{color: 'var(--primary)'}}>Orson AI Mobile App</strong> on your phone.
                     </p>
@@ -682,8 +682,8 @@ export default function AssetInventoryPage() {
                         />
                       </div>
                       <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Get it on</div>
-                        <div style={{ fontSize: '15px', fontWeight: 800 }}>Google Play</div>
+                        <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Get it on</div>
+                        <div style={{ fontSize: '15px', fontWeight: 600 }}>Google Play</div>
                       </div>
                     </div>
                   </div>
@@ -692,7 +692,7 @@ export default function AssetInventoryPage() {
                     onClick={() => {
                       setModalType(referralSource === 'add' ? 'add' : 'maintenance');
                     }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 700, fontSize: '14px', cursor: 'pointer', marginTop: '16px', textDecoration: 'underline' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '14px', cursor: 'pointer', marginTop: '16px', textDecoration: 'underline' }}
                   >
                     Continue with manual entry on Web
                   </button>
@@ -700,38 +700,38 @@ export default function AssetInventoryPage() {
               ) : modalType === 'history' && selectedAsset ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: 0 }}>
                   <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Wrench size={18} /> Maintenance History
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {selectedAsset.maintenanceHistory?.length === 0 ? <p style={{ color: 'var(--text-faint)', textAlign: 'center', padding: '24px', background: 'var(--bg-mid)', borderRadius: '12px' }}>No records found.</p> : 
                       [...selectedAsset.maintenanceHistory].reverse().map(m => (
                         <div key={m.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 700, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 600, minWidth: 0 }}>
                             <span style={{ color: 'var(--text-primary)', minWidth: 0, flex: '1 1 220px', overflowWrap: 'anywhere' }}>{m.description}</span>
                             <span style={{ fontSize: '12px', color: 'var(--text-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(m.date)}</span>
                           </div>
                           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-                            {m.type} • {m.technician} • <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{formatCurrency(m.cost || 0)}</span>
+                            {m.type} • {m.technician} • <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{formatCurrency(m.cost || 0)}</span>
                           </div>
                         </div>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <ArrowRightLeft size={18} /> Transfer History
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {selectedAsset.transferHistory?.length === 0 ? <p style={{ color: 'var(--text-faint)', textAlign: 'center', padding: '24px', background: 'var(--bg-mid)', borderRadius: '12px' }}>No records found.</p> : 
                       [...selectedAsset.transferHistory].reverse().map(t => (
                         <div key={t.id} style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '12px', border: '1px solid var(--border)', minWidth: 0 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 700, minWidth: 0 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px 12px', fontWeight: 600, minWidth: 0 }}>
                             <span style={{ color: 'var(--text-primary)', minWidth: 0, flex: '1 1 220px', overflowWrap: 'anywhere' }}>{t.from} → {t.to}</span>
                             <span style={{ fontSize: '12px', color: 'var(--text-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>{formatDate(t.date)}</span>
                           </div>
                           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
-                            {t.purpose} {t.returned ? `• Returned: ${formatDate(t.returned)}` : <span style={{color: 'var(--primary)', fontWeight: 700}}>• Currently with {t.to}</span>}
+                            {t.purpose} {t.returned ? `• Returned: ${formatDate(t.returned)}` : <span style={{color: 'var(--primary)', fontWeight: 600}}>• Currently with {t.to}</span>}
                           </div>
                         </div>
                       ))}
@@ -743,28 +743,28 @@ export default function AssetInventoryPage() {
                   {modalType === 'add' && (
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700 }}>Asset Name *</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Asset Name *</label>
                         <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Category *</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Category *</label>
                           <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Condition *</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Condition *</label>
                           <select value={formData.condition} onChange={e => setFormData({...formData, condition: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                             {CONDITIONS.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Serial Number</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Serial Number</label>
                           <input value={formData.serialNumber} onChange={e => setFormData({...formData, serialNumber: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Purchase Date</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Purchase Date</label>
                           <input type="date" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                       </div>
@@ -774,15 +774,15 @@ export default function AssetInventoryPage() {
                   {modalType === 'transfer' && (
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700 }}>Transfer To *</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Transfer To *</label>
                         <input className="asset-readable-placeholder" required value={formData.to} onChange={e => setFormData({...formData, to: e.target.value})} placeholder="Person name" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700 }}>Purpose</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Purpose</label>
                         <input value={formData.purpose} onChange={e => setFormData({...formData, purpose: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700 }}>Expected Return Date</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Expected Return Date</label>
                         <input type="date" value={formData.expectedReturn} onChange={e => setFormData({...formData, expectedReturn: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                     </>
@@ -792,27 +792,27 @@ export default function AssetInventoryPage() {
                     <>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Maintenance Type *</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Maintenance Type *</label>
                           <select value={formData.maintType} onChange={e => setFormData({...formData, maintType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                             {MAINTENANCE_TYPES.map(m => <option key={m} value={m}>{m}</option>)}
                           </select>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Technician</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Technician</label>
                           <input value={formData.technician} onChange={e => setFormData({...formData, technician: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 700 }}>Description *</label>
+                        <label style={{ fontSize: '13px', fontWeight: 600 }}>Description *</label>
                         <textarea rows={3} required value={formData.maintDesc} onChange={e => setFormData({...formData, maintDesc: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', resize: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Cost (Rp)</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Cost (Rp)</label>
                           <input type="number" value={formData.maintCost} onChange={e => setFormData({...formData, maintCost: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 700 }}>Next Maint. Date</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Next Maint. Date</label>
                           <input type="date" value={formData.nextMaint} onChange={e => setFormData({...formData, nextMaint: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                       </div>
@@ -832,8 +832,8 @@ export default function AssetInventoryPage() {
 
             {modalType !== 'history' && modalType !== 'scanReferral' && (
               <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border)', display: 'flex', gap: '16px', background: 'var(--bg-mid)' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 700, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
-                <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>
+                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
+                <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>
                   {modalType === 'add' ? 'Add Asset' :
                    modalType === 'transfer' ? 'Confirm Transfer' :
                    modalType === 'maintenance' ? 'Save Record' : 'Confirm Return'}

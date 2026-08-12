@@ -151,7 +151,7 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
           <Clock size={36} />
         </div>
 
-        <h1 style={{ fontSize: '32px', fontWeight: 900, marginBottom: '12px', color: 'var(--text-primary)' }}>
+        <h1 style={{ fontSize: '32px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>
           Waiting for Approval
         </h1>
         <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '24px' }}>
@@ -165,7 +165,7 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
           border: '1px solid var(--border)',
           color: 'var(--text-muted)',
           fontSize: '13px',
-          fontWeight: 700,
+          fontWeight: 600,
           marginBottom: '28px',
         }}>
           {formatRequestedAt(request.requestedAt)}
@@ -185,7 +185,7 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
             border: '1px solid #FECDCA',
             background: '#FEF3F2',
             color: '#B42318',
-            fontWeight: 800,
+            fontWeight: 600,
             cursor: signingOut ? 'not-allowed' : 'pointer',
           }}
         >

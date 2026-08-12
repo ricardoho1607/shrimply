@@ -43,7 +43,7 @@
   border-right: 1px solid rgba(15, 76, 117, .2);
   padding-right: 16px;
   font-size: 1.15rem;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -.03em;
 }
 
@@ -58,7 +58,7 @@
 .titleGroup h1 {
   overflow: hidden;
   font-size: 1.1rem;
-  font-weight: 850;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -67,7 +67,7 @@
   margin-top: 3px;
   color: #3282b8;
   font-size: .76rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .headerActions {
@@ -79,7 +79,7 @@
   justify-content: flex-end;
   gap: 14px;
   font-size: .75rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .legend span {
@@ -112,7 +112,7 @@
   padding: 0 15px;
   font: inherit;
   font-size: .8rem;
-  font-weight: 800;
+  font-weight: 600;
   cursor: pointer;
   pointer-events: auto;
   touch-action: manipulation;
@@ -157,14 +157,14 @@
 
 .blockHeader h2 {
   font-size: 1rem;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .blockHeader p {
   margin-top: 3px;
   color: #647786;
   font-size: .7rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .pondGrid {
@@ -192,13 +192,13 @@
   max-width: 100%;
   overflow-wrap: anywhere;
   font-size: .76rem;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.15;
 }
 
 .pondTile small {
   font-size: .62rem;
-  font-weight: 800;
+  font-weight: 600;
   opacity: .82;
 }
 
@@ -236,7 +236,7 @@
   padding: 22px;
   color: #647786;
   font-size: .8rem;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
 }
 

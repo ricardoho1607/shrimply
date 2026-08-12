@@ -36,7 +36,7 @@ const settingsShellStyle: React.CSSProperties = {
   gap: '24px',
   maxWidth: '1120px',
   margin: '0 auto',
-  fontFamily: 'var(--sans)',
+  fontFamily: 'var(--jakarta)',
 };
 
 const categoryRailStyle: React.CSSProperties = {
@@ -57,24 +57,23 @@ const fieldStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: '0.72rem',
-  fontWeight: 800,
-  letterSpacing: '0.08em',
-  textTransform: 'uppercase',
+  fontSize: '12px',
+  fontWeight: 500,
   color: 'var(--text-muted)',
-  fontFamily: 'var(--sans)',
+  fontFamily: 'var(--jakarta)',
 };
 
 const controlStyle: React.CSSProperties = {
-  padding: '12px 14px',
-  borderRadius: '12px',
+  minHeight: '44px',
+  padding: '0 14px',
+  borderRadius: '10px',
   border: '1px solid var(--border)',
   background: 'var(--bg-mid)',
   outline: 'none',
   color: 'var(--text-primary)',
-  fontWeight: 650,
+  fontWeight: 400,
   fontSize: '14px',
-  fontFamily: 'var(--sans)',
+  fontFamily: 'var(--jakarta)',
   width: '100%',
 };
 
@@ -276,8 +275,8 @@ export default function SettingsPage() {
                 display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px',
                 border: 'none', background: activeTab === tab.id ? 'var(--primary-dim)' : 'transparent',
                 color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-                fontWeight: activeTab === tab.id ? 800 : 650, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
-                fontFamily: 'var(--sans)',
+                fontWeight: activeTab === tab.id ? 600 : 500, fontSize: '13px', cursor: 'pointer', textAlign: 'left',
+                fontFamily: 'var(--jakarta)',
                 transition: 'all 0.2s'
               }}
             >
@@ -294,7 +293,7 @@ export default function SettingsPage() {
             <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{ position: 'relative' }}>
-                  <div style={{ width: '100px', height: '100px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 800, color: 'var(--primary)', overflow: 'hidden', border: '1px solid var(--border)' }}>
+                  <div style={{ width: '100px', height: '100px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 600, color: 'var(--primary)', overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {user?.profileImage ? <img src={user.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.name?.[0] || 'U').toUpperCase()}
                   </div>
                   <button type="button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-card)' }}>
@@ -302,7 +301,7 @@ export default function SettingsPage() {
                   </button>
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>{userForm.name || t.settings.fullName || 'Your Name'}</h3>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>{userForm.name || t.settings.fullName || 'Your Name'}</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{user?.email}</p>
                 </div>
               </div>
@@ -339,7 +338,7 @@ export default function SettingsPage() {
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 700 }}><CheckCircle2 size={16} /> {t.settings.changesSaved || 'Changes saved'}</div>}
+                {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.changesSaved || 'Changes saved'}</div>}
                 <button type="submit" disabled={saving} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                   {t.settings.saveChanges || 'Save Changes'}
@@ -356,11 +355,11 @@ export default function SettingsPage() {
                   <Building2 size={32} />
                 </div>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800 }}>{companyForm.companyName || t.companyDetails.title || 'Company Profile'}</h3>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{companyForm.companyName || t.companyDetails.title || 'Company Profile'}</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.settings.orgSettings || 'Organization and farm-wide settings.'}</p>
                 </div>
                 </div>
-                <Link href="/dashboard/company" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', fontSize: '13px', fontWeight: 800, background: '#fff' }}>
+                <Link href="/dashboard/company" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', fontSize: '13px', fontWeight: 600, background: '#fff' }}>
                   View profile
                   <ArrowUpRight size={16} />
                 </Link>
@@ -455,14 +454,14 @@ export default function SettingsPage() {
                     style={{ width: '18px', height: '18px', accentColor: 'var(--primary)' }}
                   />
                   <span>
-                    <span style={{ display: 'block', fontWeight: 800, color: 'var(--text-primary)', fontSize: '14px' }}>{t.companySetup.publicProfile || 'Public Profile'}</span>
+                    <span style={{ display: 'block', fontWeight: 600, color: 'var(--text-primary)', fontSize: '14px' }}>{t.companySetup.publicProfile || 'Public Profile'}</span>
                     <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{t.companySetup.publicProfileDescription || 'Allow shrimp buyers to discover and contact your farm'}</span>
                   </span>
                 </label>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
-                {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 700 }}><CheckCircle2 size={16} /> {t.settings.updatedSuccessfully || 'Updated successfully'}</div>}
+                {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.updatedSuccessfully || 'Updated successfully'}</div>}
                 <button type="submit" disabled={saving} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
                   {t.settings.updateOrganization || 'Update Organization'}
@@ -475,7 +474,7 @@ export default function SettingsPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: 800 }}>Team Members</h3>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Team Members</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Manage your organization&apos;s members and their roles.</p>
                 </div>
                 <button className="btn-primary" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
@@ -487,25 +486,25 @@ export default function SettingsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Clock size={18} color="var(--primary)" />
                       <div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 900, margin: 0, color: 'var(--text-primary)' }}>Pending join requests</h4>
+                        <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>Pending join requests</h4>
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>Approve staff waiting to join this company.</p>
                       </div>
                     </div>
                   </div>
 
                   {joinRequests.length === 0 && (
-                    <div style={{ padding: '14px', borderRadius: '12px', background: '#FFFFFF', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650 }}>
+                    <div style={{ padding: '14px', borderRadius: '12px', background: '#FFFFFF', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>
                       No pending join requests.
                     </div>
                   )}
 
                   {joinRequests.map((request) => (
                     <div key={request.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px', borderRadius: '14px', background: '#FFFFFF', border: '1px solid var(--border)' }}>
-                      <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 900 }}>
+                      <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 600 }}>
                         {(request.userName?.[0] || request.userEmail?.[0] || 'U').toUpperCase()}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 850, color: 'var(--text-primary)' }}>{request.userName || request.userEmail}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{request.userName || request.userEmail}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{request.userEmail} • {request.requestedRole}</div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
@@ -513,7 +512,7 @@ export default function SettingsPage() {
                           type="button"
                           disabled={processingRequestId === request.id}
                           onClick={() => handleJoinRequestDecision(request.id, 'reject')}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 800, cursor: 'pointer' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
                         >
                           <XCircle size={15} />
                           Reject
@@ -522,7 +521,7 @@ export default function SettingsPage() {
                           type="button"
                           disabled={processingRequestId === request.id}
                           onClick={() => handleJoinRequestDecision(request.id, 'approve')}
-                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #BBE1FA', background: 'var(--primary)', color: '#FFFFFF', fontWeight: 800, cursor: 'pointer' }}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #BBE1FA', background: 'var(--primary)', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
                         >
                           {processingRequestId === request.id ? <Loader2 className="animate-spin" size={15} /> : <ShieldCheck size={15} />}
                           Approve
@@ -536,13 +535,13 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {members.map((member) => (
                   <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', transition: 'all 0.2s' }}>
-                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 800, fontSize: '18px', border: '1px solid var(--border)' }}>
+                    <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 600, fontSize: '18px', border: '1px solid var(--border)' }}>
                       {member.profileImage ? <img src={member.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} /> : (member.name?.[0] || 'U').toUpperCase()}
                     </div>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)' }}>{member.name}</span>
-                        {member.id === user?.uid && <span style={{ padding: '2px 8px', borderRadius: '100px', background: 'white', border: '1px solid var(--border)', fontSize: '10px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase' }}>You</span>}
+                        <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{member.name}</span>
+                        {member.id === user?.uid && <span style={{ padding: '2px 8px', borderRadius: '100px', background: 'white', border: '1px solid var(--border)', fontSize: '10px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>You</span>}
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '2px' }}>
                         <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={12} /> {member.email}</span>
@@ -550,7 +549,7 @@ export default function SettingsPage() {
                       </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
+                      <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : member.role === 'co-owner' ? (t.roleSelection?.coOwner || 'Co-owner') : (t.roleSelection?.manager || 'Staff')}</div>
                     </div>
                   </div>
@@ -562,7 +561,7 @@ export default function SettingsPage() {
           {activeTab === 'preferences' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '4px' }}>{t.settings.regionDisplay || 'Region & Display'}</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>{t.settings.regionDisplay || 'Region & Display'}</h3>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{t.settings.regionDisplaySubtitle || 'Customize your language and currency preferences.'}</p>
               </div>
 
@@ -570,7 +569,7 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--primary)' }}>
                   <Languages size={20} />
-                  <span style={{ fontWeight: 700, fontSize: '14px' }}>{t.settings.appLanguage || 'App Language'}</span>
+                  <span style={{ fontWeight: 600, fontSize: '14px' }}>{t.settings.appLanguage || 'App Language'}</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '12px' }}>
                   {AVAILABLE_LANGUAGES.map((lang) => (
@@ -587,7 +586,7 @@ export default function SettingsPage() {
                     >
                       <span style={{ fontSize: '24px' }}>{lang.flag}</span>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: currentLanguage === lang.code ? 'var(--primary)' : 'var(--text-primary)' }}>{lang.nativeName}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: currentLanguage === lang.code ? 'var(--primary)' : 'var(--text-primary)' }}>{lang.nativeName}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{lang.name}</div>
                       </div>
                       {currentLanguage === lang.code && <CheckCircle2 size={18} color="var(--primary)" />}
@@ -601,7 +600,7 @@ export default function SettingsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--primary)' }}>
                     <CreditCard size={20} />
-                    <span style={{ fontWeight: 700, fontSize: '14px' }}>{t.settings.displayCurrency || 'Display Currency'}</span>
+                    <span style={{ fontWeight: 600, fontSize: '14px' }}>{t.settings.displayCurrency || 'Display Currency'}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setAutoSyncEnabled(!autoSyncEnabled)}>
                     <div style={{ 
@@ -633,7 +632,7 @@ export default function SettingsPage() {
                     >
                       <span style={{ fontSize: '24px' }}>{curr.flag}</span>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '14px', fontWeight: 700, color: currentCurrency === curr.code ? 'var(--primary)' : 'var(--text-primary)' }}>{curr.name}</div>
+                        <div style={{ fontSize: '14px', fontWeight: 600, color: currentCurrency === curr.code ? 'var(--primary)' : 'var(--text-primary)' }}>{curr.name}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{curr.symbol} ({curr.code})</div>
                       </div>
                       {currentCurrency === curr.code && <CheckCircle2 size={18} color="var(--primary)" />}
@@ -658,7 +657,7 @@ export default function SettingsPage() {
               <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', color: 'var(--text-faint)' }}>
                 <ShieldCheck size={32} />
               </div>
-              <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>{t.settings.comingSoon || 'Coming Soon'}</h3>
+              <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>{t.settings.comingSoon || 'Coming Soon'}</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '14px', maxWidth: '300px', margin: '0 auto' }}>
                 {t.settings.comingSoonSubtitle ? String(t.settings.comingSoonSubtitle).replace('{tab}', activeTab) : `Advanced ${activeTab} settings are currently being ported to the web interface.`}
               </p>
@@ -682,7 +681,7 @@ export default function SettingsPage() {
         .settings-shell :global(h2),
         .settings-shell :global(h3),
         .settings-shell :global(h4) {
-          font-family: var(--sans) !important;
+          font-family: var(--jakarta) !important;
         }
 
         .settings-shell :global(h1),
@@ -693,11 +692,11 @@ export default function SettingsPage() {
         }
 
         .settings-shell :global(.btn-primary) {
-          font-family: var(--sans) !important;
+          font-family: var(--jakarta) !important;
           letter-spacing: 0;
           text-transform: none;
-          font-size: 13px;
-          font-weight: 850;
+          font-size: 14px;
+          font-weight: 500;
         }
 
         @media (max-width: 900px) {

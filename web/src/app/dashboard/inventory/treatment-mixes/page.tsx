@@ -179,7 +179,7 @@ export default function TreatmentMixesPage() {
               <div style={{ ...labelStyle, display: 'block' }}>Pond</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{activePonds.map((pond) => <button key={pond.id} className={`dashboard-action ${pond.id === pondId ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`} onClick={() => setPondId(pond.id)}>{pond.pondName} · {pond.pondArea} m²</button>)}</div>
               <label style={labelStyle}>Treatment concentration (PPM)<input style={inputStyle} type="number" min="0" step="any" value={ppm} onChange={(event) => setPpm(event.target.value)} /></label>
-              {dose && <div style={{ marginTop: 14, padding: 16, borderRadius: 14, background: 'var(--primary-dim)' }}><strong>Dose: {dose.requiredMixLiters} L</strong><div style={{ marginTop: 5 }}>{ppm} PPM × {selectedPond?.pondArea} m² ÷ 1,000</div>{useMix && dose.requiredMixLiters > useMix.totalStock && <div style={{ marginTop: 6, color: '#c0392b', fontWeight: 800 }}>Only {useMix.totalStock} L is available.</div>}</div>}
+              {dose && <div style={{ marginTop: 14, padding: 16, borderRadius: 14, background: 'var(--primary-dim)' }}><strong>Dose: {dose.requiredMixLiters} L</strong><div style={{ marginTop: 5 }}>{ppm} PPM × {selectedPond?.pondArea} m² ÷ 1,000</div>{useMix && dose.requiredMixLiters > useMix.totalStock && <div style={{ marginTop: 6, color: '#c0392b', fontWeight: 600 }}>Only {useMix.totalStock} L is available.</div>}</div>}
             </>}
 
             <label style={labelStyle}>Notes (optional)<textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
@@ -191,5 +191,5 @@ export default function TreatmentMixesPage() {
   );
 }
 
-const labelStyle = { display: 'grid', gap: 8, marginTop: 16, fontSize: 13, fontWeight: 800 } as const;
+const labelStyle = { display: 'grid', gap: 8, marginTop: 16, fontSize: 13, fontWeight: 600 } as const;
 const inputStyle = { width: '100%', minHeight: 46, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text)' } as const;

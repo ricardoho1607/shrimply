@@ -157,7 +157,7 @@ export default function SuppliersPage() {
       </div>
 
       {error && (
-        <div role="alert" style={{ color: '#B42318', background: '#FEF3F2', border: '1px solid #FECDCA', borderRadius: '16px', padding: '14px 18px', fontSize: '14px', fontWeight: 700 }}>
+        <div role="alert" style={{ color: '#B42318', background: '#FEF3F2', border: '1px solid #FECDCA', borderRadius: '16px', padding: '14px 18px', fontSize: '14px', fontWeight: 600 }}>
           {error}
         </div>
       )}
@@ -193,7 +193,7 @@ export default function SuppliersPage() {
                 </div>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                    <h4 style={{ fontSize: '18px', fontWeight: 800 }}>{company.companyName}</h4>
+                    <h4 style={{ fontSize: '18px', fontWeight: 600 }}>{company.companyName}</h4>
                     <ShieldCheck size={16} color="#27ae60" />
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -206,29 +206,29 @@ export default function SuppliersPage() {
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>
                   <TrendingUp size={12} />
                   {t.buyer.farmType}
                 </div>
-                <div style={{ fontSize: '14px', fontWeight: 800, color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {company.farmType || t.buyer.defaultFarmType || 'Shrimp Farm'}
                 </div>
               </div>
               <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: '4px' }}>
                   <Activity size={12} />
                   {t.buyer.ponds}
                 </div>
-                <div style={{ fontSize: '15px', fontWeight: 800 }}>{company.publicPondCount || company.pondCount || 0}</div>
+                <div style={{ fontSize: '15px', fontWeight: 600 }}>{company.publicPondCount || company.pondCount || 0}</div>
               </div>
             </div>
 
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-              <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'var(--primary-dim)', fontSize: '11px', fontWeight: 700, color: 'var(--primary)' }}>
+              <span style={{ padding: '4px 10px', borderRadius: '6px', background: 'var(--primary-dim)', fontSize: '11px', fontWeight: 600, color: 'var(--primary)' }}>
                 {company.businessSize || t.buyer.verified}
               </span>
               {company.isVerified && (
-                <span style={{ padding: '4px 10px', borderRadius: '6px', background: '#e8f5e9', fontSize: '11px', fontWeight: 700, color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ padding: '4px 10px', borderRadius: '6px', background: '#e8f5e9', fontSize: '11px', fontWeight: 600, color: '#2e7d32', display: 'flex', alignItems: 'center', gap: '4px' }}>
                   <ShieldCheck size={12} /> {t.buyer.trusted}
                 </span>
               )}
@@ -243,7 +243,7 @@ export default function SuppliersPage() {
                   color: monitoredIds.has(company.id) ? 'var(--primary)' : 'var(--text-primary)',
                   border: '1px solid',
                   borderColor: monitoredIds.has(company.id) ? 'var(--primary)' : 'var(--border)',
-                  fontWeight: 700, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s',
+                  fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s',
                   display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
                 }}
               >
@@ -261,7 +261,7 @@ export default function SuppliersPage() {
               </button>
               <button style={{ 
                 padding: '12px', borderRadius: '12px', background: 'var(--primary)', color: '#FFF', 
-                border: 'none', fontWeight: 700, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
+                border: 'none', fontWeight: 600, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
               }}>
                 {t.buyer.viewProfile}
               </button>
@@ -273,7 +273,7 @@ export default function SuppliersPage() {
       {companies.length === 0 && !loading && (
         <div style={{ textAlign: 'center', padding: '100px 40px', color: 'var(--text-muted)' }}>
           <Search size={64} style={{ margin: '0 auto 24px', opacity: 0.1 }} />
-          <h4 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '8px' }}>{t.buyer.noSuppliersFound}</h4>
+          <h4 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '8px' }}>{t.buyer.noSuppliersFound}</h4>
           <p>{t.buyer.adjustSearch}</p>
         </div>
       )}

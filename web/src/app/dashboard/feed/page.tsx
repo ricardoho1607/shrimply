@@ -739,8 +739,8 @@ export default function FeedRecordsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px',
-              padding: '12px 16px 12px 40px', width: '100%', fontSize: '14px', outline: 'none', fontWeight: 600, color: 'var(--text-primary)'
+              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
+              height: '44px', padding: '0 16px 0 40px', width: '100%', fontSize: '14px', outline: 'none', fontWeight: 400, color: 'var(--text-primary)'
             }}
           />
         </div>
@@ -776,10 +776,10 @@ export default function FeedRecordsPage() {
             borderTop: '1px solid var(--border)',
           }}
         >
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 750 }}>
+          <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>
             {t.feed.dailyFeedUsed}
           </span>
-          <strong style={{ color: 'var(--text-primary)', fontSize: '17px', fontWeight: 900, whiteSpace: 'nowrap' }}>
+          <strong style={{ color: 'var(--text-primary)', fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap' }}>
             {todayFeedSummaryValue}
           </strong>
         </div>
@@ -811,7 +811,7 @@ export default function FeedRecordsPage() {
                       <ClipboardList size={20} />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '16px', fontWeight: 800, color: 'var(--text-primary)' }}>{pond.pondName}</h3>
+                      <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{pond.pondName}</h3>
                       <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
                     </div>
                   </div>
@@ -827,15 +827,15 @@ export default function FeedRecordsPage() {
 
                 <div style={{ padding: '22px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total</span>
-                    <div style={{ fontSize: '21px', fontWeight: 900, color: 'var(--primary)', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                      {latest ? latest.totalDailyFeed : '--'} <span style={{ fontSize: '13px', fontWeight: 700 }}>kg</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total</span>
+                    <div style={{ fontSize: '21px', fontWeight: 600, color: 'var(--primary)', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                      {latest ? latest.totalDailyFeed : '--'} <span style={{ fontSize: '13px', fontWeight: 600 }}>kg</span>
                     </div>
                   </div>
                 </div>
 
                 <div style={{ padding: '14px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>Daily feed record</span>
+                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Daily feed record</span>
                   {canEditFeed && (
                     <button
                       onClick={() => {
@@ -848,7 +848,7 @@ export default function FeedRecordsPage() {
                         });
                         setModalOpen(true);
                       }}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
                       onMouseOver={(e) => (e.currentTarget.style.gap = '10px')}
                       onMouseOut={(e) => (e.currentTarget.style.gap = '6px')}
                     >
@@ -872,8 +872,8 @@ export default function FeedRecordsPage() {
                   <History size={22} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 850, color: 'var(--text-primary)', margin: 0 }}>{selectedPondForHistory.pondName}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 650, margin: '3px 0 0' }}>{t.feedHistory.title}</p>
+                  <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{selectedPondForHistory.pondName}</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: '3px 0 0' }}>{t.feedHistory.title}</p>
                 </div>
               </div>
               <button aria-label="Close feed history" onClick={closeHistoryDrawer} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -883,7 +883,7 @@ export default function FeedRecordsPage() {
 
             <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 32px' }}>
               {canEditFeed && selectedFeedHistory.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #BBE1FA', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', fontWeight: 700 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #BBE1FA', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', fontWeight: 600 }}>
                   <History size={17} />
                   <span>{t.feedHistory.editHint}</span>
                 </div>
@@ -893,7 +893,7 @@ export default function FeedRecordsPage() {
                   <div style={{ width: '68px', height: '68px', borderRadius: '20px', background: '#EAF3F8', color: '#0F4C75', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
                     <ClipboardList size={30} />
                   </div>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 850, marginBottom: '6px' }}>{t.feedHistory.noHistory}</div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 600, marginBottom: '6px' }}>{t.feedHistory.noHistory}</div>
                   <div style={{ maxWidth: '300px', fontSize: '13px', lineHeight: 1.6, fontWeight: 600 }}>{t.feedHistory.noHistorySubtitle}</div>
                 </div>
               )}
@@ -916,7 +916,7 @@ export default function FeedRecordsPage() {
                             type="button"
                             aria-label={`${t.feedHistory.deleteAction}: ${log.date}`}
                             onClick={() => setDeletingFeedRecord(log)}
-                            style={{ position: 'absolute', inset: '0 0 0 auto', width: '104px', border: 'none', background: '#E74C3C', color: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', fontSize: '12px', fontWeight: 850, cursor: 'pointer' }}
+                            style={{ position: 'absolute', inset: '0 0 0 auto', width: '104px', border: 'none', background: '#E74C3C', color: '#FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '3px', fontSize: '12px', fontWeight: 600, cursor: 'pointer' }}
                           >
                             <Trash2 size={19} />
                             {t.feedHistory.deleteAction}
@@ -946,10 +946,10 @@ export default function FeedRecordsPage() {
                           }}
                           style={{ position: 'relative', zIndex: 1, width: '100%', minHeight: '58px', padding: '14px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', background: '#FFFFFF', cursor: canEditFeed ? 'pointer' : 'default', textAlign: 'left', transform: isRevealed ? 'translateX(-104px)' : 'translateX(0)', transition: 'transform 180ms ease' }}
                         >
-                          <span style={{ color: '#334E68', fontSize: '14px', fontWeight: 650 }}>
+                          <span style={{ color: '#334E68', fontSize: '14px', fontWeight: 600 }}>
                             {new Date(log.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                           </span>
-                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F4C75', fontSize: '16px', fontWeight: 850, whiteSpace: 'nowrap' }}>
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F4C75', fontSize: '16px', fontWeight: 600, whiteSpace: 'nowrap' }}>
                             {log.feedData.totalDailyFeed} kg
                             {canEditFeed && (
                               <button
@@ -984,13 +984,13 @@ export default function FeedRecordsPage() {
             <div style={{ width: '56px', height: '56px', margin: '0 auto 14px', borderRadius: '50%', background: '#FDECEC', color: '#E74C3C', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Trash2 size={25} />
             </div>
-            <h2 id="delete-feed-title" style={{ margin: 0, color: 'var(--text-primary)', fontSize: '21px', fontWeight: 900 }}>{t.feedHistory.deleteTitle}</h2>
+            <h2 id="delete-feed-title" style={{ margin: 0, color: 'var(--text-primary)', fontSize: '21px', fontWeight: 600 }}>{t.feedHistory.deleteTitle}</h2>
             <p style={{ margin: '10px 0 0', color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6, fontWeight: 600 }}>
               {t.feedHistory.deleteMessage
                 .replace('{amount}', String(deletingFeedRecord.feedData.totalDailyFeed))
                 .replace('{date}', new Date(deletingFeedRecord.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }))}
             </p>
-            <div style={{ marginTop: '18px', padding: '12px 14px', borderRadius: '12px', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', lineHeight: 1.5, fontWeight: 750 }}>
+            <div style={{ marginTop: '18px', padding: '12px 14px', borderRadius: '12px', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', lineHeight: 1.5, fontWeight: 600 }}>
               {deletionHasMissingInventory
                 ? t.feedHistory.deleteMissingInventoryNote
                 : t.feedHistory.deleteInventoryNote}
@@ -1000,7 +1000,7 @@ export default function FeedRecordsPage() {
                 type="button"
                 onClick={() => setDeletingFeedRecord(null)}
                 disabled={isDeletingFeedRecord}
-                style={{ flex: 1, minHeight: '48px', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--text-muted)', fontWeight: 850, cursor: 'pointer' }}
+                style={{ flex: 1, minHeight: '48px', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF', color: 'var(--text-muted)', fontWeight: 600, cursor: 'pointer' }}
               >
                 {t.actions.cancel}
               </button>
@@ -1008,7 +1008,7 @@ export default function FeedRecordsPage() {
                 type="button"
                 onClick={handleDeleteFeedRecord}
                 disabled={isDeletingFeedRecord}
-                style={{ flex: 1.4, minHeight: '48px', padding: '0 12px', borderRadius: '12px', border: 'none', background: '#E74C3C', color: '#FFFFFF', fontWeight: 900, cursor: isDeletingFeedRecord ? 'wait' : 'pointer', opacity: isDeletingFeedRecord ? 0.65 : 1 }}
+                style={{ flex: 1.4, minHeight: '48px', padding: '0 12px', borderRadius: '12px', border: 'none', background: '#E74C3C', color: '#FFFFFF', fontWeight: 600, cursor: isDeletingFeedRecord ? 'wait' : 'pointer', opacity: isDeletingFeedRecord ? 0.65 : 1 }}
               >
                 {isDeletingFeedRecord ? t.feedHistory.deleting : t.feedHistory.confirmDelete}
               </button>
@@ -1020,15 +1020,15 @@ export default function FeedRecordsPage() {
       {/* -- LOG MODAL -------------------------------------- */}
       {isModalOpen && (
         <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '650px', background: '#FFFFFF', padding: '0', overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
-            <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+          <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '640px', maxHeight: 'calc(100dvh - 48px)', background: '#FFFFFF', padding: '0', overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
+            <div className="responsive-modal-header" style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(15, 76, 117, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
                   <Plus size={28} />
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '22px', fontWeight: 800 }}>{editingFeedRecord ? t.feedHistory.editTitle : t.feed.addFeedData}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '14px', fontWeight: 600 }}>
+                  <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>{editingFeedRecord ? t.feedHistory.editTitle : t.feed.addFeedData}</h2>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '18px', fontWeight: 400 }}>
                     {editingFeedRecord ? t.feedHistory.editSubtitle : t.feed.feedMixHint}
                   </p>
                 </div>
@@ -1036,10 +1036,10 @@ export default function FeedRecordsPage() {
               <button onClick={closeFeedModal} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handleAddFeed} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px', maxHeight: '70dvh', overflowY: 'auto' }}>
+            <form className="responsive-modal-body" onSubmit={handleAddFeed} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', maxHeight: 'calc(100dvh - 145px)', overflowY: 'auto' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Select Pond</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Select Pond</label>
                   <select
                     required
                     disabled={Boolean(editingFeedRecord)}
@@ -1057,7 +1057,7 @@ export default function FeedRecordsPage() {
                         date: pondStartDate && current.date < pondStartDate ? today : current.date,
                       }));
                     }}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', fontWeight: 600, color: 'var(--text-primary)' }}
                   >
                     <option value="">Choose a pond...</option>
                     {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
@@ -1065,7 +1065,7 @@ export default function FeedRecordsPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.forms.date}</label>
                   <input
                     type="date"
                     required
@@ -1074,12 +1074,12 @@ export default function FeedRecordsPage() {
                     max={today}
                     value={formData.date}
                     onChange={e => setFormData({...formData, date: e.target.value})}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord || !formData.pondId ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 700, color: 'var(--text-primary)' }}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord || !formData.pondId ? '#edf3f8' : 'var(--bg-mid)', fontWeight: 600, color: 'var(--text-primary)' }}
                   />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.feed.feedMix}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.feed.feedMix}</label>
                   <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{t.feed.feedMixHint}</p>
                   {formData.feedAllocations.length === 0 && (
                     <div role="alert" style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #f6c453', background: '#fff8e6', color: '#92400e' }}>
@@ -1100,7 +1100,7 @@ export default function FeedRecordsPage() {
                             itemIndex === index ? { ...item, inventoryFeedId: e.target.value } : item
                           )),
                         }))}
-                        style={{ minWidth: 0, padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 700, color: 'var(--text-primary)' }}
+                        style={{ minWidth: 0, padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', fontWeight: 600, color: 'var(--text-primary)' }}
                       >
                         {!inventoryFeeds.some((feed) => feed.id === allocation.inventoryFeedId) && (
                           <option value={allocation.inventoryFeedId}>{t.feed.feedUnavailable}</option>
@@ -1125,7 +1125,7 @@ export default function FeedRecordsPage() {
                             itemIndex === index ? { ...item, quantityKg: e.target.value } : item
                           )),
                         }))}
-                        style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, color: 'var(--primary)' }}
+                        style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, color: 'var(--primary)' }}
                       />
                       <button
                         type="button"
@@ -1151,28 +1151,28 @@ export default function FeedRecordsPage() {
                         feedAllocations: [...current.feedAllocations, { inventoryFeedId: nextFeed.id, quantityKg: '' }],
                       }));
                     }}
-                    style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 800, cursor: hasUnusedInventoryFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedInventoryFeed ? 1 : 0.5 }}
+                    style={{ alignSelf: 'flex-start', padding: '10px 14px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', color: 'var(--primary)', fontWeight: 600, cursor: hasUnusedInventoryFeed ? 'pointer' : 'not-allowed', opacity: hasUnusedInventoryFeed ? 1 : 0.5 }}
                   >
                     + {t.feed.addFeedType}
                   </button>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.feed.calculatedTotal}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.feed.calculatedTotal}</label>
                   <input
                     readOnly
                     type="number"
                     step="0.1"
                     value={formAllocationTotal.toFixed(2)}
-                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: '#edf3f8', fontWeight: 800, color: 'var(--primary)' }}
+                    style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: '#edf3f8', fontWeight: 600, color: 'var(--primary)' }}
                   />
                 </div>
 
               </div>
 
-              <div style={{ marginTop: '24px', display: 'flex', gap: '20px', borderTop: '1px solid var(--border)', paddingTop: '32px' }}>
-                <button type="button" onClick={closeFeedModal} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'white', fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>{t.actions.cancel}</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', fontWeight: 900, fontSize: '16px' }}>{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
+              <div style={{ position: 'sticky', bottom: '-24px', margin: '0 -24px -24px', padding: '20px 24px 24px', display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', background: '#FFFFFF' }}>
+                <button type="button" onClick={closeFeedModal} style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>{t.actions.cancel}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', fontWeight: 500, fontSize: '14px' }}>{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
               </div>
             </form>
           </div>

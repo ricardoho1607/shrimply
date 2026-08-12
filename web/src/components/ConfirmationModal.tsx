@@ -49,7 +49,7 @@ export default function ConfirmationModal({
           </div>
           
           <div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800, marginBottom: '8px' }}>{title}</h3>
+            <h3 style={{ fontSize: '20px', fontWeight: 600, marginBottom: '8px' }}>{title}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '14px', lineHeight: 1.6 }}>{message}</p>
           </div>
 
@@ -59,7 +59,7 @@ export default function ConfirmationModal({
               disabled={isLoading}
               style={{ 
                 flex: 1, padding: '12px', borderRadius: '12px', border: '1px solid var(--border)', 
-                background: 'transparent', fontWeight: 700, cursor: 'pointer', fontSize: '14px' 
+                background: 'transparent', fontWeight: 600, cursor: 'pointer', fontSize: '14px'
               }}
             >
               {cancelText}
@@ -70,7 +70,7 @@ export default function ConfirmationModal({
               style={{ 
                 flex: 1, padding: '12px', borderRadius: '12px', border: 'none', 
                 background: isDanger ? '#EF4444' : 'var(--primary)', color: '#FFF',
-                fontWeight: 800, cursor: 'pointer', fontSize: '14px',
+                fontWeight: 600, cursor: 'pointer', fontSize: '14px',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
               }}
             >

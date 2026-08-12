@@ -16,14 +16,17 @@
   margin: 0 0 5px;
   color: var(--secondary);
   font-size: .72rem;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .12em;
   text-transform: uppercase;
 }
 
 .pageHeader h1 {
   margin: 0;
-  font-size: 1.65rem;
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -.02em;
 }
 
 .subtitle {
@@ -40,7 +43,8 @@
 .actionButton,
 .backButton {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  min-height: 44px;
+  border-radius: 10px;
   background: #fff;
   color: var(--primary);
   display: inline-flex;
@@ -49,7 +53,8 @@
   gap: 8px;
   padding: 11px 14px;
   font: inherit;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 500;
   text-decoration: none;
   cursor: pointer;
 }
@@ -141,7 +146,7 @@
   color: var(--primary);
   padding: 7px 11px;
   font-size: .7rem;
-  font-weight: 900;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -152,7 +157,7 @@
   margin-top: 18px;
   color: var(--text-muted);
   font-size: .82rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .tabs {
@@ -168,7 +173,8 @@
   color: var(--text-muted);
   padding: 11px;
   font: inherit;
-  font-weight: 800;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
 }
 
@@ -194,7 +200,7 @@
   display: block;
   color: var(--text-muted);
   font-size: .72rem;
-  font-weight: 800;
+  font-weight: 600;
   text-transform: uppercase;
 }
 
@@ -220,7 +226,9 @@
 
 .section h2 {
   margin: 0 0 15px;
-  font-size: 1rem;
+  font-size: 18px;
+  line-height: 26px;
+  font-weight: 600;
 }
 
 .pondList,
@@ -286,7 +294,7 @@
 .costTotal {
   border-bottom: 0;
   color: var(--primary);
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .empty,

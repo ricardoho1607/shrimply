@@ -829,7 +829,7 @@ export default function PondsPage() {
           </div>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
                 Current Cycle
               </span>
               <span style={{
@@ -838,24 +838,24 @@ export default function PondsPage() {
                 background: activeFarmCycle ? 'var(--primary-dim)' : 'var(--bg-mid)',
                 color: activeFarmCycle ? 'var(--primary)' : 'var(--text-muted)',
                 fontSize: '0.66rem',
-                fontWeight: 900,
+                fontWeight: 600,
                 textTransform: 'uppercase',
               }}>
                 {activeFarmCycle?.status || 'waiting'}
               </span>
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {activeFarmCycle?.cycleName || `Cycle ${cycles.length + 1} not started`}
             </div>
           </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
             <Waves size={15} color="var(--primary)" />
             {activeCyclePonds.length} pond{activeCyclePonds.length === 1 ? '' : 's'}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 800 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
             <Calendar size={15} color="var(--primary)" />
             {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}
           </div>
@@ -874,7 +874,7 @@ export default function PondsPage() {
                   background: 'var(--bg-mid)',
                   color: 'var(--text-primary)',
                   fontSize: '0.78rem',
-                  fontWeight: 750,
+                  fontWeight: 600,
                   outline: 'none',
                 }}
               />
@@ -898,9 +898,9 @@ export default function PondsPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px',
-              padding: '12px 16px 12px 48px', width: '100%', fontSize: '15px', outline: 'none',
-              fontWeight: 600, color: 'var(--text-primary)', transition: 'all 0.2s'
+              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
+              height: '44px', padding: '0 16px 0 48px', width: '100%', fontSize: '14px', outline: 'none',
+              fontWeight: 400, color: 'var(--text-primary)', transition: 'all 0.2s'
             }}
             onFocus={e => e.target.style.borderColor = 'var(--primary)'}
             onBlur={e => e.target.style.borderColor = 'var(--border)'}
@@ -909,7 +909,7 @@ export default function PondsPage() {
         <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-mid)', padding: '5px', borderRadius: '14px', border: '1px solid var(--border)' }}>
           <button onClick={() => setCycleFilter('active')} style={{
             padding: '8px 14px', borderRadius: '10px', background: cycleFilter === 'active' ? 'var(--glass-bg)' : 'transparent',
-            border: '1px solid var(--border)', fontSize: '13px', fontWeight: 700,
+            border: '1px solid var(--border)', fontSize: '13px', fontWeight: 600,
             color: cycleFilter === 'active' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'active' ? 'var(--shadow-card)' : 'none',
             opacity: cycleFilter === 'active' ? 1 : 0.75,
@@ -920,7 +920,7 @@ export default function PondsPage() {
             padding: '8px 14px', borderRadius: '10px',
             background: cycleFilter === 'inactive' ? 'var(--glass-bg)' : 'transparent',
             border: cycleFilter === 'inactive' ? '1px solid var(--border)' : 'none',
-            fontSize: '13px', fontWeight: 700,
+            fontSize: '13px', fontWeight: 600,
             color: cycleFilter === 'inactive' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'inactive' ? 'var(--shadow-card)' : 'none',
           }}>
@@ -930,7 +930,7 @@ export default function PondsPage() {
             padding: '8px 14px', borderRadius: '10px',
             background: cycleFilter === 'ended' ? 'var(--glass-bg)' : 'transparent',
             border: cycleFilter === 'ended' ? '1px solid var(--border)' : 'none',
-            fontSize: '13px', fontWeight: 700,
+            fontSize: '13px', fontWeight: 600,
             color: cycleFilter === 'ended' ? 'var(--primary)' : 'var(--text-muted)',
             boxShadow: cycleFilter === 'ended' ? 'var(--shadow-card)' : 'none',
           }}>
@@ -962,7 +962,7 @@ export default function PondsPage() {
           }}>
             <Waves size={40} />
           </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '12px' }}>{t.ponds.noPondsFound || 'No Ponds Found'}</h2>
+          <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '12px' }}>{t.ponds.noPondsFound || 'No Ponds Found'}</h2>
           <p style={{ color: 'var(--text-muted)', marginBottom: '32px', maxWidth: '400px', margin: '0 auto 32px', lineHeight: 1.6 }}>
             {t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}
           </p>
@@ -989,8 +989,8 @@ export default function PondsPage() {
                     <Waves size={20} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '1.02rem', fontWeight: 850, letterSpacing: '0' }}>{pond.pondName}</h3>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                    <h3 style={{ fontSize: '1.02rem', fontWeight: 600, letterSpacing: '0' }}>{pond.pondName}</h3>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                       {t.startPondCycle.readyForNextCycle}
                     </p>
                   </div>
@@ -1022,22 +1022,22 @@ export default function PondsPage() {
               </div>
               <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ color: 'var(--primary)' }}><Scale size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 800 }}>{pond.pondArea} m²</span>
+                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.pondArea} m²</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status</span>
-                  <span style={{ fontSize: '0.95rem', fontWeight: 850, color: 'var(--primary)' }}>Inactive</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status</span>
+                  <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)' }}>Inactive</span>
                 </div>
               </div>
             </div>
           ))}
           {filteredPonds.map(pond => (
-            <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '330px' }}>
-              <div style={{ padding: '22px', minHeight: '106px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '14px' }}>
+            <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '296px' }}>
+              <div style={{ padding: '20px', minHeight: '96px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
                 <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{
                     width: '46px', height: '46px', borderRadius: '12px', background: 'var(--gradient-dim)',
@@ -1046,7 +1046,7 @@ export default function PondsPage() {
                     <Waves size={22} />
                   </div>
                   <div>
-                    <h3 style={{ fontSize: '1.12rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
+                    <h3 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
                     <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{getPlSupplier(pond)}</p>
                     {pond.cycleStartMode === 'midcycle' && (
                       <span style={{
@@ -1057,7 +1057,7 @@ export default function PondsPage() {
                         background: '#BBE1FA',
                         color: '#0F4C75',
                         fontSize: '0.68rem',
-                        fontWeight: 900,
+                        fontWeight: 600,
                         textTransform: 'uppercase',
                         letterSpacing: '0.03em'
                       }}>
@@ -1125,45 +1125,45 @@ export default function PondsPage() {
                 )}
               </div>
 
-              <div style={{ padding: '22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', flex: '1 1 auto' }}>
+              <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', flex: '1 1 auto' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ color: 'var(--primary)' }}><Scale size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 800 }}>{pond.pondArea} m²</span>
+                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.pondArea} m²</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.density || 'Density'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.density || 'Density'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ color: 'var(--primary)' }}><Users size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 800 }}>{pond.density} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)' }}>PL/m²</span></span>
+                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.density} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)' }}>PL/m²</span></span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.started || 'Started'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.started || 'Started'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ color: 'var(--primary)' }}><Calendar size={18} /></div>
-                    <span style={{ fontSize: '0.98rem', fontWeight: 800 }}>{new Date(pond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                    <span style={{ fontSize: '0.98rem', fontWeight: 600 }}>{new Date(pond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                   </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.population || 'Population'}</span>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.population || 'Population'}</span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ color: 'var(--primary)' }}><Shrimp size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 800 }}>{pond.initialPopulation.toLocaleString()}</span>
+                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.initialPopulation.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
 
-              <div style={{ padding: '16px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+              <div style={{ padding: '12px 20px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
                   {t.ponds.lastSampled || 'Last sampled'}: <span style={{ color: 'var(--text-faint)' }}>{getLatestSamplingDate(pond.samplings) ? new Date(getLatestSamplingDate(pond.samplings) as string).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : (t.ponds.never || 'Never')}</span>
                 </span>
                 <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
                   <button style={{
-                    background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 800,
-                    fontSize: '0.82rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
+                    background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600,
+                    fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
                     transition: 'all 0.2s'
                   }} onMouseEnter={e => e.currentTarget.style.gap = '10px'} onMouseLeave={e => e.currentTarget.style.gap = '6px'}>
                     {t.ponds.viewDetails || 'View Details'} <ArrowRight size={16} />
@@ -1188,7 +1188,7 @@ export default function PondsPage() {
           }}>
             <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>{t.ponds.addNew || 'Add New Pond'}</h2>
+                <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{t.ponds.addNew || 'Add New Pond'}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Create a physical pond placeholder. Start cycle details are added separately.</p>
               </div>
               <button
@@ -1207,7 +1207,7 @@ export default function PondsPage() {
             <form className="responsive-modal-body" onSubmit={handleAddPond} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
                   <input
                     required placeholder={t.ponds.pondNamePlaceholder || "e.g. Pond Alpha 1"}
                     value={formData.pondName}
@@ -1223,7 +1223,7 @@ export default function PondsPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.area || 'Pond Area'} (m²)</label>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.area || 'Pond Area'} (m²)</label>
                   <input
                     required type="number" placeholder="1000"
                     value={formData.pondArea}
@@ -1239,7 +1239,7 @@ export default function PondsPage() {
 
                 {isEnterpriseFarm && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.enterprise.selectBlock}</label>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.enterprise.selectBlock}</label>
                     {availableFarmBlocks.length > 0 ? (
                       <select
                         required
@@ -1259,7 +1259,7 @@ export default function PondsPage() {
               <div style={{ marginTop: '12px', display: 'flex', gap: '20px' }}>
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
-                  background: 'transparent', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s'
+                  background: 'transparent', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s'
                 }} onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-mid)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   {t.common.cancel || 'Cancel'}
                 </button>
@@ -1281,7 +1281,7 @@ export default function PondsPage() {
           <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Edit Baseline</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Edit Baseline</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
                   Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.
                 </p>
@@ -1291,29 +1291,29 @@ export default function PondsPage() {
               </button>
             </div>
             <form className="responsive-modal-body responsive-form-grid" onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.baselineDate || 'Baseline Date'}
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.currentMbw || 'Current MBW (g)'}
                 <input required type="number" step="0.01" value={baselineForm.baselineMbw} onChange={e => setBaselineForm(prev => ({ ...prev, baselineMbw: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.currentPopulation || 'Current Population (optional)'}
                 <input type="number" value={baselineForm.baselineEstimatedPopulation} onChange={e => setBaselineForm(prev => ({ ...prev, baselineEstimatedPopulation: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.survivalRate || 'Current SR % (optional)'}
                 <input type="number" step="0.1" value={baselineForm.baselineSurvivalRate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineSurvivalRate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.midcycleOnboarding?.feedUsedSoFar || 'Feed Used So Far (kg, optional)'}
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>Save Baseline</button>
+                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>Save Baseline</button>
               </div>
             </form>
           </div>
@@ -1329,7 +1329,7 @@ export default function PondsPage() {
           <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>End Cycle</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>End Cycle</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} history will stay saved.</p>
               </div>
               <button onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1337,11 +1337,11 @@ export default function PondsPage() {
               </button>
             </div>
             <div className="responsive-modal-body" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 End Date
                 <input type="date" required value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Reason
                 <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }}>
                   <option value="harvested">Harvested</option>
@@ -1351,8 +1351,8 @@ export default function PondsPage() {
                 </select>
               </label>
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
-                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>End Cycle</button>
+                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>End Cycle</button>
               </div>
             </div>
           </div>

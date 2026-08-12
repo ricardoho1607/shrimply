@@ -432,7 +432,7 @@ export default function InventoryFeedsPage() {
             <Link
               href="/dashboard/inventory/treatment-mixes"
               className="dashboard-action dashboard-action-secondary"
-              style={{ minHeight: '44px', fontSize: '13px', fontWeight: 850, textDecoration: 'none' }}
+              style={{ minHeight: '44px', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}
             >
               <FlaskConical size={18} />
               Treatment Mixes
@@ -446,7 +446,7 @@ export default function InventoryFeedsPage() {
                 boxShadow: 'var(--shadow-card)',
                 minHeight: '44px',
                 fontSize: '13px',
-                fontWeight: 850,
+                fontWeight: 600,
                 letterSpacing: '0',
                 textTransform: 'none',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -464,7 +464,7 @@ export default function InventoryFeedsPage() {
                 boxShadow: 'var(--shadow-card)',
                 minHeight: '44px',
                 fontSize: '13px',
-                fontWeight: 850,
+                fontWeight: 600,
                 letterSpacing: '0',
                 textTransform: 'none',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -490,20 +490,20 @@ export default function InventoryFeedsPage() {
                     <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
                       <metric.icon size={20} />
                     </div>
-                    <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{metric.label}</span>
+                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{metric.label}</span>
                   </div>
-                  <div style={{ fontSize: '26px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{metric.value}</div>
+                  <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{metric.value}</div>
                 </div>
               ))}
             </div>
 
             {/* Split View: Alerts and Transactions */}
-            <div className="dashboard-report-grid">
+            <div className="dashboard-report-grid inventory-dashboard-split" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(420px, 1fr)' }}>
 
               {/* Critical Alerts Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
                       <AlertCircle size={19} />
                     </div>
@@ -515,7 +515,7 @@ export default function InventoryFeedsPage() {
                     color: metrics.lowStockCount > 0 ? '#e74c3c' : '#27ae60',
                     borderRadius: '30px',
                     fontSize: '12px',
-                    fontWeight: 900,
+                    fontWeight: 600,
                     textTransform: 'uppercase'
                   }}>
                     {metrics.lowStockCount} {metrics.lowStockCount === 1 ? 'Alert' : 'Alerts'}
@@ -529,7 +529,7 @@ export default function InventoryFeedsPage() {
                         <Waves size={24} />
                       </div>
                       <div>
-                        <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>Optimal Stock Levels</h3>
+                        <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>Optimal Stock Levels</h3>
                         <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginTop: '4px' }}>All inventory items are currently above reorder thresholds.</p>
                       </div>
                     </div>
@@ -553,8 +553,8 @@ export default function InventoryFeedsPage() {
                           <AlertCircle size={24} />
                         </div>
                         <div>
-                          <div style={{ fontWeight: 900, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
-                          <div style={{ fontSize: '13px', fontWeight: 700, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
+                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Box size={14} />
                             Critical: {formatQuantity(item.totalStock)} {item.unit} remaining
                           </div>
@@ -566,7 +566,7 @@ export default function InventoryFeedsPage() {
                           style={{
                             padding: '12px 20px',
                             fontSize: '13px',
-                            fontWeight: 900,
+                            fontWeight: 600,
                             background: '#e74c3c',
                             letterSpacing: '0',
                             textTransform: 'none',
@@ -585,7 +585,7 @@ export default function InventoryFeedsPage() {
               {/* Transaction Ledger */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 900, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
                     <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                       <History size={19} />
                     </div>
@@ -597,7 +597,7 @@ export default function InventoryFeedsPage() {
                         key={f}
                         onClick={() => setRecentActivityFilter(f)}
                         style={{
-                          padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                          padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
                           background: recentActivityFilter === f ? 'white' : 'transparent',
                           color: recentActivityFilter === f ? 'var(--primary)' : 'var(--text-faint)',
                           border: 'none', cursor: 'pointer', boxShadow: recentActivityFilter === f ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -628,18 +628,18 @@ export default function InventoryFeedsPage() {
                         {tx.type === 'Stock In' ? <ArrowDownCircle size={20} /> : <ArrowUpCircle size={20} />}
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 900, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
+                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                           <span>{tx.type}</span>
                           <span style={{ opacity: 0.3 }}>•</span>
                           <span>{tx.date}</span>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '18px', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                        <div style={{ fontWeight: 600, fontSize: '18px', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
                           {tx.type === 'Stock In' ? '+' : '-'}{formatQuantity(tx.quantity)}
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
+                        <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
                       </div>
                     </div>
                   ))}
@@ -666,7 +666,7 @@ export default function InventoryFeedsPage() {
                     width: '100%',
                     fontSize: '14px',
                     outline: 'none',
-                    fontWeight: 700,
+                    fontWeight: 600,
                     color: 'var(--text-primary)',
                     boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)',
                     transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
@@ -677,7 +677,7 @@ export default function InventoryFeedsPage() {
                 <button
                   onClick={() => setCategoryFilter(null)}
                   style={{
-                    padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                    padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
                     background: !categoryFilter ? 'white' : 'transparent',
                     color: !categoryFilter ? 'var(--primary)' : 'var(--text-muted)',
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -689,7 +689,7 @@ export default function InventoryFeedsPage() {
                     key={cat}
                     onClick={() => setCategoryFilter(cat)}
                     style={{
-                      padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 800,
+                      padding: '8px 12px', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
                       background: categoryFilter === cat ? 'white' : 'transparent',
                       color: categoryFilter === cat ? 'var(--primary)' : 'var(--text-muted)',
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
@@ -706,7 +706,7 @@ export default function InventoryFeedsPage() {
                 <div style={{ width: '72px', height: '72px', borderRadius: '22px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '22px', border: '1px solid var(--border)' }}>
                   <Box size={34} />
                 </div>
-                <h2 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '10px', letterSpacing: '0' }}>
+                <h2 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '10px', letterSpacing: '-0.02em' }}>
                   {activeTab === 'feed' ? t.inventory.noFeedItems : t.inventory.noAdditives}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '26px', fontWeight: 600, fontSize: '14px', maxWidth: '400px', lineHeight: 1.6 }}>
@@ -716,7 +716,7 @@ export default function InventoryFeedsPage() {
                   <button
                     className="btn-primary"
                     onClick={() => handleOpenModal('add', undefined, activeTab)}
-                    style={{ padding: '18px 40px', borderRadius: '20px', fontWeight: 900, fontSize: '16px', boxShadow: 'var(--shadow-glow)' }}
+                    style={{ height: '44px', padding: '0 20px', borderRadius: '10px', fontWeight: 500, fontSize: '14px', letterSpacing: 0, textTransform: 'none', boxShadow: 'var(--shadow-glow)' }}
                   >
                     <Plus size={22} />
                     Add Your First {activeTab === 'feed' ? 'Feed' : 'Additive'}
@@ -761,13 +761,13 @@ export default function InventoryFeedsPage() {
                             {activeTab === 'feed' ? <Box size={24} /> : <FlaskConical size={24} />}
                           </div>
                           <div>
-                            <h3 style={{ fontSize: '18px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.itemName}</h3>
+                            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.itemName}</h3>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700 }}>{item.brand || 'No Brand'}</span>
-                              <span style={{ opacity: 0.2, fontWeight: 900 }}>•</span>
+                              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>{item.brand || 'No Brand'}</span>
+                              <span style={{ opacity: 0.2, fontWeight: 600 }}>•</span>
                               <span style={{
                                 padding: '2px 10px', background: 'var(--primary-dim)', color: 'var(--primary)',
-                                borderRadius: '20px', fontSize: '11px', fontWeight: 900, textTransform: 'uppercase'
+                                borderRadius: '20px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase'
                               }}>
                                 {(item as any).feedType || (item as any).category}
                               </span>
@@ -798,37 +798,37 @@ export default function InventoryFeedsPage() {
 
                       <div className={styles.inventoryMetrics}>
                         <div className={styles.inventoryMetric}>
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.stock}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.stock}</span>
                           <div className={styles.inventoryMetricValue} style={{ color: isLow ? '#e74c3c' : 'var(--text-primary)' }}>
                             {formatQuantity(item.totalStock)}
                             <span className={styles.inventoryMetricUnit}>{item.unit}</span>
                           </div>
                           {isLow && (
-                            <div style={{ fontSize: '11px', fontWeight: 800, color: '#e74c3c', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 600, color: '#e74c3c', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
                               <AlertCircle size={12} /> Low Stock Alert
                             </div>
                           )}
                         </div>
                         <div className={styles.inventoryMetric}>
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
                           <span className={styles.inventoryMetricValue}>{formatCurrency(averagePrice)}</span>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>per {item.unit}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>per {item.unit}</span>
                         </div>
                         <div className={styles.inventoryMetric}>
-                          <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.value}</span>
+                          <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.value}</span>
                           <span className={styles.inventoryMetricValue}>{formatCurrency(item.totalCost || 0)}</span>
-                          <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Value</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Total Value</span>
                         </div>
                       </div>
 
                       <div style={{ padding: '14px 20px', display: 'flex', gap: '18px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 800, fontSize: '13px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
                           <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ArrowDownCircle size={14} />
                           </div>
                           {t.inventory.in}: {formatQuantity(totalIn)} {item.unit}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 800, fontSize: '13px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
                           <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ArrowUpCircle size={14} />
                           </div>
@@ -840,14 +840,14 @@ export default function InventoryFeedsPage() {
                         <div style={{ padding: '18px 20px', display: 'flex', gap: '12px', background: 'white', borderTop: '1px solid var(--border)' }}>
                           <button
                             className="btn-primary"
-                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', boxShadow: 'none' }}
+                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600, fontSize: '13px', boxShadow: 'none' }}
                             onClick={() => handleOpenModal('stockIn', item, activeTab)}
                           >
                             <Plus size={18} /> {t.inventory.stockIn}
                           </button>
                           <button
                             className="btn-secondary"
-                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
+                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600, fontSize: '13px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
                             onClick={() => handleOpenModal('usage', item, activeTab)}
                           >
                             <ArrowUpCircle size={18} /> {t.inventory.use}
@@ -897,14 +897,14 @@ export default function InventoryFeedsPage() {
                    modalType === 'history' ? <History size={32} /> : <AlertCircle size={32} />}
                 </div>
                 <div>
-                  <h2 style={{ fontSize: '26px', fontWeight: 950, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  <h2 style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
                     {modalType === 'add' ? `Add New ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
                      modalType === 'stockIn' ? t.inventory.stockIn :
                      modalType === 'usage' ? t.inventory.recordUsage :
                      modalType === 'history' ? t.inventory.transactionHistory : 'Threshold Settings'}
                   </h2>
                   {selectedItem && (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 700, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Box size={16} /> {selectedItem.itemName}
                     </p>
                   )}
@@ -928,7 +928,7 @@ export default function InventoryFeedsPage() {
                 <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
                   {/* Stock In Ledger */}
                   <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
                       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
                         <ArrowDownCircle size={20} />
                       </div>
@@ -936,7 +936,7 @@ export default function InventoryFeedsPage() {
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {selectedItem.stockInHistory.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 700 }}>
+                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
                           No stock intake recorded.
                         </div>
                       ) : (
@@ -945,13 +945,13 @@ export default function InventoryFeedsPage() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <Calendar size={18} color="var(--primary)" />
-                                <span style={{ fontWeight: 900, fontSize: '16px' }}>{formatDate(h.date)}</span>
+                                <span style={{ fontWeight: 600, fontSize: '16px' }}>{formatDate(h.date)}</span>
                               </div>
-                              <div style={{ fontWeight: 950, fontSize: '18px', color: '#27ae60' }}>
+                              <div style={{ fontWeight: 600, fontSize: '18px', color: '#27ae60' }}>
                                 +{formatQuantity(h.quantity)} {selectedItem.unit}
                               </div>
                             </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 700 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
                               <div>
                                 <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>Batch</span>
                                 {h.batch || 'N/A'}
@@ -974,7 +974,7 @@ export default function InventoryFeedsPage() {
 
                   {/* Usage Ledger */}
                   <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
+                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
                       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
                         <ArrowUpCircle size={20} />
                       </div>
@@ -982,7 +982,7 @@ export default function InventoryFeedsPage() {
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {selectedItem.usageHistory.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 700 }}>
+                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
                           No usage logs found.
                         </div>
                       ) : (
@@ -991,13 +991,13 @@ export default function InventoryFeedsPage() {
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                                 <Calendar size={18} color="#e74c3c" />
-                                <span style={{ fontWeight: 900, fontSize: '16px' }}>{formatDate(h.date)}</span>
+                                <span style={{ fontWeight: 600, fontSize: '16px' }}>{formatDate(h.date)}</span>
                               </div>
-                              <div style={{ fontWeight: 950, fontSize: '18px', color: '#e74c3c' }}>
+                              <div style={{ fontWeight: 600, fontSize: '18px', color: '#e74c3c' }}>
                                 -{formatQuantity(h.quantity)} {selectedItem.unit}
                               </div>
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 800 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
                               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                                 <Waves size={16} />
                               </div>
@@ -1022,28 +1022,28 @@ export default function InventoryFeedsPage() {
                   {modalType === 'add' && (
                     <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                       <div style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Item Identification</label>
-                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder="Full Item Name (e.g., Premium Growth Feed 02)" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Item Identification</label>
+                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder="Full Item Name (e.g., Premium Growth Feed 02)" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Brand / Manufacturer</label>
-                        <input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Brand / Manufacturer</label>
+                        <input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Classification</label>
-                        <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none', appearance: 'none' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Classification</label>
+                        <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', appearance: 'none' }}>
                           {(itemType === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Inventory Unit</label>
-                        <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }}>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Inventory Unit</label>
+                        <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Alert Threshold</label>
-                        <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Notify when below..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Alert Threshold</label>
+                        <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Notify when below..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
                     </div>
                   )}
@@ -1051,19 +1051,19 @@ export default function InventoryFeedsPage() {
                   {modalType !== 'editReorder' && (
                     <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                       <div style={{ gridColumn: modalType === 'add' ? 'span 1' : 'span 2' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.quantity} ({formData.unit || 'units'})</label>
-                        <input required type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} placeholder="0.00" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 900, fontSize: '20px', outline: 'none', color: 'var(--primary)' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.quantity} ({formData.unit || 'units'})</label>
+                        <input required type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} placeholder="0.00" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '20px', outline: 'none', color: 'var(--primary)' }} />
                       </div>
 
                       {modalType === 'usage' && (
                         <div style={{ gridColumn: 'span 2' }}>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Assign to Pond</label>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Assign to Pond</label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
                             <button
                               type="button"
                               onClick={() => setFormData({...formData, pondId: ''})}
                               style={{
-                                padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 800,
+                                padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 600,
                                 background: formData.pondId === '' ? 'var(--primary)' : 'var(--bg-mid)',
                                 color: formData.pondId === '' ? 'white' : 'var(--text-muted)',
                                 border: '1px solid var(--border)', transition: 'all 0.3s'
@@ -1075,7 +1075,7 @@ export default function InventoryFeedsPage() {
                                 type="button"
                                 onClick={() => setFormData({...formData, pondId: p.id})}
                                 style={{
-                                  padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 800,
+                                  padding: '14px', borderRadius: '14px', fontSize: '13px', fontWeight: 600,
                                   background: formData.pondId === p.id ? 'var(--primary)' : 'var(--bg-mid)',
                                   color: formData.pondId === p.id ? 'white' : 'var(--text-muted)',
                                   border: '1px solid var(--border)', transition: 'all 0.3s',
@@ -1089,20 +1089,20 @@ export default function InventoryFeedsPage() {
 
                       {modalType !== 'usage' && (
                         <div>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} (Rp)</label>
-                          <input required type="number" value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: e.target.value})} placeholder="Current Price" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }} />
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} (Rp)</label>
+                          <input required type="number" value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: e.target.value})} placeholder="Current Price" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                         </div>
                       )}
 
                       {(modalType === 'add' || modalType === 'stockIn') && (
                         <>
                           <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Batch Number</label>
-                            <input value={formData.batch} onChange={e => setFormData({...formData, batch: e.target.value})} placeholder="Lot/Batch #" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }} />
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Batch Number</label>
+                            <input value={formData.batch} onChange={e => setFormData({...formData, batch: e.target.value})} placeholder="Lot/Batch #" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                           </div>
                           <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Expiry Date</label>
-                            <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none' }} />
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Expiry Date</label>
+                            <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                           </div>
                         </>
                       )}
@@ -1111,16 +1111,16 @@ export default function InventoryFeedsPage() {
 
                   {modalType === 'editReorder' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Stock Reorder Threshold</label>
-                      <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Alert me when stock is below..." style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 900, fontSize: '24px', outline: 'none', color: '#e74c3c' }} />
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Stock Reorder Threshold</label>
+                      <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Alert me when stock is below..." style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '24px', outline: 'none', color: '#e74c3c' }} />
                       <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>We will display a critical alert on the dashboard when stock falls below this amount.</p>
                     </div>
                   )}
 
                   {modalType !== 'editReorder' && (
                     <div>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.notesOptional}</label>
-                      <textarea rows={3} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific details about this transaction..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 700, fontSize: '16px', outline: 'none', resize: 'none' }} />
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.notesOptional}</label>
+                      <textarea rows={3} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific details about this transaction..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
                     </div>
                   )}
                 </form>
@@ -1134,7 +1134,7 @@ export default function InventoryFeedsPage() {
                   onClick={() => setModalOpen(false)}
                   style={{
                     flex: 1, padding: '18px', borderRadius: '18px', border: '1px solid var(--border)',
-                    background: 'white', color: 'var(--text-muted)', fontWeight: 800, fontSize: '15px',
+                    background: 'white', color: 'var(--text-muted)', fontWeight: 600, fontSize: '15px',
                     cursor: 'pointer', transition: 'all 0.3s'
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
@@ -1144,7 +1144,7 @@ export default function InventoryFeedsPage() {
                   type="submit"
                   className="btn-primary"
                   style={{
-                    flex: 1.5, padding: '18px', borderRadius: '18px', fontWeight: 900, fontSize: '15px',
+                    flex: 1.5, padding: '18px', borderRadius: '18px', fontWeight: 600, fontSize: '15px',
                     boxShadow: '0 8px 25px var(--primary-dim)'
                   }}
                 >

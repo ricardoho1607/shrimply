@@ -265,8 +265,8 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
         ))}
 
         {/* Labels */}
-        <text x={padding} y={height - 10} fontSize="10" fill="var(--text-faint)" fontWeight="700">DOC {minX}</text>
-        <text x={width - padding} y={height - 10} textAnchor="end" fontSize="10" fill="var(--text-faint)" fontWeight="700">DOC {maxX}</text>
+        <text x={padding} y={height - 10} fontSize="10" fill="var(--text-faint)" fontWeight="600">DOC {minX}</text>
+        <text x={width - padding} y={height - 10} textAnchor="end" fontSize="10" fill="var(--text-faint)" fontWeight="600">DOC {maxX}</text>
       </svg>
 
       {/* Tooltip */}
@@ -287,8 +287,8 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
           whiteSpace: 'nowrap',
           transition: 'all 0.1s ease-out'
         }}>
-          <div style={{ fontWeight: 800, marginBottom: '2px' }}>DOC {hoveredPoint.x}</div>
-          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>MBW: <span style={{ color: '#FFF', fontWeight: 700 }}>{hoveredPoint.y}g</span></div>
+          <div style={{ fontWeight: 600, marginBottom: '2px' }}>DOC {hoveredPoint.x}</div>
+          <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: '11px' }}>MBW: <span style={{ color: '#FFF', fontWeight: 600 }}>{hoveredPoint.y}g</span></div>
           <div style={{ position: 'absolute', bottom: '-4px', left: '50%', transform: 'translateX(-50%) rotate(45deg)', width: '8px', height: '8px', background: 'rgba(15, 23, 42, 0.9)' }} />
         </div>
       )}
@@ -856,11 +856,11 @@ export default function PondDetailClient() {
             <ArrowLeft size={20} />
           </Link>
           <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {pond.pondName}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 700 }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
                   DOC {metrics?.doc ?? 0}
                 </span>
                 <span style={{
@@ -870,7 +870,7 @@ export default function PondDetailClient() {
                   border: '1px solid var(--border)',
                   borderRadius: '999px',
                   padding: '3px 8px',
-                  fontWeight: 800,
+                  fontWeight: 600,
                 }}>
                   {getCycleStatus(pond) === 'ended' ? 'ENDED' : 'ACTIVE'}
                 </span>
@@ -881,7 +881,7 @@ export default function PondDetailClient() {
                     background: '#BBE1FA',
                     borderRadius: '999px',
                     padding: '3px 8px',
-                    fontWeight: 900,
+                    fontWeight: 600,
                   }}>
                     MID-CYCLE BASELINE
                   </span>
@@ -934,51 +934,51 @@ export default function PondDetailClient() {
       </div>
 
       {/* Hero Stats */}
-      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '18px' }}>
+      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Age (DOC)</span>
+            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Age (DOC)</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <Calendar size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            {metrics?.doc} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>DAYS</span>
+          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
+            {metrics?.doc} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>DAYS</span>
           </div>
         </div>
 
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Est. Biomass</span>
+            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Est. Biomass</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(22, 163, 74, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
               <Scale size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            {metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>KG</span>
+          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
+            {metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>KG</span>
           </div>
         </div>
 
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 700 }}>Avg Daily Growth</span>
+            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Avg Daily Growth</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(50, 130, 184, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
               <TrendingUp size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
-            {metrics?.adg.toFixed(2)} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 700 }}>G/DAY</span>
+          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
+            {metrics?.adg.toFixed(2)} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>G/DAY</span>
           </div>
         </div>
 
         <div style={{ background: 'var(--gradient)', borderRadius: 'var(--radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: 'var(--shadow-glow)', color: '#FFF' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '0.65rem', letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 700 }}>Survival Rate</span>
+            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>Survival Rate</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <Activity size={16} />
             </div>
           </div>
-          <div style={{ fontSize: '1.55rem', fontWeight: 800, letterSpacing: '-0.03em' }}>
+          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
             {metrics?.sr.toFixed(1)}%
           </div>
         </div>
@@ -999,14 +999,14 @@ export default function PondDetailClient() {
             <LineChartIcon size={18} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-            <div style={{ fontSize: '0.88rem', fontWeight: 850 }}>Feed response needs review</div>
-            <div style={{ color: '#92400E', fontSize: '0.78rem', fontWeight: 650, lineHeight: 1.45 }}>
+            <div style={{ fontSize: '0.88rem', fontWeight: 600 }}>Feed response needs review</div>
+            <div style={{ color: '#92400E', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.45 }}>
               Feed-based biomass differs from records across {metrics.feedBiomassInsight.requiredRecords} recent records.
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.72rem', fontWeight: 850, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Records {metrics.feedBiomassInsight.latest.recordBiomassKg.toFixed(1)} kg</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 850, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Feed est. {metrics.feedBiomassInsight.latest.feedBasedBiomassKg.toFixed(1)} kg</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 850, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{metrics.feedBiomassInsight.latest.differencePercent.toFixed(0)}% diff</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Records {metrics.feedBiomassInsight.latest.recordBiomassKg.toFixed(1)} kg</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Feed est. {metrics.feedBiomassInsight.latest.feedBasedBiomassKg.toFixed(1)} kg</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{metrics.feedBiomassInsight.latest.differencePercent.toFixed(0)}% diff</span>
             </div>
           </div>
         </div>
@@ -1021,13 +1021,13 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ fontSize: '1.08rem', fontWeight: 800, marginBottom: '4px' }}>Biological Growth Curve</h3>
+                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '4px' }}>Biological Growth Curve</h3>
                 <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mean Body Weight (MBW) trajectory over production cycle.</p>
               </div>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
                 background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '0.75rem',
-                fontWeight: 800, color: 'var(--primary)', border: '1px solid var(--border)'
+                fontWeight: 600, color: 'var(--primary)', border: '1px solid var(--border)'
               }}>
                 <LineChartIcon size={16} />
                 LIVE TRACKING
@@ -1039,18 +1039,18 @@ export default function PondDetailClient() {
           {/* Sampling History Table */}
           <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ fontSize: '1.08rem', fontWeight: 800 }}>Sampling History</h3>
-              <button style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View Audit Log</button>
+              <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>Sampling History</h3>
+              <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View Audit Log</button>
             </div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
-                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Date</th>
-                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>MBW (g)</th>
-                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Size (pcs/kg)</th>
-                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Feed (kg)</th>
-                    <th style={{ padding: '14px 24px', fontSize: '0.62rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Mortality</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>MBW (g)</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Size (pcs/kg)</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feed (kg)</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mortality</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1060,13 +1060,13 @@ export default function PondDetailClient() {
                     .slice(0, 8)
                     .map((s: any, i: number) => (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">
-                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 700 }}>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>
                           {new Date(s.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
-                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 800, color: 'var(--primary)' }}>{s.mbw || '-'}g</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--primary)' }}>{s.mbw || '-'}g</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.mbw > 0 ? Math.round(1000 / s.mbw) : '-'}</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.feed || '-'} kg</td>
-                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 800, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
                           {s.mortality > 0 ? `+${s.mortality}` : '0'}
                         </td>
                       </tr>
@@ -1086,11 +1086,11 @@ export default function PondDetailClient() {
                 <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                   <FlaskConical size={18} />
                 </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Latest Lab Status</h4>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Latest Lab Status</h4>
               </div>
             </div>
             {labStatusCards.length === 0 ? (
-              <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 800, lineHeight: 1.45 }}>
+              <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.45 }}>
                 No confirmed lab warning for this pond.
               </p>
             ) : (
@@ -1103,31 +1103,31 @@ export default function PondDetailClient() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', marginBottom: '10px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                           <Icon size={16} color="var(--primary)" />
-                          <span style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 850 }}>{item.title}</span>
+                          <span style={{ color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 600 }}>{item.title}</span>
                         </div>
-                        <span style={{ borderRadius: 999, padding: '5px 9px', background: statusStyle.bg, color: statusStyle.color, fontSize: '0.66rem', fontWeight: 850, flexShrink: 0 }}>
+                        <span style={{ borderRadius: 999, padding: '5px 9px', background: statusStyle.bg, color: statusStyle.color, fontSize: '0.66rem', fontWeight: 600, flexShrink: 0 }}>
                           {statusStyle.label}
                         </span>
                       </div>
-                      <p style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 800, lineHeight: 1.45 }}>
+                      <p style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, lineHeight: 1.45 }}>
                         {item.status?.mainIssue || 'No confirmed lab warning for this pond.'}
                       </p>
                       {item.status?.sampleDate && (
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 700, marginTop: '6px' }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 600, marginTop: '6px' }}>
                           Last lab: {new Date(item.status.sampleDate).toLocaleDateString()}
                         </p>
                       )}
                       {item.status?.keyRisks && item.status.keyRisks.length > 0 && (
                         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '5px' }}>
                           {item.status.keyRisks.slice(0, 2).map((risk, index) => (
-                            <span key={`${item.key}-${risk}-${index}`} style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 700 }}>• {risk}</span>
+                            <span key={`${item.key}-${risk}-${index}`} style={{ color: 'var(--text-muted)', fontSize: '0.76rem', fontWeight: 600 }}>• {risk}</span>
                           ))}
                         </div>
                       )}
                       {item.status?.recommendations?.[0] && (
                         <div style={{ marginTop: '12px', padding: '10px', borderRadius: '10px', background: '#ffffff', border: '1px solid var(--border)' }}>
-                          <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>Recommended Action</div>
-                          <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.45 }}>{item.status.recommendations[0]}</div>
+                          <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>Recommended Action</div>
+                          <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.45 }}>{item.status.recommendations[0]}</div>
                         </div>
                       )}
                     </div>
@@ -1142,14 +1142,14 @@ export default function PondDetailClient() {
               <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                 <Info size={18} />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Detailed Metrics</h4>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Detailed Metrics</h4>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               {/* Biological Specs */}
               <div>
-                <h5 style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Biological & Feed</h5>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Biological & Feed</h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
                     { label: 'Current Population', value: `${metrics?.population.toLocaleString()} pcs`, icon: Users },
@@ -1165,7 +1165,7 @@ export default function PondDetailClient() {
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <spec.icon size={14} style={{ opacity: 0.5 }} /> {spec.label}
                       </span>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>{spec.value}</span>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>{spec.value}</span>
                     </div>
                   ))}
                 </div>
@@ -1173,7 +1173,7 @@ export default function PondDetailClient() {
 
               {/* Pond Specifications */}
               <div>
-                <h5 style={{ fontSize: '0.72rem', fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Pond Specifications</h5>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Pond Specifications</h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
                     { label: 'Total Area', value: `${pond.pondArea} m²`, icon: Layers },
@@ -1185,7 +1185,7 @@ export default function PondDetailClient() {
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <spec.icon size={14} style={{ opacity: 0.5 }} /> {spec.label}
                       </span>
-                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>{spec.value}</span>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 600, color: 'var(--text-primary)' }}>{spec.value}</span>
                     </div>
                   ))}
                 </div>
@@ -1195,7 +1195,7 @@ export default function PondDetailClient() {
           </div>
 
           <div className="glass-card" style={{ padding: '20px' }}>
-            <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '18px' }}>Quick Actions</h4>
+            <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '18px' }}>Quick Actions</h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <Link href="/dashboard/water" style={{ textDecoration: 'none' }}>
                 <button className="action-button-modern">
@@ -1222,7 +1222,7 @@ export default function PondDetailClient() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <Trash2 size={20} />
-              <span style={{ fontSize: '1rem', fontWeight: 800 }}>Danger Zone</span>
+              <span style={{ fontSize: '1rem', fontWeight: 600 }}>Danger Zone</span>
             </div>
             <p style={{ fontSize: '0.8rem', marginBottom: '24px', opacity: 0.8, lineHeight: 1.6 }}>
               Deleting this pond will permanently remove this pond cycle and its sampling history from the Orson AI ecosystem.
@@ -1246,7 +1246,7 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>End Cycle</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>End Cycle</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} history will remain available.</p>
               </div>
               <button onClick={() => setEndCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1254,11 +1254,11 @@ export default function PondDetailClient() {
               </button>
             </div>
             <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 End Date
                 <input type="date" value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Reason
                 <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                   <option value="harvested">Harvested</option>
@@ -1268,7 +1268,7 @@ export default function PondDetailClient() {
                 </select>
               </label>
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                 <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>End Cycle</button>
               </div>
             </div>
@@ -1281,7 +1281,7 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Edit Baseline</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Edit Baseline</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.</p>
               </div>
               <button onClick={() => setBaselineModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1289,28 +1289,28 @@ export default function PondDetailClient() {
               </button>
             </div>
             <form onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Baseline Date
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Current MBW (g)
                 <input required type="number" step="0.01" value={baselineForm.baselineMbw} onChange={e => setBaselineForm(prev => ({ ...prev, baselineMbw: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Current Population
                 <input type="number" value={baselineForm.baselineEstimatedPopulation} onChange={e => setBaselineForm(prev => ({ ...prev, baselineEstimatedPopulation: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Current SR %
                 <input type="number" step="0.1" value={baselineForm.baselineSurvivalRate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineSurvivalRate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Feed Used So Far (kg)
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Baseline</button>
               </div>
             </form>
@@ -1323,7 +1323,7 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 800 }}>Start New Cycle</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Start New Cycle</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} and {pond.pondArea} m² will be reused. Supplier is cycle-specific.</p>
               </div>
               <button onClick={() => setStartCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1331,24 +1331,24 @@ export default function PondDetailClient() {
               </button>
             </div>
             <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Density (PL/m²)
                 <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Stocking Date
                 <input required type="date" value={startCycleForm.docStart} onChange={e => setStartCycleForm(prev => ({ ...prev, docStart: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 PL Value (g)
                 <input required type="number" step="0.1" value={startCycleForm.plValue} onChange={e => setStartCycleForm(prev => ({ ...prev, plValue: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 PL Supplier
                 <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
                 <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Start Cycle</button>
               </div>
             </form>
@@ -1407,7 +1407,7 @@ export default function PondDetailClient() {
         }
         .action-button-modern span {
           font-size: 0.68rem;
-          font-weight: 800;
+          font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
@@ -1459,7 +1459,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 800 }}>New Sampling</h3>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>New Sampling</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Log biological and feeding data.</p>
           </div>
           <button
@@ -1472,7 +1472,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
 
         <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sampling Date</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sampling Date</label>
             <input
               type="date"
               required
@@ -1487,7 +1487,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MBW (grams)</label>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MBW (grams)</label>
               <input
                 type="number"
                 step="0.01"
@@ -1502,7 +1502,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feed (kg)</label>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feed (kg)</label>
               <input
                 type="number"
                 step="0.1"
@@ -1518,7 +1518,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mortality (pcs)</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mortality (pcs)</label>
             <input
               type="number"
               placeholder="0"
@@ -1534,7 +1534,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
           <div style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
             <button type="button" onClick={onClose} style={{
               flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
-              background: 'transparent', fontWeight: 700, cursor: 'pointer'
+              background: 'transparent', fontWeight: 600, cursor: 'pointer'
             }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Record'}
@@ -1567,7 +1567,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Daily Mortality</h3>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Daily Mortality</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Record mortality observations for this pond.</p>
           </div>
           <button onClick={onClose} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1576,7 +1576,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
         </div>
 
         <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Record Type
             <select value={form.observationType} onChange={(event) => setForm({ ...form, observationType: event.target.value as MortalityObservationType })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
               <option value="estimated_total">Estimated total pond mortality</option>
@@ -1586,24 +1586,24 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
           </label>
 
           {form.observationType !== 'none_observed' ? (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Mortality Count
               <input required type="number" min="1" step="1" value={form.count} onChange={(event) => setForm({ ...form, count: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
             </label>
           ) : null}
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Mortality Date
             <input required type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
           </label>
 
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Notes (optional)
             <textarea maxLength={500} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Cause, pond condition, or observation details" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600, resize: 'vertical' }} />
           </label>
 
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Mortality'}
             </button>

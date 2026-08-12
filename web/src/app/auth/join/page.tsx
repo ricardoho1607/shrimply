@@ -266,7 +266,7 @@ export default function JoinPage() {
           padding: 6px 0;
           color: var(--text-muted);
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 600;
           line-height: 1;
           transition: color 0.2s;
         }
@@ -293,7 +293,7 @@ export default function JoinPage() {
         .auth-kicker {
           color: var(--accent);
           font-size: 12px;
-          font-weight: 800;
+          font-weight: 600;
           letter-spacing: 0.14em;
           text-transform: uppercase;
           margin-bottom: 18px;
@@ -305,7 +305,7 @@ export default function JoinPage() {
           font-size: clamp(2.35rem, 4vw, 4.4rem);
           line-height: 1.02;
           letter-spacing: 0;
-          font-weight: 780;
+          font-weight: 600;
           max-width: 560px;
         }
 
@@ -326,7 +326,7 @@ export default function JoinPage() {
           display: block;
           color: var(--text-muted);
           font-size: 11px;
-          font-weight: 800;
+          font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.1em;
           line-height: 1.2;
@@ -365,7 +365,7 @@ export default function JoinPage() {
           background: var(--primary-dim);
           color: var(--primary);
           font-size: 12px;
-          font-weight: 800;
+          font-weight: 600;
           margin-bottom: 22px;
         }
 
@@ -374,7 +374,7 @@ export default function JoinPage() {
           font-size: 34px;
           line-height: 1.1;
           letter-spacing: 0;
-          font-weight: 820;
+          font-weight: 600;
           margin-bottom: 10px;
         }
 
@@ -399,7 +399,7 @@ export default function JoinPage() {
         .field-group label {
           color: var(--text-primary);
           font-size: 13px;
-          font-weight: 800;
+          font-weight: 600;
         }
 
         .input-wrap {
@@ -441,7 +441,7 @@ export default function JoinPage() {
           padding: 12px 14px;
           border-radius: 12px;
           font-size: 13px;
-          font-weight: 700;
+          font-weight: 600;
           line-height: 1.45;
         }
 
@@ -457,7 +457,7 @@ export default function JoinPage() {
           background: var(--primary);
           color: #ffffff;
           font-size: 14px;
-          font-weight: 850;
+          font-weight: 600;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -488,7 +488,7 @@ export default function JoinPage() {
 
         .auth-join a {
           color: var(--primary);
-          font-weight: 850;
+          font-weight: 600;
         }
 
         .auth-footnote {
@@ -536,7 +536,7 @@ export default function JoinPage() {
             gap: 8px;
             color: var(--text-muted);
             font-size: 13px;
-            font-weight: 800;
+            font-weight: 600;
           }
 
           :global(.mobile-auth-logo) {

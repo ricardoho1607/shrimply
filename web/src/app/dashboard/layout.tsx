@@ -291,7 +291,27 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         .dashboard-saas {
           font-feature-settings: "cv02", "cv03", "cv04", "cv11";
           -webkit-font-smoothing: antialiased;
-          text-rendering: geometricPrecision;
+          font-size: var(--text-body);
+          font-weight: var(--weight-regular);
+          line-height: var(--leading-body);
+        }
+        .dashboard-saas .glass-card {
+          border-radius: var(--radius-card);
+        }
+        .dashboard-saas .responsive-modal {
+          max-height: calc(100dvh - 48px);
+          border-radius: var(--radius-modal);
+        }
+        .dashboard-saas :where(input:not([type="checkbox"]):not([type="radio"]), select) {
+          min-height: var(--control-md);
+          border-radius: var(--radius-control) !important;
+          font-size: var(--text-body);
+          font-weight: var(--weight-regular);
+        }
+        .dashboard-saas textarea {
+          border-radius: var(--radius-control) !important;
+          font-size: var(--text-body);
+          font-weight: var(--weight-regular);
         }
         @media (min-width: 1024px) {
           .sidebar {
@@ -318,6 +338,17 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         @media (max-width: 1023px) {
           .mobile-trigger-hide {
             display: none !important;
+          }
+          .dashboard-main-scroll {
+            padding: var(--space-6) var(--space-8) var(--space-10) !important;
+          }
+          .inventory-dashboard-split {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .dashboard-main-scroll {
+            padding: var(--space-5) var(--space-4) var(--space-8) !important;
           }
         }
       `}</style>
@@ -405,7 +436,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
             <Waves size={20} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.9rem', fontWeight: 650, color: '#1e293b', marginBottom: '2px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
               {company?.companyName || 'Company profile'}
             </div>
             <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8' }}>
@@ -418,7 +449,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
             <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 650, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
               {items.map((item) => {
@@ -438,7 +469,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                           border: 'none',
                           fontSize: '0.9rem',
                           borderRadius: '14px',
-                          fontWeight: 550,
+                          fontWeight: 500,
                           color: '#64748b',
                           cursor: 'pointer',
                           transition: 'all 0.2s',
@@ -468,7 +499,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                                   fontSize: '0.85rem',
                                   textDecoration: 'none',
                                   borderRadius: '10px',
-                                  fontWeight: isChildActive ? 650 : 500,
+                                  fontWeight: isChildActive ? 600 : 500,
                                   color: isChildActive ? '#1e293b' : '#64748b',
                                   background: isChildActive ? '#f1f5f9' : 'transparent',
                                   transition: 'all 0.2s'
@@ -497,7 +528,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                       textDecoration: 'none',
                       fontSize: '0.9rem',
                       borderRadius: '14px',
-                      fontWeight: isActive ? 650 : 550,
+                      fontWeight: isActive ? 600 : 500,
                       color: isActive ? '#1e293b' : '#64748b',
                       background: isActive ? '#f1f5f9' : 'transparent',
                       transition: 'all 0.2s'
@@ -520,7 +551,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
             style={{
               display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 22px',
               color: '#ef4444', background: 'transparent', border: 'none', width: '100%',
-              fontSize: '0.95rem', fontWeight: 650, borderRadius: 'var(--radius-md)'
+              fontSize: '0.95rem', fontWeight: 600, borderRadius: 'var(--radius-md)'
             }}
           >
             <LogOut size={20} strokeWidth={2.5} />
@@ -563,12 +594,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
             </button>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.62rem', color: 'var(--primary)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '4px 8px', background: 'var(--primary-dim)', borderRadius: '999px', lineHeight: 1 }}>
+                <span style={{ fontSize: '0.62rem', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '4px 8px', background: 'var(--primary-dim)', borderRadius: '999px', lineHeight: 1 }}>
                   {currentNavMeta.section}
                 </span>
               </div>
               <div style={{ minWidth: 0 }}>
-                <div className="dashboard-header-title" style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 700, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div className="dashboard-header-title" style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 600, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {currentNavMeta.title}
                 </div>
               </div>
@@ -585,13 +616,13 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
             <div className="dashboard-profile-button" style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
-                <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
                 <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
               </div>
               <div className="dashboard-profile-avatar" style={{
                 width: '44px', height: '44px', borderRadius: '12px', background: 'var(--gradient)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
-                fontWeight: 700, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
+                fontWeight: 600, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
               }}>
                 {(user?.name?.[0] || 'U').toUpperCase()}
               </div>
@@ -601,7 +632,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
         <main className="dashboard-main-scroll" style={{
           flex: 1,
-          padding: '16px 40px 40px',
+          padding: '24px 40px 40px',
           maxWidth: '1600px',
           width: '100%',
           margin: '0 auto',

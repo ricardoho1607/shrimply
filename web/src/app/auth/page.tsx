@@ -215,6 +215,10 @@ export default function AuthPage() {
           align-items: center;
           justify-content: center;
           padding: 32px;
+          font-family: var(--jakarta);
+          font-size: var(--text-body);
+          font-weight: var(--weight-regular);
+          line-height: var(--leading-body);
         }
 
         .auth-frame {
@@ -261,7 +265,7 @@ export default function AuthPage() {
           padding: 6px 0;
           color: var(--text-muted);
           font-size: 13px;
-          font-weight: 700;
+          font-weight: var(--weight-medium);
           line-height: 1;
           transition: color 0.2s;
         }
@@ -288,8 +292,8 @@ export default function AuthPage() {
         .auth-kicker {
           color: var(--accent);
           font-size: 12px;
-          font-weight: 800;
-          letter-spacing: 0.14em;
+          font-weight: var(--weight-medium);
+          letter-spacing: var(--tracking-caps);
           text-transform: uppercase;
           margin-bottom: 18px;
         }
@@ -297,10 +301,10 @@ export default function AuthPage() {
         .auth-title {
           font-family: var(--jakarta);
           color: var(--text-primary);
-          font-size: clamp(2.35rem, 4vw, 4.4rem);
-          line-height: 1.02;
-          letter-spacing: 0;
-          font-weight: 780;
+          font-size: var(--text-display);
+          line-height: var(--leading-display);
+          letter-spacing: var(--tracking-heading);
+          font-weight: var(--weight-semibold);
           max-width: 560px;
         }
 
@@ -321,7 +325,7 @@ export default function AuthPage() {
           display: block;
           color: var(--text-muted);
           font-size: 11px;
-          font-weight: 800;
+          font-weight: var(--weight-medium);
           text-transform: uppercase;
           letter-spacing: 0.1em;
           line-height: 1.2;
@@ -360,16 +364,16 @@ export default function AuthPage() {
           background: var(--primary-dim);
           color: var(--primary);
           font-size: 12px;
-          font-weight: 800;
+          font-weight: var(--weight-medium);
           margin-bottom: 22px;
         }
 
         .form-heading h2 {
           color: var(--text-primary);
-          font-size: 34px;
-          line-height: 1.1;
-          letter-spacing: 0;
-          font-weight: 820;
+          font-size: 30px;
+          line-height: 38px;
+          letter-spacing: var(--tracking-heading);
+          font-weight: var(--weight-semibold);
           margin-bottom: 10px;
         }
 
@@ -394,7 +398,7 @@ export default function AuthPage() {
         .field-group label {
           color: var(--text-primary);
           font-size: 13px;
-          font-weight: 800;
+          font-weight: var(--weight-medium);
         }
 
         .field-label-row {
@@ -407,21 +411,21 @@ export default function AuthPage() {
         .reset-link {
           color: var(--accent);
           font-size: 12px;
-          font-weight: 800;
+          font-weight: var(--weight-medium);
           cursor: pointer;
           min-height: 44px;
           padding: 0 4px;
         }
 
         .input-wrap {
-          height: 54px;
+          height: var(--control-lg);
           display: flex;
           align-items: center;
           gap: 12px;
           padding: 0 16px;
           background: #f8fafc;
           border: 1px solid var(--shell-border);
-          border-radius: 14px;
+          border-radius: var(--radius-control);
           color: var(--text-muted);
           transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
         }
@@ -452,7 +456,7 @@ export default function AuthPage() {
           padding: 12px 14px;
           border-radius: 12px;
           font-size: 13px;
-          font-weight: 700;
+          font-weight: var(--weight-medium);
           line-height: 1.45;
         }
 
@@ -469,12 +473,12 @@ export default function AuthPage() {
         }
 
         .auth-submit {
-          height: 54px;
-          border-radius: 14px;
+          height: var(--control-lg);
+          border-radius: var(--radius-control);
           background: var(--primary);
           color: #ffffff;
           font-size: 14px;
-          font-weight: 850;
+          font-weight: var(--weight-medium);
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -504,7 +508,7 @@ export default function AuthPage() {
 
         .auth-join a {
           color: var(--primary);
-          font-weight: 850;
+          font-weight: var(--weight-medium);
         }
 
         .auth-footnote {
@@ -552,7 +556,7 @@ export default function AuthPage() {
             gap: 8px;
             color: var(--text-muted);
             font-size: 13px;
-            font-weight: 800;
+            font-weight: var(--weight-medium);
           }
 
           :global(.mobile-auth-logo) {

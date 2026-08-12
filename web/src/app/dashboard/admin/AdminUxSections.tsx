@@ -68,7 +68,7 @@ export function AdminTabs({ activeTab, onChange }: { activeTab: AdminTab; onChan
               textAlign: 'left',
             }}
           >
-            <div style={{ fontWeight: 760, fontSize: '0.9rem', color: active ? 'var(--primary)' : 'var(--text-primary)' }}>{tab.label}</div>
+            <div style={{ fontWeight: 600, fontSize: '0.9rem', color: active ? 'var(--primary)' : 'var(--text-primary)' }}>{tab.label}</div>
             <div style={{ fontSize: '0.74rem', marginTop: '4px', fontWeight: 600 }}>{tab.helper}</div>
           </button>
         );
@@ -85,10 +85,10 @@ export function ExecutiveSummary({ metrics }: { metrics: AdminMetricsSummary }) 
   return (
     <div className="glass-card admin-founder-summary" style={{ padding: '24px', display: 'grid', gridTemplateColumns: 'minmax(260px, 1.3fr) repeat(4, minmax(132px, 0.75fr))', gap: '14px', alignItems: 'stretch' }}>
       <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '6px 10px', borderRadius: '999px', background: 'var(--primary-dim)', color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '12px' }}>
           <Sparkles size={14} /> Founder summary
         </div>
-        <div style={{ fontSize: '1.05rem', color: 'var(--text-primary)', fontWeight: 760, lineHeight: 1.5, letterSpacing: 0 }}>
+        <div style={{ fontSize: '1.05rem', color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.5, letterSpacing: 0 }}>
           Last {metrics.periodDays} days: {formatNumber(metrics.period.newUsers)} new users, {formatNumber(activeCompanies)} active companies, {formatNumber(stuckCompanies)} companies needing help, and {formatNumber(periodRequests)} tracked requests.
         </div>
       </div>
@@ -104,10 +104,10 @@ function SummaryMini({ label, value, icon: Icon }: { label: string; value: numbe
   return (
     <div className="admin-summary-mini" style={{ padding: '15px', borderRadius: '8px', background: 'var(--bg-mid)', border: '1px solid var(--border)', minHeight: '112px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px', marginBottom: '10px' }}>
-        <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 760, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
+        <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</span>
         <Icon size={16} color="var(--primary)" />
       </div>
-      <div style={{ color: 'var(--text-primary)', fontSize: '1.32rem', fontWeight: 760, fontFamily: 'var(--sans)', letterSpacing: 0 }}>{formatNumber(value)}</div>
+      <div style={{ color: 'var(--text-primary)', fontSize: '1.32rem', fontWeight: 600, fontFamily: 'var(--jakarta)', letterSpacing: 0 }}>{formatNumber(value)}</div>
     </div>
   );
 }
@@ -122,7 +122,7 @@ export function DataSourceBadge({ source, updatedAt }: { source: 'Cloud Function
     : 'Unavailable';
 
   return (
-    <div style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '999px', background: isFallback ? '#fef3c7' : 'var(--primary-dim)', color: isFallback ? '#92400e' : 'var(--primary)', fontSize: '0.76rem', fontWeight: 700 }}>
+    <div style={{ display: 'inline-flex', flexWrap: 'wrap', alignItems: 'center', gap: '10px', padding: '9px 12px', borderRadius: '999px', background: isFallback ? '#fef3c7' : 'var(--primary-dim)', color: isFallback ? '#92400e' : 'var(--primary)', fontSize: '0.76rem', fontWeight: 600 }}>
       <Database size={15} /> Data source: {source}
       <span style={{ opacity: 0.75 }}>· Updated {updatedLabel}</span>
     </div>
@@ -182,12 +182,12 @@ export function CompanyTableControls({
           value={search}
           onChange={(event) => onSearchChange(event.target.value)}
           placeholder="Search company or owner email"
-          style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 650 }}
+          style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}
         />
       </label>
       <label style={{ position: 'relative' }}>
         <Filter size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-        <select value={status} onChange={(event) => onStatusChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 700, background: '#fff' }}>
+        <select value={status} onChange={(event) => onStatusChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 600, background: '#fff' }}>
           <option value="all">All statuses</option>
           <option value="Active">Active</option>
           <option value="Configured">Configured</option>
@@ -197,7 +197,7 @@ export function CompanyTableControls({
       </label>
       <label style={{ position: 'relative' }}>
         <BarChart3 size={16} color="var(--text-muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
-        <select value={sort} onChange={(event) => onSortChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 700, background: '#fff' }}>
+        <select value={sort} onChange={(event) => onSortChange(event.target.value)} style={{ width: '100%', height: 44, borderRadius: 8, border: '1px solid var(--border)', padding: '0 14px 0 42px', outline: 'none', color: 'var(--text-primary)', fontWeight: 600, background: '#fff' }}>
           <option value="ponds-desc">Most ponds</option>
           <option value="created-desc">Newest</option>
           <option value="name-asc">Company A-Z</option>

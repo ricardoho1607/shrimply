@@ -239,20 +239,20 @@ export default function NotificationsPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
         <button type="button" className="glass-card" onClick={() => setNotificationFilter('all')} style={metricCardStyle('all')}>
-          <div style={{ fontSize: '12px', fontWeight: 700, opacity: 0.85, textTransform: 'uppercase' }}>Total alerts</div>
-          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px' }}>{notifications.length}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85, textTransform: 'uppercase' }}>Total alerts</div>
+          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px' }}>{notifications.length}</div>
         </button>
         <button type="button" className="glass-card" onClick={() => setNotificationFilter('unread')} style={metricCardStyle('unread')}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Unread</div>
-          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: 'var(--text-primary)' }}>{unreadCount}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Unread</div>
+          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: 'var(--text-primary)' }}>{unreadCount}</div>
         </button>
         <button type="button" className="glass-card" onClick={() => setNotificationFilter('orson')} style={metricCardStyle('orson', '#3282B8')}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Orson AI</div>
-          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: 'var(--text-primary)' }}>{orsonCount}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Orson AI</div>
+          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: 'var(--text-primary)' }}>{orsonCount}</div>
         </button>
         <button type="button" className="glass-card" onClick={() => setNotificationFilter('high')} style={metricCardStyle('high', '#ef4444')}>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-faint)', textTransform: 'uppercase' }}>High priority</div>
-          <div style={{ fontSize: '30px', fontWeight: 800, marginTop: '6px', color: '#ef4444' }}>{highPriorityCount}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>High priority</div>
+          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: '#ef4444' }}>{highPriorityCount}</div>
         </button>
       </div>
 
@@ -273,7 +273,7 @@ export default function NotificationsPage() {
               border: 'none',
               borderBottom: filter === 'all' ? '2px solid var(--primary)' : '2px solid transparent',
               color: filter === 'all' ? 'var(--text-primary)' : 'var(--text-faint)',
-              fontWeight: filter === 'all' ? 700 : 600,
+              fontWeight: filter === 'all' ? 600 : 500,
               fontSize: '14px',
               cursor: 'pointer',
               transition: 'all 0.2s'
@@ -289,7 +289,7 @@ export default function NotificationsPage() {
               border: 'none',
               borderBottom: filter === 'unread' ? '2px solid var(--primary)' : '2px solid transparent',
               color: filter === 'unread' ? 'var(--text-primary)' : 'var(--text-faint)',
-              fontWeight: filter === 'unread' ? 700 : 600,
+              fontWeight: filter === 'unread' ? 600 : 500,
               fontSize: '14px',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -321,7 +321,7 @@ export default function NotificationsPage() {
               border: 'none',
               borderBottom: filter === 'orson' ? '2px solid #3282B8' : '2px solid transparent',
               color: filter === 'orson' ? 'var(--text-primary)' : 'var(--text-faint)',
-              fontWeight: filter === 'orson' ? 700 : 600,
+              fontWeight: filter === 'orson' ? 600 : 500,
               fontSize: '14px',
               cursor: 'pointer',
               transition: 'all 0.2s'
@@ -337,7 +337,7 @@ export default function NotificationsPage() {
               border: 'none',
               borderBottom: filter === 'high' ? '2px solid #ef4444' : '2px solid transparent',
               color: filter === 'high' ? 'var(--text-primary)' : 'var(--text-faint)',
-              fontWeight: filter === 'high' ? 700 : 600,
+              fontWeight: filter === 'high' ? 600 : 500,
               fontSize: '14px',
               cursor: 'pointer',
               transition: 'all 0.2s'
@@ -381,7 +381,7 @@ export default function NotificationsPage() {
             }}>
               <Bell size={40} />
             </div>
-            <h3 style={{ fontSize: '20px', fontWeight: 800 }}>
+            <h3 style={{ fontSize: '20px', fontWeight: 600 }}>
               {filter === 'unread'
                 ? (t.notifications.noUnread || 'No unread notifications')
                 : filter === 'orson'
@@ -418,7 +418,7 @@ export default function NotificationsPage() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
                   <h4 style={{ 
                     fontSize: '16px', 
-                    fontWeight: notification.read ? 700 : 800,
+                    fontWeight: notification.read ? 400 : 600,
                     color: notification.read ? 'var(--text-primary)' : 'var(--primary)'
                   }}>
                     {notification.title}

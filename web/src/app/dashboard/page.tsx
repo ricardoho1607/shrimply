@@ -165,7 +165,7 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
         </div>
         {trend && (
           <div style={{ 
-            fontSize: '0.72rem', fontWeight: 650, 
+            fontSize: '0.72rem', fontWeight: 600,
             color: trendType === 'up' ? '#16a34a' : '#ef4444', 
             background: trendType === 'up' ? '#16a34a14' : '#ef444414',
             padding: '5px 10px', borderRadius: '100px', display: 'flex', alignItems: 'center', gap: '4px'
@@ -177,13 +177,13 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <span style={{ fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 650 }}>
+        <span style={{ fontSize: '0.68rem', letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
           {label}
         </span>
         {loading ? (
           <div style={{ height: '2.2rem', width: '60%', background: 'var(--bg-mid)', borderRadius: '8px', animation: 'pulse 2s infinite' }} />
         ) : (
-          <div style={{ fontSize: '1.55rem', color: 'var(--text-primary)', fontWeight: 700, lineHeight: 1, letterSpacing: '0', fontFamily: "var(--jakarta)" }}>
+          <div style={{ fontSize: '28px', color: 'var(--text-primary)', fontWeight: 600, lineHeight: '36px', letterSpacing: '-0.02em', fontFamily: "var(--jakarta)" }}>
             {value}
           </div>
         )}
@@ -208,10 +208,10 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
   return (
     <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
       <div className="glass-card" style={{
-        padding: '22px',
+        padding: '20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '18px',
+        gap: '16px',
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -223,7 +223,7 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
               <Waves size={20} />
             </div>
             <div>
-              <div style={{ fontSize: '1.12rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: '2px', letterSpacing: '0' }}>
+              <div style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px', letterSpacing: '-0.02em' }}>
                 {pond.pondName}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -244,27 +244,27 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 650 }}>Avg Weight</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700, fontFamily: "var(--jakarta)" }}>
-              {m.mbw.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 550, marginLeft: '2px' }}>g</span>
+            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Avg Weight</span>
+            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.mbw.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>g</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 650 }}>Survival</span>
-            <span style={{ fontSize: '1rem', color: m.sr > 85 ? '#16a34a' : '#ef4444', fontWeight: 700, fontFamily: "var(--jakarta)" }}>
-              {m.sr.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 550, marginLeft: '2px' }}>%</span>
+            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Survival</span>
+            <span style={{ fontSize: '1rem', color: m.sr > 85 ? '#16a34a' : '#ef4444', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.sr.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>%</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 650 }}>Biomass</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700, fontFamily: "var(--jakarta)" }}>
-              {m.biomass.toLocaleString(undefined, {maximumFractionDigits:0})}<span style={{ fontSize: '0.8rem', fontWeight: 550, marginLeft: '2px' }}>kg</span>
+            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Biomass</span>
+            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.biomass.toLocaleString(undefined, {maximumFractionDigits:0})}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>kg</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 650 }}>ADG</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 700, fontFamily: "var(--jakarta)" }}>
-              {m.adg.toFixed(2)}<span style={{ fontSize: '0.8rem', fontWeight: 550, marginLeft: '2px' }}>g/d</span>
+            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>ADG</span>
+            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.adg.toFixed(2)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>g/d</span>
             </span>
           </div>
         </div>
@@ -283,7 +283,7 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
                 {wqPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.58rem', fontWeight: 650, color: wqPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Water Quality</span>
+                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: wqPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Water Quality</span>
                 {wqPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>POSTED</span>}
               </div>
             </div>
@@ -300,7 +300,7 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
                 {feedPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span style={{ fontSize: '0.58rem', fontWeight: 650, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Feed status</span>
+                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Feed status</span>
                 {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>COMPLETED</span>}
               </div>
             </div>
@@ -371,7 +371,7 @@ function BuyerDashboard({ t, user }: any) {
             <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 28px' }}>
               <Minus size={36} />
             </div>
-            <h3 style={{ fontSize: '24px', fontWeight: 700, marginBottom: '14px', color: 'var(--text-primary)', letterSpacing: '0' }}>{t.buyer.stopMonitoring}</h3>
+            <h3 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '14px', color: 'var(--text-primary)', letterSpacing: '0' }}>{t.buyer.stopMonitoring}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '15px', lineHeight: 1.6, marginBottom: '40px' }}>
               {t.buyer.stopMonitoringDescription}
             </p>
@@ -415,7 +415,7 @@ function BuyerDashboard({ t, user }: any) {
       <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '40px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '1.8rem', fontWeight: 700, letterSpacing: '0' }}>{t.buyer.monitoredSuppliers}</h3>
+            <h3 style={{ fontSize: '1.8rem', fontWeight: 600, letterSpacing: '0' }}>{t.buyer.monitoredSuppliers}</h3>
           </div>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px' }}>
@@ -426,7 +426,7 @@ function BuyerDashboard({ t, user }: any) {
               <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 28px', color: 'var(--text-faint)' }}>
                 <Users size={40} />
               </div>
-              <h4 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '12px' }}>{t.buyer.noSuppliersMonitored}</h4>
+              <h4 style={{ fontSize: '1.4rem', fontWeight: 600, marginBottom: '12px' }}>{t.buyer.noSuppliersMonitored}</h4>
               <p style={{ color: 'var(--text-muted)', marginBottom: '40px', maxWidth: '400px', margin: '0 auto 40px' }}>{t.buyer.searchFarmsDescription}</p>
               <Link href="/dashboard/suppliers">
                 <button className="btn-primary" style={{ padding: '16px 40px' }}>{t.buyer.findSuppliers}</button>
@@ -442,8 +442,8 @@ function BuyerDashboard({ t, user }: any) {
                         <Building2 size={28} />
                       </div>
                       <div>
-                        <h4 style={{ fontWeight: 700, fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '4px', letterSpacing: '0' }}>{company.companyName}</h4>
-                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 550 }}>{company.location}</p>
+                        <h4 style={{ fontWeight: 600, fontSize: '1.3rem', color: 'var(--text-primary)', marginBottom: '4px', letterSpacing: '0' }}>{company.companyName}</h4>
+                        <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>{company.location}</p>
                       </div>
                     </div>
                     <button 
@@ -456,24 +456,24 @@ function BuyerDashboard({ t, user }: any) {
 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                     <div style={{ padding: '20px', borderRadius: '20px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '8px' }}>{t.buyer.avgDOC}</div>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "var(--jakarta)" }}>{company.avgDOC || 0} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>days</span></div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '8px' }}>{t.buyer.avgDOC}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "var(--jakarta)" }}>{company.avgDOC || 0} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>days</span></div>
                     </div>
                     <div style={{ padding: '20px', borderRadius: '20px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '8px' }}>{t.buyer.avgSize}</div>
-                      <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: "var(--jakarta)" }}>{company.avgSize || 0} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>pcs/kg</span></div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '8px' }}>{t.buyer.avgSize}</div>
+                      <div style={{ fontSize: '1.3rem', fontWeight: 600, color: 'var(--text-primary)', fontFamily: "var(--jakarta)" }}>{company.avgSize || 0} <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>pcs/kg</span></div>
                     </div>
                   </div>
 
                   <div style={{ padding: '24px', borderRadius: '20px', background: 'var(--gradient)', boxShadow: 'var(--shadow-glow)', position: 'relative', overflow: 'hidden' }}>
                     <div style={{ position: 'relative', zIndex: 2 }}>
-                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', fontWeight: 650, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>{t.buyer.estBiomass}</div>
-                      <div style={{ fontSize: '1.8rem', fontWeight: 700, color: '#FFF', letterSpacing: '0', fontFamily: "var(--jakarta)" }}>{Math.round(company.totalBiomass || 0).toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 550 }}>kg</span></div>
+                      <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: '6px' }}>{t.buyer.estBiomass}</div>
+                      <div style={{ fontSize: '1.8rem', fontWeight: 600, color: '#FFF', letterSpacing: '0', fontFamily: "var(--jakarta)" }}>{Math.round(company.totalBiomass || 0).toLocaleString()} <span style={{ fontSize: '1rem', fontWeight: 500 }}>kg</span></div>
                     </div>
                     <Waves size={80} style={{ position: 'absolute', right: '-10px', bottom: '-20px', color: 'white', opacity: 0.1, transform: 'rotate(-10deg)' }} />
                   </div>
 
-                  <button className="btn-secondary" style={{ width: '100%', padding: '16px', borderRadius: '14px', fontWeight: 650 }}>{t.buyer.viewFarmDetails}</button>
+                  <button className="btn-secondary" style={{ width: '100%', padding: '16px', borderRadius: '14px', fontWeight: 600 }}>{t.buyer.viewFarmDetails}</button>
                 </div>
               ))}
             </div>
@@ -482,7 +482,7 @@ function BuyerDashboard({ t, user }: any) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
           <div className="glass-card" style={{ padding: '32px' }}>
-            <h4 style={{ fontWeight: 700, fontSize: '1.3rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', letterSpacing: '0' }}>
+            <h4 style={{ fontWeight: 600, fontSize: '1.3rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '12px', letterSpacing: '0' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                 <TrendingUp size={22} />
               </div> 
@@ -497,7 +497,7 @@ function BuyerDashboard({ t, user }: any) {
           </div>
           
           <div className="glass-card" style={{ padding: '32px' }}>
-            <h4 style={{ fontWeight: 700, fontSize: '1.3rem', marginBottom: '28px', letterSpacing: '0' }}>{t.buyer.priceIndex}</h4>
+            <h4 style={{ fontWeight: 600, fontSize: '1.3rem', marginBottom: '28px', letterSpacing: '0' }}>{t.buyer.priceIndex}</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {[
                 { label: `${t.shrimp.size} 30`, price: marketPrices.size30 },
@@ -505,10 +505,10 @@ function BuyerDashboard({ t, user }: any) {
                 { label: `${t.shrimp.size} 100`, price: marketPrices.size100 },
               ].filter(item => item.price > 0).map(item => (
                 <div key={item.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px', borderRadius: '20px', background: 'var(--bg-mid)', border: '1px solid var(--border)', transition: 'transform 0.2s' }}>
-                  <span style={{ fontSize: '1rem', fontWeight: 650, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.label}</span>
+                  <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.label}</span>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--primary)', fontFamily: "var(--jakarta)" }}>{formatCurrency(item.price)}</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 650, color: 'var(--text-muted)' }}>Market Avg</div>
+                    <div style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--primary)', fontFamily: "var(--jakarta)" }}>{formatCurrency(item.price)}</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Market Avg</div>
                   </div>
                 </div>
               ))}
@@ -621,16 +621,16 @@ export default function DashboardPage() {
       </div>
 
       {/* Ponds Section with Insights Sidebar */}
-      <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '32px', alignItems: 'start' }}>
+      <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
         
         {/* Left Column: Ponds List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="dashboard-section-heading responsive-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 700, letterSpacing: '0' }}>Ponds</h3>
+              <h3 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, letterSpacing: '-0.02em' }}>Ponds</h3>
               <div style={{ 
                 background: 'var(--primary-dim)', color: 'var(--primary)', padding: '4px 12px', 
-                borderRadius: '100px', fontSize: '0.8rem', fontWeight: 650, border: '1px solid var(--border)' 
+                borderRadius: '100px', fontSize: '0.8rem', fontWeight: 600, border: '1px solid var(--border)'
               }}>
                 {activePonds.length} ponds
               </div>
@@ -675,7 +675,7 @@ export default function DashboardPage() {
                 borderBottom: '1px solid var(--border)'
               }}>
                 {['POND NAME', 'DOC', 'BIOMASS', 'SR (%)', 'SIZE', ''].map((label) => (
-                  <span key={label} style={{ fontSize: '0.7rem', fontWeight: 650, color: 'var(--text-faint)', letterSpacing: '0.05em' }}>{label}</span>
+                  <span key={label} style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-faint)', letterSpacing: '0.05em' }}>{label}</span>
                 ))}
               </div>
             )}
@@ -683,7 +683,7 @@ export default function DashboardPage() {
             <div className="dashboard-pond-grid" style={{
               display: 'grid', 
               gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr', 
-              gap: viewMode === 'grid' ? '32px' : '0' 
+              gap: viewMode === 'grid' ? '24px' : '0'
             }}>
               {activePonds.map((pond, idx) => {
                 const m = calculateMetrics(pond, company?.timeZone);
@@ -704,21 +704,21 @@ export default function DashboardPage() {
                     onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 650, color: 'var(--text-primary)', marginBottom: '2px' }}>{pond.pondName}</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>{pond.pondName}</div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 500 }}>{pond.supplier || 'N/A'}</div>
                       </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>DOC {m.doc}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>DOC {m.doc}</div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {m.biomass.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                       </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 650, color: '#16a34a' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#16a34a' }}>
                         {m.sr.toFixed(1)}%
                       </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 650, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {m.size || '-'}
                       </div>
 
@@ -734,10 +734,10 @@ export default function DashboardPage() {
         </div>
 
         {/* Right Column: Insights Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', position: 'sticky', top: '32px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'sticky', top: '24px' }}>
           {/* Orson AI Insights Card */}
           <div style={{ 
-            background: 'var(--gradient)', borderRadius: '32px', padding: '32px', color: 'white',
+            background: 'var(--gradient)', borderRadius: '14px', padding: '24px', color: 'white',
             position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-glow)'
           }}>
             <div style={{ position: 'absolute', top: '-20px', right: '-20px', opacity: 0.1 }}>
@@ -747,15 +747,15 @@ export default function DashboardPage() {
               <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Zap size={20} />
               </div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Orson AI</span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Orson AI</span>
             </div>
-            <h4 style={{ fontSize: '1.6rem', fontWeight: 700, marginBottom: '16px', color: 'white' }}>Analysis in progress...</h4>
-            <p style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.8)', marginBottom: '32px', lineHeight: '1.5', fontWeight: 500 }}>
+            <h4 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '12px', color: 'white' }}>Analysis in progress...</h4>
+            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', marginBottom: '24px', lineHeight: '20px', fontWeight: 400 }}>
               Based on your latest sampling data, your ponds show growth efficiency. I'm calculating your harvest window.
             </p>
             <button style={{ 
-              width: '100%', padding: '16px', borderRadius: '16px', background: 'white', color: 'var(--primary)',
-              border: 'none', fontWeight: 650, fontSize: '1rem', cursor: 'pointer', transition: 'all 0.2s'
+              width: '100%', height: '44px', padding: '0 16px', borderRadius: '10px', background: 'white', color: 'var(--primary)',
+              border: 'none', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
             }}
             onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
             onMouseOut={(e) => e.currentTarget.style.transform = 'none'}
@@ -765,7 +765,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="glass-card" style={{ padding: '32px' }}>
-            <h4 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '24px' }}>Farm Health Index</h4>
+            <h4 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '24px' }}>Farm Health Index</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {[
                 { 
@@ -820,7 +820,7 @@ export default function DashboardPage() {
                     </div>
                     <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>{item.label}</span>
                   </div>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 650, color: 'var(--text-primary)' }}>{item.value}</span>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.value}</span>
                 </div>
               ))}
             </div>

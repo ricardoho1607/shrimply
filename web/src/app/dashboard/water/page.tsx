@@ -1008,7 +1008,7 @@ export default function WaterQualityPage() {
                 gap: '7px',
                 background: active ? 'var(--primary)' : 'transparent',
                 color: active ? '#FFFFFF' : 'var(--text-muted)',
-                fontWeight: 800,
+                fontWeight: 600,
                 fontSize: '0.82rem',
                 cursor: 'pointer',
                 boxShadow: active ? '0 8px 18px rgba(15, 76, 117, 0.18)' : 'none',
@@ -1024,16 +1024,15 @@ export default function WaterQualityPage() {
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
         <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
+          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
           <input
             placeholder="Search ponds or parameters..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
-              background: 'var(--glass-bg)', border: '1px solid var(--border)', borderRadius: '16px',
-              padding: '14px 16px 14px 48px', width: '100%', fontSize: '1rem', outline: 'none',
-              color: 'var(--text-primary)', fontWeight: 600, backdropFilter: 'var(--glass-blur)',
-              boxShadow: 'var(--shadow-card)', transition: 'all 0.2s'
+              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
+              height: '44px', padding: '0 16px 0 40px', width: '100%', fontSize: '14px', outline: 'none',
+              color: 'var(--text-primary)', fontWeight: 400, transition: 'all 0.2s'
             }}
             onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}
             onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
@@ -1087,8 +1086,8 @@ export default function WaterQualityPage() {
                       <Waves size={20} />
                     </div>
                     <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>
+                      <h3 style={{ fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>
                         {latest ? `UPDATED ${new Date(latest.date).toLocaleDateString()}` : 'NO DATA LOGGED'}
                       </p>
                     </div>
@@ -1105,10 +1104,10 @@ export default function WaterQualityPage() {
                   <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', background: '#FFFFFF' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
                       <div>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Latest Lab Status</div>
-                        <div style={{ marginTop: '4px', fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Latest Lab Status</div>
+                        <div style={{ marginTop: '4px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</div>
                       </div>
-                      <span style={{ borderRadius: 999, padding: '6px 10px', background: labStyle.bg, color: labStyle.color, fontSize: '0.72rem', fontWeight: 800 }}>
+                      <span style={{ borderRadius: 999, padding: '6px 10px', background: labStyle.bg, color: labStyle.color, fontSize: '0.72rem', fontWeight: 600 }}>
                         {labStyle.label}
                       </span>
                     </div>
@@ -1184,8 +1183,8 @@ export default function WaterQualityPage() {
                 }}
               >
                 <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>{group.label}</h3>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 700, marginTop: '2px' }}>
+                  <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{group.label}</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: '2px' }}>
                     {group.reports.length} confirmed report{group.reports.length === 1 ? '' : 's'}
                   </p>
                 </div>
@@ -1213,10 +1212,10 @@ export default function WaterQualityPage() {
                         <ClipboardList size={19} />
                       </div>
                       <div>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 850, color: 'var(--text-primary)' }}>
+                        <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                           {report.labName || 'Lab Report'}
                         </h3>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 700 }}>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
                           {report.sampleDate ? new Date(report.sampleDate).toLocaleDateString() : 'No sample date'} · {pondCount} pond{pondCount === 1 ? '' : 's'}
                         </p>
                       </div>
@@ -1240,7 +1239,7 @@ export default function WaterQualityPage() {
                               background: rowStyle.bg,
                               color: rowStyle.color,
                               fontSize: '0.7rem',
-                              fontWeight: 850,
+                              fontWeight: 600,
                             }}
                           >
                             {row.pondCode || `Pond ${rowIndex + 1}`} · {rowStyle.label}
@@ -1248,33 +1247,33 @@ export default function WaterQualityPage() {
                         );
                       })}
                       {(report.pondResults || []).length > 8 && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 800, padding: '5px 0' }}>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 0' }}>
                           +{(report.pondResults || []).length - 8} more
                         </span>
                       )}
                       {(report.pondResults || []).length === 0 && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>No pond rows</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600 }}>No pond rows</span>
                       )}
                     </div>
                     {report.insights?.ownerSummary && (
-                      <div style={{ marginTop: '10px', color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 700, lineHeight: 1.5 }}>
+                      <div style={{ marginTop: '10px', color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, lineHeight: 1.5 }}>
                         {report.insights.ownerSummary}
                       </div>
                     )}
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Report Type</div>
-                    <div style={{ marginTop: 6, fontWeight: 800, color: 'var(--text-primary)' }}>{getLabReportTypeLabel(report.reportType)}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Report Type</div>
+                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)' }}>{getLabReportTypeLabel(report.reportType)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Processing</div>
-                    <div style={{ marginTop: 6, fontWeight: 800, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{report.processing?.status || report.status || 'pending'}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Processing</div>
+                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{report.processing?.status || report.status || 'pending'}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
-                    <span style={{ borderRadius: 999, padding: '7px 12px', background: style.bg, color: style.color, fontSize: '0.74rem', fontWeight: 850 }}>
+                    <span style={{ borderRadius: 999, padding: '7px 12px', background: style.bg, color: style.color, fontSize: '0.74rem', fontWeight: 600 }}>
                       {style.label}
                     </span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>
                       {(report.summary?.warningCount || 0) + (report.summary?.criticalCount || 0)} alert row(s)
                     </span>
                     <button
@@ -1303,7 +1302,7 @@ export default function WaterQualityPage() {
                         style={{
                           color: 'var(--primary)',
                           fontSize: '0.74rem',
-                          fontWeight: 850,
+                          fontWeight: 600,
                           textDecoration: 'none',
                           display: 'inline-flex',
                           alignItems: 'center',
@@ -1329,11 +1328,11 @@ export default function WaterQualityPage() {
                         <div key={`${row.pondId || row.pondCode || rowIndex}-${rowIndex}`} style={{ border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--bg-mid)', padding: '14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                             <div>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 850 }}>{row.pondCode || `Pond ${rowIndex + 1}`}</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 700 }}>{getLabReportTypeLabel(report.reportType)}</div>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{row.pondCode || `Pond ${rowIndex + 1}`}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 600 }}>{getLabReportTypeLabel(report.reportType)}</div>
                             </div>
                             {report.sourcePdfUrl && (
-                              <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 850, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
+                              <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
                                 <ExternalLink size={12} />
                                 PDF
                               </a>
@@ -1351,17 +1350,17 @@ export default function WaterQualityPage() {
                                 ['Vibrio', formatLabValue(micro.vibrioTotal)],
                               ].map(([label, value]) => (
                                 <div key={label} style={{ background: '#fff', borderRadius: '10px', border: '1px solid var(--border)', padding: '10px' }}>
-                                  <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase' }}>{label}</div>
-                                  <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 850, marginTop: '4px' }}>{value}</div>
+                                  <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase' }}>{label}</div>
+                                  <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, marginTop: '4px' }}>{value}</div>
                                 </div>
                               ))}
                             </div>
                           )}
                           {(report.reportType === 'plankton' || report.reportType === 'combined') && (
                             <div style={{ background: '#fff', borderRadius: '10px', border: '1px solid var(--border)', padding: '10px' }}>
-                              <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 850, textTransform: 'uppercase' }}>Plankton</div>
-                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 850, marginTop: '4px' }}>{formatLabValue(plankton.totalCellPerMl)} cells/ml</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 700, marginTop: '6px', lineHeight: 1.45 }}>
+                              <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase' }}>Plankton</div>
+                              <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, marginTop: '4px' }}>{formatLabValue(plankton.totalCellPerMl)} cells/ml</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
                                 Green {formatLabValue(plankton.chlorophytaPercent, '%')} · Blue-green {formatLabValue(plankton.cyanophytaPercent, '%')} · Golden {formatLabValue(plankton.chrysophytaPercent, '%')}
                               </div>
                             </div>
@@ -1379,8 +1378,8 @@ export default function WaterQualityPage() {
           {filteredLabReports.length === 0 && (
             <div className="glass-card" style={{ textAlign: 'center', padding: '70px 24px' }}>
               <FileText size={44} color="var(--text-faint)" style={{ marginBottom: '16px' }} />
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 850, color: 'var(--text-primary)', marginBottom: '8px' }}>No lab reports yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontWeight: 650 }}>Add a manual report or upload a lab PDF for assisted extraction and review.</p>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>No lab reports yet</h3>
+              <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Add a manual report or upload a lab PDF for assisted extraction and review.</p>
             </div>
           )}
         </div>
@@ -1392,7 +1391,7 @@ export default function WaterQualityPage() {
           <div className="drawer-content responsive-side-drawer animate-slide-left">
             <div className="responsive-modal-header" style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800, fontFamily: "var(--sans)", color: 'var(--text-primary)' }}>
+                <h2 style={{ fontSize: '20px', fontWeight: 600, fontFamily: "var(--jakarta)", color: 'var(--text-primary)' }}>
                   {selectedPondForHistory.pondName} Water Quality History
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>
@@ -1412,8 +1411,8 @@ export default function WaterQualityPage() {
                   .map((log, i) => (
                     <div key={i} className="glass-card" style={{ padding: '18px', background: '#FFF' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-                        <span style={{ fontWeight: 800, fontSize: '14px', letterSpacing: '-0.01em' }}>{new Date(log.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                        <div style={{ fontSize: '0.6rem', padding: '4px 10px', borderRadius: '100px', background: 'var(--primary-dim)', color: 'var(--primary)', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Record Entry</div>
+                        <span style={{ fontWeight: 600, fontSize: '14px', letterSpacing: '-0.01em' }}>{new Date(log.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+                        <div style={{ fontSize: '0.6rem', padding: '4px 10px', borderRadius: '100px', background: 'var(--primary-dim)', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Record Entry</div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                         <div className="wq-metric-small">
@@ -1454,8 +1453,8 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
             <div className="responsive-modal-header" style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'var(--bg-mid)' }}>
               <div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 850 }}>Add Lab Report</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginTop: '4px', fontWeight: 650 }}>Upload a PDF or enter results manually.</p>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Add Lab Report</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginTop: '4px', fontWeight: 600 }}>Upload a PDF or enter results manually.</p>
               </div>
               <button onClick={() => setLabActionModalOpen(false)} className="icon-btn-modern">
                 <X size={22} />
@@ -1463,7 +1462,7 @@ export default function WaterQualityPage() {
             </div>
             <div className="responsive-modal-body" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div>
-                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Upload PDF</div>
+                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Upload PDF</div>
                 <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <button
                     type="button"
@@ -1478,7 +1477,7 @@ export default function WaterQualityPage() {
                     <FileText size={18} />
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
                       <span>Mineral PDF</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{mineralPdfActionState.message}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>{mineralPdfActionState.message}</span>
                     </span>
                   </button>
                   <button
@@ -1494,13 +1493,13 @@ export default function WaterQualityPage() {
                     <FileText size={18} />
                     <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
                       <span>Plankton PDF</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 700 }}>{planktonPdfActionState.message}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>{planktonPdfActionState.message}</span>
                     </span>
                   </button>
                 </div>
               </div>
               <div>
-                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 850, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Manual Entry</div>
+                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Manual Entry</div>
                 <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                   <button
                     type="button"
@@ -1539,8 +1538,8 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
             <div className="responsive-modal-header" style={{ padding: '26px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
-                <h2 style={{ fontSize: '1.45rem', fontWeight: 850 }}>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 650 }}>Enter results manually or upload a lab PDF, then review before confirmation.</p>
+                <h2 style={{ fontSize: '1.45rem', fontWeight: 600 }}>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 600 }}>Enter results manually or upload a lab PDF, then review before confirmation.</p>
               </div>
               <button onClick={() => setLabModalOpen(false)} className="icon-btn-modern">
                 <X size={24} />
@@ -1567,7 +1566,7 @@ export default function WaterQualityPage() {
                           border: labEntryMode === mode ? '1px solid var(--primary)' : '1px solid var(--border)',
                           background: labEntryMode === mode ? 'var(--primary-dim)' : '#FFFFFF',
                           color: labEntryMode === mode ? 'var(--primary)' : 'var(--text-muted)',
-                          fontWeight: 850,
+                          fontWeight: 600,
                           cursor: editingLabReportId ? 'default' : 'pointer',
                         }}
                       >
@@ -1602,9 +1601,9 @@ export default function WaterQualityPage() {
                       type="file"
                       accept="application/pdf"
                       onChange={e => setLabPdfFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', marginTop: '10px', fontWeight: 700 }}
+                      style={{ display: 'block', marginTop: '10px', fontWeight: 600 }}
                     />
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 650, marginTop: '8px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, marginTop: '8px' }}>
                       The PDF is saved to Firebase Storage. Gemini extraction creates a draft table only; it does not confirm the report.
                     </p>
                   </div>
@@ -1613,7 +1612,7 @@ export default function WaterQualityPage() {
                     disabled={labSubmitting || !labPdfFile || activePdfActionState.disabled}
                     onClick={handleUploadLabPdf}
                     className="btn-primary"
-                    style={{ padding: '14px 18px', borderRadius: '14px', fontWeight: 850, opacity: labSubmitting || !labPdfFile || activePdfActionState.disabled ? 0.6 : 1 }}
+                    style={{ padding: '14px 18px', borderRadius: '14px', fontWeight: 600, opacity: labSubmitting || !labPdfFile || activePdfActionState.disabled ? 0.6 : 1 }}
                   >
                     {labSubmitting ? 'Extracting...' : activePdfActionState.disabled ? activePdfActionState.message : 'Upload & Extract'}
                   </button>
@@ -1623,10 +1622,10 @@ export default function WaterQualityPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <div>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 850 }}>Included Ponds</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 650 }}>Select every pond covered by this lab report.</p>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Included Ponds</h3>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600 }}>Select every pond covered by this lab report.</p>
                   </div>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 800, fontSize: '0.82rem' }}>{selectedLabPondIds.length} selected</span>
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem' }}>{selectedLabPondIds.length} selected</span>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
                   {accessiblePonds.map(pond => {
@@ -1642,7 +1641,7 @@ export default function WaterQualityPage() {
                           border: selected ? '1px solid var(--primary)' : '1px solid var(--border)',
                           background: selected ? 'var(--primary-dim)' : '#FFFFFF',
                           color: selected ? 'var(--primary)' : 'var(--text-primary)',
-                          fontWeight: 800,
+                          fontWeight: 600,
                           cursor: 'pointer',
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -1661,21 +1660,21 @@ export default function WaterQualityPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                     <AlertTriangle size={18} color="var(--primary)" />
-                    <h3 style={{ fontSize: '1rem', fontWeight: 850 }}>Bulk Result Grid</h3>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Bulk Result Grid</h3>
                   </div>
                   <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: labForm.reportType === 'plankton' ? '2200px' : labForm.reportType === 'combined' ? '2800px' : '1280px' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-mid)' }}>
                           {['Pond', ...labGridColumns.map(column => column.label)].map(label => (
-                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 850, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{label}</th>
+                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{label}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {labRows.map(row => (
                           <tr key={row.pondId}>
-                            <td style={{ padding: '8px', fontWeight: 850, minWidth: 90 }}>{row.pondCode}</td>
+                            <td style={{ padding: '8px', fontWeight: 600, minWidth: 90 }}>{row.pondCode}</td>
                             {labGridColumns.map(({ path, inputType = 'number' }) => {
                               const sectionValue = row[path[0] as keyof LabPondResult];
                               const value = path.length === 1
@@ -1688,7 +1687,7 @@ export default function WaterQualityPage() {
                                     step={inputType === 'number' ? '0.01' : undefined}
                                     value={value || ''}
                                     onChange={e => updateLabRow(row.pondId, path, e.target.value)}
-                                    style={{ width: inputType === 'text' ? '170px' : '86px', padding: '8px', borderRadius: '9px', border: '1px solid var(--border)', fontWeight: 700 }}
+                                    style={{ width: inputType === 'text' ? '170px' : '86px', padding: '8px', borderRadius: '9px', border: '1px solid var(--border)', fontWeight: 600 }}
                                   />
                                 </td>
                               );
@@ -1704,9 +1703,9 @@ export default function WaterQualityPage() {
               <div style={{ display: 'flex', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '22px' }}>
                 <button type="button" onClick={() => setLabModalOpen(false)} style={{
                   flex: 1, padding: '15px', borderRadius: '14px', border: '1px solid var(--border)',
-                  background: 'transparent', fontWeight: 750, cursor: 'pointer'
+                  background: 'transparent', fontWeight: 600, cursor: 'pointer'
                 }}>Cancel</button>
-                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="btn-primary" style={{ flex: 1, padding: '15px', borderRadius: '14px', fontWeight: 850, opacity: labSubmitting || selectedLabPondIds.length === 0 ? 0.6 : 1 }}>
+                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="btn-primary" style={{ flex: 1, padding: '15px', borderRadius: '14px', fontWeight: 600, opacity: labSubmitting || selectedLabPondIds.length === 0 ? 0.6 : 1 }}>
                   {labSubmitting ? 'Saving...' : 'Confirm Lab Report'}
                 </button>
               </div>
@@ -1721,8 +1720,8 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
             <div className="responsive-modal-header" style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)', flexShrink: 0 }}>
               <div>
-                <h2 style={{ fontSize: '1.18rem', fontWeight: 850 }}>Log Parameters</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '3px', fontWeight: 650 }}>Sync environmental readings with Orson AI.</p>
+                <h2 style={{ fontSize: '1.18rem', fontWeight: 600 }}>Log Parameters</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '3px', fontWeight: 600 }}>Sync environmental readings with Orson AI.</p>
               </div>
               <button onClick={() => setModalOpen(false)} className="icon-btn-modern">
                 <X size={20} />
@@ -1783,9 +1782,9 @@ export default function WaterQualityPage() {
               <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', padding: '16px 22px', background: '#FFFFFF', flexShrink: 0 }}>
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border)',
-                  background: 'transparent', fontWeight: 700, cursor: 'pointer'
+                  background: 'transparent', fontWeight: 600, cursor: 'pointer'
                 }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '13px', borderRadius: '12px', fontWeight: 800 }}>Save Log Entry</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '13px', borderRadius: '12px', fontWeight: 600 }}>Save Log Entry</button>
               </div>
             </form>
           </div>
@@ -1818,7 +1817,7 @@ export default function WaterQualityPage() {
         }
         .wq-label {
           font-size: 0.65rem;
-          font-weight: 800;
+          font-weight: 600;
           color: var(--text-faint);
           text-transform: uppercase;
           letter-spacing: 0.1em;
@@ -1828,7 +1827,7 @@ export default function WaterQualityPage() {
           align-items: center;
           gap: 12px;
           font-size: 1.1rem;
-          font-weight: 800;
+          font-weight: 600;
           color: var(--text-primary);
         }
         .drawer-content {
@@ -1854,19 +1853,19 @@ export default function WaterQualityPage() {
         }
         .wq-label-small {
           font-size: 0.6rem;
-          font-weight: 800;
+          font-weight: 600;
           color: var(--text-faint);
           text-transform: uppercase;
           letter-spacing: 0.1em;
         }
         .wq-val-small {
           font-size: 0.95rem;
-          font-weight: 800;
+          font-weight: 600;
           color: var(--text-primary);
         }
         .form-label {
           font-size: 0.8rem;
-          font-weight: 700;
+          font-weight: 600;
           color: var(--text-muted);
           text-transform: uppercase;
           letter-spacing: 0.05em;

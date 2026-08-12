@@ -224,7 +224,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
         alignItems: 'center',
         justifyContent: 'center',
         color: 'var(--text-muted)',
-        fontWeight: 700,
+        fontWeight: 600,
         textAlign: 'center',
         padding: '24px'
       }}>
@@ -264,7 +264,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
           return (
             <g key={`y-${tick}`}>
               <line x1={left} x2={width - right} y1={y} y2={y} stroke="#E5EEF5" strokeWidth="1" />
-              <text x={left - 10} y={y + 4} textAnchor="end" fontSize="11" fontWeight="700" fill="#7A8EA3">{tick.toFixed(1)}</text>
+              <text x={left - 10} y={y + 4} textAnchor="end" fontSize="11" fontWeight="600" fill="#7A8EA3">{tick.toFixed(1)}</text>
             </g>
           );
         })}
@@ -273,13 +273,13 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
           return (
             <g key={`x-${tick}`}>
               <line x1={x} x2={x} y1={top} y2={height - bottom} stroke="#F1F5F9" strokeWidth="1" />
-              <text x={x} y={height - 18} textAnchor="middle" fontSize="11" fontWeight="700" fill="#7A8EA3">DOC {tick}</text>
+              <text x={x} y={height - 18} textAnchor="middle" fontSize="11" fontWeight="600" fill="#7A8EA3">DOC {tick}</text>
             </g>
           );
         })}
         <line x1={left} x2={width - right} y1={height - bottom} y2={height - bottom} stroke="#C7D7E4" strokeWidth="1.5" />
         <line x1={left} x2={left} y1={top} y2={height - bottom} stroke="#C7D7E4" strokeWidth="1.5" />
-        <text x="14" y="22" fontSize="11" fontWeight="800" fill="#7A8EA3">MBW (g)</text>
+        <text x="14" y="22" fontSize="11" fontWeight="600" fill="#7A8EA3">MBW (g)</text>
 
         {series.map((item) => {
           const path = item.data.map((point) => `${xScale(point.x)},${yScale(point.y)}`).join(' ');
@@ -298,7 +298,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 16px', marginTop: '12px' }}>
         {series.map((item) => (
-          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 800 }}>
+          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
             <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: item.color }} />
             {item.label}
           </div>
@@ -451,11 +451,11 @@ export default function ShrimpReportsPage() {
         flexWrap: 'wrap'
       }}>
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Reports</div>
-          <h1 style={{ fontSize: '22px', fontWeight: 900, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: 0 }}>Shrimp Production Audit</h1>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Reports</div>
+          <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Shrimp Production Audit</h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>Performance analytics across all active production ponds.</p>
         </div>
-        <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 800 }}>
+        <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
           {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
         </button>
       </div>
@@ -480,23 +480,23 @@ export default function ShrimpReportsPage() {
 
       <div className="dashboard-report-grid">
         <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} /> Growth Trajectory</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} /> Growth Trajectory</h2>
           <GrowthTrajectoryChart series={growthSeries} />
         </div>
 
         <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 900, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> Pond Status</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> Pond Status</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {global.stats.map((s: PondStats) => (
               <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-                  <div><div style={{ fontSize: '16px', fontWeight: 800 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>
-                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 900, color: s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL'}</div>
+                  <div><div style={{ fontSize: '16px', fontWeight: 600 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>
+                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL'}</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', gap: '8px' }}>
-                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>ABW</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.mbw.toFixed(2)}g</div></div>
-                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>SIZE</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.size}</div></div>
-                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 800 }}>SR</div><div style={{ fontSize: '14px', fontWeight: 850 }}>{s.sr.toFixed(1)}%</div></div>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600 }}>ABW</div><div style={{ fontSize: '14px', fontWeight: 600 }}>{s.mbw.toFixed(2)}g</div></div>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600 }}>SIZE</div><div style={{ fontSize: '14px', fontWeight: 600 }}>{s.size}</div></div>
+                  <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600 }}>SR</div><div style={{ fontSize: '14px', fontWeight: 600 }}>{s.sr.toFixed(1)}%</div></div>
                 </div>
               </div>
             ))}

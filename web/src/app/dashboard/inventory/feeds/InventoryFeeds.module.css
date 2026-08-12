@@ -20,7 +20,7 @@
   color: var(--text-primary);
   font-size: clamp(15px, 1.2vw, 19px);
   font-variant-numeric: tabular-nums;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.015em;
   white-space: nowrap;
 }
@@ -28,7 +28,7 @@
 .inventoryMetricUnit {
   color: var(--text-muted);
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 @media (max-width: 480px) {

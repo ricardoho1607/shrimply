@@ -51,7 +51,7 @@ export default function ProfileCompletionCard({ company, href = '/dashboard/sett
         <span style={{ display: 'block', marginTop: '4px', color: 'var(--text-muted)', fontSize: '12px', lineHeight: 1.55 }}>
           {t.onboardingProgress.profileIncompleteDetail}
         </span>
-        <span style={{ display: 'block', marginTop: '8px', color: 'var(--primary)', fontSize: '12px', fontWeight: 800 }}>
+        <span style={{ display: 'block', marginTop: '8px', color: 'var(--primary)', fontSize: '12px', fontWeight: 600 }}>
           {t.onboardingProgress.completeProfile}
         </span>
       </div>

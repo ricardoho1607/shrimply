@@ -72,11 +72,11 @@ const panelStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   fontSize: '0.68rem',
-  fontWeight: 850,
+  fontWeight: 600,
   letterSpacing: '0.12em',
   textTransform: 'uppercase',
   color: 'var(--text-muted)',
-  fontFamily: 'var(--sans)',
+  fontFamily: 'var(--jakarta)',
 };
 
 const formatLocation = (company: CompanyProfile) => {
@@ -195,13 +195,13 @@ export default function CompanyPage() {
   if (!companyProfile) {
     return (
       <div style={pageStyle}>
-        <Link href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 800, fontSize: '13px' }}>
+        <Link href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px' }}>
           <ArrowLeft size={16} />
           Back to settings
         </Link>
         <div style={{ ...panelStyle, padding: '40px', textAlign: 'center' }}>
           <Building2 size={44} color="var(--primary)" style={{ marginBottom: '16px' }} />
-          <h1 style={{ fontSize: '28px', fontWeight: 850, marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>No company profile found</h1>
+          <h1 style={{ fontSize: '28px', fontWeight: 600, marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>No company profile found</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>Set up your company profile before using this page.</p>
           <Link href="/dashboard/settings" className="btn-primary" style={{ borderRadius: '12px', padding: '12px 18px' }}>
             Open settings
@@ -215,18 +215,18 @@ export default function CompanyPage() {
     <div className="company-page" style={pageStyle}>
       <div className="company-page-header" style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div className="company-page-heading">
-          <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 800, fontSize: '13px', marginBottom: '18px' }}>
+          <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', marginBottom: '18px' }}>
             <ArrowLeft size={16} />
             Dashboard
           </Link>
-          <h1 className="company-page-title" style={{ fontSize: '34px', fontWeight: 900, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--sans)', color: 'var(--text-primary)' }}>
+          <h1 className="company-page-title" style={{ fontSize: '34px', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>
             {companyProfile.companyName || t.companyDetails?.title || 'Company Details'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '15px', maxWidth: '680px', lineHeight: 1.6 }}>
             {companyProfile.description || 'Company information, organization structure, and public profile details for your aquaculture operation.'}
           </p>
         </div>
-        <Link className="company-edit-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
+        <Link className="company-edit-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 600 }}>
           <Edit3 size={16} />
           Edit details
         </Link>
@@ -240,10 +240,10 @@ export default function CompanyPage() {
             </div>
             <div>
               <div style={labelStyle}>{t.companyDetails?.companyInformation || 'Company Information'}</div>
-              <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 850, marginTop: '4px' }}>{companyProfile.companyName}</div>
+              <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 600, marginTop: '4px' }}>{companyProfile.companyName}</div>
             </div>
           </div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '999px', background: companyProfile.isPublicProfile ? '#dcfce7' : 'var(--bg-mid)', color: companyProfile.isPublicProfile ? '#166534' : 'var(--text-muted)', fontSize: '12px', fontWeight: 850 }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '999px', background: companyProfile.isPublicProfile ? '#dcfce7' : 'var(--bg-mid)', color: companyProfile.isPublicProfile ? '#166534' : 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
             <CheckCircle2 size={15} />
             {companyProfile.isPublicProfile ? 'Public profile' : 'Private profile'}
           </div>
@@ -260,7 +260,7 @@ export default function CompanyPage() {
               <item.icon size={20} color="var(--primary)" />
               <div>
                 <div style={labelStyle}>{item.label}</div>
-                <div style={{ color: 'var(--text-primary)', fontWeight: 850, fontSize: '15px', marginTop: '5px', lineHeight: 1.35 }}>{item.value}</div>
+                <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '15px', marginTop: '5px', lineHeight: 1.35 }}>{item.value}</div>
               </div>
             </div>
           ))}
@@ -269,13 +269,13 @@ export default function CompanyPage() {
         {(companyProfile.contactPhone || user?.email) && (
           <div style={{ padding: '22px 32px', display: 'flex', flexWrap: 'wrap', gap: '16px 28px', borderTop: '1px solid var(--shell-border)' }}>
             {companyProfile.contactPhone && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 700, fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
                 <Phone size={16} color="var(--primary)" />
                 {companyProfile.contactPhone}
               </div>
             )}
             {user?.email && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 700, fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
                 <Mail size={16} color="var(--primary)" />
                 {user.email}
               </div>
@@ -292,7 +292,7 @@ export default function CompanyPage() {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div>
-                <h2 style={{ fontSize: '17px', fontWeight: 900, fontFamily: 'var(--sans)', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                <h2 style={{ fontSize: '17px', fontWeight: 600, fontFamily: 'var(--jakarta)', color: 'var(--text-primary)', marginBottom: '4px' }}>
                   Manage join requests in Settings
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -301,7 +301,7 @@ export default function CompanyPage() {
               </div>
             </div>
           </div>
-          <Link className="company-settings-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 850 }}>
+          <Link className="company-settings-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 600 }}>
             Open Settings &gt; Organization
           </Link>
         </section>
@@ -310,7 +310,7 @@ export default function CompanyPage() {
       <section className="company-organization-panel" style={{ ...panelStyle, padding: '30px 32px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', marginBottom: '22px', flexWrap: 'wrap' }}>
           <div>
-            <h2 style={{ fontSize: '20px', fontWeight: 900, fontFamily: 'var(--sans)', color: 'var(--text-primary)', marginBottom: '4px' }}>
+            <h2 style={{ fontSize: '20px', fontWeight: 600, fontFamily: 'var(--jakarta)', color: 'var(--text-primary)', marginBottom: '4px' }}>
               {t.companyDetails?.organizationStructure || 'Organization Structure'}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
@@ -330,10 +330,10 @@ export default function CompanyPage() {
                     <RoleIcon size={20} />
                   </div>
                   <div className="company-role-copy" style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 900 }}>{role.title}</div>
+                    <div style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>{role.title}</div>
                     <div className="company-role-description" style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>{role.description}</div>
                   </div>
-                  <div style={{ color: roleMembers.length > 0 ? '#16a34a' : '#94a3b8', fontWeight: 900, fontSize: '13px' }}>
+                  <div style={{ color: roleMembers.length > 0 ? '#16a34a' : '#94a3b8', fontWeight: 600, fontSize: '13px' }}>
                     {roleMembers.length}/{role.maxCount}
                   </div>
                 </div>
@@ -344,19 +344,19 @@ export default function CompanyPage() {
                       <div className="company-member-row" key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                         <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: statusColor(member.status) }} />
                         <div className="company-member-copy" style={{ minWidth: 0 }}>
-                          <div style={{ color: 'var(--text-primary)', fontWeight: 850, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name || member.email || 'Team member'}</div>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name || member.email || 'Team member'}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.email}</div>
                         </div>
                       </div>
                     )) : (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 700 }}>No members assigned yet.</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>No members assigned yet.</div>
                     )}
                   </div>
 
                   {roleMembers.length > 0 && (
                     <div className="company-permissions" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignContent: 'flex-start' }}>
                       {role.permissions.map((permission: string) => (
-                        <span className="company-permission" key={permission} style={{ padding: '6px 9px', borderRadius: '999px', background: '#fff', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 800 }}>
+                        <span className="company-permission" key={permission} style={{ padding: '6px 9px', borderRadius: '999px', background: '#fff', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>
                           {permission}
                         </span>
                       ))}

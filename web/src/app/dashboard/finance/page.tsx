@@ -184,7 +184,7 @@ export default function FinancePage() {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
         <AlertCircle size={48} color="#ef4444" style={{ marginBottom: '16px' }} />
-        <h2 style={{ fontSize: '24px', fontWeight: 800 }}>{t.finance.accessDenied}</h2>
+        <h2 style={{ fontSize: '24px', fontWeight: 600 }}>{t.finance.accessDenied}</h2>
         <p style={{ color: 'var(--text-muted)' }}>{t.finance.noPermission}</p>
       </div>
     );
@@ -212,12 +212,12 @@ export default function FinancePage() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '14px' }}>
-        <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 800, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
+        <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
         <select
           id="finance-cycle-filter"
           value={cycleScope}
           onChange={(event) => setCycleScope(event.target.value)}
-          style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontWeight: 800, outline: 'none' }}
+          style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontWeight: 600, outline: 'none' }}
         >
           {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}{cycle.blockNames?.length ? ` — ${cycle.blockNames.join(', ')}` : cycle.blockName ? ` — ${cycle.blockName}` : ''}</option>)}
           <option value="all">{t.financeCycle.allHistory}</option>
@@ -226,45 +226,46 @@ export default function FinancePage() {
 
       {/* Summary Cards */}
       <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-        <div className="glass-card animate-fade-up" style={{ padding: '24px', background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', color: '#065F46', border: '1px solid #A7F3D0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+        <div className="glass-card animate-fade-up" style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', color: '#065F46', border: '1px solid #A7F3D0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(6, 95, 70, 0.1)' }}>
               <ArrowUpRight size={20} />
             </div>
             <TrendingUp size={20} style={{ opacity: 0.6 }} />
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 800, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.revenues}</div>
-          <div style={{ fontSize: '32px', fontWeight: 800 }}>{formatCurrency(stats.totalIncome)}</div>
+          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.revenues}</div>
+          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.totalIncome)}</div>
         </div>
 
-        <div className="glass-card animate-fade-up" style={{ padding: '24px', background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)', color: '#991B1B', border: '1px solid #FECACA', animationDelay: '0.1s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+        <div className="glass-card animate-fade-up" style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)', color: '#991B1B', border: '1px solid #FECACA', animationDelay: '0.1s' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(153, 27, 27, 0.1)' }}>
               <ArrowDownRight size={20} />
             </div>
             <TrendingDown size={20} style={{ opacity: 0.6 }} />
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 800, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.expenses}</div>
-          <div style={{ fontSize: '32px', fontWeight: 800 }}>{formatCurrency(stats.totalExpense)}</div>
+          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.expenses}</div>
+          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.totalExpense)}</div>
         </div>
 
         <div className="glass-card animate-fade-up" style={{ 
-          padding: '24px', 
+          padding: '20px',
+          minHeight: '144px',
           background: stats.profit >= 0 ? 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)' : 'linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%)', 
           color: stats.profit >= 0 ? '#166534' : '#9F1239', 
           border: stats.profit >= 0 ? '1px solid #BBF7D0' : '1px solid #FECDD3',
           animationDelay: '0.2s'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
             <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(22, 101, 52, 0.1)' }}>
               <Wallet size={20} />
             </div>
-            <div style={{ fontSize: '11px', fontWeight: 900, color: '#FFF', background: stats.profit >= 0 ? '#27AE60' : '#ef4444', padding: '4px 10px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+            <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFF', background: stats.profit >= 0 ? '#27AE60' : '#ef4444', padding: '4px 10px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
               {stats.profit >= 0 ? t.finance.netProfit : t.finance.netLoss}
             </div>
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 800, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.profitLoss}</div>
-          <div style={{ fontSize: '32px', fontWeight: 800 }}>{formatCurrency(stats.profit)}</div>
+          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.profitLoss}</div>
+          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.profit)}</div>
         </div>
       </div>
 
@@ -287,8 +288,8 @@ export default function FinancePage() {
               border: 'none',
               borderBottom: activeTab === tab.id ? '3px solid var(--primary)' : '3px solid transparent',
               color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-              fontSize: '15px',
-              fontWeight: 800,
+              fontSize: '14px',
+              fontWeight: 500,
               cursor: 'pointer',
               transition: 'all 0.2s',
               whiteSpace: 'nowrap'
@@ -305,28 +306,28 @@ export default function FinancePage() {
           
           {/* Monthly P&L Table */}
           <div className="glass-card" style={{ padding: '32px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Calendar size={20} color="var(--primary)" /> {t.finance.monthlyPerformance}
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ padding: '16px 20px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', justifyContent: 'space-between', border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{t.finance.revenues}</span>
-                <span style={{ fontWeight: 800, color: '#27AE60' }}>{formatCurrency(stats.totalIncome)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{t.finance.revenues}</span>
+                <span style={{ fontWeight: 600, color: '#27AE60' }}>{formatCurrency(stats.totalIncome)}</span>
               </div>
               <div style={{ padding: '16px 20px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', justifyContent: 'space-between', border: '1px solid var(--border)' }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{t.finance.expenses}</span>
-                <span style={{ fontWeight: 800, color: '#ef4444' }}>{formatCurrency(stats.totalExpense)}</span>
+                <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{t.finance.expenses}</span>
+                <span style={{ fontWeight: 600, color: '#ef4444' }}>{formatCurrency(stats.totalExpense)}</span>
               </div>
               <div style={{ marginTop: '12px', padding: '24px', borderRadius: '20px', background: 'var(--primary-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)' }}>
                 <div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Operating Margin</div>
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--primary)' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Operating Margin</div>
+                  <div style={{ fontSize: '28px', fontWeight: 600, color: 'var(--primary)' }}>
                     {stats.totalIncome > 0 ? ((stats.profit / stats.totalIncome) * 100).toFixed(1) : 0}%
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{t.finance.netProfit}</div>
-                  <div style={{ fontSize: '28px', fontWeight: 900, color: stats.profit >= 0 ? '#27AE60' : '#ef4444' }}>{formatCurrency(stats.profit)}</div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{t.finance.netProfit}</div>
+                  <div style={{ fontSize: '28px', fontWeight: 600, color: stats.profit >= 0 ? '#27AE60' : '#ef4444' }}>{formatCurrency(stats.profit)}</div>
                 </div>
               </div>
             </div>
@@ -335,15 +336,15 @@ export default function FinancePage() {
           {/* Quick Actions / Tips */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div className="glass-card" style={{ padding: '32px' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 800, marginBottom: '20px', color: 'var(--text-primary)' }}>Financial Health</h4>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px', color: 'var(--text-primary)' }}>Financial Health</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                   <span style={{ color: 'var(--text-muted)' }}>Income Records</span>
-                  <span style={{ fontWeight: 800, color: 'var(--primary)' }}>{income.length}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{income.length}</span>
                 </div>
                 <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
                   <span style={{ color: 'var(--text-muted)' }}>Expense Records</span>
-                  <span style={{ fontWeight: 800, color: '#ef4444' }}>{expenses.length}</span>
+                  <span style={{ fontWeight: 600, color: '#ef4444' }}>{expenses.length}</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
                   You have logged <b>{expenses.length + income.length}</b> transactions this period. Your cash flow is <b style={{color: stats.profit >= 0 ? '#27AE60' : '#ef4444'}}>{stats.profit >= 0 ? 'positive' : 'negative'}</b>.
@@ -356,7 +357,7 @@ export default function FinancePage() {
                 <TrendingUp size={20} />
               </div>
               <div>
-                <h4 style={{ fontSize: '15px', fontWeight: 800, marginBottom: '6px', color: 'var(--primary)' }}>Orson AI Optimization Tip</h4>
+                <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px', color: 'var(--primary)' }}>Orson AI Optimization Tip</h4>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
                   Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is <strong style={{color: 'var(--primary)'}}>{stats.totalIncome > 0 ? ((stats.profit / stats.totalIncome) * 100).toFixed(1) : 0}%</strong>.
                 </p>
@@ -386,41 +387,41 @@ export default function FinancePage() {
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', background: 'var(--bg-mid)', borderBottom: '1px solid var(--border)' }}>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.category}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.itemDescription}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.paymentType}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.cycle}</th>
-                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}></th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.forms.date}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.category}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.itemDescription}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.paymentType}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.financeCycle.cycle}</th>
+                  <th style={{ padding: '16px 32px', fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}></th>
                 </tr>
               </thead>
               <tbody>
                 {filteredTransactions.map((t) => (
                   <tr key={t.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
                     <td style={{ padding: '20px 32px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 800 }}>{new Date(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600 }}>{new Date(t.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{new Date(t.date).getFullYear()}</div>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
-                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: t.type === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: t.type === 'income' ? '#27AE60' : '#ef4444', fontSize: '12px', fontWeight: 800 }}>
+                      <span style={{ padding: '6px 12px', borderRadius: '8px', background: t.type === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', color: t.type === 'income' ? '#27AE60' : '#ef4444', fontSize: '12px', fontWeight: 600 }}>
                         {t.category}
                       </span>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{t.item}</div>
+                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{t.item}</div>
                       {t.notes && <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px' }}>{t.notes}</div>}
                     </td>
                     <td style={{ padding: '20px 32px' }}>
-                      <div style={{ fontSize: '16px', fontWeight: 900, color: t.type === 'income' ? '#27AE60' : '#ef4444' }}>
+                      <div style={{ fontSize: '16px', fontWeight: 600, color: t.type === 'income' ? '#27AE60' : '#ef4444' }}>
                         {t.type === 'income' ? '+' : '-'}{formatCurrency(t.amount)}
                       </div>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 700 }}>{t.paymentType}</div>
+                      <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.paymentType}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || 'No Ref'}</div>
                     </td>
-                    <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 700 }}>{t.cycleName || generalCategoryLabel}</td>
+                    <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
@@ -448,7 +449,7 @@ export default function FinancePage() {
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: formType === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: formType === 'income' ? '#27AE60' : '#ef4444', border: '1px solid var(--border)' }}>
                   <DollarSign size={24} />
                 </div>
-                <h2 style={{ fontSize: '20px', fontWeight: 800 }}>{t.financeCycle.logTransaction.replace('{{type}}', formType === 'income' ? t.finance.revenue : t.finance.expenses)}</h2>
+                <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{t.financeCycle.logTransaction.replace('{{type}}', formType === 'income' ? t.finance.revenue : t.finance.expenses)}</h2>
               </div>
               <button onClick={() => setIsModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
             </div>
@@ -456,17 +457,17 @@ export default function FinancePage() {
             <form className="responsive-modal-body" onSubmit={handlePost} style={{ padding: '24px 28px 28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', columnGap: '16px', rowGap: '14px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.forms.date}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.forms.date}</label>
                   <input type="date" required value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={e => e.preventDefault()} onPaste={e => e.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.category}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.category}</label>
                   <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {(formType === 'expense' ? EXPENSE_CATEGORIES : INCOME_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.allocateToCycle}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.allocateToCycle}</label>
                   <select required value={formData.cycleId} onChange={e => setFormData({...formData, cycleId: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     <option value="" disabled>{t.financeCycle.selectCycle}</option>
                     {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
@@ -478,15 +479,15 @@ export default function FinancePage() {
                   </span> : null}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.finance.itemDescription}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.itemDescription}</label>
                   <input required value={formData.item} onChange={e => setFormData({...formData, item: e.target.value})} placeholder={t.finance.enterDescription} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.amount.replace('{{currency}}', currencyConfig.symbol)}</label>
                   <input type="number" required value={formData.amount} onChange={e => setFormData({...formData, amount: e.target.value})} placeholder="0.00" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.finance.paymentType}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.finance.paymentType}</label>
                   <select value={formData.paymentType} onChange={e => setFormData({...formData, paymentType: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {PAYMENT_TYPES.map(p => <option key={p} value={p}>{p}</option>)}
                   </select>
@@ -494,8 +495,8 @@ export default function FinancePage() {
               </div>
 
               <div className="responsive-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px', fontWeight: 700 }}>{t.actions.cancel}</button>
-                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', background: formType === 'income' ? '#27AE60' : '#ef4444', border: 'none', fontWeight: 800 }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.cancel}</button>
+                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', background: formType === 'income' ? '#27AE60' : '#ef4444', border: 'none', fontWeight: 600 }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : `${t.actions.save} ${formType === 'income' ? t.finance.revenue : t.finance.expenses}`}
                 </button>
               </div>

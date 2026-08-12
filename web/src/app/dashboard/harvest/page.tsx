@@ -507,18 +507,18 @@ export default function HarvestPage() {
       <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '18px' }}>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#27ae60', marginBottom: '10px' }}><DollarSign size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{t.harvestCycle.totalEstimatedRevenue}</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>{formatCurrency(totalRevenue)}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestCycle.totalEstimatedRevenue}</div>
+          <div style={{ fontSize: '21px', fontWeight: 600 }}>{formatCurrency(totalRevenue)}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#0d2137', marginBottom: '10px' }}><Scale size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{t.harvestCycle.totalHarvestedBiomass}</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>{totalBiomass.toLocaleString()}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestCycle.totalHarvestedBiomass}</div>
+          <div style={{ fontSize: '21px', fontWeight: 600 }}>{totalBiomass.toLocaleString()}</div>
         </div>
         <div className="glass-card" style={{ padding: '20px', background: '#FFFFFF' }}>
           <div style={{ color: '#3282B8', marginBottom: '10px' }}><History size={22} /></div>
-          <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-muted)' }}>{harvestFilter === 'current' ? t.harvestCycle.currentCycleRecords : t.harvestCycle.historicalRecordLabel}</div>
-          <div style={{ fontSize: '21px', fontWeight: 800 }}>{visibleHarvestRecords.length}</div>
+          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>{harvestFilter === 'current' ? t.harvestCycle.currentCycleRecords : t.harvestCycle.historicalRecordLabel}</div>
+          <div style={{ fontSize: '21px', fontWeight: 600 }}>{visibleHarvestRecords.length}</div>
         </div>
       </div>
 
@@ -549,7 +549,7 @@ export default function HarvestPage() {
                   background: harvestFilter === item.key ? '#fff' : 'transparent',
                   color: harvestFilter === item.key ? 'var(--primary)' : 'var(--text-muted)',
                   fontSize: '13px',
-                  fontWeight: 800,
+                  fontWeight: 600,
                   cursor: 'pointer',
                   boxShadow: harvestFilter === item.key ? '0 2px 8px rgba(0,0,0,0.05)' : 'none',
                 }}
@@ -562,12 +562,12 @@ export default function HarvestPage() {
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 360px)', marginBottom: '20px' }}>
           {harvestFilter === 'current' ? (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {t.harvestCycle.productionCycle}
               <select
                 value={effectiveSelectedCycleId}
                 onChange={(event) => setSelectedCycleId(event.target.value)}
-                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}
+                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}
               >
                 <option value="">{t.harvestCycle.selectActiveCycle}</option>
                 {activeCycles.map((cycle) => (
@@ -578,12 +578,12 @@ export default function HarvestPage() {
               </select>
             </label>
           ) : (
-            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {t.harvestCycle.cycleHistory}
               <select
                 value={historyCycleId}
                 onChange={(event) => setHistoryCycleId(event.target.value)}
-                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 700, textTransform: 'none', letterSpacing: 0 }}
+                style={{ minHeight: '48px', padding: '11px 13px', borderRadius: '11px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)', fontSize: '14px', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}
               >
                 <option value="all">{t.harvestCycle.allHistory}</option>
                 {historicalCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
@@ -607,8 +607,8 @@ export default function HarvestPage() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                     <Calendar size={18} color="var(--primary)" />
                     <div>
-                      <div style={{ fontSize: '15px', fontWeight: 700 }}>{new Date(record.date).toLocaleDateString()}</div>
-                      {record.cycleName ? <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 700 }}>{record.cycleName}{record.blockName ? ` · ${record.blockName}` : ''}</div> : null}
+                      <div style={{ fontSize: '15px', fontWeight: 600 }}>{new Date(record.date).toLocaleDateString()}</div>
+                      {record.cycleName ? <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '11px', fontWeight: 600 }}>{record.cycleName}{record.blockName ? ` · ${record.blockName}` : ''}</div> : null}
                     </div>
                   </div>
                   {canEditHarvest && canModifyHarvestRecord(record.id) ? (
@@ -619,22 +619,22 @@ export default function HarvestPage() {
                 <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                   {record.ponds.map((p, idx) => (
                     <div key={idx} style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 800, marginBottom: '10px' }}>{p.pondName}</div>
-                      <div style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 800, marginBottom: '10px' }}>
+                      <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>{p.pondName}</div>
+                      <div style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 600, marginBottom: '10px' }}>
                         {getHarvestTypeLabel(p)}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvest.totalBiomass}</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700 }}>{parseFloat(p.biomass) + (parseFloat(p.subBiomass) || 0)}</span>
+                          <span style={{ fontSize: '13px', fontWeight: 600 }}>{parseFloat(p.biomass) + (parseFloat(p.subBiomass) || 0)}</span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvest.averageSize}</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.size} <span style={{ fontSize: '11px' }}>pcs/kg</span></span>
+                          <span style={{ fontSize: '13px', fontWeight: 600 }}>{p.size} <span style={{ fontSize: '11px' }}>pcs/kg</span></span>
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.finance.revenue}</span>
-                          <span style={{ fontSize: '13px', fontWeight: 700, color: '#27ae60' }}>
+                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#27ae60' }}>
                             {formatCurrency((parseFloat(p.biomass) * parseFloat(p.price)) + (parseFloat(p.subBiomass) * parseFloat(p.subPrice)))}
                           </span>
                         </div>
@@ -654,7 +654,7 @@ export default function HarvestPage() {
           <div className="glass-card responsive-modal" style={{ width: '100%', maxWidth: '700px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 800 }}>{t.harvestCycle.logHarvest}</h2>
+                <h2 style={{ fontSize: '24px', fontWeight: 600 }}>{t.harvestCycle.logHarvest}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
               <button onClick={() => setModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '50%', padding: '8px', cursor: 'pointer' }}>
@@ -665,16 +665,16 @@ export default function HarvestPage() {
             <form className="responsive-modal-body" onSubmit={handleAddHarvest} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 800 }}>{selectedCycle?.cycleName}</div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>{selectedCycle?.cycleName}</div>
                   <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>{selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockNotAssigned}</div>
                 </div>
-                <div style={{ flexShrink: 0, alignSelf: 'center', padding: '7px 10px', borderRadius: '999px', background: '#EAF6FD', color: '#0F4C75', fontSize: '11px', fontWeight: 800 }}>
+                <div style={{ flexShrink: 0, alignSelf: 'center', padding: '7px 10px', borderRadius: '999px', background: '#EAF6FD', color: '#0F4C75', fontSize: '11px', fontWeight: 600 }}>
                   {selectedCyclePonds.length} {t.harvest.pond}
                 </div>
               </div>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.selectPond}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.selectPond}</label>
                   <select
                     required
                     value={formData.pondId}
@@ -687,12 +687,12 @@ export default function HarvestPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.harvestDate}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.harvestDate}</label>
                   <input type="date" max={today} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={(event) => event.preventDefault()} onPaste={(event) => event.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvest.harvestType}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvest.harvestType}</label>
                   <div style={{ display: 'flex', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                     {(['partial', 'final'] as HarvestType[]).map((harvestType) => (
                       <button
@@ -707,7 +707,7 @@ export default function HarvestPage() {
                           background: formData.harvestType === harvestType ? '#0F4C75' : 'transparent',
                           color: formData.harvestType === harvestType ? '#FFFFFF' : 'var(--text-muted)',
                           fontSize: '12px',
-                          fontWeight: 800,
+                          fontWeight: 600,
                           cursor: 'pointer',
                         }}
                       >
@@ -718,18 +718,18 @@ export default function HarvestPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 700 }}>{t.harvestCycle.averageSize}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.averageSize}</label>
                   <input required min="0.01" step="0.01" type="number" value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: 'span 2', padding: '24px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
                   <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>{t.harvestCycle.mainBiomass}</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>{t.harvestCycle.mainBiomass}</label>
                       <input required min="0.01" type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--primary)' }}>{t.harvestCycle.mainPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>{t.harvestCycle.mainPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
                       <input required min="0.01" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
@@ -738,15 +738,15 @@ export default function HarvestPage() {
 
                   <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subBiomass}</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subBiomass}</label>
                       <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subSize}</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subSize}</label>
                       <input required={Boolean(formData.subBiomass || formData.subPrice)} min="0.01" step="0.01" type="number" value={formData.subSize} onChange={e => setFormData({...formData, subSize: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <label style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)' }}>{t.harvestCycle.subPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
+                      <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
                       <input required={Boolean(formData.subBiomass || formData.subSize)} min="0.01" type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
@@ -754,8 +754,8 @@ export default function HarvestPage() {
               </div>
 
               <div className="responsive-modal-footer" style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>{t.actions.cancel}</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 800 }}>{t.actions.save} {t.harvest.harvest}</button>
+                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.save} {t.harvest.harvest}</button>
               </div>
             </form>
           </div>

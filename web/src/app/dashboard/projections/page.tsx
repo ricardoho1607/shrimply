@@ -472,24 +472,24 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
         <meta charset="utf-8">
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
+          body { font-family: 'Plus Jakarta Sans', Arial, sans-serif; padding: 40px; color: #2C3E50; background: #ffffff; font-size: 14px; line-height: 1.6; }
           .header { margin-bottom: 30px; }
-          .title { font-size: 32px; font-weight: 700; color: #E74C3C; margin-bottom: 8px; }
+          .title { font-size: 32px; font-weight: 600; color: #E74C3C; margin-bottom: 8px; }
           .company-name { font-size: 15px; color: #2C3E50; margin-bottom: 4px; font-weight: 600; }
           .divider { height: 3px; background: linear-gradient(to right, #E74C3C, #F39C12); margin: 20px 0; border-radius: 2px; }
           .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; }
           .card { background: #F8FAFB; padding: 15px; border-radius: 8px; text-align: center; border-bottom: 3px solid #E74C3C; }
           .label { font-size: 10px; color: #64748B; text-transform: uppercase; margin-bottom: 4px; }
-          .value { font-size: 20px; font-weight: 700; color: #2C3E50; }
+          .value { font-size: 20px; font-weight: 600; color: #2C3E50; }
           .financial-card { background: #F0F9FF; padding: 25px; border-radius: 12px; border-left: 5px solid #3282B8; margin-bottom: 25px; }
-          .profit { color: #10B981; font-size: 36px; font-weight: 900; }
+          .profit { color: #10B981; font-size: 36px; font-weight: 600; }
           .section { margin-top: 24px; page-break-inside: avoid; }
-          .section-title { font-size: 18px; font-weight: 800; color: #0F4C75; margin-bottom: 10px; }
+          .section-title { font-size: 18px; font-weight: 600; color: #0F4C75; margin-bottom: 10px; }
           .comparison { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
           .scenario { background: #FFFFFF; border: 1px solid #BAE6FD; border-radius: 10px; padding: 16px; }
           .table { width: 100%; border-collapse: collapse; margin-top: 8px; }
           .table td { border-bottom: 1px solid #E2E8F0; padding: 8px 4px; }
-          .table td:last-child { text-align: right; font-weight: 700; }
+          .table td:last-child { text-align: right; font-weight: 600; }
           .note { font-size: 12px; color: #64748B; margin-top: 10px; }
           .warning { background: #FFFBEB; border: 1px solid #FDE68A; color: #92400E; padding: 12px; border-radius: 8px; margin-top: 10px; }
           .orson-box { background: #FFFBEA; border: 1px solid #FDE68A; padding: 20px; border-radius: 12px; margin-top: 30px; }
@@ -554,10 +554,10 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
           ${operatingComparison.dataQualityWarning ? '<div class="warning">Some projection inputs are incomplete. Review source records and recalculate after the next sampling, feed, mortality, or expense update.</div>' : ''}
         </div>
         <div class="orson-box">
-          <div style="font-weight: 800; color: #92400E; margin-bottom: 8px;">Orson AI Risk Analysis:</div>
+          <div style="font-weight: 600; color: #92400E; margin-bottom: 8px;">Orson AI Risk Analysis:</div>
           <div style="font-style: italic; color: #451a03;">"${insight || 'No AI analysis performed for this projection.'}"</div>
           <div style="margin-top: 10px; color: #451a03;">Survival confidence: ${survivalConfidence}. Market size status: ${marketSizeRisk}.</div>
-          <div style="margin-top: 14px; font-weight: 800; color: #92400E;">Structured Projection Risks</div>
+          <div style="margin-top: 14px; font-weight: 600; color: #92400E;">Structured Projection Risks</div>
           <ul style="margin-top: 8px; padding-left: 18px; color: #451a03;">
             ${risks.length > 0 ? risks.map((risk: ProjectionRisk) => `<li><strong>${risk.severity}:</strong> ${risk.summary}</li>`).join('') : '<li>No projection-specific risks were detected from the available data.</li>'}
           </ul>
@@ -641,7 +641,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
         {/* Settings Card */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="glass-card" style={{ background: '#FFF', padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Waves size={20} color="var(--primary)" /> 1. {t.forms.selectPond}
             </h3>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -668,7 +668,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
           </div>
 
           <div className="glass-card" style={{ background: '#FFF', padding: '24px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Target size={20} color="var(--primary)" /> {t.harvestProjectionScreen?.marketPriceLadder || '2. Market Price by Size'}
             </h3>
             <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: '16px' }}>
@@ -676,7 +676,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
             </p>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
               {HARVEST_MARKET_SIZE_TIERS.map((size) => (
-                <label key={size} style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '10px', fontWeight: 700, color: 'var(--text-muted)' }}>
+                <label key={size} style={{ display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>
                   {size} {t.harvestProjectionScreen?.countPerKg || 'count/kg'}
                   <input
                     type="number"
@@ -722,8 +722,8 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   <Pencil size={16} /> {t.harvestProjectionScreen?.editPrices || 'Edit prices'}
                 </button>
               )}
-              {priceSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 700, color: '#059669' }}>{t.harvestProjectionScreen?.pricesSaved || 'Prices saved.'}</span>}
-              {priceSaveError && <span style={{ fontSize: '12px', fontWeight: 700, color: '#B91C1C' }}>{t.harvestProjectionScreen?.priceSaveError || priceSaveError}</span>}
+              {priceSaveStatus === 'saved' && <span style={{ fontSize: '12px', fontWeight: 600, color: '#059669' }}>{t.harvestProjectionScreen?.pricesSaved || 'Prices saved.'}</span>}
+              {priceSaveError && <span style={{ fontSize: '12px', fontWeight: 600, color: '#B91C1C' }}>{t.harvestProjectionScreen?.priceSaveError || priceSaveError}</span>}
               {!canManagePriceLadder && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.priceEditRestricted || 'Only owners and finance managers can edit saved prices.'}</span>}
             </div>
           </div>
@@ -733,7 +733,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div className="glass-card" style={{ background: '#FFF', padding: '32px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
               <TrendingUp size={22} color="var(--primary)" /> {t.harvestProjectionScreen?.step3 || '3. Financial Projected Outcomes'}
             </h3>
 
@@ -746,7 +746,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
             ) : financialComparison && projection ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '28px' }}>
                 <div style={{ padding: '28px', borderRadius: '22px', background: 'linear-gradient(135deg, #F0F9FF 0%, #E0F2FE 100%)', border: '1px solid #BAE6FD' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 900, color: '#0369A1', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#0369A1', textTransform: 'uppercase' }}>
                     {financialComparison.result.decision === 'keep_growing'
                       ? (t.harvestProjectionScreen?.keepGrowing || 'Keep Growing')
                       : financialComparison.result.decision === 'harvest_now'
@@ -758,24 +758,24 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '14px' }}>
                   <div style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
-                    <div style={{ fontSize: '25px', fontWeight: 900, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
+                    <div style={{ fontSize: '25px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
                   </div>
                   <div style={{ padding: '18px', borderRadius: '16px', background: '#ECFDF5' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: '#047857' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#047857' }}>
                       {financialComparison.result.bestScenario.kind === 'today'
                         ? (t.harvestProjectionScreen?.bestOption || 'BEST OPTION')
                         : `${t.harvestProjectionScreen?.targetSize || 'TARGET SIZE'} ${financialComparison.result.bestScenario.targetSizeCountPerKg}`}
                     </div>
-                    <div style={{ fontSize: '25px', fontWeight: 900, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
+                    <div style={{ fontSize: '25px', fontWeight: 600, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
                     <div style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(financialComparison.result.bestScenario.revenue)}</div>
                     <div style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
                   </div>
                   <div style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
-                    <div style={{ fontSize: '25px', fontWeight: 900, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
+                    <div style={{ fontSize: '25px', fontWeight: 600, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
                       {formatCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}
                     </div>
                     <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</div>
@@ -783,7 +783,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 </div>
 
                 <div>
-                  <div style={{ fontSize: '14px', fontWeight: 900, color: 'var(--text-primary)', marginBottom: '10px' }}>{t.harvestProjectionScreen?.sizeComparison || 'Profit by harvest size'}</div>
+                  <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '10px' }}>{t.harvestProjectionScreen?.sizeComparison || 'Profit by harvest size'}</div>
                   <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '650px', fontSize: '12px' }}>
                       <thead style={{ background: 'var(--bg-mid)', color: 'var(--text-muted)' }}>
@@ -799,11 +799,11 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                       <tbody>
                         {[financialComparison.result.today, ...financialComparison.result.targets].map((scenario) => (
                           <tr key={`${scenario.kind}-${scenario.targetSizeCountPerKg}`} style={{ borderTop: '1px solid var(--border)', background: scenario === financialComparison.result.bestScenario ? '#ECFDF5' : '#FFF' }}>
-                            <td style={{ padding: '11px', fontWeight: 800 }}>{scenario.kind === 'today' ? `${t.harvestProjectionScreen?.today || 'Today'} (${scenario.targetSizeCountPerKg})` : scenario.targetSizeCountPerKg}</td>
+                            <td style={{ padding: '11px', fontWeight: 600 }}>{scenario.kind === 'today' ? `${t.harvestProjectionScreen?.today || 'Today'} (${scenario.targetSizeCountPerKg})` : scenario.targetSizeCountPerKg}</td>
                             <td style={{ padding: '11px', textAlign: 'right' }}>{scenario.daysFromNow}</td>
                             <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(scenario.revenue)}</td>
                             <td style={{ padding: '11px', textAlign: 'right' }}>{formatCurrency(totalScenarioCosts(scenario.totalCosts))}</td>
-                            <td style={{ padding: '11px', textAlign: 'right', fontWeight: 900, color: scenario.operatingProfit >= 0 ? '#059669' : '#DC2626' }}>{formatCurrency(scenario.operatingProfit)}</td>
+                            <td style={{ padding: '11px', textAlign: 'right', fontWeight: 600, color: scenario.operatingProfit >= 0 ? '#059669' : '#DC2626' }}>{formatCurrency(scenario.operatingProfit)}</td>
                             <td style={{ padding: '11px', textAlign: 'right', color: scenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626' }}>{formatCurrency(scenario.incrementalProfitVsToday)}</td>
                           </tr>
                         ))}
@@ -813,9 +813,9 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestDOC || 'HARVEST DOC'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{projection.futureDoc ?? '-'}</div></div>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projBiomass || 'PROJ. BIOMASS'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedBiomassKg.toFixed(0)} kg</div></div>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 800, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projectedSurvival || 'PROJECTED SURVIVAL'}</div><div style={{ fontSize: '20px', fontWeight: 900, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedSurvivalRatePercent.toFixed(1)}%</div></div>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestDOC || 'HARVEST DOC'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{projection.futureDoc ?? '-'}</div></div>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projBiomass || 'PROJ. BIOMASS'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedBiomassKg.toFixed(0)} kg</div></div>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projectedSurvival || 'PROJECTED SURVIVAL'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedSurvivalRatePercent.toFixed(1)}%</div></div>
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', fontSize: '12px', lineHeight: 1.8, color: 'var(--text-muted)' }}>
@@ -838,9 +838,9 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Sparkles size={24} color="#0EA5E9" />
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#0369A1' }}>{t.sidebar.aiAssistant} Risk Analysis</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#0369A1' }}>{t.sidebar.aiAssistant} Risk Analysis</h3>
               </div>
-              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 700, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>Recalculate</button>}
+              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>Recalculate</button>}
             </div>
 
             {insight ? (
@@ -858,7 +858,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   background: 'var(--gradient)',
                   color: '#FFF',
                   border: 'none',
-                  fontWeight: 800,
+                  fontWeight: 600,
                   fontSize: '15px',
                   display: 'flex',
                   alignItems: 'center',

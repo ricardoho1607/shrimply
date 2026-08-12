@@ -301,22 +301,15 @@ export default function FinancialReportsPage() {
 
   return (
     <div className="dashboard-page-relaxed">
-      <div className="glass-card" style={{ padding: '20px 22px', background: '#FFF', border: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><FileText size={21} /></div>
-          <div><div style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Reports</div><h1 style={{ fontSize: '22px', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>Financial Reports</h1></div>
-        </div>
-      </div>
-
       <div className="dashboard-report-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <div>
-            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>Select Report Type</h2>
+            <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>Select Report Type</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
               {REPORT_TYPES.map((type) => (
                 <button key={type.id} type="button" onClick={() => setSelectedReport(type.id)} className="glass-card" style={{ padding: '18px', cursor: 'pointer', textAlign: 'left', border: selectedReport === type.id ? `1px solid ${type.color}` : '1px solid var(--border)', background: selectedReport === type.id ? `${type.color}10` : '#FFF', position: 'relative' }}>
                   <span style={{ width: '38px', height: '38px', borderRadius: '11px', background: `${type.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}><type.icon size={20} color={type.color} /></span>
-                  <span style={{ display: 'block', fontWeight: 850, fontSize: '15px' }}>{type.name}</span>
+                  <span style={{ display: 'block', fontWeight: 600, fontSize: '15px' }}>{type.name}</span>
                   <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px', lineHeight: 1.45 }}>{type.desc}</span>
                   {selectedReport === type.id ? <CheckCircle2 size={18} color={type.color} style={{ position: 'absolute', top: '14px', right: '14px' }} /> : null}
                 </button>
@@ -325,7 +318,7 @@ export default function FinancialReportsPage() {
           </div>
 
           <div>
-            <h2 style={{ fontSize: '17px', fontWeight: 850, marginBottom: '14px' }}>{t.financeCycle.selectPeriod}</h2>
+            <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>{t.financeCycle.selectPeriod}</h2>
             <div className="dashboard-segmented-tabs" style={{ width: '100%' }}>
               {PERIOD_OPTIONS.map((period) => <button key={period} type="button" onClick={() => setSelectedPeriod(period)} className={`dashboard-segmented-tab ${selectedPeriod === period ? 'active' : ''}`} style={{ flex: 1 }}>{period}</button>)}
             </div>
@@ -336,7 +329,7 @@ export default function FinancialReportsPage() {
 
           {selectedReport === 'cogs' ? (
             <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
-              <h2 style={{ fontSize: '16px', fontWeight: 800, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
+              <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Opening Inventory ({currencyConfig.symbol})<input type="number" value={openingInventory} onChange={(event) => setOpeningInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ marginTop: '8px' }} /></label>
                 <label style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Closing Inventory ({currencyConfig.symbol})<input type="number" value={closingInventory} onChange={(event) => setClosingInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ marginTop: '8px' }} /></label>
@@ -347,16 +340,16 @@ export default function FinancialReportsPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="glass-card" style={{ background: '#FFF', padding: '22px', position: 'sticky', top: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 850 }}>Report Preview</h2></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 600 }}>Report Preview</h2></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Revenue</span><span style={{ fontWeight: 700, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Expenses</span><span style={{ fontWeight: 700, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 800 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 800, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Revenue</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Expenses</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
             </div>
             <div style={{ marginTop: '24px', padding: '14px', background: 'var(--bg-mid)', borderRadius: '14px', display: 'flex', gap: '12px', marginBottom: '24px' }}><AlertCircle size={20} color="var(--primary)" style={{ flexShrink: 0 }} /><p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>Your PDF uses the same report template as the mobile application.</p></div>
             <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading} style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-              <span style={{ fontWeight: 700 }}>{exportLoading ? 'Generating PDF...' : 'Download Statement'}</span>
+              <span style={{ fontWeight: 600 }}>{exportLoading ? 'Generating PDF...' : 'Download Statement'}</span>
             </button>
           </div>
         </div>

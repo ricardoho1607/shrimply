@@ -31,6 +31,45 @@
   --jakarta: 'Plus Jakarta Sans', sans-serif;
 
   /* --- Dashboard Tokens (Unified) ------------------------- */
+  --text-caption: 11px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-body: 14px;
+  --text-body-lg: 15px;
+  --text-card: 16px;
+  --text-section: 18px;
+  --text-page: 24px;
+  --text-metric: 28px;
+  --text-display: 48px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --leading-caption: 16px;
+  --leading-sm: 18px;
+  --leading-body: 20px;
+  --leading-body-lg: 22px;
+  --leading-section: 26px;
+  --leading-page: 32px;
+  --leading-metric: 36px;
+  --leading-display: 52px;
+  --tracking-heading: -0.02em;
+  --tracking-label: 0.04em;
+  --tracking-caps: 0.06em;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --control-sm: 36px;
+  --control-md: 44px;
+  --control-lg: 48px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+  --radius-modal: 16px;
   --bg-dark: #f8fafc;
   --bg-mid: #f1f5f9;
   --bg-card: #ffffffb3;
@@ -320,15 +359,15 @@ nav.scrolled {
 .dashboard-action-row .btn-primary,
 .dashboard-action-row .btn-secondary,
 .dashboard-action-row .dashboard-action {
-  min-height: 44px;
+  min-height: var(--control-md);
   padding: 0 18px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  font-size: 0.86rem;
-  font-weight: 650;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
@@ -341,11 +380,11 @@ nav.scrolled {
 }
 
 .dashboard-toolbar-card {
-  padding: 12px;
+  padding: var(--space-3);
   display: flex;
   gap: 16px;
   align-items: center;
-  border-radius: 16px;
+  border-radius: var(--radius-card);
 }
 
 .dashboard-inline-toolbar {
@@ -385,8 +424,8 @@ nav.scrolled {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 750;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   letter-spacing: 0;
   line-height: 1;
   white-space: nowrap;
@@ -413,7 +452,7 @@ nav.scrolled {
 }
 
 .dashboard-kpi-card {
-  padding: 18px;
+  padding: var(--space-5);
   background: #ffffff;
   border: 1px solid var(--border);
 }
@@ -436,25 +475,25 @@ nav.scrolled {
 
 .dashboard-kpi-label {
   color: var(--text-muted);
-  font-size: 0.68rem;
-  font-weight: 800;
-  line-height: 1.2;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-caption);
   text-transform: uppercase;
 }
 
 .dashboard-kpi-value {
   margin-top: 6px;
   color: var(--text-primary);
-  font-size: 1.35rem;
-  font-weight: 900;
-  line-height: 1.1;
+  font-size: var(--text-metric);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-metric);
   letter-spacing: 0;
 }
 
 .dashboard-header-date {
-  min-height: 44px;
+  min-height: var(--control-md);
   padding: 0 14px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   background: #ffffff;
   border: 1px solid var(--border);
   box-shadow: 0 8px 24px rgba(15, 76, 117, 0.05);
@@ -462,13 +501,13 @@ nav.scrolled {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-size: 0.82rem;
-  font-weight: 750;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   white-space: nowrap;
 }
 
 .sidebar { background: #FFF; border-right: 1px solid var(--shell-border-strong); box-shadow: 20px 0 80px rgba(15, 76, 117, 0.04); }
-.sidebar-link { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); color: var(--text-muted); font-weight: 550; border-radius: var(--radius-md); }
+.sidebar-link { transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); color: var(--text-muted); font-weight: var(--weight-medium); border-radius: var(--radius-control); }
 .sidebar-link:hover { color: var(--primary); background: var(--bg-mid); transform: translateX(4px); }
 .sidebar-link.active { color: var(--primary); background: var(--primary-dim); }
 
@@ -499,8 +538,8 @@ nav.scrolled {
   border-radius: 999px;
   background: var(--primary-dim);
   color: var(--primary);
-  font-size: 0.78rem;
-  font-weight: 700;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
   line-height: 1;
 }
 
@@ -513,10 +552,10 @@ nav.scrolled {
 
 .dashboard-hero-title {
   font-family: var(--jakarta);
-  font-size: clamp(1.7rem, 2.8vw, 2.3rem);
-  font-weight: 650;
-  line-height: 1.05;
-  letter-spacing: 0;
+  font-size: var(--text-page);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-page);
+  letter-spacing: var(--tracking-heading);
   color: var(--text-primary);
 }
 
@@ -554,12 +593,12 @@ nav.scrolled {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 46px;
+  min-height: var(--control-md);
   padding: 0 20px;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   border: 1px solid transparent;
-  font-size: 0.9rem;
-  font-weight: 650;
+  font-size: var(--text-body);
+  font-weight: var(--weight-medium);
   letter-spacing: 0;
   line-height: 1;
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease, background 0.2s ease;
@@ -985,8 +1024,10 @@ nav.scrolled {
 .orson-title {
   margin: 2px 0 0;
   color: var(--text-primary);
-  font-size: 1.45rem;
-  letter-spacing: 0;
+  font-size: var(--text-section);
+  line-height: var(--leading-section);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-heading);
 }
 
 .orson-stats {
@@ -1007,8 +1048,8 @@ nav.scrolled {
 .orson-stat span {
   display: block;
   color: var(--text-faint);
-  font-size: 0.68rem;
-  font-weight: 800;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -1022,7 +1063,7 @@ nav.scrolled {
 }
 
 .orson-reset {
-  height: 44px;
+  height: var(--control-md);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1032,8 +1073,8 @@ nav.scrolled {
   border: 1px solid #f4c7c7;
   background: #fff;
   color: #cf3636;
-  font-size: 0.82rem;
-  font-weight: 800;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
@@ -1089,7 +1130,7 @@ nav.scrolled {
   background: #eaf5fb;
   color: var(--primary);
   font-size: 0.76rem;
-  font-weight: 900;
+  font-weight: var(--weight-semibold);
 }
 
 .orson-message-row.is-user .orson-avatar {
@@ -1140,7 +1181,7 @@ nav.scrolled {
 .orson-time {
   color: var(--text-faint);
   font-size: 0.68rem;
-  font-weight: 700;
+  font-weight: var(--weight-regular);
 }
 
 .orson-error {
@@ -1154,7 +1195,7 @@ nav.scrolled {
   background: #fff5f5;
   color: #cf3636;
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: var(--weight-medium);
 }
 
 .orson-composer {
@@ -1235,7 +1276,7 @@ nav.scrolled {
   gap: 8px;
   color: var(--text-primary);
   font-size: 0.92rem;
-  font-weight: 900;
+  font-weight: var(--weight-semibold);
 }
 
 .orson-panel h4 svg {
@@ -1259,7 +1300,7 @@ nav.scrolled {
   color: var(--text-muted);
   text-align: left;
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: var(--weight-medium);
   line-height: 1.35;
   cursor: pointer;
 }
@@ -1309,7 +1350,7 @@ nav.scrolled {
   min-width: 0;
   color: var(--text-primary);
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: var(--weight-semibold);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1320,7 +1361,7 @@ nav.scrolled {
   color: var(--text-faint);
   font-size: 0.7rem;
   font-style: normal;
-  font-weight: 800;
+  font-weight: var(--weight-regular);
   white-space: nowrap;
 }
 
@@ -1328,7 +1369,7 @@ nav.scrolled {
   margin-top: 4px;
   color: var(--text-faint);
   font-size: 0.7rem;
-  font-weight: 800;
+  font-weight: var(--weight-regular);
   text-align: center;
 }
 
