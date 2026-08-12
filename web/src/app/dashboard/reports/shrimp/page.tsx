@@ -29,13 +29,11 @@ import {
   toFiniteNumber,
 } from '../../../../../../shared/pondCalculations';
 import {
-  localizePdfHtml,
-  type PdfLanguage,
-} from '../../../../../../shared/pdfReportI18n';
-import {
-  buildSamplingGrowthMovementRows,
-  renderSamplingGrowthMovementChartSvg,
-} from '../../../../../../shared/samplingGrowthMovementChart';
+  generateSamplingReportHTML,
+  type PondData as SamplingReportPondData,
+  type SamplingReportData,
+} from '@/lib/generated/mobileSamplingReport';
+import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -64,6 +62,7 @@ interface Pond {
   initialWeight?: number;
   density?: number;
   samplings: Sampling[];
+  mortalityRecords?: Array<{ date: string; mortality?: number; quantity?: number }>;
   cycleId?: string;
   cycleStatus?: 'active' | 'ended';
   cycleStartMode?: 'new' | 'midcycle';
@@ -90,6 +89,7 @@ interface FarmCycle {
 interface DashboardUser {
   uid: string;
   name?: string;
+  email?: string;
   companyId?: string;
 }
 
@@ -113,24 +113,6 @@ type GrowthSeries = {
 };
 
 type PondStats = ReturnType<typeof calculatePondStats>;
-
-interface ShrimpReportExportData {
-  farmName?: string;
-  technician?: string;
-  companyName?: string;
-  ponds: Pond[];
-  chartSvg: string;
-}
-
-type Html2PdfWorker = {
-  from: (element: HTMLElement) => {
-    set: (options: unknown) => {
-      save: () => Promise<void>;
-    };
-  };
-};
-
-type Html2PdfFactory = () => Html2PdfWorker;
 
 const getValidDateTime = (date?: string): number | null => {
   if (!date) return null;
@@ -326,86 +308,6 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
   );
 };
 
-/* --- PDF Generation HTML Template -------------------------- */
-const generateShrimpReportHTML = (data: ShrimpReportExportData, language: PdfLanguage): string => {
-  const { farmName, technician, companyName, ponds, chartSvg } = data;
-  const global = getGlobalAverages(ponds);
-  const stats = global.stats || [];
-  const midcyclePonds = ponds.filter((pond: Pond) => pond.baselineDate || pond.cycleStartMode === 'midcycle');
-
-  const pondRows = stats.map((s: PondStats, index: number) => `
-    <tr style="${index % 2 === 0 ? 'background-color: #F8FAFB;' : ''}">
-      <td style="padding: 12px 4px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.pondName}</td>
-      <td style="padding: 12px 4px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.doc}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.prevMbw > 0 ? s.prevMbw.toFixed(2) : '-'}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB; font-weight: 600;">${s.mbw.toFixed(2)}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.adg.toFixed(2)}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.size}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB; color: ${s.sr >= 85 ? '#2D7A4F' : '#C0392B'}; font-weight: 600;">${s.sr.toFixed(1)}%</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.biomass.toFixed(1)}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.totalFeed.toFixed(1)}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB; font-weight: 600;">${s.fcr.toFixed(2)}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.mortality}</td>
-      <td style="padding: 12px 8px; text-align: center; border-bottom: 1px solid #E5E7EB;">${s.mortalityPct.toFixed(2)}%</td>
-    </tr>
-  `).join('');
-
-  const labRows = ponds
-    .filter((pond: Pond) => pond.latestLabStatus)
-    .map((pond: Pond) => {
-      const lab = pond.latestLabStatus;
-      const status = lab?.status === 'info' ? 'good' : lab?.status || 'good';
-      const color = status === 'critical' ? '#C0392B' : status === 'warning' || status === 'watch' ? '#B45309' : '#2D7A4F';
-      const risks = (lab?.keyRisks || []).slice(0, 2).join('; ') || lab?.mainIssue || 'No warning-level issue detected';
-      const recommendation = (lab?.recommendations || [])[0] || 'Continue routine monitoring and compare against the next lab result.';
-      return `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; font-weight: 700;">${pond.pondName}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${lab?.sampleDate || '-'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB; color: ${color}; font-weight: 800;">${status.toUpperCase()}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${lab?.mainIssue || 'Lab result reviewed'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${risks}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #E5E7EB;">${recommendation}</td>
-        </tr>
-      `;
-    }).join('');
-
-  return localizePdfHtml(`
-    <!DOCTYPE html>
-    <html>
-    <head><meta charset="utf-8"></head>
-    <body style="font-family: sans-serif; padding: 15px; font-size: 9px; color: #1B262C;">
-      <h1 style="color: #0F4C75;">Shrimp Production Audit Report</h1>
-      <div>Farm: ${farmName} | Company: ${companyName} | Technician: ${technician}</div>
-      <hr style="margin: 10px 0; border: 0.5px solid #E5E7EB;"/>
-      <table style="width: 100%; border-collapse: collapse;">
-        <thead style="background: #0F4C75; color: white;">
-          <tr><th>Pond</th><th>DOC</th><th>Prev ABW</th><th>ABW</th><th>ADG</th><th>Size</th><th>SR%</th><th>Bio</th><th>Feed</th><th>FCR</th><th>Mort</th><th>Mort%</th></tr>
-        </thead>
-        <tbody>${pondRows}</tbody>
-      </table>
-      ${midcyclePonds.length > 0 ? `
-        <div style="margin-top: 14px; padding: 12px; background: #F0F8FF; border: 1px solid #BBE1FA; border-radius: 8px; color: #0F4C75;">
-          <strong>Data Quality Note:</strong> ${midcyclePonds.map((pond: Pond) => `${pond.pondName}${pond.baselineDate ? ` baseline ${pond.baselineDate}` : ''}`).join(', ')} ${midcyclePonds.length === 1 ? 'was' : 'were'} onboarded mid-cycle. Pre-onboarding feed, survival, and biomass values are estimates, not exact historical logs.
-        </div>
-      ` : ''}
-      <div style="margin-top: 16px; padding: 12px; background: #F8FAFC; border: 1px solid #BBE1FA; border-radius: 8px;">
-        <h2 style="font-size: 14px; margin: 0 0 10px; color: #0F4C75;">Latest Lab Analysis</h2>
-        ${labRows ? `
-          <table style="width: 100%; border-collapse: collapse;">
-            <thead style="background: #E0F2FE; color: #0F4C75;">
-              <tr><th>Pond</th><th>Date</th><th>Status</th><th>Main Issue</th><th>Risks</th><th>Recommended Action</th></tr>
-            </thead>
-            <tbody>${labRows}</tbody>
-          </table>
-        ` : '<p style="margin: 0; color: #475569;">No confirmed lab analysis was attached to the selected ponds at export time.</p>'}
-      </div>
-      <div style="margin-top: 28px; width: 100%; page-break-inside: avoid;">${chartSvg}</div>
-    </body>
-    </html>
-  `, language);
-};
-
 export default function ShrimpReportsPage() {
   const { currentLanguage } = useLanguage();
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -421,7 +323,7 @@ export default function ShrimpReportsPage() {
         onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           if (uDoc.exists()) {
             const userData = uDoc.data();
-            setUser({ ...userData, uid: firebaseUser.uid });
+            setUser({ ...userData, uid: firebaseUser.uid, email: userData.email || firebaseUser.email || undefined });
             if (userData.companyId) {
               onSnapshot(doc(db, 'companies', userData.companyId), (cDoc) => {
                 if (cDoc.exists()) setCompany({ id: cDoc.id, ...cDoc.data() });
@@ -463,33 +365,73 @@ export default function ShrimpReportsPage() {
   const global = useMemo(() => getGlobalAverages(activePonds, company?.timeZone), [activePonds, company?.timeZone]);
   const growthSeries = useMemo(() => buildGrowthSeries(activePonds), [activePonds]);
 
-  const growthChartSvg = useMemo(() => {
-    const rows = buildSamplingGrowthMovementRows(growthSeries.map((series) => ({
-      label: series.label,
-      samples: series.data.map((point) => ({
-        doc: point.x,
-        mbw: point.y,
-      })),
-    })));
-
-    return renderSamplingGrowthMovementChartSvg(rows, {
-      language: currentLanguage,
-      width: 1000,
-      height: 350,
-    });
-  }, [currentLanguage, growthSeries]);
-
   const handleGenerateReport = async () => {
     setExportLoading(true);
     try {
-      const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
-      const html = generateShrimpReportHTML({ farmName: activePonds[0]?.pondName, technician: user?.name, companyName: company?.companyName, ponds: activePonds, chartSvg: growthChartSvg }, currentLanguage);
-      const element = document.createElement('div');
-      element.innerHTML = html;
-      document.body.appendChild(element);
-      await html2pdf().from(element).set({ margin: 10, filename: 'Sampling_Report.pdf', jsPDF: { orientation: 'landscape' } }).save();
-      document.body.removeChild(element);
-    } catch (err) { console.error(err); } finally { setExportLoading(false); }
+      const pondsForReport: SamplingReportPondData[] = activePonds.map((pond) => {
+        const operationalSamplings = (pond.samplings || [])
+          .filter((sampling) => !isBaselineSampling(sampling))
+          .sort((first, second) => new Date(first.date).getTime() - new Date(second.date).getTime());
+        const allSamplings = [...(pond.samplings || [])]
+          .sort((first, second) => new Date(first.date).getTime() - new Date(second.date).getTime());
+        const growthSamplings = operationalSamplings.filter((sampling) => getSamplingMbw(sampling) > 0);
+        const pondMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone);
+        const initialPopulation = toFiniteNumber(pond.initialPopulation || pond.initialStock);
+
+        const samplingHistory = growthSamplings.map((sampling, index) => {
+          const samplingTime = new Date(sampling.date).getTime();
+          const metricsToDate = calculatePondMetricsWithHarvest({
+            ...pond,
+            samplings: allSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime),
+            mortalityRecords: (pond.mortalityRecords || []).filter((record) => new Date(record.date).getTime() <= samplingTime),
+          }, company?.timeZone);
+          const mbw = getSamplingMbw(sampling);
+          return {
+            samplingNumber: index + 1,
+            samplingDate: sampling.date,
+            doc: Math.floor((samplingTime - new Date(pond.docStart).getTime()) / DAY_MS),
+            mbw,
+            abw: mbw,
+            adg: metricsToDate.adg,
+            size: mbw > 0 ? 1000 / mbw : 0,
+            sr: metricsToDate.adjustedSR,
+            biomass: metricsToDate.currentBiomass,
+            feedCumulative: metricsToDate.totalFeedConsumed,
+            fcr: index === growthSamplings.length - 1 ? pondMetrics.adjustedFCR : metricsToDate.adjustedFCR,
+            mortality: toFiniteNumber(sampling.mortality),
+            mortalityPercentage: initialPopulation > 0 ? (metricsToDate.totalMortality / initialPopulation) * 100 : 0,
+          };
+        });
+
+        return {
+          pondNumber: pond.pondName,
+          stockingDate: pond.docStart,
+          area: toFiniteNumber(pond.pondArea || pond.area),
+          initialStock: initialPopulation,
+          density: toFiniteNumber(pond.density),
+          latestLabStatus: pond.latestLabStatus,
+          isMidcycleBaseline: pond.cycleStartMode === 'midcycle',
+          baselineDate: pond.baselineDate,
+          samplingHistory,
+        };
+      });
+      const reportData: SamplingReportData = {
+        farmName: company?.companyName || 'My Farm',
+        block: 'Main Block',
+        technician: user?.name || user?.email?.split('@')[0] || 'Unknown',
+        reportDate: new Date().toISOString(),
+        reportPeriod: `Culture Cycle ${new Date().getFullYear()}`,
+        companyName: company?.companyName || 'My Company',
+        ponds: pondsForReport,
+      };
+      const brandAssets = await loadMobilePdfBrandAssets('landscape');
+      const html = generateSamplingReportHTML(reportData, brandAssets, currentLanguage);
+      await downloadMobilePdf({ html, filename: 'Sampling_Report.pdf', orientation: 'landscape' });
+    } catch (error) {
+      console.error('Sampling report export failed:', error);
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;

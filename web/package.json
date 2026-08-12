@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node ../scripts/sync-web-pdf-generators.cjs",
     "dev": "next dev",
-    "prebuild": "node scripts/validate-public-env.cjs",
+    "prebuild": "node ../scripts/sync-web-pdf-generators.cjs && node scripts/validate-public-env.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",

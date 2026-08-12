@@ -10,19 +10,14 @@ import {
   FlaskConical,
   ArrowDownCircle,
   ArrowUpCircle,
-  Download,
   AlertCircle,
-  MoreHorizontal,
   History,
   X,
   Loader2,
-  ChevronDown,
-  ChevronUp,
   Wallet,
   Calendar,
   Waves,
-  LayoutDashboard,
-  ShoppingBag
+  LayoutDashboard
 } from 'lucide-react';
 import {
   collection,
@@ -89,6 +84,9 @@ const UNITS = ['kg', 'L', 'pack', 'sack'];
 const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
+const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, {
+  maximumFractionDigits: 2,
+}).format(Number.isFinite(value) ? value : 0);
 
 export default function InventoryFeedsPage() {
   const { t } = useLanguage();
@@ -147,16 +145,9 @@ export default function InventoryFeedsPage() {
     const totalFeedStock = feeds.reduce((s, f) => s + (f.totalStock || 0), 0);
     const totalAdditiveValue = additives.reduce((s, a) => s + (a.totalCost || 0), 0);
     const feedStockValue = feeds.reduce((s, f) => s + (f.totalCost || 0), 0);
-
-    // Calculate total feed cost (money spent on feed consumed)
-    // Synchronized with mobile logic from app/inventory/feedAdditives.tsx
-    let totalFeedCost = 0;
-    feeds.forEach(f => {
-      (f.usageHistory || []).forEach(u => {
-        const avgPrice = f.totalStock > 0 ? (f.totalCost || 0) / (f.totalStock + u.quantity) : 0;
-        totalFeedCost += u.quantity * avgPrice;
-      });
-    });
+    const totalFeedUsed = feeds.reduce((sum, feed) => (
+      sum + (feed.usageHistory || []).reduce((usageSum, usage) => usageSum + (Number(usage.quantity) || 0), 0)
+    ), 0);
 
     // Low stock count
     const lowStockItems = [
@@ -168,11 +159,11 @@ export default function InventoryFeedsPage() {
       totalFeedStock,
       totalAdditiveValue,
       feedStockValue,
-      totalFeedCost,
+      totalFeedUsed,
       lowStockCount: lowStockItems.length,
       lowStockItems
     };
-  }, [feeds, additives, ponds]);
+  }, [feeds, additives]);
 
   const recentTransactions = useMemo(() => {
     const txs: any[] = [];
@@ -219,10 +210,11 @@ export default function InventoryFeedsPage() {
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
     if (!canEditInventory && type !== 'history') return;
+    const effectiveItemType = iType || itemType;
     setModalType(type);
+    setItemType(effectiveItemType);
     if (item) {
       setSelectedItem(item);
-      setItemType(iType || 'feed');
       setFormData({
         ...formData,
         itemName: item.itemName,
@@ -241,7 +233,7 @@ export default function InventoryFeedsPage() {
       setFormData({
         itemName: '',
         brand: '',
-        category: itemType === 'feed' ? 'Grower' : 'Water Conditioner',
+        category: effectiveItemType === 'feed' ? 'Grower' : 'Water Conditioner',
         quantity: '',
         unitPrice: '',
         pondId: '',
@@ -399,6 +391,13 @@ export default function InventoryFeedsPage() {
     }
   };
 
+  const dashboardMetrics = [
+    { label: t.inventory.feedStock, value: `${formatQuantity(metrics.totalFeedStock)} kg`, icon: Box },
+    { label: 'Feed Used', value: `${formatQuantity(metrics.totalFeedUsed)} kg`, icon: ArrowUpCircle },
+    { label: t.inventory.feedStockValue, value: formatCurrency(metrics.feedStockValue), icon: Wallet },
+    { label: t.inventory.additiveValue, value: formatCurrency(metrics.totalAdditiveValue), icon: FlaskConical },
+  ];
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '80vh' }}>
@@ -439,7 +438,7 @@ export default function InventoryFeedsPage() {
             </Link>
             <button
               className="dashboard-action dashboard-action-secondary"
-              onClick={() => { setItemType('feed'); handleOpenModal('add'); }}
+              onClick={() => handleOpenModal('add', undefined, 'feed')}
               style={{
                 background: 'white',
                 border: '1px solid var(--border)',
@@ -456,10 +455,12 @@ export default function InventoryFeedsPage() {
               {t.inventory.addFeed}
             </button>
             <button
-              className="dashboard-action dashboard-action-primary"
-              onClick={() => { setItemType('additive'); handleOpenModal('add'); }}
+              className="dashboard-action dashboard-action-secondary"
+              onClick={() => handleOpenModal('add', undefined, 'additive')}
               style={{
-                boxShadow: 'var(--shadow-glow)',
+                background: 'white',
+                border: '1px solid var(--border)',
+                boxShadow: 'var(--shadow-card)',
                 minHeight: '44px',
                 fontSize: '13px',
                 fontWeight: 850,
@@ -482,68 +483,17 @@ export default function InventoryFeedsPage() {
 
             {/* High-Impact Metrics Grid */}
             <div className="dashboard-kpi-grid">
-              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
-                <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <Box size={72} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                    <Box size={20} />
+              {dashboardMetrics.map((metric, index) => (
+                <div key={metric.label} className="glass-card animate-fade-up" style={{ padding: '20px', animationDelay: `${index * 0.05}s` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
+                      <metric.icon size={20} />
+                    </div>
+                    <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{metric.label}</span>
                   </div>
-                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedStock}</span>
+                  <div style={{ fontSize: '26px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{metric.value}</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px' }}>
-                  <span style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
-                    {metrics.totalFeedStock.toLocaleString()}
-                  </span>
-                  <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-muted)' }}>kg</span>
-                </div>
-              </div>
-
-              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.1s' }}>
-                <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <FlaskConical size={72} color="#f39c12" />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(243, 156, 18, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f39c12', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
-                    <FlaskConical size={20} />
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.additiveValue}</span>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
-                  {formatCurrency(metrics.totalAdditiveValue)}
-                </div>
-              </div>
-
-              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.2s' }}>
-                <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <Wallet size={72} color="#27ae60" />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60', border: '1px solid rgba(39, 174, 96, 0.2)' }}>
-                    <Wallet size={20} />
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedStockValue}</span>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
-                  {formatCurrency(metrics.feedStockValue)}
-                </div>
-              </div>
-
-              <div className="glass-card animate-fade-up" style={{ padding: '20px', position: 'relative', overflow: 'hidden', animationDelay: '0.3s' }}>
-                <div style={{ position: 'absolute', top: '-10px', right: '-10px', opacity: 0.05 }}>
-                  <ShoppingBag size={72} color="#e74c3c" />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
-                    <ShoppingBag size={20} />
-                  </div>
-                  <span style={{ fontSize: '11px', fontWeight: 850, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.feedCost}</span>
-                </div>
-                <div style={{ fontSize: '28px', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '0' }}>
-                  {formatCurrency(metrics.totalFeedCost)}
-                </div>
-              </div>
+              ))}
             </div>
 
             {/* Split View: Alerts and Transactions */}
@@ -605,7 +555,7 @@ export default function InventoryFeedsPage() {
                           <div style={{ fontWeight: 900, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
                           <div style={{ fontSize: '13px', fontWeight: 700, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Box size={14} />
-                            Critical: {item.totalStock.toLocaleString()} {item.unit} remaining
+                            Critical: {formatQuantity(item.totalStock)} {item.unit} remaining
                           </div>
                         </div>
                       </div>
@@ -669,25 +619,24 @@ export default function InventoryFeedsPage() {
                     }}>
                       <div style={{
                         width: '42px', height: '42px', borderRadius: '12px',
-                        background: tx.type === 'Stock In' ? 'rgba(39, 174, 96, 0.08)' : 'rgba(231, 76, 60, 0.08)',
+                        background: 'var(--primary-dim)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c',
-                        border: '1px solid currentColor',
-                        opacity: 0.9
+                        color: 'var(--primary)',
+                        border: '1px solid var(--border)'
                       }}>
                         {tx.type === 'Stock In' ? <ArrowDownCircle size={20} /> : <ArrowUpCircle size={20} />}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 900, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 700, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span style={{ color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c' }}>{tx.type}</span>
+                          <span>{tx.type}</span>
                           <span style={{ opacity: 0.3 }}>•</span>
                           <span>{tx.date}</span>
                         </div>
                       </div>
                       <div style={{ textAlign: 'right' }}>
-                        <div style={{ fontWeight: 900, fontSize: '18px', color: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c', letterSpacing: '0' }}>
-                          {tx.type === 'Stock In' ? '+' : '-'}{tx.quantity.toLocaleString()}
+                        <div style={{ fontWeight: 900, fontSize: '18px', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
+                          {tx.type === 'Stock In' ? '+' : '-'}{formatQuantity(tx.quantity)}
                         </div>
                         <div style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{tx.unit}</div>
                       </div>
@@ -765,7 +714,7 @@ export default function InventoryFeedsPage() {
                 {canEditInventory && (
                   <button
                     className="btn-primary"
-                    onClick={() => handleOpenModal('add')}
+                    onClick={() => handleOpenModal('add', undefined, activeTab)}
                     style={{ padding: '18px 40px', borderRadius: '20px', fontWeight: 900, fontSize: '16px', boxShadow: 'var(--shadow-glow)' }}
                   >
                     <Plus size={22} />
@@ -777,7 +726,7 @@ export default function InventoryFeedsPage() {
             <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
                 {filteredItems.map((item, idx) => {
                   const isLow = (item.reorderLevel || 0) > 0 && item.totalStock <= (item.reorderLevel || 0);
-                  const lastPrice = item.stockInHistory?.[item.stockInHistory.length - 1]?.price || 0;
+                  const averagePrice = item.totalStock > 0 ? item.totalCost / item.totalStock : 0;
                   const totalIn = item.stockInHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
                   const totalOut = item.usageHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
 
@@ -794,7 +743,7 @@ export default function InventoryFeedsPage() {
                       transform: 'translateZ(0)',
                       transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
-                      <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: isLow ? 'rgba(231, 76, 60, 0.03)' : 'linear-gradient(to bottom, var(--bg-mid), white)' }}>
+                      <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--bg-mid)' }}>
                         <div style={{ display: 'flex', gap: '14px' }}>
                           <div style={{
                             width: '48px',
@@ -804,7 +753,7 @@ export default function InventoryFeedsPage() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            color: isLow ? '#e74c3c' : (activeTab === 'feed' ? 'var(--primary)' : '#f39c12'),
+                            color: isLow ? '#e74c3c' : 'var(--primary)',
                             border: '1px solid var(--border)',
                             boxShadow: '0 8px 20px rgba(0,0,0,0.06)'
                           }}>
@@ -851,7 +800,7 @@ export default function InventoryFeedsPage() {
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.stock}</span>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
                             <span style={{ fontSize: '26px', fontWeight: 900, color: isLow ? '#e74c3c' : 'var(--text-primary)', letterSpacing: '0' }}>
-                              {item.totalStock.toLocaleString()}
+                              {formatQuantity(item.totalStock)}
                             </span>
                             <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-muted)' }}>{item.unit}</span>
                           </div>
@@ -863,28 +812,28 @@ export default function InventoryFeedsPage() {
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
-                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)' }}>{formatCurrency(lastPrice)}</span>
+                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(averagePrice)}</span>
                           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>per {item.unit}</span>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.value}</span>
-                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)' }}>{formatCurrency(item.totalStock * lastPrice)}</span>
+                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.totalCost || 0)}</span>
                           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Value</span>
                         </div>
                       </div>
 
                       <div style={{ padding: '14px 20px', display: 'flex', gap: '18px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#27ae60', fontWeight: 800, fontSize: '13px' }}>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 800, fontSize: '13px' }}>
+                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ArrowDownCircle size={14} />
                           </div>
-                          {t.inventory.in}: {totalIn.toLocaleString()} {item.unit}
+                          {t.inventory.in}: {formatQuantity(totalIn)} {item.unit}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#e74c3c', fontWeight: 800, fontSize: '13px' }}>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 800, fontSize: '13px' }}>
+                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <ArrowUpCircle size={14} />
                           </div>
-                          {t.inventory.out}: {totalOut.toLocaleString()} {item.unit}
+                          {t.inventory.out}: {formatQuantity(totalOut)} {item.unit}
                         </div>
                       </div>
 
@@ -892,7 +841,7 @@ export default function InventoryFeedsPage() {
                         <div style={{ padding: '18px 20px', display: 'flex', gap: '12px', background: 'white', borderTop: '1px solid var(--border)' }}>
                           <button
                             className="btn-primary"
-                            style={{ flex: 1.6, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', boxShadow: '0 4px 15px var(--primary-dim)' }}
+                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 900, fontSize: '13px', boxShadow: 'none' }}
                             onClick={() => handleOpenModal('stockIn', item, activeTab)}
                           >
                             <Plus size={18} /> {t.inventory.stockIn}
@@ -1000,7 +949,7 @@ export default function InventoryFeedsPage() {
                                 <span style={{ fontWeight: 900, fontSize: '16px' }}>{formatDate(h.date)}</span>
                               </div>
                               <div style={{ fontWeight: 950, fontSize: '18px', color: '#27ae60' }}>
-                                +{h.quantity.toLocaleString()} {selectedItem.unit}
+                                +{formatQuantity(h.quantity)} {selectedItem.unit}
                               </div>
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 700 }}>
@@ -1046,7 +995,7 @@ export default function InventoryFeedsPage() {
                                 <span style={{ fontWeight: 900, fontSize: '16px' }}>{formatDate(h.date)}</span>
                               </div>
                               <div style={{ fontWeight: 950, fontSize: '18px', color: '#e74c3c' }}>
-                                -{h.quantity.toLocaleString()} {selectedItem.unit}
+                                -{formatQuantity(h.quantity)} {selectedItem.unit}
                               </div>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 800 }}>

@@ -97,6 +97,7 @@ export interface WebCycleReport {
     actualFcr: number;
     hasFinalHarvest: boolean;
     closureReason?: CycleReportPondSource['cycleEndReason'];
+    isNonHarvestClosure: boolean;
   }>;
   totals: {
     pondCount: number;
@@ -263,6 +264,7 @@ export function buildWebCycleReport({
       actualFcr: biomassGain > 0 ? metrics.totalFeedConsumed / biomassGain : 0,
       hasFinalHarvest: harvest.hasFinalHarvest,
       closureReason: pond.cycleEndReason,
+      isNonHarvestClosure: ['disease', 'reset', 'other'].includes(pond.cycleEndReason || ''),
     };
   });
 

@@ -31,6 +31,8 @@ import {
   type CycleReportInventoryItem,
   type CycleReportPondSource,
 } from '@/lib/cycleReport';
+import { generateCycleReportHtml } from '@/lib/generated/mobileCycleReport';
+import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import styles from './CycleReports.module.css';
 
 type TabKey = 'overview' | 'ponds' | 'costs';
@@ -51,7 +53,7 @@ function CycleReportsContent() {
   const params = useSearchParams();
   const selectedCycleId = params.get('cycleId') || '';
   const { user, company } = useAuth();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<CycleReportCycle>('desc');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<CycleReportPondSource>('desc');
@@ -65,6 +67,7 @@ function CycleReportsContent() {
   const [assets, setAssets] = useState<CycleReportAsset[]>([]);
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
+  const [exportLoading, setExportLoading] = useState(false);
 
   const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
 
@@ -119,6 +122,29 @@ function CycleReportsContent() {
     selectedCycle,
   ]);
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;
+
+  const handleExport = async () => {
+    if (!report) return;
+    setExportLoading(true);
+    try {
+      const brandAssets = await loadMobilePdfBrandAssets('portrait');
+      const html = generateCycleReportHtml({
+        report,
+        companyName: company?.companyName || company?.id || 'Company',
+        formatCurrency,
+        language: currentLanguage,
+      }, brandAssets.backgroundBase64, brandAssets.logoBase64);
+      await downloadMobilePdf({
+        html,
+        filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_')}.pdf`,
+        orientation: 'portrait',
+      });
+    } catch (error) {
+      console.error('Cycle report export failed:', error);
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   if (!hasFinanceAccess) {
     return (
@@ -200,8 +226,8 @@ function CycleReportsContent() {
         </div>
         <div className={styles.headerActions}>
           <Link href="/dashboard/reports/cycles" className={styles.backButton}>{t.cycleReport.backToArchive}</Link>
-          <button type="button" className={styles.actionButton} onClick={() => window.print()}>
-            <FileDown size={17} /> {t.cycleReport.exportPdf}
+          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={exportLoading}>
+            {exportLoading ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {t.cycleReport.exportPdf}
           </button>
         </div>
       </header>
