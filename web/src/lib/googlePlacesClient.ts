@@ -16,141 +16,166 @@ export interface SelectedLocation {
   placeId: string;
 }
 
-interface GooglePrediction {
-  place_id: string;
-  description: string;
-  structured_formatting?: {
-    main_text?: string;
-    secondary_text?: string;
-  };
+interface GoogleFormattableText {
+  text: string;
 }
 
-interface GooglePlaceResult {
-  place_id?: string;
-  formatted_address?: string;
-  name?: string;
-  geometry?: {
-    location?: { lat: () => number; lng: () => number };
-  };
-  address_components?: Array<{
-    long_name: string;
-    types: string[];
-  }>;
+interface GoogleAddressComponent {
+  longText?: string;
+  types: string[];
+}
+
+interface GooglePlace {
+  id?: string;
+  displayName?: string;
+  formattedAddress?: string;
+  location?: { lat: () => number; lng: () => number };
+  addressComponents?: GoogleAddressComponent[];
+  fetchFields: (request: { fields: string[] }) => Promise<unknown>;
+}
+
+interface GooglePlacePrediction {
+  placeId: string;
+  text: GoogleFormattableText;
+  mainText?: GoogleFormattableText;
+  secondaryText?: GoogleFormattableText;
+  toPlace: () => GooglePlace;
 }
 
 interface GooglePlacesApi {
-  AutocompleteService: new () => {
-    getPlacePredictions: (
-      request: { input: string; types: string[] },
-      callback: (predictions: GooglePrediction[] | null, status: string) => void,
-    ) => void;
+  AutocompleteSessionToken: new () => object;
+  AutocompleteSuggestion: {
+    fetchAutocompleteSuggestions: (request: {
+      input: string;
+      includedPrimaryTypes: string[];
+      sessionToken: object;
+    }) => Promise<{ suggestions: Array<{ placePrediction?: GooglePlacePrediction }> }>;
   };
-  PlacesService: new (element: HTMLDivElement) => {
-    getDetails: (
-      request: { placeId: string; fields: string[] },
-      callback: (place: GooglePlaceResult | null, status: string) => void,
-    ) => void;
-  };
-  PlacesServiceStatus: { OK: string; ZERO_RESULTS: string };
+  Place: new (options: { id: string }) => GooglePlace;
+}
+
+interface GoogleMapsApi {
+  importLibrary: (library: 'places') => Promise<GooglePlacesApi>;
 }
 
 declare global {
   interface Window {
-    google?: { maps?: { places?: GooglePlacesApi } };
+    google?: { maps?: GoogleMapsApi };
+    __shrimplyGoogleMapsReady?: () => void;
   }
 }
 
+let mapsPromise: Promise<GoogleMapsApi> | null = null;
 let placesPromise: Promise<GooglePlacesApi> | null = null;
+let sessionToken: object | null = null;
+const placePredictions = new Map<string, GooglePlacePrediction>();
 
-function loadPlacesApi(): Promise<GooglePlacesApi> {
-  if (window.google?.maps?.places) return Promise.resolve(window.google.maps.places);
-  if (placesPromise) return placesPromise;
+function loadGoogleMapsApi(): Promise<GoogleMapsApi> {
+  if (typeof window === 'undefined') return Promise.reject(new Error('Google Places requires a browser'));
+  if (window.google?.maps?.importLibrary) return Promise.resolve(window.google.maps);
+  if (mapsPromise) return mapsPromise;
 
-  placesPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<GoogleMapsApi>((resolve, reject) => {
     const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
     if (!apiKey) {
       reject(new Error('Google Places is not configured'));
       return;
     }
 
-    const existing = document.querySelector<HTMLScriptElement>('script[data-shrimply-google-places]');
-    const handleLoad = () => {
-      if (window.google?.maps?.places) resolve(window.google.maps.places);
-      else reject(new Error('Google Places failed to load'));
+    const fail = () => {
+      delete window.__shrimplyGoogleMapsReady;
+      reject(new Error('Google Places failed to load'));
     };
 
-    if (existing) {
-      existing.addEventListener('load', handleLoad, { once: true });
-      existing.addEventListener('error', () => reject(new Error('Google Places failed to load')), { once: true });
-      return;
-    }
+    window.__shrimplyGoogleMapsReady = () => {
+      const maps = window.google?.maps;
+      delete window.__shrimplyGoogleMapsReady;
+      if (maps?.importLibrary) resolve(maps);
+      else fail();
+    };
+
+    document.querySelector<HTMLScriptElement>('script[data-shrimply-google-places]')?.remove();
 
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&libraries=places&loading=async`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async&callback=__shrimplyGoogleMapsReady&v=weekly`;
     script.async = true;
     script.defer = true;
     script.dataset.shrimplyGooglePlaces = 'true';
-    script.addEventListener('load', handleLoad, { once: true });
-    script.addEventListener('error', () => reject(new Error('Google Places failed to load')), { once: true });
+    script.addEventListener('error', fail, { once: true });
     document.head.appendChild(script);
   });
 
+  mapsPromise = pending.catch(error => {
+    mapsPromise = null;
+    throw error;
+  });
+  return mapsPromise;
+}
+
+function loadPlacesApi(): Promise<GooglePlacesApi> {
+  if (placesPromise) return placesPromise;
+
+  const pending = loadGoogleMapsApi().then(maps => maps.importLibrary('places'));
+  placesPromise = pending.catch(error => {
+    placesPromise = null;
+    throw error;
+  });
   return placesPromise;
 }
 
 export async function searchCityLocations(input: string): Promise<PlaceSuggestion[]> {
   const places = await loadPlacesApi();
-  const service = new places.AutocompleteService();
+  sessionToken ||= new places.AutocompleteSessionToken();
 
-  return new Promise((resolve, reject) => {
-    service.getPlacePredictions({ input, types: ['(cities)'] }, (predictions, status) => {
-      if (status === places.PlacesServiceStatus.ZERO_RESULTS) {
-        resolve([]);
-        return;
-      }
-      if (status !== places.PlacesServiceStatus.OK || !predictions) {
-        reject(new Error('Location search failed'));
-        return;
-      }
-      resolve(predictions.slice(0, 6).map(prediction => ({
-        placeId: prediction.place_id,
-        description: prediction.description,
-        mainText: prediction.structured_formatting?.main_text || prediction.description,
-        secondaryText: prediction.structured_formatting?.secondary_text || '',
-      })));
-    });
+  const { suggestions } = await places.AutocompleteSuggestion.fetchAutocompleteSuggestions({
+    input,
+    includedPrimaryTypes: ['(cities)'],
+    sessionToken,
   });
+
+  const predictions = suggestions
+    .map(suggestion => suggestion.placePrediction)
+    .filter((prediction): prediction is GooglePlacePrediction => Boolean(prediction))
+    .slice(0, 6);
+
+  placePredictions.clear();
+  predictions.forEach(prediction => placePredictions.set(prediction.placeId, prediction));
+
+  return predictions.map(prediction => ({
+    placeId: prediction.placeId,
+    description: prediction.text.text,
+    mainText: prediction.mainText?.text || prediction.text.text,
+    secondaryText: prediction.secondaryText?.text || '',
+  }));
 }
 
 export async function getLocationDetails(placeId: string): Promise<SelectedLocation> {
   const places = await loadPlacesApi();
-  const service = new places.PlacesService(document.createElement('div'));
+  const place = placePredictions.get(placeId)?.toPlace() || new places.Place({ id: placeId });
 
-  return new Promise((resolve, reject) => {
-    service.getDetails(
-      { placeId, fields: ['place_id', 'formatted_address', 'name', 'geometry', 'address_components'] },
-      (place, status) => {
-        const coordinates = place?.geometry?.location;
-        if (status !== places.PlacesServiceStatus.OK || !place || !coordinates) {
-          reject(new Error('Location details failed'));
-          return;
-        }
-
-        const components = place.address_components || [];
-        const component = (...types: string[]) =>
-          components.find(item => item.types.some(type => types.includes(type)))?.long_name || '';
-
-        resolve({
-          address: place.formatted_address || place.name || '',
-          latitude: coordinates.lat(),
-          longitude: coordinates.lng(),
-          city: component('locality', 'administrative_area_level_2', 'sublocality'),
-          state: component('administrative_area_level_1'),
-          country: component('country'),
-          postalCode: component('postal_code') || undefined,
-          placeId: place.place_id || placeId,
-        });
-      },
-    );
+  await place.fetchFields({
+    fields: ['id', 'displayName', 'formattedAddress', 'location', 'addressComponents'],
   });
+
+  const coordinates = place.location;
+  if (!coordinates) throw new Error('Location details failed');
+
+  const components = place.addressComponents || [];
+  const component = (...types: string[]) =>
+    components.find(item => item.types.some(type => types.includes(type)))?.longText || '';
+
+  const selectedLocation = {
+    address: place.formattedAddress || place.displayName || '',
+    latitude: coordinates.lat(),
+    longitude: coordinates.lng(),
+    city: component('locality', 'administrative_area_level_2', 'sublocality'),
+    state: component('administrative_area_level_1'),
+    country: component('country'),
+    postalCode: component('postal_code') || undefined,
+    placeId: place.id || placeId,
+  };
+
+  sessionToken = null;
+  placePredictions.clear();
+  return selectedLocation;
 }
