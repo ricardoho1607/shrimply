@@ -4,9 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/validate-public-env.cjs",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs"
   },
   "dependencies": {
     "firebase": "^12.12.1",
