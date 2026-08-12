@@ -54,10 +54,13 @@ export const downloadMobilePdf = async ({
 }) => {
   const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
   const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const pageWidth = orientation === 'landscape' ? 792 : 612;
+  const pageHeight = orientation === 'landscape' ? 612 : 792;
   const element = document.createElement('div');
   element.className = 'mobile-pdf-document';
-  element.style.width = orientation === 'landscape' ? '792px' : '612px';
-  element.style.height = orientation === 'landscape' ? '612px' : '792px';
+  element.style.width = `${pageWidth}px`;
+  element.style.height = 'auto';
+  element.style.overflow = 'visible';
   parsed.head.querySelectorAll('style').forEach((sourceStyle) => {
     const style = document.createElement('style');
     style.textContent = (sourceStyle.textContent || '')
@@ -66,6 +69,23 @@ export const downloadMobilePdf = async ({
       .replace(/\bhtml\b(?=\s*\{)/g, '.mobile-pdf-document');
     element.appendChild(style);
   });
+  const pageDimensions = document.createElement('style');
+  pageDimensions.textContent = `
+    .mobile-pdf-document {
+      width: ${pageWidth}px !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: visible !important;
+    }
+    .mobile-pdf-document .pdf-page {
+      width: ${pageWidth}px !important;
+      height: ${pageHeight}px !important;
+      min-height: ${pageHeight}px !important;
+      break-inside: avoid !important;
+      page-break-inside: avoid !important;
+    }
+  `;
+  element.appendChild(pageDimensions);
   element.insertAdjacentHTML('beforeend', parsed.body.innerHTML);
   document.body.appendChild(element);
 
@@ -74,13 +94,19 @@ export const downloadMobilePdf = async ({
       margin: [0, 0, 0, 0],
       filename,
       image: { type: 'jpeg', quality: 1 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: null },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+        width: pageWidth,
+        windowWidth: pageWidth,
+      },
       jsPDF: {
         unit: 'pt',
         format: orientation === 'landscape' ? [792, 612] : [612, 792],
         orientation,
       },
-      pagebreak: { mode: ['css', 'legacy'] },
+      pagebreak: { mode: [] },
     }).save();
   } finally {
     element.remove();

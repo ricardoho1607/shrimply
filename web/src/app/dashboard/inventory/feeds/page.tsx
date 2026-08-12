@@ -36,6 +36,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
+import styles from './InventoryFeeds.module.css';
 
 /* --- Types --------------------------------------------------- */
 
@@ -795,14 +796,12 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr', gap: '16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div className={styles.inventoryMetrics}>
+                        <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.stock}</span>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
-                            <span style={{ fontSize: '26px', fontWeight: 900, color: isLow ? '#e74c3c' : 'var(--text-primary)', letterSpacing: '0' }}>
-                              {formatQuantity(item.totalStock)}
-                            </span>
-                            <span style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text-muted)' }}>{item.unit}</span>
+                          <div className={styles.inventoryMetricValue} style={{ color: isLow ? '#e74c3c' : 'var(--text-primary)' }}>
+                            {formatQuantity(item.totalStock)}
+                            <span className={styles.inventoryMetricUnit}>{item.unit}</span>
                           </div>
                           {isLow && (
                             <div style={{ fontSize: '11px', fontWeight: 800, color: '#e74c3c', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -810,14 +809,14 @@ export default function InventoryFeedsPage() {
                             </div>
                           )}
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
-                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(averagePrice)}</span>
+                          <span className={styles.inventoryMetricValue}>{formatCurrency(averagePrice)}</span>
                           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>per {item.unit}</span>
                         </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.value}</span>
-                          <span style={{ fontSize: '20px', fontWeight: 900, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{formatCurrency(item.totalCost || 0)}</span>
+                          <span className={styles.inventoryMetricValue}>{formatCurrency(item.totalCost || 0)}</span>
                           <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)' }}>Total Value</span>
                         </div>
                       </div>

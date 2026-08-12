@@ -9,6 +9,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:inventory-layout": "node --test src/app/dashboard/inventory/feeds/inventoryMetricLayout.test.cjs",
+    "test:mobile-pdf": "node --test src/lib/mobilePdfExport.test.cjs",
     "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs"
   },
   "dependencies": {

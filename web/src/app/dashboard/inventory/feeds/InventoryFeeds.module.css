@@ -1,0 +1,42 @@
+.inventoryMetrics {
+  display: grid;
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 12px;
+  padding: 20px;
+}
+
+.inventoryMetric {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inventoryMetricValue {
+  display: flex;
+  min-height: 32px;
+  align-items: baseline;
+  gap: 4px;
+  color: var(--text-primary);
+  font-size: clamp(15px, 1.2vw, 19px);
+  font-variant-numeric: tabular-nums;
+  font-weight: 900;
+  letter-spacing: -0.015em;
+  white-space: nowrap;
+}
+
+.inventoryMetricUnit {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 480px) {
+  .inventoryMetrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .inventoryMetric:last-child {
+    grid-column: 1 / -1;
+  }
+}
