@@ -133,7 +133,7 @@
 .editCycleActions button { color: #b42318; }
 .editCycleActions button:disabled { opacity: .45; cursor: not-allowed; }
 .addMenuGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.addMenuGrid button { min-height: 96px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; font: inherit; font-weight: 850; cursor: pointer; }
+.addMenuGrid button, .addMenuGrid a { min-height: 96px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; font: inherit; font-weight: 850; cursor: pointer; text-decoration: none; }
 .addMenuGrid button:disabled { opacity: .45; cursor: not-allowed; }
 .dateFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .setupProgress { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); padding: 14px; display: flex; flex-direction: column; gap: 4px; }
@@ -193,7 +193,7 @@
   .cyclePondPreview { gap: 6px; }
   .cyclePondPreview .pondTile { min-height: 60px; border-radius: 8px; padding: 3px; font-size: .6rem; }
   .addMenuGrid { grid-template-columns: 1fr; }
-  .addMenuGrid button { min-height: 58px; flex-direction: row; }
+  .addMenuGrid button, .addMenuGrid a { min-height: 58px; flex-direction: row; }
   .dateFieldGrid, .pondSelector { grid-template-columns: 1fr; }
   .setupPondForm { grid-template-columns: 1fr; }
   .cycleStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -67,6 +67,8 @@ interface EnterpriseCycleDashboardProps {
   onCreatePond: (input: { pondName: string; pondArea: number; block: FarmBlock }) => void | Promise<void>;
   onEditCycle: (cycle: FarmCycle, input: { cycleName: string; blocks: FarmBlock[] }) => void | Promise<void>;
   onCloseCycle: (cycle: FarmCycle) => void;
+  onAddSampling: () => void;
+  onAddMortality: () => void;
   createBlock: (input: { name: string; technician?: EnterpriseTechnician | null }) => Promise<void>;
   assignBlockTechnician: (input: { blockId: string; technician: EnterpriseTechnician }) => Promise<void>;
 }
@@ -92,6 +94,8 @@ export default function EnterpriseCycleDashboard({
   onCreatePond,
   onEditCycle,
   onCloseCycle,
+  onAddSampling,
+  onAddMortality,
   createBlock,
   assignBlockTechnician,
 }: EnterpriseCycleDashboardProps) {
@@ -127,6 +131,7 @@ export default function EnterpriseCycleDashboard({
   const [saving, setSaving] = useState(false);
 
   const sortedBlocks = useMemo(() => sortFarmBlocks(blocks), [blocks]);
+  const activePonds = useMemo(() => ponds.filter((pond) => pond.cycleStatus !== 'ended'), [ponds]);
   const sortedCycles = useMemo(() => [...cycles].sort((first, second) => {
     const firstClosed = first.status === 'closed' ? 1 : 0;
     const secondClosed = second.status === 'closed' ? 1 : 0;
@@ -501,6 +506,8 @@ export default function EnterpriseCycleDashboard({
       <Modal visible={addMenuVisible} transparent animationType="fade" onRequestClose={() => setAddMenuVisible(false)}>
         <View style={styles.centeredBackdrop}><View style={styles.dialogCard}>
           <View style={styles.modalHeader}><View style={styles.modalHeaderCopy}><Text style={styles.modalTitle}>{copy.addPrompt}</Text><Text style={styles.modalText}>{copy.addPromptDescription}</Text></View><TouchableOpacity style={styles.closeModalButton} onPress={() => setAddMenuVisible(false)} accessibilityLabel={t.harvest.close}><Ionicons name="close" size={21} color="#334B5C" /></TouchableOpacity></View>
+          <TouchableOpacity style={styles.addMenuOption} disabled={activePonds.length === 0} onPress={() => { setAddMenuVisible(false); onAddSampling(); }}><Ionicons name="analytics-outline" size={22} color="#0F4C75" /><Text style={styles.addMenuOptionText}>{t.home.samplingData}</Text></TouchableOpacity>
+          <TouchableOpacity style={styles.addMenuOption} disabled={activePonds.length === 0} onPress={() => { setAddMenuVisible(false); onAddMortality(); }}><Ionicons name="pulse-outline" size={22} color="#0F4C75" /><Text style={styles.addMenuOptionText}>{t.home.dailyMortality}</Text></TouchableOpacity>
           <TouchableOpacity style={styles.addMenuOption} disabled={cycleBlockOptions.length === 0} onPress={() => { setAddMenuVisible(false); openCycleForm(); }}><Ionicons name="repeat-outline" size={22} color="#0F4C75" /><Text style={styles.addMenuOptionText}>{copy.newProductionCycle}</Text></TouchableOpacity>
           <TouchableOpacity style={styles.addMenuOption} onPress={() => { setAddMenuVisible(false); setCreateBlockVisible(true); }}><Ionicons name="layers-outline" size={22} color="#0F4C75" /><Text style={styles.addMenuOptionText}>{copy.newBlock}</Text></TouchableOpacity>
           <TouchableOpacity style={styles.addMenuOption} disabled={sortedBlocks.length === 0} onPress={() => { setAddMenuVisible(false); setCreatePondVisible(true); }}><Ionicons name="water-outline" size={22} color="#0F4C75" /><Text style={styles.addMenuOptionText}>{copy.newPond}</Text></TouchableOpacity>

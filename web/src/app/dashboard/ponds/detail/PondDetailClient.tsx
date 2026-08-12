@@ -57,6 +57,7 @@ import {
   detectFeedBiomassMismatchInsight,
   getSamplingMbw,
   isBaselineSampling,
+  type MortalityObservationType,
   type SharedMortalityRecord,
 } from '../../../../../../shared/pondCalculations';
 import { useAuth } from '@/contexts/AuthContext';
@@ -160,6 +161,13 @@ interface FarmCycle {
   status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
   plannedStartDate?: string;
   stockingStartDate?: string;
+}
+
+interface MortalityFormState {
+  date: string;
+  observationType: MortalityObservationType;
+  count: string;
+  notes: string;
 }
 
 const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 'active';
@@ -293,6 +301,7 @@ export default function PondDetailClient() {
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
+  const requestedAction = searchParams.get('action');
   const router = useRouter();
   const [pond, setPond] = useState<Pond | null>(null);
   const [loading, setLoading] = useState(true);
@@ -300,7 +309,8 @@ export default function PondDetailClient() {
   const [userRole, setUserRole] = useState<string | undefined>();
   const today = useFarmDateKey(company?.timeZone);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
-  const [isSamplingModalOpen, setSamplingModalOpen] = useState(false);
+  const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
+  const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingPond, setIsDeletingPond] = useState(false);
   const [isEndCycleOpen, setEndCycleOpen] = useState(false);
@@ -328,6 +338,12 @@ export default function PondDetailClient() {
     mbw: '',
     feed: '',
     mortality: '0'
+  });
+  const [mortalityForm, setMortalityForm] = useState<MortalityFormState>({
+    date: today,
+    observationType: 'estimated_total' as MortalityObservationType,
+    count: '',
+    notes: '',
   });
   const { data: farmBlocks, loading: blocksLoading } = useCompanyBlocks<FarmBlock>('asc');
   const assignedBlockIds = useMemo(
@@ -443,6 +459,71 @@ export default function PondDetailClient() {
     } catch (error) {
       console.error("Error adding sampling:", error);
       alert("Failed to save sampling record.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleAddMortality = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const recordedBy = auth.currentUser?.uid;
+    if (!companyId || !pond || !recordedBy || !canEditPond) return;
+    if (!isActiveCycle(pond)) {
+      alert('Ended cycles are read-only. Start a new cycle before adding mortality data.');
+      return;
+    }
+
+    const count = mortalityForm.observationType === 'none_observed'
+      ? 0
+      : Number(mortalityForm.count.trim().replace(',', '.'));
+    if (mortalityForm.observationType !== 'none_observed' && (!Number.isInteger(count) || count <= 0)) {
+      alert('Enter a mortality count greater than zero using a whole number.');
+      return;
+    }
+    if (mortalityForm.date > today) {
+      alert('Mortality cannot be recorded for a future date.');
+      return;
+    }
+    const cycleStartKey = String(pond.cycleStartedAt || pond.docStart || '').slice(0, 10);
+    if (cycleStartKey && mortalityForm.date < cycleStartKey) {
+      alert('Mortality cannot be recorded before this pond cycle started.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const mbwAtRecord = [...(pond.samplings || [])]
+        .filter((sampling) => sampling.date <= mortalityForm.date && Number(sampling.mbw) > 0)
+        .sort((first, second) => second.date.localeCompare(first.date))[0]?.mbw;
+      const notes = mortalityForm.notes.trim();
+      const newRecord: SharedMortalityRecord = {
+        id: `mortality-${Date.now()}`,
+        date: mortalityForm.date,
+        observationType: mortalityForm.observationType,
+        count,
+        recordedAt: new Date().toISOString(),
+        recordedBy,
+        pondCycleId: pond.pondCycleId || pond.id,
+        ...(Number(mbwAtRecord) > 0 ? { mbwAtRecord: Number(mbwAtRecord) } : {}),
+        ...(notes ? { notes } : {}),
+        ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
+        ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
+      };
+
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        mortalityRecords: arrayUnion(newRecord),
+        updatedAt: serverTimestamp(),
+      });
+      setMortalityModalOpen(false);
+      setMortalityForm({
+        date: today,
+        observationType: 'estimated_total',
+        count: '',
+        notes: '',
+      });
+    } catch (error) {
+      console.error('Error adding mortality:', error);
+      alert('Failed to save mortality record.');
     } finally {
       setIsSubmitting(false);
     }
@@ -1283,6 +1364,14 @@ export default function PondDetailClient() {
         setForm={setSamplingForm}
         isSubmitting={isSubmitting}
       />
+      <MortalityModal
+        isOpen={isMortalityModalOpen}
+        onClose={() => setMortalityModalOpen(false)}
+        onSubmit={handleAddMortality}
+        form={mortalityForm}
+        setForm={setMortalityForm}
+        isSubmitting={isSubmitting}
+      />
 
       <style jsx>{`
         .hover-row:hover {
@@ -1449,6 +1538,74 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
             }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Record'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+interface MortalityModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void | Promise<void>;
+  form: MortalityFormState;
+  setForm: React.Dispatch<React.SetStateAction<MortalityFormState>>;
+  isSubmitting: boolean;
+}
+
+function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting }: MortalityModalProps) {
+  if (!isOpen) return null;
+
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 1000,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px'
+    }}>
+      <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
+        <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Daily Mortality</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Record mortality observations for this pond.</p>
+          </div>
+          <button onClick={onClose} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+            <X size={24} />
+          </button>
+        </div>
+
+        <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Record Type
+            <select value={form.observationType} onChange={(event) => setForm({ ...form, observationType: event.target.value as MortalityObservationType })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
+              <option value="estimated_total">Estimated total pond mortality</option>
+              <option value="observed_recovered">Observed or recovered dead shrimp</option>
+              <option value="none_observed">No mortality observed</option>
+            </select>
+          </label>
+
+          {form.observationType !== 'none_observed' ? (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Mortality Count
+              <input required type="number" min="1" step="1" value={form.count} onChange={(event) => setForm({ ...form, count: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
+            </label>
+          ) : null}
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Mortality Date
+            <input required type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
+          </label>
+
+          <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Notes (optional)
+            <textarea maxLength={500} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Cause, pond condition, or observation details" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600, resize: 'vertical' }} />
+          </label>
+
+          <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+            <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Mortality'}
             </button>
           </div>
         </form>

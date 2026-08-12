@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import {
+  Activity,
   AlertTriangle,
   CalendarDays,
   CheckCircle2,
@@ -13,6 +14,7 @@ import {
   Pencil,
   Play,
   Plus,
+  FlaskConical,
   Waves,
   X,
 } from 'lucide-react';
@@ -96,6 +98,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   const [expandedCycles, setExpandedCycles] = useState<Record<string, boolean>>({});
   const [pondFilter, setPondFilter] = useState<PondFilter>('active');
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [operationAction, setOperationAction] = useState<'sampling' | 'mortality' | null>(null);
   const [createBlockOpen, setCreateBlockOpen] = useState(false);
   const [newBlockName, setNewBlockName] = useState('');
   const [newBlockTechnicianId, setNewBlockTechnicianId] = useState('');
@@ -588,9 +591,29 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
           <div className={styles.modal} role="dialog" aria-modal="true" aria-label={copy.addItemLabel}>
             <div className={styles.modalHeader}><div><h2>{copy.addPrompt}</h2><p>{copy.addPromptDescription}</p></div><button type="button" className={styles.iconButton} onClick={() => setAddMenuOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
             <div className={styles.addMenuGrid}>
+              <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('sampling'); }}><FlaskConical size={21} /><span>{t.home.samplingData}</span></button>
+              <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('mortality'); }}><Activity size={21} /><span>Daily Mortality</span></button>
               <button type="button" disabled={cycleBlockOptions.length === 0} onClick={() => { setAddMenuOpen(false); openCycleForm(); }}><CalendarDays size={21} /><span>{copy.newProductionCycle}</span></button>
               <button type="button" onClick={() => { setAddMenuOpen(false); setCreateBlockOpen(true); }}><Layers3 size={21} /><span>{copy.newBlock}</span></button>
               <button type="button" disabled={sortedBlocks.length === 0} onClick={() => { setAddMenuOpen(false); setCreatePondOpen(true); }}><Waves size={21} /><span>{copy.newPond}</span></button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {operationAction ? (
+        <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOperationAction(null)}>
+          <div className={styles.modal} role="dialog" aria-modal="true" aria-label={operationAction === 'sampling' ? t.home.samplingData : 'Daily Mortality'}>
+            <div className={styles.modalHeader}>
+              <div><h2>{operationAction === 'sampling' ? t.home.samplingData : 'Daily Mortality'}</h2><p>Select an active pond.</p></div>
+              <button type="button" className={styles.iconButton} onClick={() => setOperationAction(null)} aria-label={copy.close}><X size={20} /></button>
+            </div>
+            <div className={styles.addMenuGrid}>
+              {activePonds.map((pond) => (
+                <Link key={pond.id} href={`/dashboard/ponds/detail?id=${encodeURIComponent(pond.id)}&action=${operationAction}`}>
+                  <Waves size={21} /><span>{pond.pondName}</span>
+                </Link>
+              ))}
             </div>
           </div>
         </div>

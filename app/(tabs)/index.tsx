@@ -1912,6 +1912,8 @@ export default function PondManagementScreen() {
           onCreatePond={handleCreateEnterprisePhysicalPond}
           onEditCycle={handleEditEnterpriseCycle}
           onCloseCycle={handleCloseEnterpriseBlockCycle}
+          onAddSampling={() => openModal('sampling')}
+          onAddMortality={() => openModal('mortality')}
           createBlock={enterpriseBlocks.createBlock}
           assignBlockTechnician={enterpriseBlocks.assignBlockTechnician}
         />
