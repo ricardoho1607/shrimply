@@ -164,14 +164,15 @@ export async function getLocationDetails(placeId: string): Promise<SelectedLocat
   const component = (...types: string[]) =>
     components.find(item => item.types.some(type => types.includes(type)))?.longText || '';
 
-  const selectedLocation = {
+  const postalCode = component('postal_code');
+  const selectedLocation: SelectedLocation = {
     address: place.formattedAddress || place.displayName || '',
     latitude: coordinates.lat(),
     longitude: coordinates.lng(),
     city: component('locality', 'administrative_area_level_2', 'sublocality'),
     state: component('administrative_area_level_1'),
     country: component('country'),
-    postalCode: component('postal_code') || undefined,
+    ...(postalCode ? { postalCode } : {}),
     placeId: place.id || placeId,
   };
 

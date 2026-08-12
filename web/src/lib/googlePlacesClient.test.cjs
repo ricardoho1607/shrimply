@@ -120,9 +120,9 @@ test('location search uses Places API New and returns selectable city details', 
     city: 'Jakarta',
     state: 'Special Capital Region of Jakarta',
     country: 'Indonesia',
-    postalCode: undefined,
     placeId: 'jakarta-place-id',
   });
+  assert.equal(Object.hasOwn(location, 'postalCode'), false);
   assert.deepEqual(requestedFields, [
     'id',
     'displayName',

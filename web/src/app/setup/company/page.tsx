@@ -61,7 +61,7 @@ export default function CompanySetupPage() {
           city: existingLocation.city || '',
           state: existingLocation.state || '',
           country: existingLocation.country || '',
-          postalCode: existingLocation.postalCode,
+          ...(existingLocation.postalCode ? { postalCode: existingLocation.postalCode } : {}),
           placeId: existingLocation.placeId || 'existing-location',
         });
       }
