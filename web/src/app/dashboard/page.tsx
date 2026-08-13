@@ -12,18 +12,14 @@ import {
   ChevronRight,
   Activity,
   Droplets,
-  Zap,
-  BrainCircuit,
   Loader2,
   LayoutGrid,
   List,
   Clock,
   Minus,
   Building2,
-  Brain,
-  Thermometer,
+  Wind,
   Utensils,
-  ShoppingBag,
   Check
 } from 'lucide-react';
 import Link from 'next/link';
@@ -110,16 +106,24 @@ const calculateMetrics = (pond: Pond, timeZone?: string) => {
   const validSamplings = samplings.filter(s => s.mbw > 0 || s.mortality > 0 || s.feed > 0 || s.feedData);
   const sorted = [...validSamplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const latest = sorted[sorted.length - 1] || {};
+  const environmentalSamplings = samplings
+    .filter((sampling) => sampling.phMorning || sampling.phEvening || sampling.doMorning || sampling.doEvening || sampling.transparency || sampling.salinity || sampling.temp)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const latestEnvironmental = environmentalSamplings[environmentalSamplings.length - 1] || {};
   const latestValid = getLatestValidMbwSampling(pond);
   const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone);
 
-    const phM = parseFloat(latest.phMorning || '');
-    const phE = parseFloat(latest.phEvening || '');
+    const phM = parseFloat(latestEnvironmental.phMorning || '');
+    const phE = parseFloat(latestEnvironmental.phEvening || '');
     const validPhM = Number.isFinite(phM) && phM > 0 ? phM : null;
     const validPhE = Number.isFinite(phE) && phE > 0 ? phE : null;
     const ph = validPhM && validPhE ? (validPhM + validPhE) / 2 : (validPhM ?? validPhE);
-    const transparencyValue = parseFloat(latest.transparency || '');
-    const temperatureValue = parseFloat(latest.temp || '');
+    const doM = parseFloat(latestEnvironmental.doMorning || '');
+    const doE = parseFloat(latestEnvironmental.doEvening || '');
+    const validDoM = Number.isFinite(doM) && doM > 0 ? doM : null;
+    const validDoE = Number.isFinite(doE) && doE > 0 ? doE : null;
+    const dissolvedOxygen = validDoM && validDoE ? (validDoM + validDoE) / 2 : (validDoM ?? validDoE);
+    const transparencyValue = parseFloat(latestEnvironmental.transparency || '');
     const feedDataValue = parseFloat(latest.feedData?.totalDailyFeed || '');
     const dailyFeed = latest.feed && latest.feed > 0
       ? latest.feed
@@ -139,7 +143,7 @@ const calculateMetrics = (pond: Pond, timeZone?: string) => {
       latestValid,
       ph,
       transparency: Number.isFinite(transparencyValue) && transparencyValue > 0 ? transparencyValue : null,
-      temperature: Number.isFinite(temperatureValue) && temperatureValue > 0 ? temperatureValue : null,
+      dissolvedOxygen,
       dailyFeed
     };
   };
@@ -197,7 +201,7 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
   );
 }
 
-function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
+function PondCard({ pond, calculateMetrics, timeZone }: any) {
   const m = calculateMetrics(pond, timeZone);
   const today = useFarmDateKey(timeZone);
   const isHarvested = (pond.totalHarvestedPopulation || 0) >= (pond.initialPopulation * 0.9);
@@ -207,71 +211,64 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
 
   return (
     <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
-      <div className="glass-card" style={{
-        padding: '20px',
+      <div className="glass-card dashboard-pond-card" style={{
+        padding: '14px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '12px',
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ 
-              width: '42px', height: '42px', borderRadius: '12px', background: 'var(--gradient-dim)', 
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
-              border: '1px solid var(--border)'
-            }}>
-              <Waves size={20} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+            <div className="dashboard-pond-name-badge" title={pond.pondName}>
+              {pond.pondName}
             </div>
-            <div>
-              <div style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px', letterSpacing: '-0.02em' }}>
-                {pond.pondName}
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <div className="ping" style={{ 
-                  width: '7px', height: '7px', borderRadius: '50%', 
+                  width: '6px', height: '6px', borderRadius: '50%',
                   background: isHarvested ? '#64748b' : '#16a34a' 
                 }} />
-                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                <span style={{ overflow: 'hidden', fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 600, textOverflow: 'ellipsis', textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
                   {isHarvested ? 'Harvested' : `Active • DOC ${m.doc}`}
                 </span>
               </div>
             </div>
           </div>
-          <div style={{ padding: '6px', borderRadius: '10px', background: 'var(--bg-mid)', color: 'var(--text-faint)' }}>
-            <ChevronRight size={18} />
+          <div style={{ padding: '5px', borderRadius: '8px', background: 'var(--bg-mid)', color: 'var(--text-faint)', flex: '0 0 auto' }}>
+            <ChevronRight size={16} />
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Avg Weight</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
-              {m.mbw.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>g</span>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Avg Weight</span>
+            <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.mbw.toFixed(1)}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>g</span>
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Survival</span>
-            <span style={{ fontSize: '1rem', color: m.sr > 85 ? '#16a34a' : '#ef4444', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
-              {m.sr.toFixed(1)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>%</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Survival</span>
+            <span style={{ fontSize: '0.88rem', color: m.sr > 85 ? '#16a34a' : '#ef4444', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.sr.toFixed(1)}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>%</span>
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>Biomass</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
-              {m.biomass.toLocaleString(undefined, {maximumFractionDigits:0})}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>kg</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Biomass</span>
+            <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.biomass.toLocaleString(undefined, {maximumFractionDigits:0})}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>kg</span>
             </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            <span style={{ fontSize: '0.65rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.12em', fontWeight: 600 }}>ADG</span>
-            <span style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
-              {m.adg.toFixed(2)}<span style={{ fontSize: '0.8rem', fontWeight: 500, marginLeft: '2px' }}>g/d</span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>ADG</span>
+            <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
+              {m.adg.toFixed(2)}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>g/d</span>
             </span>
           </div>
         </div>
 
-        <div style={{ marginTop: '2px', borderTop: '1px solid var(--border)', paddingTop: '14px' }}>
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '10px' }}>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
               <div style={{ 
                 width: '18px', height: '18px', borderRadius: '50%', 
                 background: wqPosted ? 'rgba(22, 163, 74, 0.1)' : 'var(--bg-mid)',
@@ -282,13 +279,13 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
               }}>
                 {wqPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span style={{ fontSize: '0.58rem', fontWeight: 600, color: wqPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Water Quality</span>
                 {wqPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>POSTED</span>}
               </div>
             </div>
             
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
               <div style={{ 
                 width: '18px', height: '18px', borderRadius: '50%', 
                 background: feedPosted ? 'rgba(22, 163, 74, 0.1)' : 'var(--bg-mid)',
@@ -299,7 +296,7 @@ function PondCard({ pond, calculateMetrics, t, timeZone }: any) {
               }}>
                 {feedPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span style={{ fontSize: '0.58rem', fontWeight: 600, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Feed status</span>
                 {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>COMPLETED</span>}
               </div>
@@ -594,6 +591,41 @@ export default function DashboardPage() {
     return values.reduce((acc, value) => acc + value, 0) / values.length;
   };
 
+  const farmHealthItems = [
+    {
+      label: 'pH Level',
+      value: (() => {
+        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).ph);
+        return average === null ? '--' : average.toFixed(1);
+      })(),
+      icon: Activity,
+    },
+    {
+      label: 'Transparency',
+      value: (() => {
+        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).transparency);
+        return average === null ? '--' : `${average.toFixed(0)}cm`;
+      })(),
+      icon: Droplets,
+    },
+    {
+      label: 'DO',
+      value: (() => {
+        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).dissolvedOxygen);
+        return average === null ? '--' : `${average.toFixed(1)}mg/L`;
+      })(),
+      icon: Wind,
+    },
+    {
+      label: 'Daily Feed',
+      value: (() => {
+        const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).dailyFeed);
+        return average === null ? '--' : `${average.toFixed(0)}kg`;
+      })(),
+      icon: Utensils,
+    },
+  ];
+
   if (loading) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
       <Loader2 className="animate-spin" size={48} color="var(--primary)" />
@@ -613,68 +645,121 @@ export default function DashboardPage() {
       ) : null}
 
       {/* Summary Row */}
-      <div className="animate-fade-up animate-delay-1 responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
-        <SummaryCard label={t.shrimp.biomass} value={`${totalMetrics.biomass.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg`} trend={`${totalMetrics.biomassTrend >= 0 ? '+' : ''}${totalMetrics.biomassTrend.toFixed(1)}%`} trendType={totalMetrics.biomassTrend >= 0 ? 'up' : 'down'} icon={Scale} loading={loading} />
-        <SummaryCard label={t.shrimp.survivalRate} value={`${totalMetrics.sr.toFixed(1)}%`} trend={`${totalMetrics.srTrend >= 0 ? '+' : ''}${totalMetrics.srTrend.toFixed(1)}%`} trendType={totalMetrics.srTrend >= 0 ? 'up' : 'down'} icon={TrendingUp} loading={loading} />
-        <SummaryCard label={t.shrimp.population} value={totalMetrics.population.toLocaleString()} trend={`${totalMetrics.popTrend >= 0 ? '+' : ''}${totalMetrics.popTrend.toFixed(1)}%`} trendType={totalMetrics.popTrend >= 0 ? 'up' : 'down'} icon={Users} loading={loading} />
-        <SummaryCard label="Active Ponds" value={totalMetrics.activeCount.toString()} icon={Waves} loading={loading} />
+      <div className="glass-card animate-fade-up animate-delay-1 dashboard-summary-panel">
+        {[
+          {
+            label: t.shrimp.biomass,
+            value: `${totalMetrics.biomass.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg`,
+            trend: `${totalMetrics.biomassTrend >= 0 ? '+' : ''}${totalMetrics.biomassTrend.toFixed(1)}%`,
+            trendUp: totalMetrics.biomassTrend >= 0,
+          },
+          {
+            label: t.shrimp.survivalRate,
+            value: `${totalMetrics.sr.toFixed(1)}%`,
+            trend: `${totalMetrics.srTrend >= 0 ? '+' : ''}${totalMetrics.srTrend.toFixed(1)}%`,
+            trendUp: totalMetrics.srTrend >= 0,
+          },
+          {
+            label: t.shrimp.population,
+            value: totalMetrics.population.toLocaleString(),
+            trend: `${totalMetrics.popTrend >= 0 ? '+' : ''}${totalMetrics.popTrend.toFixed(1)}%`,
+            trendUp: totalMetrics.popTrend >= 0,
+          },
+          {
+            label: 'Active Ponds',
+            value: totalMetrics.activeCount.toString(),
+            trend: null,
+            trendUp: true,
+          },
+        ].map(({ label, value, trend, trendUp }) => (
+          <div className="dashboard-summary-item" key={label}>
+            <div className="dashboard-summary-content">
+              <div className="dashboard-summary-meta">
+                <span className="dashboard-summary-label">{label}</span>
+                {trend && (
+                  <span className={`dashboard-summary-trend ${trendUp ? 'is-up' : 'is-down'}`}>
+                    {trendUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                    {trend}
+                  </span>
+                )}
+              </div>
+              {loading ? (
+                <div className="dashboard-summary-skeleton" />
+              ) : (
+                <div className="dashboard-summary-value">{value}</div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
 
-      {/* Ponds Section with Insights Sidebar */}
-      <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '24px', alignItems: 'start' }}>
-        
-        {/* Left Column: Ponds List */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div className="dashboard-section-heading responsive-toolbar-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <h3 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, letterSpacing: '-0.02em' }}>Ponds</h3>
-              <div style={{ 
-                background: 'var(--primary-dim)', color: 'var(--primary)', padding: '4px 12px', 
-                borderRadius: '100px', fontSize: '0.8rem', fontWeight: 600, border: '1px solid var(--border)'
-              }}>
-                {activePonds.length} ponds
+      <section className="glass-card animate-fade-up animate-delay-2 dashboard-health-panel" aria-labelledby="farm-health-title">
+        <div className="dashboard-health-heading">
+          <h3 id="farm-health-title">Farm Health</h3>
+          <span>Current averages</span>
+        </div>
+        <div className="dashboard-health-grid">
+          {farmHealthItems.map(({ label, value, icon: Icon }) => (
+            <div className="dashboard-health-item" key={label}>
+              <div className="dashboard-health-icon" aria-hidden="true">
+                <Icon size={16} strokeWidth={2} />
+              </div>
+              <div className="dashboard-health-copy">
+                <span>{label}</span>
+                <strong>{value}</strong>
               </div>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <div className="dashboard-view-toggle" style={{ display: 'flex', background: 'var(--bg-mid)', padding: '4px', borderRadius: '12px', border: '1px solid var(--border)' }}>
-                <button 
+          ))}
+        </div>
+      </section>
+
+      {/* Ponds Section */}
+      <div className="animate-fade-up animate-delay-2" style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+
+        {/* Left Column: Ponds List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+          <div className="dashboard-section-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h3 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, letterSpacing: '-0.02em' }}>Ponds</h3>
+            <div className="dashboard-view-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
+              <button
                   onClick={() => setViewMode('grid')}
-                  style={{ 
-                    padding: '8px 12px', borderRadius: '8px', border: 'none', 
-                    background: viewMode === 'grid' ? 'white' : 'transparent',
+                  aria-label="Grid view"
+                  aria-pressed={viewMode === 'grid'}
+                  style={{
+                    width: '36px', height: '36px', padding: '0', borderRadius: '8px', border: 'none',
+                    background: 'transparent',
                     color: viewMode === 'grid' ? 'var(--primary)' : 'var(--text-faint)',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s',
-                    boxShadow: viewMode === 'grid' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.16s ease, color 0.16s ease'
                   }}
                 >
-                  <LayoutGrid size={18} />
+                  <LayoutGrid size={17} />
                 </button>
-                <button 
+              <button
                   onClick={() => setViewMode('list')}
-                  style={{ 
-                    padding: '8px 12px', borderRadius: '8px', border: 'none', 
-                    background: viewMode === 'list' ? 'white' : 'transparent',
+                  aria-label="List view"
+                  aria-pressed={viewMode === 'list'}
+                  style={{
+                    width: '36px', height: '36px', padding: '0', borderRadius: '8px', border: 'none',
+                    background: 'transparent',
                     color: viewMode === 'list' ? 'var(--primary)' : 'var(--text-faint)',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center', transition: 'all 0.2s',
-                    boxShadow: viewMode === 'list' ? '0 2px 8px rgba(0,0,0,0.05)' : 'none'
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background-color 0.16s ease, color 0.16s ease'
                   }}
                 >
-                  <List size={18} />
+                  <List size={17} />
                 </button>
-              </div>
             </div>
           </div>
 
-          <div className="glass-card responsive-horizontal-scroll" style={{ padding: '0', overflow: 'hidden', border: viewMode === 'list' ? '1px solid var(--border)' : 'none', background: viewMode === 'list' ? 'white' : 'transparent', boxShadow: viewMode === 'list' ? 'var(--shadow-card)' : 'none' }}>
+          <div className={`glass-card responsive-horizontal-scroll ${viewMode === 'list' ? 'dashboard-list-container' : ''}`} style={{ padding: '0', overflow: 'hidden', border: viewMode === 'list' ? '1px solid var(--border)' : 'none', background: viewMode === 'list' ? 'white' : 'transparent', boxShadow: viewMode === 'list' ? 'var(--shadow-card)' : 'none' }}>
             {viewMode === 'list' && (
-              <div className="dashboard-list-row" style={{
+              <div className="dashboard-list-row dashboard-list-header" style={{
                 display: 'grid', 
                 gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1fr 0.5fr', 
                 padding: '24px 32px',
                 background: 'rgba(241, 245, 249, 0.5)',
                 borderBottom: '1px solid var(--border)'
               }}>
-                {['POND NAME', 'DOC', 'BIOMASS', 'SR (%)', 'SIZE', ''].map((label) => (
+                {['POND NAME', 'DOC', 'ADG', 'BIOMASS', 'SR (%)', ''].map((label) => (
                   <span key={label} style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-faint)', letterSpacing: '0.05em' }}>{label}</span>
                 ))}
               </div>
@@ -682,147 +767,51 @@ export default function DashboardPage() {
             
             <div className="dashboard-pond-grid" style={{
               display: 'grid', 
-              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(380px, 1fr))' : '1fr', 
-              gap: viewMode === 'grid' ? '24px' : '0'
+              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(280px, 1fr))' : '1fr',
+              gap: viewMode === 'grid' ? '16px' : '0'
             }}>
               {activePonds.map((pond, idx) => {
                 const m = calculateMetrics(pond, company?.timeZone);
                 return viewMode === 'grid' ? (
-                  <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} t={t} timeZone={company?.timeZone} />
+                  <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} timeZone={company?.timeZone} />
                 ) : (
                   <Link key={pond.id} href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
-                    <div className="dashboard-list-row" style={{
+                    <div className="dashboard-list-row dashboard-list-data" style={{
                       display: 'grid', 
                       gridTemplateColumns: '2fr 1.5fr 1.5fr 1.5fr 1fr 0.5fr', 
                       padding: '16px 32px',
                       alignItems: 'center',
-                      borderBottom: idx === ponds.length - 1 ? 'none' : '1px solid var(--border)',
+                      borderBottom: idx === activePonds.length - 1 ? 'none' : '1px solid var(--border)',
                       transition: 'background 0.2s',
                       cursor: 'pointer'
                     }}
-                    onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-dark)'}
-                    onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                     >
-                      <div>
+                      <div className="dashboard-list-pond">
                         <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>{pond.pondName}</div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 500 }}>{pond.supplier || 'N/A'}</div>
                       </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>DOC {m.doc}</div>
+                      <div className="dashboard-list-metric" data-label="DOC" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{m.doc}</div>
+
+                      <div className="dashboard-list-metric" data-label="ADG" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                        {m.adg.toFixed(2)}
+                      </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      <div className="dashboard-list-metric" data-label="Biomass" style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {m.biomass.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })} kg
                       </div>
                       
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#16a34a' }}>
+                      <div className="dashboard-list-metric" data-label="Survival" style={{ fontSize: '0.85rem', fontWeight: 600, color: '#16a34a' }}>
                         {m.sr.toFixed(1)}%
                       </div>
-                      
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                        {m.size || '-'}
-                      </div>
 
-                      <div style={{ textAlign: 'right', color: 'var(--text-faint)' }}>
+                      <div className="dashboard-list-chevron" style={{ textAlign: 'right', color: 'var(--text-faint)' }}>
                         <ChevronRight size={18} />
                       </div>
                     </div>
                   </Link>
                 );
               })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Column: Insights Sidebar */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'sticky', top: '24px' }}>
-          {/* Orson AI Insights Card */}
-          <div style={{ 
-            background: 'var(--gradient)', borderRadius: '14px', padding: '24px', color: 'white',
-            position: 'relative', overflow: 'hidden', boxShadow: 'var(--shadow-glow)'
-          }}>
-            <div style={{ position: 'absolute', top: '-20px', right: '-20px', opacity: 0.1 }}>
-              <Brain size={140} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Zap size={20} />
-              </div>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Orson AI</span>
-            </div>
-            <h4 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '12px', color: 'white' }}>Analysis in progress...</h4>
-            <p style={{ fontSize: '14px', color: 'rgba(255,255,255,0.8)', marginBottom: '24px', lineHeight: '20px', fontWeight: 400 }}>
-              Based on your latest sampling data, your ponds show growth efficiency. I'm calculating your harvest window.
-            </p>
-            <button style={{ 
-              width: '100%', height: '44px', padding: '0 16px', borderRadius: '10px', background: 'white', color: 'var(--primary)',
-              border: 'none', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s'
-            }}
-            onMouseOver={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
-            onMouseOut={(e) => e.currentTarget.style.transform = 'none'}
-            >
-              Orson AI
-            </button>
-          </div>
-
-          <div className="glass-card" style={{ padding: '32px' }}>
-            <h4 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '24px' }}>Farm Health Index</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {[
-                { 
-                  label: 'pH Level', 
-                  value: (() => {
-                    const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p, company?.timeZone);
-                    return m?.ph;
-                    });
-                    return average === null ? '--' : average.toFixed(1);
-                  })(),
-                  icon: Activity 
-                },
-                { 
-                  label: 'Transparency', 
-                  value: (() => {
-                    const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p, company?.timeZone);
-                    return m?.transparency;
-                    });
-                    return average === null ? '--' : `${average.toFixed(0)}cm`;
-                  })(),
-                  icon: Droplets 
-                },
-                { 
-                  label: 'Temperature', 
-                  value: (() => {
-                    const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p, company?.timeZone);
-                    return m?.temperature;
-                    });
-                    return average === null ? '--' : `${average.toFixed(1)}°C`;
-                  })(),
-                  icon: Thermometer 
-                },
-                { 
-                  label: 'Daily Feed Usage', 
-                  value: (() => {
-                    const average = averageActivePondMetric((p) => {
-                    const m = calculateMetrics(p, company?.timeZone);
-                    return m?.dailyFeed;
-                    });
-                    return average === null ? '--' : `${average.toFixed(0)}kg`;
-                  })(),
-                  icon: Utensils 
-                }
-              ].map((item, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                      <item.icon size={18} />
-                    </div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-muted)' }}>{item.label}</span>
-                  </div>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)' }}>{item.value}</span>
-                </div>
-              ))}
             </div>
           </div>
         </div>

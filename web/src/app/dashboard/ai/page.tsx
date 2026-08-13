@@ -162,7 +162,7 @@ export default function OrsonAIPage() {
   const aiMessageCount = messages.filter(message => message.type === 'ai').length;
 
   return (
-    <div className="dashboard-page orson-page">
+    <div className="dashboard-page authenticated-compact-page orson-page">
       <div className="orson-shell">
         <div className="orson-hero">
           <div className="orson-hero-main">

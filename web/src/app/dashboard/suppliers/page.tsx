@@ -148,7 +148,7 @@ export default function SuppliersPage() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+    <div className="authenticated-compact-page" style={{ display: 'flex', flexDirection: 'column' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
           <h1 style={{ fontSize: '32px', marginBottom: '8px', letterSpacing: '-0.03em' }}>{t.buyer.marketplaceTitle}</h1>

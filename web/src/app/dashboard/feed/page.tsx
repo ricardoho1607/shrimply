@@ -1,18 +1,14 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Plus,
   History,
   Search,
-  Activity,
-  ShoppingBag,
   X,
   Loader2,
-  Waves,
   ChevronRight,
-  ArrowRight,
-  ClipboardList,
   TriangleAlert,
   Trash2
 } from 'lucide-react';
@@ -116,28 +112,6 @@ interface InventoryFeed {
   usageHistory?: FeedUsage[];
 }
 
-const getTimestampDate = (value?: { toDate?: () => Date; seconds?: number } | string | Date | null): Date | null => {
-  if (!value) return null;
-  if (value instanceof Date) return value;
-  if (typeof value === 'string') {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-  if (typeof value === 'object' && typeof value.toDate === 'function') return value.toDate();
-  if (typeof value === 'object' && typeof value.seconds === 'number') return new Date(value.seconds * 1000);
-  return null;
-};
-
-const formatSyncStatus = (date: Date | null): string => {
-  if (!date) return 'Sync status unavailable';
-  const now = new Date();
-  if (date.toDateString() === now.toDateString()) return 'Last synced today';
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return 'Last synced yesterday';
-  return `Last synced ${new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(date)}`;
-};
-
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
@@ -145,6 +119,9 @@ const canEditOperations = (role?: string) => role === 'owner' || role === 'co-ow
 export default function FeedRecordsPage() {
   const { t } = useLanguage();
   const { company } = useAuth();
+  const searchParams = useSearchParams();
+  const requestedPondId = searchParams.get('pondId');
+  const requestedAction = searchParams.get('action');
   const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,6 +138,7 @@ export default function FeedRecordsPage() {
   const [inventoryFeeds, setInventoryFeeds] = useState<InventoryFeed[]>([]);
   const historyTouchStartXRef = useRef<number | null>(null);
   const suppressHistoryClickRef = useRef(false);
+  const requestedFeedActionHandledRef = useRef(false);
 
   // Form State
   const [formData, setFormData] = useState<FeedFormData>({
@@ -189,6 +167,32 @@ export default function FeedRecordsPage() {
   const minimumFeedDate = selectedPondStartDate && selectedPondStartDate <= today
     ? selectedPondStartDate
     : today;
+
+  useEffect(() => {
+    if (
+      requestedFeedActionHandledRef.current
+      || requestedAction !== 'new'
+      || !requestedPondId
+      || loading
+    ) return;
+
+    const requestedPond = accessiblePonds.find((pond) => pond.id === requestedPondId);
+    if (!requestedPond || !canEditFeed) return;
+
+    requestedFeedActionHandledRef.current = true;
+    const openRequestedFeedForm = window.setTimeout(() => {
+      setEditingFeedRecord(null);
+      setFormData({
+        pondId: requestedPond.id,
+        date: today,
+        totalDailyFeed: '',
+        feedAllocations: [],
+      });
+      setModalOpen(true);
+    }, 0);
+
+    return () => window.clearTimeout(openRequestedFeedForm);
+  }, [accessiblePonds, canEditFeed, loading, requestedAction, requestedPondId, today]);
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
@@ -728,20 +732,16 @@ export default function FeedRecordsPage() {
     : false;
 
   return (
-    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="dashboard-page feed-page">
 
       {/* Toolbar */}
-      <div className="glass-card dashboard-toolbar-card animate-fade-up" style={{ flexWrap: 'wrap' }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
+      <div className="glass-card dashboard-toolbar-card feed-toolbar animate-fade-up">
+        <div className="feed-search-field">
+          <Search size={17} aria-hidden="true" />
           <input
             placeholder={t.feed.searchPonds}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
-              height: '44px', padding: '0 16px 0 40px', width: '100%', fontSize: '14px', outline: 'none', fontWeight: 400, color: 'var(--text-primary)'
-            }}
           />
         </div>
         {canEditFeed && (
@@ -758,28 +758,19 @@ export default function FeedRecordsPage() {
             }}
             className="dashboard-action dashboard-action-primary"
           >
-            <Plus size={20} />
+            <Plus size={18} />
             <span>{t.feed.newFeedLog}</span>
           </button>
         )}
         <div
           role="status"
           aria-live="polite"
-          style={{
-            flexBasis: '100%',
-            minHeight: '40px',
-            padding: '10px 4px 0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '16px',
-            borderTop: '1px solid var(--border)',
-          }}
+          className="feed-daily-summary"
         >
-          <span style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>
+          <span>
             {t.feed.dailyFeedUsed}
           </span>
-          <strong style={{ color: 'var(--text-primary)', fontSize: '17px', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <strong>
             {todayFeedSummaryValue}
           </strong>
         </div>
@@ -800,42 +791,39 @@ export default function FeedRecordsPage() {
           onSelect={(pond) => openHistoryDrawer(pond.id)}
         />
       ) : (
-        <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+        <div className="feed-pond-grid">
           {filteredPonds.map((pond, idx) => {
             const latest = getLatestFeed(pond);
             return (
-              <div key={pond.id} className="glass-card animate-fade-up" style={{ padding: '0', overflow: 'hidden', animationDelay: `${idx * 0.05}s` }}>
-                <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)', boxShadow: '0 4px 12px rgba(15, 76, 117, 0.08)' }}>
-                      <ClipboardList size={20} />
-                    </div>
+              <article key={pond.id} className="glass-card feed-pond-card animate-fade-up" style={{ animationDelay: `${idx * 0.05}s` }}>
+                <div className="feed-pond-header">
+                  <div className="feed-pond-identity">
                     <div>
-                      <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>{pond.pondName}</h3>
-                      <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
+                      <h3>{pond.pondName}</h3>
+                      <p>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => openHistoryDrawer(pond.id)}
-                    style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '8px', color: 'var(--primary)', cursor: 'pointer', transition: 'all 0.2s', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}
-                    onMouseOver={(e) => (e.currentTarget.style.transform = 'translateY(-2px)')}
-                    onMouseOut={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+                    className="feed-history-button"
+                    aria-label={`View ${pond.pondName} feed history`}
+                    title="View history"
                   >
-                    <History size={20} />
+                    <History size={17} />
                   </button>
                 </div>
 
-                <div style={{ padding: '22px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Daily Total</span>
-                    <div style={{ fontSize: '21px', fontWeight: 600, color: 'var(--primary)', display: 'flex', alignItems: 'baseline', gap: '4px' }}>
-                      {latest ? latest.totalDailyFeed : '--'} <span style={{ fontSize: '13px', fontWeight: 600 }}>kg</span>
+                <div className="feed-pond-metric">
+                  <div>
+                    <span>Daily Total</span>
+                    <div>
+                      {latest ? latest.totalDailyFeed : '--'} <small>kg</small>
                     </div>
                   </div>
                 </div>
 
-                <div style={{ padding: '14px 22px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>Daily feed record</span>
+                <div className="feed-pond-actions">
+                  <span>Daily feed record</span>
                   {canEditFeed && (
                     <button
                       onClick={() => {
@@ -848,15 +836,13 @@ export default function FeedRecordsPage() {
                         });
                         setModalOpen(true);
                       }}
-                      style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', transition: 'gap 0.2s' }}
-                      onMouseOver={(e) => (e.currentTarget.style.gap = '10px')}
-                      onMouseOut={(e) => (e.currentTarget.style.gap = '6px')}
+                      className="feed-quick-entry"
                     >
-                      Quick Entry <ArrowRight size={16} />
+                      <Plus size={15} /> Log
                     </button>
                   )}
                 </div>
-              </div>
+              </article>
             );
           })}
         </div>
@@ -864,41 +850,34 @@ export default function FeedRecordsPage() {
 
       {/* -- HISTORY DRAWER ---------------------------------- */}
       {selectedPondForHistory && (
-        <div className="responsive-side-drawer-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1100, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', justifyContent: 'flex-end' }}>
-          <div className="responsive-side-drawer" role="dialog" aria-modal="true" aria-label={`${selectedPondForHistory.pondName} feed history`} style={{ width: '100%', maxWidth: '580px', background: '#F8FAFC', height: '100dvh', boxShadow: '-14px 0 60px rgba(15, 76, 117, 0.16)', display: 'flex', flexDirection: 'column', animation: 'drawerSlide 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}>
-            <div className="responsive-modal-header" style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFFFFF' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'rgba(50, 130, 184, 0.12)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <History size={22} />
-                </div>
+        <div className="responsive-side-drawer-overlay feed-history-overlay">
+          <div className="responsive-side-drawer feed-history-drawer" role="dialog" aria-modal="true" aria-label={`${selectedPondForHistory.pondName} feed history`}>
+            <div className="responsive-modal-header feed-history-header">
+              <div>
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>{selectedPondForHistory.pondName}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, margin: '3px 0 0' }}>{t.feedHistory.title}</p>
+                  <h2>{selectedPondForHistory.pondName}</h2>
+                  <p>{t.feedHistory.title}</p>
                 </div>
               </div>
-              <button aria-label="Close feed history" onClick={closeHistoryDrawer} style={{ background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '12px', padding: '9px', cursor: 'pointer', color: 'var(--text-muted)' }}>
-                <X size={20} />
+              <button aria-label="Close feed history" onClick={closeHistoryDrawer} className="feed-modal-close">
+                <X size={18} />
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px 32px' }}>
+            <div className="feed-history-body">
               {canEditFeed && selectedFeedHistory.length > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '9px', marginBottom: '14px', padding: '12px 14px', borderRadius: '12px', border: '1px solid #BBE1FA', background: '#EAF4FB', color: '#0F4C75', fontSize: '13px', fontWeight: 600 }}>
-                  <History size={17} />
+                <div className="feed-history-hint">
                   <span>{t.feedHistory.editHint}</span>
                 </div>
               )}
               {selectedFeedHistory.length === 0 && (
-                <div style={{ minHeight: '60vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  <div style={{ width: '68px', height: '68px', borderRadius: '20px', background: '#EAF3F8', color: '#0F4C75', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                    <ClipboardList size={30} />
-                  </div>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '18px', fontWeight: 600, marginBottom: '6px' }}>{t.feedHistory.noHistory}</div>
-                  <div style={{ maxWidth: '300px', fontSize: '13px', lineHeight: 1.6, fontWeight: 600 }}>{t.feedHistory.noHistorySubtitle}</div>
+                <div className="feed-history-empty">
+                  <strong>{t.feedHistory.noHistory}</strong>
+                  <p>{t.feedHistory.noHistorySubtitle}</p>
                 </div>
               )}
               {selectedFeedHistory.length > 0 && (
-                <div style={{ overflow: 'hidden', borderRadius: '14px', background: '#FFFFFF', border: '1px solid #DCE8F2' }}>
+                <div className="feed-history-list">
                   {selectedFeedHistory.map((log, i) => {
                     const recordId = log.id || log.date;
                     const isRevealed = revealedFeedRecordId === recordId;
@@ -1019,25 +998,22 @@ export default function FeedRecordsPage() {
 
       {/* -- LOG MODAL -------------------------------------- */}
       {isModalOpen && (
-        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1200, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '640px', maxHeight: 'calc(100dvh - 48px)', background: '#FFFFFF', padding: '0', overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
-            <div className="responsive-modal-header" style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(15, 76, 117, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                  <Plus size={28} />
-                </div>
+        <div className="responsive-modal-overlay feed-log-overlay">
+          <div className="glass-card animate-fade-up responsive-modal feed-log-modal">
+            <div className="responsive-modal-header feed-log-header">
+              <div>
                 <div>
-                  <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>{editingFeedRecord ? t.feedHistory.editTitle : t.feed.addFeedData}</h2>
-                  <p style={{ color: 'var(--text-muted)', fontSize: '13px', lineHeight: '18px', fontWeight: 400 }}>
+                  <h2>{editingFeedRecord ? t.feedHistory.editTitle : t.feed.addFeedData}</h2>
+                  <p>
                     {editingFeedRecord ? t.feedHistory.editSubtitle : t.feed.feedMixHint}
                   </p>
                 </div>
               </div>
-              <button onClick={closeFeedModal} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '12px', padding: '10px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
+              <button onClick={closeFeedModal} className="feed-modal-close" aria-label="Close feed entry"><X size={18} /></button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handleAddFeed} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '24px', maxHeight: 'calc(100dvh - 145px)', overflowY: 'auto' }}>
-              <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+            <form className="responsive-modal-body feed-log-form" onSubmit={handleAddFeed}>
+              <div className="responsive-form-grid feed-log-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Select Pond</label>
                   <select
@@ -1170,9 +1146,9 @@ export default function FeedRecordsPage() {
 
               </div>
 
-              <div style={{ position: 'sticky', bottom: '-24px', margin: '0 -24px -24px', padding: '20px 24px 24px', display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', background: '#FFFFFF' }}>
+              <div className="feed-log-footer">
                 <button type="button" onClick={closeFeedModal} style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', border: '1px solid var(--border)', background: 'white', fontWeight: 500, fontSize: '14px', cursor: 'pointer', transition: 'all 0.2s' }} onMouseOver={(e) => (e.currentTarget.style.background = 'var(--bg-mid)')} onMouseOut={(e) => (e.currentTarget.style.background = 'white')}>{t.actions.cancel}</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, height: '44px', padding: '0 16px', borderRadius: '10px', fontWeight: 500, fontSize: '14px' }}>{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
+                <button type="submit" className="feed-save-button">{editingFeedRecord ? t.feedHistory.updateFeed : t.feed.saveFeedData}</button>
               </div>
             </form>
           </div>

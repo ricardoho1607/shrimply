@@ -4,14 +4,23 @@
   "private": true,
   "scripts": {
     "predev": "node ../scripts/sync-web-pdf-generators.cjs",
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "prebuild": "node ../scripts/sync-web-pdf-generators.cjs && node scripts/validate-public-env.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:cursor": "node --test src/components/Cursor.test.cjs",
+    "test:dashboard-summary-ui": "node --test src/app/dashboard/dashboardSummaryUi.test.cjs",
+    "test:authenticated-ui": "node --test src/app/dashboard/authenticatedUi.test.cjs",
+    "test:feed-ui": "node --test src/app/dashboard/feed/feedUi.test.cjs",
     "test:inventory-layout": "node --test src/app/dashboard/inventory/feeds/inventoryMetricLayout.test.cjs",
+    "test:pond-detail-ui": "node --test src/app/dashboard/ponds/detail/pondDetailUi.test.cjs",
+    "test:ponds-ui": "node --test src/app/dashboard/ponds/pondsUi.test.cjs",
+    "test:water-quality-ui": "node --test src/app/dashboard/water/waterQualityUi.test.cjs",
+    "test:water-quality-state": "node --test src/app/dashboard/water/labRowState.test.cjs",
     "test:mobile-pdf": "node --test src/lib/mobilePdfExport.test.cjs",
-    "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs"
+    "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs",
+    "test:dev-bundler": "node --test scripts/dev-bundler.test.cjs"
   },
   "dependencies": {
     "firebase": "^12.12.1",

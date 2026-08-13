@@ -1452,7 +1452,7 @@ export default function HiddenAdminPage() {
       <AdminSidebar activeTab={activeTab} onChange={setActiveTab} userName={user?.name || user?.email || undefined} />
 
       <main className="shrimply-admin-main">
-        <div className="admin-main-container">
+        <div className="admin-main-container authenticated-compact-page">
           <div className="admin-topbar">
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>

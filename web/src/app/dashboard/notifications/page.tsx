@@ -198,7 +198,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="dashboard-page" style={{ maxWidth: '1000px', margin: '0 auto' }}>
+    <div className="dashboard-page authenticated-compact-page" style={{ maxWidth: '1000px', margin: '0 auto' }}>
       <div className="dashboard-action-row">
           <button 
             onClick={markAllAsRead}

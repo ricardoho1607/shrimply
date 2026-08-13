@@ -10,7 +10,6 @@ import {
   Wind,
   X,
   Loader2,
-  Waves,
   History,
   Info,
   FileText,
@@ -37,6 +36,7 @@ import {
   isEnterpriseOwner,
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
+import { toggleUniqueLabPondRow } from './labRowState';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -485,15 +485,14 @@ export default function WaterQualityPage() {
   });
 
   const toggleLabPond = (pond: Pond) => {
-    setSelectedLabPondIds(prev => {
-      const exists = prev.includes(pond.id);
-      const nextIds = exists ? prev.filter(id => id !== pond.id) : [...prev, pond.id];
-      setLabRows(rows => {
-        if (exists) return rows.filter(row => row.pondId !== pond.id);
-        return [...rows, createEmptyLabRow(pond)];
-      });
-      return nextIds;
-    });
+    const next = toggleUniqueLabPondRow(
+      selectedLabPondIds,
+      labRows,
+      pond.id,
+      () => createEmptyLabRow(pond),
+    );
+    setSelectedLabPondIds(next.selectedIds);
+    setLabRows(next.rows);
   };
 
   const updateLabRow = (pondId: string, path: string[], value: string) => {
@@ -986,8 +985,8 @@ export default function WaterQualityPage() {
   const activePdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
 
   return (
-    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="glass-card animate-fade-up" style={{ padding: '5px', display: 'inline-flex', gap: '4px', marginBottom: '6px', width: 'fit-content', alignSelf: 'flex-start', borderRadius: '12px' }}>
+    <div className="dashboard-page water-quality-page">
+      <div className="water-view-tabs animate-fade-up" role="tablist" aria-label="Water quality view">
         {([
           { id: 'daily', label: 'Daily Log', icon: Droplets },
           { id: 'lab', label: 'Lab Reports', icon: FileText },
@@ -998,21 +997,10 @@ export default function WaterQualityPage() {
             <button
               key={item.id}
               type="button"
+              role="tab"
+              aria-selected={active}
               onClick={() => setActiveView(item.id)}
-              style={{
-                border: 'none',
-                borderRadius: '9px',
-                padding: '8px 12px',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '7px',
-                background: active ? 'var(--primary)' : 'transparent',
-                color: active ? '#FFFFFF' : 'var(--text-muted)',
-                fontWeight: 600,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                boxShadow: active ? '0 8px 18px rgba(15, 76, 117, 0.18)' : 'none',
-              }}
+              className={active ? 'is-active' : ''}
             >
               <Icon size={15} />
               {item.label}
@@ -1022,20 +1010,13 @@ export default function WaterQualityPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
+      <div className="glass-card dashboard-toolbar-card water-toolbar animate-fade-up animate-delay-1">
+        <div className="water-search-field">
+          <Search size={17} aria-hidden="true" />
           <input
             placeholder="Search ponds or parameters..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
-              height: '44px', padding: '0 16px 0 40px', width: '100%', fontSize: '14px', outline: 'none',
-              color: 'var(--text-primary)', fontWeight: 400, transition: 'all 0.2s'
-            }}
-            onFocus={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.currentTarget.style.borderColor = 'var(--border)'}
           />
         </div>
         {canEditWater && activeView === 'daily' && (
@@ -1046,7 +1027,7 @@ export default function WaterQualityPage() {
             }}
             className="dashboard-action dashboard-action-primary"
           >
-            <Plus size={20} strokeWidth={3} />
+            <Plus size={18} />
             <span>New Parameter Log</span>
           </button>
         )}
@@ -1056,7 +1037,7 @@ export default function WaterQualityPage() {
             onClick={() => setLabActionModalOpen(true)}
             className="dashboard-action dashboard-action-primary"
           >
-            <Plus size={20} strokeWidth={3} />
+            <Plus size={18} />
             <span>Add Lab Report</span>
           </button>
         )}
@@ -1074,47 +1055,46 @@ export default function WaterQualityPage() {
             onSelect={(pond) => setSelectedPondForHistory(pond as Pond)}
           />
         ) : (
-        <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
+        <div className="water-pond-grid">
           {filteredPonds.map((pond, idx) => {
             const latest = getLatestWQ(pond);
             const labStyle = getSeverityStyle(pond.latestLabStatus?.status);
             return (
-              <div key={pond.id} className={`glass-card animate-fade-up animate-delay-${(idx % 4) + 1}`} style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                      <Waves size={20} />
-                    </div>
+              <article key={pond.id} className={`glass-card water-pond-card animate-fade-up animate-delay-${(idx % 4) + 1}`}>
+                <div className="water-pond-header">
+                  <div className="water-pond-identity">
                     <div>
-                      <h3 style={{ fontSize: '1rem', fontWeight: 600, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: '2px' }}>
+                      <h3>{pond.pondName}</h3>
+                      <p>
                         {latest ? `UPDATED ${new Date(latest.date).toLocaleDateString()}` : 'NO DATA LOGGED'}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedPondForHistory(pond)}
-                    className="icon-btn-modern"
+                    className="water-history-button"
+                    aria-label={`View ${pond.pondName} water quality history`}
+                    title="View history"
                   >
-                    <History size={20} />
+                    <History size={17} />
                   </button>
                 </div>
 
                 {pond.latestLabStatus && (
-                  <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', background: '#FFFFFF' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '14px', alignItems: 'center' }}>
+                  <div className="water-lab-status">
+                    <div>
                       <div>
-                        <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Latest Lab Status</div>
-                        <div style={{ marginTop: '4px', fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)' }}>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</div>
+                        <span>Latest lab</span>
+                        <strong>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</strong>
                       </div>
-                      <span style={{ borderRadius: 999, padding: '6px 10px', background: labStyle.bg, color: labStyle.color, fontSize: '0.72rem', fontWeight: 600 }}>
+                      <span className="water-lab-status-pill" style={{ background: labStyle.bg, color: labStyle.color }}>
                         {labStyle.label}
                       </span>
                     </div>
                   </div>
                 )}
 
-                <div style={{ padding: '24px 22px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px', flex: 1 }}>
+                <div className="water-metric-grid">
                   <div className="wq-metric">
                     <span className="wq-label">pH Level</span>
                     <div className="wq-value">
@@ -1145,18 +1125,17 @@ export default function WaterQualityPage() {
                   </div>
                 </div>
 
-                <div style={{ padding: '14px 22px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', background: 'var(--bg-mid)' }}>
-                  {canEditWater && (
+                {canEditWater && (
+                  <div className="water-pond-actions">
                     <button
                       onClick={() => { setFormData({ ...formData, pondId: pond.id, date: today }); setModalOpen(true); }}
-                      className="btn-secondary"
-                      style={{ padding: '9px 16px', fontSize: '0.82rem' }}
+                      className="water-quick-log"
                     >
-                      Quick Log <Plus size={16} strokeWidth={2.5} />
+                      <Plus size={15} /> Log
                     </button>
-                  )}
-                </div>
-              </div>
+                  </div>
+                )}
+              </article>
             );
           })}
         </div>
@@ -1449,21 +1428,21 @@ export default function WaterQualityPage() {
 
       {/* -- LAB REPORT ACTION MODAL --------------------- */}
       {isLabActionModalOpen && (
-        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2900, background: 'rgba(15, 23, 42, 0.38)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 24px 60px rgba(0,0,0,0.18)' }}>
-            <div className="responsive-modal-header" style={{ padding: '22px 24px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', background: 'var(--bg-mid)' }}>
+        <div className="responsive-modal-overlay water-lab-action-overlay">
+          <div className="glass-card responsive-modal animate-fade-up water-lab-action-modal">
+            <div className="responsive-modal-header water-lab-action-header">
               <div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 600 }}>Add Lab Report</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.86rem', marginTop: '4px', fontWeight: 600 }}>Upload a PDF or enter results manually.</p>
+                <h2>Add Lab Report</h2>
+                <p>Upload a PDF or enter results manually.</p>
               </div>
-              <button onClick={() => setLabActionModalOpen(false)} className="icon-btn-modern">
-                <X size={22} />
+              <button onClick={() => setLabActionModalOpen(false)} className="water-modal-close" aria-label="Close lab report options">
+                <X size={18} />
               </button>
             </div>
-            <div className="responsive-modal-body" style={{ padding: '22px 24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-              <div>
-                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Upload PDF</div>
-                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="responsive-modal-body water-lab-action-body">
+              <section>
+                <div className="water-lab-action-label">Upload PDF</div>
+                <div className="water-lab-action-grid">
                   <button
                     type="button"
                     disabled={mineralPdfActionState.disabled}
@@ -1471,13 +1450,13 @@ export default function WaterQualityPage() {
                       setLabActionModalOpen(false);
                       openLabPdfUpload('water_quality');
                     }}
-                    className="btn-secondary"
-                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start', opacity: mineralPdfActionState.disabled ? 0.48 : 1, cursor: mineralPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
+                    className="water-lab-action-option"
+                    style={{ opacity: mineralPdfActionState.disabled ? 0.48 : 1, cursor: mineralPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
                   >
-                    <FileText size={18} />
-                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                    <FileText size={16} />
+                    <span>
                       <span>Mineral PDF</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>{mineralPdfActionState.message}</span>
+                      <small>{mineralPdfActionState.message}</small>
                     </span>
                   </button>
                   <button
@@ -1487,30 +1466,29 @@ export default function WaterQualityPage() {
                       setLabActionModalOpen(false);
                       openLabPdfUpload('plankton');
                     }}
-                    className="btn-secondary"
-                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start', opacity: planktonPdfActionState.disabled ? 0.48 : 1, cursor: planktonPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
+                    className="water-lab-action-option"
+                    style={{ opacity: planktonPdfActionState.disabled ? 0.48 : 1, cursor: planktonPdfActionState.disabled ? 'not-allowed' : 'pointer' }}
                   >
-                    <FileText size={18} />
-                    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '3px' }}>
+                    <FileText size={16} />
+                    <span>
                       <span>Plankton PDF</span>
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600 }}>{planktonPdfActionState.message}</span>
+                      <small>{planktonPdfActionState.message}</small>
                     </span>
                   </button>
                 </div>
-              </div>
-              <div>
-                <div style={{ color: 'var(--text-faint)', fontSize: '0.68rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px' }}>Manual Entry</div>
-                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              </section>
+              <section>
+                <div className="water-lab-action-label">Manual Entry</div>
+                <div className="water-lab-action-grid">
                   <button
                     type="button"
                     onClick={() => {
                       setLabActionModalOpen(false);
                       openNewLabReport('water_quality');
                     }}
-                    className="btn-secondary"
-                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start' }}
+                    className="water-lab-action-option"
                   >
-                    <Plus size={18} />
+                    <Plus size={16} />
                     <span>Manual Mineral</span>
                   </button>
                   <button
@@ -1519,14 +1497,13 @@ export default function WaterQualityPage() {
                       setLabActionModalOpen(false);
                       openNewLabReport('plankton');
                     }}
-                    className="btn-secondary"
-                    style={{ padding: '16px', borderRadius: '14px', justifyContent: 'flex-start' }}
+                    className="water-lab-action-option"
                   >
-                    <Plus size={18} />
+                    <Plus size={16} />
                     <span>Manual Plankton</span>
                   </button>
                 </div>
-              </div>
+              </section>
             </div>
           </div>
         </div>
@@ -1534,23 +1511,23 @@ export default function WaterQualityPage() {
 
       {/* -- LAB REPORT MODAL --------------------------------- */}
       {isLabModalOpen && (
-        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '1100px', maxHeight: '90vh', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
-            <div className="responsive-modal-header" style={{ padding: '26px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+        <div className="responsive-modal-overlay water-lab-form-overlay">
+          <div className="glass-card responsive-modal animate-fade-up water-lab-form-modal">
+            <div className="responsive-modal-header water-lab-form-header">
               <div>
-                <h2 style={{ fontSize: '1.45rem', fontWeight: 600 }}>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px', fontWeight: 600 }}>Enter results manually or upload a lab PDF, then review before confirmation.</p>
+                <h2>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
+                <p>Enter results manually or upload a lab PDF, then review before confirmation.</p>
               </div>
-              <button onClick={() => setLabModalOpen(false)} className="icon-btn-modern">
-                <X size={24} />
+              <button onClick={() => setLabModalOpen(false)} className="water-modal-close" aria-label="Close lab report form">
+                <X size={18} />
               </button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handleCreateManualLabReport} style={{ padding: '26px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div className="responsive-four-column" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+            <form className="responsive-modal-body water-lab-form-body" onSubmit={handleCreateManualLabReport}>
+              <div className="water-lab-form-fields">
+                <div className="water-lab-form-field">
                   <label className="form-label">Entry Mode</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                  <div className="water-entry-mode-tabs">
                     {([
                       ['manual', 'Manual'],
                       ['pdf_upload', 'PDF'],
@@ -1560,22 +1537,15 @@ export default function WaterQualityPage() {
                         type="button"
                         disabled={Boolean(editingLabReportId)}
                         onClick={() => setLabEntryMode(mode)}
-                        style={{
-                          padding: '13px 10px',
-                          borderRadius: '12px',
-                          border: labEntryMode === mode ? '1px solid var(--primary)' : '1px solid var(--border)',
-                          background: labEntryMode === mode ? 'var(--primary-dim)' : '#FFFFFF',
-                          color: labEntryMode === mode ? 'var(--primary)' : 'var(--text-muted)',
-                          fontWeight: 600,
-                          cursor: editingLabReportId ? 'default' : 'pointer',
-                        }}
+                        className={labEntryMode === mode ? 'is-active' : ''}
+                        style={{ cursor: editingLabReportId ? 'default' : 'pointer' }}
                       >
                         {label}
                       </button>
                     ))}
                   </div>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="water-lab-form-field">
                   <label className="form-label">Report Type</label>
                   <select value={labForm.reportType} onChange={e => setLabForm({ ...labForm, reportType: e.target.value as LabReportType })} className="form-input">
                     {labForm.reportType === 'combined' && <option value="combined">Combined Lab Report</option>}
@@ -1583,51 +1553,55 @@ export default function WaterQualityPage() {
                     <option value="plankton">Plankton</option>
                   </select>
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="water-lab-form-field">
                   <label className="form-label">Sample Date</label>
                   <input type="date" required value={labForm.sampleDate} onChange={e => setLabForm({ ...labForm, sampleDate: e.target.value })} className="form-input" />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="water-lab-form-field">
                   <label className="form-label">Lab Name</label>
                   <input value={labForm.labName} onChange={e => setLabForm({ ...labForm, labName: e.target.value })} placeholder="Farm kit / lab name" className="form-input" />
                 </div>
               </div>
 
               {labEntryMode === 'pdf_upload' && !editingLabReportId && (
-                <div className="responsive-two-column" style={{ border: '1px solid var(--border)', borderRadius: '16px', padding: '18px', background: 'var(--bg-mid)', display: 'grid', gridTemplateColumns: '1fr auto', gap: '16px', alignItems: 'center' }}>
-                  <div>
+                <div className="water-pdf-upload-row">
+                  <div className="water-pdf-upload-copy">
                     <label className="form-label">Upload Lab PDF</label>
-                    <input
-                      type="file"
-                      accept="application/pdf"
-                      onChange={e => setLabPdfFile(e.target.files?.[0] || null)}
-                      style={{ display: 'block', marginTop: '10px', fontWeight: 600 }}
-                    />
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, marginTop: '8px' }}>
-                      The PDF is saved to Firebase Storage. Gemini extraction creates a draft table only; it does not confirm the report.
-                    </p>
+                    <div className="water-pdf-file-control">
+                      <input
+                        className="water-pdf-file-input"
+                        type="file"
+                        accept="application/pdf"
+                        onChange={e => setLabPdfFile(e.target.files?.[0] || null)}
+                      />
+                      {labPdfFile && (
+                        <span className="water-pdf-file-success" role="status" aria-label={`${labPdfFile.name} selected`}>
+                          <CheckCircle2 size={17} />
+                        </span>
+                      )}
+                    </div>
+                    <p>Creates a draft for review. The report is not confirmed automatically.</p>
                   </div>
                   <button
                     type="button"
                     disabled={labSubmitting || !labPdfFile || activePdfActionState.disabled}
                     onClick={handleUploadLabPdf}
-                    className="btn-primary"
-                    style={{ padding: '14px 18px', borderRadius: '14px', fontWeight: 600, opacity: labSubmitting || !labPdfFile || activePdfActionState.disabled ? 0.6 : 1 }}
+                    className="water-lab-primary-button water-upload-extract-button"
                   >
                     {labSubmitting ? 'Extracting...' : activePdfActionState.disabled ? activePdfActionState.message : 'Upload & Extract'}
                   </button>
                 </div>
               )}
 
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <section className="water-included-ponds">
+                <div className="water-included-ponds-heading">
                   <div>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Included Ponds</h3>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600 }}>Select every pond covered by this lab report.</p>
+                    <h3>Included Ponds</h3>
+                    <p>Select every pond covered by this lab report.</p>
                   </div>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 600, fontSize: '0.82rem' }}>{selectedLabPondIds.length} selected</span>
+                  <span>{selectedLabPondIds.length} selected</span>
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '10px' }}>
+                <div className="water-pond-selector-grid">
                   {accessiblePonds.map(pond => {
                     const selected = selectedLabPondIds.includes(pond.id);
                     return (
@@ -1635,18 +1609,7 @@ export default function WaterQualityPage() {
                         key={pond.id}
                         type="button"
                         onClick={() => toggleLabPond(pond)}
-                        style={{
-                          padding: '12px 14px',
-                          borderRadius: '12px',
-                          border: selected ? '1px solid var(--primary)' : '1px solid var(--border)',
-                          background: selected ? 'var(--primary-dim)' : '#FFFFFF',
-                          color: selected ? 'var(--primary)' : 'var(--text-primary)',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                        }}
+                        className={selected ? 'is-selected' : ''}
                       >
                         <span>{pond.pondName}</span>
                         {selected && <CheckCircle2 size={16} />}
@@ -1654,7 +1617,7 @@ export default function WaterQualityPage() {
                     );
                   })}
                 </div>
-              </div>
+              </section>
 
               {labRows.length > 0 && (
                 <div>
@@ -1700,12 +1663,9 @@ export default function WaterQualityPage() {
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '22px' }}>
-                <button type="button" onClick={() => setLabModalOpen(false)} style={{
-                  flex: 1, padding: '15px', borderRadius: '14px', border: '1px solid var(--border)',
-                  background: 'transparent', fontWeight: 600, cursor: 'pointer'
-                }}>Cancel</button>
-                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="btn-primary" style={{ flex: 1, padding: '15px', borderRadius: '14px', fontWeight: 600, opacity: labSubmitting || selectedLabPondIds.length === 0 ? 0.6 : 1 }}>
+              <div className="water-lab-form-footer">
+                <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">Cancel</button>
+                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="water-lab-primary-button water-confirm-lab-button">
                   {labSubmitting ? 'Saving...' : 'Confirm Lab Report'}
                 </button>
               </div>
@@ -1716,20 +1676,20 @@ export default function WaterQualityPage() {
 
       {/* -- LOG MODAL ------------------------------------------ */}
       {isModalOpen && (
-        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
-          <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '560px', maxHeight: 'min(760px, calc(100vh - 36px))', background: 'white', padding: '0', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)', display: 'flex', flexDirection: 'column' }}>
-            <div className="responsive-modal-header" style={{ padding: '20px 22px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)', flexShrink: 0 }}>
+        <div className="responsive-modal-overlay water-log-overlay">
+          <div className="glass-card responsive-modal animate-fade-up water-log-modal">
+            <div className="responsive-modal-header water-log-header">
               <div>
-                <h2 style={{ fontSize: '1.18rem', fontWeight: 600 }}>Log Parameters</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '3px', fontWeight: 600 }}>Sync environmental readings with Orson AI.</p>
+                <h2>Log Parameters</h2>
+                <p>Sync environmental readings with Orson AI.</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="icon-btn-modern">
-                <X size={20} />
+              <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label="Close parameter log">
+                <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleAddWQ} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
-              <div className="responsive-modal-body responsive-form-grid" style={{ padding: '20px 22px', overflowY: 'auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', minHeight: 0 }}>
+            <form onSubmit={handleAddWQ} className="water-log-form">
+              <div className="responsive-modal-body water-log-form-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">Target Pond</label>
                   <select
@@ -1744,7 +1704,7 @@ export default function WaterQualityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Sampling Date</label>
+                  <label className="form-label">Date</label>
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="form-input" />
                 </div>
 
@@ -1779,12 +1739,12 @@ export default function WaterQualityPage() {
                 </div>
               </div>
 
-              <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', padding: '16px 22px', background: '#FFFFFF', flexShrink: 0 }}>
+              <div className="responsive-modal-footer water-log-footer">
                 <button type="button" onClick={() => setModalOpen(false)} style={{
-                  flex: 1, padding: '13px', borderRadius: '12px', border: '1px solid var(--border)',
+                  flex: 1, borderRadius: '10px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 600, cursor: 'pointer'
                 }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '13px', borderRadius: '12px', fontWeight: 600 }}>Save Log Entry</button>
+                <button type="submit" disabled={!formData.pondId} className="water-save-log-button">Save Log Entry</button>
               </div>
             </form>
           </div>

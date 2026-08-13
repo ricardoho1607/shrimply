@@ -121,7 +121,7 @@ export default function TreatmentMixesPage() {
   if (loading) return <div style={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}><Loader2 className="animate-spin" size={42} /></div>;
 
   return (
-    <div className="dashboard-page-relaxed" style={{ paddingBottom: 40 }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ paddingBottom: 40 }}>
       <div className="dashboard-inline-toolbar">
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Link href="/dashboard/inventory/feeds" className="dashboard-action dashboard-action-secondary" aria-label="Back to feeds and additives"><ArrowLeft size={18} /></Link>

@@ -250,7 +250,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="settings-shell" style={settingsShellStyle}>
+    <div className="settings-shell authenticated-compact-page" style={settingsShellStyle}>
       
       <p style={{ color: 'var(--text-muted)', fontSize: '15px', margin: 0 }}>
         {t.settings.manageProfile || 'Manage your personal profile and farm configurations.'}

@@ -212,7 +212,7 @@ export default function CompanyPage() {
   }
 
   return (
-    <div className="company-page" style={pageStyle}>
+    <div className="company-page authenticated-compact-page" style={pageStyle}>
       <div className="company-page-header" style={{ display: 'flex', justifyContent: 'space-between', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div className="company-page-heading">
           <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', marginBottom: '18px' }}>

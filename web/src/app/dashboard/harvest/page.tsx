@@ -476,7 +476,7 @@ export default function HarvestPage() {
   };
 
   return (
-    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
       {/* Toolbar */}
       <div className="glass-card dashboard-toolbar-card animate-fade-up">

@@ -5,19 +5,17 @@ import {
   Plus,
   Waves,
   Search,
-  Archive,
   RotateCcw,
   Calendar,
-  Scale,
-  Users,
   X,
   Loader2,
-  ArrowRight,
   Lock,
-  Save,
-  Shrimp,
   Pencil,
-  Trash2
+  Trash2,
+  LayoutGrid,
+  List,
+  ChevronRight,
+  Check
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -171,6 +169,7 @@ export default function PondsPage() {
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const startRequestHandledRef = useRef(false);
   const [searchTerm, setSearchTerm] = useState('');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
@@ -819,359 +818,233 @@ export default function PondsPage() {
     ? (t.ponds?.deleteInactiveConfirm || 'Delete {{pondName}}? This removes the inactive physical pond placeholder and cannot be undone.')
     : (t.ponds?.deleteEndedConfirm || 'Delete {{pondName}}? This permanently removes this ended cycle record and its sampling history.');
   const deleteMessage = deleteMessageTemplate.replace('{{pondName}}', deletePondName);
+  const visiblePondItems = [
+    ...filteredPhysicalPonds.map((pond) => ({ kind: 'physical' as const, pond })),
+    ...filteredPonds.map((pond) => ({ kind: 'cycle' as const, pond })),
+  ];
 
   return (
-    <div className="dashboard-page-relaxed" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="glass-card animate-fade-up" style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '14px', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
-          <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <RotateCcw size={17} />
-          </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-                Current Cycle
-              </span>
-              <span style={{
-                padding: '3px 8px',
-                borderRadius: '999px',
-                background: activeFarmCycle ? 'var(--primary-dim)' : 'var(--bg-mid)',
-                color: activeFarmCycle ? 'var(--primary)' : 'var(--text-muted)',
-                fontSize: '0.66rem',
-                fontWeight: 600,
-                textTransform: 'uppercase',
-              }}>
+    <div className="dashboard-page ponds-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
+      <section className="glass-card animate-fade-up ponds-cycle-panel" aria-label="Current farm cycle">
+        <div className="ponds-cycle-primary">
+          <div className="ponds-cycle-copy">
+            <div className="ponds-cycle-label-row">
+              <span className="ponds-eyebrow">Current cycle</span>
+              <span className={`ponds-status-badge ${activeFarmCycle ? 'is-active' : ''}`}>
                 {activeFarmCycle?.status || 'waiting'}
               </span>
             </div>
-            <div style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {activeFarmCycle?.cycleName || `Cycle ${cycles.length + 1} not started`}
-            </div>
+            <strong>{activeFarmCycle?.cycleName || `Cycle ${cycles.length + 1} not started`}</strong>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
-            <Waves size={15} color="var(--primary)" />
-            {activeCyclePonds.length} pond{activeCyclePonds.length === 1 ? '' : 's'}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
-            <Calendar size={15} color="var(--primary)" />
-            {activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}
-          </div>
-          {canManageFarmCycle && activeFarmCycle && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="ponds-cycle-meta">
+          <span><Calendar size={14} />{activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}</span>
+        </div>
+
+        {canManageFarmCycle && activeFarmCycle && (
+          <div className="ponds-cycle-actions">
+            <div className="ponds-cycle-name-field">
               <input
                 value={cycleNameDraft}
                 onChange={(event) => setCycleNameDraft(event.target.value)}
                 placeholder="Cycle name"
                 aria-label="Cycle name"
-                style={{
-                  width: '160px',
-                  padding: '8px 10px',
-                  borderRadius: '10px',
-                  border: '1px solid var(--border)',
-                  background: 'var(--bg-mid)',
-                  color: 'var(--text-primary)',
-                  fontSize: '0.78rem',
-                  fontWeight: 600,
-                  outline: 'none',
-                }}
               />
-              <button type="button" onClick={handleRenameCycle} title="Rename cycle" className="icon-btn-modern" style={{ width: '34px', height: '34px' }}>
-                <Save size={15} />
-              </button>
-              <button type="button" onClick={handleCloseFarmCycle} title="End cycle" className="icon-btn-modern" style={{ width: '34px', height: '34px', color: '#e74c3c' }}>
-                <Lock size={15} />
+              <button type="button" onClick={handleRenameCycle} title="Save cycle name" aria-label="Save cycle name">
+                <Check size={15} />
               </button>
             </div>
-          )}
-        </div>
-      </div>
+            <button type="button" onClick={handleCloseFarmCycle} title="End cycle" aria-label="End cycle" className="is-danger">
+              <Lock size={15} />
+            </button>
+          </div>
+        )}
+      </section>
 
-      {/* Toolbar */}
-      <div className="glass-card dashboard-toolbar-card animate-fade-up animate-delay-1">
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
+      <section className="glass-card animate-fade-up animate-delay-1 ponds-toolbar" aria-label="Pond controls">
+        <div className="ponds-search-field">
+          <Search size={17} aria-hidden="true" />
           <input
-            placeholder={t.ponds.searchPlaceholder || "Search ponds by name..."}
+            placeholder={t.ponds.searchPlaceholder || 'Search ponds by name...'}
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={{
-              background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '10px',
-              height: '44px', padding: '0 16px 0 48px', width: '100%', fontSize: '14px', outline: 'none',
-              fontWeight: 400, color: 'var(--text-primary)', transition: 'all 0.2s'
-            }}
-            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
-            onBlur={e => e.target.style.borderColor = 'var(--border)'}
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
-        <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-mid)', padding: '5px', borderRadius: '14px', border: '1px solid var(--border)' }}>
-          <button onClick={() => setCycleFilter('active')} style={{
-            padding: '8px 14px', borderRadius: '10px', background: cycleFilter === 'active' ? 'var(--glass-bg)' : 'transparent',
-            border: '1px solid var(--border)', fontSize: '13px', fontWeight: 600,
-            color: cycleFilter === 'active' ? 'var(--primary)' : 'var(--text-muted)',
-            boxShadow: cycleFilter === 'active' ? 'var(--shadow-card)' : 'none',
-            opacity: cycleFilter === 'active' ? 1 : 0.75,
-          }}>
-            {t.ponds.active || 'Active'} <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{activePondCount}</span>
+
+        <div className="ponds-filter-tabs" role="tablist" aria-label="Pond cycle status">
+          {([
+            ['active', t.ponds.active || 'Active', activePondCount],
+            ['inactive', t.ponds.inactive || 'Inactive', inactivePondOptions.length],
+            ['ended', 'Ended', endedPondCount],
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={cycleFilter === value}
+              className={cycleFilter === value ? 'is-active' : ''}
+              onClick={() => setCycleFilter(value)}
+            >
+              {label}<span>{count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="dashboard-view-toggle ponds-view-toggle" aria-label="Pond view">
+          <button
+            type="button"
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
+            onClick={() => setViewMode('grid')}
+            className={viewMode === 'grid' ? 'is-active' : ''}
+          >
+            <LayoutGrid size={17} />
           </button>
-          <button onClick={() => setCycleFilter('inactive')} style={{
-            padding: '8px 14px', borderRadius: '10px',
-            background: cycleFilter === 'inactive' ? 'var(--glass-bg)' : 'transparent',
-            border: cycleFilter === 'inactive' ? '1px solid var(--border)' : 'none',
-            fontSize: '13px', fontWeight: 600,
-            color: cycleFilter === 'inactive' ? 'var(--primary)' : 'var(--text-muted)',
-            boxShadow: cycleFilter === 'inactive' ? 'var(--shadow-card)' : 'none',
-          }}>
-            {t.ponds.inactive || 'Inactive'} <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{inactivePondOptions.length}</span>
-          </button>
-          <button onClick={() => setCycleFilter('ended')} style={{
-            padding: '8px 14px', borderRadius: '10px',
-            background: cycleFilter === 'ended' ? 'var(--glass-bg)' : 'transparent',
-            border: cycleFilter === 'ended' ? '1px solid var(--border)' : 'none',
-            fontSize: '13px', fontWeight: 600,
-            color: cycleFilter === 'ended' ? 'var(--primary)' : 'var(--text-muted)',
-            boxShadow: cycleFilter === 'ended' ? 'var(--shadow-card)' : 'none',
-          }}>
-            Ended <span style={{ color: 'var(--text-faint)', marginLeft: '4px' }}>{endedPondCount}</span>
+          <button
+            type="button"
+            aria-label="List view"
+            aria-pressed={viewMode === 'list'}
+            onClick={() => setViewMode('list')}
+            className={viewMode === 'list' ? 'is-active' : ''}
+          >
+            <List size={17} />
           </button>
         </div>
+
         {canEditPonds && (
-          <button className="dashboard-action dashboard-action-primary" onClick={() => {
-            setFormData(prev => ({ ...prev, docStart: today, baselineDate: today }));
+          <button className="dashboard-action dashboard-action-primary ponds-add-button" onClick={() => {
+            setFormData((previous) => ({ ...previous, docStart: today, baselineDate: today }));
             setModalOpen(true);
           }}>
-            <Plus size={20} strokeWidth={3} />
-            <span>{t.ponds.addNew || 'Add New Pond'}</span>
+            <Plus size={18} />
+            <span>{t.ponds.addNew || 'Add pond'}</span>
           </button>
         )}
-      </div>
+      </section>
 
-      {/* Grid */}
       {loading || physicalPondsLoading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '400px' }}>
-          <Loader2 className="animate-spin" size={40} color="var(--primary)" />
+        <div className="ponds-loading-state">
+          <Loader2 className="animate-spin" size={30} color="var(--primary)" />
         </div>
-      ) : filteredPonds.length === 0 && filteredPhysicalPonds.length === 0 ? (
-        <div className="glass-card animate-fade-up animate-delay-2" style={{ padding: '80px 40px', textAlign: 'center' }}>
-          <div style={{
-            width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary-dim)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
-            margin: '0 auto 24px'
-          }}>
-            <Waves size={40} />
-          </div>
-          <h2 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '12px' }}>{t.ponds.noPondsFound || 'No Ponds Found'}</h2>
-          <p style={{ color: 'var(--text-muted)', marginBottom: '32px', maxWidth: '400px', margin: '0 auto 32px', lineHeight: 1.6 }}>
-            {t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}
-          </p>
+      ) : visiblePondItems.length === 0 ? (
+        <div className="glass-card animate-fade-up animate-delay-2 ponds-empty-state">
+          <div className="ponds-empty-icon"><Waves size={26} /></div>
+          <h2>{t.ponds.noPondsFound || 'No ponds found'}</h2>
+          <p>{t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}</p>
           {canEditPonds && (
             <button className="btn-primary" onClick={() => {
-              setFormData(prev => ({ ...prev, docStart: today, baselineDate: today }));
+              setFormData((previous) => ({ ...previous, docStart: today, baselineDate: today }));
               setModalOpen(true);
             }}>
-              <Plus size={20} strokeWidth={3} />
-              {t.ponds.addNew || 'Add New Pond'}
+              <Plus size={18} />
+              {t.ponds.addNew || 'Add pond'}
             </button>
           )}
         </div>
+      ) : viewMode === 'grid' ? (
+        <div className="animate-fade-up animate-delay-2 ponds-card-grid">
+          {visiblePondItems.map((item) => {
+            const isPhysical = item.kind === 'physical';
+            const pond = item.pond;
+            const cyclePond = item.kind === 'cycle' ? item.pond : null;
+            const statusLabel = isPhysical ? 'Inactive' : (isActiveCycle(cyclePond!) ? 'Active' : 'Ended');
+            const pondHref = cyclePond ? `/dashboard/ponds/detail?id=${cyclePond.id}` : null;
+
+            return (
+              <article key={`${item.kind}-${pond.id}`} className="glass-card ponds-overview-card">
+                <div className="ponds-card-header">
+                  <div className="ponds-card-identity">
+                    <div className="dashboard-pond-name-badge" title={pond.pondName}>{pond.pondName}</div>
+                    <div>
+                      <span className={`ponds-card-status is-${statusLabel.toLowerCase()}`}>{statusLabel}</span>
+                      <p>{cyclePond ? getPlSupplier(cyclePond) : t.startPondCycle.readyForNextCycle}</p>
+                    </div>
+                  </div>
+                  {canEditPonds && (
+                    <div className="ponds-card-actions">
+                      {cyclePond?.cycleStartMode === 'midcycle' && isActiveCycle(cyclePond) && (
+                        <button type="button" onClick={() => openBaselineEdit(cyclePond)} title="Edit baseline estimates" aria-label={`Edit ${pond.pondName} baseline`}>
+                          <Pencil size={15} />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
+                        title={isPhysical || !isActiveCycle(cyclePond!) ? 'Start cycle' : 'End cycle'}
+                        aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? 'Start' : 'End'} ${pond.pondName} cycle`}
+                      >
+                        {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
+                      </button>
+                      {(isPhysical || !isActiveCycle(cyclePond!)) && (
+                        <button
+                          type="button"
+                          className="is-danger"
+                          onClick={() => isPhysical ? openDeletePhysicalPond(pond) : openDeleteCyclePond(cyclePond!)}
+                          title="Delete pond"
+                          aria-label={`Delete ${pond.pondName}`}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="ponds-card-metrics">
+                  <div><span>{t.ponds.area || 'Area'}</span><strong>{pond.pondArea.toLocaleString()} m²</strong></div>
+                  <div><span>{t.ponds.density || 'Density'}</span><strong>{cyclePond ? `${cyclePond.density.toLocaleString()} PL/m²` : '—'}</strong></div>
+                  <div><span>{t.ponds.population || 'Population'}</span><strong>{cyclePond ? cyclePond.initialPopulation.toLocaleString() : '—'}</strong></div>
+                  <div><span>{t.ponds.started || 'Started'}</span><strong>{cyclePond ? new Date(cyclePond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : 'Not started'}</strong></div>
+                </div>
+
+                <div className="ponds-card-footer">
+                  <span>{cyclePond ? `${t.ponds.lastSampled || 'Last sampled'}: ${getLatestSamplingDate(cyclePond.samplings) ? new Date(getLatestSamplingDate(cyclePond.samplings) as string).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : (t.ponds.never || 'Never')}` : t.startPondCycle.readyForNextCycle}</span>
+                  {pondHref && (
+                    <Link href={pondHref} aria-label={`View ${pond.pondName} details`}><ChevronRight size={17} /></Link>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
       ) : (
-        <div className="animate-fade-up animate-delay-2 responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
-          {filteredPhysicalPonds.map(pond => (
-            <div key={`physical-${pond.id}`} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-              <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                    width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
-                  }}>
-                    <Waves size={20} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '1.02rem', fontWeight: 600, letterSpacing: '0' }}>{pond.pondName}</h3>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                      {t.startPondCycle.readyForNextCycle}
-                    </p>
-                  </div>
+        <div className="animate-fade-up animate-delay-2 ponds-list-panel">
+          <div className="ponds-list-row ponds-list-header" aria-hidden="true">
+            <span>Pond</span><span className="ponds-list-status">Status</span><span>Area</span><span>Density</span><span>Population</span><span>Actions</span>
+          </div>
+          {visiblePondItems.map((item) => {
+            const isPhysical = item.kind === 'physical';
+            const pond = item.pond;
+            const cyclePond = item.kind === 'cycle' ? item.pond : null;
+            const statusLabel = isPhysical ? 'Inactive' : (isActiveCycle(cyclePond!) ? 'Active' : 'Ended');
+
+            return (
+              <div className="ponds-list-row ponds-list-data" key={`${item.kind}-${pond.id}`}>
+                <div className="ponds-list-name">
+                  {cyclePond ? <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`}>{pond.pondName}</Link> : <strong>{pond.pondName}</strong>}
+                  <small>{statusLabel}</small>
                 </div>
-                {canEditPonds && (
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                <span className={`ponds-list-status is-${statusLabel.toLowerCase()}`}>{statusLabel}</span>
+                <span>{pond.pondArea.toLocaleString()} m²</span>
+                <span>{cyclePond ? cyclePond.density.toLocaleString() : '—'}</span>
+                <span>{cyclePond ? cyclePond.initialPopulation.toLocaleString() : '—'}</span>
+                <div className="ponds-list-actions">
+                  {cyclePond && <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`} aria-label={`View ${pond.pondName} details`}><ChevronRight size={16} /></Link>}
+                  {canEditPonds && (
                     <button
-                      onClick={() => openStartCycle(pond)}
-                      title={t.startPondCycle.submit}
-                      style={{
-                        background: 'var(--bg-mid)', border: 'none', color: '#3282B8',
-                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                      }}
+                      type="button"
+                      onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
+                      aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? 'Start' : 'End'} ${pond.pondName} cycle`}
+                      title={isPhysical || !isActiveCycle(cyclePond!) ? 'Start cycle' : 'End cycle'}
                     >
-                      <RotateCcw size={18} />
-                    </button>
-                    <button
-                      onClick={() => openDeletePhysicalPond(pond)}
-                      title={t.ponds?.deletePond || 'Delete pond'}
-                      style={{
-                        background: 'rgba(231, 76, 60, 0.1)', border: 'none', color: '#e74c3c',
-                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                      }}
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div style={{ padding: '18px 20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color: 'var(--primary)' }}><Scale size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.pondArea} m²</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Status</span>
-                  <span style={{ fontSize: '0.95rem', fontWeight: 600, color: 'var(--primary)' }}>Inactive</span>
-                </div>
-              </div>
-            </div>
-          ))}
-          {filteredPonds.map(pond => (
-            <div key={pond.id} className="glass-card" style={{ padding: '0', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: '296px' }}>
-              <div style={{ padding: '20px', minHeight: '96px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
-                <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                    width: '46px', height: '46px', borderRadius: '12px', background: 'var(--gradient-dim)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)'
-                  }}>
-                    <Waves size={22} />
-                  </div>
-                  <div>
-                    <h3 style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 600, letterSpacing: '-0.02em' }}>{pond.pondName}</h3>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{getPlSupplier(pond)}</p>
-                    {pond.cycleStartMode === 'midcycle' && (
-                      <span style={{
-                        display: 'inline-flex',
-                        marginTop: '6px',
-                        padding: '3px 8px',
-                        borderRadius: '8px',
-                        background: '#BBE1FA',
-                        color: '#0F4C75',
-                        fontSize: '0.68rem',
-                        fontWeight: 600,
-                        textTransform: 'uppercase',
-                        letterSpacing: '0.03em'
-                      }}>
-                        {t.midcycleOnboarding?.importedMidcycle || 'Imported mid-cycle'}
-                      </span>
-                    )}
-                  </div>
-                </Link>
-                {canEditPonds && (
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && (
-                    <button
-                      onClick={() => openBaselineEdit(pond)}
-                      title="Edit baseline estimates"
-                      style={{
-                        background: '#EAF6FD', border: '1px solid #BBE1FA', color: '#0F4C75',
-                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <Pencil size={18} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => isActiveCycle(pond) ? setEndCyclePond(pond) : openStartCycle(pond)}
-                    title={isActiveCycle(pond) ? 'End cycle' : 'Start new cycle'}
-                    style={{
-                      background: 'var(--bg-mid)', border: 'none', color: isActiveCycle(pond) ? 'var(--primary)' : '#3282B8',
-                      cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                      transition: 'all 0.2s'
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.background = 'var(--primary-dim)';
-                      e.currentTarget.style.transform = 'scale(1.05)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.background = 'var(--bg-mid)';
-                      e.currentTarget.style.transform = 'scale(1)';
-                    }}
-                  >
-                    {isActiveCycle(pond) ? <Archive size={18} /> : <RotateCcw size={18} />}
-                  </button>
-                  {!isActiveCycle(pond) && (
-                    <button
-                      onClick={() => openDeleteCyclePond(pond)}
-                      title={t.ponds?.deletePond || 'Delete pond'}
-                      style={{
-                        background: 'rgba(231, 76, 60, 0.1)', border: 'none', color: '#e74c3c',
-                        cursor: 'pointer', padding: '8px', borderRadius: '10px',
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.background = 'rgba(231, 76, 60, 0.16)';
-                        e.currentTarget.style.transform = 'scale(1.05)';
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.background = 'rgba(231, 76, 60, 0.1)';
-                        e.currentTarget.style.transform = 'scale(1)';
-                      }}
-                    >
-                      <Trash2 size={18} />
+                      {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
                     </button>
                   )}
                 </div>
-                )}
               </div>
-
-              <div style={{ padding: '20px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', flex: '1 1 auto' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.area || 'Pond Area'}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color: 'var(--primary)' }}><Scale size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.pondArea} m²</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.density || 'Density'}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color: 'var(--primary)' }}><Users size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.density} <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-muted)' }}>PL/m²</span></span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.started || 'Started'}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color: 'var(--primary)' }}><Calendar size={18} /></div>
-                    <span style={{ fontSize: '0.98rem', fontWeight: 600 }}>{new Date(pond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <span style={{ fontSize: '0.65rem', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{t.ponds.population || 'Population'}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ color: 'var(--primary)' }}><Shrimp size={18} /></div>
-                    <span style={{ fontSize: '1rem', fontWeight: 600 }}>{pond.initialPopulation.toLocaleString()}</span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ padding: '12px 20px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {t.ponds.lastSampled || 'Last sampled'}: <span style={{ color: 'var(--text-faint)' }}>{getLatestSamplingDate(pond.samplings) ? new Date(getLatestSamplingDate(pond.samplings) as string).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : (t.ponds.never || 'Never')}</span>
-                </span>
-                <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
-                  <button style={{
-                    background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600,
-                    fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px',
-                    transition: 'all 0.2s'
-                  }} onMouseEnter={e => e.currentTarget.style.gap = '10px'} onMouseLeave={e => e.currentTarget.style.gap = '6px'}>
-                    {t.ponds.viewDetails || 'View Details'} <ArrowRight size={16} />
-                  </button>
-                </Link>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

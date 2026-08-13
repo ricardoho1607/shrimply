@@ -193,7 +193,7 @@ export default function FinancePage() {
   if (loading || cyclesLoading || pondsLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page authenticated-compact-page">
       <div className="dashboard-action-row">
           <button 
             onClick={() => { setFormType('income'); setFormData({...formData, date: today, category: INCOME_CATEGORIES[0], cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope}); setIsModalOpen(true); }}

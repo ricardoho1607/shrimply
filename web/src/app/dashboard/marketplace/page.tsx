@@ -270,7 +270,7 @@ export default function MarketplacePage() {
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page authenticated-compact-page">
       <div className="dashboard-action-row">
         <button 
           onClick={() => {

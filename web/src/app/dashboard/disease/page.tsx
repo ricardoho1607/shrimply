@@ -6,7 +6,7 @@ import Link from 'next/link';
 
 export default function DiseaseReportPage() {
   return (
-    <div style={{ padding: '24px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="authenticated-compact-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <div className="glass-card animate-fade-up" style={{ 
         display: 'flex', 
         flexDirection: 'column', 

@@ -437,7 +437,7 @@ export default function ShrimpReportsPage() {
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page-relaxed" style={{ paddingBottom: '40px' }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ paddingBottom: '40px' }}>
       
       <div className="glass-card" style={{
         background: '#FFFFFF',

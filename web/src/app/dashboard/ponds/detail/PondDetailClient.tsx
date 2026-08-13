@@ -1,24 +1,17 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
-  Waves,
   Scale,
-  TrendingUp,
   Activity,
   Wind,
   Droplets,
-  Thermometer,
-  Calendar,
   Settings,
   Plus,
-  Archive,
   RotateCcw,
   X,
   Loader2,
-  Trash2,
-  ChevronRight,
   Info,
   LineChart as LineChartIcon,
   ShoppingBag,
@@ -41,9 +34,7 @@ import {
   collection,
   orderBy,
   serverTimestamp,
-  runTransaction,
   arrayUnion,
-  Timestamp,
   addDoc,
   getDoc,
   getDocs,
@@ -311,6 +302,8 @@ export default function PondDetailClient() {
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
   const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
+  const [isRecordMenuOpen, setRecordMenuOpen] = useState(false);
+  const recordMenuRef = useRef<HTMLDivElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeletingPond, setIsDeletingPond] = useState(false);
   const [isEndCycleOpen, setEndCycleOpen] = useState(false);
@@ -350,6 +343,17 @@ export default function PondDetailClient() {
     () => getAssignedEnterpriseBlockIds(farmBlocks, auth.currentUser?.uid),
     [farmBlocks],
   );
+
+  useEffect(() => {
+    if (!isRecordMenuOpen) return;
+
+    const closeRecordMenu = (event: PointerEvent) => {
+      if (!recordMenuRef.current?.contains(event.target as Node)) setRecordMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeRecordMenu);
+    return () => document.removeEventListener('pointerdown', closeRecordMenu);
+  }, [isRecordMenuOpen]);
 
   useEffect(() => {
     let unsubUser: (() => void) | null = null;
@@ -842,47 +846,27 @@ export default function PondDetailClient() {
   ].filter((item) => item.status);
 
   return (
-    <div className="pond-detail-page" style={{ display: 'flex', flexDirection: 'column', gap: '36px', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="pond-detail-page dashboard-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
 
       {/* Breadcrumbs & Actions */}
-      <div className="glass-card animate-fade-up pond-detail-toolbar" style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-        <div className="pond-detail-identity" style={{ display: 'flex', alignItems: 'center', gap: '14px', minWidth: 0 }}>
-          <Link href="/dashboard/ponds" className="pond-detail-back" style={{
-            width: '42px', height: '42px', borderRadius: '12px', background: 'var(--glass-bg)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
-            border: '1px solid var(--border)', textDecoration: 'none', transition: 'all 0.2s',
-            boxShadow: 'var(--shadow-card)'
-          }} onMouseEnter={e => e.currentTarget.style.transform = 'translateX(-4px)'} onMouseLeave={e => e.currentTarget.style.transform = 'translateX(0)'}>
-            <ArrowLeft size={20} />
+      <div className="glass-card animate-fade-up pond-detail-toolbar">
+        <div className="pond-detail-identity">
+          <Link href="/dashboard/ponds" className="pond-detail-back" aria-label="Back to ponds">
+            <ArrowLeft size={17} />
           </Link>
-          <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: '1.05rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div className="pond-detail-title">
+              <div>
                 {pond.pondName}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              <div className="pond-detail-meta">
+                <span>
                   DOC {metrics?.doc ?? 0}
                 </span>
-                <span style={{
-                  fontSize: '0.68rem',
-                  color: getCycleStatus(pond) === 'ended' ? '#64748b' : 'var(--primary)',
-                  background: getCycleStatus(pond) === 'ended' ? '#f1f5f9' : 'var(--primary-dim)',
-                  border: '1px solid var(--border)',
-                  borderRadius: '999px',
-                  padding: '3px 8px',
-                  fontWeight: 600,
-                }}>
+                <span className={`pond-detail-status is-${getCycleStatus(pond)}`}>
                   {getCycleStatus(pond) === 'ended' ? 'ENDED' : 'ACTIVE'}
                 </span>
                 {pond.cycleStartMode === 'midcycle' && (
-                  <span style={{
-                    fontSize: '0.68rem',
-                    color: '#0F4C75',
-                    background: '#BBE1FA',
-                    borderRadius: '999px',
-                    padding: '3px 8px',
-                    fontWeight: 600,
-                  }}>
+                  <span className="pond-detail-baseline-badge">
                     MID-CYCLE BASELINE
                   </span>
                 )}
@@ -890,16 +874,8 @@ export default function PondDetailClient() {
             </div>
           </div>
         {canEditPond && (
-          <div className="pond-detail-actions" style={{ display: 'flex', gap: '12px', flexShrink: 0 }}>
-            {isActiveCycle(pond) ? (
-              <button onClick={() => {
-                setEndCycleForm(prev => ({ ...prev, cycleEndedAt: today }));
-                setEndCycleOpen(true);
-              }} className="dashboard-action dashboard-action-secondary" style={{ padding: '0 14px' }}>
-                <Archive size={18} strokeWidth={2.5} />
-                <span>End Cycle</span>
-              </button>
-            ) : (
+          <div className="pond-detail-actions">
+            {!isActiveCycle(pond) && (
               <button onClick={() => {
                 setStartCycleForm(prev => ({ ...prev, docStart: today }));
                 setStartCycleOpen(true);
@@ -908,80 +884,76 @@ export default function PondDetailClient() {
                 <span>Start New Cycle</span>
               </button>
             )}
-            <button
-              onClick={openBaselineModal}
-              className="dashboard-action dashboard-action-secondary"
-              disabled={pond.cycleStartMode !== 'midcycle' || !isActiveCycle(pond)}
-              title="Edit baseline estimates"
-              style={{ padding: '0 14px', opacity: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 1 : 0.45, cursor: pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
-            >
-              <Settings size={18} strokeWidth={2.5} />
-            </button>
-            <button
-              onClick={() => {
-                setSamplingForm(prev => ({ ...prev, date: today }));
-                setSamplingModalOpen(true);
-              }}
-              className="dashboard-action dashboard-action-primary"
-              disabled={!isActiveCycle(pond)}
-              style={{ opacity: isActiveCycle(pond) ? 1 : 0.45, cursor: isActiveCycle(pond) ? 'pointer' : 'not-allowed' }}
-            >
-              <Plus size={20} strokeWidth={3} />
-              <span>New Sampling</span>
-            </button>
+            {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && (
+              <button onClick={openBaselineModal} className="pond-detail-icon-action" title="Edit baseline estimates" aria-label="Edit baseline estimates">
+                <Settings size={16} />
+              </button>
+            )}
+            <div className="pond-detail-record-menu" ref={recordMenuRef}>
+              <button
+                type="button"
+                className="pond-detail-record-trigger"
+                aria-expanded={isRecordMenuOpen}
+                aria-haspopup="menu"
+                disabled={!isActiveCycle(pond)}
+                onClick={() => setRecordMenuOpen((open) => !open)}
+              >
+                <Plus size={15} />
+                <span>Record</span>
+              </button>
+              {isRecordMenuOpen && (
+                <div className="pond-detail-record-popover" role="menu">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setRecordMenuOpen(false);
+                      setSamplingForm(prev => ({ ...prev, date: today }));
+                      setSamplingModalOpen(true);
+                    }}
+                  >
+                    <Plus size={16} /><span><strong>Sampling</strong><small>Record MBW and observations</small></span>
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setRecordMenuOpen(false);
+                      setMortalityForm(prev => ({ ...prev, date: today }));
+                      setMortalityModalOpen(true);
+                    }}
+                  >
+                    <Activity size={16} /><span><strong>Mortality</strong><small>Record daily mortality</small></span>
+                  </button>
+                  <Link
+                    role="menuitem"
+                    href={`/dashboard/feed?action=new&pondId=${encodeURIComponent(pond.id)}`}
+                    onClick={() => setRecordMenuOpen(false)}
+                  >
+                    <ShoppingBag size={16} /><span><strong>Feed</strong><small>Deduct feed inventory</small></span>
+                  </Link>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
 
       {/* Hero Stats */}
-      <div className="animate-fade-up animate-delay-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Age (DOC)</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-              <Calendar size={16} />
+      <div className="glass-card animate-fade-up animate-delay-1 dashboard-summary-panel pond-detail-summary">
+        {[
+          { label: 'Age (DOC)', value: `${metrics?.doc ?? 0}`, unit: 'days' },
+          { label: 'Est. Biomass', value: metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0', unit: 'kg' },
+          { label: 'Avg Daily Growth', value: metrics?.adg.toFixed(2) || '0.00', unit: 'g/day' },
+          { label: 'Survival Rate', value: `${metrics?.sr.toFixed(1) || '0.0'}%`, unit: '' },
+        ].map(({ label, value, unit }) => (
+          <div className="dashboard-summary-item pond-detail-summary-item" key={label}>
+            <div className="dashboard-summary-content">
+              <span className="dashboard-summary-label">{label}</span>
+              <div className="dashboard-summary-value">{value}{unit && <small>{unit}</small>}</div>
             </div>
           </div>
-          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            {metrics?.doc} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>DAYS</span>
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Est. Biomass</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(22, 163, 74, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16a34a' }}>
-              <Scale size={16} />
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            {metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 })} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>KG</span>
-          </div>
-        </div>
-
-        <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 500 }}>Avg Daily Growth</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(50, 130, 184, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-              <TrendingUp size={16} />
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            {metrics?.adg.toFixed(2)} <span style={{ fontSize: '0.8rem', color: 'var(--text-faint)', fontWeight: 600 }}>G/DAY</span>
-          </div>
-        </div>
-
-        <div style={{ background: 'var(--gradient)', borderRadius: 'var(--radius-lg)', padding: '20px', display: 'flex', flexDirection: 'column', gap: '10px', boxShadow: 'var(--shadow-glow)', color: '#FFF' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '11px', lineHeight: '16px', letterSpacing: '0.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)', fontWeight: 500 }}>Survival Rate</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '10px', background: 'rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Activity size={16} />
-            </div>
-          </div>
-          <div style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            {metrics?.sr.toFixed(1)}%
-          </div>
-        </div>
+        ))}
       </div>
 
       {metrics?.feedBiomassInsight?.latest && (
@@ -1012,10 +984,10 @@ export default function PondDetailClient() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '22px', alignItems: 'start' }}>
+      <div className="pond-detail-content-grid">
 
         {/* Left Content */}
-        <div className="animate-fade-up animate-delay-2" style={{ display: 'contents' }}>
+        <div className="animate-fade-up animate-delay-2 pond-detail-main-column">
 
           {/* Growth Chart Section */}
           <div className="glass-card" style={{ padding: '24px' }}>
@@ -1037,17 +1009,18 @@ export default function PondDetailClient() {
           </div>
 
           {/* Sampling History Table */}
-          <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
+          <div className="glass-card pond-detail-sampling-history" style={{ padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
               <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>Sampling History</h3>
               <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View Audit Log</button>
             </div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <div className="pond-detail-sampling-table-wrap">
+              <table className="pond-detail-sampling-table">
                 <thead>
                   <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>MBW (g)</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>ADG</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Size (pcs/kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feed (kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mortality</th>
@@ -1058,19 +1031,33 @@ export default function PondDetailClient() {
                     .filter((s: any) => Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
                     .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 8)
-                    .map((s: any, i: number) => (
+                    .map((s: any, i: number) => {
+                      const validMbwSamplings = (pond.samplings || [])
+                        .filter((sampling) => getSamplingMbw(sampling) > 0 && new Date(sampling.date).getTime() < new Date(s.date).getTime())
+                        .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime());
+                      const previousSampling = validMbwSamplings[0];
+                      const previousWeight = previousSampling ? getSamplingMbw(previousSampling) : Number(pond.initialWeight || 0.5);
+                      const previousDate = previousSampling?.date || pond.docStart;
+                      const daysDiff = (new Date(s.date).getTime() - new Date(previousDate).getTime()) / (24 * 60 * 60 * 1000);
+                      const samplingAdg = Number(s.mbw) > 0 && daysDiff > 0
+                        ? (Number(s.mbw) - previousWeight) / daysDiff
+                        : null;
+
+                      return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>
                           {new Date(s.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--primary)' }}>{s.mbw || '-'}g</td>
+                        <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{samplingAdg === null ? '—' : samplingAdg.toFixed(2)}</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.mbw > 0 ? Math.round(1000 / s.mbw) : '-'}</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>{s.feed || '-'} kg</td>
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
                           {s.mortality > 0 ? `+${s.mortality}` : '0'}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                 </tbody>
               </table>
             </div>
@@ -1079,7 +1066,7 @@ export default function PondDetailClient() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="animate-fade-up animate-delay-3" style={{ display: 'contents' }}>
+        <div className="animate-fade-up animate-delay-3 pond-detail-side-column">
           <div className="glass-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1154,7 +1141,6 @@ export default function PondDetailClient() {
                   {[
                     { label: 'Current Population', value: `${metrics?.population.toLocaleString()} pcs`, icon: Users },
                     { label: "Today's Mortality", value: `${metrics?.todayMortality.toLocaleString()} pcs`, icon: Activity },
-                    { label: 'Observed/Recovered Today', value: `${metrics?.todayObservedMortality.toLocaleString()} pcs`, icon: Activity },
                     { label: 'Total Mortality', value: `${metrics?.totalMortality.toLocaleString()} pcs`, icon: Activity },
                     { label: 'Total Mort. Weight', value: `${metrics?.totalMortalityWeight.toFixed(2)} kg`, icon: Wind },
                     { label: 'Total Feed Used', value: `${metrics?.totalFeed.toFixed(1)} kg`, icon: ShoppingBag },
@@ -1194,45 +1180,12 @@ export default function PondDetailClient() {
             </div>
           </div>
 
-          <div className="glass-card" style={{ padding: '20px' }}>
-            <h4 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: '18px' }}>Quick Actions</h4>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <Link href="/dashboard/water" style={{ textDecoration: 'none' }}>
-                <button className="action-button-modern">
-                  <div className="icon-box" style={{ background: 'rgba(50, 130, 184, 0.1)', color: 'var(--accent)' }}>
-                    <Droplets size={20} />
-                  </div>
-                  <span>Water Quality</span>
-                </button>
-              </Link>
-              <Link href="/dashboard/feed" style={{ textDecoration: 'none' }}>
-                <button className="action-button-modern">
-                  <div className="icon-box" style={{ background: 'rgba(5, 150, 105, 0.1)', color: '#059669' }}>
-                    <ShoppingBag size={20} />
-                  </div>
-                  <span>Feed Logs</span>
-                </button>
-              </Link>
-            </div>
-          </div>
-
-          <div style={{
-            background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)',
-            borderRadius: 'var(--radius-lg)', padding: '20px', color: '#ef4444'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-              <Trash2 size={20} />
-              <span style={{ fontSize: '1rem', fontWeight: 600 }}>Danger Zone</span>
-            </div>
-            <p style={{ fontSize: '0.8rem', marginBottom: '24px', opacity: 0.8, lineHeight: 1.6 }}>
-              Deleting this pond will permanently remove this pond cycle and its sampling history from the Orson AI ecosystem.
-            </p>
+          <div className="pond-detail-delete-action">
+            <p>Permanently deletes this cycle and its sampling history.</p>
             <button
               type="button"
               onClick={handleDeletePond}
               disabled={!canEditPond || isDeletingPond}
-              className="btn-secondary"
-              style={{ width: '100%', color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.2)', background: 'transparent', opacity: isDeletingPond ? 0.65 : 1, cursor: isDeletingPond ? 'not-allowed' : 'pointer' }}
             >
               {isDeletingPond ? 'Deleting...' : 'Delete Pond'}
             </button>
@@ -1410,37 +1363,6 @@ export default function PondDetailClient() {
           font-weight: 600;
           text-transform: uppercase;
           letter-spacing: 0.04em;
-        }
-        @media (max-width: 767px) {
-          .pond-detail-page {
-            gap: 24px !important;
-          }
-          .pond-detail-toolbar {
-            align-items: stretch !important;
-            flex-direction: column !important;
-            padding: 16px !important;
-          }
-          .pond-detail-identity {
-            width: 100%;
-          }
-          .pond-detail-back {
-            flex: 0 0 42px;
-          }
-          .pond-detail-actions {
-            width: 100%;
-            display: grid !important;
-            grid-template-columns: minmax(0, 1fr) 44px;
-            gap: 8px !important;
-          }
-          .pond-detail-actions > :last-child {
-            grid-column: 1 / -1;
-          }
-          .pond-detail-actions .dashboard-action {
-            width: 100%;
-            min-width: 0;
-            justify-content: center;
-            padding: 0 10px !important;
-          }
         }
       `}</style>
     </div>

@@ -405,7 +405,7 @@ export default function AssetInventoryPage() {
   }
 
   return (
-    <div className="dashboard-page-relaxed">
+    <div className="dashboard-page-relaxed authenticated-compact-page">
       <div className="dashboard-inline-toolbar">
         <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
           {[

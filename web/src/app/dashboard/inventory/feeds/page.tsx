@@ -408,7 +408,7 @@ export default function InventoryFeedsPage() {
   }
 
   return (
-    <div className="dashboard-page-relaxed" style={{ paddingBottom: '32px' }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ paddingBottom: '32px' }}>
       <div className="dashboard-inline-toolbar animate-fade-up">
         <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
           {[

@@ -17,9 +17,8 @@ import {
   Settings,
   LogOut,
   Menu,
-  X,
   Bell,
-  ChevronRight,
+  Search,
   Droplets,
   Store,
   Map,
@@ -252,7 +251,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
     sidebarRef.current
-      ?.querySelector<HTMLElement>('[aria-label="Close dashboard navigation"]')
+      ?.querySelector<HTMLElement>('a[href], button:not([disabled])')
       ?.focus();
 
     return () => {
@@ -325,13 +324,29 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           }
         }
         .sidebar-link {
-          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+          transition: background-color 0.16s ease, color 0.16s ease !important;
         }
         .sidebar-link:hover {
-          transform: translateX(4px);
           background: var(--bg-mid) !important;
+          color: var(--text-primary) !important;
+          transform: none !important;
         }
         .sidebar-link.active {
+          background: var(--primary-dim) !important;
+          color: var(--primary) !important;
+        }
+        .dashboard-profile-button {
+          transition: background-color 0.16s ease !important;
+        }
+        .dashboard-profile-button:hover {
+          background: var(--bg-mid) !important;
+        }
+        .mobile-trigger {
+          background: transparent !important;
+          transition: background-color 0.16s ease, color 0.16s ease !important;
+        }
+        .mobile-trigger:hover,
+        .mobile-trigger:focus-visible {
           background: var(--primary-dim) !important;
           color: var(--primary) !important;
         }
@@ -393,63 +408,39 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         boxShadow: '20px 0 80px rgba(15, 76, 117, 0.04)'
       }}>
 
-        <div style={{ height: '80px', margin: '0 -16px 20px', padding: '0 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--shell-border)' }}>
-          <Link href="/dashboard" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img
-              src="/shrimplylogo_v2.webp"
-              width="500"
-              height="160"
-              alt="Shrimply"
-              style={{ height: '42px', width: 'auto', objectFit: 'contain' }}
-            />
-          </Link>
-          <button
-            onClick={() => setSidebarOpen(false)}
-            className="mobile-trigger"
-            aria-label="Close dashboard navigation"
-            style={{ background: 'var(--bg-mid)', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '10px', borderRadius: '10px' }}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', padding: '12px 4px 0 0' }}>
+          <Link
+            href="/dashboard/company"
+            className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
+            aria-current={pathname === '/dashboard/company' ? 'page' : undefined}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              width: '100%',
+              minHeight: '40px',
+              padding: '8px 12px',
+              borderRadius: '10px',
+              color: pathname === '/dashboard/company' ? '#1e293b' : '#64748b',
+              background: pathname === '/dashboard/company' ? '#f1f5f9' : 'transparent',
+              textDecoration: 'none',
+            }}
           >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div
-          onClick={() => router.push('/dashboard/company')}
-          style={{
-            margin: '0 4px 32px',
-            padding: '16px',
-            borderRadius: '16px',
-            background: 'rgba(241, 245, 249, 0.5)',
-            border: '1px solid rgba(226, 232, 240, 0.8)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '12px',
-            cursor: 'pointer',
-            transition: 'all 0.2s'
-          }}
-        >
-          <div style={{
-            width: '44px', height: '44px', borderRadius: '50%', background: 'white',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
-          }}>
-            <Waves size={20} />
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: '#1e293b', marginBottom: '2px' }}>
-              {company?.companyName || 'Company profile'}
+            <Waves size={18} color={pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8'} strokeWidth={pathname === '/dashboard/company' ? 2.5 : 2} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ overflow: 'hidden', color: 'inherit', fontSize: '0.8rem', fontWeight: pathname === '/dashboard/company' ? 600 : 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company?.companyName || 'Company profile'}
+              </div>
+              <div style={{ overflow: 'hidden', color: '#94a3b8', fontSize: '0.62rem', fontWeight: 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {company?.farmType || 'Open company details'}
+              </div>
             </div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 500, color: '#94a3b8' }}>
-              {company?.farmType || 'Open company details'}
-            </div>
-          </div>
-          <ChevronRight size={16} color="#94a3b8" />
-        </div>
+            <Search size={14} color="#94a3b8" aria-hidden="true" />
+          </Link>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', flex: 1, overflowY: 'auto', paddingRight: '4px' }}>
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
-            <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.14em', textTransform: 'uppercase', padding: '0 12px 10px', fontFamily: 'var(--jakarta)' }}>
+            <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 10px 6px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
               {items.map((item) => {
@@ -459,16 +450,18 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   return (
                     <div key={item.label} style={{ display: 'flex', flexDirection: 'column' }}>
                       <button
+                        className="sidebar-link"
                         onClick={() => toggleGroup(item.id)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          padding: '12px 16px',
+                          minHeight: '40px',
+                          padding: '8px 12px',
                           background: 'transparent',
                           border: 'none',
-                          fontSize: '0.9rem',
-                          borderRadius: '14px',
+                          fontSize: '0.8rem',
+                          borderRadius: '10px',
                           fontWeight: 500,
                           color: '#64748b',
                           cursor: 'pointer',
@@ -476,29 +469,29 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                           width: '100%',
                           textAlign: 'left'
                         }}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#f1f5f9'}
-                        onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <ItemIcon size={20} color="#94a3b8" strokeWidth={2} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <ItemIcon size={18} color="#94a3b8" strokeWidth={2} />
                           <span>{item.label}</span>
                         </div>
-                        <ChevronDown size={16} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
+                        <ChevronDown size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
                       </button>
 
                       {isExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '32px', marginTop: '4px', gap: '4px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '28px', marginTop: '2px', gap: '2px' }}>
                           {item.children.map((child) => {
                             const isChildActive = pathname === child.href;
                             return (
                               <Link
                                 key={child.href}
                                 href={child.href}
+                                className="sidebar-link"
                                 style={{
-                                  padding: '8px 16px',
-                                  fontSize: '0.85rem',
+                                  minHeight: '34px',
+                                  padding: '7px 12px',
+                                  fontSize: '0.76rem',
                                   textDecoration: 'none',
-                                  borderRadius: '10px',
+                                  borderRadius: '8px',
                                   fontWeight: isChildActive ? 600 : 500,
                                   color: isChildActive ? '#1e293b' : '#64748b',
                                   background: isChildActive ? '#f1f5f9' : 'transparent',
@@ -520,43 +513,55 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   <Link
                     key={item.href}
                     href={item.href}
+                    className="sidebar-link"
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '12px',
-                      padding: '12px 16px',
+                      gap: '10px',
+                      minHeight: '40px',
+                      padding: '8px 12px',
                       textDecoration: 'none',
-                      fontSize: '0.9rem',
-                      borderRadius: '14px',
+                      fontSize: '0.8rem',
+                      borderRadius: '10px',
                       fontWeight: isActive ? 600 : 500,
                       color: isActive ? '#1e293b' : '#64748b',
                       background: isActive ? '#f1f5f9' : 'transparent',
                       transition: 'all 0.2s'
                     }}
                   >
-                    <ItemIcon size={20} color={isActive ? '#1e293b' : '#94a3b8'} strokeWidth={isActive ? 2.5 : 2} />
+                    <ItemIcon size={18} color={isActive ? '#1e293b' : '#94a3b8'} strokeWidth={isActive ? 2.5 : 2} />
                     <span>{item.label}</span>
                   </Link>
                 );
               })}
+              {groupKey === 'system' && (
+                <button
+                  type="button"
+                  onClick={handleSignOut}
+                  className="sidebar-link"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    width: '100%',
+                    minHeight: '40px',
+                    padding: '8px 12px',
+                    border: 'none',
+                    borderRadius: '10px',
+                    background: 'transparent',
+                    color: '#ef4444',
+                    cursor: 'pointer',
+                    fontSize: '0.8rem',
+                    fontWeight: 500,
+                    textAlign: 'left',
+                  }}
+                >
+                  <LogOut size={18} strokeWidth={2} />
+                  <span>{getString(t.auth.signOut, 'Logout')}</span>
+                </button>
+              )}
             </div>
           ))}
-        </div>
-
-        <div style={{ marginTop: 'auto', paddingTop: '16px' }}>
-          <div style={{ height: '1px', background: 'var(--border)', margin: '0 12px 16px', opacity: 0.6 }} />
-          <button
-            onClick={handleSignOut}
-            className="sidebar-link"
-            style={{
-              display: 'flex', alignItems: 'center', gap: '12px', padding: '16px 22px',
-              color: '#ef4444', background: 'transparent', border: 'none', width: '100%',
-              fontSize: '0.95rem', fontWeight: 600, borderRadius: 'var(--radius-md)'
-            }}
-          >
-            <LogOut size={20} strokeWidth={2.5} />
-            <span>{getString(t.auth.signOut, 'Logout')}</span>
-          </button>
         </div>
       </aside>
 
@@ -568,9 +573,9 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       >
         <header className="dashboard-app-header" style={{
           height: '80px',
-          background: 'rgba(255,255,255,0.82)',
-          borderBottom: '1px solid var(--shell-border)',
-          backdropFilter: 'blur(18px)',
+          background: 'var(--bg-dark)',
+          borderBottom: 'none',
+          backdropFilter: 'none',
           padding: '12px 40px',
           display: 'flex',
           alignItems: 'center',
@@ -592,41 +597,37 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
             >
               <Menu size={24} />
             </button>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.62rem', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.14em', padding: '4px 8px', background: 'var(--primary-dim)', borderRadius: '999px', lineHeight: 1 }}>
-                  {currentNavMeta.section}
-                </span>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0 }}>
               <div style={{ minWidth: 0 }}>
                 <div className="dashboard-header-title" style={{ fontSize: '1.34rem', lineHeight: 1.08, color: 'var(--text-primary)', fontWeight: 600, letterSpacing: '0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {currentNavMeta.title}
                 </div>
               </div>
+              <span style={{ fontSize: '0.62rem', color: '#94a3b8', fontWeight: 500, lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+                {currentNavMeta.section}
+              </span>
             </div>
           </div>
 
           <div className="dashboard-header-right" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div className="dashboard-header-date mobile-trigger-hide" title={todayLabel}>
+            <div className="dashboard-header-date mobile-trigger-hide" title={todayLabel} style={{ background: 'transparent', border: 'none', boxShadow: 'none', padding: '0 8px' }}>
               <CalendarDays size={17} />
               <span>{todayLabel}</span>
             </div>
 
-            <div className="dashboard-header-divider" style={{ width: '1px', height: '24px', background: 'var(--border)', margin: '0 8px' }} />
-
-            <div className="dashboard-profile-button" style={{ display: 'flex', alignItems: 'center', gap: '14px', cursor: 'pointer', padding: '8px 10px 8px 16px', borderRadius: '16px', background: '#FFF', border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(15, 76, 117, 0.05)' }}>
+            <Link href="/dashboard/settings" className="dashboard-profile-button" aria-label="Open account settings" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '10px', background: 'transparent', color: 'inherit', textDecoration: 'none' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name || 'Captain'}</div>
-                <div style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>{user?.name || 'Captain'}</div>
+                <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#94a3b8', lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
               </div>
               <div className="dashboard-profile-avatar" style={{
-                width: '44px', height: '44px', borderRadius: '12px', background: 'var(--gradient)',
+                width: '38px', height: '38px', borderRadius: '10px', background: 'var(--gradient)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white',
-                fontWeight: 600, fontSize: '16px', border: '2px solid white', boxShadow: 'var(--shadow-card)'
+                fontWeight: 600, fontSize: '14px'
               }}>
                 {(user?.name?.[0] || 'U').toUpperCase()}
               </div>
-            </div>
+            </Link>
           </div>
         </header>
 

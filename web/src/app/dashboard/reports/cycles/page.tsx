@@ -217,7 +217,7 @@ function CycleReportsContent() {
   const profitClass = report.totals.grossProfit >= 0 ? styles.metricPositive : styles.metricNegative;
 
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} authenticated-compact-page`}>
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>{t.cycleReport.eyebrow}</p>

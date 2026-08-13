@@ -59,6 +59,20 @@
   cursor: pointer;
 }
 
+.actionButton:hover,
+.backButton:hover {
+  border-color: rgba(15, 76, 117, .32);
+  background: var(--primary-dim);
+}
+
+.actionButton:focus-visible,
+.backButton:focus-visible,
+.tabs button:focus-visible,
+.archiveCard:focus-visible {
+  outline: 2px solid var(--secondary);
+  outline-offset: 2px;
+}
+
 .archiveList {
   display: flex;
   flex-direction: column;
@@ -77,6 +91,11 @@
   color: inherit;
   text-decoration: none;
   box-shadow: 0 8px 24px rgba(15, 76, 117, .04);
+}
+
+.archiveCard:hover {
+  border-color: rgba(15, 76, 117, .28);
+  background: #fbfdff;
 }
 
 .archiveIcon {
@@ -181,6 +200,11 @@
 .tabs .tabActive {
   background: var(--primary);
   color: #fff;
+}
+
+.tabs button:not(.tabActive):hover {
+  background: var(--primary-dim);
+  color: var(--primary);
 }
 
 .metricGrid {

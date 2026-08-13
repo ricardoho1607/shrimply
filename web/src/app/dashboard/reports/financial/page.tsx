@@ -300,7 +300,7 @@ export default function FinancialReportsPage() {
   }
 
   return (
-    <div className="dashboard-page-relaxed">
+    <div className="dashboard-page-relaxed authenticated-compact-page">
       <div className="dashboard-report-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <div>
