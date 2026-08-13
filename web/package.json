@@ -5,7 +5,7 @@
   "scripts": {
     "predev": "node ../scripts/sync-web-pdf-generators.cjs",
     "dev": "next dev --webpack",
-    "prebuild": "node ../scripts/sync-web-pdf-generators.cjs && node scripts/validate-public-env.cjs",
+    "prebuild": "node scripts/validate-public-env.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -20,7 +20,8 @@
     "test:water-quality-state": "node --test src/app/dashboard/water/labRowState.test.cjs",
     "test:mobile-pdf": "node --test src/lib/mobilePdfExport.test.cjs",
     "test:signup-location": "node --test src/lib/googlePlacesClient.test.cjs",
-    "test:dev-bundler": "node --test scripts/dev-bundler.test.cjs"
+    "test:dev-bundler": "node --test scripts/dev-bundler.test.cjs",
+    "test:vercel-build-path": "node --test scripts/vercel-build-path.test.cjs"
   },
   "dependencies": {
     "firebase": "^12.12.1",
