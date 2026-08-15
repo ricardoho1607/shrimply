@@ -9,6 +9,9 @@ const authPage = fs.readFileSync(path.join(__dirname, '../app/auth/page.tsx'), '
 const authLayout = fs.readFileSync(path.join(__dirname, '../app/auth/layout.tsx'), 'utf8');
 const dashboardLayout = fs.readFileSync(path.join(__dirname, '../app/dashboard/layout.tsx'), 'utf8');
 const dashboardPage = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
+const vercelConfig = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../../vercel.json'), 'utf8'),
+);
 const portalProvidersPath = path.join(__dirname, '../components/PortalProviders.tsx');
 const portalProviders = fs.existsSync(portalProvidersPath)
   ? fs.readFileSync(portalProvidersPath, 'utf8')
@@ -51,6 +54,23 @@ test('installed PWA sign in retries one transient Firebase network failure', () 
   assert.match(signInSource, /isAuthNetworkRequestFailed/);
   assert.match(signInSource, /waitForAuthNetworkRecovery/);
   assert.match(authContext, /\.code === ['"]auth\/network-request-failed['"]/);
+});
+
+test('installed iOS web apps route Firebase Auth through the same-origin network path', () => {
+  assert.match(firebaseClient, /initializeAuth/);
+  assert.doesNotMatch(firebaseClient, /getAuth|browserPopupRedirectResolver/);
+  assert.match(firebaseClient, /display-mode: standalone/);
+  assert.match(firebaseClient, /navigator\.standalone/);
+  assert.match(firebaseClient, /if \(!isInstalledWebApp\(\)\) return/);
+  assert.match(firebaseClient, /config\.apiHost = .*firebase-auth\/identitytoolkit/);
+  assert.match(firebaseClient, /config\.tokenApiHost = .*firebase-auth\/securetoken/);
+
+  assert.ok(vercelConfig.rewrites.some((rewrite) =>
+    rewrite.source === '/firebase-auth/identitytoolkit/:path*'
+      && rewrite.destination === 'https://identitytoolkit.googleapis.com/:path*'));
+  assert.ok(vercelConfig.rewrites.some((rewrite) =>
+    rewrite.source === '/firebase-auth/securetoken/:path*'
+      && rewrite.destination === 'https://securetoken.googleapis.com/:path*'));
 });
 
 test('auth page explains an installed-app network failure without blaming credentials', () => {
