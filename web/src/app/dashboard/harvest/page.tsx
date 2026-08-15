@@ -39,6 +39,7 @@ import {
   harvestRecordMatchesCycle,
   isHistoricalHarvestRecord,
 } from '../../../../../shared/harvestCycleScope';
+import styles from './HarvestPage.module.css';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -650,20 +651,21 @@ export default function HarvestPage() {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card responsive-modal" style={{ width: '100%', maxWidth: '700px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
-            <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className={`responsive-modal-overlay ${styles.harvestOverlay}`} style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.6)', backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '18px' }}>
+          <div className={`glass-card responsive-modal ${styles.harvestModal}`} style={{ width: '100%', maxWidth: '700px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
+            <div className={`responsive-modal-header ${styles.harvestHeader}`} style={{ padding: '18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '24px', fontWeight: 600 }}>{t.harvestCycle.logHarvest}</h2>
+                <h2 className={styles.harvestTitle} style={{ fontSize: '20px', fontWeight: 600 }}>{t.harvestCycle.logHarvest}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
-              <button onClick={() => setModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '50%', padding: '8px', cursor: 'pointer' }}>
+              <button className={styles.closeButton} aria-label="Close" onClick={() => setModalOpen(false)} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
 
-            <form className="responsive-modal-body" onSubmit={handleAddHarvest} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '16px', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
+            <form className={`responsive-modal-body ${styles.harvestForm}`} onSubmit={handleAddHarvest}>
+              <div className={styles.harvestFormScroll}>
+              <div className={styles.cycleSummary} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '12px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                 <div style={{ minWidth: 0 }}>
                   <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>{selectedCycle?.cycleName}</div>
                   <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>{selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockNotAssigned}</div>
@@ -672,8 +674,8 @@ export default function HarvestPage() {
                   {selectedCyclePonds.length} {t.harvest.pond}
                 </div>
               </div>
-              <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+              <div className={`responsive-form-grid ${styles.harvestGrid}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className={styles.pondField} style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.selectPond}</label>
                   <select
                     required
@@ -686,12 +688,12 @@ export default function HarvestPage() {
                   </select>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className={styles.dateField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.harvestDate}</label>
                   <input type="date" max={today} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={(event) => event.preventDefault()} onPaste={(event) => event.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className={styles.typeField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvest.harvestType}</label>
                   <div style={{ display: 'flex', padding: '4px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                     {(['partial', 'final'] as HarvestType[]).map((harvestType) => (
@@ -717,13 +719,13 @@ export default function HarvestPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className={styles.sizeField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.averageSize}</label>
                   <input required min="0.01" step="0.01" type="number" value={formData.size} onChange={e => setFormData({...formData, size: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', gridColumn: 'span 2', padding: '24px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
-                  <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+                <div className={styles.metricsPanel} style={{ display: 'flex', flexDirection: 'column', gap: '12px', gridColumn: 'span 2', padding: '14px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
+                  <div className={`responsive-two-column ${styles.primaryMetrics}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>{t.harvestCycle.mainBiomass}</label>
                       <input required min="0.01" type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
@@ -736,7 +738,7 @@ export default function HarvestPage() {
 
                   <div style={{ height: '1px', background: 'var(--border)' }} />
 
-                  <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '20px' }}>
+                  <div className={`responsive-card-grid ${styles.secondaryMetrics}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subBiomass}</label>
                       <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
@@ -752,10 +754,11 @@ export default function HarvestPage() {
                   </div>
                 </div>
               </div>
+              </div>
 
-              <div className="responsive-modal-footer" style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.save} {t.harvest.harvest}</button>
+              <div className={`responsive-modal-footer ${styles.harvestFooter}`} style={{ display: 'flex', gap: '10px' }}>
+                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
+                <button type="submit" className={`btn-primary ${styles.saveButton}`} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.save} {t.harvest.harvest}</button>
               </div>
             </form>
           </div>

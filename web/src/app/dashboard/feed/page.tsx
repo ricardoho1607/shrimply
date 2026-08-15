@@ -568,6 +568,11 @@ export default function FeedRecordsPage() {
     setSelectedPondIdForHistory(null);
   };
 
+  const handleHistoryBackdropClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    closeHistoryDrawer();
+  };
+
   const handleHistoryPointerStart = (event: React.PointerEvent) => {
     historyTouchStartXRef.current = event.clientX;
     suppressHistoryClickRef.current = false;
@@ -850,8 +855,8 @@ export default function FeedRecordsPage() {
 
       {/* -- HISTORY DRAWER ---------------------------------- */}
       {selectedPondForHistory && (
-        <div className="responsive-side-drawer-overlay feed-history-overlay">
-          <div className="responsive-side-drawer feed-history-drawer" role="dialog" aria-modal="true" aria-label={`${selectedPondForHistory.pondName} feed history`}>
+        <div className="responsive-side-drawer-overlay feed-history-overlay" onClick={handleHistoryBackdropClick} style={{ zIndex: 9100 }}>
+          <div className="responsive-side-drawer feed-history-drawer" role="dialog" aria-modal="true" aria-label={`${selectedPondForHistory.pondName} feed history`} style={{ paddingTop: 0 }}>
             <div className="responsive-modal-header feed-history-header">
               <div>
                 <div>
@@ -1175,6 +1180,13 @@ export default function FeedRecordsPage() {
         @media (max-width: 768px) {
           .feed-history-desktop-delete {
             display: none;
+          }
+        }
+      `}</style>
+      <style jsx global>{`
+        @media (max-width: 640px) {
+          .dashboard-saas .feed-history-header {
+            padding-top: calc(12px + var(--safe-area-top)) !important;
           }
         }
       `}</style>

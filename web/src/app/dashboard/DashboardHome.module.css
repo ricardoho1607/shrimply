@@ -1,0 +1,79 @@
+.listPondCell {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.emptyState {
+  min-height: 220px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.emptyContent {
+  width: min(440px, 100%);
+}
+
+.emptyIcon {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 12px;
+  border-radius: 12px;
+  background: var(--primary-dim);
+  color: var(--primary);
+  display: grid;
+  place-items: center;
+}
+
+.emptyTitle {
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 23px;
+}
+
+.emptyDetail {
+  margin: 6px auto 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.emptyAction {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background-color 0.16s ease;
+}
+
+.emptyAction:hover {
+  background: #0b3d60;
+}
+
+.emptyAction:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .emptyState {
+    min-height: 200px;
+    padding: 20px 12px;
+  }
+
+  .emptyAction {
+    width: 100%;
+  }
+}

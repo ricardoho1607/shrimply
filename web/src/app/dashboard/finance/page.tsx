@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Wallet, 
   TrendingUp, 
@@ -12,9 +12,9 @@ import {
   X,
   ArrowUpRight,
   ArrowDownRight,
-  DollarSign,
   BarChart3,
-  TrendingDown
+  TrendingDown,
+  Plus,
 } from 'lucide-react';
 import { 
   collection, 
@@ -79,7 +79,9 @@ export default function FinancePage() {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebouncedValue(searchQuery);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isInputMenuOpen, setInputMenuOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const inputMenuRef = useRef<HTMLDivElement>(null);
   
   // Form State
   const [formType, setFormType] = useState<'expense' | 'income'>('expense');
@@ -93,6 +95,36 @@ export default function FinancePage() {
     notes: '',
     cycleId: activeCycles[0]?.id || '',
   });
+
+  useEffect(() => {
+    if (!isInputMenuOpen) return;
+
+    const closeInputMenu = (event: PointerEvent) => {
+      if (!inputMenuRef.current?.contains(event.target as Node)) setInputMenuOpen(false);
+    };
+    const closeInputMenuOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setInputMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeInputMenu);
+    document.addEventListener('keydown', closeInputMenuOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeInputMenu);
+      document.removeEventListener('keydown', closeInputMenuOnEscape);
+    };
+  }, [isInputMenuOpen]);
+
+  const openTransactionForm = (type: 'expense' | 'income') => {
+    setInputMenuOpen(false);
+    setFormType(type);
+    setFormData((previous) => ({
+      ...previous,
+      date: today,
+      category: type === 'income' ? INCOME_CATEGORIES[0] : EXPENSE_CATEGORIES[0],
+      cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope,
+    }));
+    setIsModalOpen(true);
+  };
 
   const scopedExpenses = useMemo(() => cycleScope === 'all'
     ? expenses
@@ -193,35 +225,58 @@ export default function FinancePage() {
   if (loading || cyclesLoading || pondsLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page authenticated-compact-page">
-      <div className="dashboard-action-row">
-          <button 
-            onClick={() => { setFormType('income'); setFormData({...formData, date: today, category: INCOME_CATEGORIES[0], cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope}); setIsModalOpen(true); }}
-            className="btn-secondary" 
-            style={{ border: '1px solid #27AE60', color: '#27AE60', background: 'rgba(39, 174, 96, 0.05)' }}
+    <div className="dashboard-page authenticated-compact-page business-dashboard-page">
+      <div className="finance-input-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px 10px', background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '14px' }}>
+        <div className="finance-cycle-control" style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 1 440px', minWidth: 0 }}>
+          <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
+          <select
+            id="finance-cycle-filter"
+            value={cycleScope}
+            onChange={(event) => setCycleScope(event.target.value)}
+            style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontWeight: 600, outline: 'none' }}
           >
-            <ArrowUpRight size={18} /> {t.finance.addRevenue}
-          </button>
-          <button 
-            onClick={() => { setFormType('expense'); setFormData({...formData, date: today, category: EXPENSE_CATEGORIES[0], cycleId: cycleScope === 'all' ? (activeCycles[0]?.id || '') : cycleScope}); setIsModalOpen(true); }}
-            className="btn-primary" 
-            style={{ background: '#ef4444', border: 'none' }}
-          >
-            <ArrowDownRight size={20} /> {t.finance.addExpense}
-          </button>
-      </div>
+            {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}{cycle.blockNames?.length ? ` — ${cycle.blockNames.join(', ')}` : cycle.blockName ? ` — ${cycle.blockName}` : ''}</option>)}
+            <option value="all">{t.financeCycle.allHistory}</option>
+          </select>
+        </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '8px 10px', background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '14px' }}>
-        <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
-        <select
-          id="finance-cycle-filter"
-          value={cycleScope}
-          onChange={(event) => setCycleScope(event.target.value)}
-          style={{ flex: 1, minWidth: 0, padding: '9px 12px', borderRadius: '10px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontWeight: 600, outline: 'none' }}
-        >
-          {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}{cycle.blockNames?.length ? ` — ${cycle.blockNames.join(', ')}` : cycle.blockName ? ` — ${cycle.blockName}` : ''}</option>)}
-          <option value="all">{t.financeCycle.allHistory}</option>
-        </select>
+        <div className="pond-detail-record-menu finance-input-menu" ref={inputMenuRef} style={{ position: 'relative', flex: '0 0 auto', zIndex: 30 }}>
+          <button
+            type="button"
+            className="pond-detail-record-trigger finance-input-trigger"
+            aria-label="Add finance input"
+            aria-expanded={isInputMenuOpen}
+            aria-haspopup="menu"
+            onClick={() => setInputMenuOpen((open) => !open)}
+          >
+            <Plus size={15} />
+            <span>Input</span>
+          </button>
+          {isInputMenuOpen && (
+            <div
+              className="pond-detail-record-popover finance-input-popover"
+              role="menu"
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 8px)',
+                right: 0,
+                bottom: 'auto',
+                left: 'auto',
+                width: 'min(238px, calc(100vw - 24px))',
+                zIndex: 80,
+              }}
+            >
+              <button type="button" role="menuitem" onClick={() => openTransactionForm('income')}>
+                <ArrowUpRight size={16} />
+                <span><strong>{t.finance.addRevenue}</strong><small>Record incoming funds</small></span>
+              </button>
+              <button type="button" role="menuitem" onClick={() => openTransactionForm('expense')}>
+                <ArrowDownRight size={16} />
+                <span><strong>{t.finance.addExpense}</strong><small>Record operating costs</small></span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -445,10 +500,7 @@ export default function FinancePage() {
         <div className="responsive-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', padding: '24px' }}>
           <div className="glass-card responsive-modal animate-fade-up" style={{ width: '100%', maxWidth: '600px', background: 'white', overflow: 'hidden', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
             <div className="responsive-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: formType === 'income' ? 'rgba(39, 174, 96, 0.1)' : 'rgba(239, 68, 68, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: formType === 'income' ? '#27AE60' : '#ef4444', border: '1px solid var(--border)' }}>
-                  <DollarSign size={24} />
-                </div>
+              <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600 }}>{t.financeCycle.logTransaction.replace('{{type}}', formType === 'income' ? t.finance.revenue : t.finance.expenses)}</h2>
               </div>
               <button onClick={() => setIsModalOpen(false)} style={{ background: 'white', border: '1px solid var(--border)', borderRadius: '10px', padding: '8px', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
@@ -494,9 +546,9 @@ export default function FinancePage() {
                 </div>
               </div>
 
-              <div className="responsive-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
-                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.cancel}</button>
-                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', background: formType === 'income' ? '#27AE60' : '#ef4444', border: 'none', fontWeight: 600 }}>
+              <div className="responsive-modal-footer" style={{ display: 'flex', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '18px' }}>
+                <button type="button" onClick={() => setIsModalOpen(false)} className="btn-secondary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.cancel}</button>
+                <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: '1 1 0', minWidth: 0, padding: '12px 16px', borderRadius: '12px', background: 'var(--primary)', border: 'none', fontWeight: 600 }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : `${t.actions.save} ${formType === 'income' ? t.finance.revenue : t.finance.expenses}`}
                 </button>
               </div>

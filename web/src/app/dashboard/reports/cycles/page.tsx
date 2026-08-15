@@ -148,7 +148,7 @@ function CycleReportsContent() {
 
   if (!hasFinanceAccess) {
     return (
-      <div className={styles.restricted}>
+      <div className={`${styles.restricted} authenticated-compact-page business-dashboard-page`}>
         <Lock size={42} color="#0F4C75" />
         <h2>{t.cycleReport.accessRestrictedTitle}</h2>
         <p>{t.cycleReport.accessRestrictedBody}</p>
@@ -158,7 +158,7 @@ function CycleReportsContent() {
 
   if (!selectedCycleId) {
     return (
-      <div className={styles.page}>
+      <div className={`${styles.page} authenticated-compact-page business-dashboard-page`}>
         <header className={styles.pageHeader}>
           <div>
             <p className={styles.eyebrow}>{t.cycleReport.eyebrow}</p>
@@ -200,12 +200,12 @@ function CycleReportsContent() {
   }
 
   if (loading && !report) {
-    return <div className={styles.empty}><Loader2 className="animate-spin" /><p>{t.cycleReport.loading}</p></div>;
+    return <div className={`${styles.empty} authenticated-compact-page business-dashboard-page`}><Loader2 className="animate-spin" /><p>{t.cycleReport.loading}</p></div>;
   }
 
   if (!report) {
     return (
-      <div className={styles.empty}>
+      <div className={`${styles.empty} authenticated-compact-page business-dashboard-page`}>
         <FileText size={42} color="#3282B8" />
         <h2>{t.cycleReport.notFoundTitle}</h2>
         <p>{t.cycleReport.notFoundBody}</p>
@@ -217,7 +217,7 @@ function CycleReportsContent() {
   const profitClass = report.totals.grossProfit >= 0 ? styles.metricPositive : styles.metricNegative;
 
   return (
-    <div className={`${styles.page} authenticated-compact-page`}>
+    <div className={`${styles.page} authenticated-compact-page business-dashboard-page`}>
       <header className={styles.pageHeader}>
         <div>
           <p className={styles.eyebrow}>{t.cycleReport.eyebrow}</p>

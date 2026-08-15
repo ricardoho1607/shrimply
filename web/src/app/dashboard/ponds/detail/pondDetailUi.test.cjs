@@ -20,6 +20,12 @@ test('record trigger exposes sampling, mortality, and pond-aware feed flows', ()
   assert.match(component, /\/dashboard\/feed\?action=new&pondId=\$\{encodeURIComponent\(pond\.id\)\}/);
 });
 
+test('mobile record menu opens below its trigger inside the visible viewport', () => {
+  assert.match(component, /@media \(max-width: 420px\)[\s\S]*?\.pond-detail-record-popover\s*{[\s\S]*?position:\s*absolute;/);
+  assert.match(component, /\.pond-detail-record-popover\s*{[\s\S]*?top:\s*calc\(100% \+ 8px\);[\s\S]*?bottom:\s*auto;/);
+  assert.match(component, /width:\s*min\(238px, calc\(100vw - 24px\)\);/);
+});
+
 test('detail removes duplicate mortality and end-cycle controls', () => {
   assert.doesNotMatch(component, /label:\s*'Dead Shrimp Counted Today'/);
   assert.doesNotMatch(component, /label:\s*'Observed\/Recovered Today'/);

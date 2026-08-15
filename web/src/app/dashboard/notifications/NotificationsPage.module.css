@@ -1,0 +1,193 @@
+.page {
+  gap: 12px;
+}
+
+.bulkActions {
+  gap: 10px;
+}
+
+.bulkActions button {
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.bulkActions button:not(:disabled):hover {
+  background: var(--bg-mid) !important;
+}
+
+.metricGrid {
+  width: 100%;
+  padding: 4px;
+  gap: 2px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.metricCard {
+  width: 100%;
+  min-height: 76px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.metricCard + .metricCard {
+  border-left: 0;
+}
+
+.metricCard:nth-child(n + 3) {
+  border-top: 0;
+}
+
+.metricCard:hover {
+  background: var(--bg-mid);
+  transform: none;
+}
+
+.metricCard[data-active='true'] {
+  background: var(--primary-dim);
+}
+
+.metricCard:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid var(--secondary);
+  outline-offset: -2px;
+}
+
+.highPriorityValue {
+  color: var(--danger);
+}
+
+.filters {
+  min-width: 0;
+  padding: 8px 14px !important;
+}
+
+.filterTabs {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filterTabs::-webkit-scrollbar {
+  display: none;
+}
+
+.filterTabs button {
+  flex: 0 0 auto;
+  min-height: 40px;
+  border-radius: 8px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.filterTabs button:hover {
+  background: var(--bg-mid) !important;
+  color: var(--text-primary) !important;
+}
+
+.notificationItem {
+  gap: 12px !important;
+  padding: 14px !important;
+}
+
+.notificationContent {
+  min-width: 0;
+}
+
+.notificationHeading {
+  min-width: 0;
+  gap: 8px;
+}
+
+.notificationHeading h4 {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notificationTime {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.notificationActions {
+  flex: 0 0 auto;
+}
+
+.emptyState {
+  min-height: 280px;
+  padding: 40px 24px !important;
+}
+
+@media (max-width: 1023px) {
+  .metricGrid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .metricCard + .metricCard {
+    border-left: 0;
+  }
+
+  .metricCard:nth-child(n + 3) {
+    border-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .bulkActions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
+
+  .bulkActions button {
+    min-width: 0;
+    justify-content: center;
+    padding: 0 10px !important;
+    font-size: 11px;
+  }
+
+  .metricCard {
+    min-height: 68px;
+    padding: 8px !important;
+  }
+
+  .filters {
+    padding: 4px 10px !important;
+  }
+
+  .filterTabs {
+    gap: 18px !important;
+  }
+
+  .filterLabel {
+    display: none !important;
+  }
+
+  .notificationItem {
+    position: relative;
+    padding: 12px !important;
+  }
+
+  .notificationHeading h4 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .notificationActions {
+    align-self: flex-start !important;
+    opacity: 1 !important;
+  }
+
+  .emptyState {
+    min-height: 220px;
+    padding: 28px 18px !important;
+  }
+}

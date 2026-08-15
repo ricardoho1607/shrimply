@@ -43,7 +43,8 @@ import {
 } from '../../../../shared/pondCalculations';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import EnterpriseDashboard from '@/components/EnterpriseCycleDashboard';
-import ProfileCompletionCard from '@/components/ProfileCompletionCard';
+import DashboardOnboardingCard from './DashboardOnboardingCard';
+import styles from './DashboardHome.module.css';
 import {
   filterEnterpriseRecordsForUser,
   isEnterpriseOwner,
@@ -641,7 +642,7 @@ export default function DashboardPage() {
     <div className="dashboard-page">
 
       {(userData?.role === 'owner' || userData?.role === 'co-owner') ? (
-        <ProfileCompletionCard company={company} />
+        <DashboardOnboardingCard company={company} />
       ) : null}
 
       {/* Summary Row */}
@@ -765,11 +766,28 @@ export default function DashboardPage() {
               </div>
             )}
             
-            <div className="dashboard-pond-grid" style={{
-              display: 'grid', 
-              gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(280px, 1fr))' : '1fr',
-              gap: viewMode === 'grid' ? '16px' : '0'
-            }}>
+            {activePonds.length === 0 ? (
+              <div className={`glass-card ${styles.emptyState}`}>
+                <div className={styles.emptyContent}>
+                  <div className={styles.emptyIcon} aria-hidden="true">
+                    <Waves size={22} />
+                  </div>
+                  <h2 className={styles.emptyTitle}>Add your first pond</h2>
+                  <p className={styles.emptyDetail}>
+                    Create a pond to begin tracking stocking, growth, water quality, feed, and harvest records.
+                  </p>
+                  <Link className={styles.emptyAction} href="/dashboard/ponds">
+                    <Plus size={16} aria-hidden="true" />
+                    Set up a pond
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="dashboard-pond-grid" style={{
+                display: 'grid',
+                gridTemplateColumns: viewMode === 'grid' ? 'repeat(auto-fill, minmax(280px, 1fr))' : '1fr',
+                gap: viewMode === 'grid' ? '16px' : '0'
+              }}>
               {activePonds.map((pond, idx) => {
                 const m = calculateMetrics(pond, company?.timeZone);
                 return viewMode === 'grid' ? (
@@ -786,7 +804,7 @@ export default function DashboardPage() {
                       cursor: 'pointer'
                     }}
                     >
-                      <div className="dashboard-list-pond">
+                      <div className={`dashboard-list-pond ${styles.listPondCell}`}>
                         <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '2px' }}>{pond.pondName}</div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--text-faint)', fontWeight: 500 }}>{pond.supplier || 'N/A'}</div>
                       </div>
@@ -812,7 +830,8 @@ export default function DashboardPage() {
                   </Link>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

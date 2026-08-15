@@ -5,16 +5,9 @@ import {
   Bell, 
   CheckCircle2, 
   Trash2, 
-  AlertTriangle, 
-  Info, 
-  Clock, 
-  Box, 
-  Users, 
-  ShoppingBag,
   Filter,
   Check,
   Loader2,
-  BrainCircuit
 } from 'lucide-react';
 import { 
   collection, 
@@ -29,6 +22,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyNotifications } from '@/hooks/useDashboardData';
+import styles from './NotificationsPage.module.css';
 
 /* --- Types --------------------------------------------------- */
 
@@ -48,49 +42,6 @@ interface Notification {
 
 const isFirestoreTimestamp = (value: Notification['timestamp']): value is { toDate: () => Date } => {
   return !!value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function';
-};
-
-/* --- Components ----------------------------------------------- */
-
-const NotificationIcon = ({ type, priority, data }: { type: string, priority: string, data?: Notification['data'] }) => {
-  const getIconColor = () => {
-    if (data?.isOrson) return '#3282B8'; // Orson Navy
-    if (priority === 'high') return '#ef4444';
-    if (priority === 'medium') return '#f59e0b';
-    return '#3b82f6';
-  };
-
-  const color = getIconColor();
-  const bg = `${color}15`;
-
-  const iconProps = { size: 20, color };
-
-  return (
-    <div style={{ 
-      width: '44px', 
-      height: '44px', 
-      borderRadius: '12px', 
-      background: bg, 
-      display: 'flex', 
-      alignItems: 'center', 
-      justifyContent: 'center',
-      flexShrink: 0
-    }}>
-      {data?.isOrson ? (
-        <BrainCircuit {...iconProps} />
-      ) : (
-        <>
-          {type === 'disease_alert' && <AlertTriangle {...iconProps} />}
-          {type === 'feed_low_stock' && <Box {...iconProps} />}
-          {type === 'asset_overdue' && <Clock {...iconProps} />}
-          {type === 'system' && <Info {...iconProps} />}
-          {type === 'team' && <Users {...iconProps} />}
-          {type === 'buyer' && <ShoppingBag {...iconProps} />}
-          {!['disease_alert', 'feed_low_stock', 'asset_overdue', 'system', 'team', 'buyer'].includes(type) && <Bell {...iconProps} />}
-        </>
-      )}
-    </div>
-  );
 };
 
 export default function NotificationsPage() {
@@ -116,16 +67,6 @@ export default function NotificationsPage() {
   const orsonCount = useMemo(() => notifications.filter(n => n.data?.isOrson).length, [notifications]);
   const highPriorityCount = useMemo(() => notifications.filter(n => n.priority === 'high').length, [notifications]);
   const setNotificationFilter = (nextFilter: typeof filter) => startTransition(() => setFilter(nextFilter));
-  const metricCardStyle = (id: typeof filter, accent = 'var(--primary)') => ({
-    background: id === 'all' ? 'var(--gradient)' : '#FFFFFF',
-    color: id === 'all' ? '#FFF' : 'var(--text-primary)',
-    padding: '22px',
-    border: filter === id ? `1px solid ${accent}` : id === 'all' ? 'none' : '1px solid var(--border)',
-    boxShadow: filter === id ? '0 14px 34px rgba(15, 76, 117, 0.12)' : 'var(--shadow-card)',
-    cursor: 'pointer',
-    textAlign: 'left' as const,
-    width: '100%'
-  });
 
   const markAsRead = async (id: string) => {
     try {
@@ -198,8 +139,8 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="dashboard-page authenticated-compact-page" style={{ maxWidth: '1000px', margin: '0 auto' }}>
-      <div className="dashboard-action-row">
+    <div className={`dashboard-page authenticated-compact-page ${styles.page}`} style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div className={`dashboard-action-row ${styles.bulkActions}`}>
           <button 
             onClick={markAllAsRead}
             disabled={unreadCount === 0}
@@ -237,41 +178,48 @@ export default function NotificationsPage() {
           </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
-        <button type="button" className="glass-card" onClick={() => setNotificationFilter('all')} style={metricCardStyle('all')}>
-          <div style={{ fontSize: '12px', fontWeight: 600, opacity: 0.85, textTransform: 'uppercase' }}>Total alerts</div>
-          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px' }}>{notifications.length}</div>
+      <div className={`glass-card dashboard-summary-panel ${styles.metricGrid}`}>
+        <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'all'} aria-pressed={filter === 'all'} onClick={() => setNotificationFilter('all')}>
+          <div className="dashboard-summary-content">
+            <div className="dashboard-summary-label">Total alerts</div>
+            <div className="dashboard-summary-value">{notifications.length}</div>
+          </div>
         </button>
-        <button type="button" className="glass-card" onClick={() => setNotificationFilter('unread')} style={metricCardStyle('unread')}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Unread</div>
-          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: 'var(--text-primary)' }}>{unreadCount}</div>
+        <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'unread'} aria-pressed={filter === 'unread'} onClick={() => setNotificationFilter('unread')}>
+          <div className="dashboard-summary-content">
+            <div className="dashboard-summary-label">Unread</div>
+            <div className="dashboard-summary-value">{unreadCount}</div>
+          </div>
         </button>
-        <button type="button" className="glass-card" onClick={() => setNotificationFilter('orson')} style={metricCardStyle('orson', '#3282B8')}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Orson AI</div>
-          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: 'var(--text-primary)' }}>{orsonCount}</div>
+        <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'orson'} aria-pressed={filter === 'orson'} onClick={() => setNotificationFilter('orson')}>
+          <div className="dashboard-summary-content">
+            <div className="dashboard-summary-label">Orson AI</div>
+            <div className="dashboard-summary-value">{orsonCount}</div>
+          </div>
         </button>
-        <button type="button" className="glass-card" onClick={() => setNotificationFilter('high')} style={metricCardStyle('high', '#ef4444')}>
-          <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>High priority</div>
-          <div style={{ fontSize: '30px', fontWeight: 600, marginTop: '6px', color: '#ef4444' }}>{highPriorityCount}</div>
+        <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'high'} aria-pressed={filter === 'high'} onClick={() => setNotificationFilter('high')}>
+          <div className="dashboard-summary-content">
+            <div className="dashboard-summary-label">High priority</div>
+            <div className={`dashboard-summary-value ${styles.highPriorityValue}`}>{highPriorityCount}</div>
+          </div>
         </button>
       </div>
 
       {/* Filters & Tabs */}
-      <div className="glass-card" style={{ 
+      <div className={`glass-card ${styles.filters}`} style={{
         display: 'flex', 
         justifyContent: 'space-between', 
         alignItems: 'center',
         background: '#FFFFFF',
         padding: '16px 22px'
       }}>
-        <div style={{ display: 'flex', gap: '32px' }}>
+        <div className={styles.filterTabs} style={{ display: 'flex', gap: '24px' }}>
           <button 
                 onClick={() => setNotificationFilter('all')}
             style={{
               padding: '12px 4px',
               background: 'none',
               border: 'none',
-              borderBottom: filter === 'all' ? '2px solid var(--primary)' : '2px solid transparent',
               color: filter === 'all' ? 'var(--text-primary)' : 'var(--text-faint)',
               fontWeight: filter === 'all' ? 600 : 500,
               fontSize: '14px',
@@ -287,7 +235,6 @@ export default function NotificationsPage() {
               padding: '12px 4px',
               background: 'none',
               border: 'none',
-              borderBottom: filter === 'unread' ? '2px solid var(--primary)' : '2px solid transparent',
               color: filter === 'unread' ? 'var(--text-primary)' : 'var(--text-faint)',
               fontWeight: filter === 'unread' ? 600 : 500,
               fontSize: '14px',
@@ -319,7 +266,6 @@ export default function NotificationsPage() {
               padding: '12px 4px',
               background: 'none',
               border: 'none',
-              borderBottom: filter === 'orson' ? '2px solid #3282B8' : '2px solid transparent',
               color: filter === 'orson' ? 'var(--text-primary)' : 'var(--text-faint)',
               fontWeight: filter === 'orson' ? 600 : 500,
               fontSize: '14px',
@@ -335,7 +281,6 @@ export default function NotificationsPage() {
               padding: '12px 4px',
               background: 'none',
               border: 'none',
-              borderBottom: filter === 'high' ? '2px solid #ef4444' : '2px solid transparent',
               color: filter === 'high' ? 'var(--text-primary)' : 'var(--text-faint)',
               fontWeight: filter === 'high' ? 600 : 500,
               fontSize: '14px',
@@ -346,20 +291,20 @@ export default function NotificationsPage() {
             High priority
           </button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-faint)', fontSize: '13px', fontWeight: 600 }}>
+        <div className={styles.filterLabel} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-faint)', fontSize: '13px', fontWeight: 600 }}>
           <Filter size={16} />
           <span>Filter</span>
         </div>
       </div>
 
       {/* Notifications List */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+      <div className={styles.notificationList} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         {loading ? (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '300px', color: 'var(--text-faint)' }}>
             <Loader2 className="animate-spin" size={40} />
           </div>
         ) : filteredNotifications.length === 0 ? (
-          <div className="glass-card" style={{ 
+          <div className={`glass-card ${styles.emptyState}`} style={{
             textAlign: 'center', 
             padding: '80px 40px', 
             background: '#FFFFFF',
@@ -398,11 +343,11 @@ export default function NotificationsPage() {
           filteredNotifications.map((notification) => (
             <div 
               key={notification.id}
-              className="glass-card notification-item"
+              className={`glass-card notification-item ${styles.notificationItem}`}
               style={{ 
                 padding: '20px', 
                 background: notification.read ? '#FFFFFF' : 'rgba(15, 76, 117, 0.02)',
-                borderLeft: notification.read ? '1px solid var(--border)' : `4px solid ${notification.data?.isOrson ? '#3282B8' : 'var(--primary)'}`,
+                border: '1px solid var(--border)',
                 display: 'flex',
                 gap: '20px',
                 alignItems: 'flex-start',
@@ -412,10 +357,8 @@ export default function NotificationsPage() {
               }}
               onClick={() => !notification.read && markAsRead(notification.id)}
             >
-              <NotificationIcon type={notification.type} priority={notification.priority} data={notification.data} />
-              
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
+              <div className={styles.notificationContent} style={{ flex: 1 }}>
+                <div className={styles.notificationHeading} style={{ display: 'flex', alignItems: 'baseline', marginBottom: '4px' }}>
                   <h4 style={{ 
                     fontSize: '16px', 
                     fontWeight: notification.read ? 400 : 600,
@@ -423,7 +366,7 @@ export default function NotificationsPage() {
                   }}>
                     {notification.title}
                   </h4>
-                  <span style={{ fontSize: '12px', color: 'var(--text-faint)', fontWeight: 600 }}>
+                  <span className={styles.notificationTime} style={{ fontSize: '12px', color: 'var(--text-faint)', fontWeight: 600 }}>
                     {formatTime(notification.timestamp)}
                   </span>
                 </div>
@@ -456,7 +399,7 @@ export default function NotificationsPage() {
                 )}
               </div>
 
-              <div className="notification-actions" style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
+              <div className={`notification-actions ${styles.notificationActions}`} style={{ display: 'flex', gap: '8px', alignSelf: 'center' }}>
                 {!notification.read && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
@@ -505,7 +448,7 @@ export default function NotificationsPage() {
 
       <style jsx>{`
         .notification-item:hover {
-          transform: translateX(4px);
+          transform: translateY(-1px);
           box-shadow: 0 4px 12px rgba(15, 76, 117, 0.05);
           background: #FFF !important;
         }
@@ -514,6 +457,9 @@ export default function NotificationsPage() {
           transition: opacity 0.2s;
         }
         .notification-item:hover .notification-actions {
+          opacity: 1;
+        }
+        .notification-item:focus-within .notification-actions {
           opacity: 1;
         }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

@@ -30,3 +30,15 @@ test('feed entry and history surfaces use compact authenticated styling', () => 
 test('mobile feed history remains a narrow drawer instead of covering the page', () => {
   assert.match(styles, /\.feed-history-drawer\s*\{[\s\S]*?width:\s*min\(300px, 78vw\) !important;[\s\S]*?max-width:\s*78vw !important;/);
 });
+
+test('feed history drawer closes only when its backdrop is clicked', () => {
+  assert.match(source, /const handleHistoryBackdropClick = \(event: React\.MouseEvent<HTMLDivElement>\)/);
+  assert.match(source, /event\.target !== event\.currentTarget/);
+  assert.match(source, /className="responsive-side-drawer-overlay feed-history-overlay" onClick=\{handleHistoryBackdropClick\}/);
+});
+
+test('phone feed history header stays below device navigation and status areas', () => {
+  assert.match(source, /className="responsive-side-drawer-overlay feed-history-overlay"[\s\S]*?style=\{\{ zIndex: 9100 \}\}/);
+  assert.match(source, /className="responsive-side-drawer feed-history-drawer"[\s\S]*?style=\{\{ paddingTop: 0 \}\}/);
+  assert.match(source, /<style jsx global>[\s\S]*?\.dashboard-saas \.feed-history-header\s*{[\s\S]*?padding-top:\s*calc\(12px \+ var\(--safe-area-top\)\) !important;/);
+});
