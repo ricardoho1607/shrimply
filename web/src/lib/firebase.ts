@@ -4,7 +4,13 @@ import {
   ReCaptchaV3Provider,
   type AppCheck,
 } from "firebase/app-check";
-import { getAuth } from "firebase/auth";
+import {
+  browserLocalPersistence,
+  browserSessionPersistence,
+  indexedDBLocalPersistence,
+  initializeAuth,
+  type Auth,
+} from "firebase/auth";
 import {
   getFirestore,
   initializeFirestore,
@@ -28,11 +34,35 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 type FirebaseRuntime = typeof globalThis & { __shrimplyFirestore?: Firestore };
 const firebaseRuntime = globalThis as FirebaseRuntime;
+
+type AuthWithNetworkConfig = Auth & {
+  config: {
+    apiHost: string;
+    apiScheme: string;
+    tokenApiHost: string;
+  };
+};
+
+const configureProductionAuthProxy = (firebaseAuth: Auth) => {
+  if (typeof window === "undefined") return;
+  if (!["shrimplytech.com", "www.shrimplytech.com"].includes(window.location.hostname)) return;
+
+  const { config } = firebaseAuth as AuthWithNetworkConfig;
+  config.apiScheme = window.location.protocol.replace(":", "");
+  config.apiHost = `${window.location.host}/firebase-auth/identitytoolkit`;
+  config.tokenApiHost = `${window.location.host}/firebase-auth/securetoken`;
+};
+
 let appCheck: AppCheck | null = null;
+const appCheckEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED === "true";
 const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
 const isProduction = process.env.NODE_ENV === "production";
 const appCheckDebugEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED === "true";
-if (typeof window !== "undefined" && appCheckSiteKey && (isProduction || appCheckDebugEnabled)) {
+if (
+  typeof window !== "undefined"
+  && appCheckEnabled && appCheckSiteKey
+  && (isProduction || appCheckDebugEnabled)
+) {
   if (!isProduction) {
     (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
@@ -41,7 +71,14 @@ if (typeof window !== "undefined" && appCheckSiteKey && (isProduction || appChec
     isTokenAutoRefreshEnabled: true,
   });
 }
-const auth = getAuth(app);
+const auth = initializeAuth(app, {
+  persistence: [
+    indexedDBLocalPersistence,
+    browserLocalPersistence,
+    browserSessionPersistence,
+  ],
+});
+configureProductionAuthProxy(auth);
 const db = firebaseRuntime.__shrimplyFirestore ?? (
   typeof window === "undefined"
     ? getFirestore(app)

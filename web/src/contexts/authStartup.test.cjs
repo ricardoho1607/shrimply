@@ -9,14 +9,18 @@ const authPage = fs.readFileSync(path.join(__dirname, '../app/auth/page.tsx'), '
 const authLayout = fs.readFileSync(path.join(__dirname, '../app/auth/layout.tsx'), 'utf8');
 const dashboardLayout = fs.readFileSync(path.join(__dirname, '../app/dashboard/layout.tsx'), 'utf8');
 const dashboardPage = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
+const vercelConfig = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../../../vercel.json'), 'utf8'),
+);
 const portalProvidersPath = path.join(__dirname, '../components/PortalProviders.tsx');
 const portalProviders = fs.existsSync(portalProvidersPath)
   ? fs.readFileSync(portalProvidersPath, 'utf8')
   : '';
 
-test('development App Check is opt-in so an unregistered debug token cannot block startup', () => {
+test('App Check requires explicit registration before it can block authentication startup', () => {
+  assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED/);
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED/);
-  assert.match(firebaseClient, /isProduction \|\| appCheckDebugEnabled/);
+  assert.match(firebaseClient, /appCheckEnabled && appCheckSiteKey/);
 });
 
 test('sign in relies on the auth listener instead of duplicating user and company reads', () => {
@@ -27,6 +31,51 @@ test('sign in relies on the auth listener instead of duplicating user and compan
 
   assert.doesNotMatch(signInSource, /hydrateAuthenticatedUserState/);
   assert.doesNotMatch(signInSource, /getDoc\(/);
+});
+
+test('installed PWA sign in preserves Firebase-selected persistence fallbacks', () => {
+  const signInSource = authContext.slice(
+    authContext.indexOf('const signIn = async'),
+    authContext.indexOf('const signUp = async'),
+  );
+
+  assert.doesNotMatch(signInSource, /setPersistence/);
+  assert.doesNotMatch(signInSource, /browserLocalPersistence/);
+  assert.doesNotMatch(signInSource, /browserSessionPersistence/);
+});
+
+test('installed PWA sign in retries one transient Firebase network failure', () => {
+  const signInSource = authContext.slice(
+    authContext.indexOf('const signIn = async'),
+    authContext.indexOf('const signUp = async'),
+  );
+  const signInAttempts = signInSource.match(/await signInWithEmailAndPassword/g) || [];
+
+  assert.equal(signInAttempts.length, 2);
+  assert.match(signInSource, /isAuthNetworkRequestFailed/);
+  assert.match(signInSource, /waitForAuthNetworkRecovery/);
+  assert.match(authContext, /\.code === ['"]auth\/network-request-failed['"]/);
+});
+
+test('production Firebase Auth always uses the same-origin network path', () => {
+  assert.match(firebaseClient, /initializeAuth/);
+  assert.doesNotMatch(firebaseClient, /getAuth|browserPopupRedirectResolver/);
+  assert.doesNotMatch(firebaseClient, /isInstalledWebApp|display-mode: standalone|navigator\.standalone/);
+  assert.match(firebaseClient, /config\.apiHost = .*firebase-auth\/identitytoolkit/);
+  assert.match(firebaseClient, /config\.tokenApiHost = .*firebase-auth\/securetoken/);
+
+  assert.ok(vercelConfig.rewrites.some((rewrite) =>
+    rewrite.source === '/firebase-auth/identitytoolkit/:path*'
+      && rewrite.destination === 'https://identitytoolkit.googleapis.com/:path*'));
+  assert.ok(vercelConfig.rewrites.some((rewrite) =>
+    rewrite.source === '/firebase-auth/securetoken/:path*'
+      && rewrite.destination === 'https://securetoken.googleapis.com/:path*'));
+});
+
+test('auth page explains an installed-app network failure without blaming credentials', () => {
+  assert.match(authPage, /auth\/network-request-failed/);
+  assert.match(authPage, /Unable to reach the secure sign-in service/);
+  assert.doesNotMatch(authPage, /fully close and reopen/);
 });
 
 test('the auth page has one state-driven dashboard redirect', () => {

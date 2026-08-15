@@ -9,6 +9,19 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { getRequiredSetupRoute, ROUTES } from '@/config/routes';
 
+const getLoginErrorMessage = (error: unknown, fallback: string) => {
+  const errorCode =
+    typeof error === 'object' && error !== null && 'code' in error
+      ? (error as { code?: unknown }).code
+      : undefined;
+
+  if (errorCode === 'auth/network-request-failed') {
+    return 'Unable to reach the secure sign-in service. Check your connection and try again.';
+  }
+
+  return error instanceof Error ? error.message : fallback;
+};
+
 export default function AuthPage() {
   const { t } = useLanguage();
   const [email, setEmail] = useState('');
@@ -47,9 +60,9 @@ export default function AuthPage() {
     setSuccess('');
     
     try {
-      await signIn(email, password, true, inviteToken);
+      await signIn(email, password, inviteToken);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : t.messages.error || 'Failed to login');
+      setError(getLoginErrorMessage(err, t.messages.error || 'Failed to login'));
     } finally {
       setLoading(false);
     }

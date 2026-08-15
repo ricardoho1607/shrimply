@@ -8,9 +8,6 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User as FirebaseUser,
-  setPersistence,
-  browserLocalPersistence,
-  browserSessionPersistence,
   sendPasswordResetEmail,
   sendEmailVerification,
   GoogleAuthProvider,
@@ -31,6 +28,40 @@ type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
 
 const OWNER_ROLES: UserRole[] = ['owner', 'co-owner'];
 const isOwnerRole = (role?: UserRole | null) => !!role && OWNER_ROLES.includes(role);
+
+const AUTH_NETWORK_RETRY_DELAY_MS = 450;
+const AUTH_OFFLINE_WAIT_MS = 4000;
+
+const isAuthNetworkRequestFailed = (error: unknown): error is { code: string } =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: unknown }).code === 'auth/network-request-failed';
+
+const waitForAuthNetworkRecovery = async () => {
+  if (typeof window === 'undefined') return;
+
+  if (!window.navigator.onLine) {
+    await new Promise<void>((resolve) => {
+      let settled = false;
+
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeoutId);
+        window.removeEventListener('online', finish);
+        resolve();
+      };
+
+      const timeoutId = window.setTimeout(finish, AUTH_OFFLINE_WAIT_MS);
+      window.addEventListener('online', finish, { once: true });
+    });
+  }
+
+  await new Promise<void>((resolve) => {
+    window.setTimeout(resolve, AUTH_NETWORK_RETRY_DELAY_MS);
+  });
+};
 
 const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
   if (!user) return undefined;
@@ -132,7 +163,7 @@ interface AuthContextType {
   company: Company | null;
   loading: boolean;
   companyLoading: boolean;
-  signIn: (email: string, password: string, keepMeSignedIn?: boolean, inviteToken?: string) => Promise<void>;
+  signIn: (email: string, password: string, inviteToken?: string) => Promise<void>;
   signInWithGoogle: (inviteToken?: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -330,12 +361,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await acceptCompanyInvite({ inviteToken });
   };
 
-  const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true, inviteToken?: string) => {
+  const signIn = async (email: string, password: string, inviteToken?: string) => {
     setLoading(true);
     try {
-      const persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
-      await setPersistence(auth, persistence);
-      await signInWithEmailAndPassword(auth, email, password);
+      const normalizedEmail = email.trim();
+
+      try {
+        await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      } catch (error) {
+        if (!isAuthNetworkRequestFailed(error)) throw error;
+        await waitForAuthNetworkRecovery();
+        await signInWithEmailAndPassword(auth, normalizedEmail, password);
+      }
+
       await acceptInviteAfterAuth(inviteToken);
     } finally {
       setLoading(false);
@@ -372,7 +410,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signInWithGoogle = async (inviteToken?: string) => {
     setLoading(true);
     try {
-      await setPersistence(auth, browserLocalPersistence);
       const credential = await signInWithPopup(auth, new GoogleAuthProvider());
       const userRef = doc(db, 'users', credential.user.uid);
       const existingUser = await getDoc(userRef);
