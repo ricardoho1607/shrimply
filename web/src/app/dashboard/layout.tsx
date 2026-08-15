@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRequiredSetupRoute } from '@/config/routes';
+import { useNotificationChecker } from '@/hooks/useNotificationChecker';
 import {
   LayoutDashboard,
   Waves,
@@ -100,6 +101,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
 function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage() as { t: DashboardTranslations };
   const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading, companyLoading } = useAuth();
+  useNotificationChecker(company?.id, user?.role);
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);

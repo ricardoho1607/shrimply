@@ -16,6 +16,7 @@ import revenueService, { Revenue, RevenueInput } from './services/revenueService
 import { usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { getFarmDateKey, getFarmPeriodDateKeys, isDateKeyInRange } from '../shared/farmDate';
+import { financeSyncDocumentId } from '../shared/financeSync';
 import AppDatePicker from './components/forms/AppDatePicker';
 import CycleSelector from './components/forms/CycleSelector';
 import {
@@ -287,7 +288,13 @@ export default function FinancePage() {
         };
 
         try {
-          await financeService.addExpense(company.id, expenseData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown');
+          await financeService.upsertSyncedExpense(
+            company.id,
+            financeSyncDocumentId(expenseData.reference),
+            expenseData,
+            user.uid,
+            user.name || user.email?.split('@')[0] || 'Unknown'
+          );
           setSyncedInventoryIds(prev => new Set([...prev, `${stock.type}-${stock.itemId}-${stock.id}`]));
         } catch (error: any) {
           console.error('Failed to sync inventory:', error);
@@ -352,7 +359,13 @@ export default function FinancePage() {
         };
 
         try {
-          await revenueService.addRevenue(company.id, revenueData, user.uid, user.name || user.email?.split('@')[0] || 'Unknown');
+          await revenueService.upsertSyncedRevenue(
+            company.id,
+            financeSyncDocumentId(revenueData.reference),
+            revenueData,
+            user.uid,
+            user.name || user.email?.split('@')[0] || 'Unknown'
+          );
           setSyncedHarvestIds(prev => new Set([...prev, harvest.id]));
         } catch (error: any) {
           console.error('Failed to sync harvest:', error);

@@ -18,11 +18,13 @@ import {
   Info,
   ArrowUpRight,
   Clock,
-  XCircle
+  XCircle,
+  Trash2
 } from 'lucide-react';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import Link from 'next/link';
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
@@ -84,9 +86,11 @@ const getLocationValue = (company: any) => {
 };
 
 export default function SettingsPage() {
-  const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest } = useAuth();
+  const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember } = useAuth();
   const { data: members } = useCompanyMembers<any>();
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [joinRequests, setJoinRequests] = useState<Array<{
@@ -179,6 +183,39 @@ export default function SettingsPage() {
       alert(error instanceof Error ? error.message : 'Failed to process join request.');
     } finally {
       setProcessingRequestId(null);
+    }
+  };
+
+  const handleProfilePhoto = async (file?: File) => {
+    if (!user || !file) return;
+    if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
+      alert('Choose an image smaller than 5 MB.');
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const photoRef = storageRef(storage, `users/${user.uid}/profile/avatar-${Date.now()}.${extension}`);
+      await uploadBytes(photoRef, file, { contentType: file.type });
+      const profileImage = await getDownloadURL(photoRef);
+      await updateDoc(doc(db, 'users', user.uid), { profileImage });
+    } catch (error) {
+      console.error('Error uploading profile photo:', error);
+      alert('Failed to upload profile photo.');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string, memberName?: string) => {
+    if (!window.confirm(`Remove ${memberName || 'this member'} from the company?`)) return;
+    setRemovingMemberId(memberId);
+    try {
+      await removeMember(memberId);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to remove team member.');
+    } finally {
+      setRemovingMemberId(null);
     }
   };
 
@@ -295,11 +332,12 @@ export default function SettingsPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
                 <div style={{ position: 'relative' }}>
                   <div style={{ width: '100px', height: '100px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 600, color: 'var(--primary)', overflow: 'hidden', border: '1px solid var(--border)' }}>
-                    {user?.profileImage ? <img src={user.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.name?.[0] || 'U').toUpperCase()}
+                    {user?.profileImage ? <img src={user.profileImage} alt={user.name || 'Profile'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.name?.[0] || 'U').toUpperCase()}
                   </div>
-                  <button type="button" className="settings-avatar-button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-card)' }}>
-                    <Camera size={14} />
-                  </button>
+                  <label className="settings-avatar-button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: uploadingPhoto ? 'wait' : 'pointer', boxShadow: 'var(--shadow-card)' }}>
+                    {uploadingPhoto ? <Loader2 className="animate-spin" size={14} /> : <Camera size={14} />}
+                    <input type="file" accept="image/*" disabled={uploadingPhoto} onChange={(event) => void handleProfilePhoto(event.target.files?.[0])} style={{ display: 'none' }} />
+                  </label>
                 </div>
                 <div>
                   <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '4px' }}>{userForm.name || t.settings.fullName || 'Your Name'}</h3>
@@ -537,7 +575,7 @@ export default function SettingsPage() {
                 {members.map((member) => (
                   <div key={member.id} className="settings-member-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', transition: 'all 0.2s' }}>
                     <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 600, fontSize: '18px', border: '1px solid var(--border)' }}>
-                      {member.profileImage ? <img src={member.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} /> : (member.name?.[0] || 'U').toUpperCase()}
+                      {member.profileImage ? <img src={member.profileImage} alt={member.name || 'Team member'} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} /> : (member.name?.[0] || 'U').toUpperCase()}
                     </div>
                     <div className="settings-member-copy" style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -553,6 +591,14 @@ export default function SettingsPage() {
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : member.role === 'co-owner' ? (t.roleSelection?.coOwner || 'Co-owner') : (t.roleSelection?.manager || 'Staff')}</div>
                     </div>
+                    {['owner', 'co-owner'].includes(user?.role || '')
+                      && member.id !== user?.uid
+                      && member.id !== company?.ownerId
+                      && !['owner', 'co-owner'].includes(member.role || '') && (
+                      <button type="button" disabled={removingMemberId === member.id} onClick={() => void handleRemoveMember(member.id, member.name)} aria-label={`Remove ${member.name || 'member'}`} style={{ border: '1px solid #FECDCA', color: '#B42318', background: '#FEF3F2', borderRadius: '10px', padding: '9px', cursor: 'pointer' }}>
+                        {removingMemberId === member.id ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />}
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>

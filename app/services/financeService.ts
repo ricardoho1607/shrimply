@@ -4,6 +4,7 @@ import {
   collection, 
   doc, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   getDocs, 
@@ -91,6 +92,26 @@ class FinanceService {
       console.error('Error adding expense:', error);
       throw new Error('Failed to add expense');
     }
+  }
+
+  async upsertSyncedExpense(
+    companyId: string,
+    documentId: string,
+    expenseData: ExpenseInput,
+    userId: string,
+    userName: string
+  ): Promise<string> {
+    const expenseRef = doc(db, 'companies', companyId, 'expenses', documentId);
+    await setDoc(expenseRef, {
+      ...expenseData,
+      companyId,
+      addedBy: userId,
+      addedByName: userName,
+      timestamp: Date.now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return expenseRef.id;
   }
 
   /**

@@ -897,12 +897,32 @@ service cloud.firestore {
 
       match /expenses/{expenseId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyManager(companyId);
+        allow create, update: if isCompanyManager(companyId)
+          || (
+            isCompanyOperator(companyId)
+            && expenseId.matches('sync_INVENTORY-.*')
+            && request.resource.data.companyId == companyId
+            && request.resource.data.reference.matches('INVENTORY-.*')
+          );
+        allow delete: if isCompanyManager(companyId)
+          || (isCompanyOperator(companyId)
+            && expenseId.matches('sync_INVENTORY-.*')
+            && resource.data.reference.matches('INVENTORY-.*'));
       }
 
       match /revenues/{revenueId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyManager(companyId);
+        allow create, update: if isCompanyManager(companyId)
+          || (
+            isCompanyOperator(companyId)
+            && revenueId.matches('sync_HARVEST-.*')
+            && request.resource.data.companyId == companyId
+            && request.resource.data.reference.matches('HARVEST-.*')
+          );
+        allow delete: if isCompanyManager(companyId)
+          || (isCompanyOperator(companyId)
+            && revenueId.matches('sync_HARVEST-.*')
+            && resource.data.reference.matches('HARVEST-.*'));
       }
 
       // Legacy client-visible counters. Existing installed clients still reserve
