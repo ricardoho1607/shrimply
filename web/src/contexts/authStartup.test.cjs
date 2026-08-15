@@ -29,6 +29,35 @@ test('sign in relies on the auth listener instead of duplicating user and compan
   assert.doesNotMatch(signInSource, /getDoc\(/);
 });
 
+test('installed PWA sign in preserves Firebase-selected persistence fallbacks', () => {
+  const signInSource = authContext.slice(
+    authContext.indexOf('const signIn = async'),
+    authContext.indexOf('const signUp = async'),
+  );
+
+  assert.doesNotMatch(signInSource, /setPersistence/);
+  assert.doesNotMatch(signInSource, /browserLocalPersistence/);
+  assert.doesNotMatch(signInSource, /browserSessionPersistence/);
+});
+
+test('installed PWA sign in retries one transient Firebase network failure', () => {
+  const signInSource = authContext.slice(
+    authContext.indexOf('const signIn = async'),
+    authContext.indexOf('const signUp = async'),
+  );
+  const signInAttempts = signInSource.match(/await signInWithEmailAndPassword/g) || [];
+
+  assert.equal(signInAttempts.length, 2);
+  assert.match(signInSource, /isAuthNetworkRequestFailed/);
+  assert.match(signInSource, /waitForAuthNetworkRecovery/);
+  assert.match(authContext, /\.code === ['"]auth\/network-request-failed['"]/);
+});
+
+test('auth page explains an installed-app network failure without blaming credentials', () => {
+  assert.match(authPage, /auth\/network-request-failed/);
+  assert.match(authPage, /Unable to connect to Firebase/);
+});
+
 test('the auth page has one state-driven dashboard redirect', () => {
   const dashboardRedirects = authPage.match(/router\.(?:push|replace)\(ROUTES\.dashboard\)/g) || [];
   assert.equal(dashboardRedirects.length, 1);
