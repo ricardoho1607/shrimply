@@ -9,11 +9,11 @@ import { getRequiredSetupRoute, ROUTES } from "@/config/routes";
 type OnboardingStage = "role" | "setup";
 
 export function useOnboardingGuard(stage: OnboardingStage) {
-  const { isAuthenticated, needsRoleSelection, needsSetup, loading, user } = useAuth();
+  const { isAuthenticated, needsRoleSelection, needsSetup, loading, companyLoading, user } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || companyLoading) return;
 
     if (!isAuthenticated) {
       router.replace(ROUTES.auth);
@@ -37,9 +37,9 @@ export function useOnboardingGuard(stage: OnboardingStage) {
     if (!needsSetup) {
       router.replace(ROUTES.dashboard);
     }
-  }, [isAuthenticated, loading, needsRoleSelection, needsSetup, router, stage, user?.role]);
+  }, [companyLoading, isAuthenticated, loading, needsRoleSelection, needsSetup, router, stage, user?.role]);
 
-  if (loading || !isAuthenticated) return false;
+  if (loading || companyLoading || !isAuthenticated) return false;
   if (stage === "role") return needsRoleSelection;
   return !needsRoleSelection && needsSetup;
 }

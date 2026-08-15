@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import AppProviders from '@/components/AppProviders';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth } from '@/lib/firebase';
 import { signOut } from 'firebase/auth';
@@ -100,7 +99,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
 
 function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage() as { t: DashboardTranslations };
-  const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading } = useAuth();
+  const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading, companyLoading } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
@@ -194,7 +193,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const toggleSidebar = () => setSidebarOpen(open => !open);
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || companyLoading) return;
     if (!isAuthenticated) {
       router.push('/auth');
       return;
@@ -207,7 +206,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       router.push(getRequiredSetupRoute(user?.role));
       return;
     }
-  }, [isAuthenticated, needsRoleSelection, needsSetup, loading, router, user?.role]);
+  }, [companyLoading, isAuthenticated, needsRoleSelection, needsSetup, loading, router, user?.role]);
 
   useEffect(() => {
     queueMicrotask(() => setSidebarOpen(false));
@@ -829,6 +828,11 @@ function DashboardStartupState() {
         @keyframes dashboard-startup-pulse {
           to { background-position-x: -200%; }
         }
+        @media (prefers-reduced-motion: reduce) {
+          .dashboard-startup-placeholder {
+            animation: none;
+          }
+        }
         @media (max-width: 700px) {
           .dashboard-startup-state {
             padding: 16px 12px;
@@ -843,9 +847,5 @@ function DashboardStartupState() {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AppProviders>
-      <DashboardLayoutShell>{children}</DashboardLayoutShell>
-    </AppProviders>
-  );
+  return <DashboardLayoutShell>{children}</DashboardLayoutShell>;
 }

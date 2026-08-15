@@ -129,6 +129,7 @@ interface AuthContextType {
   user: User | null;
   company: Company | null;
   loading: boolean;
+  companyLoading: boolean;
   signIn: (email: string, password: string, keepMeSignedIn?: boolean, inviteToken?: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -517,10 +518,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const value = useMemo(() => {
     const effectiveRole = getEffectiveUserRole(user, company);
     const effectiveUser = user ? { ...user, role: effectiveRole } : null;
+    const companyLoading = !!user?.companyId && !companyResolved;
+    const onboardingResolved = !user?.companyId || companyResolved;
     return {
     user: effectiveUser,
     company,
-    loading: loading || initializing || (!!user?.companyId && !companyResolved),
+    loading: loading || initializing,
+    companyLoading,
     signIn,
     signUp,
     resetPassword,
@@ -536,7 +540,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshCompanyData,
     isAuthenticated: !!user,
     needsRoleSelection: !!user && !effectiveRole,
-    needsSetup: !!effectiveUser && !!effectiveRole && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
+    needsSetup: !!effectiveUser
+      && !!effectiveRole
+      && onboardingResolved
+      && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
     isBuyer: effectiveRole === 'buyer',
   };
   }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);

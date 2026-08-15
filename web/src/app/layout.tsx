@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SITE_CONFIG } from "@/config/site";
+import PortalProviders from "@/components/PortalProviders";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -90,9 +91,11 @@ export default function RootLayout({
   return (
     <html lang="en" data-scroll-behavior="smooth">
       <body>
-        <div className="main-container">
-          {children}
-        </div>
+        <PortalProviders>
+          <div className="main-container">
+            {children}
+          </div>
+        </PortalProviders>
       </body>
     </html>
   );

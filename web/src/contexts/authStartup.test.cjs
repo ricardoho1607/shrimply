@@ -9,6 +9,10 @@ const authPage = fs.readFileSync(path.join(__dirname, '../app/auth/page.tsx'), '
 const authLayout = fs.readFileSync(path.join(__dirname, '../app/auth/layout.tsx'), 'utf8');
 const dashboardLayout = fs.readFileSync(path.join(__dirname, '../app/dashboard/layout.tsx'), 'utf8');
 const dashboardPage = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
+const portalProvidersPath = path.join(__dirname, '../components/PortalProviders.tsx');
+const portalProviders = fs.existsSync(portalProvidersPath)
+  ? fs.readFileSync(portalProvidersPath, 'utf8')
+  : '';
 
 test('development App Check is opt-in so an unregistered debug token cannot block startup', () => {
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED/);
@@ -37,14 +41,33 @@ test('authentication initialization keeps the route visible', () => {
 test('dashboard renders its shell and structured loading state while secure data resolves', () => {
   assert.doesNotMatch(dashboardLayout, /if \(loading\) return \(/);
   assert.match(dashboardLayout, /loading \? <DashboardStartupState \/> : children/);
-  assert.match(dashboardPage, /className="dashboard-page dashboard-home-loading"/);
+  assert.doesNotMatch(dashboardPage, /if \(loading\) return \(/);
+  assert.match(dashboardPage, /pondsLoading \? \(/);
   assert.match(dashboardPage, /dashboard-summary-panel/);
 });
 
-test('resolved auth state is handed across route-scoped providers after login', () => {
-  assert.match(authContext, /lastResolvedAuthState/);
-  assert.match(authContext, /useState<User \| null>\(\(\) => lastResolvedAuthState\.user\)/);
-  assert.match(authContext, /lastResolvedAuthState\.company\?\.id !== companyId/);
+test('portal navigation retains one provider across auth, setup, and dashboard routes', () => {
+  assert.match(portalProviders, /<AppProviders>\{children\}<\/AppProviders>/);
+  assert.match(portalProviders, /['"]\/auth['"]/);
+  assert.match(portalProviders, /['"]\/dashboard['"]/);
+  assert.match(portalProviders, /['"]\/roleselection['"]/);
+  assert.match(portalProviders, /['"]\/setup['"]/);
+  assert.doesNotMatch(authLayout, /AppProviders/);
+  assert.doesNotMatch(dashboardLayout, /AppProviders/);
+});
+
+test('company hydration is reported separately from secure auth initialization', () => {
+  assert.match(authContext, /companyLoading:\s*boolean/);
+  assert.match(authContext, /const companyLoading = !!user\?\.companyId && !companyResolved/);
+  assert.match(authContext, /companyLoading,/);
+  assert.match(authContext, /loading:\s*loading\s*\|\|\s*initializing,/);
+  assert.doesNotMatch(authContext, /loading:\s*loading\s*\|\|\s*initializing\s*\|\|/);
+});
+
+test('returning users hydrate Firestore listeners from persistent multi-tab cache', () => {
+  assert.match(firebaseClient, /initializeFirestore/);
+  assert.match(firebaseClient, /persistentLocalCache/);
+  assert.match(firebaseClient, /persistentMultipleTabManager/);
 });
 
 test('auth query-parameter routes render within a Suspense boundary', () => {
