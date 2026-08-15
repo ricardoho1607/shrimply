@@ -53,6 +53,7 @@ import {
   normalizeHarvestMarketPriceInputs,
   type HarvestMarketPriceInputs,
 } from '../../../../../shared/harvestProjectionSettings';
+import styles from './ProjectionsPage.module.css';
 
 /* --- Types --------------------------------------------------- */
 interface Pond {
@@ -625,7 +626,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page authenticated-compact-page">
+    <div className="dashboard-page authenticated-compact-page business-dashboard-page">
       <div className="dashboard-action-row">
         <button 
           className="btn-primary" 
@@ -636,10 +637,10 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
           {exportLoading ? 'Generating...' : t.actions.export + ' Audit PDF'}
         </button>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '32px', alignItems: 'start' }}>
+      <div className={styles.mainGrid} style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '32px', alignItems: 'start' }}>
         
         {/* Settings Card */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className={styles.settingsColumn} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div className="glass-card" style={{ background: '#FFF', padding: '24px' }}>
             <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Waves size={20} color="var(--primary)" /> 1. {t.forms.selectPond}
@@ -730,7 +731,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
         </div>
 
         {/* Projections Display */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <div className={styles.resultsColumn} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           
           <div className="glass-card" style={{ background: '#FFF', padding: '32px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -855,7 +856,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   width: '100%',
                   padding: '16px',
                   borderRadius: '16px',
-                  background: 'var(--gradient)',
+                  background: '#0F4C75',
                   color: '#FFF',
                   border: 'none',
                   fontWeight: 600,

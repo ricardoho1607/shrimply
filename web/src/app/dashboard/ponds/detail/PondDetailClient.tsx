@@ -1364,6 +1364,16 @@ export default function PondDetailClient() {
           text-transform: uppercase;
           letter-spacing: 0.04em;
         }
+        @media (max-width: 420px) {
+          .pond-detail-record-popover {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            bottom: auto;
+            left: auto;
+            width: min(238px, calc(100vw - 24px));
+          }
+        }
       `}</style>
     </div>
   );

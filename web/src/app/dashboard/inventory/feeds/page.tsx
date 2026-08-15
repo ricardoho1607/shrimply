@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -14,10 +14,10 @@ import {
   History,
   X,
   Loader2,
-  Wallet,
   Calendar,
   Waves,
-  LayoutDashboard
+  LayoutDashboard,
+  ArrowUpDown
 } from 'lucide-react';
 import {
   collection,
@@ -102,11 +102,38 @@ export default function InventoryFeedsPage() {
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
+  const [isInputMenuOpen, setInputMenuOpen] = useState(false);
+  const [isTransactionFilterOpen, setTransactionFilterOpen] = useState(false);
+  const inputMenuRef = useRef<HTMLDivElement>(null);
+  const transactionFilterRef = useRef<HTMLDivElement>(null);
   const activePonds = useMemo(
     () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
     [ponds]
   );
   const canEditInventory = canEditOperations(user?.role);
+
+  useEffect(() => {
+    if (!isInputMenuOpen && !isTransactionFilterOpen) return;
+
+    const closeMenus = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!inputMenuRef.current?.contains(target)) setInputMenuOpen(false);
+      if (!transactionFilterRef.current?.contains(target)) setTransactionFilterOpen(false);
+    };
+    const closeMenusOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setInputMenuOpen(false);
+        setTransactionFilterOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeMenus);
+    document.addEventListener('keydown', closeMenusOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeMenus);
+      document.removeEventListener('keydown', closeMenusOnEscape);
+    };
+  }, [isInputMenuOpen, isTransactionFilterOpen]);
 
   const formatDate = (date: any) => {
     if (!date) return '';
@@ -393,10 +420,10 @@ export default function InventoryFeedsPage() {
   };
 
   const dashboardMetrics = [
-    { label: t.inventory.feedStock, value: `${formatQuantity(metrics.totalFeedStock)} kg`, icon: Box },
-    { label: 'Feed Used', value: `${formatQuantity(metrics.totalFeedUsed)} kg`, icon: ArrowUpCircle },
-    { label: t.inventory.feedStockValue, value: formatCurrency(metrics.feedStockValue), icon: Wallet },
-    { label: t.inventory.additiveValue, value: formatCurrency(metrics.totalAdditiveValue), icon: FlaskConical },
+    { label: t.inventory.feedStock, value: `${formatQuantity(metrics.totalFeedStock)} kg` },
+    { label: 'Feed Used', value: `${formatQuantity(metrics.totalFeedUsed)} kg` },
+    { label: 'Feed Value', value: formatCurrency(metrics.feedStockValue) },
+    { label: t.inventory.additiveValue, value: formatCurrency(metrics.totalAdditiveValue) },
   ];
 
   if (loading) {
@@ -408,9 +435,9 @@ export default function InventoryFeedsPage() {
   }
 
   return (
-    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ paddingBottom: '32px' }}>
-      <div className="dashboard-inline-toolbar animate-fade-up">
-        <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '32px' }}>
+      <div className="inventory-primary-toolbar animate-fade-up">
+        <div className="inventory-section-tabs">
           {[
             { id: 'dashboard', label: t.inventory.dashboard, icon: LayoutDashboard },
             { id: 'feed', label: t.inventory.feeds, icon: Box },
@@ -419,7 +446,7 @@ export default function InventoryFeedsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`}
+              className={`inventory-section-tab ${activeTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
               {tab.label}
@@ -428,51 +455,47 @@ export default function InventoryFeedsPage() {
         </div>
 
         {canEditInventory && (
-          <div className="dashboard-action-row">
-            <Link
-              href="/dashboard/inventory/treatment-mixes"
-              className="dashboard-action dashboard-action-secondary"
-              style={{ minHeight: '44px', fontSize: '13px', fontWeight: 600, textDecoration: 'none' }}
-            >
-              <FlaskConical size={18} />
-              Treatment Mixes
-            </Link>
+          <div className="pond-detail-record-menu inventory-input-menu" ref={inputMenuRef}>
             <button
-              className="dashboard-action dashboard-action-secondary"
-              onClick={() => handleOpenModal('add', undefined, 'feed')}
-              style={{
-                background: 'white',
-                border: '1px solid var(--border)',
-                boxShadow: 'var(--shadow-card)',
-                minHeight: '44px',
-                fontSize: '13px',
-                fontWeight: 600,
-                letterSpacing: '0',
-                textTransform: 'none',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              type="button"
+              className="pond-detail-record-trigger inventory-input-trigger"
+              aria-label="Add inventory input"
+              aria-expanded={isInputMenuOpen}
+              aria-haspopup="menu"
+              onClick={() => {
+                setTransactionFilterOpen(false);
+                setInputMenuOpen((open) => !open);
               }}
             >
-              <Plus size={18} />
-              {t.inventory.addFeed}
+              <Plus size={15} />
+              <span>Input</span>
             </button>
-            <button
-              className="dashboard-action dashboard-action-secondary"
-              onClick={() => handleOpenModal('add', undefined, 'additive')}
-              style={{
-                background: 'white',
-                border: '1px solid var(--border)',
-                boxShadow: 'var(--shadow-card)',
-                minHeight: '44px',
-                fontSize: '13px',
-                fontWeight: 600,
-                letterSpacing: '0',
-                textTransform: 'none',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-              }}
-            >
-              <FlaskConical size={18} />
-              {t.inventory.addAdditive}
-            </button>
+            {isInputMenuOpen && (
+              <div
+                role="menu"
+                className="pond-detail-record-popover inventory-input-popover"
+                style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, bottom: 'auto', left: 'auto', width: 'min(238px, calc(100vw - 24px))' }}
+              >
+                <Link role="menuitem" href="/dashboard/inventory/treatment-mixes" onClick={() => setInputMenuOpen(false)}>
+                  <FlaskConical size={16} />
+                  <span><strong>Treatment Mixes</strong><small>Create or manage treatment recipes</small></span>
+                </Link>
+                <button type="button" role="menuitem" onClick={() => {
+                  setInputMenuOpen(false);
+                  handleOpenModal('add', undefined, 'feed');
+                }}>
+                  <Box size={16} />
+                  <span><strong>{t.inventory.addFeed}</strong><small>Add feed stock to inventory</small></span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => {
+                  setInputMenuOpen(false);
+                  handleOpenModal('add', undefined, 'additive');
+                }}>
+                  <FlaskConical size={16} />
+                  <span><strong>{t.inventory.addAdditive}</strong><small>Add an inventory additive</small></span>
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -482,17 +505,11 @@ export default function InventoryFeedsPage() {
         {activeTab === 'dashboard' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-            {/* High-Impact Metrics Grid */}
-            <div className="dashboard-kpi-grid">
-              {dashboardMetrics.map((metric, index) => (
-                <div key={metric.label} className="glass-card animate-fade-up" style={{ padding: '20px', animationDelay: `${index * 0.05}s` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
-                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                      <metric.icon size={20} />
-                    </div>
-                    <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{metric.label}</span>
-                  </div>
-                  <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>{metric.value}</div>
+            <div className="glass-card inventory-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))' }}>
+              {dashboardMetrics.map((metric) => (
+                <div key={metric.label} className="inventory-summary-item">
+                  <span>{metric.label}</span>
+                  <strong>{metric.value}</strong>
                 </div>
               ))}
             </div>
@@ -503,37 +520,14 @@ export default function InventoryFeedsPage() {
               {/* Critical Alerts Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px', whiteSpace: 'nowrap' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
-                      <AlertCircle size={19} />
-                    </div>
-                    Stock Status Alerts
-                  </h2>
-                  <span style={{
-                    padding: '6px 14px',
-                    background: metrics.lowStockCount > 0 ? 'rgba(231, 76, 60, 0.1)' : 'rgba(39, 174, 96, 0.1)',
-                    color: metrics.lowStockCount > 0 ? '#e74c3c' : '#27ae60',
-                    borderRadius: '30px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    textTransform: 'uppercase'
-                  }}>
+                  <h2 className="inventory-section-heading">Stock Status Alerts</h2>
+                  <span className="inventory-alert-count">
                     {metrics.lowStockCount} {metrics.lowStockCount === 1 ? 'Alert' : 'Alerts'}
                   </span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {metrics.lowStockItems.length === 0 ? (
-                    <div className="glass-card" style={{ padding: '28px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'rgba(39, 174, 96, 0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
-                        <Waves size={24} />
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)' }}>Optimal Stock Levels</h3>
-                        <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginTop: '4px' }}>All inventory items are currently above reorder thresholds.</p>
-                      </div>
-                    </div>
-                  ) : metrics.lowStockItems.map((item, i) => (
+                  {metrics.lowStockItems.map((item, i) => (
                     <div key={item.id} className="glass-card animate-fade-up" style={{
                       padding: '24px 28px',
                       display: 'flex',
@@ -585,28 +579,47 @@ export default function InventoryFeedsPage() {
               {/* Transaction Ledger */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 style={{ fontSize: '18px', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                      <History size={19} />
-                    </div>
-                    Recent Transactions
-                  </h2>
-                  <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-mid)', padding: '6px', borderRadius: '14px', border: '1px solid var(--border)' }}>
-                    {(['all', 'stockIn', 'usage'] as const).map(f => (
-                      <button
-                        key={f}
-                        onClick={() => setRecentActivityFilter(f)}
-                        style={{
-                          padding: '8px 16px', borderRadius: '10px', fontSize: '12px', fontWeight: 600,
-                          background: recentActivityFilter === f ? 'white' : 'transparent',
-                          color: recentActivityFilter === f ? 'var(--primary)' : 'var(--text-faint)',
-                          border: 'none', cursor: 'pointer', boxShadow: recentActivityFilter === f ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
-                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                        }}
+                  <h2 className="inventory-section-heading">Recent Transactions</h2>
+                  <div className="pond-detail-record-menu inventory-filter-menu" ref={transactionFilterRef}>
+                    <button
+                      type="button"
+                      className="inventory-filter-trigger"
+                      aria-label="Filter transactions"
+                      aria-expanded={isTransactionFilterOpen}
+                      aria-haspopup="menu"
+                      onClick={() => {
+                        setInputMenuOpen(false);
+                        setTransactionFilterOpen((open) => !open);
+                      }}
+                    >
+                      <ArrowUpDown size={17} />
+                    </button>
+                    {isTransactionFilterOpen && (
+                      <div
+                        className="pond-detail-record-popover inventory-filter-popover"
+                        role="menu"
+                        style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, bottom: 'auto', left: 'auto', width: 'min(210px, calc(100vw - 24px))' }}
                       >
-                        {f === 'all' ? 'All' : f === 'stockIn' ? 'In' : 'Out'}
-                      </button>
-                    ))}
+                        {([
+                          { id: 'all', label: 'All transactions', description: 'Show every stock movement' },
+                          { id: 'stockIn', label: 'Stock in', description: 'Show incoming stock only' },
+                          { id: 'usage', label: 'Stock out', description: 'Show inventory usage only' },
+                        ] as const).map((filter) => (
+                          <button
+                            key={filter.id}
+                            type="button"
+                            role="menuitem"
+                            className={recentActivityFilter === filter.id ? 'is-active' : ''}
+                            onClick={() => {
+                              setRecentActivityFilter(filter.id);
+                              setTransactionFilterOpen(false);
+                            }}
+                          >
+                            <span><strong>{filter.label}</strong><small>{filter.description}</small></span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -873,57 +886,55 @@ export default function InventoryFeedsPage() {
 
       {/* -- MODERNIZED MODALS --------------------------------------------- */}
       {isModalOpen && (
-        <div className="responsive-modal-overlay" style={{
+        <div
+          className="responsive-modal-overlay inventory-modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setModalOpen(false);
+          }}
+          style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '12px'
         }}>
-          <div className="glass-card responsive-modal animate-fade-up" style={{
-            width: '100%', maxWidth: modalType === 'history' ? '1000px' : '680px', background: '#FFFFFF', padding: '0',
-            overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.2)',
-            maxHeight: '90vh', display: 'flex', flexDirection: 'column',
-            border: '1px solid var(--border)', borderRadius: '32px'
-          }}>
-            <div className="responsive-modal-header" style={{ padding: '32px 40px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(to right, var(--bg-mid), white)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '24px' }}>
-                <div style={{
-                  width: '64px', height: '64px', borderRadius: '20px', background: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)',
-                  border: '1px solid var(--border)', boxShadow: '0 8px 24px rgba(0,0,0,0.06)'
-                }}>
-                  {modalType === 'add' ? <Plus size={32} /> :
-                   modalType === 'stockIn' ? <ArrowDownCircle size={32} /> :
-                   modalType === 'usage' ? <ArrowUpCircle size={32} /> :
-                   modalType === 'history' ? <History size={32} /> : <AlertCircle size={32} />}
-                </div>
+          <div
+            className="glass-card responsive-modal animate-fade-up inventory-modal"
+            role="dialog" aria-modal="true" aria-labelledby="inventory-modal-title"
+            style={{
+              width: '100%', maxWidth: modalType === 'history' ? '920px' : '560px', background: '#FFFFFF', padding: '0',
+              overflow: 'hidden', boxShadow: '0 24px 64px rgba(15, 23, 42, 0.18)',
+              maxHeight: 'calc(100dvh - 24px)', display: 'flex', flexDirection: 'column',
+              border: '1px solid var(--border)', borderRadius: '16px'
+            }}
+          >
+            <div className="responsive-modal-header inventory-modal-header" style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#fff' }}>
+              <div>
                 <div>
-                  <h2 style={{ fontSize: '26px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+                  <h2 id="inventory-modal-title" style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                     {modalType === 'add' ? `Add New ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
                      modalType === 'stockIn' ? t.inventory.stockIn :
                      modalType === 'usage' ? t.inventory.recordUsage :
                      modalType === 'history' ? t.inventory.transactionHistory : 'Threshold Settings'}
                   </h2>
                   {selectedItem && (
-                    <p style={{ color: 'var(--text-muted)', fontSize: '16px', fontWeight: 600, marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Box size={16} /> {selectedItem.itemName}
+                    <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '2px 0 0' }}>
+                      {selectedItem.itemName}
                     </p>
                   )}
                 </div>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
+                aria-label="Close inventory dialog"
                 style={{
-                  background: 'white', border: '1px solid var(--border)', borderRadius: '16px',
-                  padding: '12px', cursor: 'pointer', color: 'var(--text-muted)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)', transition: 'all 0.3s'
+                  width: '36px', height: '36px', background: 'var(--bg-mid)', border: '1px solid transparent', borderRadius: '10px',
+                  padding: '0', cursor: 'pointer', color: 'var(--text-primary)', display: 'grid', placeItems: 'center'
                 }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'rotate(90deg)'}
               >
-                <X size={24} />
+                <X size={18} />
               </button>
             </div>
 
-            <div className="responsive-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '40px' }}>
+            <div className="responsive-modal-body inventory-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {modalType === 'history' && selectedItem ? (
                 <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
                   {/* Stock In Ledger */}
@@ -1018,20 +1029,20 @@ export default function InventoryFeedsPage() {
                   </div>
                 </div>
               ) : (
-                <form id="inventoryForm" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   {modalType === 'add' && (
-                    <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                      <div style={{ gridColumn: 'span 2' }}>
+                    <div className="responsive-form-grid inventory-add-details" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Item Identification</label>
-                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder="Full Item Name (e.g., Premium Growth Feed 02)" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
+                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder={itemType === 'feed' ? 'e.g. Premium Growth Feed 02' : 'e.g. Pond Probiotic Blend'} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
                       </div>
-                      <div>
+                      <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Brand / Manufacturer</label>
                         <input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Classification</label>
-                        <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', appearance: 'none' }}>
+                        <select required aria-label="Inventory classification" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
                           {(itemType === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
@@ -1041,7 +1052,7 @@ export default function InventoryFeedsPage() {
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
-                      <div>
+                      <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Alert Threshold</label>
                         <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Notify when below..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
@@ -1049,14 +1060,14 @@ export default function InventoryFeedsPage() {
                   )}
 
                   {modalType !== 'editReorder' && (
-                    <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                      <div style={{ gridColumn: modalType === 'add' ? 'span 1' : 'span 2' }}>
+                    <div className="responsive-form-grid inventory-stock-details" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                      <div className={modalType === 'add' ? undefined : 'inventory-full-row'} style={{ gridColumn: modalType === 'add' ? 'span 1' : 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.quantity} ({formData.unit || 'units'})</label>
                         <input required type="number" step="0.01" value={formData.quantity} onChange={e => setFormData({...formData, quantity: e.target.value})} placeholder="0.00" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '20px', outline: 'none', color: 'var(--primary)' }} />
                       </div>
 
                       {modalType === 'usage' && (
-                        <div style={{ gridColumn: 'span 2' }}>
+                        <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
                           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Assign to Pond</label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
                             <button
@@ -1120,7 +1131,7 @@ export default function InventoryFeedsPage() {
                   {modalType !== 'editReorder' && (
                     <div>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.notesOptional}</label>
-                      <textarea rows={3} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific details about this transaction..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
+                      <textarea rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific details about this transaction..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
                     </div>
                   )}
                 </form>
@@ -1128,29 +1139,20 @@ export default function InventoryFeedsPage() {
             </div>
 
             {modalType !== 'history' && (
-              <div style={{ padding: '32px 40px', borderTop: '1px solid var(--border)', display: 'flex', gap: '20px', background: 'var(--bg-mid)' }}>
+              <div className="responsive-modal-footer inventory-modal-footer">
                 <button
                   type="button"
+                  className="btn-secondary"
                   onClick={() => setModalOpen(false)}
-                  style={{
-                    flex: 1, padding: '18px', borderRadius: '18px', border: '1px solid var(--border)',
-                    background: 'white', color: 'var(--text-muted)', fontWeight: 600, fontSize: '15px',
-                    cursor: 'pointer', transition: 'all 0.3s'
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                 >Cancel</button>
                 <button
                   form="inventoryForm"
                   type="submit"
                   className="btn-primary"
-                  style={{
-                    flex: 1.5, padding: '18px', borderRadius: '18px', fontWeight: 600, fontSize: '15px',
-                    boxShadow: '0 8px 25px var(--primary-dim)'
-                  }}
                 >
-                  {modalType === 'add' ? 'INITIALIZE ITEM' :
-                   modalType === 'stockIn' ? 'CONFIRM STOCK IN' :
-                   modalType === 'usage' ? 'RECORD DISBURSEMENT' : 'UPDATE THRESHOLD'}
+                  {modalType === 'add' ? `Add ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
+                   modalType === 'stockIn' ? 'Confirm stock in' :
+                   modalType === 'usage' ? 'Record usage' : 'Save threshold'}
                 </button>
               </div>
             )}
@@ -1163,14 +1165,241 @@ export default function InventoryFeedsPage() {
           from { transform: translateY(30px); opacity: 0; }
           to { transform: translateY(0); opacity: 1; }
         }
+        .inventory-primary-toolbar {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .inventory-section-tabs {
+          flex: 1;
+          min-width: 0;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 6px;
+        }
+        .inventory-section-tab {
+          min-width: 0;
+          min-height: 40px;
+          padding: 0 10px;
+          border: 1px solid transparent;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          font-size: 12px;
+          font-weight: 600;
+          white-space: nowrap;
+          cursor: pointer;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+        .inventory-section-tab:hover,
+        .inventory-section-tab.active {
+          border-color: var(--border);
+          background: #fff;
+          color: var(--primary);
+        }
+        .inventory-input-menu {
+          flex: 0 0 auto;
+          z-index: 40;
+        }
+        .inventory-input-trigger {
+          min-height: 40px;
+          padding: 0 8px;
+          color: var(--primary);
+        }
+        .inventory-input-popover,
+        .inventory-filter-popover {
+          z-index: 90;
+        }
+        .inventory-summary-bar {
+          gap: 4px;
+          padding: 8px;
+          border: 1px solid var(--border);
+          border-radius: 16px !important;
+          background: #fff;
+          overflow: hidden;
+        }
+        .inventory-summary-item {
+          min-width: 0;
+          min-height: 64px;
+          padding: 7px 4px;
+          border-radius: 10px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+        }
+        .inventory-summary-item span {
+          max-width: 100%;
+          color: var(--text-muted);
+          font-size: 9px;
+          font-weight: 600;
+          line-height: 13px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          text-transform: uppercase;
+          white-space: nowrap;
+        }
+        .inventory-summary-item strong {
+          max-width: 100%;
+          margin-top: 3px;
+          color: var(--text-primary);
+          font-size: clamp(13px, 2.5vw, 18px);
+          font-weight: 600;
+          line-height: 22px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .inventory-section-heading {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 17px;
+          font-weight: 600;
+          line-height: 22px;
+        }
+        .inventory-alert-count {
+          padding: 5px 10px;
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          background: #fff;
+          color: var(--text-muted);
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .inventory-filter-menu {
+          z-index: 35;
+        }
+        .inventory-filter-trigger {
+          width: 38px;
+          height: 38px;
+          padding: 0;
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          background: #fff;
+          color: var(--text-muted);
+          display: grid;
+          place-items: center;
+          cursor: pointer;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+        .inventory-filter-trigger:hover,
+        .inventory-filter-trigger[aria-expanded="true"] {
+          border-color: var(--secondary);
+          background: var(--bg-mid);
+          color: var(--primary);
+        }
+        .inventory-filter-popover button.is-active {
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .inventory-modal-overlay {
+          padding: 18px !important;
+        }
+        .inventory-modal {
+          max-height: calc(100dvh - 36px) !important;
+          border-radius: 16px !important;
+        }
+        .inventory-modal-header {
+          min-height: 56px;
+          padding: 10px 14px !important;
+          background: #fff !important;
+        }
+        .inventory-modal-header button:hover {
+          border-color: var(--border) !important;
+          background: var(--primary-dim) !important;
+          color: var(--primary) !important;
+        }
+        .inventory-modal-body {
+          padding: 12px !important;
+          overscroll-behavior: contain;
+        }
+        .inventory-form {
+          gap: 12px !important;
+        }
+        .inventory-modal-body :global(.responsive-form-grid) {
+          gap: 10px !important;
+        }
+        .inventory-add-details,
+        .inventory-stock-details {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+        }
+        .inventory-full-row {
+          grid-column: 1 / -1 !important;
+        }
+        .inventory-add-details > div:not(.inventory-full-row),
+        .inventory-stock-details > div:not(.inventory-full-row) {
+          grid-column: auto !important;
+        }
+        .inventory-modal-body :global(label) {
+          margin-bottom: 4px !important;
+          font-size: 11px !important;
+          letter-spacing: 0 !important;
+          text-transform: none !important;
+        }
+        .inventory-modal-body :global(input),
+        .inventory-modal-body :global(select),
+        .inventory-modal-body :global(textarea) {
+          min-height: 40px !important;
+          padding: 8px 10px !important;
+          border-radius: 10px !important;
+          font-size: 14px !important;
+        }
+        .inventory-modal-footer {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          padding: 8px 10px !important;
+          border-top: 1px solid var(--border);
+          background: #fff;
+        }
+        .inventory-modal-footer button {
+          width: 100%;
+          min-height: 38px;
+          padding: 8px 12px;
+          border-radius: 10px;
+          font-size: 13px;
+          font-weight: 600;
+          justify-content: center;
+          letter-spacing: 0;
+          text-transform: none;
+        }
         .glass-card {
           backdrop-filter: var(--glass-blur);
-          border-radius: 24px;
+          border-radius: 16px;
         }
         input:focus, select:focus, textarea:focus {
           border-color: var(--primary) !important;
           background: white !important;
           box-shadow: 0 0 0 4px var(--primary-dim) !important;
+        }
+        @media (max-width: 420px) {
+          .inventory-primary-toolbar {
+            gap: 6px;
+          }
+          .inventory-section-tabs {
+            gap: 3px;
+          }
+          .inventory-section-tab {
+            min-height: 38px;
+            padding: 0 4px;
+            gap: 4px;
+            font-size: 10px;
+          }
+          .inventory-section-tab :global(svg) {
+            width: 15px;
+            height: 15px;
+          }
+          .inventory-input-trigger {
+            min-width: 58px;
+            padding: 0 5px;
+            font-size: 10px;
+          }
         }
       `}</style>
     </div>

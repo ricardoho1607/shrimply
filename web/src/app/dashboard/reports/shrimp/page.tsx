@@ -5,10 +5,7 @@ import {
   Loader2, 
   Waves, 
   TrendingUp,
-  Scale,
-  Zap,
-  Activity,
-  Target
+  X
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
@@ -316,6 +313,9 @@ export default function ShrimpReportsPage() {
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const [selectedPondIds, setSelectedPondIds] = useState<string[] | null>(null);
+  const [draftPondIds, setDraftPondIds] = useState<string[]>([]);
+  const [isPondSelectorOpen, setIsPondSelectorOpen] = useState(false);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -362,13 +362,35 @@ export default function ShrimpReportsPage() {
   }, [company?.id]);
 
   const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
-  const global = useMemo(() => getGlobalAverages(activePonds, company?.timeZone), [activePonds, company?.timeZone]);
-  const growthSeries = useMemo(() => buildGrowthSeries(activePonds), [activePonds]);
+  const selectedPonds = useMemo(() => {
+    if (selectedPondIds === null) return activePonds;
+    const selectedIds = new Set(selectedPondIds);
+    return activePonds.filter((pond) => selectedIds.has(pond.id));
+  }, [activePonds, selectedPondIds]);
+  const global = useMemo(() => getGlobalAverages(selectedPonds, company?.timeZone), [selectedPonds, company?.timeZone]);
+  const growthSeries = useMemo(() => buildGrowthSeries(selectedPonds), [selectedPonds]);
+
+  const openPondSelector = () => {
+    setDraftPondIds(selectedPonds.map((pond) => pond.id));
+    setIsPondSelectorOpen(true);
+  };
+
+  const toggleDraftPond = (pondId: string) => {
+    setDraftPondIds((current) => current.includes(pondId)
+      ? current.filter((id) => id !== pondId)
+      : [...current, pondId]);
+  };
+
+  const applyPondSelection = () => {
+    setSelectedPondIds(draftPondIds);
+    setIsPondSelectorOpen(false);
+  };
 
   const handleGenerateReport = async () => {
+    if (selectedPonds.length === 0) return;
     setExportLoading(true);
     try {
-      const pondsForReport: SamplingReportPondData[] = activePonds.map((pond) => {
+      const pondsForReport: SamplingReportPondData[] = selectedPonds.map((pond) => {
         const operationalSamplings = (pond.samplings || [])
           .filter((sampling) => !isBaselineSampling(sampling))
           .sort((first, second) => new Date(first.date).getTime() - new Date(second.date).getTime());
@@ -437,7 +459,7 @@ export default function ShrimpReportsPage() {
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page-relaxed authenticated-compact-page" style={{ paddingBottom: '40px' }}>
+    <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '40px' }}>
       
       <div className="glass-card" style={{
         background: '#FFFFFF',
@@ -453,27 +475,32 @@ export default function ShrimpReportsPage() {
         <div>
           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Reports</div>
           <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Shrimp Production Audit</h1>
-          <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>Performance analytics across all active production ponds.</p>
+          <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>
+            Performance analytics for {selectedPonds.length} of {activePonds.length} active production ponds.
+          </p>
         </div>
-        <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
-          {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
-        </button>
+        <div className="sampling-report-actions">
+          <button type="button" className="btn-secondary sampling-pond-trigger" onClick={openPondSelector} disabled={activePonds.length === 0}>
+            <span>Select ponds</span>
+            <span className="sampling-pond-count">{selectedPonds.length}</span>
+          </button>
+          <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
+            {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
+          </button>
+        </div>
       </div>
 
       {/* Global Metrics */}
-      <div className="dashboard-kpi-grid">
+      <div className="glass-card sampling-summary-bar" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '4px', padding: '8px', border: '1px solid var(--border)', background: '#fff', overflow: 'hidden' }}>
         {[
-          { label: 'Avg Body Weight', value: `${global.avgABW.toFixed(2)}g`, icon: Scale, color: 'var(--primary)', bg: 'var(--primary-dim)' },
-          { label: 'Growth Rate (ADG)', value: `${global.avgADG.toFixed(2)}g`, icon: Activity, color: '#27AE60', bg: '#E8F7EE' },
-          { label: 'Avg FCR', value: global.avgFCR.toFixed(2), icon: Zap, color: '#F39C12', bg: '#FFF9EB' },
-          { label: 'Total Biomass', value: `${Math.round(global.totalBiomass)}kg`, icon: Target, color: '#E74C3C', bg: '#FEF2F2' },
-        ].map((item, i) => (
-          <div key={i} className="glass-card dashboard-kpi-card" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: item.bg, color: item.color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><item.icon size={21} /></div>
-            <div>
-              <div className="dashboard-kpi-label">{item.label}</div>
-              <div className="dashboard-kpi-value">{item.value}</div>
-            </div>
+          { label: 'ABW', value: `${global.avgABW.toFixed(2)}g` },
+          { label: 'FCR', value: global.avgFCR.toFixed(2) },
+          { label: 'ADG', value: `${global.avgADG.toFixed(2)}g` },
+          { label: 'T.Biomas', value: `${Math.round(global.totalBiomass)}kg` },
+        ].map((item) => (
+          <div key={item.label} className="sampling-summary-item" style={{ minWidth: 0, minHeight: '64px', padding: '8px 4px', borderRadius: '10px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+            <div style={{ color: 'var(--text-muted)', fontSize: '10px', fontWeight: 600, lineHeight: '14px', whiteSpace: 'nowrap' }}>{item.label}</div>
+            <div style={{ marginTop: '2px', color: 'var(--text-primary)', fontSize: '18px', fontWeight: 600, lineHeight: '24px', whiteSpace: 'nowrap' }}>{item.value}</div>
           </div>
         ))}
       </div>
@@ -503,6 +530,284 @@ export default function ShrimpReportsPage() {
           </div>
         </div>
       </div>
+
+      {isPondSelectorOpen && (
+        <div
+          className="responsive-modal-overlay sampling-pond-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setIsPondSelectorOpen(false);
+          }}
+        >
+          <div className="glass-card responsive-modal sampling-pond-modal" role="dialog" aria-modal="true" aria-labelledby="sampling-pond-title">
+            <div className="responsive-modal-header sampling-pond-header">
+              <div>
+                <h2 id="sampling-pond-title">Select ponds</h2>
+                <p>Choose which ponds to include in this report.</p>
+              </div>
+              <button type="button" className="sampling-pond-close" onClick={() => setIsPondSelectorOpen(false)} aria-label="Close pond selection">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="responsive-modal-body sampling-pond-body">
+              <div className="sampling-pond-toolbar">
+                <span>{draftPondIds.length} of {activePonds.length} selected</span>
+                <div>
+                  <button type="button" onClick={() => setDraftPondIds(activePonds.map((pond) => pond.id))}>Select all</button>
+                  <button type="button" onClick={() => setDraftPondIds([])}>Clear</button>
+                </div>
+              </div>
+              <div className="sampling-pond-list">
+                {activePonds.map((pond) => {
+                  const isSelected = draftPondIds.includes(pond.id);
+                  return (
+                    <label key={pond.id} className={`sampling-pond-option${isSelected ? ' is-selected' : ''}`}>
+                      <span>
+                        <strong>{pond.pondName}</strong>
+                        <small>{(pond.samplings || []).filter((sampling) => getSamplingMbw(sampling) > 0).length} sampling records</small>
+                      </span>
+                      <input type="checkbox" checked={isSelected} onChange={() => toggleDraftPond(pond.id)} />
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="responsive-modal-footer sampling-pond-footer">
+              <button type="button" className="btn-secondary" onClick={() => setIsPondSelectorOpen(false)}>Cancel</button>
+              <button type="button" className="btn-primary" onClick={applyPondSelection}>Apply selection</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .sampling-report-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .sampling-pond-trigger {
+          min-height: 42px;
+          padding: 0 12px;
+          border-radius: 12px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 9px;
+          font-weight: 600;
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+        }
+
+        .sampling-pond-trigger:hover {
+          background: var(--bg-mid);
+          border-color: var(--secondary);
+          color: var(--primary);
+        }
+
+        .sampling-pond-count {
+          min-width: 22px;
+          height: 22px;
+          padding: 0 6px;
+          border-radius: 7px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          background: var(--primary);
+          font-size: 11px;
+        }
+
+        .sampling-pond-overlay {
+          position: fixed;
+          inset: 0;
+          z-index: 1200;
+          padding: 18px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: rgba(15, 23, 42, 0.52);
+          backdrop-filter: blur(8px);
+        }
+
+        .sampling-pond-modal {
+          width: min(100%, 480px);
+          max-height: min(680px, calc(100dvh - 36px));
+          padding: 0;
+          overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          background: #fff;
+          border: 1px solid var(--border);
+          border-radius: 16px;
+        }
+
+        .sampling-pond-header {
+          min-height: 68px;
+          padding: 14px 16px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          border-bottom: 1px solid var(--border);
+        }
+
+        .sampling-pond-header h2 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 17px;
+          line-height: 22px;
+        }
+
+        .sampling-pond-header p {
+          margin: 2px 0 0;
+          color: var(--text-muted);
+          font-size: 12px;
+        }
+
+        .sampling-pond-close {
+          width: 36px;
+          height: 36px;
+          flex: 0 0 36px;
+          border: 0;
+          border-radius: 9px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-primary);
+          background: transparent;
+          cursor: pointer;
+        }
+
+        .sampling-pond-close:hover {
+          background: var(--bg-mid);
+        }
+
+        .sampling-pond-body {
+          min-height: 0;
+          padding: 14px 16px;
+          overflow-y: auto;
+        }
+
+        .sampling-pond-toolbar {
+          margin-bottom: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          color: var(--text-muted);
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .sampling-pond-toolbar > div {
+          display: flex;
+          gap: 4px;
+        }
+
+        .sampling-pond-toolbar button {
+          min-height: 32px;
+          padding: 0 8px;
+          border: 0;
+          border-radius: 8px;
+          color: var(--primary);
+          background: transparent;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .sampling-pond-toolbar button:hover {
+          background: var(--bg-mid);
+        }
+
+        .sampling-pond-list {
+          display: grid;
+          gap: 8px;
+        }
+
+        .sampling-pond-option {
+          min-height: 58px;
+          padding: 10px 12px;
+          border: 1px solid var(--border);
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          background: #fff;
+          cursor: pointer;
+        }
+
+        .sampling-pond-option:hover,
+        .sampling-pond-option.is-selected {
+          border-color: var(--secondary);
+          background: var(--bg-mid);
+        }
+
+        .sampling-pond-option span {
+          min-width: 0;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .sampling-pond-option strong {
+          color: var(--text-primary);
+          font-size: 14px;
+        }
+
+        .sampling-pond-option small {
+          margin-top: 2px;
+          color: var(--text-muted);
+          font-size: 11px;
+        }
+
+        .sampling-pond-option input {
+          width: 18px;
+          height: 18px;
+          flex: 0 0 18px;
+          accent-color: var(--primary);
+        }
+
+        .sampling-pond-footer {
+          padding: 10px 12px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 10px;
+          border-top: 1px solid var(--border);
+          background: #fff;
+        }
+
+        .sampling-pond-footer button {
+          width: 100%;
+          min-height: 40px;
+          border-radius: 10px;
+          font-weight: 600;
+        }
+
+        @media (max-width: 640px) {
+          .sampling-report-actions {
+            width: 100%;
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .sampling-report-actions > button {
+            width: 100%;
+            padding-inline: 10px !important;
+            font-size: 12px;
+          }
+
+          .sampling-pond-overlay {
+            padding: 12px;
+          }
+
+          .sampling-pond-modal {
+            max-height: calc(100dvh - 24px);
+          }
+        }
+      `}</style>
     </div>
   );
 }

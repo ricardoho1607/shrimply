@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Loader2,
   CalendarDays,
+  PanelLeft,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -105,9 +106,11 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktopNavigation, setDesktopNavigation] = useState(false);
+  const [isMobileNavigation, setMobileNavigation] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
+  const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
   const navigation = NAV_STRUCTURE(t);
   const todayLabel = new Intl.DateTimeFormat(undefined, {
     weekday: 'short',
@@ -189,6 +192,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     );
   };
 
+  const toggleSidebar = () => setSidebarOpen(open => !open);
+
   useEffect(() => {
     if (loading) return;
     if (!isAuthenticated) {
@@ -211,10 +216,19 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
-    const syncNavigationMode = () => setDesktopNavigation(mediaQuery.matches);
+    const mobileMediaQuery = window.matchMedia('(max-width: 767px)');
+    const syncNavigationMode = () => {
+      setDesktopNavigation(mediaQuery.matches);
+      setMobileNavigation(mobileMediaQuery.matches);
+      if (mediaQuery.matches) setSidebarOpen(false);
+    };
     syncNavigationMode();
     mediaQuery.addEventListener('change', syncNavigationMode);
-    return () => mediaQuery.removeEventListener('change', syncNavigationMode);
+    mobileMediaQuery.addEventListener('change', syncNavigationMode);
+    return () => {
+      mediaQuery.removeEventListener('change', syncNavigationMode);
+      mobileMediaQuery.removeEventListener('change', syncNavigationMode);
+    };
   }, []);
 
   useEffect(() => {
@@ -229,7 +243,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      if (event.key !== 'Tab') return;
+      if (!isOverlayNavigation || event.key !== 'Tab') return;
       const focusable = Array.from(
         sidebarRef.current?.querySelectorAll<HTMLElement>(
           'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -248,10 +262,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       }
     };
 
-    document.body.style.overflow = 'hidden';
+    if (isOverlayNavigation) document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleKeyDown);
     sidebarRef.current
-      ?.querySelector<HTMLElement>('a[href], button:not([disabled])')
+      ?.querySelector<HTMLElement>('[data-sidebar-toggle]')
       ?.focus();
 
     return () => {
@@ -259,7 +273,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       window.removeEventListener('keydown', handleKeyDown);
       sidebarTrigger?.focus();
     };
-  }, [isSidebarOpen]);
+  }, [isOverlayNavigation, isSidebarOpen]);
 
   const handleSignOut = async () => {
     try {
@@ -312,6 +326,76 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           font-size: var(--text-body);
           font-weight: var(--weight-regular);
         }
+        .dashboard-saas button[type="submit"].btn-primary {
+          border-color: #0f4c75;
+          background: #0f4c75;
+          box-shadow: none;
+        }
+        .dashboard-saas button[type="submit"].btn-primary:not(:disabled):hover {
+          border-color: #0c3f62;
+          background: #0c3f62;
+        }
+        .dashboard-saas .business-dashboard-page :where(.btn-primary, .dashboard-action-primary):not([style*="background"]) {
+          border-color: #0f4c75 !important;
+          background: #0f4c75 !important;
+          box-shadow: none !important;
+        }
+        .dashboard-saas .business-dashboard-page :where(.btn-primary, .dashboard-action-primary):not([style*="background"]):not(:disabled):hover {
+          border-color: #0c3f62 !important;
+          background: #0c3f62 !important;
+        }
+        .dashboard-saas .business-dashboard-page :where(.btn-primary, .dashboard-action-primary):disabled {
+          border-color: #cbd5e1 !important;
+          background: #e2e8f0 !important;
+          color: #64748b !important;
+          box-shadow: none !important;
+        }
+        .dashboard-saas :where(button, [role="button"]):not(:disabled):not(.sidebar-backdrop):not(.admin-inspector-backdrop) {
+          transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease, outline-color 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+        }
+        .dashboard-saas :where(button, [role="button"]):not(:disabled):not(.sidebar-backdrop):not(.admin-inspector-backdrop):hover {
+          outline: 2px solid color-mix(in srgb, currentColor 24%, transparent);
+          outline-offset: 1px;
+        }
+        .dashboard-saas .btn-secondary:not(:disabled):hover,
+        .dashboard-saas .dashboard-action-secondary:not(:disabled):hover {
+          border-color: var(--secondary) !important;
+          background: var(--bg-mid) !important;
+          color: var(--primary) !important;
+        }
+        .dashboard-saas .business-dashboard-page .dashboard-inline-toolbar {
+          gap: 10px;
+          padding: 10px;
+          border-radius: 16px;
+        }
+        .dashboard-saas .responsive-modal-header > button,
+        .dashboard-saas button[aria-label^="Close"]:not(.admin-inspector-backdrop):not(.sidebar-backdrop) {
+          width: 40px !important;
+          height: 40px !important;
+          min-width: 40px !important;
+          min-height: 40px !important;
+          max-width: 40px !important;
+          max-height: 40px !important;
+          flex: 0 0 40px !important;
+          display: grid !important;
+          place-items: center !important;
+          padding: 0 !important;
+          border: 0 !important;
+          border-radius: 8px !important;
+          background: transparent !important;
+          color: var(--text-primary) !important;
+          transition: background-color 160ms ease, color 160ms ease !important;
+        }
+        .dashboard-saas .responsive-modal-header > button:hover,
+        .dashboard-saas button[aria-label^="Close"]:not(.admin-inspector-backdrop):not(.sidebar-backdrop):hover {
+          background: var(--bg-mid) !important;
+          color: #0f4c75 !important;
+        }
+        .dashboard-saas .responsive-modal-header > button:focus-visible,
+        .dashboard-saas button[aria-label^="Close"]:not(.admin-inspector-backdrop):not(.sidebar-backdrop):focus-visible {
+          outline: 2px solid #3282b8 !important;
+          outline-offset: 2px;
+        }
         @media (min-width: 1024px) {
           .sidebar {
             position: sticky !important;
@@ -321,6 +405,35 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           }
           .mobile-trigger {
             display: none !important;
+          }
+          #dashboard-navigation .sidebar-toggle {
+            display: none !important;
+          }
+        }
+        @media (min-width: 768px) and (max-width: 1023px) {
+          #dashboard-navigation.sidebar {
+            position: relative !important;
+            flex: 0 0 0;
+            width: 0 !important;
+            min-width: 0;
+            height: 100dvh !important;
+            left: auto !important;
+            top: auto !important;
+            bottom: auto !important;
+            transform: none !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+            border-right-width: 0 !important;
+            box-shadow: none !important;
+            overflow: hidden;
+            transition: flex-basis 240ms ease, width 240ms ease, padding 240ms ease !important;
+          }
+          #dashboard-navigation.sidebar.mobile-open {
+            flex: 0 0 240px;
+            width: 240px !important;
+            padding-left: 16px !important;
+            padding-right: 16px !important;
+            border-right-width: 1px !important;
           }
         }
         .sidebar-link {
@@ -362,15 +475,37 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           }
         }
         @media (max-width: 640px) {
-          .dashboard-main-scroll {
-            padding: var(--space-5) var(--space-4) var(--space-8) !important;
+          .dashboard-saas .business-dashboard-page .dashboard-inline-toolbar {
+            align-items: stretch;
+          }
+          .dashboard-saas .business-dashboard-page .dashboard-segmented-tabs {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+          }
+          .dashboard-saas .business-dashboard-page .dashboard-action-row {
+            display: flex;
+            width: 100%;
+          }
+          .dashboard-saas .business-dashboard-page .dashboard-action-row > * {
+            flex: 1;
+            min-width: 0;
+            justify-content: center;
+          }
+          .dashboard-saas .dashboard-main-scroll.authenticated-shell-main {
+            padding:
+              12px
+              calc(12px + var(--safe-area-right))
+              calc(28px + var(--safe-area-bottom))
+              calc(12px + var(--safe-area-left)) !important;
           }
         }
       `}</style>
 
-      {isSidebarOpen && (
+      {isOverlayNavigation && (
         <button
           type="button"
+          className="sidebar-backdrop"
           aria-label="Close navigation"
           aria-hidden="true"
           tabIndex={-1}
@@ -385,8 +520,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       <aside
         ref={sidebarRef}
         id="dashboard-navigation"
-        role={isSidebarOpen ? 'dialog' : 'navigation'}
-        aria-modal={isSidebarOpen ? true : undefined}
+        role={isOverlayNavigation ? 'dialog' : 'navigation'}
+        aria-modal={isOverlayNavigation ? true : undefined}
         aria-label="Dashboard navigation"
         aria-hidden={!(isDesktopNavigation || isSidebarOpen)}
         inert={!(isDesktopNavigation || isSidebarOpen) ? true : undefined}
@@ -409,34 +544,49 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', padding: '12px 4px 0 0' }}>
-          <Link
-            href="/dashboard/company"
-            className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
-            aria-current={pathname === '/dashboard/company' ? 'page' : undefined}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              width: '100%',
-              minHeight: '40px',
-              padding: '8px 12px',
-              borderRadius: '10px',
-              color: pathname === '/dashboard/company' ? '#1e293b' : '#64748b',
-              background: pathname === '/dashboard/company' ? '#f1f5f9' : 'transparent',
-              textDecoration: 'none',
-            }}
-          >
-            <Waves size={18} color={pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8'} strokeWidth={pathname === '/dashboard/company' ? 2.5 : 2} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ overflow: 'hidden', color: 'inherit', fontSize: '0.8rem', fontWeight: pathname === '/dashboard/company' ? 600 : 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {company?.companyName || 'Company profile'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Link
+              href="/dashboard/company"
+              className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
+              aria-current={pathname === '/dashboard/company' ? 'page' : undefined}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                flex: 1,
+                minWidth: 0,
+                minHeight: '40px',
+                padding: '8px 12px',
+                borderRadius: '10px',
+                color: pathname === '/dashboard/company' ? '#1e293b' : '#64748b',
+                background: pathname === '/dashboard/company' ? '#f1f5f9' : 'transparent',
+                textDecoration: 'none',
+              }}
+            >
+              <Waves size={18} color={pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8'} strokeWidth={pathname === '/dashboard/company' ? 2.5 : 2} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ overflow: 'hidden', color: 'inherit', fontSize: '0.8rem', fontWeight: pathname === '/dashboard/company' ? 600 : 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {company?.companyName || 'Company profile'}
+                </div>
+                <div style={{ overflow: 'hidden', color: '#94a3b8', fontSize: '0.62rem', fontWeight: 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {company?.farmType || 'Open company details'}
+                </div>
               </div>
-              <div style={{ overflow: 'hidden', color: '#94a3b8', fontSize: '0.62rem', fontWeight: 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {company?.farmType || 'Open company details'}
-              </div>
-            </div>
-            <Search size={14} color="#94a3b8" aria-hidden="true" />
-          </Link>
+              <Search size={14} color="#94a3b8" aria-hidden="true" />
+            </Link>
+            <button
+              type="button"
+              data-sidebar-toggle
+              className="sidebar-toggle"
+              aria-label="Close dashboard navigation"
+              aria-controls="dashboard-navigation"
+              aria-expanded={isSidebarOpen}
+              onClick={toggleSidebar}
+              style={{ border: 'none', cursor: 'pointer' }}
+            >
+              <PanelLeft size={18} aria-hidden="true" />
+            </button>
+          </div>
 
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
             <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -567,8 +717,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
       <div
         className="dashboard-content-shell"
-        aria-hidden={isSidebarOpen || undefined}
-        inert={isSidebarOpen ? true : undefined}
+        aria-hidden={isOverlayNavigation || undefined}
+        inert={isOverlayNavigation ? true : undefined}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, height: '100dvh', overflow: 'hidden' }}
       >
         <header className="dashboard-app-header" style={{
@@ -588,7 +738,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           <div className="dashboard-header-left" style={{ display: 'flex', alignItems: 'center', gap: '20px', minWidth: 0 }}>
             <button
               ref={sidebarTriggerRef}
-              onClick={() => setSidebarOpen(true)}
+              onClick={toggleSidebar}
               className="mobile-trigger"
               aria-label="Open dashboard navigation"
               aria-expanded={isSidebarOpen}
@@ -631,10 +781,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           </div>
         </header>
 
-        <main className="dashboard-main-scroll" style={{
+        <main className="dashboard-main-scroll authenticated-shell-main" style={{
           flex: 1,
-          padding: '24px 40px 40px',
-          maxWidth: '1600px',
+          padding: '16px 16px 32px',
+          maxWidth: '1232px',
           width: '100%',
           margin: '0 auto',
           position: 'relative',

@@ -1,0 +1,306 @@
+.toolbarCompact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.toolbarCopy {
+  min-width: 0;
+}
+
+.toolbarCopy h1,
+.toolbarCopy p {
+  margin: 0;
+}
+
+.toolbarCopy h1 {
+  font-size: 20px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.toolbarCopy p {
+  margin-top: 2px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.doseLogic {
+  margin-top: 12px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.emptyState {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  margin-top: 18px;
+  padding: 22px 20px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.emptyState h2,
+.emptyState p {
+  margin: 0;
+}
+
+.emptyState h2 {
+  color: var(--text-primary);
+  font-size: 17px;
+}
+
+.emptyState p {
+  margin-top: 5px;
+  font-size: 13px;
+}
+
+.mixCard {
+  border-radius: 16px;
+}
+
+.ingredientsSection {
+  margin-top: 18px;
+}
+
+.ingredientsHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ingredientsHeader h3,
+.ingredientsHeader p {
+  margin: 0;
+}
+
+.ingredientsHeader h3 {
+  font-size: 16px;
+}
+
+.ingredientsHeader p {
+  margin-top: 3px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.ingredientsHeader > span {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 8px;
+  background: var(--bg-mid);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ingredientPicker {
+  position: relative;
+  margin-top: 10px;
+}
+
+.ingredientPicker > button {
+  width: 100%;
+  justify-content: center;
+}
+
+.ingredientMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 32px rgb(15 76 117 / 16%);
+}
+
+.ingredientMenu > p {
+  margin: 0;
+  padding: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.ingredientMenu > button {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  text-align: left;
+}
+
+.ingredientMenu > button[aria-checked='true'] {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+
+.ingredientMenu span,
+.ingredientRow > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.ingredientMenu small,
+.ingredientRow small {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.selectionHint {
+  margin: 10px 0 0;
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+.ingredientRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 28px 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.ingredientRow > button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+}
+
+.modalOverlay {
+  z-index: 9100 !important;
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border);
+}
+
+.modalHeader p {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.modalBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.modalFooter {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+  box-shadow: 0 -8px 24px rgb(15 76 117 / 8%);
+}
+
+.modalFooter button {
+  width: 100%;
+  min-height: 40px;
+  justify-content: center;
+}
+
+.batchSummary {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-mid);
+}
+
+.batchSummary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+@media (max-width: 640px) {
+  .toolbarCompact {
+    grid-template-columns: auto 1fr auto;
+    gap: 8px;
+  }
+
+  .toolbarCompact > a,
+  .toolbarCompact > button {
+    min-height: 38px;
+    padding: 0 11px;
+  }
+
+  .toolbarCompact > button {
+    width: auto !important;
+    justify-self: end;
+  }
+
+  .toolbarCopy {
+    display: none;
+  }
+
+  .doseLogic {
+    margin-top: 10px;
+    padding: 0 2px;
+  }
+
+  .ingredientRow {
+    grid-template-columns: minmax(0, 1fr) 76px 24px 32px;
+    gap: 8px !important;
+  }
+
+  .ingredientRow input {
+    min-width: 0;
+  }
+}

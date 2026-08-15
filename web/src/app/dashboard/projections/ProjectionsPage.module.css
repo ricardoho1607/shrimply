@@ -1,0 +1,22 @@
+.mainGrid,
+.mainGrid > *,
+.settingsColumn,
+.resultsColumn {
+  min-width: 0;
+}
+
+@media (max-width: 800px) {
+  .mainGrid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 12px !important;
+  }
+
+  .settingsColumn,
+  .resultsColumn {
+    gap: 12px !important;
+  }
+
+  .mainGrid :global(.glass-card) {
+    padding: 16px !important;
+  }
+}
