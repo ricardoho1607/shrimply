@@ -16,7 +16,7 @@ const getLoginErrorMessage = (error: unknown, fallback: string) => {
       : undefined;
 
   if (errorCode === 'auth/network-request-failed') {
-    return 'Unable to connect to Firebase. Check your connection, fully close and reopen the installed app, then try again.';
+    return 'Unable to reach the secure sign-in service. Check your connection and try again.';
   }
 
   return error instanceof Error ? error.message : fallback;

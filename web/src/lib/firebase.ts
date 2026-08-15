@@ -43,15 +43,8 @@ type AuthWithNetworkConfig = Auth & {
   };
 };
 
-const isInstalledWebApp = () => {
-  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
-
-  return window.matchMedia("(display-mode: standalone)").matches
-    || ("standalone" in navigator && navigator.standalone === true);
-};
-
-const configureInstalledWebAppAuthProxy = (firebaseAuth: Auth) => {
-  if (!isInstalledWebApp()) return;
+const configureProductionAuthProxy = (firebaseAuth: Auth) => {
+  if (typeof window === "undefined") return;
   if (!["shrimplytech.com", "www.shrimplytech.com"].includes(window.location.hostname)) return;
 
   const { config } = firebaseAuth as AuthWithNetworkConfig;
@@ -61,10 +54,15 @@ const configureInstalledWebAppAuthProxy = (firebaseAuth: Auth) => {
 };
 
 let appCheck: AppCheck | null = null;
+const appCheckEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED === "true";
 const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
 const isProduction = process.env.NODE_ENV === "production";
 const appCheckDebugEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED === "true";
-if (typeof window !== "undefined" && appCheckSiteKey && (isProduction || appCheckDebugEnabled)) {
+if (
+  typeof window !== "undefined"
+  && appCheckEnabled && appCheckSiteKey
+  && (isProduction || appCheckDebugEnabled)
+) {
   if (!isProduction) {
     (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
@@ -80,7 +78,7 @@ const auth = initializeAuth(app, {
     browserSessionPersistence,
   ],
 });
-configureInstalledWebAppAuthProxy(auth);
+configureProductionAuthProxy(auth);
 const db = firebaseRuntime.__shrimplyFirestore ?? (
   typeof window === "undefined"
     ? getFirestore(app)

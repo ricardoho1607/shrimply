@@ -17,9 +17,10 @@ const portalProviders = fs.existsSync(portalProvidersPath)
   ? fs.readFileSync(portalProvidersPath, 'utf8')
   : '';
 
-test('development App Check is opt-in so an unregistered debug token cannot block startup', () => {
+test('App Check requires explicit registration before it can block authentication startup', () => {
+  assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED/);
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED/);
-  assert.match(firebaseClient, /isProduction \|\| appCheckDebugEnabled/);
+  assert.match(firebaseClient, /appCheckEnabled && appCheckSiteKey/);
 });
 
 test('sign in relies on the auth listener instead of duplicating user and company reads', () => {
@@ -56,12 +57,10 @@ test('installed PWA sign in retries one transient Firebase network failure', () 
   assert.match(authContext, /\.code === ['"]auth\/network-request-failed['"]/);
 });
 
-test('installed iOS web apps route Firebase Auth through the same-origin network path', () => {
+test('production Firebase Auth always uses the same-origin network path', () => {
   assert.match(firebaseClient, /initializeAuth/);
   assert.doesNotMatch(firebaseClient, /getAuth|browserPopupRedirectResolver/);
-  assert.match(firebaseClient, /display-mode: standalone/);
-  assert.match(firebaseClient, /navigator\.standalone/);
-  assert.match(firebaseClient, /if \(!isInstalledWebApp\(\)\) return/);
+  assert.doesNotMatch(firebaseClient, /isInstalledWebApp|display-mode: standalone|navigator\.standalone/);
   assert.match(firebaseClient, /config\.apiHost = .*firebase-auth\/identitytoolkit/);
   assert.match(firebaseClient, /config\.tokenApiHost = .*firebase-auth\/securetoken/);
 
@@ -75,7 +74,8 @@ test('installed iOS web apps route Firebase Auth through the same-origin network
 
 test('auth page explains an installed-app network failure without blaming credentials', () => {
   assert.match(authPage, /auth\/network-request-failed/);
-  assert.match(authPage, /Unable to connect to Firebase/);
+  assert.match(authPage, /Unable to reach the secure sign-in service/);
+  assert.doesNotMatch(authPage, /fully close and reopen/);
 });
 
 test('the auth page has one state-driven dashboard redirect', () => {
