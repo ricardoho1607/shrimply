@@ -39,6 +39,7 @@ Required public environment variables:
 
 - Next.js: `NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY`
 - Expo web: `EXPO_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY`
+- Local Next.js development only: `NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED=true` after registering the generated debug token. Leave unset otherwise.
 
 Android EAS builds also require the `GOOGLE_SERVICES_JSON` file variable. The build hook validates that it belongs to Firebase project `investashrimp-5d9e5` and package `com.shrimply.tech.investashrimp` before copying it into the native Android project. The file remains gitignored.
 

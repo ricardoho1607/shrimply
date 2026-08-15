@@ -22,8 +22,10 @@ const firebaseConfig = {
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 let appCheck: AppCheck | null = null;
 const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
-if (typeof window !== "undefined" && appCheckSiteKey) {
-  if (process.env.NODE_ENV !== "production") {
+const isProduction = process.env.NODE_ENV === "production";
+const appCheckDebugEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED === "true";
+if (typeof window !== "undefined" && appCheckSiteKey && (isProduction || appCheckDebugEnabled)) {
+  if (!isProduction) {
     (globalThis as typeof globalThis & { FIREBASE_APPCHECK_DEBUG_TOKEN?: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true;
   }
   appCheck = initializeAppCheck(app, {

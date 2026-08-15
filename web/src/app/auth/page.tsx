@@ -47,8 +47,6 @@ export default function AuthPage() {
     
     try {
       await signIn(email, password, true, inviteToken);
-      // Let the layouts handle redirection based on user state
-      router.push(ROUTES.dashboard);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : t.messages.error || 'Failed to login');
     } finally {

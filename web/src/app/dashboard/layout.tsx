@@ -26,7 +26,6 @@ import {
   FileText,
   Box,
   ChevronDown,
-  Loader2,
   CalendarDays,
   PanelLeft,
   type LucideIcon,
@@ -283,12 +282,6 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       console.error('Error signing out:', error);
     }
   };
-
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--bg-dark)' }}>
-      <Loader2 className="animate-spin" size={48} color="var(--primary)" />
-    </div>
-  );
 
   if (pathname?.startsWith('/dashboard/admin')) {
     return <>{children}</>;
@@ -582,7 +575,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               aria-controls="dashboard-navigation"
               aria-expanded={isSidebarOpen}
               onClick={toggleSidebar}
-              style={{ border: 'none', cursor: 'pointer' }}
+              style={{ border: 'none', color: '#94a3b8', cursor: 'pointer' }}
             >
               <PanelLeft size={18} aria-hidden="true" />
             </button>
@@ -790,9 +783,61 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           position: 'relative',
           overflowY: 'auto'
         }}>
-          {children}
+          {loading ? <DashboardStartupState /> : children}
         </main>
       </div>
+    </div>
+  );
+}
+
+function DashboardStartupState() {
+  return (
+    <div className="dashboard-startup-state" aria-busy="true" aria-label="Loading dashboard">
+      <div className="dashboard-startup-summary">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div className="dashboard-startup-placeholder" key={index} />
+        ))}
+      </div>
+      <div className="dashboard-startup-placeholder dashboard-startup-panel" />
+      <div className="dashboard-startup-placeholder dashboard-startup-panel dashboard-startup-panel-tall" />
+
+      <style jsx>{`
+        .dashboard-startup-state {
+          display: grid;
+          gap: 16px;
+          padding: 24px;
+        }
+        .dashboard-startup-summary {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+        .dashboard-startup-placeholder {
+          min-height: 92px;
+          border: 1px solid rgba(15, 76, 117, 0.08);
+          border-radius: 16px;
+          background: linear-gradient(110deg, #f5f8fa 8%, #ffffff 18%, #f5f8fa 33%);
+          background-size: 200% 100%;
+          animation: dashboard-startup-pulse 1.4s linear infinite;
+        }
+        .dashboard-startup-panel {
+          min-height: 118px;
+        }
+        .dashboard-startup-panel-tall {
+          min-height: 240px;
+        }
+        @keyframes dashboard-startup-pulse {
+          to { background-position-x: -200%; }
+        }
+        @media (max-width: 700px) {
+          .dashboard-startup-state {
+            padding: 16px 12px;
+          }
+          .dashboard-startup-summary {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+      `}</style>
     </div>
   );
 }

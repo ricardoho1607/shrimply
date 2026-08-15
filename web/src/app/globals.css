@@ -2777,6 +2777,21 @@ nav.scrolled {
   opacity: 1;
 }
 
+.assets-segmented-tabs {
+  width: 100%;
+}
+
+.assets-segmented-tabs .dashboard-segmented-tab {
+  flex: 1 1 0;
+}
+
+.asset-modal-cancel:hover {
+  border-color: var(--primary) !important;
+  background: var(--primary-dim) !important;
+  color: var(--primary) !important;
+  outline: none !important;
+}
+
 /* Authenticated feed */
 .dashboard-saas .dashboard-page-relaxed {
   gap: 16px;

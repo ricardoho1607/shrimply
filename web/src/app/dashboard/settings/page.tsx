@@ -270,6 +270,7 @@ export default function SettingsPage() {
           ].map((tab) => (
             <button
               key={tab.id}
+              className="settings-category-button"
               onClick={() => setActiveTab(tab.id)}
               style={{
                 display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', borderRadius: '12px',
@@ -296,7 +297,7 @@ export default function SettingsPage() {
                   <div style={{ width: '100px', height: '100px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 600, color: 'var(--primary)', overflow: 'hidden', border: '1px solid var(--border)' }}>
                     {user?.profileImage ? <img src={user.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.name?.[0] || 'U').toUpperCase()}
                   </div>
-                  <button type="button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-card)' }}>
+                  <button type="button" className="settings-avatar-button" style={{ position: 'absolute', bottom: '-8px', right: '-8px', width: '36px', height: '36px', borderRadius: '50%', background: 'var(--primary)', color: '#FFF', border: '3px solid white', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-card)' }}>
                     <Camera size={14} />
                   </button>
                 </div>
@@ -337,10 +338,10 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                 {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.changesSaved || 'Changes saved'}</div>}
                 <button type="submit" disabled={saving} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  {saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
+                  {saving && <Loader2 className="animate-spin" size={18} />}
                   {t.settings.saveChanges || 'Save Changes'}
                 </button>
               </div>
@@ -471,17 +472,17 @@ export default function SettingsPage() {
           )}
 
           {activeTab === 'organization' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
+            <div className="settings-organization-panel" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="settings-organization-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ minWidth: 0 }}>
                   <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Team Members</h3>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Manage your organization&apos;s members and their roles.</p>
                 </div>
-                <button className="btn-primary" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
+                <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
               </div>
 
               {['owner', 'co-owner'].includes(user?.role || '') && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid var(--border)' }}>
+                <div className="settings-join-requests" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Clock size={18} color="var(--primary)" />
@@ -499,7 +500,7 @@ export default function SettingsPage() {
                   )}
 
                   {joinRequests.map((request) => (
-                    <div key={request.id} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px', borderRadius: '14px', background: '#FFFFFF', border: '1px solid var(--border)' }}>
+                    <div key={request.id} className="settings-join-request-row" style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px', borderRadius: '14px', background: '#FFFFFF', border: '1px solid var(--border)' }}>
                       <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 600 }}>
                         {(request.userName?.[0] || request.userEmail?.[0] || 'U').toUpperCase()}
                       </div>
@@ -507,7 +508,7 @@ export default function SettingsPage() {
                         <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{request.userName || request.userEmail}</div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>{request.userEmail} • {request.requestedRole}</div>
                       </div>
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                      <div className="settings-join-request-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                         <button
                           type="button"
                           disabled={processingRequestId === request.id}
@@ -534,21 +535,21 @@ export default function SettingsPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {members.map((member) => (
-                  <div key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', transition: 'all 0.2s' }}>
+                  <div key={member.id} className="settings-member-card" style={{ display: 'flex', alignItems: 'center', gap: '16px', padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', border: '1px solid var(--border)', transition: 'all 0.2s' }}>
                     <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 600, fontSize: '18px', border: '1px solid var(--border)' }}>
                       {member.profileImage ? <img src={member.profileImage} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }} /> : (member.name?.[0] || 'U').toUpperCase()}
                     </div>
-                    <div style={{ flex: 1 }}>
+                    <div className="settings-member-copy" style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{member.name}</span>
                         {member.id === user?.uid && <span style={{ padding: '2px 8px', borderRadius: '100px', background: 'white', border: '1px solid var(--border)', fontSize: '10px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>You</span>}
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '2px' }}>
-                        <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px' }}><Mail size={12} /> {member.email}</span>
+                      <div className="settings-member-contact" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '2px' }}>
+                        <span style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', overflowWrap: 'anywhere' }}><Mail size={12} /> {member.email}</span>
                         {member.phone && <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>• {member.phone}</span>}
                       </div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div className="settings-member-role" style={{ textAlign: 'right' }}>
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : member.role === 'co-owner' ? (t.roleSelection?.coOwner || 'Co-owner') : (t.roleSelection?.manager || 'Staff')}</div>
                     </div>
@@ -699,6 +700,32 @@ export default function SettingsPage() {
           font-weight: 500;
         }
 
+        .settings-category-button:hover {
+          background: var(--primary-dim) !important;
+          color: var(--primary) !important;
+          outline: none !important;
+        }
+
+        .settings-avatar-button {
+          width: 36px !important;
+          min-width: 36px !important;
+          max-width: 36px !important;
+          height: 36px !important;
+          min-height: 36px !important;
+          max-height: 36px !important;
+          padding: 0 !important;
+          border-radius: 50% !important;
+          flex: 0 0 36px !important;
+        }
+
+        .settings-invite-button {
+          flex: 0 0 auto;
+          border-color: #0f4c75 !important;
+          background: #0f4c75 !important;
+          color: #ffffff !important;
+          box-shadow: none !important;
+        }
+
         @media (max-width: 900px) {
           .settings-layout {
             grid-template-columns: 1fr !important;
@@ -707,6 +734,70 @@ export default function SettingsPage() {
 
           .settings-panel {
             padding: 22px !important;
+          }
+        }
+
+        @media (max-width: 640px) {
+          .settings-panel {
+            min-width: 0;
+            padding: 16px !important;
+            overflow: hidden;
+          }
+
+          .settings-organization-panel {
+            gap: 16px !important;
+          }
+
+          .settings-organization-header {
+            align-items: stretch !important;
+            flex-direction: column;
+            gap: 12px;
+          }
+
+          .settings-invite-button {
+            width: 100%;
+            min-height: 40px !important;
+            padding: 8px 12px !important;
+            white-space: nowrap;
+          }
+
+          .settings-join-requests {
+            min-width: 0;
+            padding: 14px !important;
+          }
+
+          .settings-join-request-row,
+          .settings-member-card {
+            min-width: 0;
+            align-items: flex-start !important;
+            flex-wrap: wrap;
+            gap: 12px !important;
+            padding: 14px !important;
+          }
+
+          .settings-join-request-actions {
+            width: 100%;
+            padding-left: 54px;
+            justify-content: flex-start !important;
+          }
+
+          .settings-member-copy {
+            flex: 1 1 calc(100% - 60px) !important;
+          }
+
+          .settings-member-contact {
+            align-items: flex-start !important;
+            flex-direction: column;
+            gap: 2px !important;
+          }
+
+          .settings-member-role {
+            width: 100%;
+            margin-left: 60px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-align: left !important;
           }
         }
       `}</style>

@@ -1367,7 +1367,7 @@ export default function WaterQualityPage() {
       {/* -- HISTORY DRAWER ------------------------------ */}
       {selectedPondForHistory && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'flex-end' }}>
-          <div className="drawer-content responsive-side-drawer animate-slide-left">
+          <div className="drawer-content responsive-side-drawer water-history-drawer animate-slide-left">
             <div className="responsive-modal-header" style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600, fontFamily: "var(--jakarta)", color: 'var(--text-primary)' }}>
@@ -1798,6 +1798,12 @@ export default function WaterQualityPage() {
           box-shadow: -20px 0 60px rgba(0,0,0,0.1);
           display: flex;
           flex-direction: column;
+        }
+        @media (max-width: 640px) {
+          .water-history-drawer {
+            width: min(300px, 78vw) !important;
+            max-width: 78vw !important;
+          }
         }
         .animate-slide-left {
           animation: slideLeft 0.4s cubic-bezier(0.4, 0, 0.2, 1);

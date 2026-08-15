@@ -148,6 +148,18 @@ interface AuthContextType {
   isBuyer: boolean;
 }
 
+let lastResolvedAuthState: {
+  initialized: boolean;
+  user: User | null;
+  company: Company | null;
+  companyResolved: boolean;
+} = {
+  initialized: false,
+  user: null,
+  company: null,
+  companyResolved: true,
+};
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const firebaseFunctions = getFunctions(app);
 
@@ -158,17 +170,19 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [company, setCompany] = useState<Company | null>(null);
-  const [companyResolved, setCompanyResolved] = useState(true);
+  const [user, setUser] = useState<User | null>(() => lastResolvedAuthState.user);
+  const [company, setCompany] = useState<Company | null>(() => lastResolvedAuthState.company);
+  const [companyResolved, setCompanyResolved] = useState(() => lastResolvedAuthState.companyResolved);
   const [loading, setLoading] = useState(false);
-  const [initializing, setInitializing] = useState(true);
+  const [initializing, setInitializing] = useState(() => !lastResolvedAuthState.initialized);
   const timeZoneMigrationRef = useRef<Set<string>>(new Set());
   const publicMemberCountSyncRef = useRef<Map<string, number>>(new Map());
   const router = useRouter();
 
   const setupCompanyListener = useCallback((companyId: string, canSyncPublicProfile: boolean) => {
-    setCompanyResolved(false);
+    if (lastResolvedAuthState.company?.id !== companyId) {
+      setCompanyResolved(false);
+    }
     return onSnapshot(doc(db, 'companies', companyId), (companyDoc) => {
       if (companyDoc.exists()) {
         const companyData = companyDoc.data() as Company;
@@ -210,6 +224,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   useEffect(() => {
+    if (initializing) return;
+    lastResolvedAuthState = {
+      initialized: true,
+      user,
+      company,
+      companyResolved,
+    };
+  }, [company, companyResolved, initializing, user]);
+
+  useEffect(() => {
     let userUnsubscribe: (() => void) | null = null;
     let companyUnsubscribe: (() => void) | null = null;
     let currentCompanyId: string | null = null;
@@ -247,9 +271,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               setCompanyResolved(true);
             }
           } else {
-            setUser(null);
+            const newUser: User = {
+              id: firebaseUser.uid,
+              uid: firebaseUser.uid,
+              email: firebaseUser.email || '',
+              hasCompletedSetup: false,
+              joinedDate: new Date().toISOString(),
+              lastActive: new Date().toISOString(),
+            };
+            setUser(newUser);
             setCompany(null);
             setCompanyResolved(true);
+            void setDoc(doc(db, 'users', firebaseUser.uid), newUser).catch((error) => {
+              console.error('User profile creation failed:', error);
+            });
           }
           setInitializing(false);
         }, (error) => {
@@ -288,48 +323,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await acceptCompanyInvite({ inviteToken });
   };
 
-  const hydrateAuthenticatedUserState = async (firebaseUser: FirebaseUser, fallbackEmail: string) => {
-    const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
-
-    if (userDoc.exists()) {
-      const userData = userDoc.data() as User;
-      setUser(userData);
-
-      if (userData.companyId) {
-        const companyDoc = await getDoc(doc(db, 'companies', userData.companyId));
-        setCompany(companyDoc.exists()
-          ? { ...(companyDoc.data() as Company), id: companyDoc.id }
-          : null);
-        setCompanyResolved(true);
-      } else {
-        setCompany(null);
-        setCompanyResolved(true);
-      }
-      return;
-    }
-
-    const newUser: User = {
-      id: firebaseUser.uid,
-      uid: firebaseUser.uid,
-      email: firebaseUser.email || fallbackEmail,
-      hasCompletedSetup: false,
-      joinedDate: new Date().toISOString(),
-      lastActive: new Date().toISOString(),
-    };
-    await setDoc(doc(db, 'users', firebaseUser.uid), newUser);
-    setUser(newUser);
-    setCompany(null);
-    setCompanyResolved(true);
-  };
-
   const signIn = async (email: string, password: string, keepMeSignedIn: boolean = true, inviteToken?: string) => {
     setLoading(true);
     try {
       const persistence = keepMeSignedIn ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await signInWithEmailAndPassword(auth, email, password);
       await acceptInviteAfterAuth(inviteToken);
-      await hydrateAuthenticatedUserState(userCredential.user, email);
     } finally {
       setLoading(false);
     }
@@ -368,6 +368,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signOut = async () => {
     await firebaseSignOut(auth);
+    lastResolvedAuthState = {
+      initialized: true,
+      user: null,
+      company: null,
+      companyResolved: true,
+    };
     setUser(null);
     setCompany(null);
     setCompanyResolved(true);
@@ -534,8 +540,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isBuyer: effectiveRole === 'buyer',
   };
   }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);
-
-  if (initializing) return null;
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

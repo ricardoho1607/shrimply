@@ -12,6 +12,7 @@
     "test:cursor": "node --test src/components/Cursor.test.cjs",
     "test:dashboard-summary-ui": "node --test src/app/dashboard/dashboardSummaryUi.test.cjs",
     "test:authenticated-ui": "node --test src/app/dashboard/authenticatedUi.test.cjs",
+    "test:auth-startup": "node --test src/contexts/authStartup.test.cjs",
     "test:feed-ui": "node --test src/app/dashboard/feed/feedUi.test.cjs",
     "test:inventory-layout": "node --test src/app/dashboard/inventory/feeds/inventoryMetricLayout.test.cjs",
     "test:pond-detail-ui": "node --test src/app/dashboard/ponds/detail/pondDetailUi.test.cjs",

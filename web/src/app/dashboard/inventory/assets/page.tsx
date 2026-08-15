@@ -18,7 +18,6 @@ import {
   Loader2, 
   X,
   Calendar,
-  DollarSign,
   Briefcase
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -40,6 +39,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { GOOGLE_PLAY_URL } from '@/config/site';
 
 /* --- Types --------------------------------------------------- */
 
@@ -407,7 +407,7 @@ export default function AssetInventoryPage() {
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page">
       <div className="dashboard-inline-toolbar">
-        <div className="dashboard-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
+        <div className="dashboard-segmented-tabs assets-segmented-tabs" style={{ minHeight: '44px', alignItems: 'center' }}>
           {[
             { id: 'dashboard', label: t.asset.dashboard, icon: Briefcase },
             { id: 'all', label: t.asset.allAssets, icon: Construction }
@@ -448,46 +448,22 @@ export default function AssetInventoryPage() {
         {activeTab === 'dashboard' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
             {/* Metrics Grid */}
-            <div className="dashboard-kpi-grid">
-              <div className="glass-card dashboard-kpi-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                    <Construction size={20} />
+            <div className="glass-card dashboard-summary-panel assets-summary-panel">
+              {[
+                { label: t.asset.totalAssets, value: metrics.totalAssets.toString() },
+                { label: t.asset.needsMaintenance, value: metrics.needsMaintenance.toString() },
+                { label: t.asset.checkedOut, value: metrics.checkedOut.toString() },
+                { label: t.asset.totalMaintenanceCost, value: formatCurrency(metrics.totalMaintCost) }
+              ].map(({ label, value }) => (
+                <div className="dashboard-summary-item" key={label}>
+                  <div className="dashboard-summary-content">
+                    <div className="dashboard-summary-meta">
+                      <span className="dashboard-summary-label">{label}</span>
+                    </div>
+                    <div className="dashboard-summary-value">{value}</div>
                   </div>
-                  <span className="dashboard-kpi-label">{t.asset.totalAssets}</span>
                 </div>
-                <div className="dashboard-kpi-value">{metrics.totalAssets}</div>
-              </div>
-
-              <div className="glass-card dashboard-kpi-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c', border: '1px solid rgba(231, 76, 60, 0.2)' }}>
-                    <AlertCircle size={20} />
-                  </div>
-                  <span className="dashboard-kpi-label">{t.asset.needsMaintenance}</span>
-                </div>
-                <div className="dashboard-kpi-value">{metrics.needsMaintenance}</div>
-              </div>
-
-              <div className="glass-card dashboard-kpi-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(243, 156, 18, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f39c12', border: '1px solid rgba(243, 156, 18, 0.2)' }}>
-                    <User size={20} />
-                  </div>
-                  <span className="dashboard-kpi-label">{t.asset.checkedOut}</span>
-                </div>
-                <div className="dashboard-kpi-value">{metrics.checkedOut}</div>
-              </div>
-
-              <div className="glass-card dashboard-kpi-card">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60', border: '1px solid rgba(39, 174, 96, 0.2)' }}>
-                    <DollarSign size={20} />
-                  </div>
-                  <span className="dashboard-kpi-label">{t.asset.totalMaintenanceCost}</span>
-                </div>
-                <div className="dashboard-kpi-value" style={{ whiteSpace: 'nowrap' }}>{formatCurrency(metrics.totalMaintCost)}</div>
-              </div>
+              ))}
             </div>
 
             {/* Needs Attention Section */}
@@ -668,12 +644,18 @@ export default function AssetInventoryPage() {
                   <div>
                     <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '12px' }}>Use Mobile App to Scan</h3>
                     <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px', margin: '0 auto', fontSize: '15px' }}>
-                      To {referralSource === 'add' ? 'add a new asset' : 'log maintenance'} using a QR code, please use the <strong style={{color: 'var(--primary)'}}>Orson AI Mobile App</strong> on your phone.
+                      To {referralSource === 'add' ? 'add a new asset' : 'log maintenance'} using a QR code, please use the <strong style={{color: 'var(--primary)'}}>Shrimply Tech Mobile App</strong> on your phone.
                     </p>
                   </div>
                   
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '300px' }}>
-                    <div style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border)' }}>
+                    <a
+                      href={GOOGLE_PLAY_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label="Open the Shrimply listing on Google Play"
+                      style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', textDecoration: 'none' }}
+                    >
                       <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
                         <img 
                           src="https://upload.wikimedia.org/wikipedia/commons/d/d0/Google_Play_Arrow_logo.svg" 
@@ -685,7 +667,7 @@ export default function AssetInventoryPage() {
                         <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Get it on</div>
                         <div style={{ fontSize: '15px', fontWeight: 600 }}>Google Play</div>
                       </div>
-                    </div>
+                    </a>
                   </div>
 
                   <button 
@@ -832,7 +814,7 @@ export default function AssetInventoryPage() {
 
             {modalType !== 'history' && modalType !== 'scanReferral' && (
               <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border)', display: 'flex', gap: '16px', background: 'var(--bg-mid)' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
+                <button type="button" className="asset-modal-cancel" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
                 <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>
                   {modalType === 'add' ? 'Add Asset' :
                    modalType === 'transfer' ? 'Confirm Transfer' :

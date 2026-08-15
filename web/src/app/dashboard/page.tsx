@@ -628,8 +628,22 @@ export default function DashboardPage() {
   ];
 
   if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-      <Loader2 className="animate-spin" size={48} color="var(--primary)" />
+    <div className="dashboard-page dashboard-home-loading" aria-busy="true" aria-label="Loading farm dashboard">
+      <div className="glass-card dashboard-summary-panel">
+        {['Biomass', 'Survival Rate', 'Population', 'Active Ponds'].map((label) => (
+          <div className="dashboard-summary-item" key={label}>
+            <div className="dashboard-summary-content">
+              <div className="dashboard-summary-label">{label}</div>
+              <div
+                aria-hidden="true"
+                style={{ width: '72px', height: '24px', marginTop: '8px', borderRadius: '8px', background: '#edf3f6' }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="glass-card" style={{ minHeight: '112px', background: '#fff' }} />
+      <div className="glass-card" style={{ minHeight: '240px', background: '#fff' }} />
     </div>
   );
 
