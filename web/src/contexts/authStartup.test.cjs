@@ -6,6 +6,7 @@ const test = require('node:test');
 const authContext = fs.readFileSync(path.join(__dirname, 'AuthContext.tsx'), 'utf8');
 const firebaseClient = fs.readFileSync(path.join(__dirname, '../lib/firebase.ts'), 'utf8');
 const authPage = fs.readFileSync(path.join(__dirname, '../app/auth/page.tsx'), 'utf8');
+const authLayout = fs.readFileSync(path.join(__dirname, '../app/auth/layout.tsx'), 'utf8');
 const dashboardLayout = fs.readFileSync(path.join(__dirname, '../app/dashboard/layout.tsx'), 'utf8');
 const dashboardPage = fs.readFileSync(path.join(__dirname, '../app/dashboard/page.tsx'), 'utf8');
 
@@ -44,4 +45,9 @@ test('resolved auth state is handed across route-scoped providers after login', 
   assert.match(authContext, /lastResolvedAuthState/);
   assert.match(authContext, /useState<User \| null>\(\(\) => lastResolvedAuthState\.user\)/);
   assert.match(authContext, /lastResolvedAuthState\.company\?\.id !== companyId/);
+});
+
+test('auth query-parameter routes render within a Suspense boundary', () => {
+  assert.match(authLayout, /import \{ Suspense,/);
+  assert.match(authLayout, /<Suspense[\s\S]*>\s*\{children\}\s*<\/Suspense>/);
 });

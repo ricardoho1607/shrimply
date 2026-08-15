@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import AppProviders from "@/components/AppProviders";
 
 export const metadata: Metadata = {
@@ -12,5 +12,11 @@ export const metadata: Metadata = {
 };
 
 export default function AuthLayout({ children }: { children: ReactNode }) {
-  return <AppProviders>{children}</AppProviders>;
+  return (
+    <AppProviders>
+      <Suspense fallback={<main className="auth-shell" aria-busy="true" aria-label="Loading authentication" />}>
+        {children}
+      </Suspense>
+    </AppProviders>
+  );
 }
