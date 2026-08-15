@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { Building2, Rocket, Phone, MapPin, ArrowLeft, LogOut, CheckCircle2, LoaderCircle } from 'lucide-react';
+import { Rocket, Phone, MapPin, ArrowLeft, LogOut, CheckCircle2, LoaderCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { BUSINESS_SIZES, DEFAULT_COMPANY_SETUP, type BusinessSize } from '@/config/business';
 import { ROUTES } from '@/config/routes';
@@ -176,93 +177,42 @@ export default function CompanySetupPage() {
   if (!isReady) return <OnboardingLoading />;
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: 'var(--bg-dark)',
-      padding: '80px 24px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-    }}>
+    <main className="company-setup-shell">
       <OnboardingProgress
         percent={setupProgress}
         title={t.onboardingProgress.company}
         detail={t.onboardingProgress.companyDetail}
       />
-      <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px' }}>
-          <button
-            type="button"
-            onClick={() => router.push(ROUTES.setupChoice)}
-            style={{
-              padding: '12px 16px',
-              borderRadius: '999px',
-              border: '1px solid var(--border)',
-              background: '#FFFFFF',
-              color: 'var(--text-primary)',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
-            }}
-          >
-            <ArrowLeft size={16} />
-            Back to setup options
-          </button>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            style={{
-              padding: '12px 16px',
-              borderRadius: '999px',
-              border: '1px solid #FECDCA',
-              background: '#FEF3F2',
-              color: '#B42318',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: signingOut ? 'not-allowed' : 'pointer',
-              opacity: signingOut ? 0.7 : 1,
-            }}
-          >
-            <LogOut size={16} />
-            {signingOut ? 'Signing out...' : 'Sign Out'}
-          </button>
-        </div>
-        <div style={{
-          width: '80px', height: '80px', borderRadius: '24px',
-          background: 'var(--gradient-dim)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 24px',
-          color: 'var(--primary)'
-        }}>
-          <Building2 size={40} />
-        </div>
-        <h1 style={{ fontSize: '36px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '12px' }}>
-          Setup Your Farm
-        </h1>
-        <p style={{ fontSize: '16px', color: 'var(--text-muted)' }}>
+      <header className="company-setup-header">
+        <Image
+          src="/assets/logo.webp"
+          width={500}
+          height={500}
+          alt="Shrimply"
+          className="company-setup-logo"
+          style={{
+            display: 'block',
+            width: '72px',
+            height: '72px',
+            margin: '0 auto 5px',
+            objectFit: 'contain',
+          }}
+        />
+        <h1>Setup Your Farm</h1>
+        <p>
           Tell us about your aquaculture business to get started.
         </p>
-      </div>
+        <button
+          type="button"
+          className="company-setup-back"
+          onClick={() => router.push(ROUTES.setupChoice)}
+        >
+          <ArrowLeft size={16} />
+          Back to setup options
+        </button>
+      </header>
 
-      <form onSubmit={handleSubmit} style={{
-        maxWidth: '600px',
-        width: '100%',
-        background: '#FFFFFF',
-        padding: '48px',
-        borderRadius: '32px',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '32px'
-      }}>
+      <form className="company-setup-form" onSubmit={handleSubmit}>
         <div>
           <label htmlFor="company-name" style={labelStyle}>Company / Farm Name *</label>
           <input 
@@ -275,7 +225,7 @@ export default function CompanySetupPage() {
           />
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+        <div className="company-details-grid">
           <div>
             <label htmlFor="company-location" style={labelStyle}>Location *</label>
             <div style={{ position: 'relative' }}>
@@ -368,19 +318,8 @@ export default function CompanySetupPage() {
               <button
                 key={size}
                 type="button"
+                className={`business-size-option ${formData.businessSize === size ? 'active' : ''}`}
                 onClick={() => setFormData({...formData, businessSize: size as BusinessSize})}
-                style={{
-                  padding: '12px',
-                  borderRadius: '12px',
-                  border: '2px solid',
-                  borderColor: formData.businessSize === size ? 'var(--primary)' : 'var(--border)',
-                  background: formData.businessSize === size ? 'var(--primary-dim)' : 'transparent',
-                  color: formData.businessSize === size ? 'var(--primary)' : 'var(--text-muted)',
-                  fontWeight: 700,
-                  fontSize: '13px',
-                  textTransform: 'capitalize',
-                  cursor: 'pointer'
-                }}
               >
                 <span style={{ display: 'block' }}>{size === 'enterprise' ? 'Enterprise' : size}</span>
                 {size === 'enterprise' && (
@@ -494,6 +433,157 @@ export default function CompanySetupPage() {
           )}
         </button>
       </form>
+
+      <button
+        type="button"
+        className="company-setup-sign-out"
+        onClick={handleSignOut}
+        disabled={signingOut}
+      >
+        <LogOut size={16} />
+        {signingOut ? 'Signing out...' : 'Sign Out'}
+      </button>
+
+      <style jsx>{`
+        .company-setup-shell {
+          min-height: 100vh;
+          background: var(--bg-dark);
+          padding: 64px 24px 40px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .company-setup-header {
+          width: min(600px, 100%);
+          margin: 24px auto 30px;
+          text-align: center;
+        }
+        .company-setup-header h1 {
+          margin: 0 0 10px;
+          font-size: 38px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+        .company-setup-header p {
+          max-width: 460px;
+          margin: 0 auto;
+          color: var(--text-muted);
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        .company-setup-back,
+        .company-setup-sign-out {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 9px 11px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: inherit;
+          font-weight: 700;
+          cursor: pointer;
+          transition: color 160ms ease, background 160ms ease;
+        }
+        .company-setup-back {
+          margin-top: 14px;
+        }
+        .company-setup-back:hover {
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .company-setup-sign-out {
+          margin-top: 20px;
+        }
+        .company-setup-sign-out:hover {
+          background: #fef0ef;
+          color: #b42318;
+        }
+        .company-setup-back:focus-visible,
+        .company-setup-sign-out:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        .company-setup-sign-out:disabled {
+          cursor: wait;
+          opacity: 0.6;
+        }
+        .company-setup-form {
+          width: min(600px, 100%);
+          padding: 48px;
+          border: 1px solid var(--border);
+          border-radius: 28px;
+          background: #fff;
+          box-shadow: 0 16px 42px rgba(15, 76, 117, 0.06);
+          display: flex;
+          flex-direction: column;
+          gap: 32px;
+        }
+        .company-details-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 20px;
+        }
+        .business-size-option {
+          padding: 12px;
+          border: 2px solid var(--border);
+          border-radius: 12px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          text-transform: capitalize;
+          cursor: pointer;
+          transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+        }
+        .business-size-option.active {
+          border-color: var(--primary);
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .business-size-option:hover {
+          border-color: var(--primary);
+          background: var(--primary-dim);
+          color: var(--primary);
+          box-shadow: 0 6px 14px rgba(15, 76, 117, 0.12);
+          transform: translateY(-1px);
+        }
+        .business-size-option:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        @media (max-width: 640px) {
+          .company-setup-shell {
+            padding: 52px 16px 28px;
+          }
+          .company-setup-header {
+            margin: 18px auto 24px;
+          }
+          .company-setup-header h1 {
+            font-size: 32px;
+          }
+          .company-setup-header p {
+            max-width: 310px;
+            font-size: 15px;
+            line-height: 1.55;
+          }
+          .company-setup-back {
+            margin-top: 10px;
+          }
+          .company-setup-form {
+            padding: 26px 20px;
+            border-radius: 22px;
+            gap: 24px;
+          }
+          .company-details-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 24px;
+          }
+        }
+      `}</style>
     </main>
   );
 }

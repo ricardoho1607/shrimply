@@ -1,13 +1,13 @@
 "use client";
 
 import React, { useState } from 'react';
-import { ShoppingCart, UserCheck, ShieldCheck, Phone, ArrowLeft, LogOut } from 'lucide-react';
+import { Phone, ArrowLeft, LogOut } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { doc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
-import { BUYER_INTEREST_OPTIONS } from '@/config/business';
 import { ROUTES } from '@/config/routes';
 import { useLanguage } from '@/contexts/LanguageContext';
 import OnboardingProgress from '@/components/OnboardingProgress';
@@ -30,17 +30,7 @@ export default function BuyerSetupPage() {
     Boolean(formData.businessName.trim()),
     Boolean(formData.phone.trim()),
     Boolean(formData.region.trim()),
-    formData.interests.length > 0,
   ]);
-
-  const toggleInterest = (interest: string) => {
-    setFormData(prev => ({
-      ...prev,
-      interests: prev.interests.includes(interest)
-        ? prev.interests.filter(i => i !== interest)
-        : [...prev.interests, interest]
-    }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -126,93 +116,41 @@ export default function BuyerSetupPage() {
   if (!isReady) return <OnboardingLoading />;
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: 'var(--bg-dark)',
-      padding: '80px 24px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-    }}>
+    <main className="buyer-setup-shell">
       <OnboardingProgress
         percent={setupProgress}
         title={t.onboardingProgress.buyer}
         detail={t.onboardingProgress.buyerDetail}
       />
-      <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '12px', flexWrap: 'wrap', marginBottom: '28px' }}>
-          <button
-            type="button"
-            onClick={() => router.push(ROUTES.setupChoice)}
-            style={{
-              padding: '12px 16px',
-              borderRadius: '999px',
-              border: '1px solid var(--border)',
-              background: '#FFFFFF',
-              color: 'var(--text-primary)',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: 'pointer',
-              boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
-            }}
-          >
-            <ArrowLeft size={16} />
-            Back to setup options
-          </button>
-          <button
-            type="button"
-            onClick={handleSignOut}
-            disabled={signingOut}
-            style={{
-              padding: '12px 16px',
-              borderRadius: '999px',
-              border: '1px solid #FECDCA',
-              background: '#FEF3F2',
-              color: '#B42318',
-              fontWeight: 700,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              cursor: signingOut ? 'not-allowed' : 'pointer',
-              opacity: signingOut ? 0.7 : 1,
-            }}
-          >
-            <LogOut size={16} />
-            {signingOut ? 'Signing out...' : 'Sign Out'}
-          </button>
-        </div>
-        <div style={{
-          width: '80px', height: '80px', borderRadius: '24px',
-          background: 'var(--gradient-dim)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 24px',
-          color: 'var(--primary)'
-        }}>
-          <ShoppingCart size={40} />
-        </div>
-        <h1 style={{ fontSize: '36px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '12px' }}>
-          Buyer Verification
-        </h1>
-        <p style={{ fontSize: '16px', color: 'var(--text-muted)' }}>
+      <header className="buyer-setup-header">
+        <Image
+          src="/assets/logo.webp"
+          width={500}
+          height={500}
+          alt="Shrimply"
+          style={{
+            display: 'block',
+            width: '72px',
+            height: '72px',
+            margin: '0 auto 5px',
+            objectFit: 'contain',
+          }}
+        />
+        <h1>Buyer Verification</h1>
+        <p>
           Complete your profile to start connecting with verified shrimp farms.
         </p>
-      </div>
+        <button
+          type="button"
+          className="buyer-setup-back"
+          onClick={() => router.push(ROUTES.setupChoice)}
+        >
+          <ArrowLeft size={16} />
+          Back to setup options
+        </button>
+      </header>
 
-      <form onSubmit={handleSubmit} style={{
-        maxWidth: '600px',
-        width: '100%',
-        background: '#FFFFFF',
-        padding: '48px',
-        borderRadius: '32px',
-        boxShadow: '0 20px 50px rgba(0,0,0,0.05)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '24px'
-      }}>
+      <form className="buyer-setup-form" onSubmit={handleSubmit}>
         <div>
           <label htmlFor="buyer-business-name" style={labelStyle}>Business/Company Name</label>
           <input 
@@ -252,76 +190,171 @@ export default function BuyerSetupPage() {
           />
         </div>
 
-        <div>
-          <label style={labelStyle}>Sourcing Interests</label>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-            {BUYER_INTEREST_OPTIONS.map(option => (
-              <button
-                key={option}
-                type="button"
-                onClick={() => toggleInterest(option)}
-                style={{
-                  padding: '8px 16px',
-                  borderRadius: '100px',
-                  border: '1px solid',
-                  borderColor: formData.interests.includes(option) ? 'var(--primary)' : 'var(--border)',
-                  background: formData.interests.includes(option) ? 'var(--primary-dim)' : 'transparent',
-                  color: formData.interests.includes(option) ? 'var(--primary)' : 'var(--text-muted)',
-                  fontSize: '13px',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
+        <div className="buyer-verification-note">
+          <strong>Verified buyer profile</strong>
+          <p>Your business details will be visible to farms when you contact them.</p>
         </div>
 
-        <div style={{
-          marginTop: '12px',
-          padding: '20px',
-          background: 'rgba(39, 174, 96, 0.05)',
-          borderRadius: '16px',
-          border: '1px solid rgba(39, 174, 96, 0.1)',
-          display: 'flex',
-          gap: '12px'
-        }}>
-          <ShieldCheck size={24} style={{ color: '#27AE60', flexShrink: 0 }} />
-          <p style={{ fontSize: '13px', color: '#1B262C', lineHeight: 1.5 }}>
-            <b>Verified Buyer Status:</b> By completing this setup, you agree to Shrimply&apos;s terms for procurement. Farms will see your business details when you contact them.
-          </p>
-        </div>
-
-        <button 
+        <button
           type="submit"
+          className="buyer-setup-submit"
           disabled={loading}
-          style={{
-            marginTop: '12px',
-            padding: '18px',
-            borderRadius: '16px',
-            background: '#27AE60',
-            color: '#FFFFFF',
-            fontWeight: 800,
-            fontSize: '16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '10px',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 10px 20px rgba(39, 174, 96, 0.2)'
-          }}
         >
-          {loading ? 'Processing...' : (
-            <>
-              Complete Verification
-              <UserCheck size={20} />
-            </>
-          )}
+          {loading ? 'Processing...' : 'Complete Verification'}
         </button>
       </form>
+
+      <button
+        type="button"
+        className="buyer-setup-sign-out"
+        onClick={handleSignOut}
+        disabled={signingOut}
+      >
+        <LogOut size={16} />
+        {signingOut ? 'Signing out...' : 'Sign Out'}
+      </button>
+
+      <style jsx>{`
+        .buyer-setup-shell {
+          min-height: 100vh;
+          padding: 64px 24px 40px;
+          background: var(--bg-dark);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .buyer-setup-header {
+          width: min(600px, 100%);
+          margin: 24px auto 30px;
+          text-align: center;
+        }
+        .buyer-setup-header h1 {
+          margin: 0 0 10px;
+          font-size: 38px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+        .buyer-setup-header p {
+          max-width: 460px;
+          margin: 0 auto;
+          color: var(--text-muted);
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        .buyer-setup-back,
+        .buyer-setup-sign-out {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          padding: 9px 11px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: inherit;
+          font-weight: 700;
+          cursor: pointer;
+          transition: color 160ms ease, background 160ms ease;
+        }
+        .buyer-setup-back {
+          margin-top: 14px;
+        }
+        .buyer-setup-back:hover {
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .buyer-setup-sign-out {
+          margin-top: 20px;
+        }
+        .buyer-setup-sign-out:hover {
+          background: #fef0ef;
+          color: #b42318;
+        }
+        .buyer-setup-back:focus-visible,
+        .buyer-setup-sign-out:focus-visible,
+        .buyer-setup-submit:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        .buyer-setup-sign-out:disabled,
+        .buyer-setup-submit:disabled {
+          cursor: wait;
+          opacity: 0.65;
+        }
+        .buyer-setup-form {
+          width: min(600px, 100%);
+          padding: 48px;
+          border: 1px solid var(--border);
+          border-radius: 28px;
+          background: #fff;
+          box-shadow: 0 16px 42px rgba(15, 76, 117, 0.06);
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        .buyer-verification-note {
+          margin-top: 8px;
+          padding: 14px 16px;
+          border: 1px solid rgba(39, 174, 96, 0.12);
+          border-radius: 14px;
+          background: rgba(39, 174, 96, 0.05);
+        }
+        .buyer-verification-note strong {
+          display: block;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 750;
+        }
+        .buyer-verification-note p {
+          margin: 4px 0 0;
+          color: var(--text-muted);
+          font-size: 12px;
+          line-height: 1.55;
+        }
+        .buyer-setup-submit {
+          min-height: 52px;
+          margin-top: 4px;
+          padding: 14px 18px;
+          border: 0;
+          border-radius: 14px;
+          background: var(--primary);
+          box-shadow: 0 10px 20px rgba(15, 76, 117, 0.18);
+          color: #fff;
+          font-family: inherit;
+          font-size: 15px;
+          font-weight: 800;
+          cursor: pointer;
+          transition: background 160ms ease, transform 160ms ease;
+        }
+        .buyer-setup-submit:hover:not(:disabled) {
+          background: #0b3f62;
+          transform: translateY(-1px);
+        }
+        @media (max-width: 640px) {
+          .buyer-setup-shell {
+            padding: 52px 16px 28px;
+          }
+          .buyer-setup-header {
+            margin: 18px auto 24px;
+          }
+          .buyer-setup-header h1 {
+            font-size: 32px;
+          }
+          .buyer-setup-header p {
+            max-width: 310px;
+            font-size: 15px;
+            line-height: 1.55;
+          }
+          .buyer-setup-back {
+            margin-top: 10px;
+          }
+          .buyer-setup-form {
+            padding: 26px 20px;
+            border-radius: 22px;
+          }
+        }
+      `}</style>
     </main>
   );
 }

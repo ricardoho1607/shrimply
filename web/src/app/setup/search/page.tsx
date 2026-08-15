@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useRef, useState } from 'react';
-import { Search, Building2, UserPlus, Info, CheckCircle2, ArrowLeft } from 'lucide-react';
+import { Search, Info, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
 import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
@@ -80,93 +81,57 @@ export default function CompanySearchPage() {
   if (pendingRequest && user?.role !== 'buyer') return <PendingJoinRequestScreen request={pendingRequest} />;
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: 'var(--bg-dark)',
-      padding: '80px 24px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-    }}>
+    <main className="company-search-shell">
       <OnboardingProgress
         percent={50}
         title={t.onboardingProgress.join}
         detail={t.onboardingProgress.joinDetail}
       />
-      <div style={{ maxWidth: '600px', width: '100%', textAlign: 'center', marginBottom: '48px' }}>
+      <header className="company-search-header">
+        <Image
+          src="/assets/logo.webp"
+          width={500}
+          height={500}
+          alt="Shrimply"
+          style={{
+            display: 'block',
+            width: '72px',
+            height: '72px',
+            margin: '0 auto 5px',
+            objectFit: 'contain',
+          }}
+        />
+        <h1>Find Your Farm</h1>
+        <p>
+          Search for the company you want to join. Your administrator will need to approve your request.
+        </p>
         <button
           type="button"
+          className="company-search-back"
           onClick={() => router.push(ROUTES.setupChoice)}
-          style={{
-            margin: '0 auto 28px',
-            padding: '12px 16px',
-            borderRadius: '999px',
-            border: '1px solid var(--border)',
-            background: '#FFFFFF',
-            color: 'var(--text-primary)',
-            fontWeight: 700,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            cursor: 'pointer',
-            boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
-          }}
         >
           <ArrowLeft size={16} />
           Back to setup options
         </button>
-        <div style={{
-          width: '80px', height: '80px', borderRadius: '24px',
-          background: 'var(--gradient-dim)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 24px',
-          color: 'var(--primary)'
-        }}>
-          <Search size={40} />
-        </div>
-        <h1 style={{ fontSize: '36px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '12px' }}>
-          Find Your Farm
-        </h1>
-        <p style={{ fontSize: '16px', color: 'var(--text-muted)' }}>
-          Search for the company you want to join. Your administrator will need to approve your request.
-        </p>
-      </div>
+      </header>
 
-      <div style={{ maxWidth: '700px', width: '100%', display: 'flex', flexDirection: 'column', gap: '32px' }}>
-        <form onSubmit={handleSearch} style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ position: 'relative', flex: 1 }}>
+      <div className="company-search-content">
+        <form className="company-search-form" onSubmit={handleSearch}>
+          <div className="company-search-input-wrap">
             <Search size={20} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
-            <input 
+            <input
               id="company-search"
               aria-label="Search by farm name"
-              style={{
-                width: '100%',
-                background: '#FFFFFF',
-                border: '1px solid var(--border)',
-                borderRadius: '16px',
-                padding: '16px 16px 16px 52px',
-                outline: 'none',
-                fontSize: '16px',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-              }}
+              className="company-search-input"
               placeholder="Search by farm name..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
             />
           </div>
-          <button 
+          <button
             type="submit"
+            className="company-search-submit"
             disabled={searching}
-            style={{
-              padding: '0 32px',
-              borderRadius: '16px',
-              background: 'var(--primary)',
-              color: '#FFFFFF',
-              fontWeight: 700,
-              border: 'none',
-              cursor: 'pointer'
-            }}
           >
             {searching ? '...' : 'Search'}
           </button>
@@ -178,61 +143,27 @@ export default function CompanySearchPage() {
           </div>
         )}
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div className="company-search-results">
           {results.length > 0 ? results.map(company => (
-            <div key={company.id} style={{
-              background: '#FFFFFF',
-              padding: '24px',
-              borderRadius: '20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
-              border: '1px solid var(--border)'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{
-                  width: '48px', height: '48px', borderRadius: '12px',
-                  background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                }}>
-                  <Building2 size={24} color="var(--primary)" />
-                </div>
-                <div>
-                  <h4 style={{ fontSize: '18px', fontWeight: 700 }}>{company.companyName}</h4>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{typeof company.primaryLocation === 'string' ? company.primaryLocation : company.primaryLocation?.address || 'Location unknown'}</p>
+            <div key={company.id} className="company-result-card">
+              <div className="company-result-details">
+                <h4>{company.companyName}</h4>
+                <p className="company-result-location">
+                  {typeof company.primaryLocation === 'string' ? company.primaryLocation : company.primaryLocation?.address || 'Location unknown'}
+                </p>
                   {typeof company.memberCount === 'number' && (
-                    <p style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{company.memberCount} team members</p>
+                  <p className="company-result-members">{company.memberCount} team members</p>
                   )}
-                </div>
               </div>
-              <button 
+              <button
+                type="button"
+                className={`company-result-action ${sentRequestCompanyId === company.id ? 'sent' : ''}`}
                 onClick={() => handleJoinRequest(company)}
                 disabled={requesting === company.id || sentRequestCompanyId === company.id}
-                style={{
-                  padding: '10px 20px',
-                  borderRadius: '10px',
-                  background: 'var(--primary-dim)',
-                  color: 'var(--primary)',
-                  fontWeight: 700,
-                  fontSize: '14px',
-                  border: 'none',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
               >
-                {sentRequestCompanyId === company.id ? (
-                  <>
-                    Request Sent
-                    <CheckCircle2 size={16} />
-                  </>
-                ) : requesting === company.id ? 'Sending...' : (
-                  <>
-                    Request Access
-                    <UserPlus size={16} />
-                  </>
-                )}
+                {sentRequestCompanyId === company.id
+                  ? 'Request Sent'
+                  : requesting === company.id ? 'Sending...' : 'Request Access'}
               </button>
             </div>
           )) : searchTerm && !searching ? (
@@ -242,20 +173,242 @@ export default function CompanySearchPage() {
           ) : null}
         </div>
 
-        <div style={{
-          background: 'rgba(50, 130, 184, 0.05)',
-          padding: '20px',
-          borderRadius: '16px',
-          border: '1px solid rgba(50, 130, 184, 0.1)',
-          display: 'flex',
-          gap: '12px'
-        }}>
+        <div className="company-search-help">
           <Info size={20} style={{ color: 'var(--primary)', flexShrink: 0 }} />
           <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6 }}>
             <b>Can&apos;t find your farm?</b> Ask your manager for an invitation link, or ensure they have enabled &quot;Public Profile&quot; in their company settings.
           </p>
         </div>
       </div>
+
+      <style jsx>{`
+        .company-search-shell {
+          min-height: 100vh;
+          padding: 64px 24px 40px;
+          background: var(--bg-dark);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .company-search-header {
+          width: min(600px, 100%);
+          margin: 24px auto 30px;
+          text-align: center;
+        }
+        .company-search-header h1 {
+          margin: 0 0 10px;
+          font-size: 38px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+        .company-search-header p {
+          max-width: 500px;
+          margin: 0 auto;
+          color: var(--text-muted);
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        .company-search-back {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          margin-top: 14px;
+          padding: 9px 11px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: inherit;
+          font-weight: 700;
+          cursor: pointer;
+          transition: color 160ms ease, background 160ms ease;
+        }
+        .company-search-back:hover {
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .company-search-back:focus-visible,
+        .company-search-submit:focus-visible,
+        .company-search-input:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        .company-search-content {
+          width: min(700px, 100%);
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+        .company-search-form {
+          display: flex;
+          gap: 10px;
+          padding: 12px;
+          border: 1px solid var(--border);
+          border-radius: 20px;
+          background: #fff;
+          box-shadow: 0 10px 28px rgba(15, 76, 117, 0.06);
+        }
+        .company-search-input-wrap {
+          position: relative;
+          flex: 1;
+        }
+        .company-search-input {
+          width: 100%;
+          padding: 14px 16px 14px 48px;
+          border: 1px solid var(--border);
+          border-radius: 13px;
+          outline: none;
+          background: #f8fafc;
+          color: var(--text-primary);
+          font-family: inherit;
+          font-size: 15px;
+          transition: border-color 160ms ease, background 160ms ease;
+        }
+        .company-search-input:focus {
+          border-color: var(--secondary);
+          background: #fff;
+        }
+        .company-search-submit {
+          min-width: 112px;
+          padding: 0 24px;
+          border: 0;
+          border-radius: 13px;
+          background: var(--primary);
+          color: #fff;
+          font-family: inherit;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background 160ms ease, transform 160ms ease;
+        }
+        .company-search-submit:hover:not(:disabled) {
+          background: #0b3f62;
+          transform: translateY(-1px);
+        }
+        .company-search-submit:disabled {
+          cursor: wait;
+          opacity: 0.65;
+        }
+        .company-search-help {
+          display: flex;
+          gap: 10px;
+          padding: 16px;
+          border: 1px solid rgba(50, 130, 184, 0.12);
+          border-radius: 16px;
+          background: rgba(50, 130, 184, 0.05);
+        }
+        .company-search-help p {
+          margin: 0;
+        }
+        .company-search-results {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .company-result-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          padding: 20px;
+          border: 1px solid var(--border);
+          border-radius: 18px;
+          background: #fff;
+          box-shadow: 0 8px 22px rgba(15, 76, 117, 0.05);
+        }
+        .company-result-details {
+          min-width: 0;
+          text-align: left;
+        }
+        .company-result-details h4 {
+          margin: 0;
+          color: var(--text-primary);
+          font-size: 17px;
+          font-weight: 750;
+        }
+        .company-result-location {
+          margin: 6px 0 0;
+          color: var(--text-muted);
+          font-size: 13px;
+          line-height: 1.55;
+        }
+        .company-result-members {
+          margin: 7px 0 0;
+          color: var(--text-faint);
+          font-size: 12px;
+        }
+        .company-result-action {
+          flex: 0 0 auto;
+          min-height: 42px;
+          padding: 10px 18px;
+          border: 0;
+          border-radius: 11px;
+          background: var(--primary-dim);
+          color: var(--primary);
+          font-family: inherit;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+        }
+        .company-result-action:hover:not(:disabled) {
+          background: var(--primary);
+          color: #fff;
+          transform: translateY(-1px);
+        }
+        .company-result-action:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        .company-result-action:disabled {
+          cursor: default;
+          opacity: 0.7;
+        }
+        .company-result-action.sent {
+          background: #eaf7ef;
+          color: #15803d;
+        }
+        @media (max-width: 640px) {
+          .company-search-shell {
+            padding: 52px 16px 28px;
+          }
+          .company-search-header {
+            margin: 18px auto 24px;
+          }
+          .company-search-header h1 {
+            font-size: 32px;
+          }
+          .company-search-header p {
+            max-width: 310px;
+            font-size: 15px;
+            line-height: 1.55;
+          }
+          .company-search-back {
+            margin-top: 10px;
+          }
+          .company-search-content {
+            gap: 18px;
+          }
+          .company-search-form {
+            flex-direction: column;
+          }
+          .company-search-submit {
+            min-height: 46px;
+          }
+          .company-search-help {
+            padding: 14px;
+          }
+          .company-result-card {
+            align-items: stretch;
+            flex-direction: column;
+            gap: 14px;
+            padding: 18px;
+          }
+          .company-result-action {
+            width: 100%;
+          }
+        }
+      `}</style>
     </main>
   );
 }

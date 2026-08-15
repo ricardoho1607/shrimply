@@ -1,9 +1,10 @@
 "use client";
 
 import React from 'react';
-import { Building2, Search, ArrowLeft, ArrowRight, Rocket, UserPlus } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
 import { ROUTES } from '@/config/routes';
 import { PendingJoinRequestScreen, usePendingJoinRequest } from '@/components/PendingJoinRequestScreen';
@@ -25,8 +26,6 @@ export default function SetupChoicePage() {
       description: isBuyer 
         ? 'Start a new buyer profile to begin sourcing shrimp harvests.' 
         : 'Set up a new digital profile for your farm and ponds.',
-      icon: isBuyer ? Rocket : Building2,
-      color: isBuyer ? '#27AE60' : '#0F4C75',
       href: isBuyer ? ROUTES.setupBuyer : ROUTES.setupCompany,
       action: 'Get Started'
     },
@@ -36,8 +35,6 @@ export default function SetupChoicePage() {
       description: isBuyer
         ? 'Connect to an existing procurement or trading company.'
         : 'Join your team by searching for your farm profile.',
-      icon: isBuyer ? UserPlus : Search,
-      color: '#3282B8',
       href: ROUTES.setupSearch,
       action: 'Find Company'
     }
@@ -66,117 +63,188 @@ export default function SetupChoicePage() {
   if (pendingRequest && user?.role !== 'buyer') return <PendingJoinRequestScreen request={pendingRequest} />;
 
   return (
-    <main style={{
-      minHeight: '100vh',
-      background: 'var(--bg-dark)',
-      padding: '80px 24px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center'
-    }}>
-      <div style={{ maxWidth: '800px', width: '100%', textAlign: 'center', marginBottom: '60px' }}>
-        <button
-          type="button"
-          onClick={handleChangeRole}
-          disabled={changingRole}
+    <main className="setup-choice-shell">
+      <header className="setup-choice-header">
+        <Image
+          src="/assets/logo.webp"
+          width={500}
+          height={500}
+          alt="Shrimply"
           style={{
-            margin: '0 auto 28px',
-            padding: '12px 16px',
-            borderRadius: '999px',
-            border: '1px solid var(--border)',
-            background: '#FFFFFF',
-            color: 'var(--text-primary)',
-            fontWeight: 700,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            cursor: changingRole ? 'not-allowed' : 'pointer',
-            opacity: changingRole ? 0.7 : 1,
-            boxShadow: '0 10px 24px rgba(15, 76, 117, 0.08)'
+            display: 'block',
+            width: '72px',
+            height: '72px',
+            margin: '0 auto 5px',
+            objectFit: 'contain',
           }}
-        >
-          <ArrowLeft size={16} />
-          {changingRole ? 'Changing role...' : 'Change role'}
-        </button>
-        <h1 style={{ fontSize: '42px', fontWeight: 800, letterSpacing: '-0.03em', marginBottom: '16px' }}>
-          Finalize Your Setup
-        </h1>
-        <p style={{ fontSize: '18px', color: 'var(--text-muted)', maxWidth: '500px', margin: '0 auto' }}>
-          {isBuyer 
+        />
+        <h1>Finalize Your Setup</h1>
+        <p>
+          {isBuyer
             ? "Choose how you want to operate as a buyer on Shrimply."
             : "Would you like to create a new farm or join an existing operation?"
           }
         </p>
-      </div>
+        <button
+          type="button"
+          className="change-role-button"
+          onClick={handleChangeRole}
+          disabled={changingRole}
+        >
+          <ArrowLeft size={16} />
+          {changingRole ? 'Changing role...' : 'Change role'}
+        </button>
+      </header>
 
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', 
-        gap: '32px',
-        width: '100%',
-        maxWidth: '900px'
-      }}>
+      <div className="setup-choice-grid">
         {choices.map((choice) => (
-          <div 
+          <button
             key={choice.id}
-            className="glass-card"
+            type="button"
+            className="setup-choice-card"
             onClick={() => router.push(choice.href)}
-            style={{
-              padding: '48px',
-              cursor: 'pointer',
-              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              background: '#FFFFFF',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              textAlign: 'center',
-              border: '1px solid var(--border)',
-              boxShadow: '0 10px 30px rgba(0,0,0,0.05)'
-            }}
           >
-            <div style={{
-              width: '80px', height: '80px',
-              borderRadius: '24px',
-              background: `${choice.color}10`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              marginBottom: '32px',
-              color: choice.color
-            }}>
-              <choice.icon size={40} />
-            </div>
-
-            <h3 style={{ fontSize: '24px', fontWeight: 800, marginBottom: '16px' }}>{choice.title}</h3>
-            <p style={{ fontSize: '15px', lineHeight: 1.6, color: 'var(--text-muted)', marginBottom: '40px', flex: 1 }}>
-              {choice.description}
-            </p>
-
-            <button style={{
-              width: '100%',
-              padding: '16px',
-              borderRadius: '16px',
-              background: choice.color,
-              color: '#FFFFFF',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
-              border: 'none',
-              cursor: 'pointer'
-            }}>
-              {choice.action}
-              <ArrowRight size={18} />
-            </button>
-          </div>
+            <span className="setup-choice-copy">
+              <strong>{choice.title}</strong>
+              <span>{choice.description}</span>
+            </span>
+            <span className="setup-choice-action">{choice.action}</span>
+          </button>
         ))}
       </div>
 
       <style jsx>{`
-        .glass-card:hover {
-          transform: translateY(-8px);
-          box-shadow: 0 30px 60px rgba(0,0,0,0.1) !important;
-          border-color: var(--primary) !important;
+        .setup-choice-shell {
+          min-height: 100vh;
+          padding: 64px 24px 40px;
+          background: var(--bg-dark);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+        }
+        .setup-choice-header {
+          width: min(680px, 100%);
+          margin-bottom: 30px;
+          text-align: center;
+        }
+        .setup-choice-header h1 {
+          margin: 0 0 10px;
+          font-size: 38px;
+          font-weight: 800;
+          letter-spacing: -0.03em;
+        }
+        .setup-choice-header p {
+          max-width: 520px;
+          margin: 0 auto;
+          color: var(--text-muted);
+          font-size: 16px;
+          line-height: 1.6;
+        }
+        .change-role-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 7px;
+          margin-top: 14px;
+          padding: 9px 11px;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          color: var(--text-muted);
+          font-family: inherit;
+          font-weight: 700;
+          cursor: pointer;
+          transition: color 160ms ease, background 160ms ease;
+        }
+        .change-role-button:hover {
+          background: var(--primary-dim);
+          color: var(--primary);
+        }
+        .change-role-button:focus-visible,
+        .setup-choice-card:focus-visible {
+          outline: 3px solid rgba(50, 130, 184, 0.22);
+          outline-offset: 2px;
+        }
+        .change-role-button:disabled {
+          cursor: wait;
+          opacity: 0.6;
+        }
+        .setup-choice-grid {
+          width: min(900px, 100%);
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 14px;
+        }
+        .setup-choice-card {
+          min-height: 148px;
+          padding: 22px;
+          border: 1px solid var(--border);
+          border-radius: 16px;
+          background: #fff;
+          box-shadow: 0 8px 22px rgba(15, 76, 117, 0.05);
+          color: var(--text-primary);
+          font-family: inherit;
+          cursor: pointer;
+          text-align: left;
+          display: flex;
+          flex-direction: column;
+          justify-content: space-between;
+          gap: 18px;
+          transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+        }
+        .setup-choice-card:hover {
+          border-color: rgba(50, 130, 184, 0.45);
+          background: #f8fbfd;
+          box-shadow: 0 12px 26px rgba(15, 76, 117, 0.08);
+        }
+        .setup-choice-copy {
+          display: grid;
+          gap: 7px;
+        }
+        .setup-choice-copy strong {
+          font-size: 18px;
+          font-weight: 750;
+        }
+        .setup-choice-copy > span {
+          color: var(--text-muted);
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .setup-choice-action {
+          color: var(--primary);
+          font-size: 13px;
+          font-weight: 700;
+        }
+        @media (max-width: 640px) {
+          .setup-choice-shell {
+            padding: 52px 16px 28px;
+          }
+          .setup-choice-header {
+            margin-bottom: 24px;
+          }
+          .setup-choice-header h1 {
+            font-size: 32px;
+          }
+          .setup-choice-header p {
+            max-width: 310px;
+            font-size: 15px;
+            line-height: 1.55;
+          }
+          .change-role-button {
+            margin-top: 10px;
+          }
+          .setup-choice-grid {
+            grid-template-columns: minmax(0, 1fr);
+            gap: 10px;
+          }
+          .setup-choice-card {
+            min-height: 0;
+            padding: 17px 18px;
+            gap: 12px;
+          }
+          .setup-choice-copy strong {
+            font-size: 17px;
+          }
         }
       `}</style>
     </main>
