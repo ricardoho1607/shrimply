@@ -112,6 +112,7 @@ export class NotificationService {
     itemId: string
   ) {
     try {
+      if (!await this.shouldCreateOperationalNotification(companyId, 'feed_low_stock', itemId, 'itemId')) return;
       const notificationsRef = collection(db, 'notifications');
       await addDoc(notificationsRef, {
         companyId,
@@ -125,6 +126,55 @@ export class NotificationService {
       });
     } catch (error) {
       console.error('Error creating low stock notification:', error);
+    }
+  }
+
+  static async createOverdueAssetNotification(
+    companyId: string,
+    assetId: string,
+    assetName: string,
+    holderName: string,
+    expectedReturn: Date
+  ) {
+    try {
+      if (!await this.shouldCreateOperationalNotification(companyId, 'asset_overdue', assetId, 'assetId')) return;
+      await addDoc(collection(db, 'notifications'), {
+        companyId,
+        type: 'asset_overdue',
+        title: `Overdue asset: ${assetName}`,
+        message: `${assetName} was due back from ${holderName} on ${expectedReturn.toLocaleDateString()}.`,
+        timestamp: Timestamp.now(),
+        read: false,
+        priority: 'high',
+        data: { assetId, assetName, holderName, expectedReturn: expectedReturn.toISOString() },
+      });
+    } catch (error) {
+      console.error('Error creating overdue asset notification:', error);
+    }
+  }
+
+  private static async shouldCreateOperationalNotification(
+    companyId: string,
+    type: 'feed_low_stock' | 'asset_overdue',
+    entityId: string,
+    entityField: 'itemId' | 'assetId'
+  ) {
+    try {
+      const snapshot = await getDocs(query(
+        collection(db, 'notifications'),
+        where('companyId', '==', companyId),
+        where('type', '==', type),
+        where('read', '==', false)
+      ));
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      return !snapshot.docs.some((notification) => {
+        const data = notification.data();
+        return data.data?.[entityField] === entityId
+          && (data.timestamp?.toDate?.()?.getTime?.() || 0) > oneDayAgo;
+      });
+    } catch (error) {
+      console.error('Error checking operational notification duplicate:', error);
+      return true;
     }
   }
 

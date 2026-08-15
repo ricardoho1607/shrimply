@@ -22,9 +22,7 @@ import {
 import {
   collection,
   doc,
-  addDoc,
   updateDoc,
-  deleteDoc,
   serverTimestamp,
   runTransaction,
   arrayUnion,
@@ -36,6 +34,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
+import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../shared/financeSync';
 import styles from './InventoryFeeds.module.css';
 
 /* --- Types --------------------------------------------------- */
@@ -296,6 +295,9 @@ export default function InventoryFeedsPage() {
       if (modalType === 'add') {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const now = serverTimestamp();
+        const itemRef = doc(collection(db, 'companies', companyId, collectionName));
+        const stockId = crypto.randomUUID();
+        const stockDate = getFarmDateKey(new Date(), company?.timeZone);
         const itemData: any = {
           companyId,
           [itemType === 'feed' ? 'feedName' : 'additiveName']: formData.itemName,
@@ -306,8 +308,8 @@ export default function InventoryFeedsPage() {
           totalStock: qty,
           totalCost: qty * price,
           stockInHistory: [{
-            id: Date.now().toString(),
-            date: getFarmDateKey(new Date(), company?.timeZone),
+            id: stockId,
+            date: stockDate,
             quantity: qty,
             price: price,
             notes: formData.notes,
@@ -319,11 +321,48 @@ export default function InventoryFeedsPage() {
           lastUpdated: now,
           createdAt: now
         };
-        await addDoc(collection(db, 'companies', companyId, collectionName), itemData);
+        const expense = buildInventoryExpense({
+          id: stockId,
+          itemId: itemRef.id,
+          type: itemType,
+          itemName: formData.itemName,
+          quantity: qty,
+          price,
+          unit: formData.unit,
+          date: stockDate,
+          batch: formData.batch,
+          notes: formData.notes,
+        });
+        await runTransaction(db, async (tx) => {
+          tx.set(itemRef, itemData);
+          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), {
+            ...expense,
+            companyId,
+            addedBy: user?.uid || '',
+            addedByName: user?.name || user?.email || 'Unknown',
+            timestamp: Date.now(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
+        });
       }
       else if (modalType === 'stockIn' && selectedItem) {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
+        const stockId = crypto.randomUUID();
+        const stockDate = getFarmDateKey(new Date(), company?.timeZone);
+        const expense = buildInventoryExpense({
+          id: stockId,
+          itemId: selectedItem.id,
+          type: itemType,
+          itemName: selectedItem.itemName,
+          quantity: qty,
+          price,
+          unit: selectedItem.unit,
+          date: stockDate,
+          batch: formData.batch,
+          notes: formData.notes,
+        });
 
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
@@ -337,8 +376,8 @@ export default function InventoryFeedsPage() {
             totalStock: newStock,
             totalCost: newCost,
             stockInHistory: arrayUnion({
-              id: Date.now().toString(),
-              date: getFarmDateKey(new Date(), company?.timeZone),
+              id: stockId,
+              date: stockDate,
               quantity: qty,
               price: price,
               notes: formData.notes,
@@ -348,6 +387,15 @@ export default function InventoryFeedsPage() {
             }),
             lastUpdated: serverTimestamp()
           });
+          tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), {
+            ...expense,
+            companyId,
+            addedBy: user?.uid || '',
+            addedByName: user?.name || user?.email || 'Unknown',
+            timestamp: Date.now(),
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
         });
       }
       else if (modalType === 'usage' && selectedItem) {
@@ -413,7 +461,18 @@ export default function InventoryFeedsPage() {
     if (!canEditInventory) return;
     try {
       const collectionName = type === 'feed' ? 'feeds' : 'additives';
-      await deleteDoc(doc(db, 'companies', companyId, collectionName, item.id));
+      const itemRef = doc(db, 'companies', companyId, collectionName, item.id);
+      await runTransaction(db, async (tx) => {
+        const snapshot = await tx.get(itemRef);
+        if (!snapshot.exists()) return;
+        const stockHistory = Array.isArray(snapshot.data().stockInHistory) ? snapshot.data().stockInHistory : [];
+        stockHistory.forEach((stock: { id?: string }) => {
+          if (!stock.id) return;
+          const reference = `INVENTORY-${type}-${item.id}-${stock.id}`;
+          tx.delete(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(reference)));
+        });
+        tx.delete(itemRef);
+      });
     } catch (err) {
       console.error('Delete failed:', err);
     }

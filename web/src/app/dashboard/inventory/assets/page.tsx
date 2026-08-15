@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
+import QRCode from 'qrcode';
 import { 
   Plus, 
   Search, 
@@ -14,10 +15,8 @@ import {
   CheckCircle2, 
   User, 
   Home, 
-  Camera, 
   Loader2, 
   X,
-  Calendar,
   Briefcase
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -27,19 +26,19 @@ import {
   where, 
   onSnapshot, 
   doc, 
-  addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   serverTimestamp,
   Timestamp,
   orderBy
 } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { auth, db, storage } from '@/lib/firebase';
+import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { GOOGLE_PLAY_URL } from '@/config/site';
 
 /* --- Types --------------------------------------------------- */
 
@@ -142,9 +141,10 @@ export default function AssetInventoryPage() {
   
   // Modal States
   const [isModalOpen, setModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'add' | 'transfer' | 'maintenance' | 'history' | 'return' | 'scanReferral'>('add');
+  const [modalType, setModalType] = useState<'add' | 'transfer' | 'maintenance' | 'history' | 'return' | 'qr'>('add');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [referralSource, setReferralSource] = useState<'add' | 'log'>('add');
+  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [qrDataUrl, setQrDataUrl] = useState('');
   
   // Form State
   const [formData, setFormData] = useState({
@@ -247,15 +247,12 @@ export default function AssetInventoryPage() {
       return;
     }
 
-    if (type === 'add' || type === 'maintenance') {
-      setReferralSource(type === 'add' ? 'add' : 'log');
-      setModalType('scanReferral');
-      if (asset) setSelectedAsset(asset);
-      setModalOpen(true);
-      return;
-    }
-
     setModalType(type);
+    setPhotoFiles([]);
+    setQrDataUrl('');
+    if (type === 'qr' && asset) {
+      void QRCode.toDataURL(`ASSET:${asset.id}`, { width: 360, margin: 2 }).then(setQrDataUrl);
+    }
     if (asset) {
       setSelectedAsset(asset);
       setFormData({
@@ -289,6 +286,41 @@ export default function AssetInventoryPage() {
     setModalOpen(true);
   };
 
+  const uploadPhotos = async (assetId: string, folder: string) => Promise.all(photoFiles.map(async (file, index) => {
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+    const fileRef = storageRef(storage, `companies/${companyId}/assets/${assetId}/${folder}/${Date.now()}-${index}.${extension}`);
+    await uploadBytes(fileRef, file, { contentType: file.type, customMetadata: { companyId: companyId || '', assetId } });
+    return getDownloadURL(fileRef);
+  }));
+
+  const openScannedAsset = (rawValue: string) => {
+    const assetId = rawValue.trim().replace(/^ASSET:/i, '');
+    const asset = assets.find((item) => item.id === assetId);
+    if (!asset) {
+      alert('This QR code does not match an asset in your company.');
+      return;
+    }
+    handleOpenModal('history', asset);
+  };
+
+  const scanQrImage = async (file?: File) => {
+    if (!file) return;
+    try {
+      type BarcodeDetectorConstructor = new (options: { formats: string[] }) => {
+        detect: (source: ImageBitmap) => Promise<Array<{ rawValue?: string }>>;
+      };
+      const Detector = (window as unknown as { BarcodeDetector?: BarcodeDetectorConstructor }).BarcodeDetector;
+      if (!Detector) throw new Error('QR image scanning is not supported in this browser.');
+      const bitmap = await createImageBitmap(file);
+      const results = await new Detector({ formats: ['qr_code'] }).detect(bitmap);
+      bitmap.close();
+      if (!results[0]?.rawValue) throw new Error('No QR code was found in that image.');
+      openScannedAsset(results[0].rawValue);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Could not scan this QR image.');
+    }
+  };
+
   const handleAction = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId) return;
@@ -303,6 +335,8 @@ export default function AssetInventoryPage() {
 
     try {
       if (modalType === 'add') {
+        const assetRef = doc(collection(db, 'assets'));
+        const photos = await uploadPhotos(assetRef.id, 'asset');
         const assetData = {
           companyId,
           name: formData.name,
@@ -315,14 +349,14 @@ export default function AssetInventoryPage() {
           model: formData.model,
           condition: formData.condition,
           currentHolder: null,
-          photos: [],
+          photos,
           transferHistory: [],
           maintenanceHistory: [],
           totalMaintenanceCost: 0,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         };
-        await addDoc(collection(db, 'assets'), assetData);
+        await setDoc(assetRef, assetData);
       } 
       else if (modalType === 'transfer' && selectedAsset) {
         const transfer: TransferRecord = {
@@ -352,8 +386,10 @@ export default function AssetInventoryPage() {
       }
       else if (modalType === 'maintenance' && selectedAsset) {
         const cost = Number(formData.maintCost) || 0;
+        const maintenanceId = `maint_${Date.now()}`;
+        const photos = await uploadPhotos(selectedAsset.id, `maintenance/${maintenanceId}`);
         const maintRecord: MaintenanceRecord = {
-          id: `maint_${Date.now()}`,
+          id: maintenanceId,
           date: Timestamp.now(),
           cycleId: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.id,
           cycleName: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.cycleName,
@@ -363,7 +399,7 @@ export default function AssetInventoryPage() {
           laborHours: Number(formData.laborHours) || 0,
           severity: 'Medium',
           type: formData.maintType,
-          photos: [],
+          photos,
           conditionBefore: selectedAsset.condition,
           conditionAfter: 'Good' // Default or could add more fields
         };
@@ -516,6 +552,10 @@ export default function AssetInventoryPage() {
                   }}
                 />
               </div>
+              <label className="btn-secondary" style={{ padding: '10px 14px', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <QrCode size={16} /> Scan QR image
+                <input type="file" accept="image/*" capture="environment" onChange={(event) => void scanQrImage(event.target.files?.[0])} style={{ display: 'none' }} />
+              </label>
               <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', padding: '5px', background: 'var(--bg-mid)', borderRadius: '14px', border: '1px solid var(--border)' }}>
                 <button 
                   onClick={() => setCategoryFilter(null)}
@@ -570,6 +610,7 @@ export default function AssetInventoryPage() {
                       </div>
                     </div>
                     <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+                      <button className="btn-secondary" aria-label={`Show QR code for ${asset.name}`} style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('qr', asset)}><QrCode size={16} /></button>
                       <button className="btn-secondary" style={{ padding: '8px', minWidth: 'unset', width: '36px', height: '36px' }} onClick={() => handleOpenModal('history', asset)}><History size={16} /></button>
                       {canManageAssets && (
                         <button onClick={() => handleDeleteAsset(asset.id)} style={{ color: '#ef4444', opacity: 0.6, cursor: 'pointer', background: 'transparent', border: 'none', width: '36px', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Trash2 size={18} /></button>
@@ -626,7 +667,8 @@ export default function AssetInventoryPage() {
                   {modalType === 'add' ? 'Add New Asset' :
                    modalType === 'transfer' ? 'Transfer Asset' :
                    modalType === 'maintenance' ? 'Log Maintenance' :
-                   modalType === 'history' ? 'Asset History' : 'Return to Storage'}
+                   modalType === 'history' ? 'Asset History' :
+                   modalType === 'qr' ? 'Asset QR Code' : 'Return to Storage'}
                 </h2>
                 {selectedAsset && <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginTop: '2px', fontWeight: 600, overflowWrap: 'anywhere' }}>{selectedAsset.name}</p>}
               </div>
@@ -636,51 +678,24 @@ export default function AssetInventoryPage() {
             </div>
 
             <div className="responsive-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
-              {modalType === 'scanReferral' ? (
+              {modalType === 'qr' && selectedAsset ? (
                 <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '24px' }}>
-                  <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', border: '1px solid var(--border)' }}>
-                    <QrCode size={40} />
-                  </div>
                   <div>
-                    <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '12px' }}>Use Mobile App to Scan</h3>
+                    <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '12px' }}>{selectedAsset.name}</h3>
                     <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', maxWidth: '400px', margin: '0 auto', fontSize: '15px' }}>
-                      To {referralSource === 'add' ? 'add a new asset' : 'log maintenance'} using a QR code, please use the <strong style={{color: 'var(--primary)'}}>Shrimply Tech Mobile App</strong> on your phone.
+                      Scan this code from the web or mobile app to open the asset record.
                     </p>
                   </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%', maxWidth: '300px' }}>
-                    <a
-                      href={GOOGLE_PLAY_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label="Open the Shrimply listing on Google Play"
-                      style={{ padding: '16px', background: 'var(--bg-mid)', borderRadius: '16px', display: 'flex', alignItems: 'center', gap: '12px', border: '1px solid var(--border)', color: 'var(--text-primary)', textDecoration: 'none' }}
-                    >
-                      <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                        <img 
-                          src="https://upload.wikimedia.org/wikipedia/commons/d/d0/Google_Play_Arrow_logo.svg" 
-                          alt="Google Play" 
-                          style={{ width: '22px', height: '22px', objectFit: 'contain' }} 
-                        />
-                      </div>
-                      <div style={{ textAlign: 'left' }}>
-                        <div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Get it on</div>
-                        <div style={{ fontSize: '15px', fontWeight: 600 }}>Google Play</div>
-                      </div>
-                    </a>
-                  </div>
-
-                  <button 
-                    onClick={() => {
-                      setModalType(referralSource === 'add' ? 'add' : 'maintenance');
-                    }}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '14px', cursor: 'pointer', marginTop: '16px', textDecoration: 'underline' }}
-                  >
-                    Continue with manual entry on Web
-                  </button>
+                  {qrDataUrl ? <img src={qrDataUrl} alt={`QR code for ${selectedAsset.name}`} style={{ width: '280px', height: '280px' }} /> : <Loader2 className="animate-spin" size={32} />}
+                  {qrDataUrl && <a href={qrDataUrl} download={`${selectedAsset.name}-qr.png`} className="btn-primary" style={{ padding: '12px 20px', borderRadius: '10px', textDecoration: 'none' }}>Download QR</a>}
                 </div>
               ) : modalType === 'history' && selectedAsset ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '32px', minWidth: 0 }}>
+                  {selectedAsset.photos?.length > 0 && (
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '10px' }}>
+                      {selectedAsset.photos.map((photo) => <img key={photo} src={photo} alt={selectedAsset.name} style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '12px' }} />)}
+                    </div>
+                  )}
                   <div>
                     <h3 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <Wrench size={18} /> Maintenance History
@@ -696,6 +711,7 @@ export default function AssetInventoryPage() {
                           <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '4px', lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                             {m.type} • {m.technician} • <span style={{ color: 'var(--primary)', fontWeight: 600 }}>{formatCurrency(m.cost || 0)}</span>
                           </div>
+                          {m.photos?.length > 0 && <div style={{ display: 'flex', gap: '8px', marginTop: '10px', overflowX: 'auto' }}>{m.photos.map((photo) => <img key={photo} src={photo} alt="Maintenance" style={{ width: '72px', height: '72px', objectFit: 'cover', borderRadius: '8px' }} />)}</div>}
                         </div>
                       ))}
                     </div>
@@ -750,6 +766,10 @@ export default function AssetInventoryPage() {
                           <input type="date" value={formData.purchaseDate} onChange={e => setFormData({...formData, purchaseDate: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                       </div>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
+                        Asset photos
+                        <input type="file" accept="image/*" multiple onChange={(event) => setPhotoFiles(Array.from(event.target.files || []))} />
+                      </label>
                     </>
                   )}
 
@@ -784,6 +804,10 @@ export default function AssetInventoryPage() {
                           <input value={formData.technician} onChange={e => setFormData({...formData, technician: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                       </div>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
+                        Maintenance photos
+                        <input type="file" accept="image/*" multiple onChange={(event) => setPhotoFiles(Array.from(event.target.files || []))} />
+                      </label>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                         <label style={{ fontSize: '13px', fontWeight: 600 }}>Description *</label>
                         <textarea rows={3} required value={formData.maintDesc} onChange={e => setFormData({...formData, maintDesc: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', resize: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
@@ -812,7 +836,7 @@ export default function AssetInventoryPage() {
               )}
             </div>
 
-            {modalType !== 'history' && modalType !== 'scanReferral' && (
+            {modalType !== 'history' && modalType !== 'qr' && (
               <div style={{ padding: '24px 32px', borderTop: '1px solid var(--border)', display: 'flex', gap: '16px', background: 'var(--bg-mid)' }}>
                 <button type="button" className="asset-modal-cancel" onClick={() => setModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'white', fontWeight: 600, cursor: 'pointer', color: 'var(--text-muted)' }}>Cancel</button>
                 <button form="assetForm" type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>

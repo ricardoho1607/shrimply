@@ -4,6 +4,7 @@ import {
   collection, 
   doc, 
   addDoc, 
+  setDoc,
   updateDoc, 
   deleteDoc, 
   getDocs, 
@@ -84,6 +85,26 @@ class RevenueService {
       console.error('Error adding revenue:', error);
       throw new Error('Failed to add revenue');
     }
+  }
+
+  async upsertSyncedRevenue(
+    companyId: string,
+    documentId: string,
+    revenueData: RevenueInput,
+    userId: string,
+    userName: string
+  ): Promise<string> {
+    const revenueRef = doc(db, 'companies', companyId, 'revenues', documentId);
+    await setDoc(revenueRef, {
+      ...revenueData,
+      companyId,
+      addedBy: userId,
+      addedByName: userName,
+      timestamp: Date.now(),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+    return revenueRef.id;
   }
 
   /**

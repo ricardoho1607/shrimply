@@ -15,13 +15,14 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [success, setSuccess] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || undefined;
 
-  const { signIn, resetPassword, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
+  const { signIn, signInWithGoogle, resetPassword, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -71,6 +72,18 @@ export default function AuthPage() {
       setError(err instanceof Error ? err.message : 'Could not send password reset email.');
     } finally {
       setResetLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setError('');
+    try {
+      await signInWithGoogle(inviteToken);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Google sign-in failed.');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -189,6 +202,10 @@ export default function AuthPage() {
           </form>
 
           <div className="auth-divider" />
+
+          <button type="button" onClick={handleGoogleSignIn} disabled={googleLoading || loading} className="auth-submit" style={{ background: '#FFFFFF', color: '#0F4C75', border: '1px solid #BBE1FA', marginBottom: '18px' }}>
+            {googleLoading ? 'Connecting to Google...' : 'Continue with Google'}
+          </button>
 
           <div className="auth-join">
             {t.auth.noAccount || "Don't have an account?"}{' '}

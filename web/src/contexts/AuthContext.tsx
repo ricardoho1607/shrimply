@@ -13,6 +13,8 @@ import {
   browserSessionPersistence,
   sendPasswordResetEmail,
   sendEmailVerification,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from 'firebase/auth';
 import {
   doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc,
@@ -131,6 +133,7 @@ interface AuthContextType {
   loading: boolean;
   companyLoading: boolean;
   signIn: (email: string, password: string, keepMeSignedIn?: boolean, inviteToken?: string) => Promise<void>;
+  signInWithGoogle: (inviteToken?: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
@@ -142,6 +145,7 @@ interface AuthContextType {
   getJoinRequests: () => Promise<JoinRequest[]>;
   approveJoinRequest: (requestId: string) => Promise<void>;
   rejectJoinRequest: (requestId: string) => Promise<void>;
+  removeMember: (memberId: string) => Promise<void>;
   refreshCompanyData: () => Promise<void>;
   isAuthenticated: boolean;
   needsRoleSelection: boolean;
@@ -276,6 +280,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               id: firebaseUser.uid,
               uid: firebaseUser.uid,
               email: firebaseUser.email || '',
+              name: firebaseUser.displayName || undefined,
+              profileImage: firebaseUser.photoURL || undefined,
               hasCompletedSetup: false,
               joinedDate: new Date().toISOString(),
               lastActive: new Date().toISOString(),
@@ -283,7 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(newUser);
             setCompany(null);
             setCompanyResolved(true);
-            void setDoc(doc(db, 'users', firebaseUser.uid), newUser).catch((error) => {
+            void setDoc(doc(db, 'users', firebaseUser.uid), newUser, { merge: true }).catch((error) => {
               console.error('User profile creation failed:', error);
             });
           }
@@ -358,6 +364,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } else {
         setUser(newUser);
       }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signInWithGoogle = async (inviteToken?: string) => {
+    setLoading(true);
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      const credential = await signInWithPopup(auth, new GoogleAuthProvider());
+      const userRef = doc(db, 'users', credential.user.uid);
+      const existingUser = await getDoc(userRef);
+      if (existingUser.exists()) {
+        await setDoc(userRef, { lastActive: new Date().toISOString() }, { merge: true });
+      } else {
+        await setDoc(userRef, {
+          id: credential.user.uid,
+          uid: credential.user.uid,
+          email: credential.user.email || '',
+          ...(credential.user.displayName ? { name: credential.user.displayName } : {}),
+          ...(credential.user.photoURL ? { profileImage: credential.user.photoURL } : {}),
+          hasCompletedSetup: false,
+          joinedDate: new Date().toISOString(),
+          lastActive: new Date().toISOString(),
+        }, { merge: true });
+      }
+      await acceptInviteAfterAuth(inviteToken);
     } finally {
       setLoading(false);
     }
@@ -515,6 +548,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
   }, [company, user]);
 
+  const removeMember = useCallback(async (memberId: string) => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can remove members');
+    if (memberId === user.uid) throw new Error('You cannot remove yourself');
+    const memberSnapshot = await getDoc(doc(db, 'users', memberId));
+    const memberRole = memberSnapshot.exists() ? (memberSnapshot.data() as User).role : undefined;
+    if (isOwnerRole(memberRole) || memberId === company.ownerId) throw new Error('Owners and co-owners cannot be removed');
+    const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
+    await teamAccess({ operation: 'removeCompanyMember', companyId: company.id, memberId });
+    await refreshCompanyData();
+  }, [company, refreshCompanyData, user]);
+
   const value = useMemo(() => {
     const effectiveRole = getEffectiveUserRole(user, company);
     const effectiveUser = user ? { ...user, role: effectiveRole } : null;
@@ -526,6 +570,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading: loading || initializing,
     companyLoading,
     signIn,
+    signInWithGoogle,
     signUp,
     resetPassword,
     signOut,
@@ -537,6 +582,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     getJoinRequests,
     approveJoinRequest,
     rejectJoinRequest,
+    removeMember,
     refreshCompanyData,
     isAuthenticated: !!user,
     needsRoleSelection: !!user && !effectiveRole,
@@ -546,7 +592,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
     isBuyer: effectiveRole === 'buyer',
   };
-  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, refreshCompanyData]);
+  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, refreshCompanyData]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

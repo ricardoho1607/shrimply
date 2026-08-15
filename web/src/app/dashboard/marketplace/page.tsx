@@ -25,12 +25,13 @@ import {
   Trash2
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, where, onSnapshot, doc, addDoc, serverTimestamp, increment, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, addDoc, serverTimestamp, increment, updateDoc, deleteDoc, getDocs } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
+import { getCompanyCountry, getDefaultMarketplaceExpiry, validateMarketplaceListing } from '../../../../../shared/marketplaceParity';
 
 /* --- Types --------------------------------------------------- */
 interface PriceList {
@@ -56,7 +57,11 @@ interface BuyerListing {
 interface ListingFormState {
   buyerName: string;
   city: string;
+  country: string;
   deliveryLocation: string;
+  contactPhone: string;
+  contactEmail: string;
+  expiryDate: string;
   paymentMethod: 'cash' | 'top';
   topDays: string;
   additionalNotes: string;
@@ -66,7 +71,11 @@ interface ListingFormState {
 const emptyListingForm: ListingFormState = {
   buyerName: '',
   city: '',
+  country: '',
   deliveryLocation: '',
+  contactPhone: '',
+  contactEmail: '',
+  expiryDate: getDefaultMarketplaceExpiry(),
   paymentMethod: 'cash',
   topDays: '',
   additionalNotes: '',
@@ -95,6 +104,11 @@ export default function MarketplacePage() {
   // Create Listing State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newListing, setNewListing] = useState<ListingFormState>(emptyListingForm);
+  const [listingDateLimits] = useState(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return { min: tomorrow.toISOString().slice(0, 10), max: getDefaultMarketplaceExpiry() };
+  });
 
   // Removed local auth effect as we use AuthContext now
 
@@ -118,13 +132,15 @@ export default function MarketplacePage() {
   }, [user]);
 
   const filteredListings = useMemo(() => {
+    const companyCountry = getCompanyCountry(company);
     return listings.filter(l => {
       const companyName = l.companyName || '';
       const city = l.city || '';
       const matchesSearch = companyName.toLowerCase().includes(searchQuery.toLowerCase()) || 
                            city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesTab = activeFilter === 'all' ? true : (l.companyId === company?.id || l.userId === user?.uid);
-      return matchesSearch && matchesTab;
+      const matchesCountry = !companyCountry || l.country === companyCountry || l.companyId === company?.id || l.userId === user?.uid;
+      return matchesSearch && matchesTab && matchesCountry;
     });
   }, [listings, searchQuery, activeFilter, company, user]);
 
@@ -145,15 +161,14 @@ export default function MarketplacePage() {
     
     setIsSubmitting(true);
     try {
-      // Direct deletion from Firestore
+      const responses = await getDocs(query(collection(db, 'marketplace_responses'), where('listingId', '==', deleteConfirm.id)));
+      await Promise.all(responses.docs.map((response) => deleteDoc(response.ref)));
       await deleteDoc(doc(db, 'marketplace_listings', deleteConfirm.id));
       
       // Cleanup local state
       setSelectedListing(null);
       setDeleteConfirm({ isOpen: false, id: null });
       
-      // Note: In a production app, you might want to also delete associated 
-      // documents in 'marketplace_responses' if they exist.
     } catch (error: unknown) {
       const firebaseError = error as { code?: string; message?: string };
       console.error("Error deleting listing:", error);
@@ -172,7 +187,11 @@ export default function MarketplacePage() {
     setNewListing({
       buyerName: listing.buyerName,
       city: listing.city,
+      country: listing.country || getCompanyCountry(company),
       deliveryLocation: listing.deliveryLocation,
+      contactPhone: listing.contactPhone || user?.phone || '',
+      contactEmail: listing.contactEmail || user?.email || '',
+      expiryDate: listing.expiryDate?.slice(0, 10) || getDefaultMarketplaceExpiry(),
       paymentMethod: listing.paymentMethod,
       topDays: listing.topDays ? String(listing.topDays) : '',
       additionalNotes: listing.additionalNotes || '',
@@ -210,6 +229,12 @@ export default function MarketplacePage() {
         Object.entries(newListing.priceList).filter(([_, v]) => v !== undefined && v !== null && v !== 0)
       );
 
+      const validationError = validateMarketplaceListing({ ...newListing, priceList: sanitizedPriceList });
+      if (validationError) {
+        alert(validationError);
+        return;
+      }
+
       const topDays = Number(newListing.topDays);
       if (newListing.paymentMethod === 'top' && (!Number.isFinite(topDays) || topDays <= 0)) {
         alert("Please enter valid TOP days.");
@@ -219,7 +244,11 @@ export default function MarketplacePage() {
       const listingData = {
         buyerName: newListing.buyerName,
         city: newListing.city,
+        country: newListing.country,
         deliveryLocation: newListing.deliveryLocation,
+        contactPhone: newListing.contactPhone,
+        contactEmail: newListing.contactEmail,
+        expiryDate: new Date(`${newListing.expiryDate}T23:59:59`).toISOString(),
         paymentMethod: newListing.paymentMethod,
         ...(newListing.paymentMethod === 'top' ? { topDays } : {}),
         additionalNotes: newListing.additionalNotes,
@@ -232,9 +261,6 @@ export default function MarketplacePage() {
           updatedAt: serverTimestamp()
         });
       } else {
-        const expiry = new Date();
-        expiry.setDate(expiry.getDate() + 30); // 30 day expiry to match mobile app maximum
-
         // If company is missing (common for new buyers), fallback to user details
         const finalCompanyId = company?.id || user.uid;
         const finalCompanyName = company?.companyName || newListing.buyerName || user.name || 'Verified Buyer';
@@ -245,11 +271,7 @@ export default function MarketplacePage() {
           userId: user.uid,
           createdBy: user.uid,
           companyName: finalCompanyName,
-          contactEmail: user.email || '',
-          contactPhone: user.phone || '',
-          country: 'Indonesia', // Corrected to use proper country name for marketplace filtering
           postedDate: new Date().toISOString(),
-          expiryDate: expiry.toISOString(),
           viewCount: 0,
           status: 'active',
           createdAt: serverTimestamp()
@@ -275,7 +297,14 @@ export default function MarketplacePage() {
         <button 
           onClick={() => {
             setEditingId(null);
-            setNewListing(emptyListingForm);
+            setNewListing({
+              ...emptyListingForm,
+              buyerName: company?.companyName || user?.name || '',
+              country: getCompanyCountry(company),
+              contactPhone: company?.contactPhone || user?.phone || '',
+              contactEmail: user?.email || '',
+              expiryDate: getDefaultMarketplaceExpiry(),
+            });
             setPostModalOpen(true);
           }}
           className="btn-primary" 
@@ -504,9 +533,25 @@ export default function MarketplacePage() {
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.city}</label>
                   <input required value={newListing.city} onChange={e => setNewListing({...newListing, city: e.target.value})} placeholder={t.CreateBuyerListingScreen.cityExample} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Country</label>
+                  <input required value={newListing.country} onChange={e => setNewListing({...newListing, country: e.target.value})} placeholder="Australia" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Expiry date</label>
+                  <input required type="date" min={listingDateLimits.min} max={listingDateLimits.max} value={newListing.expiryDate} onChange={e => setNewListing({...newListing, expiryDate: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.deliveryAddress}</label>
                   <input required value={newListing.deliveryLocation} onChange={e => setNewListing({...newListing, deliveryLocation: e.target.value})} placeholder={t.CreateBuyerListingScreen.deliveryPlaceholder} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Contact phone</label>
+                  <input required type="tel" value={newListing.contactPhone} onChange={e => setNewListing({...newListing, contactPhone: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Contact email</label>
+                  <input required type="email" value={newListing.contactEmail} onChange={e => setNewListing({...newListing, contactEmail: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
               </div>
 

@@ -20,7 +20,8 @@ import {
   Database,
   Layers,
   FlaskConical,
-  Leaf
+  Leaf,
+  Pencil
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -332,6 +333,7 @@ export default function PondDetailClient() {
     feed: '',
     mortality: '0'
   });
+  const [editingSamplingId, setEditingSamplingId] = useState<string | null>(null);
   const [mortalityForm, setMortalityForm] = useState<MortalityFormState>({
     date: today,
     observationType: 'estimated_total' as MortalityObservationType,
@@ -436,8 +438,8 @@ export default function PondDetailClient() {
 
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', pond.id);
-      const newSampling: any = {
-        id: `s-${Date.now()}`,
+      const newSampling: Sampling = {
+        id: editingSamplingId || `s-${Date.now()}`,
         date: samplingForm.date,
         mbw: parseFloat(samplingForm.mbw) || 0,
         mortality: parseInt(samplingForm.mortality) || 0,
@@ -447,13 +449,17 @@ export default function PondDetailClient() {
         ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
       };
 
-      // 1. Update Pond
-      await updateDoc(pondRef, {
-        samplings: arrayUnion(newSampling),
-        updatedAt: serverTimestamp()
-      });
+      if (editingSamplingId) {
+        const updatedSamplings = (pond.samplings || []).map((sampling) => sampling.id === editingSamplingId
+          ? { ...sampling, ...newSampling }
+          : sampling);
+        await updateDoc(pondRef, { samplings: updatedSamplings, updatedAt: serverTimestamp() });
+      } else {
+        await updateDoc(pondRef, { samplings: arrayUnion(newSampling), updatedAt: serverTimestamp() });
+      }
 
       setSamplingModalOpen(false);
+      setEditingSamplingId(null);
       setSamplingForm({
         date: today,
         mbw: '',
@@ -908,6 +914,7 @@ export default function PondDetailClient() {
                     role="menuitem"
                     onClick={() => {
                       setRecordMenuOpen(false);
+                      setEditingSamplingId(null);
                       setSamplingForm(prev => ({ ...prev, date: today }));
                       setSamplingModalOpen(true);
                     }}
@@ -1024,6 +1031,7 @@ export default function PondDetailClient() {
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Size (pcs/kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feed (kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mortality</th>
+                    {canEditPond && isActiveCycle(pond) && <th style={{ height: '44px', padding: '0 24px' }}>Action</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1055,6 +1063,15 @@ export default function PondDetailClient() {
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
                           {s.mortality > 0 ? `+${s.mortality}` : '0'}
                         </td>
+                        {canEditPond && isActiveCycle(pond) && (
+                          <td style={{ padding: '16px 24px' }}>
+                            <button type="button" aria-label="Edit sampling" onClick={() => {
+                              setEditingSamplingId(s.id);
+                              setSamplingForm({ date: s.date, mbw: String(s.mbw || ''), feed: String(s.feed || ''), mortality: String(s.mortality || 0) });
+                              setSamplingModalOpen(true);
+                            }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}><Pencil size={14} /></button>
+                          </td>
+                        )}
                       </tr>
                       );
                     })}
@@ -1316,6 +1333,7 @@ export default function PondDetailClient() {
         form={samplingForm}
         setForm={setSamplingForm}
         isSubmitting={isSubmitting}
+        isEditing={Boolean(editingSamplingId)}
       />
       <MortalityModal
         isOpen={isMortalityModalOpen}
@@ -1379,7 +1397,7 @@ export default function PondDetailClient() {
   );
 }
 
-function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting }: any) {
+function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: any) {
   if (!isOpen) return null;
 
   return (
@@ -1391,7 +1409,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>New Sampling</h3>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? 'Edit Sampling' : 'New Sampling'}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Log biological and feeding data.</p>
           </div>
           <button
@@ -1469,7 +1487,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting 
               background: 'transparent', fontWeight: 600, cursor: 'pointer'
             }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Record'}
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? 'Update Record' : 'Save Record'}
             </button>
           </div>
         </form>
