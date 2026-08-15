@@ -5,7 +5,13 @@ import {
   type AppCheck,
 } from "firebase/app-check";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+  type Firestore,
+} from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -20,6 +26,8 @@ const firebaseConfig = {
 
 // Initialize Firebase for SSR compatibility
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+type FirebaseRuntime = typeof globalThis & { __shrimplyFirestore?: Firestore };
+const firebaseRuntime = globalThis as FirebaseRuntime;
 let appCheck: AppCheck | null = null;
 const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
 const isProduction = process.env.NODE_ENV === "production";
@@ -34,7 +42,16 @@ if (typeof window !== "undefined" && appCheckSiteKey && (isProduction || appChec
   });
 }
 const auth = getAuth(app);
-const db = getFirestore(app);
+const db = firebaseRuntime.__shrimplyFirestore ?? (
+  typeof window === "undefined"
+    ? getFirestore(app)
+    : initializeFirestore(app, {
+        localCache: persistentLocalCache({
+          tabManager: persistentMultipleTabManager(),
+        }),
+      })
+);
+firebaseRuntime.__shrimplyFirestore = db;
 const storage = getStorage(app);
 
 export { app, appCheck, auth, db, storage };

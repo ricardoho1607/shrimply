@@ -527,13 +527,13 @@ function BuyerDashboard({ t, user }: any) {
 
 export default function DashboardPage() {
   const { t } = useLanguage();
-  const { user, company, loading: authLoading } = useAuth();
+  const { user, company, loading: authLoading, companyLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
   const { data: blocks } = useCompanyBlocks<FarmBlock>('asc');
   const userData = user;
-  const loading = authLoading || !userData || (userData.role !== 'buyer' && pondsLoading);
+  const loading = authLoading || companyLoading || !userData || (userData.role !== 'buyer' && pondsLoading);
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: userData?.role,
@@ -627,26 +627,6 @@ export default function DashboardPage() {
     },
   ];
 
-  if (loading) return (
-    <div className="dashboard-page dashboard-home-loading" aria-busy="true" aria-label="Loading farm dashboard">
-      <div className="glass-card dashboard-summary-panel">
-        {['Biomass', 'Survival Rate', 'Population', 'Active Ponds'].map((label) => (
-          <div className="dashboard-summary-item" key={label}>
-            <div className="dashboard-summary-content">
-              <div className="dashboard-summary-label">{label}</div>
-              <div
-                aria-hidden="true"
-                style={{ width: '72px', height: '24px', marginTop: '8px', borderRadius: '8px', background: '#edf3f6' }}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="glass-card" style={{ minHeight: '112px', background: '#fff' }} />
-      <div className="glass-card" style={{ minHeight: '240px', background: '#fff' }} />
-    </div>
-  );
-
   if (userData?.role === 'buyer') return <BuyerDashboard t={t} user={userData} />;
   if (isEnterpriseOwner(company?.businessSize, userData?.role)) {
     return <EnterpriseDashboard ponds={ponds} timeZone={company?.timeZone} />;
@@ -655,7 +635,7 @@ export default function DashboardPage() {
   return (
     <div className="dashboard-page">
 
-      {(userData?.role === 'owner' || userData?.role === 'co-owner') ? (
+      {!companyLoading && (userData?.role === 'owner' || userData?.role === 'co-owner') ? (
         <DashboardOnboardingCard company={company} />
       ) : null}
 
@@ -780,7 +760,18 @@ export default function DashboardPage() {
               </div>
             )}
             
-            {activePonds.length === 0 ? (
+            {pondsLoading ? (
+              <div className="dashboard-pond-grid" aria-busy="true" aria-label="Loading ponds">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    className="glass-card dashboard-summary-skeleton"
+                    key={index}
+                    aria-hidden="true"
+                    style={{ width: '100%', height: '190px', borderRadius: '16px' }}
+                  />
+                ))}
+              </div>
+            ) : activePonds.length === 0 ? (
               <div className={`glass-card ${styles.emptyState}`}>
                 <div className={styles.emptyContent}>
                   <div className={styles.emptyIcon} aria-hidden="true">
