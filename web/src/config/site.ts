@@ -19,7 +19,7 @@ export const SITE_CONFIG = {
     "Orson AI",
   ],
   ogImage: {
-    path: "/assets/og-image.jpg",
+    path: "/assets/og-image.png",
     width: 1200,
     height: 630,
     alt: "Shrimply shrimp farm management software",
