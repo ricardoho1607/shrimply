@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import {
   Building2,
   CreditCard,
@@ -8,22 +7,11 @@ import {
   LayoutGrid,
   ListChecks,
   LogOut,
-  Menu,
+  PanelLeft,
   ShieldCheck,
   Users,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
 import styles from '@/app/admin/admin.module.css';
-
-const items = [
-  { label: 'Command Center', icon: LayoutGrid, href: '/admin' },
-  { label: 'Users', icon: Users, active: true },
-  { label: 'Farms', icon: Building2 },
-  { label: 'Subscriptions', icon: CreditCard },
-  { label: 'Support', icon: Headphones },
-  { label: 'Security', icon: ShieldCheck },
-  { label: 'Audit Log', icon: ListChecks },
-];
 
 interface AdminSidebarProps {
   ownerName: string;
@@ -31,46 +19,75 @@ interface AdminSidebarProps {
   onSignOut: () => void;
   collapsed: boolean;
   onToggle: () => void;
+  activeView?: 'overview' | 'user';
+  onNavigate?: (view: 'overview' | 'user') => void;
 }
 
-export function AdminSidebar({ ownerName, ownerEmail, onSignOut, collapsed, onToggle }: AdminSidebarProps) {
+export function AdminSidebar({
+  ownerName,
+  ownerEmail,
+  onSignOut,
+  collapsed,
+  onToggle,
+  activeView = 'overview',
+  onNavigate,
+}: AdminSidebarProps) {
+  const items = [
+    { id: 'overview' as const, label: 'Overview', icon: LayoutGrid, active: activeView === 'overview' },
+    { id: 'user' as const, label: 'User Database', icon: Users, active: activeView === 'user' },
+    { id: 'farms' as const, label: 'Farms', icon: Building2, active: false },
+    { id: 'subscriptions' as const, label: 'Subscriptions', icon: CreditCard, active: false },
+    { id: 'support' as const, label: 'Support', icon: Headphones, active: false },
+    { id: 'security' as const, label: 'Security', icon: ShieldCheck, active: false },
+    { id: 'audit' as const, label: 'Audit Log', icon: ListChecks, active: false },
+  ];
+
   return (
     <aside className={styles.sidebar} aria-label="Shrimply Admin navigation">
       <div className={styles.brandRow}>
-        <a href="/admin" className={styles.brand} aria-label="Shrimply Admin home">
-          <Image className={styles.brandLogo} src="/shrimplylogo_v2.webp" width={500} height={160} alt="Shrimply" priority />
-        </a>
+        <span className={styles.avatarSmall}>{ownerName.slice(0, 2).toUpperCase()}</span>
+        <span className={styles.ownerCopy}>
+          <strong>Admin</strong>
+          <span>{ownerEmail || 'Authenticated owner'}</span>
+        </span>
         <button type="button" className={styles.sidebarToggle} onClick={onToggle} aria-label={collapsed ? 'Expand admin navigation' : 'Collapse admin navigation'} aria-expanded={!collapsed} title={collapsed ? 'Expand menu' : 'Collapse menu'}>
-          <Menu size={20} />
+          <PanelLeft size={18} />
         </button>
       </div>
       <nav className={styles.navList}>
-        {items.map(({ label, icon: Icon, active, href }) => href ? (
-          <a key={label} href={href} className={styles.navItem} style={{ cursor: 'pointer', textDecoration: 'none' }} title={label}>
-            <Icon size={17} aria-hidden="true" />
-            <span>{label}</span>
-          </a>
-        ) : (
-          <button type="button" key={label} className={`${styles.navItem} ${active ? styles.navItemActive : ''}`} aria-current={active ? 'page' : undefined} aria-disabled={!active} title={active ? label : `${label} is outside the current User Intelligence MVP`}>
-            <Icon size={17} aria-hidden="true" />
-            <span>{label}</span>
-          </button>
-        ))}
+        <span className={styles.navSectionLabel}>Owner operations</span>
+        {items.map((item) => {
+          const Icon = item.icon;
+          const isView = item.id === 'overview' || item.id === 'user';
+
+          return (
+            <button
+              type="button"
+              key={item.label}
+              onClick={() => isView && onNavigate?.(item.id)}
+              className={`${styles.navItem} ${item.active ? styles.navItemActive : ''}`}
+              aria-current={item.active ? 'page' : undefined}
+              style={{ cursor: isView ? 'pointer' : 'default' }}
+              title={item.label}
+            >
+              <Icon size={17} aria-hidden="true" />
+              <span>{item.label}</span>
+            </button>
+          );
+        })}
       </nav>
-      <div className={styles.ownerCard}>
-        <span className={styles.avatarSmall}>{ownerName.slice(0, 2).toUpperCase()}</span>
-        <span className={styles.ownerCopy}>
-          <strong>{ownerName}</strong>
-          <span>{ownerEmail}</span>
-        </span>
-        <button type="button" onClick={onSignOut} aria-label="Sign out" title="Sign out">
-          <LogOut size={16} />
+      <div className={styles.sidebarFooter}>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className={styles.sidebarSignOutBtn}
+          aria-label="Sign out"
+          title="Sign out"
+        >
+          <LogOut size={18} strokeWidth={2} />
+          <span>Logout</span>
         </button>
       </div>
     </aside>
   );
-}
-
-export function MobilePanelButton({ children, onClick }: { children: ReactNode; onClick: () => void }) {
-  return <button type="button" className={styles.mobilePanelButton} onClick={onClick}>{children}</button>;
 }

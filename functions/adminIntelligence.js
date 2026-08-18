@@ -115,7 +115,6 @@ const createDirectoryHandler = (admin) => onCall({ timeoutSeconds: 60, memory: "
       id: userDocument.id,
       name: user.name || user.displayName || "Unnamed user",
       initials: getInitials(user.name || user.displayName),
-      email: user.email || null,
       maskedEmail: maskEmail(user.email),
       status,
       plan,
@@ -138,13 +137,12 @@ const createDirectoryHandler = (admin) => onCall({ timeoutSeconds: 60, memory: "
   await db.collection("adminAuditEvents").add({
     actorId: request.auth.uid,
     targetId: null,
-    action: "account.directory.contact.view",
+    action: "account.directory.view",
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    reason: "Owner viewed the user directory with email addresses",
+    reason: "Owner viewed the masked user directory",
     metadata: {
       source: "admin-command-centre",
-      sensitiveReveal: true,
-      fields: ["email"],
+      maskedFields: ["email"],
       resultCount: Math.min(pageSize, Math.max(0, rows.length - start)),
       searchApplied: Boolean(search),
     },
@@ -200,16 +198,23 @@ const createDeleteUserHandler = (admin) => onCall({ timeoutSeconds: 120, memory:
     throw new HttpsError("failed-precondition", "Platform-owner accounts cannot be deleted from the dashboard.");
   }
 
-  const expectedConfirmation = String(user.email || authUser?.email || userId).trim();
+  const expectedConfirmation = userId;
   if (!isValidDeleteUserRequest({ reason, confirmation, expectedConfirmation })) {
     throw new HttpsError("failed-precondition", `Type ${expectedConfirmation} exactly to confirm deletion.`);
   }
 
+  const deleteCompanyRequested = Boolean(request.data?.deleteCompany);
   const companyDocument = user.companyId ? await db.collection("companies").doc(user.companyId).get() : null;
   const company = companyDocument?.exists ? companyDocument.data() || {} : {};
   const role = String(user.role || "").toLowerCase();
-  if (company.ownerId === userId || role === "owner" || role === "co-owner") {
-    throw new HttpsError("failed-precondition", "Farm owners and co-owners must transfer ownership or use the dedicated company-removal workflow first.");
+  const isOwner = company.ownerId === userId || role === "owner" || role === "co-owner";
+
+  if (isOwner && !deleteCompanyRequested && companyDocument?.exists) {
+    await companyDocument.ref.update({
+      ownerId: null,
+      ownerEmail: null,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 
   const requestedAudit = await db.collection("adminAuditEvents").add({
@@ -218,7 +223,7 @@ const createDeleteUserHandler = (admin) => onCall({ timeoutSeconds: 120, memory:
     action: "account.delete.requested",
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
     reason,
-    metadata: { source: "admin-command-centre", destructive: true },
+    metadata: { source: "admin-command-centre", destructive: true, deleteCompany: deleteCompanyRequested },
   });
 
   try {
@@ -234,6 +239,10 @@ const createDeleteUserHandler = (admin) => onCall({ timeoutSeconds: 120, memory:
     });
     if (!membershipSnapshot.empty) await membershipBatch.commit();
 
+    if (deleteCompanyRequested && companyDocument?.exists) {
+      await db.recursiveDelete(companyDocument.ref);
+    }
+
     await db.recursiveDelete(userRef);
     await db.collection("adminAuditEvents").add({
       actorId: request.auth.uid,
@@ -247,9 +256,10 @@ const createDeleteUserHandler = (admin) => onCall({ timeoutSeconds: 120, memory:
         requestAuditId: requestedAudit.id,
         authAccountRemoved: Boolean(authUser),
         companyMembershipsRemoved: membershipSnapshot.size,
+        companyDeleted: deleteCompanyRequested && Boolean(companyDocument?.exists),
       },
     });
-    return { success: true, userId };
+    return { success: true, userId, companyDeleted: deleteCompanyRequested };
   } catch (error) {
     console.error(`Admin user deletion failed for ${userId}:`, error);
     await db.collection("adminAuditEvents").add({
@@ -389,20 +399,19 @@ const createAccountHandler = (admin) => onCall({ timeoutSeconds: 60, memory: "51
   await db.collection("adminAuditEvents").add({
     actorId: request.auth.uid,
     targetId: userId,
-    action: "account.contact.view",
+    action: "account.contact.reveal",
     timestamp: admin.firestore.FieldValue.serverTimestamp(),
-    reason: "Owner opened account intelligence with contact details",
-    metadata: { source: "admin-command-centre", sensitiveReveal: true, fields: ["email", "phone"] },
+    reason: "Owner opened account intelligence with the full email address visible",
+    metadata: { source: "admin-command-centre", revealedFields: ["email"], maskedFields: ["phone"] },
   });
 
   return {
     id: userDocument.id,
     name: user.name || user.displayName || "Unnamed user",
     initials: getInitials(user.name || user.displayName),
+    email: user.email || "Unavailable",
     maskedEmail: maskEmail(user.email),
     maskedPhone: maskPhone(user.phone),
-    email: user.email || null,
-    phone: user.phone || null,
     role: user.role || "Unavailable",
     plan: billing.planName || billing.planId || company.plan || "Unavailable",
     country: location.country,

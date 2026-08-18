@@ -40,8 +40,8 @@ test("latest activity uses the newest valid timestamp", () => {
   assert.equal(getLatestIsoTimestamp([null, undefined, "invalid"]), null);
 });
 
-test("user deletion requires a reason and exact case-insensitive confirmation", () => {
-  assert.equal(isValidDeleteUserRequest({ reason: "Remove duplicate account", confirmation: "USER@example.com", expectedConfirmation: "user@example.com" }), true);
-  assert.equal(isValidDeleteUserRequest({ reason: "short", confirmation: "user@example.com", expectedConfirmation: "user@example.com" }), false);
-  assert.equal(isValidDeleteUserRequest({ reason: "Remove duplicate account", confirmation: "wrong@example.com", expectedConfirmation: "user@example.com" }), false);
+test("user deletion requires a reason and exact case-insensitive account ID confirmation", () => {
+  assert.equal(isValidDeleteUserRequest({ reason: "Remove duplicate account", confirmation: "USR-123", expectedConfirmation: "usr-123" }), true);
+  assert.equal(isValidDeleteUserRequest({ reason: "short", confirmation: "USR-123", expectedConfirmation: "USR-123" }), false);
+  assert.equal(isValidDeleteUserRequest({ reason: "Remove duplicate account", confirmation: "USR-456", expectedConfirmation: "USR-123" }), false);
 });

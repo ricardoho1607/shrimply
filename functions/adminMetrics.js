@@ -1,6 +1,11 @@
 const { HttpsError, onCall } = require("firebase-functions/v2/https");
 const admin = require("./firebaseAdmin");
-const { hasPlatformOwnerClaim } = require("./adminIntelligenceCore");
+const {
+  deriveAccountStatus,
+  getInitials,
+  hasPlatformOwnerClaim,
+  maskEmail,
+} = require("./adminIntelligenceCore");
 const {
   enforceFixedWindowLimits,
   logCallableAppCheckStatus,
@@ -43,13 +48,18 @@ const toIso = (value) => {
 };
 
 const startOfPeriod = (days) => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (days - 1));
-  return start;
+  const now = new Date();
+  const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  utcMidnight.setUTCDate(utcMidnight.getUTCDate() - (days - 1));
+  return utcMidnight;
 };
 
-const dayKey = (date) => date.toISOString().slice(0, 10);
+const dayKey = (date) => {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const d = String(date.getUTCDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
 
 const getSnapshotSize = async (ref) => {
   try {
@@ -189,6 +199,9 @@ const countLinkedCompanyUsers = (companyId, company, usersById) => {
 const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
   const rows = [];
   let totalPonds = 0;
+  let totalActivePonds = 0;
+  let totalInactivePonds = 0;
+  let totalActiveCycles = 0;
 
   for (const companyDoc of companiesSnapshot.docs) {
     const company = companyDoc.data() || {};
@@ -212,6 +225,8 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
 
     const { pondCount, activePondCount, inactivePondCount } = getCompanyPondCounts(pondsSnapshot.docs, physicalPondsSnapshot.docs);
     totalPonds += pondCount;
+    totalActivePonds += activePondCount;
+    totalInactivePonds += inactivePondCount;
 
     const activeCycleDocs = cyclesSnapshot.docs.filter((cycleDoc) => {
       const cycle = cycleDoc.data() || {};
@@ -219,13 +234,20 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
     }).length;
     const activePondDocs = pondsSnapshot.docs.filter((pondDoc) => isActivePondCycle(pondDoc.data() || {})).length;
     const activeCycleCount = Math.max(activeCycleDocs, activePondDocs);
+    totalActiveCycles += activeCycleCount;
 
     const teamMembersCount = countLinkedCompanyUsers(companyDoc.id, company, usersById);
-    const owner = usersById.get(company.ownerId) || null;
+    let ownerId = company.ownerId || undefined;
+    if (!ownerId) {
+      const matchedOwner = Array.from(usersById.entries()).find(([_, u]) => u?.companyId === companyDoc.id && isOwnerRole(u?.role));
+      if (matchedOwner) ownerId = matchedOwner[0];
+    }
+    const owner = ownerId ? usersById.get(ownerId) : null;
 
     rows.push({
       id: companyDoc.id,
       companyName: company.companyName || company.businessName || "Unnamed company",
+      ownerId,
       ownerEmail: owner?.email || company.ownerEmail || "",
       farmType: company.farmType || company.businessType || "",
       businessSize: company.businessSize || "",
@@ -243,7 +265,7 @@ const getCompanyMetrics = async (db, companiesSnapshot, usersById) => {
 
   rows.sort((a, b) => b.pondCount - a.pondCount || a.companyName.localeCompare(b.companyName));
 
-  return { rows, totalPonds };
+  return { rows, totalPonds, totalActivePonds, totalInactivePonds, totalActiveCycles };
 };
 
 const getPendingJoinRequestsByUserId = async (db, companyRows) => {
@@ -455,8 +477,7 @@ exports.getAdminMetrics = onCall(async (request) => {
   let staff = 0;
 
   for (let offset = 0; offset < periodDays; offset += 1) {
-    const date = new Date(since);
-    date.setDate(since.getDate() + offset);
+    const date = new Date(since.getTime() + offset * 86_400_000);
     dailyNewUsers.set(dayKey(date), 0);
   }
 
@@ -492,6 +513,86 @@ exports.getAdminMetrics = onCall(async (request) => {
     return createdAt && createdAt >= since;
   }).length;
 
+  const companyNamesById = new Map(companyMetrics.rows.map((c) => [c.id, c.companyName]));
+  const triage = [];
+
+  pendingJoinRequestsByUserId.forEach((request, userId) => {
+    const user = usersById.get(userId);
+    triage.push({
+      id: `join-${request.id}`,
+      type: "user",
+      severity: "high",
+      title: user?.name || user?.email || "Pending Staff Member",
+      subtitle: `Request to join ${request.companyName} as ${request.requestedRole || user?.role || "staff"}`,
+      issue: "Waiting for farm owner approval to join company",
+      action: "Ask farm owner to approve request or inspect staff account",
+      userId,
+      companyId: request.companyId,
+      email: user?.email || undefined,
+    });
+  });
+
+  companyMetrics.rows.forEach((company) => {
+    if (company.pondCount === 0) {
+      triage.push({
+        id: `company-noponds-${company.id}`,
+        type: "company",
+        severity: "high",
+        title: company.companyName,
+        subtitle: company.ownerEmail || "Owner contact unavailable",
+        issue: "Company created but 0 physical ponds configured",
+        action: "Reach out to owner to guide initial pond and water setup",
+        companyId: company.id,
+        userId: company.ownerId,
+        email: company.ownerEmail || undefined,
+      });
+    } else if (company.activeCycleCount === 0 && (company.feedItemCount + company.additiveItemCount === 0)) {
+      triage.push({
+        id: `company-setup-${company.id}`,
+        type: "company",
+        severity: "medium",
+        title: company.companyName,
+        subtitle: `${company.pondCount} ponds · ${company.ownerEmail || "Owner unavailable"}`,
+        issue: "Ponds exist but no active production cycle or feed stock logged",
+        action: "Help farm start their active cycle and configure inventory",
+        companyId: company.id,
+        userId: company.ownerId,
+        email: company.ownerEmail || undefined,
+      });
+    }
+  });
+
+  const usersList = usersSnapshot.docs.map((userDoc) => {
+    const user = userDoc.data() || {};
+    const joinedAt = toIso(user.joinedDate || user.createdAt);
+    const lastActiveAt = toIso(user.lastActive || user.updatedAt || user.joinedDate || user.createdAt);
+    const companyId = user.companyId || "";
+    let farmName = companyId ? companyNamesById.get(companyId) || null : null;
+    if (!farmName) {
+      const ownedCompany = companyMetrics.rows.find((c) => c.ownerId === userDoc.id);
+      if (ownedCompany) farmName = ownedCompany.companyName;
+    }
+    const email = user.email || "";
+    const name = user.name || user.displayName || "Unnamed user";
+    const status = deriveAccountStatus({ explicitStatus: user.status, lastActiveAt, billingStatus: null });
+    const role = String(user.role || "").toLowerCase();
+    const defaultPlan = isOwnerRole(role) ? "Farm Owner" : role === "buyer" ? "Buyer" : isStaffRole(role) ? "Staff" : "Standard";
+
+    return {
+      id: userDoc.id,
+      name,
+      initials: getInitials(name),
+      maskedEmail: maskEmail(email),
+      email: email || undefined,
+      status,
+      plan: user.plan || defaultPlan,
+      country: user.country || "Global",
+      joinedAt,
+      lastActiveAt,
+      farmName,
+    };
+  }).sort((a, b) => new Date(b.lastActiveAt || 0).getTime() - new Date(a.lastActiveAt || 0).getTime());
+
   const recentUsers = usersSnapshot.docs
     .map((userDoc) => {
       const user = userDoc.data() || {};
@@ -516,6 +617,9 @@ exports.getAdminMetrics = onCall(async (request) => {
       users: usersSnapshot.size,
       companies: companiesSnapshot.size,
       ponds: companyMetrics.totalPonds,
+      activePonds: companyMetrics.totalActivePonds,
+      inactivePonds: companyMetrics.totalInactivePonds,
+      activeCycles: companyMetrics.totalActiveCycles,
       buyers,
       owners,
       staff,
@@ -538,6 +642,8 @@ exports.getAdminMetrics = onCall(async (request) => {
     dailyNewUsers: Array.from(dailyNewUsers.entries()).map(([date, count]) => ({ date, count })),
     roleBreakdown,
     recentUsers,
+    users: usersList,
     companies: companyMetrics.rows,
+    triage: triage.slice(0, 12),
   };
 });

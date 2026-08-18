@@ -109,7 +109,8 @@ export function UserDirectory({
             aria-pressed={selectedUserId === user.id}
           >
             <span className={styles.userAvatar}>{user.initials}</span>
-            <span className={styles.userIdentity}><strong>{user.name}</strong><span>{user.email || 'Email unavailable'}</span></span>
+            <span className={styles.userIdentity}><strong>{user.name}</strong><span>{user.maskedEmail}</span></span>
+            <span className={`${styles.status} ${styles[`status${user.status.replaceAll(' ', '')}`]}`}><i />{user.status}</span>
           </button>
         ))}
       </div>

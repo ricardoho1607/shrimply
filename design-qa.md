@@ -362,3 +362,34 @@ Buyer-setup result: passed
 - None required for the requested scope.
 
 final result: passed
+---
+
+# Admin Command Centre Design QA — 2026-08-15
+
+- Source: `/tmp/codex-remote-attachments/01a00580-e88b-7e52-aa13-df11c7bf2d0a/5F3B630F-228E-4490-A071-D4CC5853C9DD/1-Photo-1.jpg`
+- Implementation: `http://localhost:3000/admin`
+- Desktop viewport: 1440 × 1024
+- Mobile viewport: 390 × 844
+- State: authenticated platform owner with a selected live account
+- Full comparison: `/tmp/shrimply-admin-design-comparison-final.png`
+- Focused comparison: `/tmp/shrimply-admin-design-focused-final.png`
+- Desktop capture: `/tmp/shrimply-admin-command-center-final.png`
+- Mobile captures: `/tmp/shrimply-admin-mobile.png`, `/tmp/shrimply-admin-mobile-nav.png`, `/tmp/shrimply-admin-mobile-users.png`, `/tmp/shrimply-admin-mobile-timeline.png`
+
+## Findings
+
+- P0: none.
+- P1: none.
+- P2: none.
+- The three-column hierarchy, information density, dividers, account health, feature adoption, timeline, and persistent action bar match the reference structure.
+- The light Shrimply dashboard palette and 280px dashboard-style sidebar are intentional changes requested after the reference was supplied.
+- Desktop has no visible clipping or page-level horizontal overflow.
+- Mobile uses a single account column with navigation, directory, and timeline drawers capped at 78vw. The persistent action bar remains usable.
+- Focus states, labels, status treatments, masking, loading states, empty states, and disabled backend-dependent actions remain legible.
+
+## Comparison history
+
+1. Initial comparison confirmed the reference hierarchy but identified sidebar inconsistency with the authenticated dashboard.
+2. Final comparison uses the dashboard sidebar spacing, active state, typography, owner footer, and mobile overlay behavior while preserving the reference workspace hierarchy.
+
+final result: passed

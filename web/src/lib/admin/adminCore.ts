@@ -10,16 +10,14 @@ import type {
 
 const clamp = (value: number) => Math.max(0, Math.min(100, Number.isFinite(value) ? value : 0));
 
-export const resolveAdminView = (userId: string | null | undefined): 'overview' | 'user-detail' => (
-  userId?.trim() ? 'user-detail' : 'overview'
-);
+export const resolveAdminView = (selectedUserId: string | null | undefined): 'overview' | 'intelligence' =>
+  selectedUserId?.trim() ? 'intelligence' : 'overview';
 
 export const shouldSyncAdminSelection = (
   requestedUserId: string | null | undefined,
   selectedUserId: string | null | undefined,
 ): boolean => Boolean(
-  requestedUserId?.trim()
-  && selectedUserId?.trim()
+  selectedUserId?.trim()
   && requestedUserId !== selectedUserId
 );
 
@@ -80,9 +78,20 @@ export const getStatusFromScore = (score: number, suspended = false): AccountSta
   return 'Inactive';
 };
 
-export const calculateAccountHealth = (input: HealthInput): AccountHealth => {
+export const calculateAccountHealth = (input?: HealthInput | null): AccountHealth => {
+  const safeInput = input || {
+    loginRecencyScore: null,
+    samplingActivityScore: null,
+    dataCompletenessScore: 0,
+    featureAdoptionScore: null,
+    subscriptionScore: null,
+    syncReliabilityScore: null,
+    supportScore: null,
+    securityScore: null,
+    suspended: false,
+  };
   const signals: HealthSignal[] = SIGNAL_CONFIG.map(([key, label, weight]) => {
-    const rawScore = input[key];
+    const rawScore = safeInput[key];
     const score = typeof rawScore === 'number' ? clamp(rawScore) : null;
     return {
       key,
@@ -97,7 +106,7 @@ export const calculateAccountHealth = (input: HealthInput): AccountHealth => {
   const score = availableWeight
     ? Math.round(availableSignals.reduce((total, signal) => total + signal.score * signal.weight, 0) / availableWeight)
     : 0;
-  const label = getStatusFromScore(score, input.suspended === true);
+  const label = getStatusFromScore(score, safeInput.suspended === true);
   const weakest = [...availableSignals].sort((a, b) => a.score - b.score).slice(0, 2).map((signal) => signal.label.toLowerCase());
   const weakSummary = weakest.length ? weakest.join(' and ') : 'insufficient live signals';
   const summary = label === 'Healthy'
@@ -132,7 +141,7 @@ export const filterDirectoryUsers = (
     if (filters.registered === '90d' && !withinDays(user.joinedAt, 90, now)) return false;
     if (filters.registered === 'year' && !withinDays(user.joinedAt, 365, now)) return false;
     if (!needle) return true;
-    return [user.id, user.name, user.email, user.maskedEmail, user.farmName, user.country]
+    return [user.id, user.name, user.maskedEmail, user.farmName, user.country]
       .filter(Boolean)
       .join(' ')
       .toLowerCase()

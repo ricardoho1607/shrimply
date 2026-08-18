@@ -196,6 +196,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (loading || companyLoading) return;
+    if (pathname?.startsWith('/dashboard/admin')) return;
     if (!isAuthenticated) {
       router.push('/auth');
       return;
@@ -208,7 +209,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       router.push(getRequiredSetupRoute(user?.role));
       return;
     }
-  }, [companyLoading, isAuthenticated, needsRoleSelection, needsSetup, loading, router, user?.role]);
+  }, [companyLoading, isAuthenticated, needsRoleSelection, needsSetup, loading, pathname, router, user?.role]);
 
   useEffect(() => {
     queueMicrotask(() => setSidebarOpen(false));
@@ -389,6 +390,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         .dashboard-saas button[aria-label^="Close"]:not(.admin-inspector-backdrop):not(.sidebar-backdrop):focus-visible {
           outline: 2px solid #3282b8 !important;
           outline-offset: 2px;
+        }
+        .dashboard-saas #dashboard-navigation .sidebar-toggle {
+          color: #94a3b8 !important;
+        }
+        .dashboard-saas #dashboard-navigation .sidebar-toggle:hover {
+          color: #64748b !important;
         }
         @media (min-width: 1024px) {
           .sidebar {

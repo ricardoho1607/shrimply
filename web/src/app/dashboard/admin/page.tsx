@@ -154,13 +154,18 @@ const toDate = (value: unknown): Date | null => {
 const toIso = (value: unknown) => toDate(value)?.toISOString() || null;
 
 const startOfPeriod = (days: Period) => {
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  start.setDate(start.getDate() - (days - 1));
-  return start;
+  const now = new Date();
+  const utcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  utcMidnight.setUTCDate(utcMidnight.getUTCDate() - (days - 1));
+  return utcMidnight;
 };
 
-const dayKey = (date: Date) => date.toISOString().slice(0, 10);
+const dayKey = (date: Date) => {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 const countDocsSince = async (collectionName: string, since: Date) => {
   try {
@@ -316,8 +321,7 @@ const getAdminMetricsFromFirestore = async (periodDays: Period): Promise<AdminMe
   let staff = 0;
 
   for (let offset = 0; offset < periodDays; offset += 1) {
-    const date = new Date(since);
-    date.setDate(since.getDate() + offset);
+    const date = new Date(since.getTime() + offset * 86_400_000);
     dailyNewUsers.set(dayKey(date), 0);
   }
 
@@ -942,6 +946,10 @@ function AdminSidebar({ activeTab, onChange, userName }: { activeTab: AdminTab; 
               </button>
             );
           })}
+          <Link href="/admin" className="admin-nav-button" style={{ textDecoration: 'none' }}>
+            <Users size={17} />
+            <span>User Database</span>
+          </Link>
         </div>
         <div className="admin-sidebar-footer">
           <div className="admin-sidebar-profile">
@@ -994,6 +1002,10 @@ function AdminInspectorPanel({
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 22 }}>
+          <Link href={`/admin?view=user&user=${user.id}`} className="dashboard-action dashboard-action-primary" style={{ textDecoration: 'none' }}>
+            <Users size={14} />
+            <span>Open in Database</span>
+          </Link>
           {user.email && (
             <a className="dashboard-action dashboard-action-secondary" href={`mailto:${user.email}`} style={{ textDecoration: 'none' }}>
               <Mail size={14} />
@@ -1478,6 +1490,10 @@ export default function HiddenAdminPage() {
                 {loading ? <Loader2 className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
                 <span>Refresh</span>
               </button>
+              <Link href="/admin" className="dashboard-action dashboard-action-secondary" style={{ textDecoration: 'none' }}>
+                <Users size={18} />
+                <span>User Database</span>
+              </Link>
               <button onClick={exportCompaniesCsv} className="dashboard-action dashboard-action-secondary" type="button" disabled={!metrics}>
                 <Download size={18} />
                 <span>Export CSV</span>

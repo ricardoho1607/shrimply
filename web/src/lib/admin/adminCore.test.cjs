@@ -3,33 +3,77 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const ts = require('typescript');
 
-const core = require('/tmp/shrimply-admin-core/adminCore.js');
+const coreSource = fs.readFileSync(path.join(__dirname, 'adminCore.ts'), 'utf8');
+const compiled = ts.transpileModule(coreSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const loadedModule = { exports: {} };
+new Function('module', 'exports', 'require', compiled)(loadedModule, loadedModule.exports, require);
+const core = loadedModule.exports;
 
-test('admin opens the overall overview unless a user is explicitly selected', () => {
-  assert.equal(core.resolveAdminView(null), 'overview');
-  assert.equal(core.resolveAdminView(''), 'overview');
-  assert.equal(core.resolveAdminView('  '), 'overview');
-  assert.equal(core.resolveAdminView('user-123'), 'user-detail');
-});
-
-test('admin overview renders at /admin without redirecting to the dashboard route', () => {
+test('admin route renders AdminCommandCenter directly', () => {
   const source = fs.readFileSync(path.join(process.cwd(), 'src/app/admin/page.tsx'), 'utf8');
-  assert.match(source, /return <AdminOverview \/>/);
-  assert.doesNotMatch(source, /dashboard\/admin['"]/);
+  assert.match(source, /<AdminCommandCenter \/>/);
+  assert.doesNotMatch(source, /AdminOverview/);
 });
 
-test('admin detail URL sync does not restore a user after navigating to the overview', () => {
-  assert.equal(core.shouldSyncAdminSelection(null, 'user-123'), false);
-  assert.equal(core.shouldSyncAdminSelection('', 'user-123'), false);
+test('admin selection is reflected in URL state', () => {
+  assert.equal(core.shouldSyncAdminSelection(null, 'user-123'), true);
+  assert.equal(core.shouldSyncAdminSelection('', 'user-123'), true);
   assert.equal(core.shouldSyncAdminSelection('user-123', 'user-123'), false);
   assert.equal(core.shouldSyncAdminSelection('user-123', 'user-456'), true);
 });
 
-test('admin home links use native navigation to clear the selected-user query', () => {
-  const source = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf8');
-  assert.doesNotMatch(source, /from ['"]next\/link['"]/);
-  assert.match(source, /<a href="\/admin"/);
+test('a directly requested user remains selected even when absent from the current directory page', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
+  assert.match(source, /if \(requestedUserId\) return requestedUserId/);
+});
+
+test('selected account has a direct return path to the user directory', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
+  assert.match(source, /handleBackToDirectory/);
+  assert.match(source, /backIconButton/);
+});
+
+test('admin UI masks directory contacts and audits the selected email reveal', () => {
+  const directory = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/UserDirectory.tsx'), 'utf8');
+  const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
+  const commandCenter = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
+  const backend = fs.readFileSync(path.join(process.cwd(), '..', 'functions/adminIntelligence.js'), 'utf8');
+  assert.match(directory, /user\.maskedEmail/);
+  assert.doesNotMatch(directory, /user\.email/);
+  assert.match(detail, /account\.email/);
+  assert.doesNotMatch(detail, /account\.maskedEmail/);
+  assert.match(detail, /account\.maskedPhone/);
+  assert.doesNotMatch(detail, /account\.phone/);
+  assert.match(backend, /account\.contact\.reveal/);
+  assert.match(backend, /revealedFields: \["email"\]/);
+  assert.match(commandCenter, /<AccountTimeline/);
+  assert.match(commandCenter, /<AdminActions/);
+});
+
+test('annotated admin chrome is simplified without removing core account data', () => {
+  const sidebar = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminSidebar.tsx'), 'utf8');
+  const commandCenter = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AdminCommandCenter.tsx'), 'utf8');
+  const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
+  const styles = fs.readFileSync(path.join(process.cwd(), 'src/app/admin/admin.module.css'), 'utf8');
+  assert.doesNotMatch(sidebar, /next\/image|brandLogo|Shrimply Admin home/);
+  assert.match(sidebar, /<strong>Admin<\/strong>/);
+  assert.doesNotMatch(commandCenter, /universalSearch|MobilePanelButton/);
+  assert.doesNotMatch(detail, /<Building2|<ShieldCheck|<Sparkles/);
+  assert.match(styles, /\.sidebar[\s\S]*border-right: 1px solid var\(--admin-line\)/);
+  assert.match(styles, /\.detailSection[^\n]*border-bottom: 0/);
+});
+
+test('Firestore owner reads require platform-owner claims without an email allowlist', () => {
+  const rules = fs.readFileSync(path.join(process.cwd(), '..', 'firestore.rules'), 'utf8');
+  assert.match(rules, /request\.auth\.token\.platformOwner == true/);
+  assert.match(rules, /request\.auth\.token\.platformRole == 'owner'/);
+  assert.doesNotMatch(rules, /ricardofransiskusho@gmail\.com/i);
+  assert.match(rules, /match \/adminAuditEvents\/\{eventId\}/);
+  assert.match(rules, /match \/securityEvents\/\{eventId\}/);
 });
 
 test('masks email and phone values without exposing full PII', () => {

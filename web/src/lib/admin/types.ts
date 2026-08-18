@@ -19,8 +19,8 @@ export interface AdminDirectoryUser {
   id: string;
   name: string;
   initials: string;
-  email: string | null;
   maskedEmail: string;
+  email?: string;
   status: AccountStatus;
   plan: string;
   country: string;
@@ -98,10 +98,9 @@ export interface AccountIntelligence {
   id: string;
   name: string;
   initials: string;
+  email: string;
   maskedEmail: string;
   maskedPhone: string;
-  email: string | null;
-  phone: string | null;
   role: string;
   plan: string;
   country: string;
@@ -158,9 +157,149 @@ export interface DeleteAdminUserInput {
   userId: string;
   reason: string;
   confirmation: string;
+  deleteCompany?: boolean;
+  companyId?: string;
 }
 
 export interface DeleteAdminUserResult {
   success: true;
   userId: string;
+  companyDeleted?: boolean;
+  companyId?: string;
+}
+
+export interface CompanyOverviewItem {
+  id: string;
+  companyName: string;
+  ownerId?: string;
+  ownerEmail: string;
+  farmType: string;
+  businessSize: string;
+  teamMembersCount: number;
+  pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
+  activeCycleCount: number;
+  feedItemCount: number;
+  additiveItemCount: number;
+  aiRequestCount: number;
+  createdAt: string | null;
+}
+
+export interface OverviewTriageItem {
+  id: string;
+  type: 'user' | 'company';
+  severity: 'high' | 'medium' | 'low';
+  title: string;
+  subtitle: string;
+  issue: string;
+  action: string;
+  userId?: string;
+  companyId?: string;
+  email?: string;
+}
+
+export interface PlatformOverviewMetrics {
+  generatedAt: string;
+  periodDays: 7 | 30;
+  totals: {
+    users: number;
+    companies: number;
+    ponds: number;
+    activePonds: number;
+    inactivePonds: number;
+    activeCycles: number;
+    buyers: number;
+    owners: number;
+    staff: number;
+    marketplaceListings: number;
+    aiRequests: number;
+  };
+  period: {
+    newUsers: number;
+    activeUsers: number;
+    newCompanies: number;
+    aiRequests: number;
+  };
+  dailyNewUsers: Array<{ date: string; count: number }>;
+  roleBreakdown: Record<string, number>;
+  users: AdminDirectoryUser[];
+  companies: CompanyOverviewItem[];
+  triage: OverviewTriageItem[];
+}
+
+export type ServiceHealthStatus = 'operational' | 'degraded' | 'outage' | 'maintenance';
+
+export interface ServiceHealthItem {
+  id: string;
+  name: string;
+  category: 'database' | 'auth' | 'functions' | 'ai' | 'storage';
+  status: ServiceHealthStatus;
+  uptimePercent: number;
+  latencyMs: number;
+  errorRate: number;
+  lastChecked: string;
+  description: string;
+}
+
+export interface AdminAuditEvent {
+  id: string;
+  actorId: string;
+  targetId: string | null;
+  action: string;
+  timestamp: string;
+  reason: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface SecurityTelemetry {
+  overallStatus: 'secure' | 'warning' | 'critical';
+  ruleCompliancePercent: number;
+  appCheckEnforced: boolean;
+  activeRateLimits24h: number;
+  failedAuthAttempts24h: number;
+  privilegeViolations24h: number;
+  recentAudits: AdminAuditEvent[];
+}
+
+export interface OrsonAiTelemetry {
+  dailyRequests: number;
+  dailyTokens: number;
+  avgLatencyMs: number;
+  quotaPercentUsed: number;
+  successRate: number;
+  taskBreakdown: {
+    waterQuality: number;
+    feeding: number;
+    disease: number;
+    assistant: number;
+  };
+}
+
+export interface PlatformScaleMetrics {
+  totalUsers: number;
+  totalCompanies: number;
+  totalPonds: number;
+  activeCycles: number;
+  totalShrimpStocked: number;
+  totalHarvestKg: number;
+  estimatedStorageMb: number;
+}
+
+export interface PlatformHealthOverview {
+  generatedAt: string;
+  periodDays: number;
+  overallUptimePercent: number;
+  avgApiLatencyMs: number;
+  services: ServiceHealthItem[];
+  security: SecurityTelemetry;
+  ai: OrsonAiTelemetry;
+  scale: PlatformScaleMetrics;
+  recentOperations: Array<{
+    id: string;
+    title: string;
+    description: string;
+    timestamp: string;
+    type: 'farm' | 'security' | 'ai' | 'user';
+  }>;
 }

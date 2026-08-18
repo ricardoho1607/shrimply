@@ -8,10 +8,10 @@ service cloud.firestore {
 
     function isFounderAdmin() {
       return signedIn()
-        && request.auth.token.email in [
-          'ricardofransiskusho@gmail.com',
-          'Ricardofransiskusho@gmail.com'
-        ];
+        && (
+          ('platformOwner' in request.auth.token && request.auth.token.platformOwner == true)
+          || ('platformRole' in request.auth.token && request.auth.token.platformRole == 'owner')
+        );
     }
 
     function userDoc() {
@@ -784,7 +784,7 @@ service cloud.firestore {
           && validRequiredCompanySetup(companyDoc(request.resource.data.companyId).data)
         )
       );
-      allow delete: if false;
+      allow delete: if isFounderAdmin();
 
       match /monitoredCompanies/{companyId} {
         allow read, write: if signedIn() && request.auth.uid == userId;
@@ -803,19 +803,22 @@ service cloud.firestore {
         isFounderAdmin()
         || isCompanyMember(companyId)
       );
-      allow update: if isCompanyMember(companyId)
-        && validCompanyPayload(request.resource.data)
-        && request.resource.data.ownerId == resource.data.ownerId
-        && (
-          isCompanyManager(companyId)
-          && !request.resource.data.diff(resource.data).changedKeys().hasAny([
-            'ownerId',
-            'teamMembers',
-            'pendingInvites',
-            'isVerified'
-          ])
+      allow update: if isFounderAdmin()
+        || (
+          isCompanyMember(companyId)
+          && validCompanyPayload(request.resource.data)
+          && request.resource.data.ownerId == resource.data.ownerId
+          && (
+            isCompanyManager(companyId)
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny([
+              'ownerId',
+              'teamMembers',
+              'pendingInvites',
+              'isVerified'
+            ])
+          )
         );
-      allow delete: if isCompanyOwner(companyId);
+      allow delete: if isCompanyOwner(companyId) || isFounderAdmin();
 
       match /blocks/{blockId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
@@ -826,7 +829,7 @@ service cloud.firestore {
           && validFarmBlockPayload(request.resource.data, companyId)
           && request.resource.data.companyId == resource.data.companyId
           && request.resource.data.createdBy == resource.data.createdBy;
-        allow delete: if isCompanyOwnerRole(companyId);
+        allow delete: if isCompanyOwnerRole(companyId) || isFounderAdmin();
       }
 
       match /ponds/{pondId} {
@@ -834,12 +837,12 @@ service cloud.firestore {
         allow create, update: if isCompanyOperator(companyId)
           && validEnterprisePondBlock(companyId, request.resource.data)
           && validEnterprisePondCycle(companyId, request.resource.data);
-        allow delete: if isCompanyOperator(companyId)
-          && validEnterprisePondBlock(companyId, resource.data);
+        allow delete: if (isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
 
         match /labSummaries/{labReportId} {
           allow read: if isFounderAdmin() || isCompanyMember(companyId);
-          allow write: if false;
+          allow write: if isFounderAdmin();
         }
       }
 
@@ -854,45 +857,45 @@ service cloud.firestore {
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
           && request.resource.data.entryMode in ['manual', 'pdf_upload'];
-        allow delete: if isCompanyOwnerRole(companyId);
+        allow delete: if isCompanyOwnerRole(companyId) || isFounderAdmin();
       }
 
       match /labUsage/{usageId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /physicalPonds/{physicalPondId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
         allow create, update: if isCompanyOperator(companyId)
           && validEnterprisePondBlock(companyId, request.resource.data);
-        allow delete: if isCompanyOperator(companyId)
-          && validEnterprisePondBlock(companyId, resource.data);
+        allow delete: if (isCompanyOperator(companyId)
+          && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
       }
 
       match /cycles/{cycleId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId)
+        allow write: if isFounderAdmin() || (isCompanyOperator(companyId)
           && (
             !('businessSize' in companyDoc(companyId).data)
             || companyDoc(companyId).data.businessSize != 'enterprise'
             || isCompanyOwnerRole(companyId)
-          );
+          ));
       }
 
       match /harvestRecords/{harvestId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
       }
 
       match /feeds/{feedId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
       }
 
       match /additives/{additiveId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isCompanyOperator(companyId);
+        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
       }
 
       match /expenses/{expenseId} {
@@ -904,7 +907,8 @@ service cloud.firestore {
             && request.resource.data.companyId == companyId
             && request.resource.data.reference.matches('INVENTORY-.*')
           );
-        allow delete: if isCompanyManager(companyId)
+        allow delete: if isFounderAdmin()
+          || isCompanyManager(companyId)
           || (isCompanyOperator(companyId)
             && expenseId.matches('sync_INVENTORY-.*')
             && resource.data.reference.matches('INVENTORY-.*'));
@@ -919,10 +923,19 @@ service cloud.firestore {
             && request.resource.data.companyId == companyId
             && request.resource.data.reference.matches('HARVEST-.*')
           );
-        allow delete: if isCompanyManager(companyId)
+        allow delete: if isFounderAdmin()
+          || isCompanyManager(companyId)
           || (isCompanyOperator(companyId)
             && revenueId.matches('sync_HARVEST-.*')
             && resource.data.reference.matches('HARVEST-.*'));
+      }
+
+      match /billing/{docId} {
+        allow read, write: if isFounderAdmin();
+      }
+
+      match /billingPayments/{paymentId} {
+        allow read, write: if isFounderAdmin();
       }
 
       // Legacy client-visible counters. Existing installed clients still reserve
@@ -934,34 +947,34 @@ service cloud.firestore {
           && validLegacyAiUsageCreate(request.resource.data, usageDateId);
         allow update: if isCompanyMember(companyId)
           && validLegacyAiUsageUpdate(request.resource.data, usageDateId);
-        allow delete: if false;
+        allow delete: if isFounderAdmin();
       }
 
       // Authoritative Orson quotas live here. Only Cloud Functions/Admin SDK writes
       // these counters; client SDKs can never reserve, reset, or forge them.
       match /orsonUsage/{usageDateId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /orsonPredictions/{predictionId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /orsonCycleOutcomes/{outcomeId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /orsonCalibration/{calibrationId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /orsonCalibrationEvaluations/{evaluationId} {
         allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if false;
+        allow write: if isFounderAdmin();
       }
 
       match /userActivitySessions/{sessionId} {
@@ -972,7 +985,7 @@ service cloud.firestore {
           && validActivitySessionCreate(request.resource.data, companyId);
         allow update: if isCompanyMember(companyId)
           && validActivitySessionUpdate(request.resource.data, companyId);
-        allow delete: if false;
+        allow delete: if isFounderAdmin();
       }
 
       match /userActivityDaily/{summaryId} {
@@ -983,7 +996,7 @@ service cloud.firestore {
           && validActivityDailyCreate(request.resource.data, companyId);
         allow update: if isCompanyMember(companyId)
           && validActivityDailyUpdate(request.resource.data, companyId);
-        allow delete: if false;
+        allow delete: if isFounderAdmin();
       }
     }
 
@@ -1013,7 +1026,7 @@ service cloud.firestore {
         || isCompanyOwnerRole(resource.data.companyId)
       );
       allow update: if false;
-      allow delete: if false;
+      allow delete: if isFounderAdmin();
     }
 
     match /companyInvites/{inviteId} {
@@ -1044,7 +1057,7 @@ service cloud.firestore {
       allow update: if signedIn()
         && isCompanyManager(resource.data.companyId)
         && validDiseaseReportStatusUpdate();
-      allow delete: if signedIn() && isCompanyManager(resource.data.companyId);
+      allow delete: if signedIn() && (isCompanyManager(resource.data.companyId) || isFounderAdmin());
     }
 
     match /marketplace_listings/{listingId} {
@@ -1089,6 +1102,16 @@ service cloud.firestore {
     }
 
     match /requestLogs/{requestId} {
+      allow read: if isFounderAdmin();
+      allow write: if false;
+    }
+
+    match /adminAuditEvents/{eventId} {
+      allow read, create: if isFounderAdmin();
+      allow update, delete: if false;
+    }
+
+    match /securityEvents/{eventId} {
       allow read: if isFounderAdmin();
       allow write: if false;
     }
