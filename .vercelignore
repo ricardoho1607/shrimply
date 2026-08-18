@@ -1,0 +1,10 @@
+ios
+android
+functions
+output
+.codex
+.agents
+.expo
+.firebase
+*.jks
+*.keystore
