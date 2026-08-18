@@ -303,3 +303,132 @@ export interface PlatformHealthOverview {
     type: 'farm' | 'security' | 'ai' | 'user';
   }>;
 }
+
+export type AdminViewMode = 'overview' | 'user' | 'farms' | 'subscriptions' | 'support' | 'security' | 'audit';
+
+export interface DetailedFarmPond {
+  id: string;
+  name: string;
+  areaM2: number;
+  active: boolean;
+  cycleNumber?: number;
+  daysOld?: number;
+  mbw?: number;
+  fcr?: number;
+  lastSamplingDate?: string | null;
+}
+
+export interface DetailedFarmMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  lastActive?: string | null;
+}
+
+export interface DetailedFarm {
+  id: string;
+  companyName: string;
+  ownerId?: string;
+  ownerName?: string;
+  ownerEmail: string;
+  ownerPhone?: string;
+  farmType: string;
+  businessSize: string;
+  location: string;
+  country: string;
+  region: string;
+  createdAt: string | null;
+  pondCount: number;
+  activePondCount: number;
+  inactivePondCount: number;
+  totalAreaM2: number;
+  activeCycleCount: number;
+  teamMembersCount: number;
+  feedItemCount: number;
+  additiveItemCount: number;
+  aiRequestCount: number;
+  ponds: DetailedFarmPond[];
+  team: DetailedFarmMember[];
+}
+
+export interface SupportJoinRequest {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  companyId: string;
+  companyName: string;
+  requestedRole: string;
+  status: string;
+  requestedAt: string | null;
+  note?: string;
+}
+
+export interface SupportTesterRequest {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+  role: string;
+  country: string;
+  androidDevice: string;
+  reason: string;
+  status: string;
+  platform: string;
+  releaseTrack: string;
+  requestCount: number;
+  createdAt: string | null;
+  lastRequestedAt: string | null;
+  emailDeliveryStatus: string;
+  emailDeliveryReason?: string;
+}
+
+export interface SupportDiseaseReport {
+  id: string;
+  companyId: string;
+  companyName: string;
+  pondId?: string;
+  pondName?: string;
+  symptoms: string[];
+  severity: 'high' | 'medium' | 'low';
+  diagnosis?: string;
+  status: 'open' | 'investigating' | 'resolved';
+  reporterEmail?: string;
+  createdAt: string | null;
+}
+
+export interface SupportOverviewData {
+  joinRequests: SupportJoinRequest[];
+  testerRequests: SupportTesterRequest[];
+  diseaseReports: SupportDiseaseReport[];
+  totals: {
+    pendingJoins: number;
+    pendingTesters: number;
+    openDisease: number;
+    totalResolved: number;
+  };
+}
+
+export interface SecurityPostureData {
+  overallStatus: 'secure' | 'warning' | 'critical';
+  appCheckMobileEnforced: boolean;
+  appCheckWebEnforced: boolean;
+  securityRulesVersion: string;
+  roleDistribution: Record<string, number>;
+  platformOwners: Array<{ id: string; name: string; email: string; assignedAt?: string | null }>;
+  threatTelemetry: {
+    failedAuth24h: number;
+    activeRateLimitLocks: number;
+    privilegedAccountCount: number;
+    orphanedUsersCount: number;
+  };
+  recentSecurityEvents: AdminAuditEvent[];
+}
+
+export interface AuditLogFilters {
+  category: 'all' | 'account' | 'security' | 'farm' | 'support' | 'directory';
+  actor: string;
+  search: string;
+  dateRange: 'today' | '7d' | '30d' | '90d' | 'all';
+}

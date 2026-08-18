@@ -4,16 +4,27 @@ import {
   clearFirestoreAdminCache,
   deleteFirestoreUser,
   getFirestoreAccount,
+  getFirestoreAuditLogs,
+  getFirestoreDetailedFarms,
   getFirestoreOverviewMetrics,
+  getFirestoreSecurityPosture,
+  getFirestoreSupportData,
+  resolveFirestoreDiseaseReport,
   searchFirestoreAccounts,
+  updateFirestoreTesterStatus,
 } from './firestoreAdminAdapter';
 import type {
   AccountIntelligence,
+  AdminAuditEvent,
   AdminDirectoryFilters,
   AdminDirectoryResponse,
+  AuditLogFilters,
   DeleteAdminUserInput,
   DeleteAdminUserResult,
+  DetailedFarm,
   PlatformOverviewMetrics,
+  SecurityPostureData,
+  SupportOverviewData,
 } from './types';
 
 const functions = getFunctions(app);
@@ -30,6 +41,12 @@ export interface AdminIntelligenceRepository {
   getAccount(userId: string): Promise<AccountIntelligence>;
   getOverviewMetrics(periodDays?: 7 | 30): Promise<PlatformOverviewMetrics>;
   deleteUser(input: DeleteAdminUserInput): Promise<DeleteAdminUserResult>;
+  getDetailedFarms(): Promise<DetailedFarm[]>;
+  getSupportData(): Promise<SupportOverviewData>;
+  updateTesterStatus(requestId: string, status: string): Promise<boolean>;
+  resolveDiseaseReport(reportId: string, resolutionNote?: string): Promise<boolean>;
+  getSecurityPosture(): Promise<SecurityPostureData>;
+  getAuditLogs(filters?: AuditLogFilters): Promise<AdminAuditEvent[]>;
   invalidateCache(): void;
 }
 
@@ -83,6 +100,30 @@ class FirebaseAdminIntelligenceRepository implements AdminIntelligenceRepository
       console.warn('deleteAdminUser callable unavailable, executing direct Firestore user deletion adapter:', err);
     }
     return deleteFirestoreUser(input);
+  }
+
+  async getDetailedFarms(): Promise<DetailedFarm[]> {
+    return getFirestoreDetailedFarms();
+  }
+
+  async getSupportData(): Promise<SupportOverviewData> {
+    return getFirestoreSupportData();
+  }
+
+  async updateTesterStatus(requestId: string, status: string): Promise<boolean> {
+    return updateFirestoreTesterStatus(requestId, status);
+  }
+
+  async resolveDiseaseReport(reportId: string, resolutionNote?: string): Promise<boolean> {
+    return resolveFirestoreDiseaseReport(reportId, resolutionNote);
+  }
+
+  async getSecurityPosture(): Promise<SecurityPostureData> {
+    return getFirestoreSecurityPosture();
+  }
+
+  async getAuditLogs(filters?: AuditLogFilters): Promise<AdminAuditEvent[]> {
+    return getFirestoreAuditLogs(filters);
   }
 
   invalidateCache() {

@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Users,
 } from 'lucide-react';
+import type { AdminViewMode } from '@/lib/admin/types';
 import styles from '@/app/admin/admin.module.css';
 
 interface AdminSidebarProps {
@@ -19,8 +20,8 @@ interface AdminSidebarProps {
   onSignOut: () => void;
   collapsed: boolean;
   onToggle: () => void;
-  activeView?: 'overview' | 'user';
-  onNavigate?: (view: 'overview' | 'user') => void;
+  activeView?: AdminViewMode;
+  onNavigate?: (view: AdminViewMode) => void;
 }
 
 export function AdminSidebar({
@@ -32,14 +33,21 @@ export function AdminSidebar({
   activeView = 'overview',
   onNavigate,
 }: AdminSidebarProps) {
-  const items = [
-    { id: 'overview' as const, label: 'Overview', icon: LayoutGrid, active: activeView === 'overview' },
-    { id: 'user' as const, label: 'User Database', icon: Users, active: activeView === 'user' },
-    { id: 'farms' as const, label: 'Farms', icon: Building2, active: false },
-    { id: 'subscriptions' as const, label: 'Subscriptions', icon: CreditCard, active: false },
-    { id: 'support' as const, label: 'Support', icon: Headphones, active: false },
-    { id: 'security' as const, label: 'Security', icon: ShieldCheck, active: false },
-    { id: 'audit' as const, label: 'Audit Log', icon: ListChecks, active: false },
+  const items: Array<{
+    id: AdminViewMode;
+    label: string;
+    icon: typeof LayoutGrid;
+    active: boolean;
+    enabled: boolean;
+    badge?: string;
+  }> = [
+    { id: 'overview', label: 'Overview', icon: LayoutGrid, active: activeView === 'overview', enabled: true },
+    { id: 'user', label: 'User Database', icon: Users, active: activeView === 'user', enabled: true },
+    { id: 'farms', label: 'Farms', icon: Building2, active: activeView === 'farms', enabled: true },
+    { id: 'subscriptions', label: 'Subscriptions', icon: CreditCard, active: activeView === 'subscriptions', enabled: false, badge: 'Soon' },
+    { id: 'support', label: 'Support', icon: Headphones, active: activeView === 'support', enabled: true },
+    { id: 'security', label: 'Security', icon: ShieldCheck, active: activeView === 'security', enabled: true },
+    { id: 'audit', label: 'Audit Log', icon: ListChecks, active: activeView === 'audit', enabled: true },
   ];
 
   return (
@@ -58,20 +66,25 @@ export function AdminSidebar({
         <span className={styles.navSectionLabel}>Owner operations</span>
         {items.map((item) => {
           const Icon = item.icon;
-          const isView = item.id === 'overview' || item.id === 'user';
 
           return (
             <button
               type="button"
               key={item.label}
-              onClick={() => isView && onNavigate?.(item.id)}
-              className={`${styles.navItem} ${item.active ? styles.navItemActive : ''}`}
+              onClick={() => item.enabled && onNavigate?.(item.id)}
+              className={`${styles.navItem} ${item.active ? styles.navItemActive : ''} ${!item.enabled ? styles.navItemDisabled : ''}`}
               aria-current={item.active ? 'page' : undefined}
-              style={{ cursor: isView ? 'pointer' : 'default' }}
-              title={item.label}
+              style={{ cursor: item.enabled ? 'pointer' : 'not-allowed', opacity: item.enabled ? 1 : 0.6 }}
+              title={item.badge ? `${item.label} (${item.badge})` : item.label}
+              disabled={!item.enabled}
             >
               <Icon size={17} aria-hidden="true" />
-              <span>{item.label}</span>
+              <span style={{ flex: 1 }}>{item.label}</span>
+              {item.badge && (
+                <span className={styles.sidebarSoonBadge}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           );
         })}
