@@ -26,7 +26,7 @@ import {
   type SharedPond,
 } from '../shared/pondCalculations';
 
-const hasNumber = (value: OrsonNumber): value is number => value !== null && Number.isFinite(value);
+const hasNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 
 const positive = (value: OrsonNumber): number | null => (hasNumber(value) && value > 0 ? value : null);
 
