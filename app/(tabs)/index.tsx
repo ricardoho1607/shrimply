@@ -42,6 +42,8 @@ interface FormData {
   baselineCumulativeFeed: string;
   cyclePondId: string;
   cycleId: string;
+  cycleTargetMode: 'existing' | 'new';
+  newCycleName: string;
   selectedPond: string; 
   mbw: string; 
   feed: string; 
@@ -195,6 +197,8 @@ export default function PondManagementScreen() {
     baselineCumulativeFeed: '',
     cyclePondId: '',
     cycleId: '',
+    cycleTargetMode: 'existing',
+    newCycleName: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -232,6 +236,8 @@ export default function PondManagementScreen() {
     baselineCumulativeFeed: '',
     cyclePondId: '',
     cycleId: '',
+    cycleTargetMode: 'existing',
+    newCycleName: '',
     selectedPond: '', 
     mbw: '', 
     feed: '', 
@@ -387,10 +393,10 @@ export default function PondManagementScreen() {
       .filter((pond) =>
         pond.cycleId === activeFarmCycle.id ||
         (activeFarmCycle.id === 'legacy-active-cycle' && !pond.cycleId) ||
-        (!pond.cycleId && isPondCycleActive(pond))
+        (!pond.cycleId && openAccessibleFarmCycles.length <= 1 && isPondCycleActive(pond))
       )
       .sort(compareByPondName);
-  }, [accessiblePonds, activeFarmCycle, activePonds]);
+  }, [accessiblePonds, activeFarmCycle, activePonds, openAccessibleFarmCycles.length]);
   const activeCyclePonds = useMemo(() => currentCyclePonds.filter(isPondCycleActive), [currentCyclePonds]);
   const currentCycleTitle = activeFarmCycle?.cycleName || (currentCyclePonds.length > 0 ? t.farmCycle.currentCycle : t.farmCycle.noActiveCycle);
   const currentCycleStatus = activeFarmCycle?.status || (currentCyclePonds.length > 0 ? t.farmCycle.status.active : t.farmCycle.status.waiting);
@@ -398,9 +404,15 @@ export default function PondManagementScreen() {
     () => cycleFilter === 'inactive'
       ? []
       : accessiblePonds
-        .filter((pond) => getPondCycleStatus(pond) === cycleFilter)
+        .filter((pond) => {
+          if (getPondCycleStatus(pond) !== cycleFilter) return false;
+          if (cycleFilter === 'active' && activeFarmCycle && openAccessibleFarmCycles.length > 1) {
+            return pond.cycleId === activeFarmCycle.id;
+          }
+          return true;
+        })
         .sort(compareByPondName),
-    [accessiblePonds, cycleFilter]
+    [accessiblePonds, activeFarmCycle, cycleFilter, openAccessibleFarmCycles.length]
   );
 
   useEffect(() => {
@@ -565,14 +577,6 @@ export default function PondManagementScreen() {
       setIsSubmitting(false);
       return;
     }
-    const selectedFarmCycle = cycles.find((cycle) => cycle.id === formData.cycleId) || activeFarmCycle;
-    if (isEnterpriseFarm && !selectedFarmCycle) {
-      Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-      return;
-    }
-
     const {
       cyclePondId,
       density,
@@ -585,6 +589,30 @@ export default function PondManagementScreen() {
       baselineSurvivalRate,
       baselineCumulativeFeed,
     } = formData;
+
+    const isCreatingNewCycle = !isEnterpriseFarm && (formData.cycleTargetMode === 'new' || openAccessibleFarmCycles.length === 0);
+    const docStartString = formatLocalDateKey(docStart);
+
+    let selectedFarmCycle: FarmCycle | undefined;
+    if (isCreatingNewCycle) {
+      const cycleName = formData.newCycleName?.trim() || `Cycle ${cycles.length + 1}`;
+      selectedFarmCycle = addFarmCycle({
+        cycleName,
+        status: 'active',
+        plannedStartDate: docStartString,
+        stockingStartDate: docStartString,
+        stockingEndDate: docStartString,
+      });
+    } else {
+      selectedFarmCycle = cycles.find((cycle) => cycle.id === formData.cycleId) || activeFarmCycle;
+    }
+
+    if (isEnterpriseFarm && !selectedFarmCycle) {
+      Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
 
     const sourcePond = startablePondOptions.find((pond) => pond.id === cyclePondId);
     if (!sourcePond || !density || !supplier || !plValue) {
@@ -641,7 +669,6 @@ export default function PondManagementScreen() {
     }
 
     const baselineDateString = formatLocalDateKey(baselineDate);
-    const docStartString = formatLocalDateKey(docStart);
     const baselineSampling = isMidcycle ? [{
       id: `baseline-${Date.now()}`,
       date: baselineDateString,
@@ -691,7 +718,7 @@ export default function PondManagementScreen() {
         baselineSource: 'user_midcycle_estimate',
       }),
     });
-    if (selectedFarmCycle) {
+    if (selectedFarmCycle && !isCreatingNewCycle) {
       const stockingDates = [selectedFarmCycle.stockingStartDate, selectedFarmCycle.stockingEndDate, docStartString]
         .filter((date): date is string => Boolean(date))
         .sort();
@@ -702,10 +729,14 @@ export default function PondManagementScreen() {
       });
     }
 
+    if (selectedFarmCycle) {
+      setSelectedDashboardCycleId(selectedFarmCycle.id);
+    }
+
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
-  }, [activeFarmCycle, activePhysicalPondNames, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, startablePondOptions, t, updateFarmCycle]);
+  }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
 
   const handleAddSamplingData = useCallback(() => {
     if (submitLockRef.current) return;
@@ -1203,10 +1234,19 @@ export default function PondManagementScreen() {
     if (type === 'pond' && isEnterpriseFarm && availableEnterpriseBlocks.length === 1) {
       setFormData((current) => ({ ...current, blockId: availableEnterpriseBlocks[0].id }));
     }
+    if (type === 'cycle') {
+      const nextCycleNumber = cycles.length + 1;
+      setFormData((current) => ({
+        ...current,
+        cycleTargetMode: openAccessibleFarmCycles.length > 0 ? 'existing' : 'new',
+        cycleId: current.cycleId || activeFarmCycle?.id || openAccessibleFarmCycles[0]?.id || '',
+        newCycleName: `Cycle ${nextCycleNumber}`,
+      }));
+    }
     setModalType(type); 
     setMenuModalVisible(false); 
     setModalVisible(true);
-  }, [availableEnterpriseBlocks, isEnterpriseFarm]);
+  }, [activeFarmCycle?.id, availableEnterpriseBlocks, cycles.length, isEnterpriseFarm, openAccessibleFarmCycles]);
 
   const openBaselineEditModal = useCallback((pond: Pond) => {
     const baselineSampling = (pond.samplings || [])
@@ -1727,6 +1767,67 @@ export default function PondManagementScreen() {
           </ScrollView>
         )}
       </View>
+      {openAccessibleFarmCycles.length > 0 && !isEnterpriseFarm && (
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t.farmCycle.targetCycle}</Text>
+          <View style={styles.segmentRow}>
+            {(['existing', 'new'] as const).map((mode) => (
+              <TouchableOpacity
+                key={mode}
+                style={[
+                  styles.segmentOption,
+                  formData.cycleTargetMode === mode && styles.segmentOptionSelected
+                ]}
+                onPress={() => updateForm('cycleTargetMode', mode)}
+              >
+                <Text style={[
+                  styles.segmentOptionText,
+                  formData.cycleTargetMode === mode && styles.segmentOptionTextSelected
+                ]}>
+                  {mode === 'existing' ? t.farmCycle.addToActiveCycle : t.farmCycle.createNewCycle}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {formData.cycleTargetMode === 'existing' && openAccessibleFarmCycles.length > 0 && !isEnterpriseFarm ? (
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t.farmCycle.cycleName}</Text>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.pondSelector}
+          >
+            {openAccessibleFarmCycles.map((cycle) => (
+              <TouchableOpacity
+                key={cycle.id}
+                style={[
+                  styles.pondOption,
+                  (formData.cycleId === cycle.id || (!formData.cycleId && activeFarmCycle?.id === cycle.id)) && styles.pondOptionSelected
+                ]}
+                onPress={() => updateForm('cycleId', cycle.id)}
+              >
+                <Text style={[
+                  styles.pondOptionText,
+                  (formData.cycleId === cycle.id || (!formData.cycleId && activeFarmCycle?.id === cycle.id)) && styles.pondOptionTextSelected
+                ]}>
+                  {cycle.cycleName}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      ) : !isEnterpriseFarm ? (
+        <InputField
+          label={t.farmCycle.newCycleName}
+          value={formData.newCycleName}
+          onChangeText={(value) => updateForm('newCycleName', value)}
+          placeholder={`Cycle ${cycles.length + 1}`}
+        />
+      ) : null}
+
       <View style={styles.inputContainer}>
         <Text style={styles.inputLabel}>{t.midcycleOnboarding.cycleQuestion}</Text>
         <View style={styles.segmentRow}>
@@ -1813,7 +1914,7 @@ export default function PondManagementScreen() {
         </>
       )}
     </>
-  ), [formData, startablePondOptions, t, updateForm]);
+  ), [activeFarmCycle?.id, cycles.length, formData, isEnterpriseFarm, openAccessibleFarmCycles, startablePondOptions, t, updateForm]);
 
   const dataEntryModal = (
     <Modal visible={modalVisible} animationType="slide" transparent>
@@ -1915,6 +2016,8 @@ export default function PondManagementScreen() {
           onAddSampling={() => openModal('sampling')}
           onAddMortality={() => openModal('mortality')}
           createBlock={enterpriseBlocks.createBlock}
+          updateBlock={enterpriseBlocks.updateBlock}
+          deleteBlock={enterpriseBlocks.deleteBlock}
           assignBlockTechnician={enterpriseBlocks.assignBlockTechnician}
         />
         {dataEntryModal}
@@ -1997,7 +2100,7 @@ export default function PondManagementScreen() {
 
           {cycleManagerExpanded && currentCyclePonds.length > 0 ? (
             <>
-              {isEnterpriseFarm && openAccessibleFarmCycles.length > 1 ? (
+              {openAccessibleFarmCycles.length > 1 ? (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cycleSwitcherRow}>
                   {openAccessibleFarmCycles.map((cycle) => (
                     <TouchableOpacity

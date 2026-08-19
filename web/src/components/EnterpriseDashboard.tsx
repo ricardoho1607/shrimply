@@ -3,8 +3,8 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Lock, Maximize2, Play, Plus, Save, X } from 'lucide-react';
-import { addDoc, collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Lock, Maximize2, Pencil, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -114,6 +114,9 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
   const [technicianId, setTechnicianId] = useState('');
   const [assignmentBlock, setAssignmentBlock] = useState<FarmBlock | null>(null);
   const [assignmentTechnicianId, setAssignmentTechnicianId] = useState('');
+  const [editingBlock, setEditingBlock] = useState<FarmBlock | null>(null);
+  const [editingBlockName, setEditingBlockName] = useState('');
+  const [editingBlockTechnicianId, setEditingBlockTechnicianId] = useState('');
   const [saving, setSaving] = useState(false);
   const [cycleSaving, setCycleSaving] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<EnterpriseCycleFilter>('active');
@@ -420,11 +423,68 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     }
   };
 
+  const openEditBlock = (block: FarmBlock) => {
+    setEditingBlock(block);
+    setEditingBlockName(block.name);
+    setEditingBlockTechnicianId(block.assignedTechnicianId || '');
+  };
+
+  const saveEditBlock = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!company?.id || !user?.uid || !editingBlock || !editingBlockName.trim() || saving) return;
+    const normalizedName = editingBlockName.trim();
+    if (blocks.some((b) => b.id !== editingBlock.id && b.name.trim().toLowerCase() === normalizedName.toLowerCase())) {
+      alert(t.enterprise.blockNameRequired || 'A block with this name already exists.');
+      return;
+    }
+    const tech = technicians.find((t) => t.uid === editingBlockTechnicianId);
+    setSaving(true);
+    try {
+      await updateDoc(doc(db, 'companies', company.id, 'blocks', editingBlock.id), {
+        name: normalizedName,
+        assignedTechnicianId: tech?.uid || null,
+        assignedTechnicianName: tech?.name?.trim() || null,
+        assignedTechnicianEmail: tech?.email || null,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      });
+      setEditingBlock(null);
+    } catch (err) {
+      console.error('Failed to update block:', err);
+      alert(t.enterprise.blockUpdateFailed || 'Failed to update block.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBlock = async () => {
+    if (!company?.id || !user?.uid || !editingBlock || saving) return;
+    const blockHasPonds = ponds.some((p) => p.blockId === editingBlock.id)
+      || physicalPonds.some((p) => p.blockId === editingBlock.id);
+    if (blockHasPonds) {
+      alert(t.enterprise.cannotDeleteBlockWithPonds || 'Cannot delete block because it contains ponds.');
+      return;
+    }
+    if (!window.confirm((t.enterprise.deleteBlockConfirmMessage || 'Are you sure you want to delete "{{blockName}}"?').replace('{{blockName}}', editingBlock.name))) {
+      return;
+    }
+    setSaving(true);
+    try {
+      await deleteDoc(doc(db, 'companies', company.id, 'blocks', editingBlock.id));
+      setEditingBlock(null);
+    } catch (err) {
+      console.error('Failed to delete block:', err);
+      alert(t.enterprise.blockDeleteFailed || 'Failed to delete block.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveAssignment = async (event: React.FormEvent) => {
     event.preventDefault();
     const block = blocks.find((candidate) => candidate.id === assignmentBlock?.id);
     const technician = technicians.find((candidate) => candidate.uid === assignmentTechnicianId);
-    if (!company?.id || !user?.uid || !block || block.assignedTechnicianId || !technician || saving) return;
+    if (!company?.id || !user?.uid || !block || !technician || saving) return;
 
     setSaving(true);
     try {
@@ -630,7 +690,8 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                 t.enterprise.unassigned,
               ),
             );
-            const canAssignTechnician = block.id !== '__unassigned__' && !block.assignedTechnicianId;
+            const isOwnerOrCoOwner = user?.role === 'owner' || user?.role === 'co-owner';
+            const canManageBlock = block.id !== '__unassigned__' && isOwnerOrCoOwner;
             return (
               <section key={block.id} className={styles.block}>
                 <div className={styles.blockHeader}>
@@ -644,15 +705,14 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                     <small>{getBlockCycleMeta(block.id)}</small>
                     </span>
                   </button>
-                  {canAssignTechnician ? (
+                  {canManageBlock ? (
                     <button
                       type="button"
                       className={`${styles.technicianBadge} ${styles.technicianBadgeButton}`}
-                      onClick={() => {
-                        setAssignmentBlock(block);
-                        setAssignmentTechnicianId('');
-                      }}
+                      onClick={() => openEditBlock(block)}
+                      title={t.enterprise.editBlock}
                     >
+                      <Pencil size={12} style={{ marginRight: 4 }} />
                       {technicianLabel}
                     </button>
                   ) : <span className={styles.technicianBadge}>{technicianLabel}</span>}
@@ -742,6 +802,81 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
             </label>
             {technicians.length === 0 ? <small>{t.enterprise.noTechnicians}</small> : null}
             <button className={styles.saveButton} disabled={saving}>{saving ? t.enterprise.loadingBlocks : t.enterprise.saveBlock}</button>
+          </form>
+        </div>
+      ) : null}
+
+      {editingBlock ? (
+        <div
+          className={styles.overlay}
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !saving) {
+              setEditingBlock(null);
+            }
+          }}
+        >
+          <form className={styles.modal} onSubmit={saveEditBlock}>
+            <div className={styles.modalHeader}>
+              <div><h2>{t.enterprise.editBlock || 'Edit block'}</h2><p>{t.enterprise.editBlockDescription || 'Update the block name or change the assigned technician.'}</p></div>
+              <button
+                type="button"
+                className={styles.iconButton}
+                onClick={() => setEditingBlock(null)}
+                aria-label="Close"
+                disabled={saving}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <label>{t.enterprise.blockName}
+              <input
+                required
+                value={editingBlockName}
+                onChange={(event) => setEditingBlockName(event.target.value)}
+                placeholder={t.enterprise.blockNamePlaceholder}
+              />
+            </label>
+            <label>{t.enterprise.assignTechnician}
+              <select value={editingBlockTechnicianId} onChange={(event) => setEditingBlockTechnicianId(event.target.value)}>
+                <option value="">{t.enterprise.unassigned}</option>
+                {technicians.map((technician) => (
+                  <option key={technician.uid} value={technician.uid}>
+                    {getEnterpriseTechnicianLabel(technician.name, technician.email)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              <button
+                type="button"
+                onClick={handleDeleteBlock}
+                disabled={saving}
+                style={{
+                  padding: '10px 16px',
+                  borderRadius: '10px',
+                  border: '1px solid #F0C8C3',
+                  background: '#FFF5F5',
+                  color: '#B42318',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                }}
+              >
+                <Trash2 size={16} />
+                {t.enterprise.deleteBlock || 'Delete block'}
+              </button>
+              <button
+                type="submit"
+                className={styles.saveButton}
+                disabled={saving || !editingBlockName.trim()}
+                style={{ flex: 1 }}
+              >
+                {saving ? t.enterprise.loadingBlocks : t.enterprise.saveBlock}
+              </button>
+            </div>
           </form>
         </div>
       ) : null}

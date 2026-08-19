@@ -9,7 +9,7 @@ import {
 } from '@/lib/startPondCycle';
 import styles from './StartPondCycleModal.module.css';
 
-const createInitialValue = (today: string): StartPondCycleFormValue => ({
+const createInitialValue = (today: string, defaultCycleId?: string, nextCycleName?: string): StartPondCycleFormValue => ({
   density: '',
   docStart: today,
   plValue: '',
@@ -19,23 +19,32 @@ const createInitialValue = (today: string): StartPondCycleFormValue => ({
   baselineEstimatedPopulation: '',
   baselineSurvivalRate: '',
   baselineCumulativeFeed: '',
+  cycleTargetMode: defaultCycleId ? 'existing' : 'new',
+  targetCycleId: defaultCycleId || '',
+  newCycleName: nextCycleName || '',
 });
 
 export default function StartPondCycleModal({
   pond,
   today,
+  openCycles = [],
+  activeCycleId,
   saving,
   onClose,
   onSubmit,
 }: {
   pond: StartablePondCycleRecord;
   today: string;
+  openCycles?: { id: string; cycleName: string }[];
+  activeCycleId?: string;
   saving: boolean;
   onClose: () => void;
   onSubmit: (value: StartPondCycleFormValue) => Promise<void>;
 }) {
   const { t } = useLanguage();
-  const [form, setForm] = useState<StartPondCycleFormValue>(() => createInitialValue(today));
+  const defaultCycleId = activeCycleId || openCycles[0]?.id;
+  const nextCycleName = `Cycle ${openCycles.length + 1}`;
+  const [form, setForm] = useState<StartPondCycleFormValue>(() => createInitialValue(today, defaultCycleId, nextCycleName));
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -87,6 +96,53 @@ export default function StartPondCycleModal({
               void onSubmit(form);
             }}
           >
+            {openCycles.length > 0 && (
+              <div className={styles.modeRow} aria-label={t.startPondCycle.targetCycle}>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${form.cycleTargetMode === 'existing' ? styles.modeButtonActive : ''}`}
+                  onClick={() => update('cycleTargetMode', 'existing')}
+                  aria-pressed={form.cycleTargetMode === 'existing'}
+                >
+                  {t.startPondCycle.addToActiveCycle}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.modeButton} ${form.cycleTargetMode === 'new' ? styles.modeButtonActive : ''}`}
+                  onClick={() => update('cycleTargetMode', 'new')}
+                  aria-pressed={form.cycleTargetMode === 'new'}
+                >
+                  {t.startPondCycle.createNewCycle}
+                </button>
+              </div>
+            )}
+
+            {form.cycleTargetMode === 'existing' && openCycles.length > 0 ? (
+              <label className={styles.field}>
+                {t.startPondCycle.targetCycle}
+                <select
+                  value={form.targetCycleId || defaultCycleId}
+                  onChange={(event) => update('targetCycleId', event.target.value)}
+                >
+                  {openCycles.map((cycle) => (
+                    <option key={cycle.id} value={cycle.id}>
+                      {cycle.cycleName}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label className={styles.field}>
+                {t.startPondCycle.newCycleName}
+                <input
+                  required
+                  value={form.newCycleName}
+                  placeholder={nextCycleName}
+                  onChange={(event) => update('newCycleName', event.target.value)}
+                />
+              </label>
+            )}
+
             <div className={styles.modeRow} aria-label={t.startPondCycle.cycleQuestion}>
               {(['new', 'midcycle'] as const).map((mode) => (
                 <button

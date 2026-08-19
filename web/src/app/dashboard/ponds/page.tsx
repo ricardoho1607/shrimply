@@ -249,7 +249,15 @@ export default function PondsPage() {
     };
   }, [pendingPhysicalPonds.length, physicalPonds]);
 
-  const activeFarmCycle = useMemo(() => cycles.find(isOpenFarmCycle), [cycles]);
+  const [selectedCycleId, setSelectedCycleId] = useState('');
+  const openFarmCycles = useMemo(() => cycles.filter(isOpenFarmCycle), [cycles]);
+  const activeFarmCycle = useMemo(() => {
+    if (selectedCycleId) {
+      const selected = openFarmCycles.find((cycle) => cycle.id === selectedCycleId);
+      if (selected) return selected;
+    }
+    return openFarmCycles[0] || undefined;
+  }, [openFarmCycles, selectedCycleId]);
   const canEditPonds = canEditOperations(user?.role);
   const isEnterpriseFarm = company?.businessSize === 'enterprise';
   const canManageFarmCycle = canEditPonds && canManageEnterpriseFarmCycle(company?.businessSize, user?.role);
@@ -273,9 +281,9 @@ export default function PondsPage() {
   }), [allPhysicalPonds, company?.businessSize, farmBlocks, user?.role, user?.uid]);
   const activeCyclePonds = useMemo(
     () => activeFarmCycle
-      ? accessiblePonds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || !pond.cycleId))
+      ? accessiblePonds.filter((pond) => isActiveCycle(pond) && (pond.cycleId === activeFarmCycle.id || (!pond.cycleId && openFarmCycles.length <= 1)))
       : [],
-    [accessiblePonds, activeFarmCycle]
+    [accessiblePonds, activeFarmCycle, openFarmCycles.length]
   );
   const activePondCount = activeCyclePonds.length;
   const endedPondCount = useMemo(
@@ -666,18 +674,29 @@ export default function PondsPage() {
 
     setStartingPondCycle(true);
     try {
-      const activeCycle = await ensureActiveCycle(form.docStart);
-      if (!activeCycle) return;
-      await startPondCycle({
+      const isNewCycle = form.cycleTargetMode === 'new';
+      let targetCycle: FarmCycle | null | undefined = null;
+      if (!isNewCycle) {
+        targetCycle = (form.targetCycleId ? openFarmCycles.find((c) => c.id === form.targetCycleId) : null) || activeFarmCycle;
+        if (!targetCycle) {
+          targetCycle = await ensureActiveCycle(form.docStart);
+        }
+        if (!targetCycle) return;
+      }
+
+      const result = await startPondCycle({
         companyId,
         userId: user.uid,
         pond: startCyclePond,
         pondType: 'cycleStatus' in startCyclePond ? 'cycle' : 'physical',
-        activeCycle,
+        activeCycle: targetCycle,
         form,
         today,
         activePonds: ponds,
       });
+      if (result.cycleId) {
+        setSelectedCycleId(result.cycleId);
+      }
       setStartCyclePond(null);
       setCycleFilter('active');
     } catch (error) {
@@ -794,10 +813,16 @@ export default function PondsPage() {
   const filteredPonds = useMemo(() => {
     if (cycleFilter === 'inactive') return [];
     const normalizedSearch = debouncedSearchTerm.trim().toLowerCase();
-    const statusFiltered = accessiblePonds.filter(p => getCycleStatus(p) === cycleFilter);
+    const statusFiltered = accessiblePonds.filter((p) => {
+      if (getCycleStatus(p) !== cycleFilter) return false;
+      if (cycleFilter === 'active' && activeFarmCycle && openFarmCycles.length > 1) {
+        return p.cycleId === activeFarmCycle.id;
+      }
+      return true;
+    });
     if (!normalizedSearch) return statusFiltered;
-    return statusFiltered.filter(p => p.pondName.toLowerCase().includes(normalizedSearch));
-  }, [accessiblePonds, debouncedSearchTerm, cycleFilter]);
+    return statusFiltered.filter((p) => p.pondName.toLowerCase().includes(normalizedSearch));
+  }, [accessiblePonds, activeFarmCycle, cycleFilter, debouncedSearchTerm, openFarmCycles.length]);
   const inactivePondOptions = useMemo<InactivePondOption[]>(() => {
     const activeNames = new Set(accessiblePonds.filter(isActiveCycle).map((pond) => getPhysicalPondKey(pond.pondName)));
     return accessiblePhysicalPonds.filter((pond) =>
@@ -858,6 +883,22 @@ export default function PondsPage() {
             <button type="button" onClick={handleCloseFarmCycle} title="End cycle" aria-label="End cycle" className="is-danger">
               <Lock size={15} />
             </button>
+          </div>
+        )}
+
+        {openFarmCycles.length > 1 && (
+          <div className="ponds-cycle-switcher" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', width: '100%', marginTop: '12px' }}>
+            {openFarmCycles.map((cycle) => (
+              <button
+                key={cycle.id}
+                type="button"
+                className={`ponds-filter-tab ${cycle.id === activeFarmCycle?.id ? 'is-active' : ''}`}
+                onClick={() => setSelectedCycleId(cycle.id)}
+                style={{ padding: '6px 14px', borderRadius: '20px', fontSize: '13px', cursor: 'pointer' }}
+              >
+                {cycle.cycleName}
+              </button>
+            ))}
           </div>
         )}
       </section>
@@ -1237,6 +1278,8 @@ export default function PondsPage() {
           key={startCyclePond.id}
           pond={startCyclePond}
           today={today}
+          openCycles={openFarmCycles}
+          activeCycleId={activeFarmCycle?.id}
           saving={startingPondCycle}
           onClose={() => setStartCyclePond(null)}
           onSubmit={handleStartCycle}

@@ -256,25 +256,24 @@ Final response should include:
 
 ### Response Style
 
-- Use minimal wording and lead with the outcome.
-- Explain outcomes in plain English and briefly define any unavoidable technical terms.
-- Include only the important result, files changed, verification, blockers, and remaining risks.
-- Keep progress updates to one short sentence.
-- Prefer 3 to 6 concise bullets where appropriate.
-- Skip introductions, repeated context, detailed reasoning, and optional suggestions unless requested.
-- Ask questions only when genuinely blocked.
+- Role & Tone: Expert communicator who explains complex ideas in very simple, everyday English.
+- Explain everything so simply that a 5-year-old child can easily understand.
+- Do NOT use technical jargon, buzzwords, or complicated terms.
+- Keep answers as short and concise as possible (maximum 2 to 3 sentences or quick bullet points).
+- Use simple real-world metaphors (like toys, playgrounds, or animals) when explaining hard concepts.
+- Skip conversational filler, fluff, introductions, or repeated context; get straight to the point.
+- Final task summaries should strictly focus on: what changed, files modified, and verification status.
 
 ## 12. SHIPALL / PUSHALL Release Shortcut
 
-When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to complete this production release workflow without asking for separate confirmation:
+When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to execute this 3-step production release workflow:
 
-1. Run the Shrimply release gate and the checks relevant to the current scoped changes.
-2. Commit only the current task-related changes with an appropriate message and push the current branch to GitHub.
-3. Deploy the web app to Vercel production and verify the production deployment.
-4. Publish an Android Expo/EAS OTA update to the production channel and verify that the channel points to the new update.
-5. Report the Git commit, branch, Vercel production URL, and Expo update URL.
+1. **Commit to Git:** Run relevant checks, commit changes with a clear message, and push the branch to GitHub.
+2. **Deploy Production Vercel:** Deploy the web app to Vercel production and verify the deployment.
+3. **Push OTA Update:** Publish an Expo/EAS OTA update to the production channel and verify it points to the new release.
+4. Report the Git commit hash, branch, Vercel production URL, and Expo update URL.
 
 Safety rules:
 - Stop before production deployment if a required release check fails, and report the failure.
 - Preserve unrelated user changes and do not include them in the release commit.
-- `SHIPALL` does not authorize Firebase deployment, Firestore rule changes, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.
+- `SHIPALL`/`PUSHALL` does not authorize Firebase deployment, Firestore rule changes, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.

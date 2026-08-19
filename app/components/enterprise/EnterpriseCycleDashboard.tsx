@@ -70,6 +70,8 @@ interface EnterpriseCycleDashboardProps {
   onAddSampling: () => void;
   onAddMortality: () => void;
   createBlock: (input: { name: string; technician?: EnterpriseTechnician | null }) => Promise<void>;
+  updateBlock?: (input: { blockId: string; name: string; technician?: EnterpriseTechnician | null }) => Promise<void>;
+  deleteBlock?: (blockId: string) => Promise<void>;
   assignBlockTechnician: (input: { blockId: string; technician: EnterpriseTechnician }) => Promise<void>;
 }
 
@@ -97,6 +99,8 @@ export default function EnterpriseCycleDashboard({
   onAddSampling,
   onAddMortality,
   createBlock,
+  updateBlock,
+  deleteBlock,
   assignBlockTechnician,
 }: EnterpriseCycleDashboardProps) {
   const router = useRouter();
@@ -121,6 +125,9 @@ export default function EnterpriseCycleDashboard({
   const [expandedSetupPondId, setExpandedSetupPondId] = useState<string | null>(null);
   const [selectedPond, setSelectedPond] = useState<Pond | null>(null);
   const [createBlockVisible, setCreateBlockVisible] = useState(false);
+  const [editingBlock, setEditingBlock] = useState<FarmBlock | null>(null);
+  const [editingBlockName, setEditingBlockName] = useState('');
+  const [editingBlockTechnicianId, setEditingBlockTechnicianId] = useState<string | null>(null);
   const [createPondVisible, setCreatePondVisible] = useState(false);
   const [newPondName, setNewPondName] = useState('');
   const [newPondArea, setNewPondArea] = useState('');
@@ -173,7 +180,7 @@ export default function EnterpriseCycleDashboard({
     inactivePonds: physicalPonds
       .filter((pond) => pond.blockId === block.id && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
       .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })),
-  })).filter((row) => row.inactivePonds.length > 0), [activePhysicalPondIds, activePondNames, physicalPonds, sortedBlocks]);
+  })), [activePhysicalPondIds, activePondNames, physicalPonds, sortedBlocks]);
   const lockedEditingBlockIds = useMemo(() => new Set(
     editingCycle
       ? getEnterpriseCyclePonds(editingCycle.id, ponds)
@@ -336,6 +343,67 @@ export default function EnterpriseCycleDashboard({
     }
   };
 
+  const openEditBlock = (block: FarmBlock) => {
+    setEditingBlock(block);
+    setEditingBlockName(block.name);
+    setEditingBlockTechnicianId(block.assignedTechnicianId || null);
+  };
+
+  const submitEditBlock = async () => {
+    if (!editingBlock || !editingBlockName.trim() || !updateBlock) return;
+    setSaving(true);
+    try {
+      const selectedTech = technicians.find((tech) => tech.uid === editingBlockTechnicianId) || null;
+      await updateBlock({
+        blockId: editingBlock.id,
+        name: editingBlockName.trim(),
+        technician: selectedTech,
+      });
+      setEditingBlock(null);
+    } catch (err) {
+      Alert.alert(t.messages.error, err instanceof Error ? err.message : t.enterprise.blockUpdateFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const promptDeleteBlock = () => {
+    if (!editingBlock || !deleteBlock) return;
+    const blockHasPonds = physicalPonds.some((pond) => pond.blockId === editingBlock.id)
+      || ponds.some((pond) => pond.blockId === editingBlock.id);
+
+    if (blockHasPonds) {
+      Alert.alert(
+        t.enterprise.deleteBlockConfirmTitle,
+        t.enterprise.cannotDeleteBlockWithPonds,
+      );
+      return;
+    }
+
+    Alert.alert(
+      t.enterprise.deleteBlockConfirmTitle,
+      t.enterprise.deleteBlockConfirmMessage.replace('{{blockName}}', editingBlock.name),
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: t.actions.delete,
+          style: 'destructive',
+          onPress: async () => {
+            setSaving(true);
+            try {
+              await deleteBlock(editingBlock.id);
+              setEditingBlock(null);
+            } catch (err) {
+              Alert.alert(t.messages.error, err instanceof Error ? err.message : t.enterprise.blockDeleteFailed);
+            } finally {
+              setSaving(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const assignTechnician = async (technician: EnterpriseTechnician) => {
     if (!assignmentBlock) return;
     setSaving(true);
@@ -383,20 +451,39 @@ export default function EnterpriseCycleDashboard({
           ) : null}
           {pondFilter === 'inactive' ? inactiveBlockRows.map(({ block, inactivePonds }) => {
             const openCycle = openCycleByBlockId.get(block.id);
+            const blockTechnician = technicians.find((candidate) => candidate.uid === block.assignedTechnicianId);
+            const technicianLabel = getEnterpriseTechnicianLabel(blockTechnician?.name, blockTechnician?.email, t.enterprise.unassigned);
+
             return (
               <View key={block.id} style={styles.cycleCard}>
                 <View style={styles.cycleHeader}>
                   <View style={styles.cycleToggle}>
                     <View style={styles.cycleIcon}><Ionicons name="layers-outline" size={19} color="#0F4C75" /></View>
-                    <View style={styles.cycleCopy}><Text style={styles.cycleName}>{block.name}</Text><Text style={styles.cycleDate}>{copy.inactivePonds.replace('{{count}}', String(inactivePonds.length))}</Text></View>
+                    <View style={styles.cycleCopy}>
+                      <Text style={styles.cycleName}>{block.name}</Text>
+                      <Text style={styles.cycleDate}>{copy.inactivePonds.replace('{{count}}', String(inactivePonds.length))} • {technicianLabel}</Text>
+                    </View>
                   </View>
-                  <TouchableOpacity style={styles.editCycleButton} onPress={() => openCycleFormForBlock(block.id)}><Ionicons name={openCycle ? 'play' : 'add'} size={15} color="#0F4C75" /><Text style={styles.editCycleText}>{openCycle ? copy.continue : copy.createCycle}</Text></TouchableOpacity>
-                </View>
-                <View style={styles.cycleBody}>
-                  <View style={styles.pondGrid}>
-                    {inactivePonds.map((pond) => <View key={pond.id} style={[styles.pondTile, styles.waitingPond, { width: pondTileWidth }]}><Text style={styles.waitingPondName} numberOfLines={2}>{pond.pondName}</Text><Text style={styles.waitingPondMeta}>{copy.inactive}</Text></View>)}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity style={styles.editCycleButton} onPress={() => openEditBlock(block)}>
+                      <Ionicons name="pencil-outline" size={14} color="#0F4C75" />
+                      <Text style={styles.editCycleText}>{t.actions.edit || 'Edit'}</Text>
+                    </TouchableOpacity>
+                    {inactivePonds.length > 0 && (
+                      <TouchableOpacity style={styles.editCycleButton} onPress={() => openCycleFormForBlock(block.id)}>
+                        <Ionicons name={openCycle ? 'play' : 'add'} size={14} color="#0F4C75" />
+                        <Text style={styles.editCycleText}>{openCycle ? copy.continue : copy.createCycle}</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
+                {inactivePonds.length > 0 ? (
+                  <View style={styles.cycleBody}>
+                    <View style={styles.pondGrid}>
+                      {inactivePonds.map((pond) => <View key={pond.id} style={[styles.pondTile, styles.waitingPond, { width: pondTileWidth }]}><Text style={styles.waitingPondName} numberOfLines={2}>{pond.pondName}</Text><Text style={styles.waitingPondMeta}>{copy.inactive}</Text></View>)}
+                    </View>
+                  </View>
+                ) : null}
               </View>
             );
           }) : null}
@@ -542,12 +629,58 @@ export default function EnterpriseCycleDashboard({
           <ScrollView showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="never">
           {sortedBlocks.length > 0 ? <View style={styles.pondSelector}>{sortedBlocks.map((block) => {
             const technician = technicians.find((candidate) => candidate.uid === block.assignedTechnicianId);
-            return <TouchableOpacity key={block.id} style={styles.pondOption} onPress={() => { setCreateBlockVisible(false); setAssignmentBlock(block); }}><Ionicons name="layers-outline" size={20} color="#0F4C75" /><Text style={styles.pondOptionName}>{block.name}</Text><Text style={styles.pondOptionArea}>{getEnterpriseTechnicianLabel(technician?.name, technician?.email, t.enterprise.unassigned)}</Text></TouchableOpacity>;
+            return <TouchableOpacity key={block.id} style={styles.pondOption} onPress={() => { setCreateBlockVisible(false); openEditBlock(block); }}><Ionicons name="layers-outline" size={20} color="#0F4C75" /><Text style={styles.pondOptionName}>{block.name}</Text><Text style={styles.pondOptionArea}>{getEnterpriseTechnicianLabel(technician?.name, technician?.email, t.enterprise.unassigned)}</Text><Ionicons name="pencil-outline" size={16} color="#5E7485" /></TouchableOpacity>;
           })}</View> : null}
           <Text style={styles.inputLabel}>{t.enterprise.blockName}</Text><TextInput style={styles.input} value={blockName} onChangeText={setBlockName} placeholder={t.enterprise.blockNamePlaceholder} />
           <Text style={styles.inputLabel}>{t.enterprise.assignTechnician}</Text>
           <View style={styles.pondSelector}>{technicians.map((technician) => <TouchableOpacity key={technician.uid} style={[styles.pondOption, blockTechnicianId === technician.uid && styles.pondOptionSelected]} onPress={() => setBlockTechnicianId(technician.uid)}><Ionicons name={blockTechnicianId === technician.uid ? 'checkmark-circle' : 'ellipse-outline'} size={20} color="#0F4C75" /><Text style={styles.pondOptionName}>{getEnterpriseTechnicianLabel(technician.name, technician.email)}</Text></TouchableOpacity>)}</View>
           <TouchableOpacity style={[styles.primaryButton, (!blockName.trim() || saving) && styles.disabledAction]} disabled={!blockName.trim() || saving} onPress={submitBlock}><Text style={styles.primaryButtonText}>{t.enterprise.saveBlock}</Text></TouchableOpacity>
+          </ScrollView>
+        </View></View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal visible={Boolean(editingBlock)} transparent animationType="slide" onRequestClose={() => setEditingBlock(null)}>
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={styles.modalBackdrop}><View style={styles.modalSheet}>
+          <View style={styles.modalHeader}><View style={styles.modalHeaderCopy}><Text style={styles.modalTitle}>{t.enterprise.editBlock || 'Edit Block'}</Text><Text style={styles.modalText}>{t.enterprise.editBlockDescription || 'Update the block name or change the assigned technician.'}</Text></View><TouchableOpacity style={styles.closeModalButton} onPress={() => setEditingBlock(null)} accessibilityLabel={t.harvest.close}><Ionicons name="close" size={21} color="#334B5C" /></TouchableOpacity></View>
+          <ScrollView showsVerticalScrollIndicator={false} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="never">
+          <Text style={styles.inputLabel}>{t.enterprise.blockName}</Text>
+          <TextInput style={styles.input} value={editingBlockName} onChangeText={setEditingBlockName} placeholder={t.enterprise.blockNamePlaceholder} placeholderTextColor="#8A9BA8" />
+          <Text style={styles.inputLabel}>{t.enterprise.assignTechnician}</Text>
+          <View style={styles.pondSelector}>
+            <TouchableOpacity
+              style={[styles.pondOption, editingBlockTechnicianId === null && styles.pondOptionSelected]}
+              onPress={() => setEditingBlockTechnicianId(null)}
+            >
+              <Ionicons name={editingBlockTechnicianId === null ? 'checkmark-circle' : 'ellipse-outline'} size={20} color="#0F4C75" />
+              <Text style={styles.pondOptionName}>{t.enterprise.unassigned || 'Unassigned'}</Text>
+            </TouchableOpacity>
+            {technicians.map((technician) => (
+              <TouchableOpacity
+                key={technician.uid}
+                style={[styles.pondOption, editingBlockTechnicianId === technician.uid && styles.pondOptionSelected]}
+                onPress={() => setEditingBlockTechnicianId(technician.uid)}
+              >
+                <Ionicons name={editingBlockTechnicianId === technician.uid ? 'checkmark-circle' : 'ellipse-outline'} size={20} color="#0F4C75" />
+                <Text style={styles.pondOptionName}>{getEnterpriseTechnicianLabel(technician.name, technician.email)}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TouchableOpacity
+            style={[styles.primaryButton, (!editingBlockName.trim() || saving) && styles.disabledAction]}
+            disabled={!editingBlockName.trim() || saving}
+            onPress={submitEditBlock}
+          >
+            {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{t.actions.save || 'Save'}</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cancelButton, { marginTop: 10, borderColor: '#F0C8C3', backgroundColor: '#FFF5F5' }]}
+            disabled={saving}
+            onPress={promptDeleteBlock}
+          >
+            <Text style={[styles.cancelText, { color: '#B42318' }]}>{t.enterprise.deleteBlock || 'Delete block'}</Text>
+          </TouchableOpacity>
           </ScrollView>
         </View></View>
         </TouchableWithoutFeedback>

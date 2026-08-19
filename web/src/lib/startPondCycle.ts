@@ -18,6 +18,9 @@ export interface StartPondCycleFormValue {
   baselineEstimatedPopulation: string;
   baselineSurvivalRate: string;
   baselineCumulativeFeed: string;
+  cycleTargetMode?: 'existing' | 'new';
+  targetCycleId?: string;
+  newCycleName?: string;
 }
 
 export interface StartablePondCycleRecord {
@@ -108,26 +111,28 @@ export async function startPondCycle({
   userId: string;
   pond: StartablePondCycleRecord;
   pondType: 'physical' | 'cycle';
-  activeCycle: OpenFarmCycle;
+  activeCycle?: OpenFarmCycle | null;
   form: StartPondCycleFormValue;
   today: string;
   activePonds: { id: string; pondName: string; cycleStatus?: 'active' | 'ended' }[];
-}): Promise<string> {
+}): Promise<{ pondId: string; cycleId: string }> {
   const hasDuplicate = activePonds.some((activePond) => (
     activePond.id !== pond.id
     && activePond.cycleStatus !== 'ended'
     && getPhysicalPondKey(activePond.pondName) === getPhysicalPondKey(pond.pondName)
   ));
   if (hasDuplicate) throw new StartPondCycleError('duplicate');
-  const assignedBlockIds = activeCycle.blockIds?.length
+
+  const isCreatingNewCycle = form.cycleTargetMode === 'new' || !activeCycle;
+  const assignedBlockIds = (!isCreatingNewCycle && activeCycle?.blockIds?.length)
     ? activeCycle.blockIds
-    : activeCycle.blockId
+    : (!isCreatingNewCycle && activeCycle?.blockId)
       ? [activeCycle.blockId]
       : [];
   if (assignedBlockIds.length > 0 && (!pond.blockId || !assignedBlockIds.includes(pond.blockId))) {
     throw new StartPondCycleError('blockMismatch');
   }
-  if (!activeCycle.blockIds?.length && activeCycle.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(pond.id)) {
+  if (!isCreatingNewCycle && !activeCycle?.blockIds?.length && activeCycle?.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(pond.id)) {
     throw new StartPondCycleError('cycleMismatch');
   }
 
@@ -159,7 +164,30 @@ export async function startPondCycle({
   const baselinePopulation = parseOptionalNumber(form.baselineEstimatedPopulation);
   const baselineSurvivalRate = parseOptionalNumber(form.baselineSurvivalRate);
   const baselineFeed = parseOptionalNumber(form.baselineCumulativeFeed);
+  
+  const batch = writeBatch(db);
   const pondRef = doc(collection(db, 'companies', companyId, 'ponds'));
+  
+  let targetCycleId = activeCycle?.id || '';
+  let targetCycleName = activeCycle?.cycleName || '';
+
+  if (isCreatingNewCycle) {
+    const cycleRef = doc(collection(db, 'companies', companyId, 'cycles'));
+    targetCycleId = cycleRef.id;
+    targetCycleName = form.newCycleName?.trim() || 'New Cycle';
+    batch.set(cycleRef, {
+      cycleName: targetCycleName,
+      status: 'active',
+      plannedStartDate: form.docStart,
+      stockingStartDate: form.docStart,
+      stockingEndDate: form.docStart,
+      createdAt: serverTimestamp(),
+      createdBy: userId,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  }
+
   const baselineSampling = isMidcycle ? [{
     id: `baseline-${Date.now()}`,
     date: today,
@@ -168,8 +196,8 @@ export async function startPondCycle({
     feed: baselineFeed ?? 0,
     isBaselineEstimate: true,
     source: 'midcycle_onboarding',
-    cycleId: activeCycle.id,
-    cycleName: activeCycle.cycleName,
+    cycleId: targetCycleId,
+    cycleName: targetCycleName,
     pondCycleId: pondRef.id,
     physicalPondId: pond.id,
     ...(baselinePopulation !== undefined ? { estimatedPopulation: baselinePopulation } : {}),
@@ -177,7 +205,6 @@ export async function startPondCycle({
     ...(baselineFeed !== undefined ? { cumulativeFeedToDate: baselineFeed } : {}),
   }] : [];
 
-  const batch = writeBatch(db);
   batch.set(pondRef, removeUndefinedFields({
     pondName: pond.pondName,
     blockId: pond.blockId || undefined,
@@ -193,8 +220,8 @@ export async function startPondCycle({
     totalHarvestedBiomass: 0,
     totalHarvestedPopulation: 0,
     totalHarvestedFeed: 0,
-    cycleId: activeCycle.id,
-    cycleName: activeCycle.cycleName,
+    cycleId: targetCycleId,
+    cycleName: targetCycleName,
     pondCycleId: pondRef.id,
     cycleStatus: 'active',
     cycleStartedAt: form.docStart,
@@ -224,21 +251,23 @@ export async function startPondCycle({
     });
   }
 
-  const stockingStartDate = [activeCycle.stockingStartDate, form.docStart]
-    .filter((date): date is string => Boolean(date))
-    .sort()[0];
-  const stockingEndDate = [activeCycle.stockingEndDate, form.docStart]
-    .filter((date): date is string => Boolean(date))
-    .sort()
-    .at(-1);
-  batch.update(doc(db, 'companies', companyId, 'cycles', activeCycle.id), {
-    status: 'stocking',
-    stockingStartDate,
-    stockingEndDate,
-    updatedAt: serverTimestamp(),
-    updatedBy: userId,
-  });
+  if (!isCreatingNewCycle && activeCycle) {
+    const stockingStartDate = [activeCycle.stockingStartDate, form.docStart]
+      .filter((date): date is string => Boolean(date))
+      .sort()[0];
+    const stockingEndDate = [activeCycle.stockingEndDate, form.docStart]
+      .filter((date): date is string => Boolean(date))
+      .sort()
+      .at(-1);
+    batch.update(doc(db, 'companies', companyId, 'cycles', activeCycle.id), {
+      status: 'stocking',
+      stockingStartDate,
+      stockingEndDate,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  }
 
   await batch.commit();
-  return pondRef.id;
+  return { pondId: pondRef.id, cycleId: targetCycleId };
 }

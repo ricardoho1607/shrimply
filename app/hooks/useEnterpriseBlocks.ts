@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -19,6 +20,12 @@ import {
 } from '../../shared/enterpriseBlocks';
 
 interface CreateBlockInput {
+  name: string;
+  technician?: EnterpriseTechnician | null;
+}
+
+interface UpdateBlockInput {
+  blockId: string;
   name: string;
   technician?: EnterpriseTechnician | null;
 }
@@ -111,11 +118,40 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
     });
   }, [blocks, companyId, userId]);
 
+  const updateBlock = useCallback(async ({ blockId, name, technician }: UpdateBlockInput) => {
+    const normalizedName = name.trim();
+    if (!companyId || !userId || !normalizedName) {
+      throw new Error('Block name and company access are required.');
+    }
+    const duplicate = blocks.some(
+      (b) => b.id !== blockId && b.name.trim().toLowerCase() === normalizedName.toLowerCase(),
+    );
+    if (duplicate) {
+      throw new Error('A block with this name already exists.');
+    }
+
+    await updateDoc(doc(db, 'companies', companyId, 'blocks', blockId), {
+      name: normalizedName,
+      assignedTechnicianId: technician?.uid || null,
+      assignedTechnicianName: technician?.name.trim() || null,
+      assignedTechnicianEmail: technician?.email || null,
+      updatedAt: serverTimestamp(),
+      updatedBy: userId,
+    });
+  }, [blocks, companyId, userId]);
+
+  const deleteBlock = useCallback(async (blockId: string) => {
+    if (!companyId || !userId || !blockId) {
+      throw new Error('Company access and block ID are required.');
+    }
+    await deleteDoc(doc(db, 'companies', companyId, 'blocks', blockId));
+  }, [companyId, userId]);
+
   const assignBlockTechnician = useCallback(async ({ blockId, technician }: AssignBlockTechnicianInput) => {
     const block = blocks.find((candidate) => candidate.id === blockId);
     const approvedTechnician = technicians.find((candidate) => candidate.uid === technician.uid);
-    if (!companyId || !userId || !block || block.assignedTechnicianId || !approvedTechnician) {
-      throw new Error('A valid unassigned block and approved technician are required.');
+    if (!companyId || !userId || !block || !approvedTechnician) {
+      throw new Error('A valid block and approved technician are required.');
     }
 
     await updateDoc(doc(db, 'companies', companyId, 'blocks', blockId), {
@@ -139,6 +175,8 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
     loading,
     error,
     createBlock,
+    updateBlock,
+    deleteBlock,
     assignBlockTechnician,
   };
 };
