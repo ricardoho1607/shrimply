@@ -22,6 +22,7 @@ import {
   FlaskConical,
   Leaf,
   Pencil,
+  Trash2,
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
@@ -337,6 +338,7 @@ export default function PondDetailClient() {
     mortality: '0'
   });
   const [editingSamplingId, setEditingSamplingId] = useState<string | null>(null);
+  const [editingMortalityId, setEditingMortalityId] = useState<string | null>(null);
   const [mortalityForm, setMortalityForm] = useState<MortalityFormState>({
     date: today,
     observationType: 'estimated_total' as MortalityObservationType,
@@ -429,67 +431,92 @@ export default function PondDetailClient() {
     || (typeof pond?.blockId === 'string' && assignedBlockIds.has(pond.blockId));
   const canEditPond = canEditOperations(userRole) && hasPondAccess;
 
-  const handleAddSampling = async (e: React.FormEvent) => {
+  const handleDeleteSampling = async (samplingId: string) => {
+    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
+    if (!window.confirm('Delete this sampling record?')) return;
+    try {
+      const updatedSamplings = (pond.samplings || []).filter((s) => s.id !== samplingId);
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        samplings: updatedSamplings,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error deleting sampling record:', error);
+      alert('Failed to delete sampling record.');
+    }
+  };
+
+  const handleDeleteMortality = async (recordId: string) => {
+    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
+    if (!window.confirm('Delete this mortality record?')) return;
+    try {
+      const updatedRecords = (pond.mortalityRecords || []).filter((r) => r.id !== recordId);
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        mortalityRecords: updatedRecords,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('Error deleting mortality record:', error);
+      alert('Failed to delete mortality record.');
+    }
+  };
+
+  const handleSaveSampling = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
-    if (!canEditPond) return;
-    if (!isActiveCycle(pond)) {
-      alert('Ended cycles are read-only. Start a new cycle before adding sampling data.');
-      return;
-    }
-    setIsSubmitting(true);
+    if (!canEditPond || !isActiveCycle(pond)) return;
 
+    setIsSubmitting(true);
     try {
-      const pondRef = doc(db, 'companies', companyId, 'ponds', pond.id);
       const newSampling: Sampling = {
         id: editingSamplingId || `s-${Date.now()}`,
         date: samplingForm.date,
         mbw: parseFloat(samplingForm.mbw) || 0,
-        mortality: parseInt(samplingForm.mortality) || 0,
         feed: parseFloat(samplingForm.feed) || 0,
+        mortality: parseInt(samplingForm.mortality) || 0,
+        cycleId: pond.cycleId,
+        cycleName: pond.cycleName,
         pondCycleId: pond.pondCycleId || pond.id,
-        ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
-        ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
       };
 
+      let updatedSamplings: Sampling[];
       if (editingSamplingId) {
-        const updatedSamplings = (pond.samplings || []).map((sampling) => sampling.id === editingSamplingId
+        updatedSamplings = (pond.samplings || []).map((sampling) => sampling.id === editingSamplingId
           ? { ...sampling, ...newSampling }
-          : sampling);
-        await updateDoc(pondRef, { samplings: updatedSamplings, updatedAt: serverTimestamp() });
+          : sampling
+        );
       } else {
-        await updateDoc(pondRef, { samplings: arrayUnion(newSampling), updatedAt: serverTimestamp() });
+        updatedSamplings = [...(pond.samplings || []), newSampling];
       }
 
+      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+        samplings: updatedSamplings,
+        updatedAt: serverTimestamp()
+      });
       setSamplingModalOpen(false);
       setEditingSamplingId(null);
       setSamplingForm({
         date: today,
         mbw: '',
-        mortality: '0',
-        feed: ''
+        feed: '',
+        mortality: '0'
       });
     } catch (error) {
-      console.error("Error adding sampling:", error);
-      alert("Failed to save sampling record.");
+      console.error("Error saving sampling:", error);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleAddMortality = async (e: React.FormEvent) => {
+  const handleSaveMortality = async (e: React.FormEvent) => {
     e.preventDefault();
     const recordedBy = auth.currentUser?.uid;
-    if (!companyId || !pond || !recordedBy || !canEditPond) return;
-    if (!isActiveCycle(pond)) {
-      alert('Ended cycles are read-only. Start a new cycle before adding mortality data.');
-      return;
-    }
+    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
 
     const count = mortalityForm.observationType === 'none_observed'
       ? 0
-      : Number(mortalityForm.count.trim().replace(',', '.'));
-    if (mortalityForm.observationType !== 'none_observed' && (!Number.isInteger(count) || count <= 0)) {
+      : Math.round(Number(mortalityForm.count));
+    if (mortalityForm.observationType !== 'none_observed' && (isNaN(count) || count <= 0)) {
       alert('Enter a mortality count greater than zero using a whole number.');
       return;
     }
@@ -509,25 +536,52 @@ export default function PondDetailClient() {
         .filter((sampling) => sampling.date <= mortalityForm.date && Number(sampling.mbw) > 0)
         .sort((first, second) => second.date.localeCompare(first.date))[0]?.mbw;
       const notes = mortalityForm.notes.trim();
-      const newRecord: SharedMortalityRecord = {
-        id: `mortality-${Date.now()}`,
-        date: mortalityForm.date,
-        observationType: mortalityForm.observationType,
-        count,
-        recordedAt: new Date().toISOString(),
-        recordedBy,
-        pondCycleId: pond.pondCycleId || pond.id,
-        ...(Number(mbwAtRecord) > 0 ? { mbwAtRecord: Number(mbwAtRecord) } : {}),
-        ...(notes ? { notes } : {}),
-        ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
-        ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
-      };
 
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-        mortalityRecords: arrayUnion(newRecord),
-        updatedAt: serverTimestamp(),
-      });
+      if (editingMortalityId) {
+        const existing = (pond.mortalityRecords || []).find((r) => r.id === editingMortalityId);
+        const updatedRecord: SharedMortalityRecord = {
+          id: editingMortalityId,
+          date: mortalityForm.date,
+          observationType: mortalityForm.observationType,
+          count,
+          recordedAt: existing?.recordedAt || new Date().toISOString(),
+          recordedBy: existing?.recordedBy || recordedBy,
+          pondCycleId: existing?.pondCycleId || pond.pondCycleId || pond.id,
+          ...(Number(mbwAtRecord) > 0 ? { mbwAtRecord: Number(mbwAtRecord) } : {}),
+          ...(notes ? { notes } : {}),
+          ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
+          ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
+        };
+        const updatedRecords = (pond.mortalityRecords || []).map((r) =>
+          r.id === editingMortalityId ? updatedRecord : r
+        );
+        await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+          mortalityRecords: updatedRecords,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const newRecord: SharedMortalityRecord = {
+          id: `mortality-${Date.now()}`,
+          date: mortalityForm.date,
+          observationType: mortalityForm.observationType,
+          count,
+          recordedAt: new Date().toISOString(),
+          recordedBy,
+          pondCycleId: pond.pondCycleId || pond.id,
+          ...(Number(mbwAtRecord) > 0 ? { mbwAtRecord: Number(mbwAtRecord) } : {}),
+          ...(notes ? { notes } : {}),
+          ...(pond.cycleId ? { cycleId: pond.cycleId } : {}),
+          ...(pond.cycleName ? { cycleName: pond.cycleName } : {}),
+        };
+
+        await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
+          mortalityRecords: arrayUnion(newRecord),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
       setMortalityModalOpen(false);
+      setEditingMortalityId(null);
       setMortalityForm({
         date: today,
         observationType: 'estimated_total',
@@ -535,7 +589,7 @@ export default function PondDetailClient() {
         notes: '',
       });
     } catch (error) {
-      console.error('Error adding mortality:', error);
+      console.error('Error saving mortality:', error);
       alert('Failed to save mortality record.');
     } finally {
       setIsSubmitting(false);
@@ -1086,12 +1140,15 @@ export default function PondDetailClient() {
                           {s.mortality > 0 ? `+${s.mortality}` : '0'}
                         </td>
                         {canEditPond && isActiveCycle(pond) && (
-                          <td style={{ padding: '16px 24px' }}>
-                            <button type="button" aria-label="Edit sampling" onClick={() => {
-                              setEditingSamplingId(s.id);
-                              setSamplingForm({ date: s.date, mbw: String(s.mbw || ''), feed: String(s.feed || ''), mortality: String(s.mortality || 0) });
-                              setSamplingModalOpen(true);
-                            }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}><Pencil size={14} /></button>
+                          <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button type="button" aria-label="Edit sampling" onClick={() => {
+                                setEditingSamplingId(s.id);
+                                setSamplingForm({ date: s.date, mbw: String(s.mbw || ''), feed: String(s.feed || ''), mortality: String(s.mortality || 0) });
+                                setSamplingModalOpen(true);
+                              }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}><Pencil size={14} /></button>
+                              <button type="button" aria-label="Delete sampling" onClick={() => handleDeleteSampling(s.id)} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -1136,7 +1193,13 @@ export default function PondDetailClient() {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMortalityForm(prev => ({ ...prev, date: today }));
+                      setEditingMortalityId(null);
+                      setMortalityForm({
+                        date: today,
+                        observationType: 'estimated_total',
+                        count: '',
+                        notes: '',
+                      });
                       setMortalityModalOpen(true);
                     }}
                     style={{
@@ -1190,6 +1253,9 @@ export default function PondDetailClient() {
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Count (pcs)</th>
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Est. Weight</th>
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Notes</th>
+                        {canEditPond && isActiveCycle(pond) && (
+                          <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Actions</th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1233,6 +1299,37 @@ export default function PondDetailClient() {
                             <td style={{ padding: '16px 24px', fontSize: '0.84rem', color: 'var(--text-muted)', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {record.notes && !record.notes.toLowerCase().includes('projection testing') ? record.notes : '—'}
                             </td>
+                            {canEditPond && isActiveCycle(pond) && (
+                              <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <button
+                                    type="button"
+                                    aria-label="Edit mortality"
+                                    onClick={() => {
+                                      setEditingMortalityId(record.id || null);
+                                      setMortalityForm({
+                                        date: record.date || today,
+                                        observationType: record.observationType || 'estimated_total',
+                                        count: record.observationType === 'none_observed' ? '0' : String(record.count || '0'),
+                                        notes: record.notes || '',
+                                      });
+                                      setMortalityModalOpen(true);
+                                    }}
+                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label="Delete mortality"
+                                    onClick={() => handleDeleteMortality(record.id || '')}
+                                    style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </div>
+                              </td>
+                            )}
                           </tr>
                         );
                       })}
@@ -1491,8 +1588,11 @@ export default function PondDetailClient() {
 
       <SamplingModal
         isOpen={isSamplingModalOpen}
-        onClose={() => setSamplingModalOpen(false)}
-        onSubmit={handleAddSampling}
+        onClose={() => {
+          setSamplingModalOpen(false);
+          setEditingSamplingId(null);
+        }}
+        onSubmit={handleSaveSampling}
         form={samplingForm}
         setForm={setSamplingForm}
         isSubmitting={isSubmitting}
@@ -1500,11 +1600,15 @@ export default function PondDetailClient() {
       />
       <MortalityModal
         isOpen={isMortalityModalOpen}
-        onClose={() => setMortalityModalOpen(false)}
-        onSubmit={handleAddMortality}
+        onClose={() => {
+          setMortalityModalOpen(false);
+          setEditingMortalityId(null);
+        }}
+        onSubmit={handleSaveMortality}
         form={mortalityForm}
         setForm={setMortalityForm}
         isSubmitting={isSubmitting}
+        isEditing={Boolean(editingMortalityId)}
       />
 
       <style jsx>{`
@@ -1666,9 +1770,10 @@ interface MortalityModalProps {
   form: MortalityFormState;
   setForm: React.Dispatch<React.SetStateAction<MortalityFormState>>;
   isSubmitting: boolean;
+  isEditing?: boolean;
 }
 
-function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting }: MortalityModalProps) {
+function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: MortalityModalProps) {
   if (!isOpen) return null;
 
   return (
@@ -1680,7 +1785,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>Daily Mortality</h3>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? 'Edit Mortality' : 'Daily Mortality'}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Record mortality observations for this pond.</p>
           </div>
           <button onClick={onClose} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1718,7 +1823,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
             <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : 'Save Mortality'}
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? 'Update Record' : 'Save Mortality'}
             </button>
           </div>
         </form>

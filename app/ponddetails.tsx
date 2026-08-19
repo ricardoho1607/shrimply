@@ -7,10 +7,12 @@ import {
   TextInput, TouchableOpacity, View, Alert, Platform,
   Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView
 } from 'react-native';
-import { usePondStore, type Pond, type Sampling, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import { usePondStore, type Pond, type Sampling, type MortalityRecord, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
-import { calculatePondMortalityForDate, detectFeedBiomassMismatchInsight, getSamplingMbw } from '../shared/pondCalculations';
+import { calculatePondMortalityForDate, detectFeedBiomassMismatchInsight, getSamplingMbw, type MortalityObservationType } from '../shared/pondCalculations';
 import { 
   collection, 
   query, 
@@ -238,6 +240,195 @@ const EditSamplingModal = ({
 );
 };
 
+const EditMortalityModal = ({
+  visible,
+  record,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  record: MortalityRecord | null;
+  onClose: () => void;
+  onSave: (id: string, data: {
+    count: number;
+    observationType: MortalityObservationType;
+    notes?: string;
+  }) => void;
+}) => {
+  const { t } = useLanguage();
+  const [count, setCount] = useState('');
+  const [observationType, setObservationType] = useState<MortalityObservationType>('estimated_total');
+  const [notes, setNotes] = useState('');
+
+  useEffect(() => {
+    if (record && visible) {
+      setCount(record.observationType === 'none_observed' ? '0' : (record.count !== undefined ? String(record.count) : '0'));
+      setObservationType(record.observationType || 'estimated_total');
+      setNotes(record.notes || '');
+    }
+  }, [record, visible]);
+
+  useEffect(() => {
+    if (!visible) {
+      setCount('');
+      setObservationType('estimated_total');
+      setNotes('');
+    }
+  }, [visible]);
+
+  const handleSave = () => {
+    if (!record) return;
+    const isNone = observationType === 'none_observed';
+    const countNum = isNone ? 0 : Number(count);
+    if (!isNone && (isNaN(countNum) || countNum < 0)) return;
+
+    onSave(record.id, {
+      count: countNum,
+      observationType,
+      notes: notes.trim(),
+    });
+    onClose();
+  };
+
+  return (
+    <Modal visible={visible} animationType="none" transparent>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <View style={styles.editModalContainer}>
+          <KeyboardAvoidingView 
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.editModalContent}>
+              <View style={styles.editModalHeader}>
+                <Text style={styles.editModalTitle}>
+                  {t.actions.edit} {t.home.mortalityHistory}
+                </Text>
+                <TouchableOpacity
+                  onPress={onClose}
+                  style={styles.closeButton}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close"
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={24} color="#315f57" />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView 
+                style={styles.editModalScrollView}
+                contentContainerStyle={styles.editModalScrollContent}
+                keyboardShouldPersistTaps="handled" 
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled={true}
+                bounces={false}
+              >
+                {/* Observation Type Selector */}
+                <View style={styles.editInputContainer}>
+                  <Text style={styles.editInputLabel}>{t.home.mortalityObservationType}</Text>
+                  <View style={styles.obsTypeSelector}>
+                    <TouchableOpacity
+                      style={[
+                        styles.obsTypePill,
+                        observationType === 'estimated_total' && styles.obsTypePillActive,
+                      ]}
+                      onPress={() => setObservationType('estimated_total')}
+                    >
+                      <Text
+                        style={[
+                          styles.obsTypePillText,
+                          observationType === 'estimated_total' && styles.obsTypePillTextActive,
+                        ]}
+                      >
+                        {t.home.mortalityEstimatedShort || 'Estimated Total'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.obsTypePill,
+                        observationType === 'observed_recovered' && styles.obsTypePillActive,
+                      ]}
+                      onPress={() => setObservationType('observed_recovered')}
+                    >
+                      <Text
+                        style={[
+                          styles.obsTypePillText,
+                          observationType === 'observed_recovered' && styles.obsTypePillTextActive,
+                        ]}
+                      >
+                        {t.home.mortalityObservedShort || 'Observed'}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[
+                        styles.obsTypePill,
+                        observationType === 'none_observed' && styles.obsTypePillActive,
+                      ]}
+                      onPress={() => {
+                        setObservationType('none_observed');
+                        setCount('0');
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.obsTypePillText,
+                          observationType === 'none_observed' && styles.obsTypePillTextActive,
+                        ]}
+                      >
+                        {t.home.mortalityNoneShort || 'None'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {observationType !== 'none_observed' && (
+                  <EditInputField
+                    label={`${t.home.mortalityCount} (pcs)`}
+                    value={count}
+                    onChangeText={setCount}
+                    keyboardType="numeric"
+                  />
+                )}
+
+                <View style={styles.editInputContainer}>
+                  <Text style={styles.editInputLabel}>{t.home.mortalityNotes}</Text>
+                  <TextInput
+                    style={[styles.editInput, styles.editInputMultiline]}
+                    value={notes}
+                    onChangeText={setNotes}
+                    placeholder={t.home.mortalityNotesHint || 'Notes (optional)'}
+                    placeholderTextColor="#6b8aa0"
+                    multiline
+                    numberOfLines={3}
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={styles.editButtonContainer}>
+                <TouchableOpacity 
+                  style={styles.editCancelButton} 
+                  onPress={onClose}
+                >
+                  <Text style={styles.editCancelText}>
+                    {t.actions.cancel}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.editSaveButton} 
+                  onPress={handleSave}
+                >
+                  <Text style={styles.editSaveText}>
+                    {t.actions.save}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  );
+};
+
 export default function PondDetails() {
   const router = useRouter();
   const { pondId } = useLocalSearchParams();
@@ -260,6 +451,9 @@ export default function PondDetails() {
     getPondById, 
     addPond,
     updateSampling, 
+    deleteSampling,
+    updateMortalityRecord,
+    deleteMortalityRecord,
     calculatePondMetricsWithHarvest,
     ponds,
     cycles,
@@ -270,6 +464,8 @@ export default function PondDetails() {
   const [activeHistoryTab, setActiveHistoryTab] = useState<'sampling' | 'mortality'>('sampling');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSample, setSelectedSample] = useState<Sampling | null>(null);
+  const [editMortalityModalVisible, setEditMortalityModalVisible] = useState(false);
+  const [selectedMortalityRecord, setSelectedMortalityRecord] = useState<MortalityRecord | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [startCycleVisible, setStartCycleVisible] = useState(false);
   const [newCycleForm, setNewCycleForm] = useState({
@@ -569,9 +765,89 @@ export default function PondDetails() {
     if (updatedPond) {
       setPond(updatedPond);
     }
+  }, [pond, updateSampling, getPondById]);
+
+  const openEditMortalityModal = useCallback((record: MortalityRecord) => {
+    if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
+      Alert.alert(
+        t.home.permissionDenied,
+        !pond || !isPondCycleActive(pond)
+          ? 'Ended cycles are read-only. Start a new cycle before adding or editing mortality data.'
+          : t.home.onlyTechniciansCanEdit,
+        [{ text: t.actions.confirm }]
+      );
+      return;
+    }
     
-    router.push('/(tabs)' as any);
-  }, [pond, updateSampling, getPondById, router]);
+    setSelectedMortalityRecord(record);
+    setEditMortalityModalVisible(true);
+  }, [canEditPonds, pond, t]);
+
+  const closeEditMortalityModal = useCallback(() => {
+    setEditMortalityModalVisible(false);
+    setSelectedMortalityRecord(null);
+  }, []);
+
+  const handleSaveMortalityEdit = useCallback((
+    recordId: string,
+    data: { count: number; observationType: MortalityObservationType; notes?: string }
+  ) => {
+    if (!pond) return;
+
+    updateMortalityRecord(pond.id, recordId, data);
+
+    const updatedPond = getPondById(pond.id);
+    if (updatedPond) {
+      setPond(updatedPond);
+    }
+  }, [pond, updateMortalityRecord, getPondById]);
+
+  const handleDeleteMortality = useCallback((record: MortalityRecord) => {
+    if (!pond || !canEditPonds || !isPondCycleActive(pond)) return;
+    const formattedDate = new Date(record.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const countText = record.observationType === 'none_observed' ? '0 pcs' : `${record.count} pcs`;
+    Alert.alert(
+      t.actions.delete,
+      `${t.home.mortalityHistory}: ${formattedDate} (${countText})?`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: t.actions.delete,
+          style: 'destructive',
+          onPress: () => {
+            deleteMortalityRecord(pond.id, record.id);
+            const updatedPond = getPondById(pond.id);
+            if (updatedPond) {
+              setPond(updatedPond);
+            }
+          },
+        },
+      ]
+    );
+  }, [pond, canEditPonds, deleteMortalityRecord, getPondById, t]);
+
+  const handleDeleteSampling = useCallback((sample: Sampling) => {
+    if (!pond || !canEditPonds || !isPondCycleActive(pond)) return;
+    const formattedDate = new Date(sample.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    Alert.alert(
+      t.actions.delete,
+      `${t.home.samplingData}: ${formattedDate} (MBW ${sample.mbw}g)?`,
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: t.actions.delete,
+          style: 'destructive',
+          onPress: () => {
+            deleteSampling(pond.id, sample.id);
+            const updatedPond = getPondById(pond.id);
+            if (updatedPond) {
+              setPond(updatedPond);
+            }
+          },
+        },
+      ]
+    );
+  }, [pond, canEditPonds, deleteSampling, getPondById, t]);
 
   if (!pond || !calculations) {
     return (
@@ -636,7 +912,7 @@ export default function PondDetails() {
         }}
       />
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      <View style={styles.container}>
+      <GestureHandlerRootView style={styles.container}>
         <ScrollView 
           style={styles.scrollView} 
           showsVerticalScrollIndicator={false}
@@ -787,7 +1063,9 @@ export default function PondDetails() {
                       </View>
                       <Text style={styles.labStatusIssue}>{item.status?.mainIssue || t.waterQuality.noConfirmedLabWarning}</Text>
                       {item.status?.sampleDate && (
-                        <Text style={styles.labStatusDate}>{t.waterQuality.lastLab}: {new Date(item.status.sampleDate).toLocaleDateString()}</Text>
+                        <Text style={styles.labStatusDate}>
+                          {t.waterQuality.lastLab}: {new Date(item.status.sampleDate).toLocaleDateString()}
+                        </Text>
                       )}
                       {item.status?.keyRisks && item.status.keyRisks.length > 0 && (
                         <View style={styles.labStatusList}>
@@ -880,9 +1158,14 @@ export default function PondDetails() {
                   const countNum = Number(record.count) || 0;
                   const weightKg = mbw > 0 && countNum > 0 ? (countNum * mbw) / 1000 : null;
 
-                  return (
-                    <View
-                      key={record.id || index}
+                  const rowContent = (
+                    <TouchableOpacity
+                      activeOpacity={canEditPonds && isPondCycleActive(pond) ? 0.7 : 1}
+                      onPress={() => {
+                        if (canEditPonds && isPondCycleActive(pond)) {
+                          openEditMortalityModal(record);
+                        }
+                      }}
                       style={[
                         styles.mortalityItemRow,
                         index !== currentCycleMortalityRecords.length - 1 && styles.mortalityItemBorder
@@ -909,6 +1192,41 @@ export default function PondDetails() {
                           </Text>
                         )}
                       </View>
+
+                      {canEditPonds && isPondCycleActive(pond) && (
+                        <TouchableOpacity
+                          style={styles.samplingEditBtn}
+                          onPress={() => openEditMortalityModal(record)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="pencil-outline" size={15} color="#0F4C75" />
+                        </TouchableOpacity>
+                      )}
+                    </TouchableOpacity>
+                  );
+
+                  return canEditPonds && isPondCycleActive(pond) ? (
+                    <Swipeable
+                      key={record.id || index}
+                      overshootRight={false}
+                      rightThreshold={40}
+                      renderRightActions={() => (
+                        <TouchableOpacity
+                          style={styles.swipeDeleteButton}
+                          onPress={() => handleDeleteMortality(record)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t.actions.delete}: ${record.date}`}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                          <Text style={styles.swipeDeleteText}>{t.actions.delete}</Text>
+                        </TouchableOpacity>
+                      )}
+                    >
+                      {rowContent}
+                    </Swipeable>
+                  ) : (
+                    <View key={record.id || index}>
+                      {rowContent}
                     </View>
                   );
                 })}
@@ -923,45 +1241,77 @@ export default function PondDetails() {
               </View>
             ) : (
               <View style={styles.mortalityListCard}>
-                {pondSamplingData.map((sample, index) => (
-                  <View
-                    key={sample.id || index}
-                    style={[
-                      styles.samplingItemRow,
-                      index !== pondSamplingData.length - 1 && styles.mortalityItemBorder
-                    ]}
-                  >
-                    <View style={styles.samplingItemLeft}>
-                      <Text style={styles.samplingItemDate}>
-                        {new Date(sample.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </Text>
-                      <View style={styles.samplingMetricsRow}>
-                        <Text style={styles.samplingMetricTag}>MBW <Text style={styles.samplingMetricBold}>{sample.mbw}g</Text></Text>
-                        <Text style={styles.samplingMetricDivider}>•</Text>
-                        <Text style={styles.samplingMetricTag}>Feed <Text style={styles.samplingMetricBold}>{sample.feed}kg</Text></Text>
-                        {Number(sample.mortality) > 0 && (
-                          <>
-                            <Text style={styles.samplingMetricDivider}>•</Text>
-                            <Text style={styles.samplingMetricTagLoss}>Mort. {sample.mortality}</Text>
-                          </>
+                {pondSamplingData.map((sample, index) => {
+                  const rowContent = (
+                    <TouchableOpacity
+                      activeOpacity={canEditPonds && isPondCycleActive(pond) ? 0.7 : 1}
+                      onPress={() => {
+                        if (canEditPonds && isPondCycleActive(pond)) {
+                          openEditModal(sample);
+                        }
+                      }}
+                      style={[
+                        styles.samplingItemRow,
+                        index !== pondSamplingData.length - 1 && styles.mortalityItemBorder
+                      ]}
+                    >
+                      <View style={styles.samplingItemLeft}>
+                        <Text style={styles.samplingItemDate}>
+                          {new Date(sample.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </Text>
+                        <View style={styles.samplingMetricsRow}>
+                          <Text style={styles.samplingMetricTag}>MBW <Text style={styles.samplingMetricBold}>{sample.mbw}g</Text></Text>
+                          <Text style={styles.samplingMetricDivider}>•</Text>
+                          <Text style={styles.samplingMetricTag}>Feed <Text style={styles.samplingMetricBold}>{sample.feed}kg</Text></Text>
+                          {Number(sample.mortality) > 0 && (
+                            <>
+                              <Text style={styles.samplingMetricDivider}>•</Text>
+                              <Text style={styles.samplingMetricTagLoss}>Mort. {sample.mortality}</Text>
+                            </>
+                          )}
+                        </View>
+                        {sample.feedData?.inventoryFeedId && (
+                          <Text style={styles.samplingFeedName}>{getFeedName(sample.feedData.inventoryFeedId)}</Text>
                         )}
                       </View>
-                      {sample.feedData?.inventoryFeedId && (
-                        <Text style={styles.samplingFeedName}>{getFeedName(sample.feedData.inventoryFeedId)}</Text>
-                      )}
-                    </View>
 
-                    {canEditPonds && isPondCycleActive(pond) && (
-                      <TouchableOpacity 
-                        style={styles.samplingEditBtn} 
-                        onPress={() => openEditModal(sample)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="pencil-outline" size={15} color="#0F4C75" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))}
+                      {canEditPonds && isPondCycleActive(pond) && (
+                        <TouchableOpacity 
+                          style={styles.samplingEditBtn} 
+                          onPress={() => openEditModal(sample)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="pencil-outline" size={15} color="#0F4C75" />
+                        </TouchableOpacity>
+                      )}
+                    </TouchableOpacity>
+                  );
+
+                  return canEditPonds && isPondCycleActive(pond) ? (
+                    <Swipeable
+                      key={sample.id || index}
+                      overshootRight={false}
+                      rightThreshold={40}
+                      renderRightActions={() => (
+                        <TouchableOpacity
+                          style={styles.swipeDeleteButton}
+                          onPress={() => handleDeleteSampling(sample)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t.actions.delete}: ${sample.date}`}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#FFFFFF" />
+                          <Text style={styles.swipeDeleteText}>{t.actions.delete}</Text>
+                        </TouchableOpacity>
+                      )}
+                    >
+                      {rowContent}
+                    </Swipeable>
+                  ) : (
+                    <View key={sample.id || index}>
+                      {rowContent}
+                    </View>
+                  );
+                })}
               </View>
             )
           )}
@@ -972,6 +1322,12 @@ export default function PondDetails() {
           sample={selectedSample}
           onClose={closeEditModal}
           onSave={handleSaveEdit}
+        />
+        <EditMortalityModal
+          visible={editMortalityModalVisible}
+          record={selectedMortalityRecord}
+          onClose={closeEditMortalityModal}
+          onSave={handleSaveMortalityEdit}
         />
         <Modal visible={startCycleVisible} animationType="slide" transparent>
           <KeyboardAvoidingView
@@ -1021,7 +1377,7 @@ export default function PondDetails() {
             </View>
           </KeyboardAvoidingView>
         </Modal>
-      </View>
+      </GestureHandlerRootView>
     </>
   );
 }
@@ -1218,6 +1574,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
   },
   mortalityItemBorder: {
     borderBottomWidth: 1,
@@ -1286,6 +1643,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
   },
   samplingItemLeft: {
     flex: 1,
@@ -1331,5 +1689,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#f1f5f9',
     borderRadius: 8,
     marginLeft: 10,
+  },
+  obsTypeSelector: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  obsTypePill: {
+    flex: 1,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#dce8f2',
+    backgroundColor: '#f8fbfd',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  obsTypePillActive: {
+    borderColor: '#0F4C75',
+    backgroundColor: '#0F4C75',
+  },
+  obsTypePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b8aa0',
+    textAlign: 'center',
+  },
+  obsTypePillTextActive: {
+    color: '#FFFFFF',
+  },
+  swipeDeleteButton: {
+    width: 76,
+    backgroundColor: '#E74C3C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  swipeDeleteText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  editInputMultiline: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+    paddingTop: 8,
   },
 });
