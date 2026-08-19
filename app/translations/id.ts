@@ -654,6 +654,11 @@ companySetup: {
   mortalityWeight: 'Berat Kematian',
   totalMortalityWeight: 'Total Berat Kematian',
   samplingHistory: 'Riwayat Sampling',
+  mortalityHistory: 'Riwayat Mortalitas',
+  noMortalityRecords: 'Belum ada catatan mortalitas untuk siklus ini.',
+  mortalityEstimatedShort: 'Estimasi Total',
+  mortalityObservedShort: 'Teramati / Terangkat',
+  mortalityNoneShort: 'Nihil Mortalitas',
   },
   activityTracker: {
     eyebrow: 'Aktivitas tim',

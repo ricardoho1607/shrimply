@@ -672,6 +672,11 @@ companySetup: {
   mortalityWeight: '死亡重量',
   totalMortalityWeight: '总死亡重量',
   samplingHistory: '采样历史',
+  mortalityHistory: '死亡记录历史',
+  noMortalityRecords: '当前周期暂无死亡记录。',
+  mortalityEstimatedShort: '预估总量',
+  mortalityObservedShort: '观察/捞出',
+  mortalityNoneShort: '未见死亡',
   },
   activityTracker: {
     eyebrow: '团队活动',

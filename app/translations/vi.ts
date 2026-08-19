@@ -654,6 +654,11 @@ companySetup: {
   mortalityWeight: 'Trọng Lượng Chết',
   totalMortalityWeight: 'Tổng Trọng Lượng Chết',
   samplingHistory: 'Lịch Sử Lấy Mẫu',
+  mortalityHistory: 'Lịch Sử Tỷ Lệ Chết',
+  noMortalityRecords: 'Chưa có ghi nhận tỷ lệ chết cho chu kỳ này.',
+  mortalityEstimatedShort: 'Tổng Ước Tính',
+  mortalityObservedShort: 'Quan Sát / Thu Gom',
+  mortalityNoneShort: 'Không Có Tỷ Lệ Chết',
   },
   activityTracker: {
     eyebrow: 'Hoạt động đội ngũ',

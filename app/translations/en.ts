@@ -656,6 +656,11 @@ companySetup: {
   mortalityWeight: 'Mortality Weight',
   totalMortalityWeight: 'Total Mortality Weight',
   samplingHistory: 'Sampling History',
+  mortalityHistory: 'Mortality History',
+  noMortalityRecords: 'No mortality records logged for this cycle.',
+  mortalityEstimatedShort: 'Estimated Total',
+  mortalityObservedShort: 'Observed / Recovered',
+  mortalityNoneShort: 'None Observed',
   },
   activityTracker: {
     eyebrow: 'Team activity',

@@ -39,3 +39,12 @@ test('sampling history includes ADG and the record trigger has no container', ()
   assert.match(stylesheet, /\.pond-detail-record-trigger\s*\{[^}]*border-radius:\s*0;/s);
   assert.match(stylesheet, /\.pond-detail-record-trigger:hover,[\s\S]*?background:\s*transparent;/);
 });
+
+test('pond detail renders collapsible mortality history section scoped to current cycle', () => {
+  assert.match(component, /Mortality History/);
+  assert.match(component, /currentCycleMortalityRecords/);
+  assert.match(component, /isMortalityHistoryOpen/);
+  assert.match(component, /No mortality records logged for this cycle\./);
+  assert.match(component, /Record Mortality/);
+});
+

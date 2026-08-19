@@ -174,8 +174,8 @@ function buildFixture() {
         count,
         mbwAtRecord: round(definition.latestMbw - ((6 - dayIndex) * (definition.latestMbw - definition.previousMbw)) / 10, 2),
         notes: definition.key === 'harvest-now'
-          ? 'Sustained elevated daily mortality for harvest decision testing.'
-          : 'Daily mortality estimate for projection testing.',
+          ? 'Sustained elevated mortality.'
+          : undefined,
         recordedAt: `${date}T12:00:00.000Z`,
         recordedBy: 'SEED_USER_UID',
         cycleId,

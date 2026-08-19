@@ -21,7 +21,9 @@ import {
   Layers,
   FlaskConical,
   Leaf,
-  Pencil
+  Pencil,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -303,6 +305,7 @@ export default function PondDetailClient() {
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
   const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
+  const [isMortalityHistoryOpen, setMortalityHistoryOpen] = useState(true);
   const [isRecordMenuOpen, setRecordMenuOpen] = useState(false);
   const recordMenuRef = useRef<HTMLDivElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -839,6 +842,25 @@ export default function PondDetailClient() {
     };
   }, [company?.timeZone, pond, today]);
 
+  const currentCycleMortalityRecords = useMemo(() => {
+    if (!pond) return [];
+    const records = Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [];
+    return records
+      .filter((r) => !r.pondCycleId || r.pondCycleId === pond.pondCycleId || r.pondCycleId === pond.id)
+      .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime());
+  }, [pond]);
+
+  const getSamplingMbwAtDate = (dateStr?: string) => {
+    if (!pond || !dateStr) return 0;
+    const validSamplings = (pond.samplings || [])
+      .filter((s) => !isBaselineSampling(s) && getSamplingMbw(s) > 0 && (s.date || '') <= dateStr)
+      .sort((a, b) => new Date(b.date || '').getTime() - new Date(a.date || '').getTime());
+    if (validSamplings.length > 0) return getSamplingMbw(validSamplings[0]);
+    const baseline = (pond.samplings || []).find(isBaselineSampling);
+    if (baseline && getSamplingMbw(baseline) > 0) return getSamplingMbw(baseline);
+    return Number(pond.initialWeight || 0.5);
+  };
+
   if (loading || (isEnterpriseTechnician && blocksLoading)) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   if (!pond || !hasPondAccess) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
   const latestLabStatus = pond.latestLabStatus;
@@ -1078,6 +1100,147 @@ export default function PondDetailClient() {
                 </tbody>
               </table>
             </div>
+          </div>
+
+          {/* Mortality History Table */}
+          <div className="glass-card pond-detail-mortality-history" style={{ padding: '0', overflow: 'hidden', marginTop: '20px' }}>
+            <div
+              style={{
+                padding: '18px 20px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                borderBottom: isMortalityHistoryOpen ? '1px solid var(--border)' : 'none',
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              onClick={() => setMortalityHistoryOpen((prev) => !prev)}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, margin: 0 }}>Mortality History</h3>
+                <span style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  background: 'var(--bg-mid)',
+                  color: 'var(--primary)',
+                  padding: '2px 8px',
+                  borderRadius: '999px',
+                  border: '1px solid var(--border)',
+                }}>
+                  {currentCycleMortalityRecords.length}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {canEditPond && isActiveCycle(pond) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMortalityForm(prev => ({ ...prev, date: today }));
+                      setMortalityModalOpen(true);
+                    }}
+                    style={{
+                      fontSize: '0.8rem',
+                      fontWeight: 600,
+                      color: 'var(--primary)',
+                      background: 'var(--primary-dim)',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '6px 12px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <Plus size={14} />
+                    <span>Record Mortality</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  aria-label={isMortalityHistoryOpen ? "Collapse mortality history" : "Expand mortality history"}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--text-muted)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '4px',
+                  }}
+                >
+                  {isMortalityHistoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                </button>
+              </div>
+            </div>
+
+            {isMortalityHistoryOpen && (
+              currentCycleMortalityRecords.length === 0 ? (
+                <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 500 }}>
+                  No mortality records logged for this cycle.
+                </div>
+              ) : (
+                <div className="pond-detail-sampling-table-wrap">
+                  <table className="pond-detail-sampling-table">
+                    <thead>
+                      <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Record Type</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Count (pcs)</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Est. Weight</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {currentCycleMortalityRecords.map((record, i) => {
+                        const isNone = record.observationType === 'none_observed';
+                        const isObserved = record.observationType === 'observed_recovered';
+                        const countNum = Number(record.count) || 0;
+                        const mbw = Number(record.mbwAtRecord) || getSamplingMbwAtDate(record.date);
+                        const weightKg = mbw > 0 && countNum > 0 ? (countNum * mbw) / 1000 : null;
+
+                        const badgeStyle = isNone
+                          ? { bg: '#DCFCE7', color: '#166534', label: 'None Observed' }
+                          : isObserved
+                          ? { bg: '#E0F2FE', color: '#0F4C75', label: 'Observed / Recovered' }
+                          : { bg: '#FEE2E2', color: '#991B1B', label: 'Estimated Total' };
+
+                        return (
+                          <tr key={record.id || i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">
+                            <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600 }}>
+                              {record.date ? new Date(record.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                            </td>
+                            <td style={{ padding: '16px 24px' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '4px 10px',
+                                borderRadius: '999px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                background: badgeStyle.bg,
+                                color: badgeStyle.color,
+                              }}>
+                                {badgeStyle.label}
+                              </span>
+                            </td>
+                            <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: countNum > 0 ? '#ef4444' : 'var(--text-muted)' }}>
+                              {isNone ? '0 pcs' : `${countNum.toLocaleString()} pcs`}
+                            </td>
+                            <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
+                              {weightKg !== null && !isNone ? `${weightKg.toFixed(2)} kg` : '—'}
+                            </td>
+                            <td style={{ padding: '16px 24px', fontSize: '0.84rem', color: 'var(--text-muted)', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {record.notes && !record.notes.toLowerCase().includes('projection testing') ? record.notes : '—'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )
+            )}
           </div>
 
         </div>

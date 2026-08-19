@@ -654,6 +654,11 @@ companySetup: {
   mortalityWeight: 'น้ำหนักที่ตาย',
   totalMortalityWeight: 'น้ำหนักที่ตายทั้งหมด',
   samplingHistory: 'ประวัติการเก็บตัวอย่าง',
+  mortalityHistory: 'ประวัติการตาย',
+  noMortalityRecords: 'ไม่มีบันทึกการตายสำหรับรอบนี้',
+  mortalityEstimatedShort: 'ประมาณการทั้งหมด',
+  mortalityObservedShort: 'ที่สังเกตพบ / เก็บกู้ได้',
+  mortalityNoneShort: 'ไม่พบการตาย',
   },
   activityTracker: {
     eyebrow: 'กิจกรรมทีม',

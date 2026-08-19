@@ -267,7 +267,7 @@ export default function PondDetails() {
   const activeFarmCycle = useMemo(() => getActiveFarmCycle(cycles), [cycles]);
   
   const [pond, setPond] = useState<Pond | null>(null);
-  const [showMore, setShowMore] = useState(false);
+  const [activeHistoryTab, setActiveHistoryTab] = useState<'sampling' | 'mortality'>('sampling');
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedSample, setSelectedSample] = useState<Sampling | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
@@ -460,6 +460,25 @@ export default function PondDetails() {
       feedBiomassInsight
     };
   }, [company?.timeZone, pond, calculatePondMetricsWithHarvest]);
+
+  const currentCycleMortalityRecords = useMemo(() => {
+    if (!pond) return [];
+    const records = Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [];
+    return records
+      .filter((r) => !r.pondCycleId || r.pondCycleId === pond.pondCycleId || r.pondCycleId === pond.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [pond]);
+
+  const getSamplingMbwAtDate = useCallback((dateStr: string) => {
+    if (!pond) return 0;
+    const validSamplings = (pond.samplings || [])
+      .filter((s) => !isBaselineSampling(s) && getSamplingMbw(s) > 0 && s.date <= dateStr)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (validSamplings.length > 0) return getSamplingMbw(validSamplings[0]);
+    const baseline = (pond.samplings || []).find(isBaselineSampling);
+    if (baseline && getSamplingMbw(baseline) > 0) return getSamplingMbw(baseline);
+    return pond.initialWeight || 0.5;
+  }, [pond]);
 
   const openEditModal = useCallback((sample: Sampling) => {
     if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
@@ -671,6 +690,15 @@ export default function PondDetails() {
                   value={lastADG.toFixed(2)} 
                   unit="g/day" 
                 />
+                <DataRow 
+                  label={`${t.home.total} ${t.nav.feed}`} 
+                  value={totalFeed.toFixed(1)} 
+                  unit="kg" 
+                />
+                <DataRow 
+                  label={t.shrimp.fcr} 
+                  value={fcr} 
+                />
               </View>
               <View style={styles.column}>
                 <DataRow 
@@ -697,6 +725,10 @@ export default function PondDetails() {
                   label={`${t.home.average} ${t.shrimp.adg}`} 
                   value={avgADG.toFixed(2)} 
                   unit="g/day" 
+                />
+                <DataRow 
+                  label={t.forms.supplier} 
+                  value={getPondPlSupplier(pond)} 
                 />
               </View>
             </View>
@@ -777,106 +809,161 @@ export default function PondDetails() {
             )}
           </View>
 
-          <TouchableOpacity 
-            style={styles.moreButton} 
-            onPress={() => setShowMore(!showMore)}
-          >
-            <Text style={styles.moreButtonText}>
-              {showMore ? t.home.hideDetails : t.home.moreDetails}
-            </Text>
-          </TouchableOpacity>
-
-          {showMore && (
-            <View style={styles.detailsBubble}>
-              <View style={styles.columnContainer}>
-                <View style={styles.column}>
-                  <DataRow 
-                    label={t.home.todayMortality}
-                    value={mortalityPieces} 
-                    unit="pcs" 
-                  />
-                  <DataRow
-                    label={t.home.todayObservedMortality}
-                    value={observedMortalityPieces}
-                    unit="pcs"
-                  />
-                  <DataRow 
-                    label={`${t.home.total} ${t.shrimp.mortality}`} 
-                    value={totalMortality} 
-                    unit="pcs" 
-                  />
-                  <DataRow 
-                    label={t.shrimp.fcr} 
-                    value={fcr} 
-                  />
-                </View>
-                <View style={styles.column}>
-                  <DataRow 
-                    label={t.home.todayMortalityWeight}
-                    value={mortalityWeight.toFixed(2)} 
-                    unit="kg" 
-                  />
-                  <DataRow 
-                    label={t.home.totalMortalityWeight} 
-                    value={totalMortalityWeight.toFixed(2)} 
-                    unit="kg" 
-                  />
-                  <DataRow 
-                    label={`${t.home.total} ${t.nav.feed}`} 
-                    value={totalFeed.toFixed(1)} 
-                    unit="kg" 
-                  />
-                  <DataRow
-                    label={t.forms.supplier}
-                    value={getPondPlSupplier(pond)}
-                  />
-                </View>
-              </View>
-            </View>
-          )}
-
-          {pondSamplingData.length > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>
+          {/* Segmented History Switcher */}
+          <View style={styles.segmentedControl}>
+            <TouchableOpacity
+              style={[styles.segmentButton, activeHistoryTab === 'sampling' && styles.segmentButtonActive]}
+              onPress={() => setActiveHistoryTab('sampling')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentText, activeHistoryTab === 'sampling' && styles.segmentTextActive]}>
                 {t.home.samplingHistory}
               </Text>
-              <FlatList
-                data={pondSamplingData}
-                keyExtractor={(item) => item.id}
-                scrollEnabled={false}
-                contentContainerStyle={styles.samplingContainer}
-                renderItem={({ item: sample }) => (
-                    <View style={styles.samplingRow}>
-                      <View style={styles.samplingData}>
-                        <Text style={styles.samplingDate}>
-                          {new Date(sample.date).toLocaleDateString()}
+              <View style={[styles.segmentBadge, activeHistoryTab === 'sampling' && styles.segmentBadgeActive]}>
+                <Text style={[styles.segmentBadgeText, activeHistoryTab === 'sampling' && styles.segmentBadgeTextActive]}>
+                  {pondSamplingData.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.segmentButton, activeHistoryTab === 'mortality' && styles.segmentButtonActive]}
+              onPress={() => setActiveHistoryTab('mortality')}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.segmentText, activeHistoryTab === 'mortality' && styles.segmentTextActive]}>
+                {t.home.mortalityHistory}
+              </Text>
+              <View style={[styles.segmentBadge, activeHistoryTab === 'mortality' && styles.segmentBadgeActive]}>
+                <Text style={[styles.segmentBadgeText, activeHistoryTab === 'mortality' && styles.segmentBadgeTextActive]}>
+                  {currentCycleMortalityRecords.length}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {activeHistoryTab === 'mortality' ? (
+            <>
+              {/* Mortality Overview Card */}
+              <View style={styles.mortalitySummaryCard}>
+                <View style={styles.mortalitySummaryCol}>
+                  <Text style={styles.mortalitySummaryLabel}>{t.home.todayMortality}</Text>
+                  <Text style={styles.mortalitySummaryValue}>
+                    {mortalityPieces.toLocaleString()} <Text style={styles.mortalitySummaryUnit}>pcs</Text>
+                  </Text>
+                  <Text style={styles.mortalitySummarySub}>
+                    {mortalityWeight > 0 ? `${mortalityWeight.toFixed(2)} kg` : '0 kg'}
+                  </Text>
+                </View>
+                <View style={styles.mortalitySummaryDivider} />
+                <View style={styles.mortalitySummaryCol}>
+                  <Text style={styles.mortalitySummaryLabel}>{t.home.total} {t.shrimp.mortality}</Text>
+                  <Text style={styles.mortalitySummaryValue}>
+                    {totalMortality.toLocaleString()} <Text style={styles.mortalitySummaryUnit}>pcs</Text>
+                  </Text>
+                  <Text style={styles.mortalitySummarySub}>
+                    {totalMortalityWeight > 0 ? `${totalMortalityWeight.toFixed(2)} kg` : '0 kg'}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Clean Mortality Activity List */}
+              {currentCycleMortalityRecords.length === 0 ? (
+                <View style={styles.emptyMortalityCard}>
+                  <Text style={styles.emptyMortalityText}>{t.home.noMortalityRecords}</Text>
+                </View>
+              ) : (
+                <View style={styles.mortalityListCard}>
+                {currentCycleMortalityRecords.map((record, index) => {
+                  const isNone = record.observationType === 'none_observed';
+                  const mbw = record.mbwAtRecord || getSamplingMbwAtDate(record.date);
+                  const countNum = Number(record.count) || 0;
+                  const weightKg = mbw > 0 && countNum > 0 ? (countNum * mbw) / 1000 : null;
+
+                  return (
+                    <View
+                      key={record.id || index}
+                      style={[
+                        styles.mortalityItemRow,
+                        index !== currentCycleMortalityRecords.length - 1 && styles.mortalityItemBorder
+                      ]}
+                    >
+                      <View style={styles.mortalityItemLeft}>
+                        <Text style={styles.mortalityItemDate}>
+                          {new Date(record.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                         </Text>
-                        <Text style={styles.samplingValue}>
-                          MBW: {sample.mbw}g
-                        </Text>
-                        <Text style={styles.samplingValue}>
-                          {t.shrimp.mortality}: {sample.mortality}
-                        </Text>
-                        <Text style={styles.samplingValue}>
-                          {t.nav.feed}: {sample.feed}kg {sample.feedData?.inventoryFeedId && `• ${getFeedName(sample.feedData.inventoryFeedId)}`}
-                        </Text>
+                        {record.notes && !record.notes.toLowerCase().includes('projection testing') ? (
+                          <Text style={styles.mortalityItemNote} numberOfLines={2}>
+                            {record.notes}
+                          </Text>
+                        ) : null}
                       </View>
-                      {canEditPonds && isPondCycleActive(pond) && (
-                        <TouchableOpacity 
-                          style={styles.editButton} 
-                          onPress={() => openEditModal(sample)}
-                        >
-                          <Ionicons 
-                            name="pencil-outline" 
-                            size={16} 
-                            color="#315f57" 
-                          />
-                        </TouchableOpacity>
+
+                      <View style={styles.mortalityItemRight}>
+                        <Text style={[styles.mortalityCountBig, isNone ? styles.countNone : styles.countLoss]}>
+                          {isNone ? '0 pcs' : `${countNum.toLocaleString()} pcs`}
+                        </Text>
+                        {weightKg !== null && !isNone && (
+                          <Text style={styles.mortalityWeightSub}>
+                            {weightKg.toFixed(2)} kg
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            )}
+            </>
+          ) : (
+            /* Sampling History List */
+            pondSamplingData.length === 0 ? (
+              <View style={styles.emptyMortalityCard}>
+                <Text style={styles.emptyMortalityText}>{t.messages.dataNotFound}</Text>
+              </View>
+            ) : (
+              <View style={styles.mortalityListCard}>
+                {pondSamplingData.map((sample, index) => (
+                  <View
+                    key={sample.id || index}
+                    style={[
+                      styles.samplingItemRow,
+                      index !== pondSamplingData.length - 1 && styles.mortalityItemBorder
+                    ]}
+                  >
+                    <View style={styles.samplingItemLeft}>
+                      <Text style={styles.samplingItemDate}>
+                        {new Date(sample.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      </Text>
+                      <View style={styles.samplingMetricsRow}>
+                        <Text style={styles.samplingMetricTag}>MBW <Text style={styles.samplingMetricBold}>{sample.mbw}g</Text></Text>
+                        <Text style={styles.samplingMetricDivider}>•</Text>
+                        <Text style={styles.samplingMetricTag}>Feed <Text style={styles.samplingMetricBold}>{sample.feed}kg</Text></Text>
+                        {Number(sample.mortality) > 0 && (
+                          <>
+                            <Text style={styles.samplingMetricDivider}>•</Text>
+                            <Text style={styles.samplingMetricTagLoss}>Mort. {sample.mortality}</Text>
+                          </>
+                        )}
+                      </View>
+                      {sample.feedData?.inventoryFeedId && (
+                        <Text style={styles.samplingFeedName}>{getFeedName(sample.feedData.inventoryFeedId)}</Text>
                       )}
                     </View>
-                )}
-              />
-            </>
+
+                    {canEditPonds && isPondCycleActive(pond) && (
+                      <TouchableOpacity 
+                        style={styles.samplingEditBtn} 
+                        onPress={() => openEditModal(sample)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="pencil-outline" size={15} color="#0F4C75" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            )
           )}
         </ScrollView>
 
@@ -989,8 +1076,6 @@ const styles = StyleSheet.create({
   labStatusRecommendationText: { color: '#315f57', fontSize: 13, fontWeight: '700', lineHeight: 19 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   loadingText: { color: '#315f57', fontSize: 16 },
-  moreButton: { padding: 12, backgroundColor: '#dce8f2', borderRadius: 12, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#315f57' },
-  moreButtonText: { fontWeight: '600', color: '#0d2137' },
   samplingContainer: { marginBottom: 20 },
   samplingRow: { flexDirection: 'row', alignItems: 'center', padding: 14, backgroundColor: '#FFFFFF', borderRadius: 12, marginBottom: 8, borderWidth: 1, borderColor: '#e8f2f9' },
   samplingData: { flex: 1 },
@@ -1019,4 +1104,232 @@ const styles = StyleSheet.create({
   inputLabel: { color: '#0d2137', fontSize: 14, fontWeight: '600', marginBottom: 8 },
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: 12, borderRadius: 8, backgroundColor: '#f4f8fc', color: '#0d2137' },
   inputHint: { color: '#0d2137', fontSize: 12, marginTop: 4, fontStyle: 'italic' },
+  segmentedControl: {
+    flexDirection: 'row',
+    backgroundColor: '#e8f2f9',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 14,
+    marginTop: 16,
+    gap: 4,
+  },
+  segmentButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 11,
+    gap: 6,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0F4C75',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  segmentText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#6b8aa0',
+  },
+  segmentTextActive: {
+    color: '#0F4C75',
+    fontWeight: '800',
+  },
+  segmentBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 999,
+    backgroundColor: 'rgba(107, 138, 160, 0.15)',
+  },
+  segmentBadgeActive: {
+    backgroundColor: '#e0f2fe',
+  },
+  segmentBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b8aa0',
+  },
+  segmentBadgeTextActive: {
+    color: '#0F4C75',
+  },
+  mortalitySummaryCard: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  mortalitySummaryCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  mortalitySummaryDivider: {
+    width: 1,
+    height: '70%',
+    backgroundColor: '#e8f2f9',
+  },
+  mortalitySummaryLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6b8aa0',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginBottom: 4,
+    textAlign: 'center',
+  },
+  mortalitySummaryValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0d2137',
+    textAlign: 'center',
+  },
+  mortalitySummaryUnit: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#315f57',
+  },
+  mortalitySummarySub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#315f57',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  mortalityListCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    marginBottom: 20,
+    overflow: 'hidden',
+  },
+  mortalityItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  mortalityItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  mortalityItemLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  mortalityItemDate: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0d2137',
+  },
+  mortalityItemNote: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b8aa0',
+    fontStyle: 'italic',
+    marginTop: 3,
+  },
+  mortalityItemRight: {
+    alignItems: 'flex-end',
+  },
+  mortalityCountBig: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  countLoss: {
+    color: '#0d2137',
+  },
+  countNone: {
+    color: '#16a34a',
+  },
+  mortalityWeightSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#315f57',
+    marginTop: 2,
+  },
+  emptyMortalityCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: '#e8f2f9',
+    marginBottom: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyMortalityTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0d2137',
+    marginBottom: 2,
+  },
+  emptyMortalityText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#6b8aa0',
+    textAlign: 'center',
+  },
+  samplingItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  samplingItemLeft: {
+    flex: 1,
+  },
+  samplingItemDate: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0d2137',
+    marginBottom: 3,
+  },
+  samplingMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  samplingMetricTag: {
+    fontSize: 12,
+    color: '#315f57',
+    fontWeight: '500',
+  },
+  samplingMetricBold: {
+    fontWeight: '700',
+    color: '#0d2137',
+  },
+  samplingMetricDivider: {
+    fontSize: 10,
+    color: '#94a3b8',
+  },
+  samplingMetricTagLoss: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#dc2626',
+  },
+  samplingFeedName: {
+    fontSize: 11,
+    color: '#6b8aa0',
+    marginTop: 3,
+    fontStyle: 'italic',
+  },
+  samplingEditBtn: {
+    padding: 7,
+    backgroundColor: '#f1f5f9',
+    borderRadius: 8,
+    marginLeft: 10,
+  },
 });
