@@ -191,6 +191,8 @@ export interface OrsonPondMetrics {
   feedAllocationTrend: OrsonTrendResult;
   mortalityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
+  dailyRecords14d: OrsonPromptDailyRecord[];
+  recentLabReports: OrsonPromptLabReport[];
   dataCompleteness: OrsonDataCompleteness;
   calibration: {
     versionId: string;
@@ -252,6 +254,32 @@ export interface Orson72HourOutlook {
   generatedAt: string;
 }
 
+export interface OrsonPromptDailyRecord {
+  date: string;
+  doc: number | null;
+  feedKg: OrsonNumber;
+  mbwG: OrsonNumber;
+  mortalityCount: OrsonNumber;
+  doMorning: OrsonNumber;
+  doEvening: OrsonNumber;
+  doMinimumMgL: OrsonNumber;
+  phMorning: OrsonNumber;
+  phEvening: OrsonNumber;
+  phSwing: OrsonNumber;
+  salinityPpt: OrsonNumber;
+  temperatureC?: OrsonNumber;
+  transparencyCm?: OrsonNumber;
+}
+
+export interface OrsonPromptLabReport {
+  sampleDate: string | null;
+  reportType: string | null;
+  status: OrsonLabStatusLevel | null;
+  mainIssue: string | null;
+  keyRisks: string[];
+  recommendations: string[];
+}
+
 export interface OrsonPromptPondPayload {
   pondId: string | null;
   pondName: string;
@@ -274,6 +302,8 @@ export interface OrsonPromptPondPayload {
   doMinimumLatest: OrsonNumber;
   salinityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
+  dailyRecords14d: OrsonPromptDailyRecord[];
+  recentLabReports: OrsonPromptLabReport[];
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
   findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>[];
 }

@@ -68,17 +68,22 @@ export const runPromptBuilderSelfTest = () => {
 
   assert(isFarmSpecificQuestion('Analyze my pond') === true, 'detects farm-specific questions');
   assert(isFarmSpecificQuestion('What is FCR?') === false, 'detects general questions');
+  assert(isFarmSpecificQuestion('give me the last 7 days of mortality') === true, 'detects lookback question as farm-specific');
   assert(farmPackage.cacheKey === null, 'does not cache farm-specific answers by default');
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');
   assert(farmPackage.systemInstruction.includes('Do not invent measurements'), 'guards against invented measurements');
   assert(farmPackage.systemInstruction.includes('Do not treat a change in logged daily feed as measured appetite'), 'prevents false appetite inference');
+  assert(farmPackage.systemInstruction.includes('daily_records_14d'), 'system instruction references daily_records_14d');
+  assert(farmPackage.systemInstruction.includes('recent_lab_reports'), 'system instruction references recent_lab_reports');
   assert(farmPackage.systemInstruction.includes('reply in that same language'), 'keeps replies in the user question language');
   assert(farmPackage.context.includes('ORSON RISK PAYLOAD'), 'builds payload context');
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
+  assert(farmPackage.context.includes('daily_records_14d'), 'includes 14-day daily records in context payload');
+  assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
-  assert(farmPackage.context.length < 8000, 'keeps prompt context compact');
+  assert(farmPackage.context.length < 15000, 'keeps prompt context compact');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
 
   return {

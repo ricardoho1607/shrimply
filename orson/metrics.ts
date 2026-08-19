@@ -7,6 +7,8 @@ import type {
   OrsonNormalizedRecord,
   OrsonNumber,
   OrsonPondMetrics,
+  OrsonPromptDailyRecord,
+  OrsonPromptLabReport,
   OrsonRangeEstimate,
   OrsonSurvivalAssumption,
   OrsonTrendResult,
@@ -518,6 +520,8 @@ export const calculatePondMetrics = (
     feedAllocationTrend,
     mortalityTrend,
     labContext: pond.labContext,
+    dailyRecords14d: extractDailyRecords14d(pond),
+    recentLabReports: extractRecentLabReports(pond),
     dataCompleteness: calculateDataCompleteness(pond),
     calibration: {
       versionId: calibration.versionId,
@@ -525,6 +529,106 @@ export const calculatePondMetrics = (
       sampleSize: calibration.adjustment.sampleSize,
     },
   };
+};
+
+export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDailyRecord[] => {
+  const dayMap = new Map<string, {
+    date: string;
+    doc: number | null;
+    feedKg: number | null;
+    mbwG: number | null;
+    mortalityCount: number | null;
+    doMorning: number | null;
+    doEvening: number | null;
+    phMorning: number | null;
+    phEvening: number | null;
+    salinityPpt: number | null;
+    temperatureC?: number | null;
+    transparencyCm?: number | null;
+  }>();
+
+  for (const record of pond.records) {
+    if (!record.date) continue;
+    const date = record.date;
+    const existing = dayMap.get(date) ?? {
+      date,
+      doc: record.doc,
+      feedKg: null,
+      mbwG: null,
+      mortalityCount: null,
+      doMorning: null,
+      doEvening: null,
+      phMorning: null,
+      phEvening: null,
+      salinityPpt: null,
+      temperatureC: null,
+      transparencyCm: null,
+    };
+
+    if (record.doc !== null) existing.doc = record.doc;
+    if (hasNumber(record.feedKg)) existing.feedKg = (existing.feedKg ?? 0) + record.feedKg;
+    if (hasNumber(record.mbwG)) existing.mbwG = record.mbwG;
+    if (hasNumber(record.mortalityCount)) existing.mortalityCount = (existing.mortalityCount ?? 0) + record.mortalityCount;
+    if (hasNumber(record.doMorning)) existing.doMorning = record.doMorning;
+    if (hasNumber(record.doEvening)) existing.doEvening = record.doEvening;
+    if (hasNumber(record.phMorning)) existing.phMorning = record.phMorning;
+    if (hasNumber(record.phEvening)) existing.phEvening = record.phEvening;
+    if (hasNumber(record.salinityPpt)) existing.salinityPpt = record.salinityPpt;
+    if (hasNumber(record.temperatureC)) existing.temperatureC = record.temperatureC;
+    if (hasNumber(record.transparencyCm)) existing.transparencyCm = record.transparencyCm;
+
+    dayMap.set(date, existing);
+  }
+
+  const sortedDays = Array.from(dayMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  const recentDays = sortedDays.slice(-14);
+
+  return recentDays.map((day) => {
+    const doMin = minNumber(day.doMorning, day.doEvening);
+    const phSwing = hasNumber(day.phMorning) && hasNumber(day.phEvening)
+      ? round(Math.abs(day.phEvening - day.phMorning), 2)
+      : null;
+
+    return {
+      date: day.date,
+      doc: day.doc,
+      feedKg: hasNumber(day.feedKg) ? round(day.feedKg, 2) : null,
+      mbwG: hasNumber(day.mbwG) ? round(day.mbwG, 2) : null,
+      mortalityCount: hasNumber(day.mortalityCount) ? round(day.mortalityCount, 0) : null,
+      doMorning: hasNumber(day.doMorning) ? round(day.doMorning, 2) : null,
+      doEvening: hasNumber(day.doEvening) ? round(day.doEvening, 2) : null,
+      doMinimumMgL: hasNumber(doMin) ? round(doMin, 2) : null,
+      phMorning: hasNumber(day.phMorning) ? round(day.phMorning, 2) : null,
+      phEvening: hasNumber(day.phEvening) ? round(day.phEvening, 2) : null,
+      phSwing,
+      salinityPpt: hasNumber(day.salinityPpt) ? round(day.salinityPpt, 1) : null,
+      temperatureC: hasNumber(day.temperatureC) ? round(day.temperatureC, 1) : null,
+      transparencyCm: hasNumber(day.transparencyCm) ? round(day.transparencyCm, 1) : null,
+    };
+  });
+};
+
+export const extractRecentLabReports = (pond: OrsonNormalizedPond): OrsonPromptLabReport[] => {
+  const summaries = [
+    ...(pond.labContext.latest ? [pond.labContext.latest] : []),
+    ...pond.labContext.byType,
+  ];
+  const uniqueReports = new Map<string, OrsonPromptLabReport>();
+
+  for (const s of summaries) {
+    const key = s.labReportId || `${s.sampleDate || ''}-${s.reportType || ''}`;
+    if (!key || uniqueReports.has(key)) continue;
+    uniqueReports.set(key, {
+      sampleDate: s.sampleDate,
+      reportType: s.reportType,
+      status: s.status,
+      mainIssue: s.mainIssue,
+      keyRisks: s.keyRisks || [],
+      recommendations: s.recommendations || [],
+    });
+  }
+
+  return Array.from(uniqueReports.values()).slice(0, 5);
 };
 
 export const calculatePondsMetrics = (
