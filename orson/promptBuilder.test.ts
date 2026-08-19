@@ -75,6 +75,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.systemInstruction.includes('Do not treat a change in logged daily feed as measured appetite'), 'prevents false appetite inference');
   assert(farmPackage.systemInstruction.includes('daily_records_14d'), 'system instruction references daily_records_14d');
   assert(farmPackage.systemInstruction.includes('recent_lab_reports'), 'system instruction references recent_lab_reports');
+  assert(farmPackage.systemInstruction.includes('compare the ponds side-by-side'), 'system instruction references pond comparisons');
+  assert(farmPackage.systemInstruction.includes('exact numerical adjustments'), 'system instruction references exact feed adjustments');
   assert(farmPackage.systemInstruction.includes('reply in that same language'), 'keeps replies in the user question language');
   assert(farmPackage.context.includes('ORSON RISK PAYLOAD'), 'builds payload context');
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
@@ -86,9 +88,57 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.length < 15000, 'keeps prompt context compact');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
 
+  const pond2 = normalizePondData(
+    {
+      id: 'pond-prompt-2',
+      pondName: 'Prompt Pond 2',
+      pondArea: 1000,
+      density: 100,
+      initialPopulation: 100000,
+      initialWeight: 0.5,
+      docStart: '2026-01-01',
+      treatments: [
+        {
+          id: 't1',
+          date: '2026-01-12',
+          name: 'Hydrated Lime',
+          quantity: 25,
+          unit: 'kg',
+        },
+      ],
+      samplings: [
+        {
+          id: 's21',
+          date: '2026-01-15',
+          mbw: 3.0,
+          mortality: 10,
+          feed: 40,
+        },
+      ],
+    },
+    { now: new Date('2026-01-16T00:00:00Z') },
+  );
+
+  const metrics2 = calculatePondMetrics(pond2);
+  const report2 = analyzePondRisks(metrics2, new Date('2026-01-16T00:00:00Z'));
+  const outlook2 = build72HourOutlook(report2, new Date('2026-01-16T00:00:00Z'));
+
+  const comparisonPackage = buildOrsonPromptPackage({
+    userMessage: 'Compare Prompt Pond and Prompt Pond 2',
+    metrics: [metrics, metrics2],
+    reports: [report, report2],
+    outlooks: [outlook, outlook2],
+  });
+
+  assert(comparisonPackage.questionFocus.intent === 'comparison', 'detects comparison intent');
+  assert(comparisonPackage.questionFocus.isComparison === true, 'sets isComparison flag');
+  assert(comparisonPackage.context.includes('ORSON COMPARATIVE MATRIX'), 'includes comparative matrix in context');
+  assert(comparisonPackage.context.includes('recent_treatments'), 'includes recent treatments');
+
   return {
     farmPackage,
     generalPackage,
+    comparisonPackage,
   };
 };
 

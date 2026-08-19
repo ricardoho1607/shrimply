@@ -63,9 +63,22 @@ const SUMMARY_PATTERNS = [
   /\bcheck\b/i,
 ];
 
+const COMPARISON_PATTERNS = [
+  /\bcompar(e|ison|ing)\b/i,
+  /\bwhich\s+(pond|one)\b/i,
+  /\brank(\s+my)?\s+ponds\b/i,
+  /\bbest\s+pond\b/i,
+  /\bworst\s+pond\b/i,
+  /\ball\s+ponds\b/i,
+  /\bvs\.?\b/i,
+  /\bversus\b/i,
+  /\bbetter\b/i,
+  /\bdifference\b/i,
+];
+
 const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
   { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
-  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i] },
+  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i, /\bincrease\s+feed\b/i, /\bdecrease\s+feed\b/i, /\bcut\s+feed\b/i] },
   { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
   { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
   { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
@@ -146,6 +159,7 @@ const getHighestPayloadSeverity = (payload: OrsonPromptPondPayload): number => {
 
 export const inferOrsonQuestionIntent = (question: string): OrsonQuestionIntent => {
   if (detectRequestedParameter(question) && detectRequestedDirection(question)) return 'parameter_control';
+  if (COMPARISON_PATTERNS.some((pattern) => pattern.test(question))) return 'comparison';
   for (const topic of TOPIC_PATTERNS) {
     if (topic.patterns.some((pattern) => pattern.test(question))) return topic.intent;
   }
@@ -170,23 +184,27 @@ export const buildOrsonQuestionFocus = (
   payloads: OrsonPromptPondPayload[],
 ): OrsonQuestionFocus => {
   const normalizedQuestion = normalizeSearchText(question);
-  const focusedPayload = payloads.find((payload) => {
+  const mentionedPayloads = payloads.filter((payload) => {
     return includesSearchTerm(normalizedQuestion, payload.pondName) ||
       includesSearchTerm(normalizedQuestion, payload.pondId);
-  }) ?? null;
+  });
   const intent = inferOrsonQuestionIntent(question);
+  const isComparison = intent === 'comparison' || mentionedPayloads.length >= 2;
+  const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : null;
   const requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
 
   return {
     analysisMode: isMortalityDiagnosticQuestion(question) ? 'mortality_diagnostic' : 'standard',
-    intent,
+    intent: isComparison ? 'comparison' : intent,
     focusedPondName: focusedPayload?.pondName ?? null,
     focusedPondId: focusedPayload?.pondId ?? null,
     requestedParameter,
     requestedDirection,
     isPondSpecific: focusedPayload !== null,
-    shouldSummarize: intent === 'summary' || /\banaly[sz]e\b/i.test(question),
+    isComparison,
+    comparedPondNames: mentionedPayloads.map((p) => p.pondName),
+    shouldSummarize: intent === 'summary' || isComparison || /\banaly[sz]e\b/i.test(question),
   };
 };
 
@@ -194,6 +212,12 @@ const orderPayloadsForQuestion = (
   payloads: OrsonPromptPondPayload[],
   focus: OrsonQuestionFocus,
 ): OrsonPromptPondPayload[] => {
+  if (focus.isComparison) {
+    const compared = payloads.filter((p) => focus.comparedPondNames?.includes(p.pondName));
+    const others = payloads.filter((p) => !focus.comparedPondNames?.includes(p.pondName));
+    return [...compared, ...others].slice(0, 10);
+  }
+
   if (!focus.isPondSpecific) {
     return [...payloads]
       .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
@@ -267,6 +291,8 @@ export const buildOrsonPromptPayload = (
     labContext: metrics.labContext,
     dailyRecords14d: metrics.dailyRecords14d || [],
     recentLabReports: metrics.recentLabReports || [],
+    recentTreatments: metrics.recentTreatments || [],
+    historicalBenchmark: metrics.historicalBenchmark || null,
     outlook: {
       direction: outlook.direction,
       level: outlook.level,
@@ -294,9 +320,11 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     'SOURCE OF TRUTH:',
     '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
-    '- You have access to a rolling 14-day daily record (daily_records_14d) and recent lab reports (recent_lab_reports) for each pond.',
+    '- You have access to a rolling 14-day daily record (daily_records_14d), recent lab reports (recent_lab_reports), and treatment applications (recent_treatments) for each pond.',
     '- For historical or timeline lookback questions (e.g. "show the last 7 days of mortality", "what was the feed given on August 15", "how did DO trend this week"), extract the exact dates and numbers from daily_records_14d and list them clearly.',
     '- Cross-reference daily timeline changes (feed, DO, pH, mortality, MBW) with lab report findings (nitrite, vibrio, plankton) to answer questions and explain causes.',
+    '- If recent_treatments exist, cross-reference treatments (lime, probiotics, minerals) with water quality and lab pathogen trends to confirm whether treatments were effective.',
+    '- If historical_benchmark exists, reference past completed cycle averages when answering cycle-over-cycle comparison questions.',
     '- Do not invent measurements, disease diagnoses, pathogen results, or lab data.',
     '- Do not treat a change in logged daily feed as measured appetite or proof that feed was consumed.',
     '- If a measurement is missing or confidence is low, say so clearly.',
@@ -306,6 +334,8 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '',
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
+    '- If the question asks to compare ponds (or asks which pond is best/worst), rank and compare the ponds side-by-side using growth (MBW/ADG), FCR, survival rate, and DO stability, and explain the key reasons behind performance differences.',
+    '- If the question asks about feed adjustments or feeding recommendations, compare actual_feed_kg with expected_feed_kg and water status to give exact numerical adjustments (e.g. cut feed by 15-20% if DO < 4.0 mg/L; cut by 30-50% if DO < 3.0 mg/L; increase by +5% to +10% or up to expected_feed_kg if DO > 5.0 mg/L and shrimp are converting well).',
     '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
     '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
     '- If the question asks for past daily numbers or history, provide the exact dated list from daily_records_14d.',
@@ -405,6 +435,22 @@ export const buildOrsonPromptContext = (
       key_risks: l.keyRisks,
       recommendations: l.recommendations,
     })),
+    recent_treatments: (payload.recentTreatments || []).map((t) => ({
+      date: t.date,
+      additive_name: t.additiveName,
+      category: t.category,
+      quantity: t.quantity,
+      unit: t.unit,
+      ppm: t.ppm,
+      notes: t.notes,
+    })),
+    historical_benchmark: payload.historicalBenchmark ? {
+      completed_cycle_count: payload.historicalBenchmark.completedCycleCount,
+      average_final_mbw_g: payload.historicalBenchmark.averageFinalMbwG,
+      average_adg_g_per_day: payload.historicalBenchmark.averageAdgGPerDay,
+      average_fcr: payload.historicalBenchmark.averageFcr,
+      average_survival_pct: payload.historicalBenchmark.averageSurvivalPercent,
+    } : null,
     lab_context: {
       latest: payload.labContext.latest,
       by_type: payload.labContext.byType,
@@ -465,6 +511,22 @@ export const buildOrsonPromptContext = (
     '',
     ...(mortalityTrace ? [
       `ORSON MORTALITY TRACE:\n${JSON.stringify(mortalityTrace)}`,
+      '',
+    ] : []),
+    ...(payloads.length >= 2 || questionFocus.isComparison ? [
+      'ORSON COMPARATIVE MATRIX:',
+      JSON.stringify(payloads.map((p) => ({
+        pond: p.pondName,
+        doc: p.currentDoc,
+        mbw_g: p.latestMbwG,
+        biomass_kg: p.biomassKg,
+        survival_pct: p.survivalPercent,
+        feed_pressure: p.feedPressureRatio,
+        actual_feed_kg: p.actualFeedKg,
+        expected_feed_kg: p.expectedFeedKg,
+        do_min_mg_l: p.doMinimumLatest,
+        risk_level: p.outlook.level,
+      })), null, 2),
       '',
     ] : []),
     `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads, null, 2)}`,

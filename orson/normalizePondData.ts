@@ -7,6 +7,8 @@ import type {
   OrsonNormalizedPond,
   OrsonNormalizedRecord,
   OrsonNumber,
+  OrsonPromptHistoricalBenchmark,
+  OrsonPromptTreatmentEvent,
   OrsonRecordKind,
 } from './types';
 
@@ -215,6 +217,64 @@ const collectMissingFields = (fields: Record<string, unknown>): string[] => {
     .map(([key]) => key);
 };
 
+const normalizeTreatments = (pond: RawPond): OrsonPromptTreatmentEvent[] => {
+  const rawTreatments = Array.isArray(pond.treatments)
+    ? pond.treatments
+    : Array.isArray(pond.additivesUsage)
+      ? pond.additivesUsage
+      : [];
+
+  return rawTreatments
+    .filter((item) => item && typeof item === 'object')
+    .map((item, index) => ({
+      id: firstString(item.id) ?? `treatment-${index}`,
+      date: normalizeDateString(item.date) ?? '',
+      additiveName: firstString(item.additiveName, item.name, item.treatmentMixName) ?? 'Pond additive',
+      category: firstString(item.category),
+      quantity: firstNumber(item.quantity, item.amount),
+      unit: firstString(item.unit),
+      ppm: firstNumber(item.ppm),
+      pondVolumeLiters: firstNumber(item.pondVolumeLiters, item.volumeLiters),
+      notes: firstString(item.notes),
+    }))
+    .filter((item) => item.date)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 10);
+};
+
+const normalizeHistoricalBenchmark = (pond: RawPond): OrsonPromptHistoricalBenchmark | null => {
+  const raw = pond.historicalBenchmark || pond.pastCycleBenchmark;
+  if (raw && typeof raw === 'object') {
+    return {
+      completedCycleCount: toNumber(raw.completedCycleCount) ?? 1,
+      averageFinalMbwG: toNumber(raw.averageFinalMbwG ?? raw.averageMbw ?? raw.finalMbw),
+      averageAdgGPerDay: toNumber(raw.averageAdgGPerDay ?? raw.averageAdg ?? raw.adg),
+      averageFcr: toNumber(raw.averageFcr ?? raw.fcr),
+      averageSurvivalPercent: toNumber(raw.averageSurvivalPercent ?? raw.survivalRate ?? raw.survivalPercent),
+    };
+  }
+
+  if (Array.isArray(pond.pastCycles) && pond.pastCycles.length > 0) {
+    const cycles = pond.pastCycles.filter((c: any) => c && typeof c === 'object');
+    if (cycles.length === 0) return null;
+    const mbwSum = cycles.reduce((s: number, c: any) => s + (toNumber(c.finalMbw ?? c.mbw) || 0), 0);
+    const adgSum = cycles.reduce((s: number, c: any) => s + (toNumber(c.adg) || 0), 0);
+    const fcrSum = cycles.reduce((s: number, c: any) => s + (toNumber(c.fcr) || 0), 0);
+    const srSum = cycles.reduce((s: number, c: any) => s + (toNumber(c.survivalRate ?? c.survivalPercent) || 0), 0);
+    const count = cycles.length;
+
+    return {
+      completedCycleCount: count,
+      averageFinalMbwG: mbwSum > 0 ? Math.round((mbwSum / count) * 100) / 100 : null,
+      averageAdgGPerDay: adgSum > 0 ? Math.round((adgSum / count) * 100) / 100 : null,
+      averageFcr: fcrSum > 0 ? Math.round((fcrSum / count) * 100) / 100 : null,
+      averageSurvivalPercent: srSum > 0 ? Math.round((srSum / count) * 100) / 100 : null,
+    };
+  }
+
+  return null;
+};
+
 const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null => {
   const rawFeedData = record.feedData;
   if (!rawFeedData || typeof rawFeedData !== 'object') return null;
@@ -367,6 +427,8 @@ export const normalizePondData = (
     supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
     labContext: normalizeLabContext(pond),
+    treatments: normalizeTreatments(pond),
+    historicalBenchmark: normalizeHistoricalBenchmark(pond),
     records,
     missingFields: [],
   };

@@ -84,6 +84,8 @@ export interface OrsonNormalizedPond {
   supplier: string | null;
   cycleStatus: 'active' | 'ended';
   labContext: OrsonLabContext;
+  treatments: OrsonPromptTreatmentEvent[];
+  historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   records: OrsonNormalizedRecord[];
   missingFields: string[];
 }
@@ -193,6 +195,8 @@ export interface OrsonPondMetrics {
   labContext: OrsonLabContext;
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
+  recentTreatments: OrsonPromptTreatmentEvent[];
+  historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   dataCompleteness: OrsonDataCompleteness;
   calibration: {
     versionId: string;
@@ -280,6 +284,40 @@ export interface OrsonPromptLabReport {
   recommendations: string[];
 }
 
+export interface OrsonPromptTreatmentEvent {
+  id: string;
+  date: string;
+  additiveName: string;
+  category: string | null;
+  quantity: OrsonNumber;
+  unit: string | null;
+  ppm: OrsonNumber;
+  pondVolumeLiters: OrsonNumber;
+  notes: string | null;
+}
+
+export interface OrsonPromptHistoricalBenchmark {
+  completedCycleCount: number;
+  averageFinalMbwG: OrsonNumber;
+  averageAdgGPerDay: OrsonNumber;
+  averageFcr: OrsonNumber;
+  averageSurvivalPercent: OrsonNumber;
+}
+
+export interface OrsonComparativePondMetric {
+  pondName: string;
+  currentDoc: number | null;
+  mbwG: OrsonNumber;
+  adgGPerDay: OrsonNumber;
+  biomassKg: OrsonNumber;
+  survivalPercent: OrsonNumber;
+  fcr: OrsonNumber;
+  doMinimumLatest: OrsonNumber;
+  feedPressureRatio: OrsonNumber;
+  feedAllocationTrend: string;
+  overallSeverity: OrsonRiskSeverity;
+}
+
 export interface OrsonPromptPondPayload {
   pondId: string | null;
   pondName: string;
@@ -304,12 +342,15 @@ export interface OrsonPromptPondPayload {
   labContext: OrsonLabContext;
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
+  recentTreatments: OrsonPromptTreatmentEvent[];
+  historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
   findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>[];
 }
 
 export type OrsonQuestionIntent =
   | 'parameter_control'
+  | 'comparison'
   | 'feed'
   | 'growth'
   | 'water_quality'
@@ -329,6 +370,8 @@ export interface OrsonQuestionFocus {
   requestedParameter: string | null;
   requestedDirection: 'increase' | 'decrease' | 'stabilize' | null;
   isPondSpecific: boolean;
+  isComparison?: boolean;
+  comparedPondNames?: string[];
   shouldSummarize: boolean;
 }
 

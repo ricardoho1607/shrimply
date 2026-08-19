@@ -8,7 +8,9 @@ import type {
   OrsonNumber,
   OrsonPondMetrics,
   OrsonPromptDailyRecord,
+  OrsonPromptHistoricalBenchmark,
   OrsonPromptLabReport,
+  OrsonPromptTreatmentEvent,
   OrsonRangeEstimate,
   OrsonSurvivalAssumption,
   OrsonTrendResult,
@@ -522,6 +524,8 @@ export const calculatePondMetrics = (
     labContext: pond.labContext,
     dailyRecords14d: extractDailyRecords14d(pond),
     recentLabReports: extractRecentLabReports(pond),
+    recentTreatments: pond.treatments || [],
+    historicalBenchmark: pond.historicalBenchmark || null,
     dataCompleteness: calculateDataCompleteness(pond),
     calibration: {
       versionId: calibration.versionId,
