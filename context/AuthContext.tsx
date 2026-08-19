@@ -81,6 +81,18 @@ interface Company {
   logoUrl?: string;
   timeZone?: string;
   harvestProjectionMarketPrices?: Record<string, number>;
+  deletionRequest?: CompanyDeletionRequest;
+}
+
+export interface CompanyDeletionRequest {
+  requestedBy: string;
+  requestedByName?: string;
+  requestedAt: any;
+  status: 'pending' | 'approved' | 'cancelled';
+  requiredApproverIds: string[];
+  approvedByIds: string[];
+  cancelledBy?: string;
+  cancelledAt?: any;
 }
 
 const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
@@ -180,6 +192,9 @@ interface AuthContextType {
   approveJoinRequest: (requestId: string) => Promise<void>;
   rejectJoinRequest: (requestId: string) => Promise<void>;
   removeMember: (memberId: string) => Promise<void>;
+  requestCompanyDeletion: () => Promise<{ status: string; approvedCount?: number; totalRequired?: number }>;
+  approveCompanyDeletion: () => Promise<{ status: string; approvedCount?: number; totalRequired?: number }>;
+  cancelCompanyDeletion: () => Promise<{ success: boolean; status: string }>;
   getTeamMembers: () => Promise<TeamMember[]>;
   acceptInvite: (inviteToken: string) => Promise<void>;
   refreshUserData: () => Promise<void>;
@@ -923,6 +938,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [user, company, refreshCompanyData]);
 
+  const requestCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can request company deletion');
+    try {
+      const teamAccess = httpsCallable<
+        { operation: 'requestCompanyDeletion'; companyId: string },
+        { success: boolean; status: string; approvedCount?: number; totalRequired?: number; approvedByIds?: string[]; requiredApproverIds?: string[] }
+      >(firebaseFunctions, 'acceptCompanyInvite');
+      const response = await teamAccess({ operation: 'requestCompanyDeletion', companyId: company.id });
+      await refreshCompanyData();
+      return response.data;
+    } catch (error) {
+      console.error('Error requesting company deletion:', error);
+      throw error;
+    }
+  }, [user, company, refreshCompanyData]);
+
+  const approveCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve company deletion');
+    try {
+      const teamAccess = httpsCallable<
+        { operation: 'approveCompanyDeletion'; companyId: string },
+        { success: boolean; status: string; approvedCount?: number; totalRequired?: number; approvedByIds?: string[] }
+      >(firebaseFunctions, 'acceptCompanyInvite');
+      const response = await teamAccess({ operation: 'approveCompanyDeletion', companyId: company.id });
+      await refreshCompanyData();
+      return response.data;
+    } catch (error) {
+      console.error('Error approving company deletion:', error);
+      throw error;
+    }
+  }, [user, company, refreshCompanyData]);
+
+  const cancelCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can cancel company deletion');
+    try {
+      const teamAccess = httpsCallable<
+        { operation: 'cancelCompanyDeletion'; companyId: string },
+        { success: boolean; status: string }
+      >(firebaseFunctions, 'acceptCompanyInvite');
+      const response = await teamAccess({ operation: 'cancelCompanyDeletion', companyId: company.id });
+      await refreshCompanyData();
+      return response.data;
+    } catch (error) {
+      console.error('Error cancelling company deletion:', error);
+      throw error;
+    }
+  }, [user, company, refreshCompanyData]);
+
   const inviteTeamMember = useCallback(async (inviteData: { email: string; role: StaffRole; message?: string }): Promise<CompanyInviteResult> => {
     if (!user || !company || !isOwnerRole(user.role)) throw new Error('Only company owners and co-owners can send invitations');
     if (!auth.currentUser?.emailVerified) {
@@ -1067,6 +1130,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       approveJoinRequest,
       rejectJoinRequest,
       removeMember,
+      requestCompanyDeletion,
+      approveCompanyDeletion,
+      cancelCompanyDeletion,
       getTeamMembers,
       acceptInvite,
       refreshUserData,
@@ -1082,7 +1148,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getCompanyLocationString,
     };
   }, [user, company, companyResolved, cachedFarmAvailable, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
-       getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, getTeamMembers, acceptInvite,
+       getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion, getTeamMembers, acceptInvite,
        refreshUserData, refreshCompanyData, getCompanyLocationData, getCompanyLocationString]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

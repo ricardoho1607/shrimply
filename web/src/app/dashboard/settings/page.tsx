@@ -19,7 +19,8 @@ import {
   ArrowUpRight,
   Clock,
   XCircle,
-  Trash2
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
@@ -86,11 +87,12 @@ const getLocationValue = (company: any) => {
 };
 
 export default function SettingsPage() {
-  const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember } = useAuth();
+  const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
   const { data: members } = useCompanyMembers<any>();
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
+  const [deletionLoading, setDeletionLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
   const [joinRequests, setJoinRequests] = useState<Array<{
@@ -216,6 +218,55 @@ export default function SettingsPage() {
       alert(error instanceof Error ? error.message : 'Failed to remove team member.');
     } finally {
       setRemovingMemberId(null);
+    }
+  };
+
+  const handleRequestCompanyDeletion = async () => {
+    if (!window.confirm('Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a company deletion request?')) return;
+    setDeletionLoading(true);
+    try {
+      const res = await requestCompanyDeletion();
+      if (res.status === 'deleted') {
+        alert('Company has been permanently deleted.');
+        window.location.href = '/roleselection';
+      } else {
+        alert('Company deletion requested. All owners and co-owners must approve before the company is deleted.');
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to request company deletion.');
+    } finally {
+      setDeletionLoading(false);
+    }
+  };
+
+  const handleApproveCompanyDeletion = async () => {
+    if (!window.confirm('Are you sure you want to approve deleting this company? This action is irreversible once all owners and co-owners approve.')) return;
+    setDeletionLoading(true);
+    try {
+      const res = await approveCompanyDeletion();
+      if (res.status === 'deleted') {
+        alert('All owners approved and the company has been permanently deleted.');
+        window.location.href = '/roleselection';
+      } else {
+        alert(`Approval recorded (${res.approvedCount || 0}/${res.totalRequired || 0} approved).`);
+      }
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to approve company deletion.');
+    } finally {
+      setDeletionLoading(false);
+    }
+  };
+
+  const handleCancelCompanyDeletion = async () => {
+    if (!window.confirm('Are you sure you want to cancel the pending company deletion request?')) return;
+    setDeletionLoading(true);
+    try {
+      await cancelCompanyDeletion();
+      alert('Company deletion request has been cancelled.');
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Failed to cancel deletion request.');
+    } finally {
+      setDeletionLoading(false);
     }
   };
 
@@ -602,6 +653,73 @@ export default function SettingsPage() {
                   </div>
                 ))}
               </div>
+
+              {/* Deletion Request Banner */}
+              {company?.deletionRequest?.status === 'pending' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#FEF3F2', border: '2px solid #FECDCA' }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+                    <AlertTriangle size={20} color="#B42318" style={{ marginTop: '2px', flexShrink: 0 }} />
+                    <div style={{ flex: 1 }}>
+                      <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#B42318' }}>Company Deletion Requested</h4>
+                      <p style={{ fontSize: '13px', color: '#7A271A', margin: '4px 0 0', lineHeight: 1.4 }}>
+                        Requested by <strong>{company.deletionRequest.requestedByName || 'an owner'}</strong>. Deleting the company requires unanimous approval from all owners and co-owners.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#FEE4E2', color: '#B42318', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>
+                    Approvals: {company.deletionRequest.approvedByIds?.length || 0} / {company.deletionRequest.requiredApproverIds?.length || 0} owners & co-owners
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                    {['owner', 'co-owner'].includes(user?.role || '') && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
+                      <button
+                        type="button"
+                        disabled={deletionLoading}
+                        onClick={handleApproveCompanyDeletion}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: 'none', background: '#D92D20', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        {deletionLoading ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle2 size={15} />}
+                        Approve Deletion
+                      </button>
+                    )}
+                    {['owner', 'co-owner'].includes(user?.role || '') && (
+                      <button
+                        type="button"
+                        disabled={deletionLoading}
+                        onClick={handleCancelCompanyDeletion}
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #D0D5DD', background: '#FFFFFF', color: '#344054', fontWeight: 600, cursor: 'pointer' }}
+                      >
+                        Cancel Request
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Danger Zone */}
+              {['owner', 'co-owner'].includes(user?.role || '') && company?.deletionRequest?.status !== 'pending' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #FECDCA' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B42318' }}>
+                    <AlertTriangle size={18} />
+                    <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>Danger Zone</h4>
+                  </div>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
+                    Permanently delete this company and all associated records. This action requires unanimous approval from all owners and co-owners.
+                  </p>
+                  <div>
+                    <button
+                      type="button"
+                      disabled={deletionLoading}
+                      onClick={handleRequestCompanyDeletion}
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {deletionLoading ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
+                      Delete Company
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

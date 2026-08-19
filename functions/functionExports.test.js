@@ -3,6 +3,8 @@ const test = require("node:test");
 
 const EXPECTED_FUNCTION_EXPORTS = [
   "acceptCompanyInvite",
+  "approveCompanyDeletion",
+  "cancelCompanyDeletion",
   "createCompanyInvite",
   "createCompanyJoinRequest",
   "deleteAdminUser",
@@ -23,6 +25,7 @@ const EXPECTED_FUNCTION_EXPORTS = [
   "recordOrsonPrediction",
   "removeCompanyMember",
   "requestAndroidTesterAccess",
+  "requestCompanyDeletion",
   "revokeCompanyInvite",
   "searchAdminAccounts",
 ];

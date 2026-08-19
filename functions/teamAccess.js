@@ -5,6 +5,9 @@ const {
   buildSecureInvite,
   evaluateInviteAcceptance,
   evaluateJoinApproval,
+  evaluateDeletionRequest,
+  evaluateDeletionApproval,
+  evaluateDeletionCancellation,
   hashInviteToken,
   normalizeEmail,
   toMillis: policyToMillis,
@@ -20,6 +23,9 @@ const TEAM_ACCESS_OPERATIONS = Object.freeze({
   createCompanyJoinRequest: "createCompanyJoinRequest",
   processCompanyJoinRequest: "processCompanyJoinRequest",
   removeCompanyMember: "removeCompanyMember",
+  requestCompanyDeletion: "requestCompanyDeletion",
+  approveCompanyDeletion: "approveCompanyDeletion",
+  cancelCompanyDeletion: "cancelCompanyDeletion",
 });
 const isVerifiedAuth = (request) => request.auth?.token?.email_verified === true;
 
@@ -107,9 +113,6 @@ exports.createCompanyInvite = onCall(async (request) => {
     const user = userSnap.exists ? userSnap.data() : null;
     if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
       throw new HttpsError("permission-denied", "Only company owners and co-owners can create invitations.");
-    }
-    if (role === "co-owner" && company.ownerId !== uid) {
-      throw new HttpsError("permission-denied", "Only the company owner can invite a co-owner.");
     }
 
     const pendingSecureInvites = existingInvites.docs.filter((document) => document.data().status === "pending");
@@ -467,9 +470,6 @@ exports.processCompanyJoinRequest = onCall(async (request) => {
       const code = evaluation.reason === "already-in-another-company" ? "failed-precondition" : "permission-denied";
       throw new HttpsError(code, "This join request cannot be approved.");
     }
-    if (evaluation.role === "co-owner" && company.ownerId !== uid) {
-      throw new HttpsError("permission-denied", "Only the company owner can approve a co-owner.");
-    }
 
     transaction.update(requestRef, {
       status: "approved",
@@ -590,3 +590,260 @@ exports.removeCompanyMember = onCall(async (request) => {
   });
   return { success: true };
 });
+
+const getCompanyOwnerAndCoOwnerUids = async (db, company) => {
+  const memberIds = Array.isArray(company?.teamMembers) ? company.teamMembers : [];
+  const uids = new Set([company?.ownerId].filter((id) => typeof id === "string" && id.trim()));
+  if (memberIds.length > 0) {
+    const userDocs = await Promise.all(
+      memberIds.map((memberId) => db.collection("users").doc(memberId).get())
+    );
+    for (const userDoc of userDocs) {
+      if (userDoc.exists) {
+        const userData = userDoc.data();
+        if (userData.role === "co-owner" || userData.role === "owner") {
+          uids.add(userDoc.id);
+        }
+      }
+    }
+  }
+  return Array.from(uids);
+};
+
+const deleteCompanyAndAssociatedData = async (db, companyId, company) => {
+  const memberIds = Array.isArray(company?.teamMembers) ? company.teamMembers : [];
+  const allMemberUids = new Set([company?.ownerId, ...memberIds].filter((id) => typeof id === "string" && id.trim()));
+
+  const userQuery = await db.collection("users").where("companyId", "==", companyId).get();
+  userQuery.docs.forEach((docSnap) => allMemberUids.add(docSnap.id));
+
+  const unlinkPromises = [];
+  const uidsArray = Array.from(allMemberUids);
+  for (let i = 0; i < uidsArray.length; i += 400) {
+    const batch = db.batch();
+    uidsArray.slice(i, i + 400).forEach((uid) => {
+      batch.set(db.collection("users").doc(uid), {
+        companyId: null,
+        role: null,
+        hasCompletedSetup: false,
+        lastActive: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    });
+    unlinkPromises.push(batch.commit());
+  }
+  await Promise.all(unlinkPromises);
+
+  const topLevelCollections = [
+    "joinRequests",
+    "companyInvites",
+    "notifications",
+    "marketplace_listings",
+    "marketplace_responses",
+    "diseaseReports",
+    "assets",
+  ];
+  for (const collectionName of topLevelCollections) {
+    const snapshot = await db.collection(collectionName).where("companyId", "==", companyId).get();
+    if (!snapshot.empty) {
+      const deletePromises = [];
+      for (let i = 0; i < snapshot.docs.length; i += 400) {
+        const batch = db.batch();
+        snapshot.docs.slice(i, i + 400).forEach((docSnap) => batch.delete(docSnap.ref));
+        deletePromises.push(batch.commit());
+      }
+      await Promise.all(deletePromises);
+    }
+  }
+
+  await db.collection("publicCompanyProfiles").doc(companyId).delete().catch(() => null);
+
+  const companyRef = db.collection("companies").doc(companyId);
+  await db.recursiveDelete(companyRef);
+};
+
+exports.requestCompanyDeletion = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before managing company deletion.");
+  if (!companyId || companyId.length > 160) throw new HttpsError("invalid-argument", "A valid company ID is required.");
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const userRef = db.collection("users").doc(uid);
+
+  const [companySnap, userSnap] = await Promise.all([
+    companyRef.get(),
+    userRef.get(),
+  ]);
+  if (!companySnap.exists) throw new HttpsError("not-found", "Company not found.");
+
+  const company = { ...companySnap.data(), id: companySnap.id };
+  const user = userSnap.exists ? userSnap.data() : null;
+  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+    throw new HttpsError("permission-denied", "Only company owners and co-owners can request company deletion.");
+  }
+
+  const ownerAndCoOwnerUids = await getCompanyOwnerAndCoOwnerUids(db, company);
+  const evaluation = evaluateDeletionRequest({
+    company,
+    requesterUid: uid,
+    requesterName: typeof user?.name === "string" && user.name.trim() ? user.name.trim() : user?.email || "Owner",
+    ownerAndCoOwnerUids,
+  });
+  if (!evaluation.allowed) {
+    const code = evaluation.reason === "deletion-already-requested" ? "already-exists" : "permission-denied";
+    throw new HttpsError(code, "Cannot request company deletion.");
+  }
+
+  if (evaluation.isFullyApproved) {
+    await deleteCompanyAndAssociatedData(db, companyId, company);
+    return { success: true, status: "deleted" };
+  }
+
+  await companyRef.update({
+    deletionRequest: {
+      requestedBy: uid,
+      requestedByName: evaluation.record.requestedByName,
+      requestedAt: admin.firestore.Timestamp.fromMillis(evaluation.record.requestedAtMs),
+      status: "pending",
+      requiredApproverIds: evaluation.record.requiredApproverIds,
+      approvedByIds: evaluation.record.approvedByIds,
+    },
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const otherApprovers = evaluation.record.requiredApproverIds.filter((id) => id !== uid);
+  const notificationPromises = otherApprovers.map((targetUid) => (
+    db.collection("notifications").add({
+      companyId,
+      userId: targetUid,
+      type: "team",
+      title: "Company Deletion Approval Required",
+      message: `${evaluation.record.requestedByName} requested to delete the company. Your approval is required.`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+      priority: "high",
+      icon: "warning",
+      color: "#e74c3c",
+    })
+  ));
+  await Promise.all(notificationPromises);
+
+  return {
+    success: true,
+    status: "pending",
+    approvedCount: evaluation.record.approvedByIds.length,
+    totalRequired: evaluation.record.requiredApproverIds.length,
+    approvedByIds: evaluation.record.approvedByIds,
+    requiredApproverIds: evaluation.record.requiredApproverIds,
+  };
+});
+
+exports.approveCompanyDeletion = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before approving company deletion.");
+  if (!companyId || companyId.length > 160) throw new HttpsError("invalid-argument", "A valid company ID is required.");
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const userRef = db.collection("users").doc(uid);
+
+  const [companySnap, userSnap] = await Promise.all([
+    companyRef.get(),
+    userRef.get(),
+  ]);
+  if (!companySnap.exists) throw new HttpsError("not-found", "Company not found.");
+
+  const company = { ...companySnap.data(), id: companySnap.id };
+  const user = userSnap.exists ? userSnap.data() : null;
+  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+    throw new HttpsError("permission-denied", "Only company owners and co-owners can approve company deletion.");
+  }
+
+  const evaluation = evaluateDeletionApproval({ company, approverUid: uid });
+  if (!evaluation.allowed) {
+    const code = evaluation.reason === "already-approved" ? "already-exists" : "failed-precondition";
+    throw new HttpsError(code, "Cannot approve company deletion.");
+  }
+
+  if (evaluation.isFullyApproved) {
+    await deleteCompanyAndAssociatedData(db, companyId, company);
+    return { success: true, status: "deleted" };
+  }
+
+  await companyRef.update({
+    "deletionRequest.approvedByIds": admin.firestore.FieldValue.arrayUnion(uid),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    status: "pending",
+    approvedCount: evaluation.approvedCount,
+    totalRequired: evaluation.totalRequired,
+    approvedByIds: evaluation.approvedByIds,
+  };
+});
+
+exports.cancelCompanyDeletion = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  const companyId = typeof request.data?.companyId === "string" ? request.data.companyId.trim() : "";
+  if (!uid) throw new HttpsError("unauthenticated", "You must be signed in.");
+  if (!isVerifiedAuth(request)) throw new HttpsError("failed-precondition", "Verify your email address before cancelling company deletion.");
+  if (!companyId || companyId.length > 160) throw new HttpsError("invalid-argument", "A valid company ID is required.");
+
+  const db = admin.firestore();
+  const companyRef = db.collection("companies").doc(companyId);
+  const userRef = db.collection("users").doc(uid);
+
+  const [companySnap, userSnap] = await Promise.all([
+    companyRef.get(),
+    userRef.get(),
+  ]);
+  if (!companySnap.exists) throw new HttpsError("not-found", "Company not found.");
+
+  const company = { ...companySnap.data(), id: companySnap.id };
+  const user = userSnap.exists ? userSnap.data() : null;
+  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+    throw new HttpsError("permission-denied", "Only company owners and co-owners can cancel company deletion.");
+  }
+
+  const ownerAndCoOwnerUids = await getCompanyOwnerAndCoOwnerUids(db, company);
+  const evaluation = evaluateDeletionCancellation({ company, cancellerUid: uid, ownerAndCoOwnerUids });
+  if (!evaluation.allowed) {
+    throw new HttpsError("failed-precondition", "No pending deletion request to cancel.");
+  }
+
+  await companyRef.update({
+    "deletionRequest.status": "cancelled",
+    "deletionRequest.cancelledBy": uid,
+    "deletionRequest.cancelledAt": admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const approvers = Array.isArray(company.deletionRequest?.requiredApproverIds)
+    ? company.deletionRequest.requiredApproverIds
+    : ownerAndCoOwnerUids;
+  const otherApprovers = approvers.filter((id) => id !== uid);
+  const notificationPromises = otherApprovers.map((targetUid) => (
+    db.collection("notifications").add({
+      companyId,
+      userId: targetUid,
+      type: "team",
+      title: "Company Deletion Cancelled",
+      message: `${typeof user?.name === "string" ? user.name : "An owner"} cancelled the company deletion request.`,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      read: false,
+      priority: "medium",
+      icon: "information-circle",
+      color: "#0F4C75",
+    })
+  ));
+  await Promise.all(notificationPromises);
+
+  return { success: true, status: "cancelled" };
+});
+

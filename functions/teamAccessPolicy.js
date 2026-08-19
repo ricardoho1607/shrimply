@@ -76,13 +76,97 @@ const evaluateJoinApproval = ({ request, currentCompanyId }) => {
   return { allowed: true, role: request.requestedRole };
 };
 
+const evaluateDeletionRequest = ({
+  company,
+  requesterUid,
+  requesterName,
+  ownerAndCoOwnerUids,
+  nowMs = Date.now(),
+}) => {
+  if (!company) return { allowed: false, reason: "company-not-found" };
+  if (!ownerAndCoOwnerUids || !ownerAndCoOwnerUids.includes(requesterUid)) {
+    return { allowed: false, reason: "not-an-owner-or-co-owner" };
+  }
+  const existing = company.deletionRequest;
+  if (existing && existing.status === "pending") {
+    return { allowed: false, reason: "deletion-already-requested" };
+  }
+  const requiredApproverIds = Array.from(new Set(ownerAndCoOwnerUids));
+  const approvedByIds = [requesterUid];
+  const isFullyApproved = requiredApproverIds.every((id) => approvedByIds.includes(id));
+  return {
+    allowed: true,
+    isFullyApproved,
+    record: {
+      requestedBy: requesterUid,
+      requestedByName: requesterName || null,
+      requestedAtMs: nowMs,
+      status: isFullyApproved ? "approved" : "pending",
+      requiredApproverIds,
+      approvedByIds,
+    },
+  };
+};
+
+const evaluateDeletionApproval = ({
+  company,
+  approverUid,
+}) => {
+  if (!company) return { allowed: false, reason: "company-not-found" };
+  const deletionRequest = company.deletionRequest;
+  if (!deletionRequest || deletionRequest.status !== "pending") {
+    return { allowed: false, reason: "no-pending-deletion-request" };
+  }
+  const requiredApproverIds = Array.isArray(deletionRequest.requiredApproverIds)
+    ? deletionRequest.requiredApproverIds
+    : [];
+  if (!requiredApproverIds.includes(approverUid)) {
+    return { allowed: false, reason: "not-an-owner-or-co-owner" };
+  }
+  const approvedByIds = Array.isArray(deletionRequest.approvedByIds)
+    ? deletionRequest.approvedByIds
+    : [];
+  if (approvedByIds.includes(approverUid)) {
+    return { allowed: false, reason: "already-approved" };
+  }
+  const nextApprovedByIds = [...approvedByIds, approverUid];
+  const isFullyApproved = requiredApproverIds.every((id) => nextApprovedByIds.includes(id));
+  return {
+    allowed: true,
+    isFullyApproved,
+    approvedByIds: nextApprovedByIds,
+    totalRequired: requiredApproverIds.length,
+    approvedCount: nextApprovedByIds.length,
+  };
+};
+
+const evaluateDeletionCancellation = ({
+  company,
+  cancellerUid,
+  ownerAndCoOwnerUids,
+}) => {
+  if (!company) return { allowed: false, reason: "company-not-found" };
+  const deletionRequest = company.deletionRequest;
+  if (!deletionRequest || deletionRequest.status !== "pending") {
+    return { allowed: false, reason: "no-pending-deletion-request" };
+  }
+  if (!ownerAndCoOwnerUids || !ownerAndCoOwnerUids.includes(cancellerUid)) {
+    return { allowed: false, reason: "not-an-owner-or-co-owner" };
+  }
+  return { allowed: true };
+};
+
 module.exports = {
   INVITE_TTL_MS,
   STAFF_ROLES,
   buildSecureInvite,
   evaluateInviteAcceptance,
   evaluateJoinApproval,
+  evaluateDeletionRequest,
+  evaluateDeletionApproval,
+  evaluateDeletionCancellation,
   hashInviteToken,
   normalizeEmail,
   toMillis,
 };
+

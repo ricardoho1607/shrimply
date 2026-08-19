@@ -37,7 +37,7 @@ type RoleKey = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buye
 export default function CompanyDetailsScreen() {
   const router = useRouter();
   const { t } = useLanguage();
-  const { user, company, getTeamMembers, getCompanyLocationString, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember } = useAuth();
+  const { user, company, getTeamMembers, getCompanyLocationString, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
   
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -63,7 +63,7 @@ export default function CompanyDetailsScreen() {
       permissions: [t.companyDetails.allPermissions, t.companyDetails.inviteMembers, t.companyDetails.manageFinances, t.companyDetails.exportData],
       color: '#0F4C75',
       icon: 'shield-checkmark' as const,
-      maxCount: 3
+      maxCount: 10
     },
     manager: {
       title: t.companyDetails.farmManager,
@@ -284,6 +284,102 @@ export default function CompanyDetailsScreen() {
     );
   }, [removeMember, loadData, t]);
 
+  const handleRequestCompanyDeletion = useCallback(async () => {
+    Alert.alert(
+      'Delete Company',
+      'Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a deletion request?',
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: 'Request Deletion',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              if (requestCompanyDeletion) {
+                const res = await requestCompanyDeletion();
+                if (res.status === 'deleted') {
+                  Alert.alert('Company Deleted', 'The company has been permanently deleted.');
+                  router.replace('/roleselection');
+                } else {
+                  Alert.alert('Deletion Requested', 'A deletion request has been created. All owners and co-owners must approve before the company is deleted.');
+                  await loadData();
+                }
+              }
+            } catch (error: any) {
+              console.error('Failed to request deletion:', error);
+              Alert.alert(t.messages.error, error?.message || 'Failed to request company deletion.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [requestCompanyDeletion, loadData, router, t]);
+
+  const handleApproveCompanyDeletion = useCallback(async () => {
+    Alert.alert(
+      'Approve Company Deletion',
+      'Are you sure you want to approve deleting this company? This action cannot be undone once all owners and co-owners approve.',
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: 'Approve Deletion',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              if (approveCompanyDeletion) {
+                const res = await approveCompanyDeletion();
+                if (res.status === 'deleted') {
+                  Alert.alert('Company Deleted', 'All owners approved and the company has been permanently deleted.');
+                  router.replace('/roleselection');
+                } else {
+                  Alert.alert('Approval Recorded', `Your approval has been recorded (${res.approvedCount || 0}/${res.totalRequired || 0} approved).`);
+                  await loadData();
+                }
+              }
+            } catch (error: any) {
+              console.error('Failed to approve deletion:', error);
+              Alert.alert(t.messages.error, error?.message || 'Failed to approve company deletion.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [approveCompanyDeletion, loadData, router, t]);
+
+  const handleCancelCompanyDeletion = useCallback(async () => {
+    Alert.alert(
+      'Cancel Deletion Request',
+      'Are you sure you want to cancel the pending company deletion request?',
+      [
+        { text: t.actions.cancel, style: 'cancel' },
+        {
+          text: 'Cancel Request',
+          onPress: async () => {
+            try {
+              setLoading(true);
+              if (cancelCompanyDeletion) {
+                await cancelCompanyDeletion();
+                Alert.alert('Cancelled', 'Company deletion request has been cancelled.');
+                await loadData();
+              }
+            } catch (error: any) {
+              console.error('Failed to cancel deletion:', error);
+              Alert.alert(t.messages.error, error?.message || 'Failed to cancel deletion request.');
+            } finally {
+              setLoading(false);
+            }
+          },
+        },
+      ]
+    );
+  }, [cancelCompanyDeletion, loadData, t]);
+
   const getBusinessSizeText = (size?: string) => {
     if (!size) return t.companyDetails.notSet;
     const sizeMap: Record<string, string> = {
@@ -433,6 +529,70 @@ export default function CompanyDetailsScreen() {
             </>
           )}
         </View>
+
+        {/* Deletion Request Banner / Card */}
+        {company?.deletionRequest?.status === 'pending' && (
+          <View style={styles.deletionBanner}>
+            <View style={styles.deletionBannerHeader}>
+              <Ionicons name="warning" size={22} color="#e74c3c" />
+              <View style={{ flex: 1, marginLeft: 8 }}>
+                <Text style={styles.deletionBannerTitle}>Company Deletion Requested</Text>
+                <Text style={styles.deletionBannerSubtitle}>
+                  Requested by {company.deletionRequest.requestedByName || 'an owner'}. All owners and co-owners must approve before the company is deleted.
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.deletionProgressContainer}>
+              <Text style={styles.deletionProgressText}>
+                Approvals: {company.deletionRequest.approvedByIds?.length || 0} / {company.deletionRequest.requiredApproverIds?.length || 0} owners & co-owners
+              </Text>
+            </View>
+
+            <View style={styles.deletionActionsRow}>
+              {(user?.role === 'owner' || user?.role === 'co-owner') && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
+                <TouchableOpacity
+                  style={styles.deletionApproveBtn}
+                  onPress={handleApproveCompanyDeletion}
+                  disabled={loading}
+                >
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                  <Text style={styles.deletionApproveBtnText}>Approve Deletion</Text>
+                </TouchableOpacity>
+              )}
+              {(user?.role === 'owner' || user?.role === 'co-owner') && (
+                <TouchableOpacity
+                  style={styles.deletionCancelBtn}
+                  onPress={handleCancelCompanyDeletion}
+                  disabled={loading}
+                >
+                  <Text style={styles.deletionCancelBtnText}>Cancel Request</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* Danger Zone: Delete Company for Owners & Co-owners */}
+        {(user?.role === 'owner' || user?.role === 'co-owner') && company?.deletionRequest?.status !== 'pending' && (
+          <View style={styles.dangerZoneCard}>
+            <View style={styles.dangerZoneHeader}>
+              <Ionicons name="alert-circle-outline" size={20} color="#e74c3c" />
+              <Text style={styles.dangerZoneTitle}>Danger Zone</Text>
+            </View>
+            <Text style={styles.dangerZoneDesc}>
+              Permanently delete this company and all associated records. Requires approval from all owners and co-owners.
+            </Text>
+            <TouchableOpacity
+              style={styles.dangerZoneDeleteBtn}
+              onPress={handleRequestCompanyDeletion}
+              disabled={loading}
+            >
+              <Ionicons name="trash-outline" size={16} color="#e74c3c" />
+              <Text style={styles.dangerZoneDeleteBtnText}>Delete Company</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
 
       {/* Request Modal */}
@@ -708,4 +868,21 @@ const styles = StyleSheet.create({
   rejectButtonText: { color: '#e74c3c', fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: '600' },
   approveButton: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 12 : 14, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#27ae60', gap: Platform.OS === 'android' ? 5 : 6 },
   approveButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 14 : 16, fontWeight: '600' },
+  deletionBanner: { backgroundColor: '#FFF5F5', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 2, borderColor: '#e74c3c' },
+  deletionBannerHeader: { flexDirection: 'row', alignItems: 'flex-start' },
+  deletionBannerTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#e74c3c' },
+  deletionBannerSubtitle: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', marginTop: 3, lineHeight: 18 },
+  deletionProgressContainer: { backgroundColor: '#FFEAEA', borderRadius: 8, padding: 8, marginTop: 10, alignItems: 'center' },
+  deletionProgressText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#e74c3c' },
+  deletionActionsRow: { flexDirection: 'row', gap: 10, marginTop: 12 },
+  deletionApproveBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#e74c3c', borderRadius: 10, paddingVertical: 10, gap: 6 },
+  deletionApproveBtnText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  deletionCancelBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff', borderWidth: 1, borderColor: '#cbd5e1', borderRadius: 10, paddingVertical: 10 },
+  deletionCancelBtnText: { color: '#64748b', fontSize: 13, fontWeight: '600' },
+  dangerZoneCard: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 16 : 18, marginBottom: Platform.OS === 'android' ? 16 : 20, borderWidth: 1, borderColor: '#FECDCA' },
+  dangerZoneHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  dangerZoneTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#e74c3c' },
+  dangerZoneDesc: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#64748b', lineHeight: 18, marginBottom: 12 },
+  dangerZoneDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1.5, borderColor: '#e74c3c', borderRadius: 10, paddingVertical: 11, backgroundColor: '#FFF5F5' },
+  dangerZoneDeleteBtnText: { color: '#e74c3c', fontSize: 14, fontWeight: '600' },
 });

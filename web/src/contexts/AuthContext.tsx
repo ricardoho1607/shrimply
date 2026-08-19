@@ -109,6 +109,18 @@ interface Company {
   pendingInvites: PendingInvite[];
   timeZone?: string;
   harvestProjectionMarketPrices?: Record<string, number>;
+  deletionRequest?: CompanyDeletionRequest;
+}
+
+export interface CompanyDeletionRequest {
+  requestedBy: string;
+  requestedByName?: string;
+  requestedAt: unknown;
+  status: 'pending' | 'approved' | 'cancelled';
+  requiredApproverIds: string[];
+  approvedByIds: string[];
+  cancelledBy?: string;
+  cancelledAt?: unknown;
 }
 
 interface PendingInvite {
@@ -177,6 +189,9 @@ interface AuthContextType {
   approveJoinRequest: (requestId: string) => Promise<void>;
   rejectJoinRequest: (requestId: string) => Promise<void>;
   removeMember: (memberId: string) => Promise<void>;
+  requestCompanyDeletion: () => Promise<{ status: string; approvedCount?: number; totalRequired?: number }>;
+  approveCompanyDeletion: () => Promise<{ status: string; approvedCount?: number; totalRequired?: number }>;
+  cancelCompanyDeletion: () => Promise<{ success: boolean; status: string }>;
   refreshCompanyData: () => Promise<void>;
   isAuthenticated: boolean;
   needsRoleSelection: boolean;
@@ -596,6 +611,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshCompanyData();
   }, [company, refreshCompanyData, user]);
 
+  const requestCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can request company deletion');
+    const teamAccess = httpsCallable<
+      { operation: 'requestCompanyDeletion'; companyId: string },
+      { success: boolean; status: string; approvedCount?: number; totalRequired?: number; approvedByIds?: string[]; requiredApproverIds?: string[] }
+    >(firebaseFunctions, 'acceptCompanyInvite');
+    const response = await teamAccess({ operation: 'requestCompanyDeletion', companyId: company.id });
+    await refreshCompanyData();
+    return response.data;
+  }, [company, refreshCompanyData, user]);
+
+  const approveCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve company deletion');
+    const teamAccess = httpsCallable<
+      { operation: 'approveCompanyDeletion'; companyId: string },
+      { success: boolean; status: string; approvedCount?: number; totalRequired?: number; approvedByIds?: string[] }
+    >(firebaseFunctions, 'acceptCompanyInvite');
+    const response = await teamAccess({ operation: 'approveCompanyDeletion', companyId: company.id });
+    await refreshCompanyData();
+    return response.data;
+  }, [company, refreshCompanyData, user]);
+
+  const cancelCompanyDeletion = useCallback(async () => {
+    if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can cancel company deletion');
+    const teamAccess = httpsCallable<
+      { operation: 'cancelCompanyDeletion'; companyId: string },
+      { success: boolean; status: string }
+    >(firebaseFunctions, 'acceptCompanyInvite');
+    const response = await teamAccess({ operation: 'cancelCompanyDeletion', companyId: company.id });
+    await refreshCompanyData();
+    return response.data;
+  }, [company, refreshCompanyData, user]);
+
   const value = useMemo(() => {
     const effectiveRole = getEffectiveUserRole(user, company);
     const effectiveUser = user ? { ...user, role: effectiveRole } : null;
@@ -620,6 +668,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     approveJoinRequest,
     rejectJoinRequest,
     removeMember,
+    requestCompanyDeletion,
+    approveCompanyDeletion,
+    cancelCompanyDeletion,
     refreshCompanyData,
     isAuthenticated: !!user,
     needsRoleSelection: !!user && !effectiveRole,
@@ -629,7 +680,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
     isBuyer: effectiveRole === 'buyer',
   };
-  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, refreshCompanyData]);
+  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion, refreshCompanyData]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

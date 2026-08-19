@@ -125,7 +125,7 @@ export default function CompanyPage() {
         t.companyDetails?.exportData || 'Export data',
       ],
       icon: ShieldCheck,
-      maxCount: 3,
+      maxCount: 10,
     },
     manager: {
       title: t.companyDetails?.farmManager || 'Farm Manager',
