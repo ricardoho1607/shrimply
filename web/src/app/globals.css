@@ -4806,6 +4806,25 @@ nav.scrolled {
   line-height: 20px;
 }
 
+.ponds-empty-add-button {
+  min-height: 42px;
+  padding: 0 20px;
+  border: 1px solid #bbe1fa;
+  border-radius: 10px;
+  background: #eaf6fd;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.ponds-empty-add-button:hover {
+  transform: translateY(-1px);
+  border-color: #8fc9ed;
+  background: #dceffc;
+}
+
 .ponds-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

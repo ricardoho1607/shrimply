@@ -52,6 +52,8 @@ interface Sampling {
 interface Pond {
   id: string;
   pondName: string;
+  supplier?: string;
+  plSupplier?: string;
   docStart: string;
   pondArea?: number;
   area?: number; // Mobile parity
@@ -429,6 +431,7 @@ export default function ShrimpReportsPage() {
 
         return {
           pondNumber: pond.pondName,
+          supplier: pond.plSupplier || pond.supplier || 'N/A',
           stockingDate: pond.docStart,
           area: toFiniteNumber(pond.pondArea || pond.area),
           initialStock: initialPopulation,

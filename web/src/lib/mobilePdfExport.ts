@@ -93,7 +93,7 @@ export const downloadMobilePdf = async ({
     await html2pdf().from(element).set({
       margin: [0, 0, 0, 0],
       filename,
-      image: { type: 'jpeg', quality: 1 },
+      image: { type: 'png' },
       html2canvas: {
         scale: 2,
         useCORS: true,

@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const stylesheet = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
 const dashboardLayout = fs.readFileSync(path.join(__dirname, '../layout.tsx'), 'utf8');
+const pondsPage = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 
 test('pond status tabs share equal widths and expose a hover highlight', () => {
   assert.match(stylesheet, /\.ponds-filter-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
@@ -15,4 +16,10 @@ test('pond status tabs share equal widths and expose a hover highlight', () => {
 test('mobile navigation trigger highlights only on interaction', () => {
   assert.match(dashboardLayout, /\.mobile-trigger\s*\{[^}]*background:\s*transparent\s*!important;/s);
   assert.match(dashboardLayout, /\.mobile-trigger:hover,[\s\S]*?\.mobile-trigger:focus-visible\s*\{[^}]*background:\s*var\(--primary-dim\)\s*!important;/s);
+});
+
+test('empty pond state uses the light action without a plus icon', () => {
+  assert.match(pondsPage, /className="ponds-empty-add-button"/);
+  assert.doesNotMatch(pondsPage, /className="ponds-empty-add-button"[\s\S]*?<Plus size=\{18\} \/>[\s\S]*?t\.ponds\.addNew/);
+  assert.match(stylesheet, /\.ponds-empty-add-button\s*\{[^}]*background:\s*#eaf6fd;[^}]*color:\s*var\(--primary\);/s);
 });

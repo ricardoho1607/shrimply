@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacit
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { usePondStore, type Pond, getPondCurrentDoc, isBaselineSampling, isPondCycleActive } from './store/pondStore';
+import { usePondStore, type Pond, getPondCurrentDoc, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
 import { DAY_MS, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
 
@@ -93,7 +93,7 @@ export default function ShrimpReportsScreen() {
       const pondDataForPDF = selectedPondData.map(pond => {
         const pondMetrics = calculatePondMetricsWithHarvest(pond);
         return {
-          pondNumber: pond.pondName, stockingDate: pond.docStart, area: pond.pondArea, initialStock: pond.initialPopulation,
+          pondNumber: pond.pondName, supplier: getPondPlSupplier(pond), stockingDate: pond.docStart, area: pond.pondArea, initialStock: pond.initialPopulation,
           density: pond.density,
           latestLabStatus: pond.latestLabStatus,
           latestPlanktonOverwatch: pond.latestPlanktonOverwatch,

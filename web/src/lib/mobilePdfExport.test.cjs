@@ -17,3 +17,8 @@ test('mobile PDF dimensions remain identical on web', () => {
   assert.match(source, /orientation === 'landscape' \? 792 : 612/);
   assert.match(source, /orientation === 'landscape' \? 612 : 792/);
 });
+
+test('web PDF rendering preserves source colours without JPEG conversion', () => {
+  assert.match(source, /image: \{ type: 'png' \}/);
+  assert.doesNotMatch(source, /image: \{ type: 'jpeg'/);
+});

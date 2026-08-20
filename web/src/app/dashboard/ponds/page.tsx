@@ -974,11 +974,10 @@ export default function PondsPage() {
           <h2>{t.ponds.noPondsFound || 'No ponds found'}</h2>
           <p>{t.ponds.noPondsSubtitle || 'Get started by adding your first shrimp pond to the system.'}</p>
           {canEditPonds && (
-            <button className="btn-primary" onClick={() => {
+            <button type="button" className="ponds-empty-add-button" onClick={() => {
               setFormData((previous) => ({ ...previous, docStart: today, baselineDate: today }));
               setModalOpen(true);
             }}>
-              <Plus size={18} />
               {t.ponds.addNew || 'Add pond'}
             </button>
           )}

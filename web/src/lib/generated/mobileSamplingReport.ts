@@ -36,6 +36,7 @@ export interface SamplingData {
 
 export interface PondData {
   pondNumber: string;
+  supplier: string;
   stockingDate: string;
   area: number; // in hectares
   initialStock: number;
@@ -295,6 +296,7 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
     return `
       <tr class="${index % 2 === 0 ? 'row-alt' : ''}">
         <td class="strong pond-cell">${escapeXml(pond.pondNumber)}</td>
+        <td class="supplier-cell">${escapeXml(pond.supplier || 'N/A')}</td>
         <td class="stock-date-cell">${formatShortDate(pond.stockingDate)}</td>
         <td>${latestSampling ? formatNumber(toFiniteNumber(latestSampling.doc), 0) : '-'}</td>
         <td>${formatCompactNumber(toFiniteNumber(pond.area), 0)}</td>
@@ -445,6 +447,7 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
         th { background: rgba(15, 76, 117, 0.90); color: white; padding: 4px 2px; text-align: center; font-size: 5.8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1px; border-right: 1px solid rgba(255,255,255,0.22); line-height: 1.05; }
         td { padding: 5px 2px; text-align: center; vertical-align: middle; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); white-space: normal; overflow: hidden; line-height: 1.15; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, 0.50); }
         .pond-cell { padding-left: 4px; padding-right: 4px; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
+        .supplier-cell { overflow-wrap: anywhere; word-break: break-word; }
         .stock-date-cell { overflow-wrap: normal; word-break: normal; }
         .row-alt td { background: rgba(255, 255, 255, 0.64); }
         .strong { font-weight: 800; }
@@ -491,32 +494,33 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
           <div class="table-container">
             <table>
               <colgroup>
-                <col style="width:17%" />
+                <col style="width:13%" />
+                <col style="width:10%" />
                 <col style="width:8.5%" />
+                <col style="width:4%" />
+                <col style="width:4%" />
+                <col style="width:6.5%" />
                 <col style="width:4.5%" />
-                <col style="width:4.5%" />
-                <col style="width:7%" />
-                <col style="width:5%" />
-                <col style="width:6%" />
                 <col style="width:5.5%" />
-                <col style="width:4.8%" />
-                <col style="width:4.8%" />
-                <col style="width:4.8%" />
-                <col style="width:5.3%" />
-                <col style="width:5.3%" />
-                <col style="width:4.8%" />
-                <col style="width:6%" />
-                <col style="width:6.2%" />
+                <col style="width:5%" />
+                <col style="width:4.5%" />
+                <col style="width:4.5%" />
+                <col style="width:4.5%" />
+                <col style="width:5%" />
+                <col style="width:5%" />
+                <col style="width:4.5%" />
+                <col style="width:5.5%" />
+                <col style="width:5.5%" />
               </colgroup>
               <thead>
                 <tr>
-                  <th>Pond</th><th>Stock<br/>Date</th><th>DOC</th><th>Area<br/>m2</th><th>Stock</th><th>Dens.</th><th>Prev<br/>MBW</th><th>MBW</th><th>ADG</th><th>Size</th><th>SR</th><th>Bio</th><th>Feed</th><th>FCR</th><th>Mort</th><th>Mort %</th>
+                  <th>Pond</th><th>Supplier</th><th>Stock<br/>Date</th><th>DOC</th><th>Area<br/>m2</th><th>Stock</th><th>Dens.</th><th>Prev<br/>MBW</th><th>MBW</th><th>ADG</th><th>Size</th><th>SR</th><th>Bio</th><th>Feed</th><th>FCR</th><th>Mort</th><th>Mort %</th>
                 </tr>
               </thead>
               <tbody>
                 ${pondRows}
                 <tr class="totals-row">
-                  <td colspan="4">Totals / Averages</td>
+                  <td colspan="5">Totals / Averages</td>
                   <td>${formatCompactNumber(ponds.reduce((sum, p) => sum + toFiniteNumber(p.initialStock), 0), 0)}</td>
                   <td>${formatNumber(averages.avgDensity, 0)}</td>
                   <td>${averages.avgPrevABW > 0 ? formatNumber(averages.avgPrevABW) : '-'}</td>
