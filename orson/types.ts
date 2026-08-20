@@ -67,6 +67,11 @@ export interface OrsonNormalizedRecord {
   salinityPpt: OrsonNumber;
   transparencyCm: OrsonNumber;
   temperatureC: OrsonNumber;
+  weatherEvent: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent: OrsonNumber;
+  sludgeLoad: 'low' | 'moderate' | 'high' | null;
+  surfaceScum: boolean | null;
+  shrimpBehaviour: 'normal' | 'abnormal' | null;
   feedData: OrsonNormalizedFeedData | null;
   isBaselineEstimate: boolean;
   missingFields: string[];
@@ -295,6 +300,11 @@ export interface OrsonPromptDailyRecord {
   temperatureC?: OrsonNumber;
   transparencyCm?: OrsonNumber;
   feedingResponse?: 'strong' | 'normal' | 'weak' | null;
+  weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent?: OrsonNumber;
+  sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+  surfaceScum?: boolean | null;
+  shrimpBehaviour?: 'normal' | 'abnormal' | null;
 }
 
 export interface OrsonPromptLabReport {

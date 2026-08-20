@@ -52,6 +52,13 @@ export const runPromptBuilderSelfTest = () => {
           doMorning: 4.1,
           doEvening: 3.6,
           salinity: 25,
+          temperature: 29.5,
+          transparency: 22,
+          weatherEvent: 'heavy_rain',
+          waterExchangePercent: 10,
+          sludgeLoad: 'high',
+          surfaceScum: true,
+          shrimpBehaviour: 'abnormal',
           feedData: { totalDailyFeed: 30, feedingResponse: 'weak' },
         },
       ],
@@ -95,6 +102,11 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
   assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
   assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
+  assert(farmPackage.context.includes('weather_event'), 'includes dated weather events');
+  assert(farmPackage.context.includes('water_exchange_pct'), 'includes water exchange history');
+  assert(farmPackage.context.includes('sludge_load'), 'includes sludge observations');
+  assert(farmPackage.context.includes('surface_scum'), 'includes surface-scum observations');
+  assert(farmPackage.context.includes('shrimp_behaviour'), 'includes shrimp behaviour observations');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
   assert(farmPackage.context.length < 15000, 'keeps prompt context compact');

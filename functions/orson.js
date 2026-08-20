@@ -278,6 +278,7 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   "- Treat calibration as a bounded company prediction adjustment, not as a change to biological safety thresholds or proof of causation.",
   "- If latestPlanktonOverwatch is present, its deterministic state, signals, recommendations, and missing-data list are authoritative. Explain the evidence; do not independently replace its state.",
   "- Never diagnose plankton risk from total cell count alone. Use composition, same-cycle trends, dawn DO, pH swing, transparency, direct feeding response, nutrients or organic load, mortality, and behaviour where available.",
+  "- When asked why a condition changed, inspect dated weather events, water exchange, sludge load, surface scum, shrimp behaviour, direct feeding response, and water-quality history together. Describe timing and evidence, but do not claim timing alone proves causation.",
   "- For plankton risk, do not prescribe automatic bloom-kill chemicals, fixed feed cuts, large water exchanges, or nitrogen addition based only on an N:P ratio.",
   "",
   "ANSWER ROUTING:",

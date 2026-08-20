@@ -340,7 +340,11 @@ const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null
   if ((mbw !== null && mbw > 0) || (mortality !== null && mortality > 0)) kinds.push('sampling');
   if (record.mortalityObservationType) kinds.push('mortality');
   if (
-    firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency) !== null
+    firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency, record.temperature, record.waterExchangePercent) !== null
+    || record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
+    || record.sludgeLoad === 'low' || record.sludgeLoad === 'moderate' || record.sludgeLoad === 'high'
+    || typeof record.surfaceScum === 'boolean'
+    || record.shrimpBehaviour === 'normal' || record.shrimpBehaviour === 'abnormal'
   ) {
     kinds.push('water_quality');
   }
@@ -389,6 +393,17 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
     salinityPpt: firstNumber(record.salinity),
     transparencyCm: firstNumber(record.transparency),
     temperatureC: firstNumber(record.temp, record.temperature, record.temperatureC),
+    weatherEvent: record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
+      ? record.weatherEvent
+      : null,
+    waterExchangePercent: firstNumber(record.waterExchangePercent),
+    sludgeLoad: record.sludgeLoad === 'low' || record.sludgeLoad === 'moderate' || record.sludgeLoad === 'high'
+      ? record.sludgeLoad
+      : null,
+    surfaceScum: typeof record.surfaceScum === 'boolean' ? record.surfaceScum : null,
+    shrimpBehaviour: record.shrimpBehaviour === 'normal' || record.shrimpBehaviour === 'abnormal'
+      ? record.shrimpBehaviour
+      : null,
     feedData,
     isBaselineEstimate: Boolean(record.isBaselineEstimate) || record.source === 'midcycle_onboarding',
     missingFields: [],

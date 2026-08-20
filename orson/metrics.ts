@@ -551,6 +551,11 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     temperatureC?: number | null;
     transparencyCm?: number | null;
     feedingResponse?: 'strong' | 'normal' | 'weak' | null;
+    weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+    waterExchangePercent?: number | null;
+    sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+    surfaceScum?: boolean | null;
+    shrimpBehaviour?: 'normal' | 'abnormal' | null;
   }>();
 
   for (const record of pond.records) {
@@ -570,6 +575,11 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       temperatureC: null,
       transparencyCm: null,
       feedingResponse: null,
+      weatherEvent: null,
+      waterExchangePercent: null,
+      sludgeLoad: null,
+      surfaceScum: null,
+      shrimpBehaviour: null,
     };
 
     if (record.doc !== null) existing.doc = record.doc;
@@ -584,6 +594,11 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     if (hasNumber(record.temperatureC)) existing.temperatureC = record.temperatureC;
     if (hasNumber(record.transparencyCm)) existing.transparencyCm = record.transparencyCm;
     if (record.feedData?.feedingResponse) existing.feedingResponse = record.feedData.feedingResponse;
+    if (record.weatherEvent) existing.weatherEvent = record.weatherEvent;
+    if (hasNumber(record.waterExchangePercent)) existing.waterExchangePercent = record.waterExchangePercent;
+    if (record.sludgeLoad) existing.sludgeLoad = record.sludgeLoad;
+    if (record.surfaceScum !== null) existing.surfaceScum = record.surfaceScum;
+    if (record.shrimpBehaviour) existing.shrimpBehaviour = record.shrimpBehaviour;
 
     dayMap.set(date, existing);
   }
@@ -613,6 +628,11 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       temperatureC: hasNumber(day.temperatureC) ? round(day.temperatureC, 1) : null,
       transparencyCm: hasNumber(day.transparencyCm) ? round(day.transparencyCm, 1) : null,
       feedingResponse: day.feedingResponse ?? null,
+      weatherEvent: day.weatherEvent ?? null,
+      waterExchangePercent: hasNumber(day.waterExchangePercent) ? round(day.waterExchangePercent, 1) : null,
+      sludgeLoad: day.sludgeLoad ?? null,
+      surfaceScum: day.surfaceScum ?? null,
+      shrimpBehaviour: day.shrimpBehaviour ?? null,
     };
   });
 };
