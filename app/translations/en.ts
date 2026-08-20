@@ -364,7 +364,7 @@ enterprise: {
   addBlock: 'Add block',
   stable: 'Stable',
   warning: 'Warning',
-  highRisk: 'High risk',
+  highRisk: 'Critical',
   unassignedPonds: 'Unassigned ponds',
   blockNameRequired: 'Enter a block name.',
   blockCreateFailed: 'Failed to create the block.',

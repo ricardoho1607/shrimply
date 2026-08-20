@@ -8,6 +8,10 @@ import {
   type SharedPond,
   type SharedSampling,
 } from './pondCalculations';
+import { calculatePondMetrics } from '../orson/metrics';
+import { normalizePondData } from '../orson/normalizePondData';
+import { analyzePondRisks } from '../orson/riskEngine';
+import type { OrsonRiskFinding, OrsonRiskId } from '../orson/types';
 
 export type EnterprisePondRisk = 'stable' | 'warning' | 'high-risk';
 
@@ -50,11 +54,14 @@ export interface EnterpriseSampling extends SharedSampling {
   doEvening?: number | string | null;
   salinity?: number | string | null;
   transparency?: number | string | null;
+  temperature?: number | string | null;
 }
 
 export interface EnterprisePond extends SharedPond {
   id: string;
   pondName: string;
+  pondArea?: number;
+  density?: number;
   physicalPondId?: string | null;
   previousCyclePondId?: string | null;
   blockId?: string | null;
@@ -63,6 +70,7 @@ export interface EnterprisePond extends SharedPond {
   cycleName?: string | null;
   pondCycleId?: string | null;
   cycleStatus?: 'active' | 'ended';
+  latestLabStatus?: Record<string, any> | null;
   samplings?: EnterpriseSampling[] | null;
   mortalityRecords?: SharedMortalityRecord[] | null;
 }
@@ -71,9 +79,20 @@ export interface EnterpriseBlockLinkedRecord {
   blockId?: string | null;
 }
 
+export type EnterpriseWarningTranslationCode =
+  | 'mortality'
+  | 'missing_water_quality'
+  | 'low_do'
+  | 'unsafe_ph'
+  | 'ph_swing'
+  | 'low_salinity';
+
 export interface EnterpriseWarning {
-  code: 'mortality' | 'missing_water_quality' | 'low_do' | 'unsafe_ph' | 'ph_swing' | 'low_salinity';
+  code: EnterpriseWarningTranslationCode | OrsonRiskId | `cross_parameter_risk:${string}`;
+  translationCode?: EnterpriseWarningTranslationCode;
   label: string;
+  severity: 'warning' | 'critical';
+  destination: 'water_quality' | 'pond_details';
   value?: number;
   unit?: string;
 }
@@ -106,6 +125,8 @@ const getLatestWaterRecord = (pond: EnterprisePond): EnterpriseSampling | undefi
       record.doMorning,
       record.doEvening,
       record.salinity,
+      record.transparency,
+      record.temperature,
     ].some(hasRecordedNumber))
     .sort((first, second) => new Date(second.date || 0).getTime() - new Date(first.date || 0).getTime())[0]
 );
@@ -144,6 +165,75 @@ const getMbwAtDate = (pond: EnterprisePond, date?: string | null, explicitMbw?: 
   return latestValidMbw > 0 ? latestValidMbw : getPondInitialWeight(pond);
 };
 
+const WATER_RISK_IDS = new Set<OrsonRiskId>([
+  'low_do',
+  'unsafe_ph',
+  'low_do_high_temperature',
+  'low_do_high_tan',
+  'high_ph_high_tan',
+  'nh3_elevated',
+  'high_nitrite_low_do',
+  'low_alkalinity_high_ph_swing',
+  'do_decline',
+  'ph_instability',
+  'salinity_shock',
+  'lab_report_risk',
+]);
+
+const ORSON_TRANSLATION_CODES: Partial<Record<OrsonRiskId, EnterpriseWarningTranslationCode>> = {
+  low_do: 'low_do',
+  unsafe_ph: 'unsafe_ph',
+  ph_instability: 'ph_swing',
+  mortality_spike: 'mortality',
+};
+
+const getOrsonEnterpriseWarningCode = (finding: OrsonRiskFinding): EnterpriseWarning['code'] => {
+  if (finding.id === 'mortality_spike') return 'mortality';
+  if (finding.id === 'ph_instability') return 'ph_swing';
+  return finding.id === 'cross_parameter_risk'
+    ? `cross_parameter_risk:${finding.title}`
+    : finding.id;
+};
+
+const getOrsonWarningDestination = (finding: OrsonRiskFinding): EnterpriseWarning['destination'] => {
+  if (WATER_RISK_IDS.has(finding.id)) return 'water_quality';
+  if (finding.id === 'cross_parameter_risk' && /water|oxygen|pH|TAN|nitrite|alkalinity/i.test(finding.title)) {
+    return 'water_quality';
+  }
+  return 'pond_details';
+};
+
+const mergeEnterpriseWarnings = (
+  existing: EnterpriseWarning[],
+  findings: OrsonRiskFinding[],
+): EnterpriseWarning[] => {
+  const merged = new Map<EnterpriseWarning['code'], EnterpriseWarning>();
+  existing.forEach((warning) => merged.set(warning.code, warning));
+
+  findings
+    .filter((finding) => finding.severity === 'warning' || finding.severity === 'critical')
+    .forEach((finding) => {
+      const code = getOrsonEnterpriseWarningCode(finding);
+      const current = merged.get(code);
+      if (current) {
+        if (finding.severity === 'critical') merged.set(code, { ...current, severity: 'critical' });
+        return;
+      }
+      merged.set(code, {
+        code,
+        translationCode: ORSON_TRANSLATION_CODES[finding.id],
+        label: finding.summary,
+        severity: finding.severity === 'critical' ? 'critical' : 'warning',
+        destination: getOrsonWarningDestination(finding),
+      });
+    });
+
+  return Array.from(merged.values()).sort((first, second) => {
+    if (first.severity === second.severity) return 0;
+    return first.severity === 'critical' ? -1 : 1;
+  });
+};
+
 export const getEnterprisePondStatus = (
   pond: EnterprisePond,
   timeZone?: string,
@@ -151,34 +241,71 @@ export const getEnterprisePondStatus = (
   const water = getLatestWaterRecord(pond);
   const warnings: EnterpriseWarning[] = [];
   if (!water) {
-    warnings.push({ code: 'missing_water_quality', label: 'No water-quality record is available' });
+    warnings.push({
+      code: 'missing_water_quality',
+      translationCode: 'missing_water_quality',
+      label: 'No water-quality record is available',
+      severity: 'warning',
+      destination: 'water_quality',
+    });
   }
   const doValues = [water?.doMorning, water?.doEvening]
     .map(toOptionalNumber)
     .filter((value): value is number => value !== null && value >= 0);
   const minimumDo = doValues.length > 0 ? Math.min(...doValues) : null;
   if (minimumDo !== null && minimumDo < 4) {
-    warnings.push({ code: 'low_do', label: 'Dissolved oxygen is low', value: minimumDo, unit: 'mg/L' });
+    warnings.push({
+      code: 'low_do',
+      translationCode: 'low_do',
+      label: 'Dissolved oxygen is low',
+      severity: 'warning',
+      destination: 'water_quality',
+      value: minimumDo,
+      unit: 'mg/L',
+    });
   }
 
   const phMorning = toOptionalNumber(water?.phMorning);
   const phEvening = toOptionalNumber(water?.phEvening);
   const phValues = [phMorning, phEvening].filter((value): value is number => value !== null && value > 0);
-  const unsafePh = phValues.find((value) => value < 7.2 || value > 8.8);
+  const unsafePh = phValues.find((value) => (
+    value < 7
+    || value > 9
+    || (value >= 7 && value <= 7.4)
+    || (value >= 8.6 && value <= 9)
+  ));
   if (unsafePh !== undefined) {
-    warnings.push({ code: 'unsafe_ph', label: 'pH is outside the preferred range', value: unsafePh });
+    warnings.push({
+      code: 'unsafe_ph',
+      translationCode: 'unsafe_ph',
+      label: 'pH is outside the preferred range',
+      severity: 'warning',
+      destination: 'water_quality',
+      value: unsafePh,
+    });
   }
   if (phMorning !== null && phEvening !== null && Math.abs(phEvening - phMorning) > 0.7) {
     warnings.push({
       code: 'ph_swing',
+      translationCode: 'ph_swing',
       label: 'Morning-to-evening pH swing is high',
+      severity: 'warning',
+      destination: 'water_quality',
       value: Math.abs(phEvening - phMorning),
     });
   }
 
   const salinity = toOptionalNumber(water?.salinity);
   if (salinity !== null && salinity >= 0 && salinity < 5) {
-    warnings.push({ code: 'low_salinity', label: 'Salinity is low', value: salinity, unit: 'ppt' });
+    warnings.push({
+      code: 'low_salinity',
+      translationCode: 'low_salinity',
+      label: 'Salinity is low',
+      severity: 'warning',
+      destination: 'water_quality',
+      value: salinity,
+      unit: 'ppt',
+    });
   }
 
   const metrics = calculatePondMetricsWithHarvest(pond);
@@ -196,20 +323,29 @@ export const getEnterprisePondStatus = (
   if (mortalityCount > 0) {
     warnings.unshift({
       code: 'mortality',
+      translationCode: 'mortality',
       label: mortalityPercent >= 1 ? 'Mortality is at or above 1%' : 'Mortality has been recorded',
+      severity: mortalityPercent >= 1 ? 'critical' : 'warning',
+      destination: 'pond_details',
       value: mortalityPercent,
       unit: '%',
     });
   }
 
+  const now = new Date();
+  const normalizedPond = normalizePondData(pond as unknown as Record<string, any>, { now });
+  const orsonMetrics = calculatePondMetrics(normalizedPond);
+  const orsonReport = analyzePondRisks(orsonMetrics, now);
+  const mergedWarnings = mergeEnterpriseWarnings(warnings, orsonReport.findings);
+
   return {
-    risk: mortalityPercent >= 1
+    risk: mergedWarnings.some((warning) => warning.severity === 'critical')
       ? 'high-risk'
-      : warnings.length > 0
+      : mergedWarnings.length > 0
         ? 'warning'
         : 'stable',
     doc: getPondCurrentDoc(pond, timeZone),
-    warnings,
+    warnings: mergedWarnings,
     mortalityCount,
     mortalityPercent,
     mortalityBiomassKg,

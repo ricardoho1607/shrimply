@@ -1,5 +1,6 @@
 import type {
   OrsonLabContext,
+  OrsonLabMetrics,
   OrsonLabStatusLevel,
   OrsonLabStatusSummary,
   OrsonNormalizeOptions,
@@ -107,6 +108,62 @@ const normalizeLabStatusLevel = (value: unknown): OrsonLabStatusLevel | null => 
   return null;
 };
 
+const normalizeLabMetrics = (value: unknown): OrsonLabMetrics | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as RawPond;
+  const water = raw.waterQuality && typeof raw.waterQuality === 'object' ? raw.waterQuality as RawPond : {};
+  const microbiology = raw.microbiology && typeof raw.microbiology === 'object' ? raw.microbiology as RawPond : {};
+  const plankton = raw.plankton && typeof raw.plankton === 'object' ? raw.plankton as RawPond : {};
+  const schemaVersion = firstNumber(raw.schemaVersion);
+  const legacyNh4 = schemaVersion === 2 ? null : firstNumber(water.tanMgL);
+
+  const normalizedWater: NonNullable<OrsonLabMetrics['waterQuality']> = {
+    date: normalizeDateString(water.date),
+    salinityPpt: firstNumber(water.salinityPpt),
+    alkalinityMgL: firstNumber(water.alkalinityMgL, water.alkalinityTotal),
+    tanMgL: schemaVersion === 2 ? firstNumber(water.tanMgL, water.tan) : firstNumber(water.tan),
+    nh3MgL: firstNumber(water.nh3MgL, water.nh3),
+    nh4MgL: firstNumber(water.nh4MgL, water.nh4, legacyNh4),
+    nitriteMgL: firstNumber(water.nitriteMgL, water.nitrite, water.no2),
+    tomMgL: firstNumber(water.tomMgL, water.tom),
+  };
+  const normalizedMicrobiology: NonNullable<OrsonLabMetrics['microbiology']> = {
+    date: normalizeDateString(microbiology.date),
+    vibrioYellow: firstNumber(microbiology.vibrioYellow),
+    vibrioGreen: firstNumber(microbiology.vibrioGreen),
+    vibrioTotal: firstNumber(microbiology.vibrioTotal),
+    tbc: firstNumber(microbiology.tbc),
+  };
+  const normalizedPlankton: NonNullable<OrsonLabMetrics['plankton']> = {
+    date: normalizeDateString(plankton.date),
+    totalCellPerMl: firstNumber(plankton.totalCellPerMl),
+    beneficialCellPerMl: firstNumber(plankton.beneficialCellPerMl),
+    harmfulCellPerMl: firstNumber(plankton.harmfulCellPerMl),
+    greenAlgaeCellPerMl: firstNumber(plankton.greenAlgaeCellPerMl),
+    greenAlgaePercent: firstNumber(plankton.greenAlgaePercent),
+    cyanobacteriaCellPerMl: firstNumber(plankton.cyanobacteriaCellPerMl),
+    cyanobacteriaPercent: firstNumber(plankton.cyanobacteriaPercent),
+    diatomCellPerMl: firstNumber(plankton.diatomCellPerMl),
+    diatomPercent: firstNumber(plankton.diatomPercent),
+    dinoflagellataCellPerMl: firstNumber(plankton.dinoflagellataCellPerMl),
+    dinoflagellataPercent: firstNumber(plankton.dinoflagellataPercent),
+  };
+
+  const hasMetric = (record: Record<string, unknown>) => Object.entries(record)
+    .some(([key, metric]) => key !== 'date' && metric !== null);
+  const waterQuality = hasMetric(normalizedWater) ? normalizedWater : null;
+  const normalizedMicro = hasMetric(normalizedMicrobiology) ? normalizedMicrobiology : null;
+  const normalizedPlanktonMetrics = hasMetric(normalizedPlankton) ? normalizedPlankton : null;
+  if (!waterQuality && !normalizedMicro && !normalizedPlanktonMetrics) return null;
+
+  return {
+    schemaVersion: 2,
+    waterQuality,
+    microbiology: normalizedMicro,
+    plankton: normalizedPlanktonMetrics,
+  };
+};
+
 const normalizeDateString = (value: unknown): string | null => {
   if (typeof value === 'string' && value.trim()) {
     const raw = value.trim();
@@ -140,6 +197,9 @@ const normalizeLabStatus = (value: unknown): OrsonLabStatusSummary | null => {
     mainIssue: firstString(raw.mainIssue, raw.summary, raw.issue),
     keyRisks: stringArray(raw.keyRisks, 4),
     recommendations: stringArray(raw.recommendations, 3),
+    cycleId: firstString(raw.cycleId),
+    pondCycleId: firstString(raw.pondCycleId),
+    metrics: normalizeLabMetrics(raw.metrics),
   };
 
   const hasContent = summary.labReportId ||
@@ -153,9 +213,19 @@ const normalizeLabStatus = (value: unknown): OrsonLabStatusSummary | null => {
   return hasContent ? summary : null;
 };
 
+const labBelongsToCurrentCycle = (status: OrsonLabStatusSummary, pond: RawPond): boolean => {
+  const pondCycleId = firstString(pond.pondCycleId, pond.id);
+  const cycleId = firstString(pond.cycleId);
+  if (status.pondCycleId && pondCycleId) return status.pondCycleId === pondCycleId;
+  if (status.cycleId && cycleId) return status.cycleId === cycleId;
+  const cycleStartDate = normalizeDateString(pond.cycleStartedAt ?? pond.docStart ?? pond.stockingDate ?? pond.startDate);
+  return !cycleStartDate || !status.sampleDate || status.sampleDate >= cycleStartDate;
+};
+
 const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
   const latestLabStatus = pond.latestLabStatus;
-  const latest = normalizeLabStatus(latestLabStatus);
+  const normalizedLatest = normalizeLabStatus(latestLabStatus);
+  const latest = normalizedLatest && labBelongsToCurrentCycle(normalizedLatest, pond) ? normalizedLatest : null;
   const typedStatuses: OrsonLabStatusSummary[] = [];
 
   if (latestLabStatus && typeof latestLabStatus === 'object') {
@@ -168,7 +238,7 @@ const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
     }
   }
 
-  const allStatuses = [...typedStatuses];
+  const allStatuses = [...typedStatuses].filter((status) => labBelongsToCurrentCycle(status, pond));
   if (latest) {
     const hasDuplicate = allStatuses.some((status) => {
       if (latest.labReportId && status.labReportId === latest.labReportId) return true;
@@ -177,7 +247,9 @@ const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
     if (!hasDuplicate) allStatuses.unshift(latest);
   }
 
-  if (!latest && allStatuses.length === 0) return EMPTY_LAB_CONTEXT;
+  allStatuses.sort((a, b) => (b.sampleDate ?? '').localeCompare(a.sampleDate ?? ''));
+  const currentLatest = latest ?? allStatuses[0] ?? null;
+  if (!currentLatest) return EMPTY_LAB_CONTEXT;
 
   const worstStatus = allStatuses.reduce<OrsonLabStatusLevel | null>((worst, status) => {
     if (!status.status) return worst;
@@ -190,7 +262,7 @@ const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
   });
 
   return {
-    latest,
+    latest: currentLatest,
     byType: allStatuses.slice(0, 3),
     unresolvedRisks: uniqueStrings(riskyStatuses.flatMap((status) => [
       ...(status.mainIssue ? [status.mainIssue] : []),
@@ -484,6 +556,8 @@ export const normalizePondData = (
     baselineCumulativeFeedKg: firstNumber(pond.baselineCumulativeFeed),
     baselineSource: firstString(pond.baselineSource),
     supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
+    cycleId: firstString(pond.cycleId),
+    pondCycleId: firstString(pond.pondCycleId, pond.id),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
     labContext: normalizeLabContext(pond),
     planktonOverwatch: normalizePlanktonOverwatch(pond.latestPlanktonOverwatch),

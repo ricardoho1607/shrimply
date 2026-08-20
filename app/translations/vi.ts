@@ -370,7 +370,7 @@ enterprise: {
   addBlock: 'Thêm khu',
   stable: 'Ổn định',
   warning: 'Cảnh báo',
-  highRisk: 'Rủi ro cao',
+  highRisk: 'Nguy cấp',
   unassignedPonds: 'Ao chưa xếp khu',
   blockNameRequired: 'Nhập tên khu.',
   blockCreateFailed: 'Không thể tạo khu.',

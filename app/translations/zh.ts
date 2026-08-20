@@ -370,7 +370,7 @@ enterprise: {
   addBlock: '添加区块',
   stable: '稳定',
   warning: '预警',
-  highRisk: '高风险',
+  highRisk: '危急',
   unassignedPonds: '未分配池塘',
   blockNameRequired: '请输入区块名称。',
   blockCreateFailed: '无法创建区块。',

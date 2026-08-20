@@ -215,7 +215,7 @@ export default function EnterpriseDashboard({
 
   const openRelevantScreen = () => {
     if (!selectedPond || !selectedStatus) return;
-    const hasWaterWarning = selectedStatus.warnings.some((warning) => warning.code !== 'mortality');
+    const hasWaterWarning = selectedStatus.warnings.some((warning) => warning.destination === 'water_quality');
     setSelectedPond(null);
     if (hasWaterWarning) {
       router.push('/water-quality');
@@ -691,11 +691,11 @@ export default function EnterpriseDashboard({
                 ) : (
                   <View style={styles.warningList}>
                     {selectedStatus.warnings.map((warning) => (
-                      <View key={warning.code} style={styles.warningRow}>
-                        <Ionicons name="alert-circle" size={19} color={warning.code === 'mortality' && selectedStatus.risk === 'high-risk' ? '#B42318' : '#B66A00'} />
-                        <Text style={styles.warningText}>
-                          {t.enterprise.warningMessages[warning.code]}
-                          {warning.value !== undefined ? ` (${warning.value.toFixed(warning.code === 'mortality' ? 2 : 1)}${warning.unit || ''})` : ''}
+                      <View key={warning.code} style={[styles.warningRow, warning.severity === 'critical' && styles.criticalRow]}>
+                        <Ionicons name="alert-circle" size={19} color={warning.severity === 'critical' ? '#B42318' : '#B66A00'} />
+                        <Text style={[styles.warningText, warning.severity === 'critical' && styles.criticalText]}>
+                          {warning.translationCode ? t.enterprise.warningMessages[warning.translationCode] : warning.label}
+                          {warning.value !== undefined ? ` (${warning.value.toFixed(warning.translationCode === 'mortality' ? 2 : 1)}${warning.unit || ''})` : ''}
                         </Text>
                       </View>
                     ))}
@@ -724,7 +724,7 @@ export default function EnterpriseDashboard({
 
                 <TouchableOpacity style={styles.openButton} onPress={openRelevantScreen}>
                   <Text style={styles.openButtonText}>
-                    {selectedStatus.warnings.some((warning) => warning.code !== 'mortality')
+                    {selectedStatus.warnings.some((warning) => warning.destination === 'water_quality')
                       ? t.enterprise.openWaterQuality
                       : t.enterprise.openPondDetails}
                   </Text>
@@ -957,7 +957,9 @@ const styles = StyleSheet.create({
   stableMessageText: { color: '#1F6A39', fontWeight: '700', flex: 1 },
   warningList: { gap: 9 },
   warningRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 9, backgroundColor: '#FFF8E8', padding: 13, borderRadius: 12 },
+  criticalRow: { backgroundColor: '#FDE8E8', borderWidth: 1, borderColor: '#FAA0A0' },
   warningText: { flex: 1, color: '#754900', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  criticalText: { color: '#8B1E1E' },
   mortalityPanel: { marginTop: 16, padding: 14, backgroundColor: '#F6F9FB', borderRadius: 14 },
   mortalityTitle: { fontSize: 11, fontWeight: '800', color: '#526C7E', textTransform: 'uppercase', letterSpacing: 0.6 },
   mortalityStats: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 12, gap: 10 },

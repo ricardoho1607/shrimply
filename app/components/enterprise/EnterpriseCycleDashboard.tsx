@@ -617,7 +617,7 @@ export default function EnterpriseCycleDashboard({
       <Modal visible={Boolean(selectedPond && selectedStatus)} transparent animationType="fade" onRequestClose={() => setSelectedPond(null)}>
         <View style={styles.centeredBackdrop}><View style={styles.dialogCard}>
           <View style={styles.modalHeader}><View style={styles.modalHeaderCopy}><Text style={styles.modalTitle}>{selectedPond?.pondName}</Text><Text style={styles.modalText}>DOC {selectedStatus?.doc}</Text></View><TouchableOpacity style={styles.closeModalButton} onPress={() => setSelectedPond(null)} accessibilityLabel={t.harvest.close}><Ionicons name="close" size={21} color="#334B5C" /></TouchableOpacity></View>
-          {selectedStatus?.risk === 'stable' ? <View style={styles.stablePanel}><Ionicons name="checkmark-circle" size={22} color="#1F6A39" /><Text style={styles.stableText}>{copy.stableHealth}</Text></View> : selectedStatus?.warnings.map((warning) => <View key={warning.code} style={styles.warningPanel}><Ionicons name="warning" size={19} color="#8A5A00" /><Text style={styles.warningText}>{warning.label}</Text></View>)}
+          {selectedStatus?.risk === 'stable' ? <View style={styles.stablePanel}><Ionicons name="checkmark-circle" size={22} color="#1F6A39" /><Text style={styles.stableText}>{copy.stableHealth}</Text></View> : selectedStatus?.warnings.map((warning) => <View key={warning.code} style={[styles.warningPanel, warning.severity === 'critical' && styles.criticalPanel]}><Ionicons name="warning" size={19} color={warning.severity === 'critical' ? '#B42318' : '#8A5A00'} /><Text style={[styles.warningText, warning.severity === 'critical' && styles.criticalWarningText]}>{warning.label}</Text></View>)}
           <TouchableOpacity style={styles.primaryButton} onPress={() => { const pondId = selectedPond?.id; setSelectedPond(null); if (pondId) router.push({ pathname: '/ponddetails', params: { pondId } }); }}><Text style={styles.primaryButtonText}>{t.enterprise.openPondDetails}</Text></TouchableOpacity>
         </View></View>
       </Modal>
@@ -831,5 +831,7 @@ const styles = StyleSheet.create({
   stablePanel: { borderRadius: 12, backgroundColor: '#EAF7EE', padding: 14, flexDirection: 'row', alignItems: 'center', gap: 9 },
   stableText: { color: '#1F6A39', fontSize: 12, fontWeight: '800' },
   warningPanel: { borderRadius: 12, backgroundColor: '#FFF8E8', padding: 13, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  criticalPanel: { backgroundColor: '#FDE8E8', borderWidth: 1, borderColor: '#FAA0A0' },
   warningText: { flex: 1, color: '#754900', fontSize: 12, fontWeight: '700' },
+  criticalWarningText: { color: '#8B1E1E' },
 });

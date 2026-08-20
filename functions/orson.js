@@ -603,12 +603,20 @@ const getFeedRatePercent = (mbw) => {
 
 const normalizeRecord = (record) => {
   const feedData = record.feedData && typeof record.feedData === "object" ? record.feedData : null;
+  const mortalityObservationType = ["estimated_total", "observed_recovered", "none_observed"].includes(record.mortalityObservationType || record.observationType)
+    ? record.mortalityObservationType || record.observationType
+    : null;
+  const rawMortality = toNumber(record.mortality ?? record.dead ?? record.deaths ?? record.count);
 
   return {
     id: record.id || null,
     date: record.date || null,
     mbwG: toNumber(record.mbw ?? record.abw),
-    mortalityCount: toNumber(record.mortality ?? record.dead ?? record.deaths),
+    mortalityCount: mortalityObservationType === "observed_recovered" || mortalityObservationType === "none_observed"
+      ? 0
+      : rawMortality,
+    mortalityObservedCount: rawMortality,
+    mortalityObservationType,
     feedKg: toNumber(feedData?.totalDailyFeed ?? record.feed),
     phMorning: toNumber(record.phMorning),
     phEvening: toNumber(record.phEvening),
@@ -626,6 +634,36 @@ const normalizeRecord = (record) => {
   };
 };
 
+const getCurrentLabWaterMetrics = (pond = {}, pondId = null) => {
+  const latestLabStatus = pond.latestLabStatus && typeof pond.latestLabStatus === "object" ? pond.latestLabStatus : {};
+  const candidates = [
+    latestLabStatus,
+    ...Object.values(latestLabStatus.byType && typeof latestLabStatus.byType === "object" ? latestLabStatus.byType : {}),
+  ].filter((status) => status && typeof status === "object" && status.metrics?.waterQuality);
+  const currentPondCycleId = pond.pondCycleId || pondId || pond.id || null;
+  const currentCycleId = pond.cycleId || null;
+  const cycleStart = new Date(pond.cycleStartedAt || pond.docStart || 0).getTime();
+  const current = candidates
+    .filter((status) => {
+      if (status.pondCycleId && currentPondCycleId) return status.pondCycleId === currentPondCycleId;
+      if (status.cycleId && currentCycleId) return status.cycleId === currentCycleId;
+      const sampleTime = new Date(status.sampleDate || status.metrics?.waterQuality?.date || 0).getTime();
+      return !Number.isFinite(cycleStart) || cycleStart <= 0 || !Number.isFinite(sampleTime) || sampleTime <= 0 || sampleTime >= cycleStart;
+    })
+    .sort((a, b) => String(b.sampleDate || "").localeCompare(String(a.sampleDate || "")))[0];
+  if (!current) return null;
+
+  const water = current.metrics.waterQuality || {};
+  const schemaVersion = toNumber(current.metrics.schemaVersion);
+  return {
+    tanMgL: schemaVersion === 2 ? toNumber(water.tanMgL ?? water.tan) : toNumber(water.tan),
+    nh3MgL: toNumber(water.nh3MgL ?? water.nh3),
+    nh4MgL: toNumber(water.nh4MgL ?? water.nh4 ?? (schemaVersion === 2 ? null : water.tanMgL)),
+    nitriteMgL: toNumber(water.nitriteMgL ?? water.nitrite ?? water.no2),
+    alkalinityMgL: toNumber(water.alkalinityMgL ?? water.alkalinityTotal),
+  };
+};
+
 const classifyRecord = (record) => {
   const kinds = [];
   if ((record.mbwG || 0) > 0 || (record.mortalityCount || 0) > 0) kinds.push("sampling");
@@ -640,9 +678,11 @@ const classifyRecord = (record) => {
 };
 
 const calculateRiskReport = (pond, pondId) => {
-  const records = Array.isArray(pond.samplings)
-    ? pond.samplings.map(normalizeRecord).sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime())
-    : [];
+  const samplingRecords = Array.isArray(pond.samplings) ? pond.samplings : [];
+  const mortalityRecords = Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [];
+  const records = [...samplingRecords, ...mortalityRecords]
+    .map(normalizeRecord)
+    .sort((a, b) => new Date(a.date || 0).getTime() - new Date(b.date || 0).getTime());
   const latest = records[records.length - 1] || {};
   const latestMbw = [...records].reverse().find((record) => (record.mbwG || 0) > 0)?.mbwG ?? null;
   const calculatedInitialPopulation = (toNumber(pond.pondArea) || 0) * (toNumber(pond.density) || 0);
@@ -654,10 +694,31 @@ const calculateRiskReport = (pond, pondId) => {
   const expectedFeedKg = biomassKg !== null && feedRate !== null ? (biomassKg * feedRate) / 100 : null;
   const latestFeed = [...records].reverse().find((record) => record.feedKg !== null && record.feedKg > 0) || null;
   const feedPressureRatio = latestFeed && expectedFeedKg ? latestFeed.feedKg / expectedFeedKg : null;
-  const recent = records.slice(-3);
-  const recentDo = recent.map((record) => minKnown(record.doMorning, record.doEvening)).filter((value) => value !== null);
-  const latestDo = minKnown(latest.doMorning, latest.doEvening);
-  const latestPhSwing = latest.phMorning !== null && latest.phEvening !== null ? Math.abs(latest.phEvening - latest.phMorning) : null;
+  const recentDo = records.map((record) => minKnown(record.doMorning, record.doEvening)).filter((value) => value !== null).slice(-3);
+  const latestDoRecord = [...records].reverse().find((record) => minKnown(record.doMorning, record.doEvening) !== null) || null;
+  const latestPhRecord = [...records].reverse().find((record) => record.phMorning !== null || record.phEvening !== null) || null;
+  const latestTemperatureRecord = [...records].reverse().find((record) => record.temperatureC !== null) || null;
+  const latestTransparencyRecord = [...records].reverse().find((record) => record.transparencyCm !== null) || null;
+  const latestMortalityRecord = [...records].reverse().find((record) => record.mortalityCount !== null) || null;
+  const latestDo = latestDoRecord ? minKnown(latestDoRecord.doMorning, latestDoRecord.doEvening) : null;
+  const latestPhMorning = latestPhRecord?.phMorning ?? null;
+  const latestPhEvening = latestPhRecord?.phEvening ?? null;
+  const latestPhSwing = latestPhMorning !== null && latestPhEvening !== null ? Math.abs(latestPhEvening - latestPhMorning) : null;
+  const latestTemperature = latestTemperatureRecord?.temperatureC ?? null;
+  const latestTransparency = latestTransparencyRecord?.transparencyCm ?? null;
+  const latestMortality = latestMortalityRecord?.mortalityCount ?? null;
+  const latestMortalityPercent = latestMortality !== null && currentPopulation !== null && currentPopulation > 0
+    ? (latestMortality / currentPopulation) * 100
+    : null;
+  const labWater = getCurrentLabWaterMetrics(pond, pondId);
+  const mbwRecords = records.filter((record) => (record.mbwG || 0) > 0);
+  const mbwOutlierDates = [];
+  for (let index = 1; index < mbwRecords.length - 1; index += 1) {
+    const expected = (mbwRecords[index - 1].mbwG + mbwRecords[index + 1].mbwG) / 2;
+    if (Math.abs(mbwRecords[index].mbwG - expected) > Math.max(1.5, expected * 0.25) && mbwRecords[index].date) {
+      mbwOutlierDates.push(mbwRecords[index].date);
+    }
+  }
   const findings = [];
 
   const pushFinding = (finding) => findings.push({
@@ -665,6 +726,18 @@ const calculateRiskReport = (pond, pondId) => {
     metricRefs: [],
     ...finding,
   });
+
+  if (mbwOutlierDates.length > 0) {
+    pushFinding({
+      id: "mbw_outlier",
+      severity: "info",
+      title: "A suspicious MBW sample was excluded from the growth trend",
+      summary: `Orson identified ${mbwOutlierDates.length} suspicious MBW sample${mbwOutlierDates.length === 1 ? "" : "s"}.`,
+      evidence: [`Outlier dates: ${mbwOutlierDates.join(", ")}.`],
+      recommendation: "Keep the raw record for audit and verify sampling method or repeat the MBW check before changing feed.",
+      metricRefs: ["mbwOutlierDates"],
+    });
+  }
 
   if (latestDo !== null && latestDo < 4) {
     pushFinding({
@@ -678,14 +751,20 @@ const calculateRiskReport = (pond, pondId) => {
     });
   }
 
-  if ((latest.phMorning !== null && (latest.phMorning < 7.2 || latest.phMorning > 8.8)) || (latest.phEvening !== null && (latest.phEvening < 7.2 || latest.phEvening > 8.8))) {
+  const latestPhValues = [latestPhMorning, latestPhEvening].filter((value) => value !== null);
+  const latestPhMinimum = latestPhValues.length > 0 ? Math.min(...latestPhValues) : null;
+  const latestPhMaximum = latestPhValues.length > 0 ? Math.max(...latestPhValues) : null;
+  const phCritical = (latestPhMinimum !== null && latestPhMinimum < 7) || (latestPhMaximum !== null && latestPhMaximum > 9);
+  const phWarning = (latestPhMinimum !== null && latestPhMinimum >= 7 && latestPhMinimum <= 7.4)
+    || (latestPhMaximum !== null && latestPhMaximum >= 8.6 && latestPhMaximum <= 9);
+  if (phCritical || phWarning) {
     pushFinding({
       id: "unsafe_ph",
-      severity: "warning",
+      severity: phCritical ? "critical" : "warning",
       title: "Unsafe pH range",
-      summary: "Latest pH is outside the preferred operating range.",
-      evidence: [`pH morning ${latest.phMorning ?? "missing"}, evening ${latest.phEvening ?? "missing"}.`],
-      recommendation: "Recheck pH, alkalinity, and water exchange/aeration plan before increasing feed.",
+      summary: "Latest pH is outside the 7.5-8.5 target range.",
+      evidence: [`pH morning ${latestPhMorning ?? "missing"}, evening ${latestPhEvening ?? "missing"}.`],
+      recommendation: "Recheck pH and alkalinity before changing feed or water-management inputs; avoid abrupt chemical correction.",
       metricRefs: ["phMorning", "phEvening"],
     });
   }
@@ -699,6 +778,94 @@ const calculateRiskReport = (pond, pondId) => {
       evidence: [`Morning/evening pH swing is ${round(latestPhSwing, 2)}.`],
       recommendation: "Track plankton bloom and alkalinity because large daily swings can reduce appetite.",
       metricRefs: ["phSwingLatest"],
+    });
+  }
+
+  if (latestDo !== null && latestDo < 5 && latestTemperature !== null && latestTemperature > 30) {
+    pushFinding({
+      id: "low_do_high_temperature",
+      severity: "warning",
+      confidence: 0.86,
+      title: "Low DO combined with high temperature",
+      summary: `DO is ${round(latestDo, 2)} mg/L while temperature is ${round(latestTemperature, 1)} C.`,
+      evidence: [`DO minimum ${round(latestDo, 2)} mg/L.`, `Temperature ${round(latestTemperature, 1)} C.`],
+      recommendation: "Increase aeration, avoid feed increases, and recheck early-morning DO and temperature.",
+      metricRefs: ["doMinimumLatest", "latestTemperatureC"],
+    });
+  }
+
+  if (labWater?.tanMgL !== null && labWater?.tanMgL > 1) {
+    if (latestDo !== null && latestDo < 4) {
+      pushFinding({
+        id: "low_do_high_tan",
+        severity: "critical",
+        confidence: 0.9,
+        title: "Low DO combined with high TAN",
+        summary: `TAN is ${round(labWater.tanMgL, 3)} mg/L while DO is ${round(latestDo, 2)} mg/L.`,
+        evidence: [`TAN ${round(labWater.tanMgL, 3)} mg/L.`, `DO minimum ${round(latestDo, 2)} mg/L.`],
+        recommendation: "Increase aeration immediately, hold feed increases, inspect organic load, and retest TAN, pH, temperature, and DO.",
+      });
+    }
+    if (latestPhMaximum !== null && latestPhMaximum > 8.5) {
+      pushFinding({
+        id: "high_ph_high_tan",
+        severity: "critical",
+        confidence: 0.9,
+        title: "High pH combined with high TAN",
+        summary: `TAN is ${round(labWater.tanMgL, 3)} mg/L while pH reaches ${round(latestPhMaximum, 2)}.`,
+        evidence: [`TAN ${round(labWater.tanMgL, 3)} mg/L.`, `Highest latest pH ${round(latestPhMaximum, 2)}.`],
+        recommendation: "Do not raise pH or feed pressure; strengthen aeration and retest TAN/NH3 with pH and temperature.",
+      });
+    }
+  }
+
+  if (labWater?.nh3MgL !== null && labWater?.nh3MgL >= 0.01) {
+    pushFinding({
+      id: "nh3_elevated",
+      severity: labWater.nh3MgL > 0.05 ? "critical" : "warning",
+      confidence: 0.92,
+      title: "Unionized ammonia is elevated",
+      summary: `Confirmed lab NH3 is ${round(labWater.nh3MgL, 3)} mg/L.`,
+      evidence: [`NH3 ${round(labWater.nh3MgL, 3)} mg/L.`],
+      recommendation: "Hold feed increases, protect DO, reduce organic-load drivers, and follow the confirmed lab recommendation.",
+    });
+  }
+
+  if (labWater?.nitriteMgL !== null && labWater?.nitriteMgL > 0.3 && latestDo !== null && latestDo < 5) {
+    pushFinding({
+      id: "high_nitrite_low_do",
+      severity: "critical",
+      confidence: 0.9,
+      title: "High nitrite combined with low DO",
+      summary: `Nitrite is ${round(labWater.nitriteMgL, 3)} mg/L while DO is ${round(latestDo, 2)} mg/L.`,
+      evidence: [`NO2 ${round(labWater.nitriteMgL, 3)} mg/L.`, `DO minimum ${round(latestDo, 2)} mg/L.`],
+      recommendation: "Increase aeration, reduce feed pressure, check alkalinity and organic load, and retest nitrite.",
+    });
+  }
+
+  if (labWater?.alkalinityMgL !== null && labWater?.alkalinityMgL < 80 && latestPhSwing !== null && latestPhSwing > 0.5) {
+    pushFinding({
+      id: "low_alkalinity_high_ph_swing",
+      severity: "warning",
+      confidence: 0.88,
+      title: "Low alkalinity combined with unstable pH",
+      summary: `Alkalinity is ${round(labWater.alkalinityMgL, 1)} mg/L while pH swing is ${round(latestPhSwing, 2)}.`,
+      evidence: [`Alkalinity ${round(labWater.alkalinityMgL, 1)} mg/L.`, `pH swing ${round(latestPhSwing, 2)}.`],
+      recommendation: "Use the farm-approved gradual buffering protocol and monitor morning and evening pH after correction.",
+    });
+  }
+
+  const transparencyOutsideTarget = latestTransparency !== null && (latestTransparency < 25 || latestTransparency > 45);
+  const waterUnstable = (latestDo !== null && latestDo < 5) || (latestPhSwing !== null && latestPhSwing > 0.5);
+  if (transparencyOutsideTarget && waterUnstable) {
+    pushFinding({
+      id: "plankton_transparency_instability",
+      severity: "watch",
+      confidence: 0.78,
+      title: "Transparency and water stability need attention",
+      summary: `Transparency is ${round(latestTransparency, 1)} cm while DO or pH is unstable.`,
+      evidence: [`Transparency ${round(latestTransparency, 1)} cm.`, `DO ${latestDo ?? "missing"} mg/L; pH swing ${latestPhSwing ?? "missing"}.`],
+      recommendation: "Check pond color and plankton condition, maintain aeration, and avoid abrupt bloom-control or feed changes.",
     });
   }
 
@@ -745,15 +912,16 @@ const calculateRiskReport = (pond, pondId) => {
     });
   }
 
-  if ((latest.mortalityCount || 0) > Math.max(100, (initialPopulation || 0) * 0.002)) {
+  const mortalityWarningFloor = Math.max(100, (currentPopulation || 0) * 0.002);
+  if (latestMortality !== null && latestMortality > mortalityWarningFloor) {
     pushFinding({
       id: "mortality_spike",
       severity: "warning",
       title: "Mortality spike",
-      summary: `Latest mortality is ${latest.mortalityCount}.`,
-      evidence: [`Latest mortality count is ${latest.mortalityCount}.`],
+      summary: `Latest mortality is ${latestMortality}${latestMortalityPercent !== null ? ` (${round(latestMortalityPercent, 3)}% of estimated population)` : ""}.`,
+      evidence: [`Latest mortality count is ${latestMortality}.`, `Warning floor is ${round(mortalityWarningFloor, 0)} shrimp.`],
       recommendation: "Inspect pond edge, feed tray, and water quality; consider lab checks if mortality continues.",
-      metricRefs: ["mortalityTrend"],
+      metricRefs: ["latestMortalityCount", "latestMortalityPercent", "estimatedCurrentPopulation"],
     });
   }
 
@@ -840,6 +1008,18 @@ const analyzeLabPondResult = (result, sampleDate) => {
       summary: `Lab NH4 is ${round(nh4, 3)} ppm.`,
       evidence: [`NH4 ${round(nh4, 3)} ppm.`],
       recommendation: "Check organic load, feed waste, and biofilter/water exchange conditions before increasing feed.",
+    });
+  }
+
+  const nh3 = toNumber(water.nh3);
+  if (nh3 !== null && nh3 >= 0.01) {
+    push({
+      id: "lab_nh3_elevated",
+      severity: nh3 > 0.05 ? "critical" : "warning",
+      title: "Unionized ammonia is elevated",
+      summary: `Lab NH3 is ${round(nh3, 3)} ppm.`,
+      evidence: [`NH3 ${round(nh3, 3)} ppm.`],
+      recommendation: "Hold feed increases, protect DO, reduce organic-load drivers, and follow the confirmed lab recommendation.",
     });
   }
 
@@ -1107,6 +1287,8 @@ Use this exact JSON shape:
         "phLab": number | null,
         "salinityCustomer": number | null,
         "salinityLab": number | null,
+        "tan": number | null,
+        "nh3": number | null,
         "nh4": number | null,
         "no2": number | null,
         "alkalinityTotal": number | null,
@@ -1151,6 +1333,7 @@ Use this exact JSON shape:
 
 Rules:
 - Keep missing values as null, never 0.
+- TAN, NH3, and NH4 are different measurements. Only populate the field named by the report; never copy NH4 into TAN or NH3.
 - Preserve pond codes exactly as shown in the PDF.
 - Return reportType as "${requestedReportType}" unless the PDF clearly cannot match that type.
 - Do not extract pH for lab sampling. Set phCustomer and phLab to null even if the PDF contains pH, because Shrimply tracks pH in the daily water quality log.
@@ -1425,6 +1608,8 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
           phLab: null,
           salinityCustomer: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.salinityCustomer),
           salinityLab: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.salinityLab),
+          tan: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.tan),
+          nh3: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.nh3),
           nh4: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.nh4),
           no2: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.no2),
           alkalinityTotal: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.alkalinityTotal),
@@ -1719,6 +1904,9 @@ exports.processConfirmedLabReport = onDocumentWritten({
       mainIssue: summary.mainIssue,
       keyRisks: summary.keyRisks,
       recommendations: summary.recommendations,
+      cycleId: pond.cycleId || null,
+      pondCycleId: pond.pondCycleId || summary.pondId,
+      metrics: summary.metrics,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
@@ -1732,6 +1920,9 @@ exports.processConfirmedLabReport = onDocumentWritten({
         mainIssue: summary.mainIssue,
         keyRisks: summary.keyRisks,
         recommendations: summary.recommendations,
+        cycleId: pond.cycleId || null,
+        pondCycleId: pond.pondCycleId || summary.pondId,
+        metrics: summary.metrics,
         byType: {
           [reportType]: latestTypeStatus,
         },
@@ -2095,6 +2286,11 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
 
   const beforeSamplings = Array.isArray(beforeData.samplings) ? beforeData.samplings : [];
   const afterSamplings = Array.isArray(afterData.samplings) ? afterData.samplings : [];
+  const beforeMortalityRecords = Array.isArray(beforeData.mortalityRecords) ? beforeData.mortalityRecords : [];
+  const afterMortalityRecords = Array.isArray(afterData.mortalityRecords) ? afterData.mortalityRecords : [];
+  const operationalRecordsChanged = stableStringify(beforeSamplings) !== stableStringify(afterSamplings)
+    || stableStringify(beforeMortalityRecords) !== stableStringify(afterMortalityRecords);
+  const labStatusChanged = stableStringify(beforeData.latestLabStatus || null) !== stableStringify(afterData.latestLabStatus || null);
   const beforeOverwatchHash = getPlanktonOverwatchOperationalHash(beforeData);
   const afterOverwatchHash = getPlanktonOverwatchOperationalHash(afterData);
   const overwatch = beforeOverwatchHash !== afterOverwatchHash
@@ -2107,7 +2303,7 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
     })
     : null;
 
-  if (afterSamplings.length <= beforeSamplings.length) {
+  if (!operationalRecordsChanged && !labStatusChanged) {
     return overwatch ? { success: true, overwatch } : null;
   }
 
@@ -2275,3 +2471,10 @@ exports.orsonDailySupervisor = onSchedule({
   console.log(`Orson Daily Supervisor created ${notificationsCreated} notifications.`);
   return { success: true, notificationsCreated };
 });
+
+if (process.env.NODE_ENV === "test") {
+  exports.__test = {
+    calculateRiskReport,
+    getCurrentLabWaterMetrics,
+  };
+}

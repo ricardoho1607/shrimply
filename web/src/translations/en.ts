@@ -269,7 +269,7 @@ companyDetails: {
 enterprise: {
   commandCenter: 'Enterprise command center', title: 'Farm blocks', summary: '{{blockCount}} blocks • {{pondCount}} active ponds',
   addBlock: 'Add block', officeDisplay: 'Office display', livePondHealth: 'Live pond health', exitOfficeDisplay: 'Exit display',
-  stable: 'Stable', warning: 'Warning', highRisk: 'High risk', unassignedPonds: 'Unassigned ponds',
+  stable: 'Stable', warning: 'Warning', highRisk: 'Critical', unassignedPonds: 'Unassigned ponds',
   blockNameRequired: 'Enter a unique block name.', blockCreateFailed: 'Failed to create the block.', blockAssignmentFailed: 'Failed to assign the technician to this block.', loadingBlocks: 'Loading farm blocks...',
   noBlocks: 'No farm blocks yet', noBlocksDescription: 'Create your first block and assign a technician to organize enterprise pond operations.',
   createFirstBlock: 'Create first block', pondCount: '{{count}} ponds', noPondsInBlock: 'No active ponds are assigned to this block yet.', noPondsForFilter: 'No ponds match this cycle status in this block.',

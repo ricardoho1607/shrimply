@@ -38,10 +38,22 @@ const severityFromLabStatus = (status: OrsonLabStatusLevel | null): OrsonRiskSev
   return null;
 };
 
+const latestLabWaterMetrics = (metrics: OrsonPondMetrics) => {
+  const statuses = [
+    ...(metrics.labContext.latest ? [metrics.labContext.latest] : []),
+    ...metrics.labContext.byType,
+  ].sort((a, b) => (b.sampleDate ?? '').localeCompare(a.sampleDate ?? ''));
+  return statuses.find((status) => status.metrics?.waterQuality)?.metrics?.waterQuality ?? null;
+};
+
 export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Date()): OrsonRiskReport => {
   const findings: OrsonRiskFinding[] = [...evaluateCrossParameterRules(metrics)];
   const dataScore = metrics.dataCompleteness.score;
   const labSeverity = severityFromLabStatus(metrics.labContext.worstStatus);
+  const labWater = latestLabWaterMetrics(metrics);
+  const latestPhValues = [metrics.latestPhMorning, metrics.latestPhEvening].filter(hasNumber);
+  const latestPhMinimum = latestPhValues.length > 0 ? Math.min(...latestPhValues) : null;
+  const latestPhMaximum = latestPhValues.length > 0 ? Math.max(...latestPhValues) : null;
 
   if (labSeverity) {
     const latestLab = metrics.labContext.latest ?? metrics.labContext.byType[0] ?? null;
@@ -79,6 +91,147 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       ],
       recommendation: 'Increase aeration and recheck DO before the next feeding window, especially before sunrise.',
       metricRefs: ['doMinimumLatest', 'doMinimumTrend'],
+    }));
+  }
+
+  const phCritical = (hasNumber(latestPhMinimum) && latestPhMinimum < 7)
+    || (hasNumber(latestPhMaximum) && latestPhMaximum > 9);
+  const phWarning = (hasNumber(latestPhMinimum) && latestPhMinimum >= 7 && latestPhMinimum <= 7.4)
+    || (hasNumber(latestPhMaximum) && latestPhMaximum >= 8.6 && latestPhMaximum <= 9);
+  if (phCritical || phWarning) {
+    findings.push(createFinding({
+      id: 'unsafe_ph',
+      severity: phCritical ? 'critical' : 'warning',
+      confidence: confidenceFromCompleteness(0.9, dataScore),
+      title: 'pH is outside the safe operating range',
+      summary: `Latest pH is outside the 7.5-8.5 target range.`,
+      evidence: [
+        `Morning pH: ${metrics.latestPhMorning ?? 'missing'}`,
+        `Evening pH: ${metrics.latestPhEvening ?? 'missing'}`,
+      ],
+      recommendation: 'Recheck pH and alkalinity before changing feed or water-management inputs; avoid abrupt chemical correction.',
+      metricRefs: ['latestPhMorning', 'latestPhEvening'],
+    }));
+  }
+
+  if (
+    hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5
+    && hasNumber(metrics.latestTemperatureC) && metrics.latestTemperatureC > 30
+  ) {
+    findings.push(createFinding({
+      id: 'low_do_high_temperature',
+      severity: 'warning',
+      confidence: confidenceFromCompleteness(0.86, dataScore),
+      title: 'Low DO combined with high temperature',
+      summary: `DO is ${metrics.doMinimumLatest} mg/L while temperature is ${metrics.latestTemperatureC} C.`,
+      evidence: [`DO minimum: ${metrics.doMinimumLatest} mg/L`, `Temperature: ${metrics.latestTemperatureC} C`],
+      recommendation: 'Increase aeration, avoid feed increases, and recheck early-morning DO and temperature.',
+      metricRefs: ['doMinimumLatest', 'latestTemperatureC'],
+    }));
+  }
+
+  if (labWater && hasNumber(labWater.tanMgL) && labWater.tanMgL > 1) {
+    if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 4) {
+      findings.push(createFinding({
+        id: 'low_do_high_tan',
+        severity: 'critical',
+        confidence: 0.9,
+        title: 'Low DO combined with high TAN',
+        summary: `TAN is ${labWater.tanMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
+        evidence: [`TAN: ${labWater.tanMgL} mg/L`, `DO minimum: ${metrics.doMinimumLatest} mg/L`],
+        recommendation: 'Increase aeration immediately, hold feed increases, inspect organic load, and retest TAN, pH, temperature, and DO.',
+        metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'doMinimumLatest'],
+      }));
+    }
+    if (hasNumber(latestPhMaximum) && latestPhMaximum > 8.5) {
+      findings.push(createFinding({
+        id: 'high_ph_high_tan',
+        severity: 'critical',
+        confidence: 0.9,
+        title: 'High pH combined with high TAN',
+        summary: `TAN is ${labWater.tanMgL} mg/L while pH reaches ${latestPhMaximum}.`,
+        evidence: [`TAN: ${labWater.tanMgL} mg/L`, `Highest latest pH: ${latestPhMaximum}`],
+        recommendation: 'Do not raise pH or feed pressure; strengthen aeration and retest TAN/NH3 with pH and temperature.',
+        metricRefs: ['labContext.metrics.waterQuality.tanMgL', 'latestPhMorning', 'latestPhEvening'],
+      }));
+    }
+  }
+
+  if (labWater && hasNumber(labWater.nh3MgL) && labWater.nh3MgL >= 0.01) {
+    findings.push(createFinding({
+      id: 'nh3_elevated',
+      severity: labWater.nh3MgL > 0.05 ? 'critical' : 'warning',
+      confidence: 0.92,
+      title: 'Unionized ammonia is elevated',
+      summary: `Confirmed lab NH3 is ${labWater.nh3MgL} mg/L.`,
+      evidence: [`NH3: ${labWater.nh3MgL} mg/L`],
+      recommendation: 'Hold feed increases, protect DO, reduce organic-load drivers, and follow the confirmed lab recommendation.',
+      metricRefs: ['labContext.metrics.waterQuality.nh3MgL'],
+    }));
+  }
+
+  if (
+    labWater && hasNumber(labWater.nitriteMgL) && labWater.nitriteMgL > 0.3
+    && hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5
+  ) {
+    findings.push(createFinding({
+      id: 'high_nitrite_low_do',
+      severity: 'critical',
+      confidence: 0.9,
+      title: 'High nitrite combined with low DO',
+      summary: `Nitrite is ${labWater.nitriteMgL} mg/L while DO is ${metrics.doMinimumLatest} mg/L.`,
+      evidence: [`NO2: ${labWater.nitriteMgL} mg/L`, `DO minimum: ${metrics.doMinimumLatest} mg/L`],
+      recommendation: 'Increase aeration, reduce feed pressure, check alkalinity and organic load, and retest nitrite.',
+      metricRefs: ['labContext.metrics.waterQuality.nitriteMgL', 'doMinimumLatest'],
+    }));
+  }
+
+  if (
+    labWater && hasNumber(labWater.alkalinityMgL) && labWater.alkalinityMgL < 80
+    && hasNumber(metrics.phSwingLatest) && metrics.phSwingLatest > 0.5
+  ) {
+    findings.push(createFinding({
+      id: 'low_alkalinity_high_ph_swing',
+      severity: 'warning',
+      confidence: 0.88,
+      title: 'Low alkalinity combined with unstable pH',
+      summary: `Alkalinity is ${labWater.alkalinityMgL} mg/L while pH swing is ${metrics.phSwingLatest}.`,
+      evidence: [`Alkalinity: ${labWater.alkalinityMgL} mg/L`, `pH swing: ${metrics.phSwingLatest}`],
+      recommendation: 'Use the farm-approved gradual buffering protocol and monitor morning and evening pH after correction.',
+      metricRefs: ['labContext.metrics.waterQuality.alkalinityMgL', 'phSwingLatest'],
+    }));
+  }
+
+  const transparencyOutsideTarget = hasNumber(metrics.latestTransparencyCm)
+    && (metrics.latestTransparencyCm < 25 || metrics.latestTransparencyCm > 45);
+  const waterUnstable = (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5)
+    || (hasNumber(metrics.phSwingLatest) && metrics.phSwingLatest > 0.5);
+  if (transparencyOutsideTarget && waterUnstable) {
+    findings.push(createFinding({
+      id: 'plankton_transparency_instability',
+      severity: 'watch',
+      confidence: confidenceFromCompleteness(0.78, dataScore),
+      title: 'Transparency and water stability need attention',
+      summary: `Transparency is ${metrics.latestTransparencyCm} cm while DO or pH is unstable.`,
+      evidence: [
+        `Transparency: ${metrics.latestTransparencyCm} cm`,
+        `DO minimum: ${metrics.doMinimumLatest ?? 'missing'} mg/L; pH swing: ${metrics.phSwingLatest ?? 'missing'}`,
+      ],
+      recommendation: 'Check pond color and plankton condition, maintain aeration, and avoid abrupt bloom-control or feed changes.',
+      metricRefs: ['latestTransparencyCm', 'doMinimumLatest', 'phSwingLatest'],
+    }));
+  }
+
+  if (metrics.mbwOutlierDates.length > 0) {
+    findings.push(createFinding({
+      id: 'mbw_outlier',
+      severity: 'info',
+      confidence: metrics.mbwOutlierDates.length > 0 && metrics.smoothedAdgGPerDay === null ? 0.5 : 0.72,
+      title: 'A suspicious MBW sample was excluded from the growth trend',
+      summary: `Orson excluded ${metrics.mbwOutlierDates.length} suspicious MBW sample${metrics.mbwOutlierDates.length === 1 ? '' : 's'} from smoothed ADG.`,
+      evidence: [`Outlier dates: ${metrics.mbwOutlierDates.join(', ')}`],
+      recommendation: 'Keep the raw record for audit and verify sampling method or repeat the MBW check before changing feed.',
+      metricRefs: ['mbwOutlierDates', 'smoothedAdgGPerDay'],
     }));
   }
 
@@ -247,18 +400,22 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }));
   }
 
-  if (metrics.mortalityTrend.direction === 'up' && hasNumber(metrics.mortalityTrend.delta) && metrics.mortalityTrend.delta > 0) {
+  const mortalityWarningFloor = hasNumber(metrics.estimatedCurrentPopulation)
+    ? Math.max(100, metrics.estimatedCurrentPopulation * 0.002)
+    : 100;
+  if (hasNumber(metrics.latestMortalityCount) && metrics.latestMortalityCount > mortalityWarningFloor) {
     findings.push(createFinding({
       id: 'mortality_spike',
-      severity: metrics.mortalityTrend.delta > 500 ? 'warning' : 'watch',
+      severity: 'warning',
       confidence: confidenceFromCompleteness(0.72, dataScore),
-      title: 'Mortality is increasing',
-      summary: `Mortality increased by ${metrics.mortalityTrend.delta} across recent records.`,
+      title: 'Mortality exceeds the pond warning floor',
+      summary: `Latest mortality is ${metrics.latestMortalityCount}${hasNumber(metrics.latestMortalityPercent) ? ` (${metrics.latestMortalityPercent}% of estimated population)` : ''}.`,
       evidence: [
-        `Mortality first/last: ${metrics.mortalityTrend.first} -> ${metrics.mortalityTrend.last}`,
+        `Warning floor: ${round(mortalityWarningFloor, 0)} shrimp`,
+        `Record date: ${metrics.latestMortalityDate ?? 'missing'}`,
       ],
       recommendation: 'Inspect pond edge, check DO before sunrise, and pause feed increases until mortality stabilizes.',
-      metricRefs: ['mortalityTrend'],
+      metricRefs: ['latestMortalityCount', 'latestMortalityPercent', 'estimatedCurrentPopulation'],
     }));
   }
 

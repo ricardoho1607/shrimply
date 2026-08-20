@@ -18,6 +18,7 @@ const hasAnyValue = (record, fields) => fields.some((field) => (
 const extractLabMetrics = (result = {}, sampleDate = null) => {
   const plankton = result.plankton && typeof result.plankton === "object" ? result.plankton : {};
   const water = result.waterQuality && typeof result.waterQuality === "object" ? result.waterQuality : {};
+  const microbiology = result.microbiology && typeof result.microbiology === "object" ? result.microbiology : {};
   const planktonMetrics = {
     date: sampleDate,
     totalCellPerMl: toNumber(plankton.totalCellPerMl),
@@ -36,12 +37,22 @@ const extractLabMetrics = (result = {}, sampleDate = null) => {
     date: sampleDate,
     salinityPpt: toNumber(water.salinityLab ?? water.salinityCustomer),
     alkalinityMgL: toNumber(water.alkalinityTotal),
-    tanMgL: toNumber(water.nh4),
+    tanMgL: toNumber(water.tan),
+    nh3MgL: toNumber(water.nh3),
+    nh4MgL: toNumber(water.nh4),
     nitriteMgL: toNumber(water.no2),
     tomMgL: toNumber(water.tom),
   };
+  const microbiologyMetrics = {
+    date: sampleDate,
+    vibrioYellow: toNumber(microbiology.vibrioYellow),
+    vibrioGreen: toNumber(microbiology.vibrioGreen),
+    vibrioTotal: toNumber(microbiology.vibrioTotal),
+    tbc: toNumber(microbiology.tbc),
+  };
 
   return {
+    schemaVersion: 2,
     plankton: hasAnyValue(planktonMetrics, [
       "totalCellPerMl",
       "greenAlgaePercent",
@@ -53,9 +64,17 @@ const extractLabMetrics = (result = {}, sampleDate = null) => {
       "salinityPpt",
       "alkalinityMgL",
       "tanMgL",
+      "nh3MgL",
+      "nh4MgL",
       "nitriteMgL",
       "tomMgL",
     ]) ? waterQualityMetrics : null,
+    microbiology: hasAnyValue(microbiologyMetrics, [
+      "vibrioYellow",
+      "vibrioGreen",
+      "vibrioTotal",
+      "tbc",
+    ]) ? microbiologyMetrics : null,
   };
 };
 

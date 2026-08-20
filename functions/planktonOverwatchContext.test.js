@@ -25,11 +25,21 @@ const pond = {
 test("extracts normalized plankton and chemistry metrics from a lab pond result", () => {
   const metrics = extractLabMetrics({
     plankton: { totalCellPerMl: "2500000", cyanophytaPercent: "20", chlorophytaPercent: "40", diatomPercent: "30" },
-    waterQuality: { nh4: "0.7", no2: "0.4", alkalinityTotal: "120", tom: "90" },
+    waterQuality: { tan: "0.6", nh3: "0.02", nh4: "0.7", no2: "0.4", alkalinityTotal: "120", tom: "90" },
   }, "2026-08-20");
   assert.equal(metrics.plankton.totalCellPerMl, 2500000);
   assert.equal(metrics.plankton.cyanobacteriaPercent, 20);
-  assert.equal(metrics.waterQuality.tanMgL, 0.7);
+  assert.equal(metrics.waterQuality.tanMgL, 0.6);
+  assert.equal(metrics.waterQuality.nh3MgL, 0.02);
+  assert.equal(metrics.waterQuality.nh4MgL, 0.7);
+  assert.equal(metrics.schemaVersion, 2);
+});
+
+test("does not reinterpret NH4 as TAN or NH3", () => {
+  const metrics = extractLabMetrics({ waterQuality: { nh4: "0.7" } }, "2026-08-20");
+  assert.equal(metrics.waterQuality.nh4MgL, 0.7);
+  assert.equal(metrics.waterQuality.tanMgL, null);
+  assert.equal(metrics.waterQuality.nh3MgL, null);
 });
 
 test("keeps lab and operational records inside the active pond cycle", () => {

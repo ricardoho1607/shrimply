@@ -10,6 +10,41 @@ export type OrsonAnalysisMode = 'standard' | 'mortality_diagnostic';
 
 export type OrsonLabStatusLevel = 'good' | 'info' | 'watch' | 'warning' | 'critical';
 
+export interface OrsonLabMetrics {
+  schemaVersion: 2;
+  waterQuality: {
+    date: string | null;
+    salinityPpt: OrsonNumber;
+    alkalinityMgL: OrsonNumber;
+    tanMgL: OrsonNumber;
+    nh3MgL: OrsonNumber;
+    nh4MgL: OrsonNumber;
+    nitriteMgL: OrsonNumber;
+    tomMgL: OrsonNumber;
+  } | null;
+  microbiology: {
+    date: string | null;
+    vibrioYellow: OrsonNumber;
+    vibrioGreen: OrsonNumber;
+    vibrioTotal: OrsonNumber;
+    tbc: OrsonNumber;
+  } | null;
+  plankton: {
+    date: string | null;
+    totalCellPerMl: OrsonNumber;
+    beneficialCellPerMl: OrsonNumber;
+    harmfulCellPerMl: OrsonNumber;
+    greenAlgaeCellPerMl: OrsonNumber;
+    greenAlgaePercent: OrsonNumber;
+    cyanobacteriaCellPerMl: OrsonNumber;
+    cyanobacteriaPercent: OrsonNumber;
+    diatomCellPerMl: OrsonNumber;
+    diatomPercent: OrsonNumber;
+    dinoflagellataCellPerMl: OrsonNumber;
+    dinoflagellataPercent: OrsonNumber;
+  } | null;
+}
+
 export interface OrsonLabStatusSummary {
   labReportId: string | null;
   reportType: string | null;
@@ -18,6 +53,9 @@ export interface OrsonLabStatusSummary {
   mainIssue: string | null;
   keyRisks: string[];
   recommendations: string[];
+  cycleId?: string | null;
+  pondCycleId?: string | null;
+  metrics?: OrsonLabMetrics | null;
 }
 
 export interface OrsonLabContext {
@@ -106,6 +144,8 @@ export interface OrsonNormalizedPond {
   baselineCumulativeFeedKg: OrsonNumber;
   baselineSource: string | null;
   supplier: string | null;
+  cycleId: string | null;
+  pondCycleId: string | null;
   cycleStatus: 'active' | 'ended';
   labContext: OrsonLabContext;
   planktonOverwatch: OrsonPlanktonOverwatchContext | null;
@@ -196,6 +236,7 @@ export interface OrsonPondMetrics {
   latestMbwDate: string | null;
   adgGPerDay: OrsonNumber;
   smoothedAdgGPerDay: OrsonNumber;
+  growthConfidence: 'low' | 'medium' | 'high';
   mbwOutlierDates: string[];
   totalFeedKg: number;
   baselineFeedKg: number;
@@ -210,13 +251,20 @@ export interface OrsonPondMetrics {
   feedBiomassModel: OrsonFeedBiomassModel;
   biomassGainKg: OrsonNumber;
   fcr: OrsonNumber;
+  latestPhMorning: OrsonNumber;
+  latestPhEvening: OrsonNumber;
   phSwingLatest: OrsonNumber;
   phSwingTrend: OrsonTrendResult;
   doMinimumLatest: OrsonNumber;
   doMinimumTrend: OrsonTrendResult;
+  latestTemperatureC: OrsonNumber;
+  latestTransparencyCm: OrsonNumber;
   salinityTrend: OrsonTrendResult;
   feedAllocationTrend: OrsonTrendResult;
   mortalityTrend: OrsonTrendResult;
+  latestMortalityCount: OrsonNumber;
+  latestMortalityDate: string | null;
+  latestMortalityPercent: OrsonNumber;
   labContext: OrsonLabContext;
   planktonOverwatch: OrsonPlanktonOverwatchContext | null;
   dailyRecords14d: OrsonPromptDailyRecord[];
@@ -245,6 +293,14 @@ export type OrsonRiskId =
   | 'feed_pressure_low'
   | 'biomass_model_disagreement'
   | 'mortality_spike'
+  | 'mbw_outlier'
+  | 'low_do_high_temperature'
+  | 'high_ph_high_tan'
+  | 'low_do_high_tan'
+  | 'nh3_elevated'
+  | 'high_nitrite_low_do'
+  | 'low_alkalinity_high_ph_swing'
+  | 'plankton_transparency_instability'
   | 'salinity_shock'
   | 'lab_report_risk'
   | 'cross_parameter_risk'
@@ -355,6 +411,11 @@ export interface OrsonPromptPondPayload {
   pondName: string;
   currentDoc: number | null;
   latestMbwG: OrsonNumber;
+  adgGPerDay: OrsonNumber;
+  smoothedAdgGPerDay: OrsonNumber;
+  growthConfidence: 'low' | 'medium' | 'high';
+  fcr: OrsonNumber;
+  mbwOutlierDates: string[];
   biomassKg: OrsonNumber;
   biomassRangeKg: OrsonRangeEstimate;
   survivalPercent: OrsonNumber;
@@ -369,7 +430,14 @@ export interface OrsonPromptPondPayload {
   dataCompletenessScore: number;
   calibration: OrsonPondMetrics['calibration'];
   phSwingLatest: OrsonNumber;
+  phMorningLatest: OrsonNumber;
+  phEveningLatest: OrsonNumber;
   doMinimumLatest: OrsonNumber;
+  temperatureLatestC: OrsonNumber;
+  transparencyLatestCm: OrsonNumber;
+  mortalityLatestCount: OrsonNumber;
+  mortalityLatestPercent: OrsonNumber;
+  mortalityLatestDate: string | null;
   salinityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
   planktonOverwatch: OrsonPlanktonOverwatchContext | null;

@@ -370,7 +370,7 @@ enterprise: {
   addBlock: 'เพิ่มบล็อก',
   stable: 'ปกติ',
   warning: 'เฝ้าระวัง',
-  highRisk: 'ความเสี่ยงสูง',
+  highRisk: 'วิกฤต',
   unassignedPonds: 'บ่อที่ยังไม่จัดบล็อก',
   blockNameRequired: 'กรุณาใส่ชื่อบล็อก',
   blockCreateFailed: 'สร้างบล็อกไม่สำเร็จ',

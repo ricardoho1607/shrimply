@@ -1,0 +1,211 @@
+[
+  {
+    "id": "combined-water-and-lab-risk",
+    "expectedRiskIds": [
+      "unsafe_ph",
+      "low_do_high_temperature",
+      "low_do_high_tan",
+      "high_ph_high_tan",
+      "nh3_elevated",
+      "high_nitrite_low_do",
+      "low_alkalinity_high_ph_swing",
+      "plankton_transparency_instability"
+    ],
+    "excludedRiskIds": [],
+    "pond": {
+      "id": "pond-combined",
+      "pondName": "Combined",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "cycleId": "cycle-current",
+      "pondCycleId": "pond-cycle-current",
+      "samplings": [
+        {
+          "id": "combined-1",
+          "date": "2026-08-19",
+          "mbw": 4,
+          "feed": 25,
+          "doMorning": 3.8,
+          "doEvening": 4.4,
+          "phMorning": 7.8,
+          "phEvening": 8.7,
+          "temperature": 31,
+          "transparency": 20
+        }
+      ],
+      "latestLabStatus": {
+        "labReportId": "lab-combined",
+        "reportType": "water_quality",
+        "sampleDate": "2026-08-19",
+        "status": "warning",
+        "mainIssue": "Combined chemistry risk",
+        "keyRisks": [],
+        "recommendations": [],
+        "cycleId": "cycle-current",
+        "pondCycleId": "pond-cycle-current",
+        "metrics": {
+          "schemaVersion": 2,
+          "waterQuality": {
+            "date": "2026-08-19",
+            "tanMgL": 1.2,
+            "nh3MgL": 0.02,
+            "nh4MgL": 0.7,
+            "nitriteMgL": 0.4,
+            "alkalinityMgL": 70,
+            "tomMgL": 90,
+            "salinityPpt": 20
+          },
+          "microbiology": null,
+          "plankton": null
+        }
+      }
+    }
+  },
+  {
+    "id": "nh4-is-not-tan-or-nh3",
+    "expectedRiskIds": [],
+    "excludedRiskIds": ["low_do_high_tan", "high_ph_high_tan", "nh3_elevated"],
+    "pond": {
+      "id": "pond-nh4",
+      "pondName": "NH4 only",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "cycleId": "cycle-current",
+      "pondCycleId": "pond-cycle-current",
+      "samplings": [
+        {
+          "id": "nh4-1",
+          "date": "2026-08-19",
+          "mbw": 4,
+          "feed": 25,
+          "doMorning": 3.8,
+          "phMorning": 7.8,
+          "phEvening": 8.7
+        }
+      ],
+      "latestLabStatus": {
+        "labReportId": "lab-nh4",
+        "reportType": "water_quality",
+        "sampleDate": "2026-08-19",
+        "status": "info",
+        "cycleId": "cycle-current",
+        "pondCycleId": "pond-cycle-current",
+        "metrics": {
+          "schemaVersion": 2,
+          "waterQuality": { "date": "2026-08-19", "nh4MgL": 0.7 },
+          "microbiology": null,
+          "plankton": null
+        }
+      }
+    }
+  },
+  {
+    "id": "old-cycle-lab-is-ignored",
+    "expectedRiskIds": [],
+    "excludedRiskIds": ["low_do_high_tan", "high_ph_high_tan", "nh3_elevated", "high_nitrite_low_do"],
+    "pond": {
+      "id": "pond-old-cycle",
+      "pondName": "Old cycle",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "cycleId": "cycle-current",
+      "pondCycleId": "pond-cycle-current",
+      "samplings": [
+        {
+          "id": "old-cycle-1",
+          "date": "2026-08-19",
+          "mbw": 4,
+          "feed": 25,
+          "doMorning": 3.8,
+          "phMorning": 7.8,
+          "phEvening": 8.7
+        }
+      ],
+      "latestLabStatus": {
+        "labReportId": "lab-old",
+        "reportType": "water_quality",
+        "sampleDate": "2026-07-10",
+        "status": "critical",
+        "cycleId": "cycle-old",
+        "pondCycleId": "pond-cycle-old",
+        "metrics": {
+          "schemaVersion": 2,
+          "waterQuality": {
+            "date": "2026-07-10",
+            "tanMgL": 2,
+            "nh3MgL": 0.1,
+            "nitriteMgL": 1
+          },
+          "microbiology": null,
+          "plankton": null
+        }
+      }
+    }
+  },
+  {
+    "id": "population-scaled-mortality",
+    "expectedRiskIds": ["mortality_spike"],
+    "excludedRiskIds": [],
+    "pond": {
+      "id": "pond-mortality",
+      "pondName": "Mortality",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "samplings": [
+        { "id": "mortality-1", "date": "2026-08-18", "mbw": 4, "feed": 25, "doMorning": 5.5 },
+        { "id": "mortality-2", "date": "2026-08-19", "mortality": 250 }
+      ]
+    }
+  },
+  {
+    "id": "mbw-outlier",
+    "expectedRiskIds": ["mbw_outlier"],
+    "excludedRiskIds": [],
+    "pond": {
+      "id": "pond-outlier",
+      "pondName": "Outlier",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "samplings": [
+        { "id": "outlier-1", "date": "2026-08-05", "mbw": 2, "feed": 10 },
+        { "id": "outlier-2", "date": "2026-08-10", "mbw": 10, "feed": 12 },
+        { "id": "outlier-3", "date": "2026-08-15", "mbw": 4, "feed": 14 }
+      ]
+    }
+  },
+  {
+    "id": "zero-observation-clears-stale-mortality",
+    "expectedRiskIds": [],
+    "excludedRiskIds": ["mortality_spike"],
+    "pond": {
+      "id": "pond-zero-mortality",
+      "pondName": "Zero mortality",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "samplings": [
+        { "id": "mortality-old", "date": "2026-08-18", "mbw": 4, "mortality": 250 }
+      ],
+      "mortalityRecords": [
+        { "id": "mortality-zero", "date": "2026-08-19", "observationType": "none_observed", "count": 0 }
+      ]
+    }
+  }
+]

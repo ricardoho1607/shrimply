@@ -173,6 +173,8 @@
 .stablePanel { display: flex; align-items: center; gap: 10px; padding: 15px; border-radius: 13px; background: #eaf7ee; color: #1f6a39; font-weight: 600; }
 .warningList { display: flex; flex-direction: column; gap: 9px; }
 .warningList > div { display: flex; align-items: flex-start; gap: 9px; padding: 13px; border-radius: 12px; background: #fff8e8; color: #754900; font-weight: 600; }
+.warningList > .warningItem { border: 1px solid #fac898; background: #fff8e8; color: #754900; }
+.warningList > .criticalItem { border: 1px solid #faa0a0; background: #fde8e8; color: #8b1e1e; }
 .mortalityPanel { border-radius: 14px; background: var(--bg-mid); padding: 16px; }
 .mortalityPanel > div { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 14px; }
 .mortalityPanel span { display: flex; flex-direction: column; gap: 3px; }

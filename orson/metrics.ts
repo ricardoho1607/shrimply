@@ -105,7 +105,7 @@ export const calculateTrend = (
 };
 
 const calculateSmoothedAdg = (
-  sharedPond: SharedPond,
+  pond: OrsonNormalizedPond,
   mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): OrsonNumber => {
   const recent = mbwPoints.slice(-4);
@@ -118,7 +118,16 @@ const calculateSmoothedAdg = (
     }
   }
 
-  return round(calculateSharedAdg(sharedPond));
+  if (mbwPoints.length === 1) {
+    const point = mbwPoints[0];
+    const initialWeight = positive(pond.initialWeightG) ?? 0.5;
+    if (pond.docStartTimestampMs !== null && point.record.timestampMs !== null) {
+      const days = Math.max(1, (point.record.timestampMs - pond.docStartTimestampMs) / (1000 * 60 * 60 * 24));
+      return round((point.value - initialWeight) / days);
+    }
+  }
+
+  return null;
 };
 
 const detectMbwOutliers = (
@@ -404,6 +413,9 @@ export const calculatePondMetrics = (
   const sharedPond = toSharedPond(pond);
   const sharedMetrics = calculatePondMetricsWithHarvest(sharedPond);
   const mbwPoints = recordsWith(pond, (record) => positive(record.mbwG));
+  const mbwOutlierDates = detectMbwOutliers(mbwPoints);
+  const mbwOutlierDateSet = new Set(mbwOutlierDates);
+  const cleanMbwPoints = mbwPoints.filter((point) => !point.record.date || !mbwOutlierDateSet.has(point.record.date));
   const latestMbw = mbwPoints.length > 0 ? mbwPoints[mbwPoints.length - 1] : null;
   const latestMbwG = sharedMetrics.latestMbw;
   const baselineFeedKg = getPondBaselineFeed(sharedPond);
@@ -443,16 +455,19 @@ export const calculatePondMetrics = (
 
   const fcr = round(sharedMetrics.biomassGainFCR);
 
-  const latestWq = latestWith(pond, (record) => minNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening));
-  const phSwingLatest = latestWq ? (() => {
-    const swing = latestWq.record.phMorning !== null && latestWq.record.phEvening !== null
-      ? Math.abs(latestWq.record.phEvening - latestWq.record.phMorning)
+  const latestPh = latestWith(pond, (record) => minNumber(record.phMorning, record.phEvening));
+  const latestDo = latestWith(pond, (record) => minNumber(record.doMorning, record.doEvening));
+  const latestTemperature = latestWith(pond, (record) => record.temperatureC);
+  const latestTransparency = latestWith(pond, (record) => record.transparencyCm);
+  const phSwingLatest = latestPh ? (() => {
+    const swing = latestPh.record.phMorning !== null && latestPh.record.phEvening !== null
+      ? Math.abs(latestPh.record.phEvening - latestPh.record.phMorning)
       : null;
     return hasNumber(swing) ? round(swing) : null;
   })() : null;
 
-  const doMinimumLatest = latestWq
-    ? minNumber(latestWq.record.doMorning, latestWq.record.doEvening)
+  const doMinimumLatest = latestDo
+    ? minNumber(latestDo.record.doMorning, latestDo.record.doEvening)
     : null;
 
   const phSwingTrend = calculateTrend(pond.records.map((record) => ({
@@ -480,6 +495,10 @@ export const calculatePondMetrics = (
     timestampMs: record.timestampMs,
     value: record.mortalityCount,
   })));
+  const latestMortality = latestWith(pond, (record) => record.mortalityCount);
+  const latestMortalityPercent = latestMortality && hasNumber(estimatedCurrentPopulation) && estimatedCurrentPopulation > 0
+    ? round((latestMortality.value / estimatedCurrentPopulation) * 100, 3)
+    : null;
   const roundedDoMinimumLatest = hasNumber(doMinimumLatest) ? round(doMinimumLatest) : null;
   const feedBiomassModel = calculateFeedBiomassModel({
     pond,
@@ -499,8 +518,9 @@ export const calculatePondMetrics = (
     latestMbwG: hasNumber(latestMbwG) ? round(latestMbwG) : null,
     latestMbwDate: latestMbw?.record.date ?? null,
     adgGPerDay: round(calculateSharedAdg(sharedPond)),
-    smoothedAdgGPerDay: calculateSmoothedAdg(sharedPond, mbwPoints),
-    mbwOutlierDates: detectMbwOutliers(mbwPoints),
+    smoothedAdgGPerDay: calculateSmoothedAdg(pond, cleanMbwPoints),
+    growthConfidence: cleanMbwPoints.length < 2 ? 'low' : mbwOutlierDates.length > 0 || cleanMbwPoints.length < 3 ? 'medium' : 'high',
+    mbwOutlierDates,
     totalFeedKg: round(totalFeedKg, 2),
     baselineFeedKg: round(baselineFeedKg, 2),
     operationalFeedKg: round(operationalFeedKg, 2),
@@ -514,13 +534,20 @@ export const calculatePondMetrics = (
     feedBiomassModel,
     biomassGainKg,
     fcr,
+    latestPhMorning: latestPh?.record.phMorning ?? null,
+    latestPhEvening: latestPh?.record.phEvening ?? null,
     phSwingLatest,
     phSwingTrend,
     doMinimumLatest: roundedDoMinimumLatest,
     doMinimumTrend,
+    latestTemperatureC: latestTemperature?.value ?? null,
+    latestTransparencyCm: latestTransparency?.value ?? null,
     salinityTrend,
     feedAllocationTrend,
     mortalityTrend,
+    latestMortalityCount: latestMortality?.value ?? null,
+    latestMortalityDate: latestMortality?.record.date ?? null,
+    latestMortalityPercent,
     labContext: pond.labContext,
     planktonOverwatch: pond.planktonOverwatch,
     dailyRecords14d: extractDailyRecords14d(pond),

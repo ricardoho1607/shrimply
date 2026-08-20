@@ -937,9 +937,13 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
             ) : (
               <div className={styles.warningList}>
                 {selectedStatus.warnings.map((warning) => (
-                  <div key={warning.code}><AlertTriangle size={18} />
-                    <span>{t.enterprise.warningMessages[warning.code]}
-                      {warning.value !== undefined ? ` (${warning.value.toFixed(warning.code === 'mortality' ? 2 : 1)}${warning.unit || ''})` : ''}
+                  <div
+                    key={warning.code}
+                    className={warning.severity === 'critical' ? styles.criticalItem : styles.warningItem}
+                  >
+                    <AlertTriangle size={18} />
+                    <span>{warning.translationCode ? t.enterprise.warningMessages[warning.translationCode] : warning.label}
+                      {warning.value !== undefined ? ` (${warning.value.toFixed(warning.translationCode === 'mortality' ? 2 : 1)}${warning.unit || ''})` : ''}
                     </span>
                   </div>
                 ))}
@@ -955,7 +959,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                 </div>
               </div>
             ) : null}
-            {selectedStatus.warnings.some((warning) => warning.code !== 'mortality') ? (
+            {selectedStatus.warnings.some((warning) => warning.destination === 'water_quality') ? (
               <Link className={styles.saveButton} href="/dashboard/water">{t.enterprise.openWaterQuality}</Link>
             ) : (
               <Link className={styles.saveButton} href={`/dashboard/ponds/detail?id=${selectedPond.id}`}>{t.enterprise.openPondDetails}</Link>

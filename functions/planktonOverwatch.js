@@ -83,7 +83,9 @@ const normalizeWaterRecord = (record = {}) => ({
   temperatureC: toNumber(record.temperatureC ?? record.temperature),
   salinityPpt: toNumber(record.salinityPpt ?? record.salinity),
   alkalinityMgL: toNumber(record.alkalinityMgL ?? record.alkalinityTotal),
-  tanMgL: toNumber(record.tanMgL ?? record.tan ?? record.nh4),
+  tanMgL: toNumber(record.tanMgL ?? record.tan),
+  nh3MgL: toNumber(record.nh3MgL ?? record.nh3),
+  nh4MgL: toNumber(record.nh4MgL ?? record.nh4),
   nitriteMgL: toNumber(record.nitriteMgL ?? record.nitrite ?? record.no2),
   tomMgL: toNumber(record.tomMgL ?? record.tom),
   weatherEvent: typeof record.weatherEvent === "string" ? record.weatherEvent : null,
@@ -355,8 +357,18 @@ const evaluatePlanktonOverwatch = (input = {}) => {
       points: currentWater?.afternoonPh !== null && currentWater?.afternoonPh !== undefined && currentWater.afternoonPh > 8.8 ? 8 : 5,
       severity: currentWater?.afternoonPh !== null && currentWater?.afternoonPh !== undefined && currentWater.afternoonPh > 8.8 ? "high" : "watch",
       title: "TAN is elevated",
-      evidence: `TAN/ammonium result is ${round(currentChemistry.tanMgL, 3)} mg/L${currentWater?.afternoonPh > 8.8 ? " with high afternoon pH" : ""}.`,
+      evidence: `TAN result is ${round(currentChemistry.tanMgL, 3)} mg/L${currentWater?.afternoonPh > 8.8 ? " with high afternoon pH" : ""}.`,
       recommendation: "Review feed waste and organic load, and interpret ammonia risk with pH and temperature.",
+    });
+  }
+  if (currentChemistry && currentChemistry.nh4MgL !== null && currentChemistry.nh4MgL >= 0.5) {
+    addSignal({
+      id: "nh4_elevated",
+      category: "nutrients",
+      points: currentChemistry.nh4MgL >= 1 ? 6 : 4,
+      title: "Ammonium is elevated",
+      evidence: `NH4 result is ${round(currentChemistry.nh4MgL, 3)} mg/L.`,
+      recommendation: "Review feed waste and organic load, and do not interpret NH4 as TAN or toxic NH3 without the matching lab values.",
     });
   }
   if (currentChemistry && currentChemistry.nitriteMgL !== null && currentChemistry.nitriteMgL >= 0.5) {

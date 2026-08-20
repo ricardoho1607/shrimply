@@ -370,7 +370,7 @@ enterprise: {
   addBlock: 'Tambah blok',
   stable: 'Stabil',
   warning: 'Peringatan',
-  highRisk: 'Risiko tinggi',
+  highRisk: 'Kritis',
   unassignedPonds: 'Kolam tanpa blok',
   blockNameRequired: 'Masukkan nama blok.',
   blockCreateFailed: 'Gagal membuat blok.',

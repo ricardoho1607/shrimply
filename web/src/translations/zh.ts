@@ -275,7 +275,7 @@ companyDetails: {
 enterprise: {
   commandCenter: '企业养殖指挥中心', title: '养殖区块', summary: '{{blockCount}} 个区块 • {{pondCount}} 个在养池塘',
   addBlock: '添加区块', officeDisplay: '办公室大屏', livePondHealth: '池塘健康实时监控', exitOfficeDisplay: '退出大屏',
-  stable: '稳定', warning: '预警', highRisk: '高风险', unassignedPonds: '未分配池塘',
+  stable: '稳定', warning: '预警', highRisk: '危急', unassignedPonds: '未分配池塘',
   blockNameRequired: '请输入不重复的区块名称。', blockCreateFailed: '无法创建区块。', blockAssignmentFailed: '无法为该区块分配技术员。', loadingBlocks: '正在加载养殖区块...',
   noBlocks: '暂无养殖区块', noBlocksDescription: '创建第一个区块并分配技术员，以组织企业级池塘运营。',
   createFirstBlock: '创建第一个区块', pondCount: '{{count}} 个池塘', noPondsInBlock: '该区块尚未分配在养池塘。', noPondsForFilter: '该区块中没有符合此养殖周期状态的池塘。',

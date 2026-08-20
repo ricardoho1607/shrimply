@@ -654,7 +654,12 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
             ) : (
               <div className={styles.warningList}>
                 {selectedStatus.warnings.map((warning) => (
-                  <div key={warning.code}><AlertTriangle size={18} /><span>{warning.label}</span></div>
+                  <div
+                    key={warning.code}
+                    className={warning.severity === 'critical' ? styles.criticalItem : styles.warningItem}
+                  >
+                    <AlertTriangle size={18} /><span>{warning.label}</span>
+                  </div>
                 ))}
               </div>
             )}

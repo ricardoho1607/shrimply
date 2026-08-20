@@ -275,7 +275,7 @@ companyDetails: {
 enterprise: {
   commandCenter: 'Pusat kendali enterprise', title: 'Blok tambak', summary: '{{blockCount}} blok • {{pondCount}} kolam aktif',
   addBlock: 'Tambah blok', officeDisplay: 'Tampilan ruang kontrol', livePondHealth: 'Status kolam langsung', exitOfficeDisplay: 'Keluar dari tampilan',
-  stable: 'Stabil', warning: 'Peringatan', highRisk: 'Risiko tinggi', unassignedPonds: 'Kolam tanpa blok',
+  stable: 'Stabil', warning: 'Peringatan', highRisk: 'Kritis', unassignedPonds: 'Kolam tanpa blok',
   blockNameRequired: 'Masukkan nama blok yang unik.', blockCreateFailed: 'Gagal membuat blok.', blockAssignmentFailed: 'Gagal menugaskan teknisi ke blok ini.', loadingBlocks: 'Memuat blok tambak...',
   noBlocks: 'Belum ada blok tambak', noBlocksDescription: 'Buat blok pertama dan tetapkan teknisi untuk mengatur operasi kolam enterprise.',
   createFirstBlock: 'Buat blok pertama', pondCount: '{{count}} kolam', noPondsInBlock: 'Belum ada kolam aktif yang ditetapkan ke blok ini.', noPondsForFilter: 'Tidak ada kolam dengan status siklus ini di blok tersebut.',
