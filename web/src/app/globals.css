@@ -3144,6 +3144,8 @@ nav.scrolled {
   padding: 12px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
 }
 
 .feed-pond-metric > div {
@@ -3173,6 +3175,40 @@ nav.scrolled {
   color: var(--text-muted);
   font-size: 11px;
   font-weight: var(--weight-medium);
+}
+
+.feed-pond-response {
+  align-items: flex-end;
+  text-align: right;
+}
+
+.feed-response-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.feed-response-option {
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #FFFFFF;
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+}
+
+.feed-response-option:hover {
+  border-color: var(--primary);
+  background: var(--primary-dim);
+}
+
+.feed-response-option.is-selected {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: #FFFFFF;
 }
 
 .feed-pond-actions {

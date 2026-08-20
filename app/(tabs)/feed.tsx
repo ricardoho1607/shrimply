@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import { usePondStore, isPondCycleActive } from "../store/pondStore";
+import { usePondStore, isPondCycleActive, type FeedingResponse } from "../store/pondStore";
 import { 
   collection, 
   query, 
@@ -50,15 +50,6 @@ const Input = React.memo(({ label, value, onChange, placeholder = "", disabled =
 ));
 Input.displayName = 'Input';
 
-const Parameter = React.memo(({ icon, label, value }: any) => (
-  <View style={styles.parameterItem}>
-    <Ionicons name={icon} size={16} color="#dce8f2" />
-    <Text style={styles.parameterLabel}>{label}</Text>
-    <Text style={styles.parameterValue}>{value || "N/A"}</Text>
-  </View>
-));
-Parameter.displayName = 'Parameter';
-
 export default function FeedManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
@@ -83,6 +74,7 @@ export default function FeedManagementScreen() {
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
   const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
+  const [feedingResponse, setFeedingResponse] = useState<FeedingResponse | null>(null);
   const farmToday = getFarmDateKey(new Date(), company?.timeZone);
   const [feedDate, setFeedDate] = useState(farmToday);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -137,7 +129,19 @@ export default function FeedManagementScreen() {
         quantityKg: String(allocation.quantityKg),
       }))
       : []);
+    setFeedingResponse(feedRecord?.feedData?.feedingResponse || null);
   }, [activePonds, getFeedRecordForDate]);
+
+  const feedingResponseLabels: Record<FeedingResponse, string> = {
+    strong: t.feed.feedingResponseStrong,
+    normal: t.feed.feedingResponseNormal,
+    weak: t.feed.feedingResponseWeak,
+  };
+  const getFeedingResponseLabel = (response: unknown): string | null => (
+    response === 'strong' || response === 'normal' || response === 'weak'
+      ? feedingResponseLabels[response]
+      : null
+  );
 
   const allFeedRecords = useMemo(() => {
     const today = getFarmDateKey(new Date(), company?.timeZone);
@@ -227,6 +231,7 @@ export default function FeedManagementScreen() {
 
     const feedData = {
       totalDailyFeed: totalDailyFeed.toFixed(2),
+      feedingResponse,
       inventoryFeedId: parsedAllocations.length === 1 ? parsedAllocations[0].inventoryFeedId : null,
       feedAllocations: parsedAllocations,
     };
@@ -242,6 +247,7 @@ export default function FeedManagementScreen() {
       addFeedData(pond.id, feedData, feedDate);
       setSelectedPond(null);
       setFeedAllocations([]);
+      setFeedingResponse(null);
       setFeedDate(farmToday);
       setIsModalVisible(false);
     } catch (error: any) {
@@ -285,6 +291,7 @@ export default function FeedManagementScreen() {
   const closeModal = () => {
     setSelectedPond(null);
     setFeedAllocations([]);
+    setFeedingResponse(null);
     setFeedDate(farmToday);
     submitLockRef.current = false;
     setIsSubmitting(false);
@@ -317,8 +324,10 @@ export default function FeedManagementScreen() {
             emptyMessage={t.feed.noData}
             getTone={(pond) => getTodayFeedRecord(pond)?.feedData ? 'stable' : 'neutral'}
             getSubtitle={(pond) => {
-              const amount = getTodayFeedRecord(pond)?.feedData?.totalDailyFeed;
-              return amount ? `${amount} kg` : undefined;
+              const feedData = getTodayFeedRecord(pond)?.feedData;
+              if (!feedData?.totalDailyFeed) return undefined;
+              const response = getFeedingResponseLabel(feedData.feedingResponse);
+              return `${feedData.totalDailyFeed} kg${response ? ` · ${response}` : ''}`;
             }}
             onPress={(pond) => router.push({ pathname: '/feed-history', params: { pondId: pond.id, pondName: pond.pondName } })}
           />
@@ -350,10 +359,17 @@ export default function FeedManagementScreen() {
                   </Text>
                 </View>
                 <View style={styles.parametersContainer}>
-                  <View style={styles.parameterRow}>
-                    <Parameter icon="scale-outline" label={t.feed.dailyFeed} 
-                      value={`${rec.totalDailyFeed || "N/A"} kg`} />
-                    <View style={{ flex: 1 }} />
+                  <View style={styles.cardMetricsRow}>
+                    <View style={styles.cardMetric}>
+                      <Text style={styles.cardMetricLabel}>{t.feed.dailyFeed}</Text>
+                      <Text style={styles.cardMetricValue}>{`${rec.totalDailyFeed || "N/A"} kg`}</Text>
+                    </View>
+                    <View style={[styles.cardMetric, styles.cardMetricRight]}>
+                      <Text style={styles.cardMetricLabel}>{t.feed.feedingResponse}</Text>
+                      <Text style={styles.cardMetricValue}>
+                        {getFeedingResponseLabel(rec.feedingResponse) || "—"}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -485,6 +501,29 @@ export default function FeedManagementScreen() {
                   placeholder={t.feed.feedPlaceholder}
                   disabled />
 
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>{t.feed.feedingResponseOptional}</Text>
+                  <Text style={styles.inputHint}>{t.feed.feedingResponseHint}</Text>
+                  <View style={styles.feedingResponseOptions}>
+                    {(['strong', 'normal', 'weak'] as FeedingResponse[]).map((response) => {
+                      const selected = feedingResponse === response;
+                      return (
+                        <TouchableOpacity
+                          key={response}
+                          style={[styles.feedingResponseOption, selected && styles.feedingResponseOptionSelected]}
+                          onPress={() => setFeedingResponse(selected ? null : response)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: selected }}
+                        >
+                          <Text style={[styles.feedingResponseOptionText, selected && styles.feedingResponseOptionTextSelected]}>
+                            {feedingResponseLabels[response]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity style={styles.cancelButton} onPress={closeModal}>
                     <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
@@ -533,10 +572,11 @@ const styles = StyleSheet.create({
   pondName: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
   dateText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12 },
   parametersContainer: { gap: Platform.OS === 'android' ? 10 : 12 },
-  parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  parameterItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },
-  parameterLabel: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 11 : 12, marginLeft: 6, width: 50, flexShrink: 0 },
-  parameterValue: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', textAlign: 'left', flex: 1, minWidth: 80, marginLeft: 8, color: '#0d2137' },
+  cardMetricsRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16 },
+  cardMetric: { flex: 1, minWidth: 0 },
+  cardMetricRight: { alignItems: 'flex-end' },
+  cardMetricLabel: { color: '#6B8AA0', fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '600', textTransform: 'uppercase' },
+  cardMetricValue: { color: '#0D2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '800', marginTop: 4 },
   floatingButton: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#0d2137', width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#315f57', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 8 },
   modalContainer: { flex: 1, backgroundColor: 'rgba(15, 76, 117, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   modalContent: { backgroundColor: '#FFFFFF', borderRadius: 20, width: '100%', maxHeight: '85%', borderWidth: 1, borderColor: '#e8f2f9', overflow: 'hidden' },
@@ -549,6 +589,11 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   inputDisabled: { backgroundColor: '#edf3f8', color: '#315f57' },
   inputHint: { color: '#6b8aa0', fontSize: 12, lineHeight: 17, marginBottom: 10 },
+  feedingResponseOptions: { flexDirection: 'row', gap: 8 },
+  feedingResponseOption: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#d9e8f2', backgroundColor: '#FFFFFF' },
+  feedingResponseOptionSelected: { borderColor: '#0F4C75', backgroundColor: '#0F4C75' },
+  feedingResponseOptionText: { color: '#0F4C75', fontSize: 13, fontWeight: '700' },
+  feedingResponseOptionTextSelected: { color: '#FFFFFF' },
   feedWarning: { flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 12, borderWidth: 1, borderColor: '#f6c453', backgroundColor: '#fff8e6' },
   feedWarningTextContainer: { flex: 1 },
   feedWarningTitle: { color: '#92400e', fontSize: 13, fontWeight: '700', marginBottom: 2 },

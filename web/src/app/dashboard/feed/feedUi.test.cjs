@@ -5,6 +5,8 @@ const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
+const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/feed.tsx'), 'utf8');
+const sharedCalculations = fs.readFileSync(path.join(__dirname, '../../../../../shared/pondCalculations.ts'), 'utf8');
 
 test('feed overview uses the compact authenticated layout', () => {
   assert.match(source, /className="dashboard-page feed-page"/);
@@ -41,4 +43,15 @@ test('phone feed history header stays below device navigation and status areas',
   assert.match(source, /className="responsive-side-drawer-overlay feed-history-overlay"[\s\S]*?style=\{\{ zIndex: 9100 \}\}/);
   assert.match(source, /className="responsive-side-drawer feed-history-drawer"[\s\S]*?style=\{\{ paddingTop: 0 \}\}/);
   assert.match(source, /<style jsx global>[\s\S]*?\.dashboard-saas \.feed-history-header\s*{[\s\S]*?padding-top:\s*calc\(12px \+ var\(--safe-area-top\)\) !important;/);
+});
+
+test('feeding response is optional, persisted, and shown beside daily feed on web and mobile', () => {
+  assert.match(sharedCalculations, /FEEDING_RESPONSE_VALUES = \['strong', 'normal', 'weak'\]/);
+  assert.match(source, /feedingResponse: formData\.feedingResponse \|\| null/);
+  assert.match(source, /className="feed-pond-response"/);
+  assert.match(source, /role="radiogroup"/);
+  assert.match(source, /feedingResponse: selected \? null : response/);
+  assert.match(mobileSource, /feedingResponse,/);
+  assert.match(mobileSource, /style=\{styles\.cardMetricsRow\}/);
+  assert.match(mobileSource, /setFeedingResponse\(selected \? null : response\)/);
 });

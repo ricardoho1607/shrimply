@@ -16,7 +16,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import { usePondStore, FeedData, Pond, Sampling } from './store/pondStore';
+import { usePondStore, FeedData, Pond, Sampling, type FeedingResponse } from './store/pondStore';
 import { Feed, useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
@@ -44,6 +44,7 @@ export default function FeedHistoryScreen() {
   const [editingRecord, setEditingRecord] = useState<FeedHistoryRecord | null>(null);
   const [deletingRecord, setDeletingRecord] = useState<FeedHistoryRecord | null>(null);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
+  const [feedingResponse, setFeedingResponse] = useState<FeedingResponse | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const submitLockRef = useRef(false);
@@ -62,6 +63,11 @@ export default function FeedHistoryScreen() {
   const pond: Pond | undefined = accessiblePonds.find((p: Pond) => p.id === resolvedPondId);
   const displayPondName = Array.isArray(pondName) ? pondName[0] : pondName;
   const canEditFeed = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const feedingResponseLabels: Record<FeedingResponse, string> = {
+    strong: t.feed.feedingResponseStrong,
+    normal: t.feed.feedingResponseNormal,
+    weak: t.feed.feedingResponseWeak,
+  };
 
   useEffect(() => {
     if (!user?.companyId) {
@@ -101,6 +107,7 @@ export default function FeedHistoryScreen() {
       inventoryFeedId: allocation.inventoryFeedId,
       quantityKg: String(allocation.quantityKg),
     })));
+    setFeedingResponse(record.feedingResponse || null);
     submitLockRef.current = false;
     setIsSubmitting(false);
   };
@@ -108,6 +115,7 @@ export default function FeedHistoryScreen() {
   const closeEditor = () => {
     setEditingRecord(null);
     setFeedAllocations([]);
+    setFeedingResponse(null);
     submitLockRef.current = false;
     setIsSubmitting(false);
   };
@@ -161,6 +169,7 @@ export default function FeedHistoryScreen() {
       updateSampling(pond.id, editingRecord.id, {
         feedData: {
           totalDailyFeed: totalDailyFeed.toFixed(2),
+          feedingResponse,
           inventoryFeedId: nextAllocations.length === 1 ? nextAllocations[0].inventoryFeedId : null,
           feedAllocations: nextAllocations,
           cycleId: editingRecord.cycleId || pond.cycleId,
@@ -403,6 +412,29 @@ export default function FeedHistoryScreen() {
                   <Text style={styles.totalValue}>{allocationTotal.toFixed(2)} kg</Text>
                 </View>
 
+                <View style={styles.feedingResponseField}>
+                  <Text style={styles.inputLabel}>{t.feed.feedingResponseOptional}</Text>
+                  <Text style={styles.inputHint}>{t.feed.feedingResponseHint}</Text>
+                  <View style={styles.feedingResponseOptions}>
+                    {(['strong', 'normal', 'weak'] as FeedingResponse[]).map((response) => {
+                      const selected = feedingResponse === response;
+                      return (
+                        <TouchableOpacity
+                          key={response}
+                          style={[styles.feedingResponseOption, selected && styles.feedingResponseOptionSelected]}
+                          onPress={() => setFeedingResponse(selected ? null : response)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: selected }}
+                        >
+                          <Text style={[styles.feedingResponseOptionText, selected && styles.feedingResponseOptionTextSelected]}>
+                            {feedingResponseLabels[response]}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
                 <View style={styles.buttonContainer}>
                   <TouchableOpacity style={styles.cancelButton} onPress={closeEditor}>
                     <Text style={styles.cancelButtonText}>{t.actions.cancel}</Text>
@@ -508,6 +540,12 @@ const styles = StyleSheet.create({
   feedOptionText: { color: '#0D2137', fontSize: 13, fontWeight: '600' },
   totalField: { marginTop: 22 },
   totalValue: { padding: 14, borderRadius: 12, backgroundColor: '#EDF3F8', color: '#0F4C75', fontSize: 16, fontWeight: '800' },
+  feedingResponseField: { marginTop: 20 },
+  feedingResponseOptions: { flexDirection: 'row', gap: 8 },
+  feedingResponseOption: { flex: 1, minHeight: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: '#D9E8F2', backgroundColor: '#FFFFFF' },
+  feedingResponseOptionSelected: { borderColor: '#0F4C75', backgroundColor: '#0F4C75' },
+  feedingResponseOptionText: { color: '#0F4C75', fontSize: 13, fontWeight: '700' },
+  feedingResponseOptionTextSelected: { color: '#FFFFFF' },
   buttonContainer: { flexDirection: 'row', gap: 12, marginTop: 24, marginBottom: 24 },
   cancelButton: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: '#E74C3C', alignItems: 'center' },
   cancelButtonText: { color: '#E74C3C', fontSize: 15, fontWeight: '700' },

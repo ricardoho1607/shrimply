@@ -6,8 +6,12 @@ import {
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
+export const FEEDING_RESPONSE_VALUES = ['strong', 'normal', 'weak'] as const;
+export type FeedingResponse = typeof FEEDING_RESPONSE_VALUES[number];
+
 export interface SharedFeedData {
   totalDailyFeed?: number | string | null;
+  feedingResponse?: FeedingResponse | null;
 }
 
 export interface SharedSampling {

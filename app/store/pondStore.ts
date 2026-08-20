@@ -5,6 +5,7 @@ import {
   toFiniteNumber,
   type MortalityObservationType,
   type PondMetricsWithHarvest,
+  type FeedingResponse,
 } from "../../shared/pondCalculations";
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 import {
@@ -25,7 +26,7 @@ export {
   getSamplingFeedAmount,
   isBaselineSampling,
 } from "../../shared/pondCalculations";
-export type { MortalityObservationType } from "../../shared/pondCalculations";
+export type { FeedingResponse, MortalityObservationType } from "../../shared/pondCalculations";
 
 export interface FeedAllocation {
   inventoryFeedId: string;
@@ -34,6 +35,7 @@ export interface FeedAllocation {
 
 export interface FeedData { 
   totalDailyFeed: string; 
+  feedingResponse?: FeedingResponse | null;
   inventoryFeedId?: string | null;
   feedAllocations?: FeedAllocation[];
   cycleId?: string;

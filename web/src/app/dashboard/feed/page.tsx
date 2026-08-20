@@ -46,10 +46,12 @@ import {
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
 import { normalizeFarmDateKey } from '../../../../../shared/farmDate';
+import type { FeedingResponse } from '../../../../../shared/pondCalculations';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
   totalDailyFeed: string;
+  feedingResponse?: FeedingResponse | null;
   inventoryFeedId?: string | null;
   feedAllocations?: FeedAllocation[];
   cycleId?: string;
@@ -145,8 +147,14 @@ export default function FeedRecordsPage() {
     pondId: '',
     date: today,
     totalDailyFeed: '',
+    feedingResponse: null,
     feedAllocations: [],
   });
+  const feedingResponseLabels: Record<FeedingResponse, string> = {
+    strong: t.feed.feedingResponseStrong,
+    normal: t.feed.feedingResponseNormal,
+    weak: t.feed.feedingResponseWeak,
+  };
   const canEditFeed = canEditOperations(user?.role);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
@@ -186,6 +194,7 @@ export default function FeedRecordsPage() {
         pondId: requestedPond.id,
         date: today,
         totalDailyFeed: '',
+        feedingResponse: null,
         feedAllocations: [],
       });
       setModalOpen(true);
@@ -296,6 +305,7 @@ export default function FeedRecordsPage() {
         pondId: prev.pondId,
         date: prev.date,
         totalDailyFeed: '',
+        feedingResponse: null,
         feedAllocations: [],
       }));
     }
@@ -353,6 +363,7 @@ export default function FeedRecordsPage() {
 
         const feedData = {
           totalDailyFeed: feedAmount.toFixed(2),
+          feedingResponse: formData.feedingResponse || null,
           inventoryFeedId: requestedAllocations.length === 1 ? requestedAllocations[0].inventoryFeedId : null,
           feedAllocations: requestedAllocations,
           cycleId: pondData.cycleId,
@@ -474,6 +485,7 @@ export default function FeedRecordsPage() {
           pondId: '',
           date: today,
           totalDailyFeed: '',
+          feedingResponse: null,
           feedAllocations: [],
         });
     } catch (error) {
@@ -526,7 +538,9 @@ export default function FeedRecordsPage() {
       .filter(s => s.feedData)
       .slice()
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return logs[0]?.feedData;
+    return logs[0]?.feedData
+      ? { ...logs[0].feedData, date: logs[0].date }
+      : undefined;
   };
 
   const formAllocationTotal = sumFeedAllocations(formData.feedAllocations.map((allocation) => ({
@@ -548,6 +562,7 @@ export default function FeedRecordsPage() {
       pondId: selectedPondForHistory.id,
       date: log.date,
       totalDailyFeed: log.feedData.totalDailyFeed,
+      feedingResponse: log.feedData.feedingResponse || null,
       feedAllocations: normalizeFeedAllocations(log.feedData).map((allocation) => ({
         inventoryFeedId: allocation.inventoryFeedId,
         quantityKg: String(allocation.quantityKg),
@@ -757,6 +772,7 @@ export default function FeedRecordsPage() {
                 pondId: '',
                 date: today,
                 totalDailyFeed: '',
+                feedingResponse: null,
                 feedAllocations: [],
               });
               setModalOpen(true);
@@ -791,7 +807,11 @@ export default function FeedRecordsPage() {
           getTone={(pond) => getLatestFeed(pond as Pond) ? 'stable' : 'neutral'}
           getSubtitle={(pond) => {
             const latest = getLatestFeed(pond as Pond);
-            return latest ? `${latest.totalDailyFeed} kg` : undefined;
+            if (!latest) return undefined;
+            const response = latest.feedingResponse
+              ? feedingResponseLabels[latest.feedingResponse]
+              : null;
+            return `${latest.totalDailyFeed} kg${response ? ` · ${response}` : ''}`;
           }}
           onSelect={(pond) => openHistoryDrawer(pond.id)}
         />
@@ -805,7 +825,7 @@ export default function FeedRecordsPage() {
                   <div className="feed-pond-identity">
                     <div>
                       <h3>{pond.pondName}</h3>
-                      <p>{latest ? 'Daily feeding active' : 'No recent logs'}</p>
+                      <p>{latest ? new Date(latest.date).toLocaleDateString() : 'No recent logs'}</p>
                     </div>
                   </div>
                   <button
@@ -825,6 +845,12 @@ export default function FeedRecordsPage() {
                       {latest ? latest.totalDailyFeed : '--'} <small>kg</small>
                     </div>
                   </div>
+                  <div className="feed-pond-response">
+                    <span>{t.feed.feedingResponse}</span>
+                    <div>
+                      {latest?.feedingResponse ? feedingResponseLabels[latest.feedingResponse] : '--'}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="feed-pond-actions">
@@ -837,6 +863,7 @@ export default function FeedRecordsPage() {
                           pondId: pond.id,
                           date: today,
                           totalDailyFeed: '',
+                          feedingResponse: null,
                           feedAllocations: [],
                         });
                         setModalOpen(true);
@@ -1147,6 +1174,31 @@ export default function FeedRecordsPage() {
                     value={formAllocationTotal.toFixed(2)}
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: '#edf3f8', fontWeight: 600, color: 'var(--primary)' }}
                   />
+                </div>
+
+                <div className="feed-response-field" style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.feed.feedingResponseOptional}</label>
+                  <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{t.feed.feedingResponseHint}</p>
+                  <div className="feed-response-options" role="radiogroup" aria-label={t.feed.feedingResponseOptional}>
+                    {(['strong', 'normal', 'weak'] as FeedingResponse[]).map((response) => {
+                      const selected = formData.feedingResponse === response;
+                      return (
+                        <button
+                          key={response}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          className={`feed-response-option${selected ? ' is-selected' : ''}`}
+                          onClick={() => setFormData((current) => ({
+                            ...current,
+                            feedingResponse: selected ? null : response,
+                          }))}
+                        >
+                          {feedingResponseLabels[response]}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
               </div>
