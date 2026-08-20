@@ -269,7 +269,7 @@ Final response should include:
 When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to execute this 3-step production release workflow:
 
 1. **Commit to Git:** Run relevant checks, commit changes with a clear message, and push the branch to GitHub.
-2. **Deploy Production Vercel:** Deploy the web app to Vercel production and verify the deployment.
+2. **Deploy Production Vercel:** Deploy the web app through the Vercel project `out`, verify that `https://www.shrimplytech.com` points to the new production deployment, and confirm the live URL returns successfully. A preview URL or the separate `web` project does not complete `SHIPALL`/`PUSHALL`.
 3. **Push OTA Update:** Publish an Expo/EAS OTA update to the production channel and verify it points to the new release.
 4. Report the Git commit hash, branch, Vercel production URL, and Expo update URL.
 
