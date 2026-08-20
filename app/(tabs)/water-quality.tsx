@@ -153,6 +153,7 @@ export default function WaterQualityScreen() {
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOptionalConditionsExpanded, setIsOptionalConditionsExpanded] = useState(false);
   const [isLabUploading, setIsLabUploading] = useState(false);
   const [isConfirmingLab, setIsConfirmingLab] = useState(false);
   const [isLabActionModalVisible, setIsLabActionModalVisible] = useState(false);
@@ -171,6 +172,7 @@ export default function WaterQualityScreen() {
     if (isModalVisible) {
       submitLockRef.current = false;
       setIsSubmitting(false);
+      setIsOptionalConditionsExpanded(false);
     }
   }, [isModalVisible]);
 
@@ -1139,10 +1141,25 @@ export default function WaterQualityScreen() {
                 </View>
 
                 <View style={styles.optionalSection}>
-                  <Text style={styles.optionalSectionTitle}>{t.waterQuality.optionalPondConditions}</Text>
-                  <Text style={styles.optionalSectionHint}>{t.waterQuality.optionalPondConditionsHint}</Text>
+                  <TouchableOpacity
+                    style={styles.optionalSectionToggle}
+                    onPress={() => setIsOptionalConditionsExpanded(prev => !prev)}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: isOptionalConditionsExpanded }}
+                  >
+                    <View style={styles.optionalSectionHeading}>
+                      <Text style={styles.optionalSectionTitle}>{t.waterQuality.optionalPondConditions}</Text>
+                      <Text style={styles.optionalSectionHint}>{t.waterQuality.optionalPondConditionsHint}</Text>
+                    </View>
+                    <Ionicons
+                      name={isOptionalConditionsExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
+                      size={20}
+                      color="#0F4C75"
+                    />
+                  </TouchableOpacity>
 
-                  <View style={styles.row}>
+                  {isOptionalConditionsExpanded && <View style={styles.optionalSectionContent}>
+                    <View style={styles.row}>
                     <View style={styles.inputGroup}>
                       <Input label={`${t.waterQuality.temperature} (°C)`} value={values.temperature} onChange={updateValue('temperature')} placeholder="e.g., 29" />
                     </View>
@@ -1216,6 +1233,7 @@ export default function WaterQualityScreen() {
                       </TouchableOpacity>
                     ))}
                   </View>
+                  </View>}
                 </View>
 
                 <View style={styles.buttonContainer}>
@@ -1517,9 +1535,12 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 0 },
   inputGroup: { flex: 1 },
-  optionalSection: { marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e8f2f9' },
+  optionalSection: { marginTop: 4, borderTopWidth: 1, borderTopColor: '#e8f2f9' },
+  optionalSectionToggle: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 15 },
+  optionalSectionHeading: { flex: 1 },
+  optionalSectionContent: { paddingTop: 2 },
   optionalSectionTitle: { color: '#0d2137', fontSize: 15, fontWeight: '900' },
-  optionalSectionHint: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', lineHeight: 17, marginTop: 4, marginBottom: 14 },
+  optionalSectionHint: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', lineHeight: 17, marginTop: 4 },
   conditionLabel: { color: '#0d2137', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 4 },
   conditionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
   conditionOption: { backgroundColor: '#f4f8fc', borderRadius: 999, borderWidth: 1, borderColor: '#dbe9f2', paddingHorizontal: 13, paddingVertical: 9 },
