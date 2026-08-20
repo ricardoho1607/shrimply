@@ -64,6 +64,8 @@ import {
   getAssignedEnterpriseBlockIds,
   type FarmBlock,
 } from '../../../../../../shared/enterpriseBlocks';
+import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
+import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -131,6 +133,7 @@ interface Pond {
       plankton?: LabReportStatus;
     };
   };
+  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
   cycleId?: string;
   cycleName?: string;
   pondCycleId?: string;
@@ -1344,6 +1347,8 @@ export default function PondDetailClient() {
 
         {/* Right Sidebar */}
         <div className="animate-fade-up animate-delay-3 pond-detail-side-column">
+          <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} />
+
           <div className="glass-card" style={{ padding: '20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>

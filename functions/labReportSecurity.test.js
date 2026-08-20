@@ -15,6 +15,10 @@ test("confirmed lab processing bounds client-controlled ponds before server writ
   assert.match(rules, /match \/labReports\/\{labReportId\}[\s\S]*?resource\.data\.status != 'confirmed'/);
 });
 
+test("plankton overwatch history is company-readable and client-write protected", () => {
+  assert.match(rules, /match \/planktonOverwatchHistory\/\{evaluationId\}[\s\S]*?allow read: if isFounderAdmin\(\) \|\| isCompanyMember\(companyId\);[\s\S]*?allow write: if isFounderAdmin\(\);/);
+});
+
 test("confirmed lab AI has a company limit with deterministic fallback", () => {
   assert.match(functionsSource, /namespace: "labInsightsCompanyDaily"/);
   assert.match(functionsSource, /limit: 10,[\s\S]*?windowMs: DAY_MS/);

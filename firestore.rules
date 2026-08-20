@@ -844,6 +844,11 @@ service cloud.firestore {
           allow read: if isFounderAdmin() || isCompanyMember(companyId);
           allow write: if isFounderAdmin();
         }
+
+        match /planktonOverwatchHistory/{evaluationId} {
+          allow read: if isFounderAdmin() || isCompanyMember(companyId);
+          allow write: if isFounderAdmin();
+        }
       }
 
       match /labReports/{labReportId} {

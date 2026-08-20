@@ -38,3 +38,12 @@ test('water quality modals use compact options and the authenticated primary act
   assert.match(pageSource, /disabled=\{!formData\.pondId\} className="water-save-log-button"/);
   assert.match(globalStyles, /\.water-save-log-button:disabled\s*\{[\s\S]*background:\s*var\(--bg-mid\)/);
 });
+
+test('water quality shows Plankton Overwatch and keeps pond-condition evidence optional', () => {
+  assert.match(pageSource, /<PlanktonOverwatchCard snapshot=\{pond\.latestPlanktonOverwatch\} compact \/>/);
+  assert.match(pageSource, />Optional Pond Conditions</);
+  assert.match(pageSource, /weatherEvent: null as Sampling\['weatherEvent'\]/);
+  assert.match(pageSource, /surfaceScum: null as boolean \| null/);
+  assert.match(pageSource, /shrimpBehaviour: formData\.shrimpBehaviour/);
+  assert.match(pageSource, /prev\.surfaceScum === value \? null : value/);
+});

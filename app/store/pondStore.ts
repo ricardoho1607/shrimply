@@ -16,6 +16,7 @@ import {
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
+import type { PlanktonOverwatchSnapshot } from '../../shared/planktonOverwatch';
 
 export {
   getPondBaselineFeed,
@@ -90,11 +91,17 @@ export interface Sampling {
   isBaselineEstimate?: boolean; source?: 'midcycle_onboarding' | string;
   estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
+  temperature?: string;
+  weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent?: string;
+  sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+  surfaceScum?: boolean | null;
+  shrimpBehaviour?: 'normal' | 'abnormal' | null;
   feedData?: FeedData; harvestData?: HarvestData;
 }
 
 export const hasWaterQualityData = (
-  sampling: Pick<Sampling, 'phMorning' | 'phEvening' | 'doMorning' | 'doEvening' | 'transparency' | 'salinity'>,
+  sampling: Pick<Sampling, 'phMorning' | 'phEvening' | 'doMorning' | 'doEvening' | 'transparency' | 'salinity' | 'temperature' | 'weatherEvent' | 'waterExchangePercent' | 'sludgeLoad' | 'surfaceScum' | 'shrimpBehaviour'>,
 ): boolean => [
   sampling.phMorning,
   sampling.phEvening,
@@ -102,6 +109,12 @@ export const hasWaterQualityData = (
   sampling.doEvening,
   sampling.transparency,
   sampling.salinity,
+  sampling.temperature,
+  sampling.weatherEvent,
+  sampling.waterExchangePercent,
+  sampling.sludgeLoad,
+  sampling.surfaceScum,
+  sampling.shrimpBehaviour,
 ].some((value) => value !== null && value !== undefined && String(value).trim() !== '');
 
 export interface MortalityRecord {
@@ -151,6 +164,7 @@ export interface Pond {
       plankton?: LabReportStatus;
     };
   };
+  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: PondCycleStatus; cycleStartedAt?: string; cycleEndedAt?: string; cycleEndedBy?: string; cycleEndReason?: PondCycleEndReason; previousCyclePondId?: string;
   cycleStartMode?: CycleStartMode;
@@ -214,7 +228,7 @@ interface PondStore {
   addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
-  addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; }) => void;
+  addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
   addFeedData: (pondId: string, record: FeedData, date: string) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
@@ -756,7 +770,22 @@ export const usePondStore = create<PondStore>()(
             
             let updatedSamplings;
             if (todayWQIndex >= 0) {
-              updatedSamplings = p.samplings.map((s, index) => index === todayWQIndex ? { ...s, ...cycleFields, phMorning: record.phMorning || s.phMorning, phEvening: record.phEvening || s.phEvening, doMorning: record.doMorning || s.doMorning, doEvening: record.doEvening || s.doEvening, transparency: record.transparency || s.transparency, salinity: record.salinity || s.salinity } : s);
+              updatedSamplings = p.samplings.map((s, index) => index === todayWQIndex ? {
+                ...s,
+                ...cycleFields,
+                phMorning: record.phMorning || s.phMorning,
+                phEvening: record.phEvening || s.phEvening,
+                doMorning: record.doMorning || s.doMorning,
+                doEvening: record.doEvening || s.doEvening,
+                transparency: record.transparency || s.transparency,
+                salinity: record.salinity || s.salinity,
+                temperature: record.temperature || s.temperature,
+                weatherEvent: record.weatherEvent ?? null,
+                waterExchangePercent: record.waterExchangePercent || s.waterExchangePercent,
+                sludgeLoad: record.sludgeLoad ?? null,
+                surfaceScum: record.surfaceScum ?? null,
+                shrimpBehaviour: record.shrimpBehaviour ?? null,
+              } : s);
             } else {
               updatedSamplings = [...p.samplings, { id: `wq-${Date.now()}`, date: today, mbw: 0, mortality: 0, feed: 0, ...cycleFields, ...record }];
             }

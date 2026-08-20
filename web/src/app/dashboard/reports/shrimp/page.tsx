@@ -31,6 +31,7 @@ import {
   type SamplingReportData,
 } from '@/lib/generated/mobileSamplingReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
+import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -76,6 +77,7 @@ interface Pond {
     keyRisks?: string[];
     recommendations?: string[];
   };
+  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
 }
 
 interface FarmCycle {
@@ -432,6 +434,7 @@ export default function ShrimpReportsPage() {
           initialStock: initialPopulation,
           density: toFiniteNumber(pond.density),
           latestLabStatus: pond.latestLabStatus,
+          latestPlanktonOverwatch: pond.latestPlanktonOverwatch,
           isMidcycleBaseline: pond.cycleStartMode === 'midcycle',
           baselineDate: pond.baselineDate,
           samplingHistory,

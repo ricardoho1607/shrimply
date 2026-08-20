@@ -36,6 +36,7 @@ export const runNormalizePondDataSelfTest = () => {
           feedData: {
             totalDailyFeed: '52',
             inventoryFeedId: 'feed-a',
+            feedingResponse: 'strong',
           },
         },
         {
@@ -75,6 +76,7 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.records[0].kinds.includes('water_quality'), 'detects water-quality record');
   assert(!pond.records[0].kinds.includes('feed'), 'does not treat zero-feed water-quality entry as feed');
   assert(pond.records[1].feedKg === 52, 'uses feedData total daily feed');
+  assert(pond.records[1].feedData?.feedingResponse === 'strong', 'keeps direct feeding response separate from feed quantity');
   assert(pond.records[2].kinds.includes('sampling'), 'detects sampling record');
   assert(pond.records[2].mbwG === 1.2, 'normalizes MBW');
   assert(pond.records[3].kinds.includes('mortality'), 'detects daily mortality record');

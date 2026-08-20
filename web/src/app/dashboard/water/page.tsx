@@ -37,6 +37,8 @@ import {
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
 import { toggleUniqueLabPondRow } from './labRowState';
+import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
+import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -46,6 +48,12 @@ interface Sampling {
   feedData?: { totalDailyFeed?: number | string | null } | null; harvestData?: unknown;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
+  temperature?: string;
+  weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent?: string;
+  sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+  surfaceScum?: boolean | null;
+  shrimpBehaviour?: 'normal' | 'abnormal' | null;
 }
 
 interface Pond {
@@ -53,6 +61,7 @@ interface Pond {
   blockId?: string;
   blockName?: string;
   latestLabStatus?: LabStatus;
+  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   createdAt?: { toDate?: () => Date; seconds?: number };
@@ -231,7 +240,13 @@ export default function WaterQualityPage() {
     doMorning: '',
     doEvening: '',
     transparency: '',
-    salinity: ''
+    salinity: '',
+    temperature: '',
+    weatherEvent: null as Sampling['weatherEvent'],
+    waterExchangePercent: '',
+    sludgeLoad: null as Sampling['sludgeLoad'],
+    surfaceScum: null as boolean | null,
+    shrimpBehaviour: null as Sampling['shrimpBehaviour'],
   });
   const [labForm, setLabForm] = useState({
     reportType: 'water_quality' as LabReportType,
@@ -319,7 +334,13 @@ export default function WaterQualityPage() {
           prev.doMorning === (existing.doMorning || '') &&
           prev.doEvening === (existing.doEvening || '') &&
           prev.transparency === (existing.transparency || '') &&
-          prev.salinity === (existing.salinity || '')
+          prev.salinity === (existing.salinity || '') &&
+          prev.temperature === (existing.temperature || '') &&
+          prev.weatherEvent === (existing.weatherEvent || null) &&
+          prev.waterExchangePercent === (existing.waterExchangePercent || '') &&
+          prev.sludgeLoad === (existing.sludgeLoad || null) &&
+          prev.surfaceScum === (existing.surfaceScum ?? null) &&
+          prev.shrimpBehaviour === (existing.shrimpBehaviour || null)
         ) return prev;
 
         return {
@@ -330,6 +351,12 @@ export default function WaterQualityPage() {
           doEvening: existing.doEvening || '',
           transparency: existing.transparency || '',
           salinity: existing.salinity || '',
+          temperature: existing.temperature || '',
+          weatherEvent: existing.weatherEvent || null,
+          waterExchangePercent: existing.waterExchangePercent || '',
+          sludgeLoad: existing.sludgeLoad || null,
+          surfaceScum: existing.surfaceScum ?? null,
+          shrimpBehaviour: existing.shrimpBehaviour || null,
         };
       });
     } else {
@@ -337,7 +364,9 @@ export default function WaterQualityPage() {
         // Only clear if not already empty
         if (
           !prev.phMorning && !prev.phEvening && !prev.doMorning &&
-          !prev.doEvening && !prev.transparency && !prev.salinity
+          !prev.doEvening && !prev.transparency && !prev.salinity && !prev.temperature &&
+          !prev.weatherEvent && !prev.waterExchangePercent && !prev.sludgeLoad &&
+          prev.surfaceScum === null && !prev.shrimpBehaviour
         ) return prev;
 
         return {
@@ -347,7 +376,13 @@ export default function WaterQualityPage() {
           doMorning: '',
           doEvening: '',
           transparency: '',
-          salinity: ''
+          salinity: '',
+          temperature: '',
+          weatherEvent: null,
+          waterExchangePercent: '',
+          sludgeLoad: null,
+          surfaceScum: null,
+          shrimpBehaviour: null,
         };
       });
     }
@@ -386,6 +421,12 @@ export default function WaterQualityPage() {
           doEvening: formData.doEvening,
           transparency: formData.transparency,
           salinity: formData.salinity,
+          temperature: formData.temperature,
+          weatherEvent: formData.weatherEvent,
+          waterExchangePercent: formData.waterExchangePercent,
+          sludgeLoad: formData.sludgeLoad,
+          surfaceScum: formData.surfaceScum,
+          shrimpBehaviour: formData.shrimpBehaviour,
         };
 
         if (existingIndex >= 0) {
@@ -400,6 +441,12 @@ export default function WaterQualityPage() {
             doEvening: formData.doEvening || samplings[existingIndex].doEvening || '',
             transparency: formData.transparency || samplings[existingIndex].transparency || '',
             salinity: formData.salinity || samplings[existingIndex].salinity || '',
+            temperature: formData.temperature || samplings[existingIndex].temperature || '',
+            weatherEvent: formData.weatherEvent,
+            waterExchangePercent: formData.waterExchangePercent,
+            sludgeLoad: formData.sludgeLoad,
+            surfaceScum: formData.surfaceScum,
+            shrimpBehaviour: formData.shrimpBehaviour,
           };
         } else {
           samplings.push({
@@ -425,7 +472,13 @@ export default function WaterQualityPage() {
           doMorning: '',
           doEvening: '',
           transparency: '',
-          salinity: ''
+          salinity: '',
+          temperature: '',
+          weatherEvent: null,
+          waterExchangePercent: '',
+          sludgeLoad: null,
+          surfaceScum: null,
+          shrimpBehaviour: null,
         });
       }
     } catch (error) {
@@ -1094,6 +1147,8 @@ export default function WaterQualityPage() {
                   </div>
                 )}
 
+                <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} compact />
+
                 <div className="water-metric-grid">
                   <div className="wq-metric">
                     <span className="wq-label">pH Level</span>
@@ -1737,6 +1792,77 @@ export default function WaterQualityPage() {
                   <label className="form-label">Transparency (CM)</label>
                   <input type="number" placeholder="0" value={formData.transparency} onChange={e => setFormData({...formData, transparency: e.target.value})} className="form-input" />
                 </div>
+
+                <div className="water-optional-heading">
+                  <strong>Optional Pond Conditions</strong>
+                  <span>Add only what was directly observed today.</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">Temperature (°C)</label>
+                  <input type="number" step="0.1" placeholder="29" value={formData.temperature} onChange={e => setFormData({...formData, temperature: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">Water Exchange (%)</label>
+                  <input type="number" step="0.1" placeholder="10" value={formData.waterExchangePercent} onChange={e => setFormData({...formData, waterExchangePercent: e.target.value})} className="form-input" />
+                </div>
+
+                <div className="water-condition-group">
+                  <label className="form-label">Weather Event</label>
+                  <div className="water-condition-options">
+                    {([['rain', 'Rain'], ['heavy_rain', 'Heavy Rain'], ['sudden_cloud', 'Sudden Cloud']] as const).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className={`water-condition-option ${formData.weatherEvent === value ? 'selected' : ''}`}
+                        onClick={() => setFormData(prev => ({ ...prev, weatherEvent: prev.weatherEvent === value ? null : value }))}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="water-condition-group">
+                  <label className="form-label">Sludge Load</label>
+                  <div className="water-condition-options">
+                    {([['low', 'Low'], ['moderate', 'Moderate'], ['high', 'High']] as const).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className={`water-condition-option ${formData.sludgeLoad === value ? 'selected' : ''}`}
+                        onClick={() => setFormData(prev => ({ ...prev, sludgeLoad: prev.sludgeLoad === value ? null : value }))}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="water-condition-group">
+                  <label className="form-label">Surface Scum</label>
+                  <div className="water-condition-options">
+                    {([[true, 'Observed'], [false, 'Not observed']] as const).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={String(value)}
+                        className={`water-condition-option ${formData.surfaceScum === value ? 'selected' : ''}`}
+                        onClick={() => setFormData(prev => ({ ...prev, surfaceScum: prev.surfaceScum === value ? null : value }))}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="water-condition-group">
+                  <label className="form-label">Shrimp Behaviour</label>
+                  <div className="water-condition-options">
+                    {([['normal', 'Normal'], ['abnormal', 'Abnormal']] as const).map(([value, label]) => (
+                      <button
+                        type="button"
+                        key={value}
+                        className={`water-condition-option ${formData.shrimpBehaviour === value ? 'selected' : ''}`}
+                        onClick={() => setFormData(prev => ({ ...prev, shrimpBehaviour: prev.shrimpBehaviour === value ? null : value }))}
+                      >{label}</button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               <div className="responsive-modal-footer water-log-footer">
@@ -1850,6 +1976,50 @@ export default function WaterQualityPage() {
           border-color: var(--primary);
           background: #FFF;
           box-shadow: 0 0 0 4px var(--primary-dim);
+        }
+        .water-optional-heading {
+          grid-column: span 2;
+          border-top: 1px solid var(--border);
+          padding-top: 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+          color: var(--text-primary);
+        }
+        .water-optional-heading span {
+          color: var(--text-faint);
+          font-size: 0.8rem;
+          font-weight: 600;
+        }
+        .water-condition-group {
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+        .water-condition-options {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+        }
+        .water-condition-option {
+          border: 1px solid var(--border);
+          background: var(--bg-mid);
+          color: var(--text-muted);
+          border-radius: 999px;
+          padding: 9px 12px;
+          font-size: 0.78rem;
+          font-weight: 700;
+          cursor: pointer;
+        }
+        .water-condition-option.selected {
+          background: var(--primary);
+          border-color: var(--primary);
+          color: #FFF;
+        }
+        @media (max-width: 640px) {
+          .water-optional-heading {
+            grid-column: span 1;
+          }
         }
       `}</style>
     </div>

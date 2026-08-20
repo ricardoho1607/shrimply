@@ -14,6 +14,7 @@ import { getFarmDateKey } from '../../shared/farmDate';
 import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
+import PlanktonOverwatchCard from '../components/PlanktonOverwatchCard';
 
 interface MobileLabReport {
   id: string;
@@ -45,6 +46,40 @@ type LabPdfUsage = Partial<Record<LabPdfUsageType, {
 const LAB_PDF_PENDING_MS = 10 * 60 * 1000;
 const MAX_LAB_PDF_BYTES = 10 * 1024 * 1024;
 const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+type WeatherEvent = 'rain' | 'heavy_rain' | 'sudden_cloud';
+type SludgeLoad = 'low' | 'moderate' | 'high';
+type ShrimpBehaviour = 'normal' | 'abnormal';
+
+interface WaterQualityValues {
+  phMorning: string;
+  phEvening: string;
+  doMorning: string;
+  doEvening: string;
+  transparency: string;
+  salinity: string;
+  temperature: string;
+  weatherEvent: WeatherEvent | null;
+  waterExchangePercent: string;
+  sludgeLoad: SludgeLoad | null;
+  surfaceScum: boolean | null;
+  shrimpBehaviour: ShrimpBehaviour | null;
+}
+
+const createEmptyWaterQualityValues = (): WaterQualityValues => ({
+  phMorning: '',
+  phEvening: '',
+  doMorning: '',
+  doEvening: '',
+  transparency: '',
+  salinity: '',
+  temperature: '',
+  weatherEvent: null,
+  waterExchangePercent: '',
+  sludgeLoad: null,
+  surfaceScum: null,
+  shrimpBehaviour: null,
+});
 
 const waitForNativePickerWindow = () => new Promise<void>((resolve) => {
   InteractionManager.runAfterInteractions(() => {
@@ -130,9 +165,7 @@ export default function WaterQualityScreen() {
   const [expandedLabHistoryDates, setExpandedLabHistoryDates] = useState<Record<string, boolean>>({});
   const submitLockRef = useRef(false);
   const labPickerLockRef = useRef(false);
-  const [values, setValues] = useState({
-    phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: ""
-  });
+  const [values, setValues] = useState<WaterQualityValues>(createEmptyWaterQualityValues);
 
   React.useEffect(() => {
     if (isModalVisible) {
@@ -267,10 +300,11 @@ export default function WaterQualityScreen() {
     const today = getFarmDateKey(new Date(), company?.timeZone);
     return activePonds.map((p) => {
       const todayWQRecord = p.samplings.find(s => s.date === today && hasWaterQualityData(s));
-      return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
+      return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName, latestPlanktonOverwatch: p.latestPlanktonOverwatch } : {
         id: `temp-${p.id}`, date: today, mbw: 0, mortality: 0, feed: 0,
         phMorning: undefined, phEvening: undefined, doMorning: undefined, 
-        doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName
+        doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName,
+        latestPlanktonOverwatch: p.latestPlanktonOverwatch,
       };
     });
   }, [activePonds, company?.timeZone]);
@@ -302,8 +336,11 @@ export default function WaterQualityScreen() {
       phMorning: values.phMorning.trim(), phEvening: values.phEvening.trim(),
       doMorning: values.doMorning.trim(), doEvening: values.doEvening.trim(),
       transparency: values.transparency.trim(), salinity: values.salinity.trim(),
+      temperature: values.temperature.trim(), weatherEvent: values.weatherEvent,
+      waterExchangePercent: values.waterExchangePercent.trim(), sludgeLoad: values.sludgeLoad,
+      surfaceScum: values.surfaceScum, shrimpBehaviour: values.shrimpBehaviour,
     });
-    setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
+    setValues(createEmptyWaterQualityValues());
     setSelectedPond(null);
     setIsModalVisible(false);
   }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t]);
@@ -317,11 +354,14 @@ export default function WaterQualityScreen() {
       phMorning: todayWQRecord.phMorning || "", phEvening: todayWQRecord.phEvening || "",
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
       transparency: todayWQRecord.transparency || "", salinity: todayWQRecord.salinity || "",
-    } : { phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
+      temperature: todayWQRecord.temperature || '', weatherEvent: todayWQRecord.weatherEvent || null,
+      waterExchangePercent: todayWQRecord.waterExchangePercent || '', sludgeLoad: todayWQRecord.sludgeLoad || null,
+      surfaceScum: todayWQRecord.surfaceScum ?? null, shrimpBehaviour: todayWQRecord.shrimpBehaviour || null,
+    } : createEmptyWaterQualityValues());
   }, [company?.timeZone, ponds]);
 
   const closeModal = useCallback(() => {
-    setValues({ phMorning: "", phEvening: "", doMorning: "", doEvening: "", transparency: "", salinity: "" });
+    setValues(createEmptyWaterQualityValues());
     setSelectedPond(null);
     submitLockRef.current = false;
     setIsSubmitting(false);
@@ -773,6 +813,7 @@ export default function WaterQualityScreen() {
                     <Parameter icon="water-outline" label={t.waterQuality.salinity} value={`${rec.salinity || "N/A"} ppt`} color="#0d2137" />
                   </View>
                 </View>
+                <PlanktonOverwatchCard snapshot={rec.latestPlanktonOverwatch} compact />
               </TouchableOpacity>
           )}
         />
@@ -891,6 +932,7 @@ export default function WaterQualityScreen() {
                       );
                     })}
                   </View>
+                  <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} compact />
                   <View style={styles.labCardFooter}>
                     <Text style={styles.labCardFooterText}>{t.waterQuality.tapToViewReportHistoryPdf}</Text>
                     <Ionicons name="document-text-outline" size={15} color="#315f57" />
@@ -1093,6 +1135,86 @@ export default function WaterQualityScreen() {
                   </View>
                   <View style={styles.inputGroup}>
                     <Input label={`${t.waterQuality.doEvening} 🌙`} value={values.doEvening} onChange={updateValue('doEvening')} placeholder={t.waterQuality.doPlaceholder} />
+                  </View>
+                </View>
+
+                <View style={styles.optionalSection}>
+                  <Text style={styles.optionalSectionTitle}>{t.waterQuality.optionalPondConditions}</Text>
+                  <Text style={styles.optionalSectionHint}>{t.waterQuality.optionalPondConditionsHint}</Text>
+
+                  <View style={styles.row}>
+                    <View style={styles.inputGroup}>
+                      <Input label={`${t.waterQuality.temperature} (°C)`} value={values.temperature} onChange={updateValue('temperature')} placeholder="e.g., 29" />
+                    </View>
+                    <View style={styles.inputGroup}>
+                      <Input label={t.waterQuality.waterExchangePercent} value={values.waterExchangePercent} onChange={updateValue('waterExchangePercent')} placeholder="e.g., 10" />
+                    </View>
+                  </View>
+
+                  <Text style={styles.conditionLabel}>{t.waterQuality.weatherEvent}</Text>
+                  <View style={styles.conditionOptions}>
+                    {([
+                      ['rain', t.waterQuality.rain],
+                      ['heavy_rain', t.waterQuality.heavyRain],
+                      ['sudden_cloud', t.waterQuality.suddenCloud],
+                    ] as const).map(([value, label]) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.conditionOption, values.weatherEvent === value && styles.conditionOptionSelected]}
+                        onPress={() => setValues(prev => ({ ...prev, weatherEvent: prev.weatherEvent === value ? null : value }))}
+                      >
+                        <Text style={[styles.conditionOptionText, values.weatherEvent === value && styles.conditionOptionTextSelected]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.conditionLabel}>{t.waterQuality.sludgeLoad}</Text>
+                  <View style={styles.conditionOptions}>
+                    {([
+                      ['low', t.waterQuality.conditionLow],
+                      ['moderate', t.waterQuality.conditionModerate],
+                      ['high', t.waterQuality.conditionHigh],
+                    ] as const).map(([value, label]) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.conditionOption, values.sludgeLoad === value && styles.conditionOptionSelected]}
+                        onPress={() => setValues(prev => ({ ...prev, sludgeLoad: prev.sludgeLoad === value ? null : value }))}
+                      >
+                        <Text style={[styles.conditionOptionText, values.sludgeLoad === value && styles.conditionOptionTextSelected]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.conditionLabel}>{t.waterQuality.surfaceScum}</Text>
+                  <View style={styles.conditionOptions}>
+                    {([
+                      [true, t.waterQuality.surfaceScumObserved],
+                      [false, t.waterQuality.notObserved],
+                    ] as const).map(([value, label]) => (
+                      <TouchableOpacity
+                        key={String(value)}
+                        style={[styles.conditionOption, values.surfaceScum === value && styles.conditionOptionSelected]}
+                        onPress={() => setValues(prev => ({ ...prev, surfaceScum: prev.surfaceScum === value ? null : value }))}
+                      >
+                        <Text style={[styles.conditionOptionText, values.surfaceScum === value && styles.conditionOptionTextSelected]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <Text style={styles.conditionLabel}>{t.waterQuality.shrimpBehaviour}</Text>
+                  <View style={styles.conditionOptions}>
+                    {([
+                      ['normal', t.waterQuality.behaviourNormal],
+                      ['abnormal', t.waterQuality.behaviourAbnormal],
+                    ] as const).map(([value, label]) => (
+                      <TouchableOpacity
+                        key={value}
+                        style={[styles.conditionOption, values.shrimpBehaviour === value && styles.conditionOptionSelected]}
+                        onPress={() => setValues(prev => ({ ...prev, shrimpBehaviour: prev.shrimpBehaviour === value ? null : value }))}
+                      >
+                        <Text style={[styles.conditionOptionText, values.shrimpBehaviour === value && styles.conditionOptionTextSelected]}>{label}</Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
                 </View>
 
@@ -1395,6 +1517,15 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: '#e8f2f9', padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, backgroundColor: '#f4f8fc', color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, includeFontPadding: false, textAlignVertical: 'center' },
   row: { flexDirection: 'row', gap: 12, marginBottom: 0 },
   inputGroup: { flex: 1 },
+  optionalSection: { marginTop: 4, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#e8f2f9' },
+  optionalSectionTitle: { color: '#0d2137', fontSize: 15, fontWeight: '900' },
+  optionalSectionHint: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', lineHeight: 17, marginTop: 4, marginBottom: 14 },
+  conditionLabel: { color: '#0d2137', fontSize: 13, fontWeight: '700', marginBottom: 7, marginTop: 4 },
+  conditionOptions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 },
+  conditionOption: { backgroundColor: '#f4f8fc', borderRadius: 999, borderWidth: 1, borderColor: '#dbe9f2', paddingHorizontal: 13, paddingVertical: 9 },
+  conditionOptionSelected: { backgroundColor: '#0d2137', borderColor: '#0d2137' },
+  conditionOptionText: { color: '#315f57', fontSize: 12, fontWeight: '800' },
+  conditionOptionTextSelected: { color: '#FFFFFF' },
   pondSelector: { maxHeight: 50 },
   pondOption: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, marginRight: 8, backgroundColor: '#FFFFFF', borderRadius: 20, borderWidth: 1, borderColor: '#e8f2f9' },
   pondOptionSelected: { backgroundColor: '#0d2137', borderColor: '#0d2137' },

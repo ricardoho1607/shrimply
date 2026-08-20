@@ -3,6 +3,7 @@ export type OrsonNumber = number | null;
 export interface OrsonNormalizedFeedData {
   totalDailyFeedKg: OrsonNumber;
   inventoryFeedId: string | null;
+  feedingResponse: 'strong' | 'normal' | 'weak' | null;
 }
 
 export type OrsonAnalysisMode = 'standard' | 'mortality_diagnostic';
@@ -25,6 +26,24 @@ export interface OrsonLabContext {
   unresolvedRisks: string[];
   recommendations: string[];
   worstStatus: OrsonLabStatusLevel | null;
+}
+
+export interface OrsonPlanktonOverwatchContext {
+  state: 'insufficient' | 'stable' | 'watch' | 'high' | 'critical';
+  message: string;
+  signals: { id: string; evidence: string; recommendation: string }[];
+  recommendations: string[];
+  missingData: string[];
+  sourceDate: string | null;
+  metrics: {
+    totalPlanktonCellPerMl: OrsonNumber;
+    cyanobacteriaPercent: OrsonNumber;
+    cyanobacteriaCellPerMl: OrsonNumber;
+    planktonChangePercent: OrsonNumber;
+    dawnDo: OrsonNumber;
+    phSwing: OrsonNumber;
+    feedingResponse: 'strong' | 'normal' | 'weak' | null;
+  };
 }
 
 export type OrsonRecordKind = 'sampling' | 'mortality' | 'water_quality' | 'feed' | 'harvest' | 'unknown';
@@ -84,6 +103,7 @@ export interface OrsonNormalizedPond {
   supplier: string | null;
   cycleStatus: 'active' | 'ended';
   labContext: OrsonLabContext;
+  planktonOverwatch: OrsonPlanktonOverwatchContext | null;
   treatments: OrsonPromptTreatmentEvent[];
   historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   records: OrsonNormalizedRecord[];
@@ -193,6 +213,7 @@ export interface OrsonPondMetrics {
   feedAllocationTrend: OrsonTrendResult;
   mortalityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
+  planktonOverwatch: OrsonPlanktonOverwatchContext | null;
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
   recentTreatments: OrsonPromptTreatmentEvent[];
@@ -273,6 +294,7 @@ export interface OrsonPromptDailyRecord {
   salinityPpt: OrsonNumber;
   temperatureC?: OrsonNumber;
   transparencyCm?: OrsonNumber;
+  feedingResponse?: 'strong' | 'normal' | 'weak' | null;
 }
 
 export interface OrsonPromptLabReport {
@@ -340,6 +362,7 @@ export interface OrsonPromptPondPayload {
   doMinimumLatest: OrsonNumber;
   salinityTrend: OrsonTrendResult;
   labContext: OrsonLabContext;
+  planktonOverwatch: OrsonPlanktonOverwatchContext | null;
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
   recentTreatments: OrsonPromptTreatmentEvent[];

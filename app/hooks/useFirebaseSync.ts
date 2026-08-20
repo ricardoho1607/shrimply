@@ -392,6 +392,7 @@ const useFirebaseSyncController = () => {
                 postHarvestReferenceSamplingDate: data.postHarvestReferenceSamplingDate ?? null,
                 postHarvestReferenceMbw: data.postHarvestReferenceMbw ?? null,
                 latestLabStatus: data.latestLabStatus,
+                latestPlanktonOverwatch: data.latestPlanktonOverwatch,
                 cycleId: data.cycleId,
                 cycleName: data.cycleName,
                 pondCycleId: data.pondCycleId || doc.id,

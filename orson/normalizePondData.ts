@@ -7,6 +7,7 @@ import type {
   OrsonNormalizedPond,
   OrsonNormalizedRecord,
   OrsonNumber,
+  OrsonPlanktonOverwatchContext,
   OrsonPromptHistoricalBenchmark,
   OrsonPromptTreatmentEvent,
   OrsonRecordKind,
@@ -200,6 +201,44 @@ const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
   };
 };
 
+const normalizePlanktonOverwatch = (value: unknown): OrsonPlanktonOverwatchContext | null => {
+  if (!value || typeof value !== 'object') return null;
+  const raw = value as RawPond;
+  const state = firstString(raw.state);
+  if (!state || !['insufficient', 'stable', 'watch', 'high', 'critical'].includes(state)) return null;
+  const rawSignals = Array.isArray(raw.signals) ? raw.signals : [];
+  const rawMetrics = raw.metrics && typeof raw.metrics === 'object' ? raw.metrics as RawPond : {};
+  const feedingResponse = firstString(rawMetrics.feedingResponse);
+
+  return {
+    state: state as OrsonPlanktonOverwatchContext['state'],
+    message: firstString(raw.message) || '',
+    signals: rawSignals
+      .filter((signal: unknown): signal is RawPond => Boolean(signal && typeof signal === 'object'))
+      .map((signal: RawPond) => ({
+        id: firstString(signal.id) || 'plankton_signal',
+        evidence: firstString(signal.evidence) || '',
+        recommendation: firstString(signal.recommendation) || '',
+      }))
+      .filter((signal) => signal.evidence || signal.recommendation)
+      .slice(0, 4),
+    recommendations: stringArray(raw.recommendations, 4),
+    missingData: stringArray(raw.dataQuality?.missing, 5),
+    sourceDate: normalizeDateString(raw.sourceDate),
+    metrics: {
+      totalPlanktonCellPerMl: firstNumber(rawMetrics.totalPlanktonCellPerMl),
+      cyanobacteriaPercent: firstNumber(rawMetrics.cyanobacteriaPercent),
+      cyanobacteriaCellPerMl: firstNumber(rawMetrics.cyanobacteriaCellPerMl),
+      planktonChangePercent: firstNumber(rawMetrics.planktonChangePercent),
+      dawnDo: firstNumber(rawMetrics.dawnDo),
+      phSwing: firstNumber(rawMetrics.phSwing),
+      feedingResponse: feedingResponse === 'strong' || feedingResponse === 'normal' || feedingResponse === 'weak'
+        ? feedingResponse
+        : null,
+    },
+  };
+};
+
 const toTimestampMs = (dateString: string | null): number | null => {
   if (!dateString) return null;
   const timestamp = new Date(dateString).getTime();
@@ -284,6 +323,11 @@ const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null =>
   return {
     totalDailyFeedKg,
     inventoryFeedId: firstString(rawFeedData.inventoryFeedId),
+    feedingResponse: rawFeedData.feedingResponse === 'strong'
+      || rawFeedData.feedingResponse === 'normal'
+      || rawFeedData.feedingResponse === 'weak'
+      ? rawFeedData.feedingResponse
+      : null,
   };
 };
 
@@ -427,6 +471,7 @@ export const normalizePondData = (
     supplier: firstString(pond.plSupplier, pond.supplier, pond.hatchery),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
     labContext: normalizeLabContext(pond),
+    planktonOverwatch: normalizePlanktonOverwatch(pond.latestPlanktonOverwatch),
     treatments: normalizeTreatments(pond),
     historicalBenchmark: normalizeHistoricalBenchmark(pond),
     records,

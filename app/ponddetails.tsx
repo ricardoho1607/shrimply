@@ -24,6 +24,7 @@ import { getFarmDateKey } from '../shared/farmDate';
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
+import PlanktonOverwatchCard from './components/PlanktonOverwatchCard';
 
 const InputField = React.memo(({ 
   label, 
@@ -1028,6 +1029,8 @@ export default function PondDetails() {
               </View>
             </View>
           )}
+
+          <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} />
 
           <View style={styles.labStatusCard}>
             <View style={styles.labStatusHeader}>

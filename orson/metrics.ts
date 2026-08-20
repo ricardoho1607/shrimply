@@ -522,6 +522,7 @@ export const calculatePondMetrics = (
     feedAllocationTrend,
     mortalityTrend,
     labContext: pond.labContext,
+    planktonOverwatch: pond.planktonOverwatch,
     dailyRecords14d: extractDailyRecords14d(pond),
     recentLabReports: extractRecentLabReports(pond),
     recentTreatments: pond.treatments || [],
@@ -549,6 +550,7 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     salinityPpt: number | null;
     temperatureC?: number | null;
     transparencyCm?: number | null;
+    feedingResponse?: 'strong' | 'normal' | 'weak' | null;
   }>();
 
   for (const record of pond.records) {
@@ -567,6 +569,7 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       salinityPpt: null,
       temperatureC: null,
       transparencyCm: null,
+      feedingResponse: null,
     };
 
     if (record.doc !== null) existing.doc = record.doc;
@@ -580,6 +583,7 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     if (hasNumber(record.salinityPpt)) existing.salinityPpt = record.salinityPpt;
     if (hasNumber(record.temperatureC)) existing.temperatureC = record.temperatureC;
     if (hasNumber(record.transparencyCm)) existing.transparencyCm = record.transparencyCm;
+    if (record.feedData?.feedingResponse) existing.feedingResponse = record.feedData.feedingResponse;
 
     dayMap.set(date, existing);
   }
@@ -608,6 +612,7 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       salinityPpt: hasNumber(day.salinityPpt) ? round(day.salinityPpt, 1) : null,
       temperatureC: hasNumber(day.temperatureC) ? round(day.temperatureC, 1) : null,
       transparencyCm: hasNumber(day.transparencyCm) ? round(day.transparencyCm, 1) : null,
+      feedingResponse: day.feedingResponse ?? null,
     };
   });
 };

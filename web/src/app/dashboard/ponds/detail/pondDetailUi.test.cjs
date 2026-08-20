@@ -48,3 +48,7 @@ test('pond detail renders collapsible mortality history section scoped to curren
   assert.match(component, /Record Mortality/);
 });
 
+test('pond detail shows the latest deterministic Plankton Overwatch result', () => {
+  assert.match(component, /latestPlanktonOverwatch\?: PlanktonOverwatchSnapshot/);
+  assert.match(component, /<PlanktonOverwatchCard snapshot=\{pond\.latestPlanktonOverwatch\} \/>/);
+});

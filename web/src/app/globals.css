@@ -3211,6 +3211,42 @@ nav.scrolled {
   color: #FFFFFF;
 }
 
+.plankton-overwatch-card {
+  --overwatch-color: #526D82;
+  --overwatch-border: #DCE8F2;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--overwatch-border);
+  border-radius: 16px;
+  background: #F4F8FC;
+}
+
+.plankton-overwatch-card.is-stable { --overwatch-color: #276749; --overwatch-border: #B7E4C7; background: #F0FFF4; }
+.plankton-overwatch-card.is-watch { --overwatch-color: #9C6500; --overwatch-border: #F6D675; background: #FFFAEB; }
+.plankton-overwatch-card.is-high { --overwatch-color: #B45309; --overwatch-border: #FDBA74; background: #FFF7ED; }
+.plankton-overwatch-card.is-critical { --overwatch-color: #C53030; --overwatch-border: #FEB2B2; background: #FFF5F5; }
+.plankton-overwatch-card.is-compact { margin-top: 10px; padding: 13px; }
+
+.plankton-overwatch-header,
+.plankton-overwatch-title {
+  display: flex;
+  align-items: center;
+}
+
+.plankton-overwatch-header { justify-content: space-between; gap: 12px; }
+.plankton-overwatch-title { min-width: 0; gap: 8px; color: var(--overwatch-color); }
+.plankton-overwatch-title strong { overflow: hidden; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.plankton-overwatch-badge { flex: 0 0 auto; padding: 4px 8px; border: 1px solid var(--overwatch-border); border-radius: 999px; background: #FFFFFF; color: var(--overwatch-color); font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.plankton-overwatch-message { margin: 9px 0 0; color: #334E68; font-size: 13px; font-weight: 600; line-height: 1.5; }
+.plankton-overwatch-section { margin-top: 12px; }
+.plankton-overwatch-section > span,
+.plankton-overwatch-action > span { color: var(--overwatch-color); font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.plankton-overwatch-section p,
+.plankton-overwatch-action p { margin: 5px 0 0; color: #334E68; font-size: 12px; font-weight: 600; line-height: 1.5; }
+.plankton-overwatch-section p { padding-left: 12px; position: relative; }
+.plankton-overwatch-section p::before { position: absolute; top: .55em; left: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--overwatch-color); content: ''; }
+.plankton-overwatch-action { margin-top: 12px; padding: 11px 12px; border-radius: 11px; background: rgba(255,255,255,.76); }
+
 .feed-pond-actions {
   min-height: 38px;
   padding: 5px 8px 5px 12px;

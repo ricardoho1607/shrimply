@@ -13,6 +13,13 @@ const {
   resolveOrsonAiFunction,
 } = require("./orsonRequestPolicy");
 const { assertCompanyMemberForCallable } = require("./shared/companyAccess");
+const {
+  buildStoredOverwatch,
+  evaluatePondPlanktonOverwatch,
+  extractLabMetrics,
+  getOverwatchNotificationCopy,
+  shouldNotifyPlanktonOverwatch,
+} = require("./planktonOverwatchContext");
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const SEVERITY_RANK = { info: 0, watch: 1, warning: 2, critical: 3 };
@@ -269,6 +276,9 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   "- Treat confirmed lab report findings as higher-confidence context than daily field logs, and call out contradictions instead of smoothing them over.",
   "- If data_assumptions mention mid-cycle onboarding, state that pre-onboarding values are estimates and avoid treating them as exact historical records.",
   "- Treat calibration as a bounded company prediction adjustment, not as a change to biological safety thresholds or proof of causation.",
+  "- If latestPlanktonOverwatch is present, its deterministic state, signals, recommendations, and missing-data list are authoritative. Explain the evidence; do not independently replace its state.",
+  "- Never diagnose plankton risk from total cell count alone. Use composition, same-cycle trends, dawn DO, pH swing, transparency, direct feeding response, nutrients or organic load, mortality, and behaviour where available.",
+  "- For plankton risk, do not prescribe automatic bloom-kill chemicals, fixed feed cuts, large water exchanges, or nitrogen addition based only on an N:P ratio.",
   "",
   "ANSWER ROUTING:",
   "- Answer the user question directly in the first sentence.",
@@ -604,13 +614,26 @@ const normalizeRecord = (record) => {
     doMorning: toNumber(record.doMorning),
     doEvening: toNumber(record.doEvening),
     salinityPpt: toNumber(record.salinity),
+    transparencyCm: toNumber(record.transparency),
+    temperatureC: toNumber(record.temperature),
+    feedingResponse: ["strong", "normal", "weak"].includes(feedData?.feedingResponse) ? feedData.feedingResponse : null,
+    weatherEvent: ["rain", "heavy_rain", "sudden_cloud"].includes(record.weatherEvent) ? record.weatherEvent : null,
+    waterExchangePercent: toNumber(record.waterExchangePercent),
+    sludgeLoad: ["low", "moderate", "high"].includes(record.sludgeLoad) ? record.sludgeLoad : null,
+    surfaceScum: typeof record.surfaceScum === "boolean" ? record.surfaceScum : null,
+    shrimpBehaviour: ["normal", "abnormal"].includes(record.shrimpBehaviour) ? record.shrimpBehaviour : null,
   };
 };
 
 const classifyRecord = (record) => {
   const kinds = [];
   if ((record.mbwG || 0) > 0 || (record.mortalityCount || 0) > 0) kinds.push("sampling");
-  if (record.phMorning !== null || record.phEvening !== null || record.doMorning !== null || record.doEvening !== null || record.salinityPpt !== null) kinds.push("water_quality");
+  if (
+    record.phMorning !== null || record.phEvening !== null || record.doMorning !== null || record.doEvening !== null
+    || record.salinityPpt !== null || record.transparencyCm !== null || record.temperatureC !== null
+    || record.weatherEvent !== null || record.waterExchangePercent !== null || record.sludgeLoad !== null
+    || record.surfaceScum !== null || record.shrimpBehaviour !== null
+  ) kinds.push("water_quality");
   if (record.feedKg !== null) kinds.push("feed");
   return kinds.length > 0 ? kinds : ["unknown"];
 };
@@ -927,6 +950,7 @@ const analyzeLabPondResult = (result, sampleDate) => {
     keyRisks: findings.map((finding) => finding.title).slice(0, 4),
     recommendations: findings.map((finding) => finding.recommendation).filter(Boolean).slice(0, 4),
     findings,
+    metrics: extractLabMetrics(result, sampleDate),
   };
 };
 
@@ -1516,6 +1540,52 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
   }
 });
 
+const loadPondLabSummaries = async (pondRef) => {
+  const snapshot = await pondRef.collection("labSummaries")
+    .orderBy("sampleDate", "desc")
+    .limit(8)
+    .get()
+    .catch((error) => {
+      console.warn("Plankton Overwatch could not load lab history", {
+        pondId: pondRef.id,
+        message: error.message || String(error),
+      });
+      return { docs: [] };
+    });
+  return snapshot.docs.map((document) => ({ id: document.id, ...(document.data() || {}) }));
+};
+
+const writeOverwatchHistory = async (entries) => {
+  for (let index = 0; index < entries.length; index += 40) {
+    const chunk = entries.slice(index, index + 40);
+    await Promise.all(chunk.map(({ ref, payload }) => ref.set(payload, { merge: true })));
+  }
+};
+
+const createPlanktonOverwatchNotification = async (db, companyId, snapshot) => {
+  const copy = getOverwatchNotificationCopy(snapshot);
+  return createProactiveNotification(db, {
+    companyId,
+    type: "plankton_overwatch",
+    dedupeKey: `plankton_overwatch:${snapshot.pondId}:${snapshot.pondCycleId}:${snapshot.riskSignature}`,
+    title: copy.title,
+    message: copy.message,
+    priority: copy.priority,
+    pondId: snapshot.pondId,
+    pondName: snapshot.pondName,
+    data: {
+      pondId: snapshot.pondId,
+      pondName: snapshot.pondName,
+      pondCycleId: snapshot.pondCycleId,
+      cycleId: snapshot.cycleId,
+      state: snapshot.state,
+      riskSignature: snapshot.riskSignature,
+      sourceType: snapshot.sourceType,
+      sourceId: snapshot.sourceId,
+    },
+  }, 7 * DAY_MS);
+};
+
 exports.processConfirmedLabReport = onDocumentWritten({
   document: "companies/{companyId}/labReports/{labReportId}",
   secrets: [geminiApiKeySecret],
@@ -1547,9 +1617,13 @@ exports.processConfirmedLabReport = onDocumentWritten({
     ? await db.getAll(...pondIds.map((pondId) => db.collection("companies").doc(companyId).collection("ponds").doc(pondId)))
     : [];
   const existingPondIds = new Set(pondSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => snapshot.id));
+  const pondSnapshotsById = new Map(pondSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => [snapshot.id, snapshot]));
   const pondResults = candidatePondResults.filter((result) => existingPondIds.has(result.pondId));
   const summaries = pondResults
     .map((result) => analyzeLabPondResult(result, report.sampleDate));
+  const labHistoryPromise = Promise.all([...pondSnapshotsById.values()].map(async (snapshot) => (
+    [snapshot.id, await loadPondLabSummaries(snapshot.ref)]
+  )));
   let allowPaidInsights = summaries.length > 0;
   if (allowPaidInsights) {
     try {
@@ -1573,7 +1647,35 @@ exports.processConfirmedLabReport = onDocumentWritten({
       });
     }
   }
-  const insights = await generateLabInsights(summaries, allowPaidInsights);
+  const [insights, labHistoryEntries] = await Promise.all([
+    generateLabInsights(summaries, allowPaidInsights),
+    labHistoryPromise,
+  ]);
+  const labHistoryByPond = new Map(labHistoryEntries);
+  const overwatchByPond = new Map();
+  summaries.forEach((summary) => {
+    const pondSnapshot = pondSnapshotsById.get(summary.pondId);
+    if (!pondSnapshot) return;
+    const pond = pondSnapshot.data() || {};
+    const result = evaluatePondPlanktonOverwatch({
+      pond,
+      pondId: summary.pondId,
+      labSummaries: labHistoryByPond.get(summary.pondId) || [],
+      currentLabMetrics: {
+        ...summary.metrics,
+        sourceId: labReportId,
+      },
+    });
+    const snapshot = buildStoredOverwatch({
+      result,
+      pond,
+      pondId: summary.pondId,
+      sourceType: "lab_report",
+      sourceId: labReportId,
+      sourceDate: report.sampleDate || null,
+    });
+    if (snapshot) overwatchByPond.set(summary.pondId, snapshot);
+  });
 
   const batch = db.batch();
   const criticalCount = summaries.filter((summary) => summary.overallSeverity === "critical").length;
@@ -1587,6 +1689,9 @@ exports.processConfirmedLabReport = onDocumentWritten({
     const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(summary.pondId);
     const labSummaryRef = pondRef.collection("labSummaries").doc(labReportId);
     const displayStatus = summary.overallSeverity === "info" ? "good" : summary.overallSeverity;
+    const pondSnapshot = pondSnapshotsById.get(summary.pondId);
+    const pond = pondSnapshot?.data() || {};
+    const overwatch = overwatchByPond.get(summary.pondId) || null;
     const payload = {
       companyId,
       labReportId,
@@ -1599,6 +1704,10 @@ exports.processConfirmedLabReport = onDocumentWritten({
       keyRisks: summary.keyRisks,
       recommendations: summary.recommendations,
       findings: summary.findings,
+      metrics: summary.metrics,
+      cycleId: pond.cycleId || null,
+      cycleName: pond.cycleName || null,
+      pondCycleId: pond.pondCycleId || summary.pondId,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
     const latestTypeStatus = {
@@ -1613,7 +1722,7 @@ exports.processConfirmedLabReport = onDocumentWritten({
     };
 
     batch.set(labSummaryRef, payload, { merge: true });
-    batch.set(pondRef, {
+    const pondUpdate = {
       latestLabStatus: {
         labReportId,
         reportType,
@@ -1628,7 +1737,14 @@ exports.processConfirmedLabReport = onDocumentWritten({
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
+    };
+    if (overwatch) {
+      pondUpdate.latestPlanktonOverwatch = {
+        ...overwatch,
+        evaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+    }
+    batch.set(pondRef, pondUpdate, { merge: true });
   });
 
   batch.set(afterSnap.ref, {
@@ -1657,6 +1773,25 @@ exports.processConfirmedLabReport = onDocumentWritten({
   }, { merge: true });
 
   await batch.commit();
+
+  const overwatchHistoryEntries = [...overwatchByPond.values()].map((snapshot) => {
+    const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(snapshot.pondId);
+    return {
+      ref: pondRef.collection("planktonOverwatchHistory").doc(`lab-${labReportId}`),
+      payload: {
+        ...snapshot,
+        companyId,
+        evaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+    };
+  });
+  await writeOverwatchHistory(overwatchHistoryEntries);
+
+  await Promise.all([...overwatchByPond.values()].map(async (snapshot) => {
+    const previous = pondSnapshotsById.get(snapshot.pondId)?.data()?.latestPlanktonOverwatch || null;
+    if (!shouldNotifyPlanktonOverwatch(previous, snapshot)) return false;
+    return createPlanktonOverwatchNotification(db, companyId, snapshot);
+  }));
 
   const notifiableSummaries = summaries.filter((summary) => SEVERITY_RANK[summary.overallSeverity] >= SEVERITY_RANK.warning);
   await Promise.all(notifiableSummaries.map(async (summary) => {
@@ -1878,6 +2013,76 @@ const summarizePondRisks = (pondsSnapshot) => {
   };
 };
 
+const getPlanktonOverwatchOperationalHash = (pond = {}) => hashString(stableStringify({
+  samplings: (Array.isArray(pond.samplings) ? pond.samplings : []).map((record) => ({
+    id: record.id || null,
+    date: record.date || null,
+    pondCycleId: record.pondCycleId || null,
+    mortality: record.mortality ?? null,
+    phMorning: record.phMorning ?? null,
+    phEvening: record.phEvening ?? null,
+    doMorning: record.doMorning ?? null,
+    doEvening: record.doEvening ?? null,
+    transparency: record.transparency ?? null,
+    temperature: record.temperature ?? null,
+    salinity: record.salinity ?? null,
+    weatherEvent: record.weatherEvent ?? null,
+    waterExchangePercent: record.waterExchangePercent ?? null,
+    sludgeLoad: record.sludgeLoad ?? null,
+    surfaceScum: record.surfaceScum ?? null,
+    shrimpBehaviour: record.shrimpBehaviour ?? null,
+    totalDailyFeed: record.feedData?.totalDailyFeed ?? null,
+    feedingResponse: record.feedData?.feedingResponse ?? null,
+  })),
+  mortalityRecords: (Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : []).map((record) => ({
+    id: record.id || null,
+    date: record.date || record.recordedAt || null,
+    pondCycleId: record.pondCycleId || null,
+    count: record.count ?? null,
+  })),
+}));
+
+const processOperationalPlanktonOverwatch = async ({ db, companyId, pondId, pond, sourceHash }) => {
+  if (pond.cycleStatus === "ended") return null;
+  const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(pondId);
+  const labSummaries = await loadPondLabSummaries(pondRef);
+  const result = evaluatePondPlanktonOverwatch({ pond, pondId, labSummaries });
+  if (!result) return null;
+
+  const sourceDate = (Array.isArray(pond.samplings) ? pond.samplings : [])
+    .map((record) => record.date)
+    .filter(Boolean)
+    .sort()
+    .pop() || null;
+  const snapshot = buildStoredOverwatch({
+    result,
+    pond,
+    pondId,
+    sourceType: "pond_record",
+    sourceId: sourceHash,
+    sourceDate,
+  });
+  if (!snapshot) return null;
+
+  const storedSnapshot = {
+    ...snapshot,
+    companyId,
+    evaluatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  };
+  await Promise.all([
+    pondRef.set({
+      latestPlanktonOverwatch: storedSnapshot,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true }),
+    pondRef.collection("planktonOverwatchHistory").doc(`pond-${sourceHash}`).set(storedSnapshot, { merge: true }),
+  ]);
+
+  if (shouldNotifyPlanktonOverwatch(pond.latestPlanktonOverwatch || null, snapshot)) {
+    await createPlanktonOverwatchNotification(db, companyId, snapshot);
+  }
+  return snapshot;
+};
+
 /**
  * Orson AI Proactive Consultant
  * Triggers when a pond document receives new sampling, water-quality, or feed records.
@@ -1889,9 +2094,20 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
 
   const beforeSamplings = Array.isArray(beforeData.samplings) ? beforeData.samplings : [];
   const afterSamplings = Array.isArray(afterData.samplings) ? afterData.samplings : [];
+  const beforeOverwatchHash = getPlanktonOverwatchOperationalHash(beforeData);
+  const afterOverwatchHash = getPlanktonOverwatchOperationalHash(afterData);
+  const overwatch = beforeOverwatchHash !== afterOverwatchHash
+    ? await processOperationalPlanktonOverwatch({
+      db: admin.firestore(),
+      companyId,
+      pondId,
+      pond: afterData,
+      sourceHash: afterOverwatchHash,
+    })
+    : null;
 
   if (afterSamplings.length <= beforeSamplings.length) {
-    return null;
+    return overwatch ? { success: true, overwatch } : null;
   }
 
   const report = calculateRiskReport(afterData, pondId);

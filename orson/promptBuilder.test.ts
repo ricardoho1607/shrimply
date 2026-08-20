@@ -18,6 +18,15 @@ export const runPromptBuilderSelfTest = () => {
       initialPopulation: 100000,
       initialWeight: 0.5,
       docStart: '2026-01-01',
+      latestPlanktonOverwatch: {
+        state: 'high',
+        message: 'Plankton instability risk is high.',
+        sourceDate: '2026-01-15',
+        signals: [{ id: 'cyanobacteria_increasing', evidence: 'Cyanobacteria increased across three results.', recommendation: 'Recheck dawn DO.' }],
+        recommendations: ['Increase or optimise aeration overnight.'],
+        dataQuality: { missing: ['TAN'] },
+        metrics: { totalPlanktonCellPerMl: 1900000, cyanobacteriaPercent: 21, dawnDo: 4.1, feedingResponse: 'weak' },
+      },
       samplings: [
         {
           id: 's1',
@@ -43,7 +52,7 @@ export const runPromptBuilderSelfTest = () => {
           doMorning: 4.1,
           doEvening: 3.6,
           salinity: 25,
-          feedData: { totalDailyFeed: 30 },
+          feedData: { totalDailyFeed: 30, feedingResponse: 'weak' },
         },
       ],
     },
@@ -73,6 +82,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');
   assert(farmPackage.systemInstruction.includes('Do not invent measurements'), 'guards against invented measurements');
   assert(farmPackage.systemInstruction.includes('Do not treat a change in logged daily feed as measured appetite'), 'prevents false appetite inference');
+  assert(farmPackage.systemInstruction.includes('deterministic state'), 'keeps the deterministic plankton state authoritative');
   assert(farmPackage.systemInstruction.includes('daily_records_14d'), 'system instruction references daily_records_14d');
   assert(farmPackage.systemInstruction.includes('recent_lab_reports'), 'system instruction references recent_lab_reports');
   assert(farmPackage.systemInstruction.includes('compare the ponds side-by-side'), 'system instruction references pond comparisons');
@@ -83,6 +93,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
   assert(farmPackage.context.includes('daily_records_14d'), 'includes 14-day daily records in context payload');
   assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
+  assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
+  assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
   assert(farmPackage.context.length < 15000, 'keeps prompt context compact');
