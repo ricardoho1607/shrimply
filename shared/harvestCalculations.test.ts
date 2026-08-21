@@ -7,13 +7,30 @@ import {
   withHarvestReference,
   type HarvestTrackingPond,
 } from './harvestCalculations';
-import { calculatePondMetricsWithHarvest, calculatePondMortalityForDate } from './pondCalculations';
+import { calculatePondMetricsWithHarvest, calculatePondMortalityForDate, getLatestFeedResponseForDate, getLatestGrowthSampling } from './pondCalculations';
 
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
 };
 
 export const runHarvestCalculationsSelfTest = () => {
+  const mixedDailyRecords = [
+    { id: 'baseline', date: '2026-08-18', mbw: 1.2, mortality: 0, isBaselineEstimate: true },
+    { id: 'growth', date: '2026-08-19', mbw: 1.5, mortality: 0 },
+    { id: 'water', date: '2026-08-21', mbw: 0, mortality: 0, phMorning: '7.9' },
+    { id: 'feed-old-cycle', date: '2026-08-21', mbw: 0, mortality: 0, cycleId: 'old', feedData: { totalDailyFeed: 10, feedingResponse: 'weak' as const } },
+    { id: 'feed-current', date: '2026-08-21', mbw: 0, mortality: 0, cycleId: 'current', feedData: { totalDailyFeed: 12, feedingResponse: 'normal' as const } },
+  ];
+  if (getLatestGrowthSampling({ samplings: mixedDailyRecords })?.date !== '2026-08-19') {
+    throw new Error('feed and water logs must not become growth sampling dates');
+  }
+  if (getLatestGrowthSampling({ samplings: [mixedDailyRecords[0], mixedDailyRecords[2]] }) !== undefined) {
+    throw new Error('a baseline and daily log must still display Never sampled');
+  }
+  if (getLatestFeedResponseForDate(mixedDailyRecords, '2026-08-21', { cycleId: 'current' }) !== 'normal') {
+    throw new Error('dashboard feed status must use the current-cycle response for the date');
+  }
+
   const pond: HarvestTrackingPond & { samplings: { id: string; date: string; mbw: number; mortality: number }[] } = {
     initialPopulation: 100_000,
     initialWeight: 10,

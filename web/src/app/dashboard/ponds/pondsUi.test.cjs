@@ -23,3 +23,8 @@ test('empty pond state uses the light action without a plus icon', () => {
   assert.doesNotMatch(pondsPage, /className="ponds-empty-add-button"[\s\S]*?<Plus size=\{18\} \/>[\s\S]*?t\.ponds\.addNew/);
   assert.match(stylesheet, /\.ponds-empty-add-button\s*\{[^}]*background:\s*#eaf6fd;[^}]*color:\s*var\(--primary\);/s);
 });
+
+test('pond cards only report a last sampling date for a real growth sample', () => {
+  assert.match(pondsPage, /getLatestGrowthSampling/);
+  assert.match(pondsPage, /t\.ponds\.never \|\| 'Never'/);
+});

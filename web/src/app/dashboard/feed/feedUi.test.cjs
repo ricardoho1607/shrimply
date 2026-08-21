@@ -45,13 +45,19 @@ test('phone feed history header stays below device navigation and status areas',
   assert.match(source, /<style jsx global>[\s\S]*?\.dashboard-saas \.feed-history-header\s*{[\s\S]*?padding-top:\s*calc\(12px \+ var\(--safe-area-top\)\) !important;/);
 });
 
-test('feeding response is optional, persisted, and shown beside daily feed on web and mobile', () => {
+test('feeding response is required on web, persisted, and shown beside daily feed on web and mobile', () => {
   assert.match(sharedCalculations, /FEEDING_RESPONSE_VALUES = \['strong', 'normal', 'weak'\]/);
-  assert.match(source, /feedingResponse: formData\.feedingResponse \|\| null/);
+  assert.match(source, /if \(!formData\.feedingResponse\)/);
+  assert.match(source, /feedingResponse: formData\.feedingResponse/);
   assert.match(source, /className="feed-pond-response"/);
   assert.match(source, /role="radiogroup"/);
-  assert.match(source, /feedingResponse: selected \? null : response/);
+  assert.match(source, /feedingResponse: response/);
   assert.match(mobileSource, /feedingResponse,/);
   assert.match(mobileSource, /style=\{styles\.cardMetricsRow\}/);
   assert.match(mobileSource, /setFeedingResponse\(selected \? null : response\)/);
+});
+
+test('inventory quantities are formatted for display without changing stock math', () => {
+  assert.match(source, /formatFeedQuantityForDisplay\(feed\.totalStock\)/);
+  assert.doesNotMatch(source, /\{feed\.totalStock \|\| 0\} \{feed\.unit \|\| 'kg'\}/);
 });

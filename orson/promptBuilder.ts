@@ -459,6 +459,8 @@ export const buildOrsonPromptContext = (
       ph_swing: r.phSwing,
       salinity_ppt: r.salinityPpt,
       temperature_c: r.temperatureC,
+      ammonia_mg_l: r.ammoniaMgL,
+      operational_notes: r.operationalNotes,
       transparency_cm: r.transparencyCm,
       feeding_response: r.feedingResponse,
       weather_event: r.weatherEvent,

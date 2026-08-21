@@ -59,6 +59,8 @@ interface WaterQualityValues {
   transparency: string;
   salinity: string;
   temperature: string;
+  ammonia: string;
+  operationalNotes: string;
   weatherEvent: WeatherEvent | null;
   waterExchangePercent: string;
   sludgeLoad: SludgeLoad | null;
@@ -74,6 +76,8 @@ const createEmptyWaterQualityValues = (): WaterQualityValues => ({
   transparency: '',
   salinity: '',
   temperature: '',
+  ammonia: '',
+  operationalNotes: '',
   weatherEvent: null,
   waterExchangePercent: '',
   sludgeLoad: null,
@@ -339,6 +343,7 @@ export default function WaterQualityScreen() {
       doMorning: values.doMorning.trim(), doEvening: values.doEvening.trim(),
       transparency: values.transparency.trim(), salinity: values.salinity.trim(),
       temperature: values.temperature.trim(), weatherEvent: values.weatherEvent,
+      ammonia: values.ammonia.trim(), operationalNotes: values.operationalNotes.trim(),
       waterExchangePercent: values.waterExchangePercent.trim(), sludgeLoad: values.sludgeLoad,
       surfaceScum: values.surfaceScum, shrimpBehaviour: values.shrimpBehaviour,
     });
@@ -357,6 +362,7 @@ export default function WaterQualityScreen() {
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
       transparency: todayWQRecord.transparency || "", salinity: todayWQRecord.salinity || "",
       temperature: todayWQRecord.temperature || '', weatherEvent: todayWQRecord.weatherEvent || null,
+      ammonia: todayWQRecord.ammonia || '', operationalNotes: todayWQRecord.operationalNotes || '',
       waterExchangePercent: todayWQRecord.waterExchangePercent || '', sludgeLoad: todayWQRecord.sludgeLoad || null,
       surfaceScum: todayWQRecord.surfaceScum ?? null, shrimpBehaviour: todayWQRecord.shrimpBehaviour || null,
     } : createEmptyWaterQualityValues());
@@ -1164,9 +1170,11 @@ export default function WaterQualityScreen() {
                       <Input label={`${t.waterQuality.temperature} (°C)`} value={values.temperature} onChange={updateValue('temperature')} placeholder="e.g., 29" />
                     </View>
                     <View style={styles.inputGroup}>
-                      <Input label={t.waterQuality.waterExchangePercent} value={values.waterExchangePercent} onChange={updateValue('waterExchangePercent')} placeholder="e.g., 10" />
+                      <Input label={`${t.waterQuality.ammonia} (mg/L)`} value={values.ammonia} onChange={updateValue('ammonia')} placeholder="e.g., 0.35" />
                     </View>
                   </View>
+
+                  <Input label={t.waterQuality.waterExchangePercent} value={values.waterExchangePercent} onChange={updateValue('waterExchangePercent')} placeholder="e.g., 10" />
 
                   <Text style={styles.conditionLabel}>{t.waterQuality.weatherEvent}</Text>
                   <View style={styles.conditionOptions}>
@@ -1232,6 +1240,19 @@ export default function WaterQualityScreen() {
                         <Text style={[styles.conditionOptionText, values.shrimpBehaviour === value && styles.conditionOptionTextSelected]}>{label}</Text>
                       </TouchableOpacity>
                     ))}
+                  </View>
+
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.inputLabel}>{t.waterQuality.operationalNotes}</Text>
+                    <TextInput
+                      style={[styles.input, { minHeight: 84, textAlignVertical: 'top' }]}
+                      value={values.operationalNotes}
+                      onChangeText={updateValue('operationalNotes')}
+                      placeholder="Aeration, rain impact, water exchange, or other work"
+                      placeholderTextColor="#6b8aa0"
+                      multiline
+                      maxLength={1000}
+                    />
                   </View>
                   </View>}
                 </View>

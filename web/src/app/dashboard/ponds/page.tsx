@@ -37,6 +37,7 @@ import {
   canManageEnterpriseFarmCycle,
   filterEnterpriseRecordsForUser,
 } from '../../../../../shared/enterpriseBlocks';
+import { getLatestGrowthSampling } from '../../../../../shared/pondCalculations';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -139,11 +140,7 @@ const calculateDocFromDates = (startDate: string, baselineDate: string): number 
   Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
 
 const getLatestSamplingDate = (samplings: Sampling[] = []): string | null => {
-  const latestSampling = samplings
-    .filter((sampling) => sampling.date && !sampling.isBaselineEstimate && sampling.source !== 'midcycle_onboarding')
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-
-  return latestSampling?.date || null;
+  return getLatestGrowthSampling({ samplings })?.date || null;
 };
 
 const removeUndefinedFields = (value: unknown): unknown => {

@@ -38,6 +38,7 @@ import {
 import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 import {
   calculatePondMetricsWithHarvest,
+  getLatestFeedResponseForDate,
   getLatestValidMbwSampling,
   type SharedMortalityRecord,
 } from '../../../../shared/pondCalculations';
@@ -54,6 +55,9 @@ import {
 /* --- Types --------------------------------------------------- */
 interface FeedData {
   totalDailyFeed: string;
+  feedingResponse?: 'strong' | 'normal' | 'weak' | null;
+  cycleId?: string;
+  pondCycleId?: string;
 }
 
 interface Sampling {
@@ -75,6 +79,8 @@ interface Sampling {
   estimatedPopulation?: number;
   estimatedSurvivalRate?: number;
   cumulativeFeedToDate?: number;
+  cycleId?: string;
+  pondCycleId?: string;
 }
 
 interface Pond {
@@ -85,6 +91,7 @@ interface Pond {
   mortalityRecords?: SharedMortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
   cycleId?: string;
+  pondCycleId?: string;
   cycleStatus?: 'active' | 'ended';
   baselineDate?: string;
   baselineDoc?: number;
@@ -208,7 +215,14 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
   const isHarvested = (pond.totalHarvestedPopulation || 0) >= (pond.initialPopulation * 0.9);
     const todaySampling = pond.samplings?.find((s: any) => s.date === today);
     const wqPosted = !!(todaySampling?.phMorning || todaySampling?.phEvening || todaySampling?.doMorning || todaySampling?.doEvening);
-    const feedPosted = !!(todaySampling?.feed || todaySampling?.feedData?.totalDailyFeed);
+    const todayFeedRecord = [...(pond.samplings || [])].reverse().find((sampling: Sampling) => (
+      sampling.date === today && (Number(sampling.feed) > 0 || Number(sampling.feedData?.totalDailyFeed) > 0)
+    ));
+    const feedPosted = Boolean(todayFeedRecord);
+    const todayFeedResponse = getLatestFeedResponseForDate(pond.samplings, today, {
+      cycleId: pond.cycleId,
+      pondCycleId: pond.pondCycleId || pond.id,
+    });
 
   return (
     <Link href={`/dashboard/ponds/detail?id=${pond.id}`} style={{ textDecoration: 'none' }}>
@@ -299,7 +313,7 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                 <span style={{ fontSize: '0.58rem', fontWeight: 600, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Feed status</span>
-                {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>COMPLETED</span>}
+                {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>{todayFeedResponse ? todayFeedResponse.toUpperCase() : 'COMPLETED'}</span>}
               </div>
             </div>
           </div>

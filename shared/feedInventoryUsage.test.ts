@@ -2,6 +2,8 @@ import {
   DAILY_FEED_USAGE_SOURCE,
   buildDailyFeedRecordId,
   getDailyFeedUsageTotal,
+  getDailyFeedUsageAdjustment,
+  formatFeedQuantityForDisplay,
   isDailyFeedUsage,
   normalizeFeedAllocations,
   sumFeedAllocations,
@@ -33,6 +35,10 @@ export const runFeedInventoryUsageSelfTest = () => {
   assert(isDailyFeedUsage(usages[2], pondId, date), 'recognizes stable daily-feed identity');
   assert(!isDailyFeedUsage(usages[3], pondId, date), 'excludes manual inventory usage');
   assert(getDailyFeedUsageTotal(usages, pondId, date) === 20, 'nets cross-platform adjustments once');
+  assert(getDailyFeedUsageAdjustment(110, 0) === 110, 'deducts a new feed record exactly once');
+  assert(getDailyFeedUsageAdjustment(110, 110) === 0, 'does not deduct inventory again when editing only the response');
+  assert(getDailyFeedUsageAdjustment(115, 110) === 5, 'deducts only the added amount when editing feed quantity');
+  assert(formatFeedQuantityForDisplay(7943.200000000001) === '7943.2', 'hides floating-point display noise');
 
   const legacyAllocations = normalizeFeedAllocations({
     inventoryFeedId: 'feed-a',

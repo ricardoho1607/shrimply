@@ -96,3 +96,14 @@ export const getDailyFeedUsageTotal = (
     const quantity = Number(usage.quantity);
     return total + (Number.isFinite(quantity) ? quantity : 0);
   }, 0);
+
+export const getDailyFeedUsageAdjustment = (desiredQuantity: number, alreadyDeducted: number): number => {
+  if (!Number.isFinite(desiredQuantity) || !Number.isFinite(alreadyDeducted)) return 0;
+  return desiredQuantity - alreadyDeducted;
+};
+
+export const formatFeedQuantityForDisplay = (value: unknown): string => {
+  const quantity = Number(value);
+  if (!Number.isFinite(quantity)) return '0';
+  return String(Math.round((quantity + Number.EPSILON) * 100) / 100);
+};

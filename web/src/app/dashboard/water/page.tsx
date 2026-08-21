@@ -49,6 +49,8 @@ interface Sampling {
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
   temperature?: string;
+  ammonia?: string;
+  operationalNotes?: string;
   weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
   waterExchangePercent?: string;
   sludgeLoad?: 'low' | 'moderate' | 'high' | null;
@@ -242,6 +244,8 @@ export default function WaterQualityPage() {
     transparency: '',
     salinity: '',
     temperature: '',
+    ammonia: '',
+    operationalNotes: '',
     weatherEvent: null as Sampling['weatherEvent'],
     waterExchangePercent: '',
     sludgeLoad: null as Sampling['sludgeLoad'],
@@ -336,6 +340,8 @@ export default function WaterQualityPage() {
           prev.transparency === (existing.transparency || '') &&
           prev.salinity === (existing.salinity || '') &&
           prev.temperature === (existing.temperature || '') &&
+          prev.ammonia === (existing.ammonia || '') &&
+          prev.operationalNotes === (existing.operationalNotes || '') &&
           prev.weatherEvent === (existing.weatherEvent || null) &&
           prev.waterExchangePercent === (existing.waterExchangePercent || '') &&
           prev.sludgeLoad === (existing.sludgeLoad || null) &&
@@ -352,6 +358,8 @@ export default function WaterQualityPage() {
           transparency: existing.transparency || '',
           salinity: existing.salinity || '',
           temperature: existing.temperature || '',
+          ammonia: existing.ammonia || '',
+          operationalNotes: existing.operationalNotes || '',
           weatherEvent: existing.weatherEvent || null,
           waterExchangePercent: existing.waterExchangePercent || '',
           sludgeLoad: existing.sludgeLoad || null,
@@ -365,6 +373,7 @@ export default function WaterQualityPage() {
         if (
           !prev.phMorning && !prev.phEvening && !prev.doMorning &&
           !prev.doEvening && !prev.transparency && !prev.salinity && !prev.temperature &&
+          !prev.ammonia && !prev.operationalNotes &&
           !prev.weatherEvent && !prev.waterExchangePercent && !prev.sludgeLoad &&
           prev.surfaceScum === null && !prev.shrimpBehaviour
         ) return prev;
@@ -378,6 +387,8 @@ export default function WaterQualityPage() {
           transparency: '',
           salinity: '',
           temperature: '',
+          ammonia: '',
+          operationalNotes: '',
           weatherEvent: null,
           waterExchangePercent: '',
           sludgeLoad: null,
@@ -422,6 +433,8 @@ export default function WaterQualityPage() {
           transparency: formData.transparency,
           salinity: formData.salinity,
           temperature: formData.temperature,
+          ammonia: formData.ammonia,
+          operationalNotes: formData.operationalNotes.trim(),
           weatherEvent: formData.weatherEvent,
           waterExchangePercent: formData.waterExchangePercent,
           sludgeLoad: formData.sludgeLoad,
@@ -442,6 +455,8 @@ export default function WaterQualityPage() {
             transparency: formData.transparency || samplings[existingIndex].transparency || '',
             salinity: formData.salinity || samplings[existingIndex].salinity || '',
             temperature: formData.temperature || samplings[existingIndex].temperature || '',
+            ammonia: formData.ammonia || samplings[existingIndex].ammonia || '',
+            operationalNotes: formData.operationalNotes.trim(),
             weatherEvent: formData.weatherEvent,
             waterExchangePercent: formData.waterExchangePercent,
             sludgeLoad: formData.sludgeLoad,
@@ -474,6 +489,8 @@ export default function WaterQualityPage() {
           transparency: '',
           salinity: '',
           temperature: '',
+          ammonia: '',
+          operationalNotes: '',
           weatherEvent: null,
           waterExchangePercent: '',
           sludgeLoad: null,
@@ -979,7 +996,7 @@ export default function WaterQualityPage() {
 
   const getLatestWQ = (pond: Pond) => {
     const logs = (pond.samplings || [])
-      .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity)
+      .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity || s.temperature || s.ammonia || s.weatherEvent || s.operationalNotes)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return logs[0] || null;
   };
@@ -1440,7 +1457,7 @@ export default function WaterQualityPage() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {selectedPondForHistory.samplings
-                  .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity)
+                  .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity || s.temperature || s.ammonia || s.weatherEvent || s.operationalNotes)
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((log, i) => (
                     <div key={i} className="glass-card" style={{ padding: '18px', background: '#FFF' }}>
@@ -1465,7 +1482,16 @@ export default function WaterQualityPage() {
                           <span className="wq-label-small">Transparency</span>
                           <span className="wq-val-small">{log.transparency || '-'} CM</span>
                         </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Temperature</span>
+                          <span className="wq-val-small">{log.temperature || '-'} °C</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Ammonia (TAN)</span>
+                          <span className="wq-val-small">{log.ammonia || '-'} mg/L</span>
+                        </div>
                       </div>
+                      {log.operationalNotes && <p style={{ margin: '14px 0 0', color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{log.operationalNotes}</p>}
                     </div>
                   ))
                 }
@@ -1804,6 +1830,11 @@ export default function WaterQualityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">Ammonia (TAN) (mg/L)</label>
+                  <input type="number" min="0" step="0.01" placeholder="0.00" value={formData.ammonia} onChange={e => setFormData({...formData, ammonia: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">Water Exchange (%)</label>
                   <input type="number" step="0.1" placeholder="10" value={formData.waterExchangePercent} onChange={e => setFormData({...formData, waterExchangePercent: e.target.value})} className="form-input" />
                 </div>
@@ -1862,6 +1893,18 @@ export default function WaterQualityPage() {
                       >{label}</button>
                     ))}
                   </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
+                  <label className="form-label">Operational Notes</label>
+                  <textarea
+                    rows={3}
+                    maxLength={1000}
+                    placeholder="Aeration, rain impact, water exchange, treatments, or other observed work"
+                    value={formData.operationalNotes}
+                    onChange={e => setFormData({...formData, operationalNotes: e.target.value})}
+                    className="form-input"
+                  />
                 </div>
               </div>
 

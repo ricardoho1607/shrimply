@@ -103,6 +103,8 @@ waterQuality: {
   overwatchNextAction: '下一步',
   overwatchMissingData: '仍需数据',
   temperature: '温度',
+  ammonia: '氨氮 (TAN)',
+  operationalNotes: '操作备注',
   optionalPondConditions: '可选池塘状况',
   optionalPondConditionsHint: '只添加今天直接观察到的情况。',
   weatherEvent: '天气事件',

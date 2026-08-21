@@ -53,6 +53,8 @@ export const runPromptBuilderSelfTest = () => {
           doEvening: 3.6,
           salinity: 25,
           temperature: 29.5,
+          ammonia: 0.35,
+          operationalNotes: 'Aerators ran overnight after rain.',
           transparency: 22,
           weatherEvent: 'heavy_rain',
           waterExchangePercent: 10,
@@ -103,6 +105,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
   assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
   assert(farmPackage.context.includes('weather_event'), 'includes dated weather events');
+  assert(farmPackage.context.includes('ammonia_mg_l'), 'includes daily ammonia context');
+  assert(farmPackage.context.includes('operational_notes'), 'includes daily operational notes');
   assert(farmPackage.context.includes('water_exchange_pct'), 'includes water exchange history');
   assert(farmPackage.context.includes('sludge_load'), 'includes sludge observations');
   assert(farmPackage.context.includes('surface_scum'), 'includes surface-scum observations');

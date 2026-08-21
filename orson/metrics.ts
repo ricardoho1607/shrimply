@@ -576,6 +576,8 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     phEvening: number | null;
     salinityPpt: number | null;
     temperatureC?: number | null;
+    ammoniaMgL?: number | null;
+    operationalNotes?: string | null;
     transparencyCm?: number | null;
     feedingResponse?: 'strong' | 'normal' | 'weak' | null;
     weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
@@ -600,6 +602,8 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       phEvening: null,
       salinityPpt: null,
       temperatureC: null,
+      ammoniaMgL: null,
+      operationalNotes: null,
       transparencyCm: null,
       feedingResponse: null,
       weatherEvent: null,
@@ -619,6 +623,8 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
     if (hasNumber(record.phEvening)) existing.phEvening = record.phEvening;
     if (hasNumber(record.salinityPpt)) existing.salinityPpt = record.salinityPpt;
     if (hasNumber(record.temperatureC)) existing.temperatureC = record.temperatureC;
+    if (hasNumber(record.ammoniaMgL)) existing.ammoniaMgL = record.ammoniaMgL;
+    if (record.operationalNotes) existing.operationalNotes = record.operationalNotes;
     if (hasNumber(record.transparencyCm)) existing.transparencyCm = record.transparencyCm;
     if (record.feedData?.feedingResponse) existing.feedingResponse = record.feedData.feedingResponse;
     if (record.weatherEvent) existing.weatherEvent = record.weatherEvent;
@@ -653,6 +659,8 @@ export const extractDailyRecords14d = (pond: OrsonNormalizedPond): OrsonPromptDa
       phSwing,
       salinityPpt: hasNumber(day.salinityPpt) ? round(day.salinityPpt, 1) : null,
       temperatureC: hasNumber(day.temperatureC) ? round(day.temperatureC, 1) : null,
+      ammoniaMgL: hasNumber(day.ammoniaMgL) ? round(day.ammoniaMgL, 3) : null,
+      operationalNotes: day.operationalNotes ?? null,
       transparencyCm: hasNumber(day.transparencyCm) ? round(day.transparencyCm, 1) : null,
       feedingResponse: day.feedingResponse ?? null,
       weatherEvent: day.weatherEvent ?? null,

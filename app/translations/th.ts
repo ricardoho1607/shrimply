@@ -103,6 +103,8 @@ harvestDetails: {
   overwatchNextAction: 'การดำเนินการต่อไป',
   overwatchMissingData: 'ข้อมูลที่ยังต้องการ',
   temperature: 'อุณหภูมิ',
+  ammonia: 'แอมโมเนีย (TAN)',
+  operationalNotes: 'บันทึกการปฏิบัติงาน',
   optionalPondConditions: 'สภาพบ่อเพิ่มเติม',
   optionalPondConditionsHint: 'เพิ่มเฉพาะสิ่งที่สังเกตเห็นโดยตรงวันนี้',
   weatherEvent: 'เหตุการณ์สภาพอากาศ',

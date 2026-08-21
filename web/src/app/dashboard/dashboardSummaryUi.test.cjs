@@ -32,3 +32,8 @@ test('mobile pond list constrains long pond names to their grid column', () => {
   assert.match(source, /className={`dashboard-list-pond \$\{styles\.listPondCell\}`}/);
   assert.match(homeStyles, /\.listPondCell\s*{[\s\S]*width:\s*100%;[\s\S]*overflow:\s*hidden;/);
 });
+
+test('pond cards show the latest feed response for today instead of a blank completion label', () => {
+  assert.match(source, /getLatestFeedResponseForDate/);
+  assert.match(source, /todayFeedResponse \? todayFeedResponse\.toUpperCase\(\) : 'COMPLETED'/);
+});

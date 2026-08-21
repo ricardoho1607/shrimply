@@ -54,6 +54,12 @@ type NavItem = NavLinkItem | NavGroupItem;
 type NavigationGroups = Record<'management' | 'appServices' | 'business' | 'system', NavItem[]>;
 
 const getString = (value: unknown, fallback: string) => (typeof value === 'string' && value.trim() ? value : fallback);
+const formatDashboardDate = (date: Date) => new Intl.DateTimeFormat(undefined, {
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+}).format(date);
 
 const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
   management: [
@@ -107,17 +113,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isDesktopNavigation, setDesktopNavigation] = useState(false);
   const [isMobileNavigation, setMobileNavigation] = useState(false);
+  const [todayLabel, setTodayLabel] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
   const navigation = NAV_STRUCTURE(t);
-  const todayLabel = new Intl.DateTimeFormat(undefined, {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date());
   const isMechanic = user?.role === 'mechanic';
   const isNavLink = (item: NavItem): item is NavLinkItem => 'href' in item;
   const isNavGroup = (item: NavItem): item is NavGroupItem => Array.isArray((item as { children?: NavChild[] }).children);
@@ -193,6 +194,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   };
 
   const toggleSidebar = () => setSidebarOpen(open => !open);
+
+  useEffect(() => {
+    setTodayLabel(formatDashboardDate(new Date()));
+  }, []);
 
   useEffect(() => {
     if (loading || companyLoading) return;

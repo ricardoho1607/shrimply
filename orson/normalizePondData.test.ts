@@ -27,6 +27,8 @@ export const runNormalizePondDataSelfTest = () => {
           doEvening: '4.4',
           salinity: '18',
           temperature: '29.5',
+          ammonia: '0.35',
+          operationalNotes: 'Aerators ran overnight after rain.',
           weatherEvent: 'heavy_rain',
           waterExchangePercent: '12.5',
           sludgeLoad: 'high',
@@ -82,6 +84,8 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.records[0].kinds.includes('water_quality'), 'detects water-quality record');
   assert(!pond.records[0].kinds.includes('feed'), 'does not treat zero-feed water-quality entry as feed');
   assert(pond.records[0].weatherEvent === 'heavy_rain', 'keeps the dated weather event');
+  assert(pond.records[0].ammoniaMgL === 0.35, 'normalizes daily ammonia context');
+  assert(pond.records[0].operationalNotes === 'Aerators ran overnight after rain.', 'keeps water-quality operating notes');
   assert(pond.records[0].waterExchangePercent === 12.5, 'normalizes water exchange percentage');
   assert(pond.records[0].sludgeLoad === 'high', 'keeps sludge observation');
   assert(pond.records[0].surfaceScum === false, 'preserves an explicit no-scum observation');

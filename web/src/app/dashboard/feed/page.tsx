@@ -32,6 +32,8 @@ import {
   DAILY_FEED_USAGE_SOURCE,
   buildDailyFeedRecordId,
   getDailyFeedUsageTotal,
+  getDailyFeedUsageAdjustment,
+  formatFeedQuantityForDisplay,
   isDailyFeedUsage,
   normalizeFeedAllocations,
   sumFeedAllocations,
@@ -316,6 +318,10 @@ export default function FeedRecordsPage() {
     if (!companyId || !formData.pondId) return;
     if (!canEditFeed) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
+    if (!formData.feedingResponse) {
+      alert('Choose a feeding response before saving.');
+      return;
+    }
     const allocationInputs = formData.feedAllocations.map((allocation) => ({
       inventoryFeedId: allocation.inventoryFeedId,
       quantityKg: Number(allocation.quantityKg),
@@ -363,7 +369,7 @@ export default function FeedRecordsPage() {
 
         const feedData = {
           totalDailyFeed: feedAmount.toFixed(2),
-          feedingResponse: formData.feedingResponse || null,
+          feedingResponse: formData.feedingResponse,
           inventoryFeedId: requestedAllocations.length === 1 ? requestedAllocations[0].inventoryFeedId : null,
           feedAllocations: requestedAllocations,
           cycleId: pondData.cycleId,
@@ -469,7 +475,7 @@ export default function FeedRecordsPage() {
           }
           const alreadyDeducted = getFeedScreenUsageTotal(feedId);
           const desiredAmount = desiredByFeedId.get(feedId) || 0;
-          adjustFeedUsage(feedId, desiredAmount - alreadyDeducted);
+          adjustFeedUsage(feedId, getDailyFeedUsageAdjustment(desiredAmount, alreadyDeducted));
         }
 
         transaction.update(pondRef, {
@@ -1116,7 +1122,7 @@ export default function FeedRecordsPage() {
                         {inventoryFeeds
                           .filter((feed) => feed.id === allocation.inventoryFeedId || !formData.feedAllocations.some((item) => item.inventoryFeedId === feed.id))
                           .map((feed) => (
-                            <option key={feed.id} value={feed.id}>{feed.feedName || feed.brand || 'Feed'} — {feed.totalStock || 0} {feed.unit || 'kg'}</option>
+                            <option key={feed.id} value={feed.id}>{feed.feedName || feed.brand || 'Feed'} — {formatFeedQuantityForDisplay(feed.totalStock)} {feed.unit || 'kg'}</option>
                           ))}
                       </select>
                       <input
@@ -1177,9 +1183,9 @@ export default function FeedRecordsPage() {
                 </div>
 
                 <div className="feed-response-field" style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.feed.feedingResponseOptional}</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{t.feed.feedingResponse}</label>
                   <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{t.feed.feedingResponseHint}</p>
-                  <div className="feed-response-options" role="radiogroup" aria-label={t.feed.feedingResponseOptional}>
+                  <div className="feed-response-options" role="radiogroup" aria-required="true" aria-label={t.feed.feedingResponse}>
                     {(['strong', 'normal', 'weak'] as FeedingResponse[]).map((response) => {
                       const selected = formData.feedingResponse === response;
                       return (
@@ -1191,7 +1197,7 @@ export default function FeedRecordsPage() {
                           className={`feed-response-option${selected ? ' is-selected' : ''}`}
                           onClick={() => setFormData((current) => ({
                             ...current,
-                            feedingResponse: selected ? null : response,
+                            feedingResponse: response,
                           }))}
                         >
                           {feedingResponseLabels[response]}

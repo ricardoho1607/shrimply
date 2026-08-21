@@ -109,3 +109,9 @@ test('remaining authenticated routes opt into the compact UI standard', () => {
     assert.match(source, /authenticated-compact-page/, `${route} is missing the compact UI class`);
   }
 });
+
+test('dashboard date waits for the client so server and browser markup match', () => {
+  assert.match(layout, /const \[todayLabel, setTodayLabel\] = useState\(''\)/);
+  assert.match(layout, /setTodayLabel\(formatDashboardDate\(new Date\(\)\)\)/);
+  assert.doesNotMatch(layout, /const todayLabel = new Intl\.DateTimeFormat/);
+});

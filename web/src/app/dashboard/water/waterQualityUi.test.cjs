@@ -5,6 +5,8 @@ const test = require('node:test');
 
 const pageSource = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const globalStyles = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
+const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/water-quality.tsx'), 'utf8');
+const pondStore = fs.readFileSync(path.join(__dirname, '../../../../../app/store/pondStore.ts'), 'utf8');
 
 test('water quality uses the compact authenticated layout', () => {
   assert.match(pageSource, /className="dashboard-page water-quality-page"/);
@@ -46,4 +48,17 @@ test('water quality shows Plankton Overwatch and keeps pond-condition evidence o
   assert.match(pageSource, /surfaceScum: null as boolean \| null/);
   assert.match(pageSource, /shrimpBehaviour: formData\.shrimpBehaviour/);
   assert.match(pageSource, /prev\.surfaceScum === value \? null : value/);
+});
+
+test('daily water quality preserves optional farm context and legacy records', () => {
+  assert.match(pageSource, /ammonia: existing\.ammonia \|\| ''/);
+  assert.match(pageSource, /operationalNotes: existing\.operationalNotes \|\| ''/);
+  assert.match(pageSource, />Ammonia \(TAN\) \(mg\/L\)</);
+  assert.match(pageSource, />Operational Notes</);
+  assert.match(pageSource, /temperature: formData\.temperature/);
+  assert.match(pageSource, /weatherEvent: formData\.weatherEvent/);
+  assert.match(mobileSource, /ammonia: values\.ammonia\.trim\(\)/);
+  assert.match(mobileSource, /operationalNotes: values\.operationalNotes\.trim\(\)/);
+  assert.match(pondStore, /sampling\.ammonia/);
+  assert.match(pondStore, /sampling\.operationalNotes/);
 });

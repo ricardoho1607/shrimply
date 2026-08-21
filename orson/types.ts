@@ -105,6 +105,8 @@ export interface OrsonNormalizedRecord {
   salinityPpt: OrsonNumber;
   transparencyCm: OrsonNumber;
   temperatureC: OrsonNumber;
+  ammoniaMgL: OrsonNumber;
+  operationalNotes: string | null;
   weatherEvent: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
   waterExchangePercent: OrsonNumber;
   sludgeLoad: 'low' | 'moderate' | 'high' | null;
@@ -354,6 +356,8 @@ export interface OrsonPromptDailyRecord {
   phSwing: OrsonNumber;
   salinityPpt: OrsonNumber;
   temperatureC?: OrsonNumber;
+  ammoniaMgL?: OrsonNumber;
+  operationalNotes?: string | null;
   transparencyCm?: OrsonNumber;
   feedingResponse?: 'strong' | 'normal' | 'weak' | null;
   weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;

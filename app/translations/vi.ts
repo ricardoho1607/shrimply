@@ -103,6 +103,8 @@ harvestDetails: {
   overwatchNextAction: 'Hành động tiếp theo',
   overwatchMissingData: 'Dữ liệu còn thiếu',
   temperature: 'Nhiệt độ',
+  ammonia: 'Amoniac (TAN)',
+  operationalNotes: 'Ghi chú vận hành',
   optionalPondConditions: 'Điều kiện ao tùy chọn',
   optionalPondConditionsHint: 'Chỉ thêm những gì được quan sát trực tiếp hôm nay.',
   weatherEvent: 'Sự kiện thời tiết',

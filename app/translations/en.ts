@@ -103,6 +103,8 @@ harvestDetails: {
   overwatchNextAction: 'Next action',
   overwatchMissingData: 'Still needed',
   temperature: 'Temperature',
+  ammonia: 'Ammonia (TAN)',
+  operationalNotes: 'Operational Notes',
   optionalPondConditions: 'Optional Pond Conditions',
   optionalPondConditionsHint: 'Add only what was directly observed today.',
   weatherEvent: 'Weather Event',

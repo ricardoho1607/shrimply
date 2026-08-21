@@ -52,3 +52,12 @@ test('pond detail shows the latest deterministic Plankton Overwatch result', () 
   assert.match(component, /latestPlanktonOverwatch\?: PlanktonOverwatchSnapshot/);
   assert.match(component, /<PlanktonOverwatchCard snapshot=\{pond\.latestPlanktonOverwatch\} \/>/);
 });
+
+test('sampling writes biological data without touching feed inventory', () => {
+  const handler = component.slice(
+    component.indexOf('const handleSaveSampling'),
+    component.indexOf('const handleSaveMortality'),
+  );
+  assert.match(handler, /samplings:/);
+  assert.doesNotMatch(handler, /runTransaction|inventoryFeedId|companies.*feeds/);
+});

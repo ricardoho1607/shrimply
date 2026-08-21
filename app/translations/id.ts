@@ -103,6 +103,8 @@ harvestDetails: {
   overwatchNextAction: 'Tindakan berikutnya',
   overwatchMissingData: 'Masih diperlukan',
   temperature: 'Suhu',
+  ammonia: 'Amonia (TAN)',
+  operationalNotes: 'Catatan Operasional',
   optionalPondConditions: 'Kondisi Kolam Opsional',
   optionalPondConditionsHint: 'Tambahkan hanya yang diamati langsung hari ini.',
   weatherEvent: 'Kejadian Cuaca',

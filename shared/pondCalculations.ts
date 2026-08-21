@@ -12,6 +12,8 @@ export type FeedingResponse = typeof FEEDING_RESPONSE_VALUES[number];
 export interface SharedFeedData {
   totalDailyFeed?: number | string | null;
   feedingResponse?: FeedingResponse | null;
+  cycleId?: string | null;
+  pondCycleId?: string | null;
 }
 
 export interface SharedSampling {
@@ -22,6 +24,8 @@ export interface SharedSampling {
   mortality?: number | string | null;
   feed?: number | string | null;
   feedData?: SharedFeedData | null;
+  cycleId?: string | null;
+  pondCycleId?: string | null;
   isBaselineEstimate?: boolean;
   source?: string | null;
   estimatedPopulation?: number | string | null;
@@ -144,6 +148,26 @@ export const getSamplingMbw = (sampling?: Pick<SharedSampling, 'mbw' | 'abw'> | 
 
 export const isBaselineSampling = (sampling: Pick<SharedSampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+
+export const getLatestFeedResponseForDate = (
+  samplings: SharedSampling[] | null | undefined,
+  date: string,
+  cycle?: { cycleId?: string | null; pondCycleId?: string | null },
+): FeedingResponse | null => {
+  for (let index = (samplings?.length || 0) - 1; index >= 0; index -= 1) {
+    const sampling = samplings?.[index];
+    if (!sampling || sampling.date !== date || isBaselineSampling(sampling)) continue;
+    const response = sampling.feedData?.feedingResponse;
+    if (!response || !FEEDING_RESPONSE_VALUES.includes(response)) continue;
+
+    const recordCycleId = sampling.feedData?.cycleId || sampling.cycleId;
+    const recordPondCycleId = sampling.feedData?.pondCycleId || sampling.pondCycleId;
+    if (cycle?.cycleId && recordCycleId && cycle.cycleId !== recordCycleId) continue;
+    if (cycle?.pondCycleId && recordPondCycleId && cycle.pondCycleId !== recordPondCycleId) continue;
+    return response;
+  }
+  return null;
+};
 
 export const getMortalityPopulationDeduction = (
   record: Pick<SharedMortalityRecord, 'observationType' | 'count'>,
@@ -325,6 +349,11 @@ export const getLatestValidMbwSampling = (pond: Pick<SharedPond, 'samplings'>): 
   sortByDateAsc(pond.samplings || [])
     .reverse()
     .find((sampling) => getSamplingMbw(sampling) > 0);
+
+export const getLatestGrowthSampling = (pond: Pick<SharedPond, 'samplings'>): SharedSampling | undefined =>
+  sortByDateAsc(pond.samplings || [])
+    .reverse()
+    .find((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
 
 export const calculateAdg = (
   pond: Pick<SharedPond, 'docStart' | 'initialWeight' | 'baselineMbw' | 'samplings'>,
