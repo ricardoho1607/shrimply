@@ -80,6 +80,84 @@ service cloud.firestore {
         : null;
     }
 
+    function validPermissionOverrides(data) {
+      return !('permissionOverrides' in data)
+        || (
+          data.permissionOverrides is map
+          && data.permissionOverrides.keys().hasOnly([
+            'viewFarm', 'managePonds', 'recordPondData', 'manageCycles', 'manageEnterpriseBlocks',
+            'manageLabReports', 'manageFeedInventory', 'manageHarvests', 'viewAssets', 'manageAssets',
+            'logAssetMaintenance', 'viewFinance', 'manageFinance', 'viewReports', 'exportReports',
+            'useOrson', 'editCompanySettings', 'manageTeam', 'submitDiseaseReports',
+            'resolveDiseaseReports', 'manageMarketplace', 'manageCompanyDeletion'
+          ])
+          && validOptionalBoolean(data.permissionOverrides, 'viewFarm')
+          && validOptionalBoolean(data.permissionOverrides, 'managePonds')
+          && validOptionalBoolean(data.permissionOverrides, 'recordPondData')
+          && validOptionalBoolean(data.permissionOverrides, 'manageCycles')
+          && validOptionalBoolean(data.permissionOverrides, 'manageEnterpriseBlocks')
+          && validOptionalBoolean(data.permissionOverrides, 'manageLabReports')
+          && validOptionalBoolean(data.permissionOverrides, 'manageFeedInventory')
+          && validOptionalBoolean(data.permissionOverrides, 'manageHarvests')
+          && validOptionalBoolean(data.permissionOverrides, 'viewAssets')
+          && validOptionalBoolean(data.permissionOverrides, 'manageAssets')
+          && validOptionalBoolean(data.permissionOverrides, 'logAssetMaintenance')
+          && validOptionalBoolean(data.permissionOverrides, 'viewFinance')
+          && validOptionalBoolean(data.permissionOverrides, 'manageFinance')
+          && validOptionalBoolean(data.permissionOverrides, 'viewReports')
+          && validOptionalBoolean(data.permissionOverrides, 'exportReports')
+          && validOptionalBoolean(data.permissionOverrides, 'useOrson')
+          && validOptionalBoolean(data.permissionOverrides, 'editCompanySettings')
+          && validOptionalBoolean(data.permissionOverrides, 'manageTeam')
+          && validOptionalBoolean(data.permissionOverrides, 'submitDiseaseReports')
+          && validOptionalBoolean(data.permissionOverrides, 'resolveDiseaseReports')
+          && validOptionalBoolean(data.permissionOverrides, 'manageMarketplace')
+          && validOptionalBoolean(data.permissionOverrides, 'manageCompanyDeletion')
+        );
+    }
+
+    function roleHasDefaultPermission(role, permission) {
+      return role in ['owner', 'co-owner']
+        || (
+          role in ['manager', 'admin']
+          && permission in [
+            'viewFarm', 'viewAssets', 'viewFinance', 'manageFinance', 'viewReports', 'exportReports',
+            'useOrson', 'editCompanySettings', 'submitDiseaseReports', 'resolveDiseaseReports', 'manageMarketplace'
+          ]
+        )
+        || (
+          role == 'technician'
+          && permission in [
+            'viewFarm', 'managePonds', 'recordPondData', 'manageCycles', 'manageLabReports',
+            'manageFeedInventory', 'manageHarvests', 'viewAssets', 'manageAssets', 'logAssetMaintenance',
+            'viewReports', 'exportReports', 'useOrson', 'submitDiseaseReports', 'manageMarketplace'
+          ]
+        )
+        || (role == 'mechanic' && permission in ['viewFarm', 'viewAssets', 'logAssetMaintenance'])
+        || (role == 'buyer' && permission == 'manageMarketplace');
+    }
+
+    function currentUserHasPermissionOverride(permission) {
+      return 'permissionOverrides' in userDoc().data
+        && userDoc().data.permissionOverrides is map
+        && permission in userDoc().data.permissionOverrides;
+    }
+
+    function hasCompanyPermission(companyId, permission) {
+      return isCompanyMember(companyId)
+        && (
+          isCompanyOwner(companyId)
+          || (
+            userBelongsToCompany(companyId)
+            && (
+              currentUserHasPermissionOverride(permission)
+                ? userDoc().data.permissionOverrides[permission] == true
+                : roleHasDefaultPermission(currentUserRole(), permission)
+            )
+          )
+        );
+    }
+
     function userBelongsToCompany(companyId) {
       return signedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
@@ -137,6 +215,31 @@ service cloud.firestore {
         ]);
     }
 
+    function validPondObservationUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        'samplings',
+        'mortalityRecords',
+        'updatedAt',
+        'updatedBy'
+      ]);
+    }
+
+    function validHarvestPondImpactUpdate() {
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        'totalHarvestedBiomass',
+        'totalHarvestedPopulation',
+        'partialHarvestCount',
+        'postHarvestBaselineDate',
+        'postHarvestRemainingBiomass',
+        'postHarvestRemainingPopulation',
+        'postHarvestReferenceSamplingId',
+        'postHarvestReferenceSamplingDate',
+        'postHarvestReferenceMbw',
+        'updatedAt',
+        'updatedBy'
+      ]);
+    }
+
     function validUserPayload(data) {
       return (!('uid' in data) || data.uid == request.auth.uid)
         && (!('id' in data) || data.id == request.auth.uid)
@@ -146,7 +249,10 @@ service cloud.firestore {
         && validOptionalString(data, 'profileImage', 2000)
         && validOptionalNullableString(data, 'companyId', 160)
         && (!('role' in data) || validRoleValue(data.role))
-        && validOptionalBoolean(data, 'hasCompletedSetup');
+        && validOptionalBoolean(data, 'hasCompletedSetup')
+        && validPermissionOverrides(data)
+        && validOptionalTimestamp(data, 'permissionsUpdatedAt')
+        && validOptionalString(data, 'permissionsUpdatedBy', 160);
     }
 
     function validCompanyPayload(data) {
@@ -214,7 +320,7 @@ service cloud.firestore {
     function validEnterprisePondBlock(companyId, data) {
       return !('businessSize' in companyDoc(companyId).data)
         || companyDoc(companyId).data.businessSize != 'enterprise'
-        || isCompanyOwnerRole(companyId)
+        || hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
         || (
           data.blockId is string
           && exists(/databases/$(database)/documents/companies/$(companyId)/blocks/$(data.blockId))
@@ -225,7 +331,7 @@ service cloud.firestore {
     function validEnterprisePondCycle(companyId, data) {
       return !('businessSize' in companyDoc(companyId).data)
         || companyDoc(companyId).data.businessSize != 'enterprise'
-        || isCompanyOwnerRole(companyId)
+        || hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
         || !('cycleId' in data)
         || (
           data.cycleId is string
@@ -668,7 +774,7 @@ service cloud.firestore {
     function isMarketplaceListingOwner(data) {
       return data.userId == request.auth.uid
         || data.createdBy == request.auth.uid
-        || isCompanyOwnerRole(data.companyId);
+        || hasCompanyPermission(data.companyId, 'manageMarketplace');
     }
 
     function validMarketplaceListingCreate(data) {
@@ -783,6 +889,23 @@ service cloud.firestore {
           && isCompanyOwner(request.resource.data.companyId)
           && validRequiredCompanySetup(companyDoc(request.resource.data.companyId).data)
         )
+        || (
+          isFounderAdmin()
+          && validPermissionOverrides(request.resource.data)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'permissionOverrides',
+            'permissionsUpdatedAt',
+            'permissionsUpdatedBy'
+          ])
+          && request.resource.data.permissionsUpdatedAt == request.time
+          && request.resource.data.permissionsUpdatedBy == request.auth.uid
+          && (
+            !('companyId' in resource.data)
+            || resource.data.companyId == null
+            || !exists(/databases/$(database)/documents/companies/$(resource.data.companyId))
+            || companyDoc(resource.data.companyId).data.ownerId != userId
+          )
+        )
       );
       allow delete: if isFounderAdmin();
 
@@ -809,7 +932,7 @@ service cloud.firestore {
           && validCompanyPayload(request.resource.data)
           && request.resource.data.ownerId == resource.data.ownerId
           && (
-            isCompanyManager(companyId)
+            hasCompanyPermission(companyId, 'editCompanySettings')
             && !request.resource.data.diff(resource.data).changedKeys().hasAny([
               'ownerId',
               'teamMembers',
@@ -821,116 +944,124 @@ service cloud.firestore {
       allow delete: if isCompanyOwner(companyId) || isFounderAdmin();
 
       match /blocks/{blockId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create: if isCompanyOwnerRole(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow create: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
           && validFarmBlockPayload(request.resource.data, companyId)
           && request.resource.data.createdBy == request.auth.uid;
-        allow update: if isCompanyOwnerRole(companyId)
+        allow update: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
           && validFarmBlockPayload(request.resource.data, companyId)
           && request.resource.data.companyId == resource.data.companyId
           && request.resource.data.createdBy == resource.data.createdBy;
-        allow delete: if isCompanyOwnerRole(companyId) || isFounderAdmin();
+        allow delete: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks') || isFounderAdmin();
       }
 
       match /ponds/{pondId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create, update: if isCompanyOperator(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow create: if hasCompanyPermission(companyId, 'managePonds')
           && validEnterprisePondBlock(companyId, request.resource.data)
           && validEnterprisePondCycle(companyId, request.resource.data);
-        allow delete: if (isCompanyOperator(companyId)
+        allow update: if (
+            hasCompanyPermission(companyId, 'managePonds')
+            || ((hasCompanyPermission(companyId, 'recordPondData')
+              || hasCompanyPermission(companyId, 'manageFeedInventory')) && validPondObservationUpdate())
+            || (hasCompanyPermission(companyId, 'manageHarvests') && validHarvestPondImpactUpdate())
+          )
+          && validEnterprisePondBlock(companyId, request.resource.data)
+          && validEnterprisePondCycle(companyId, request.resource.data);
+        allow delete: if (hasCompanyPermission(companyId, 'managePonds')
           && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
 
         match /labSummaries/{labReportId} {
-          allow read: if isFounderAdmin() || isCompanyMember(companyId);
+          allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
           allow write: if isFounderAdmin();
         }
 
         match /planktonOverwatchHistory/{evaluationId} {
-          allow read: if isFounderAdmin() || isCompanyMember(companyId);
+          allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
           allow write: if isFounderAdmin();
         }
       }
 
       match /labReports/{labReportId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create: if isCompanyOperator(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow create: if hasCompanyPermission(companyId, 'manageLabReports')
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
           && request.resource.data.entryMode in ['manual', 'pdf_upload'];
-        allow update: if isCompanyOperator(companyId)
+        allow update: if hasCompanyPermission(companyId, 'manageLabReports')
           && resource.data.status != 'confirmed'
           && request.resource.data.companyId == companyId
           && request.resource.data.status in ['draft', 'extracted', 'confirmed', 'failed']
           && request.resource.data.entryMode in ['manual', 'pdf_upload'];
-        allow delete: if isCompanyOwnerRole(companyId) || isFounderAdmin();
+        allow delete: if hasCompanyPermission(companyId, 'manageLabReports') || isFounderAdmin();
       }
 
       match /labUsage/{usageId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
         allow write: if isFounderAdmin();
       }
 
       match /physicalPonds/{physicalPondId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create, update: if isCompanyOperator(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow create, update: if hasCompanyPermission(companyId, 'managePonds')
           && validEnterprisePondBlock(companyId, request.resource.data);
-        allow delete: if (isCompanyOperator(companyId)
+        allow delete: if (hasCompanyPermission(companyId, 'managePonds')
           && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
       }
 
       match /cycles/{cycleId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isFounderAdmin() || (isCompanyOperator(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if isFounderAdmin() || (hasCompanyPermission(companyId, 'manageCycles')
           && (
             !('businessSize' in companyDoc(companyId).data)
             || companyDoc(companyId).data.businessSize != 'enterprise'
-            || isCompanyOwnerRole(companyId)
+            || hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
           ));
       }
 
       match /harvestRecords/{harvestId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageHarvests');
       }
 
       match /feeds/{feedId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
       }
 
       match /additives/{additiveId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow write: if isFounderAdmin() || isCompanyOperator(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
       }
 
       match /expenses/{expenseId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create, update: if isCompanyManager(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
+        allow create, update: if hasCompanyPermission(companyId, 'manageFinance')
           || (
-            isCompanyOperator(companyId)
+            hasCompanyPermission(companyId, 'manageFeedInventory')
             && expenseId.matches('sync_INVENTORY-.*')
             && request.resource.data.companyId == companyId
             && request.resource.data.reference.matches('INVENTORY-.*')
           );
         allow delete: if isFounderAdmin()
-          || isCompanyManager(companyId)
-          || (isCompanyOperator(companyId)
+          || hasCompanyPermission(companyId, 'manageFinance')
+          || (hasCompanyPermission(companyId, 'manageFeedInventory')
             && expenseId.matches('sync_INVENTORY-.*')
             && resource.data.reference.matches('INVENTORY-.*'));
       }
 
       match /revenues/{revenueId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create, update: if isCompanyManager(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
+        allow create, update: if hasCompanyPermission(companyId, 'manageFinance')
           || (
-            isCompanyOperator(companyId)
+            hasCompanyPermission(companyId, 'manageHarvests')
             && revenueId.matches('sync_HARVEST-.*')
             && request.resource.data.companyId == companyId
             && request.resource.data.reference.matches('HARVEST-.*')
           );
         allow delete: if isFounderAdmin()
-          || isCompanyManager(companyId)
-          || (isCompanyOperator(companyId)
+          || hasCompanyPermission(companyId, 'manageFinance')
+          || (hasCompanyPermission(companyId, 'manageHarvests')
             && revenueId.matches('sync_HARVEST-.*')
             && resource.data.reference.matches('HARVEST-.*'));
       }
@@ -947,10 +1078,10 @@ service cloud.firestore {
       // here before calling Orson, so keep that path backward-compatible but prevent
       // resets, jumps, or changes to both counters in one write.
       match /aiUsage/{usageDateId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
-        allow create: if isCompanyMember(companyId)
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
+        allow create: if hasCompanyPermission(companyId, 'useOrson')
           && validLegacyAiUsageCreate(request.resource.data, usageDateId);
-        allow update: if isCompanyMember(companyId)
+        allow update: if hasCompanyPermission(companyId, 'useOrson')
           && validLegacyAiUsageUpdate(request.resource.data, usageDateId);
         allow delete: if isFounderAdmin();
       }
@@ -958,33 +1089,33 @@ service cloud.firestore {
       // Authoritative Orson quotas live here. Only Cloud Functions/Admin SDK writes
       // these counters; client SDKs can never reserve, reset, or forge them.
       match /orsonUsage/{usageDateId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
       }
 
       match /orsonPredictions/{predictionId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
       }
 
       match /orsonCycleOutcomes/{outcomeId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
       }
 
       match /orsonCalibration/{calibrationId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
       }
 
       match /orsonCalibrationEvaluations/{evaluationId} {
-        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
       }
 
       match /userActivitySessions/{sessionId} {
         allow read: if isFounderAdmin()
-          || isCompanyManager(companyId)
+          || hasCompanyPermission(companyId, 'manageTeam')
           || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid);
         allow create: if isCompanyMember(companyId)
           && validActivitySessionCreate(request.resource.data, companyId);
@@ -995,7 +1126,7 @@ service cloud.firestore {
 
       match /userActivityDaily/{summaryId} {
         allow read: if isFounderAdmin()
-          || isCompanyManager(companyId)
+          || hasCompanyPermission(companyId, 'manageTeam')
           || (isCompanyMember(companyId) && resource.data.userId == request.auth.uid);
         allow create: if isCompanyMember(companyId)
           && validActivityDailyCreate(request.resource.data, companyId);
@@ -1012,15 +1143,15 @@ service cloud.firestore {
         || isCompanyMember(companyId)
       );
       allow create: if signedIn()
-        && isCompanyManager(companyId)
+        && hasCompanyPermission(companyId, 'editCompanySettings')
         && validPublicCompanyProfile(request.resource.data, companyId);
       allow update: if signedIn()
-        && isCompanyManager(companyId)
+        && hasCompanyPermission(companyId, 'editCompanySettings')
         && (
           validPublicCompanyProfile(request.resource.data, companyId)
           || validPublicMemberCountUpdate(companyId)
         );
-      allow delete: if signedIn() && isCompanyManager(companyId);
+      allow delete: if signedIn() && hasCompanyPermission(companyId, 'editCompanySettings');
     }
 
     match /joinRequests/{requestId} {
@@ -1028,7 +1159,7 @@ service cloud.firestore {
       allow read: if signedIn() && (
         isFounderAdmin()
         || resource.data.userId == request.auth.uid
-        || isCompanyOwnerRole(resource.data.companyId)
+        || hasCompanyPermission(resource.data.companyId, 'manageTeam')
       );
       allow update: if false;
       allow delete: if isFounderAdmin();
@@ -1058,16 +1189,21 @@ service cloud.firestore {
 
     match /diseaseReports/{reportId} {
       allow read: if signedIn();
-      allow create: if signedIn() && validDiseaseReportCreate(request.resource.data);
+      allow create: if signedIn()
+        && hasCompanyPermission(request.resource.data.companyId, 'submitDiseaseReports')
+        && validDiseaseReportCreate(request.resource.data);
       allow update: if signedIn()
-        && isCompanyManager(resource.data.companyId)
+        && hasCompanyPermission(resource.data.companyId, 'resolveDiseaseReports')
         && validDiseaseReportStatusUpdate();
-      allow delete: if signedIn() && (isCompanyManager(resource.data.companyId) || isFounderAdmin());
+      allow delete: if signedIn()
+        && (hasCompanyPermission(resource.data.companyId, 'resolveDiseaseReports') || isFounderAdmin());
     }
 
     match /marketplace_listings/{listingId} {
       allow read: if signedIn();
-      allow create: if signedIn() && validMarketplaceListingCreate(request.resource.data);
+      allow create: if signedIn()
+        && hasCompanyPermission(request.resource.data.companyId, 'manageMarketplace')
+        && validMarketplaceListingCreate(request.resource.data);
       allow update: if signedIn() && (
         validMarketplaceListingUpdate()
         || validMarketplaceViewCountUpdate()
@@ -1089,16 +1225,16 @@ service cloud.firestore {
     }
 
     match /assets/{assetId} {
-      allow create: if signedIn() && isCompanyOperator(request.resource.data.companyId);
+      allow create: if signedIn() && hasCompanyPermission(request.resource.data.companyId, 'manageAssets');
       allow read: if signedIn() && (
         isFounderAdmin()
-        || isCompanyMember(resource.data.companyId)
+        || hasCompanyPermission(resource.data.companyId, 'viewAssets')
       );
       allow update: if signedIn() && (
-        isCompanyOperator(resource.data.companyId)
-        || (isCompanyMechanic(resource.data.companyId) && validMechanicAssetUpdate())
+        hasCompanyPermission(resource.data.companyId, 'manageAssets')
+        || (hasCompanyPermission(resource.data.companyId, 'logAssetMaintenance') && validMechanicAssetUpdate())
       );
-      allow delete: if signedIn() && isCompanyOperator(resource.data.companyId);
+      allow delete: if signedIn() && hasCompanyPermission(resource.data.companyId, 'manageAssets');
     }
 
     match /apiRequests/{requestId} {

@@ -367,7 +367,7 @@
 .accountTitle p { display: flex; flex-wrap: wrap; gap: 9px 14px; margin: 0; color: #7e95a2; font-size: 8px; }
 .accountTitle p span { display: inline-flex; align-items: center; gap: 4px; }
 .sourceBadge { display: inline-flex; align-items: center; padding: 3px 6px; border: 1px solid #2a5d45; border-radius: 3px; color: #67cf92; background: #0d2b20; font-size: 7px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
-.accountFacts { display: grid; grid-template-columns: .8fr 1.35fr .9fr 1.15fr; gap: 8px; padding: 9px 20px; border-bottom: 0; }
+.accountFacts { display: grid; grid-template-columns: .7fr .8fr 1.35fr .9fr 1.15fr; gap: 8px; padding: 9px 20px; border-bottom: 0; }
 .accountFacts > div,
 .subscriptionGrid > div { min-width: 0; display: grid; gap: 3px; }
 .accountFacts span,
@@ -383,6 +383,24 @@
 .farmRow strong { overflow: hidden; color: #dce7ec; font-size: 9px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
 .farmRow div > span { display: inline-flex; align-items: center; gap: 4px; color: #748d9a; }
 .farmRow > span { text-align: right; }
+.farmModeControl { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; margin-top: 9px; padding: 9px; border: 1px solid #294552; border-radius: 5px; background: #091923; }
+.farmModeControl label { display: grid; gap: 4px; color: #768d9a; font-size: 8px; }
+.farmModeControl select { min-width: 130px; height: 30px; padding: 0 8px; border: 1px solid #304c5a; border-radius: 4px; color: #dfe9ee; background: #0c202c; font-size: 9px; }
+.farmModeControl button { height: 30px; padding: 0 11px; border: 1px solid #31627a; border-radius: 4px; color: #dff3ff; background: #0f4c75; font-size: 9px; font-weight: 650; cursor: pointer; }
+.farmModeControl button:disabled { opacity: .45; cursor: default; }
+.farmModeError { flex-basis: 100%; color: #ef4444; font-size: 8px; }
+.permissionIntro { margin: 0 0 9px; color: #768d9a; font-size: 8px; line-height: 1.45; }
+.permissionGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.permissionOption { min-width: 0; display: flex; align-items: flex-start; gap: 7px; padding: 7px; border: 1px solid #294552; border-radius: 5px; background: #091923; cursor: pointer; }
+.permissionOption input { flex: none; margin: 2px 0 0; accent-color: #0f4c75; }
+.permissionOption > span { min-width: 0; display: grid; gap: 2px; }
+.permissionOption strong { color: #dce7ec; font-size: 8px; font-weight: 650; }
+.permissionOption small { color: #768d9a; font-size: 7px; line-height: 1.35; }
+.permissionActions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 9px; }
+.permissionActions button { height: 30px; padding: 0 11px; border-radius: 4px; font-size: 9px; font-weight: 650; cursor: pointer; }
+.permissionActions button:disabled { opacity: .45; cursor: default; }
+.permissionResetButton { border: 1px solid #304c5a; color: #adc0ca; background: #0c202c; }
+.permissionSaveButton { border: 1px solid #31627a; color: #ffffff; background: #0f4c75; }
 .healthGrid { display: grid; grid-template-columns: 98px minmax(0, 1fr); align-items: center; gap: 15px; }
 .healthRing { width: 82px; height: 82px; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(var(--admin-green) var(--health-score), #15313d 0); }
 .healthRing::before { content: ''; grid-area: 1 / 1; width: 68px; height: 68px; border-radius: 50%; background: var(--admin-bg); }
@@ -587,6 +605,17 @@
 .farmRow { min-height: 38px; color: #526b7a; font-size: 10px; }
 .farmRow strong { color: var(--admin-text); font-size: 11px; }
 .farmRow div > span { color: #64748b; }
+.farmModeControl { border-color: #d5e2ec; background: #f8fafc; }
+.farmModeControl label { color: #64748b; font-size: 10px; }
+.farmModeControl select { border-color: #cbdbe7; color: var(--admin-text); background: #ffffff; font-size: 11px; }
+.farmModeControl button { border-color: var(--admin-cyan); color: #ffffff; background: var(--admin-cyan); font-size: 11px; }
+.permissionIntro { color: #64748b; font-size: 10px; }
+.permissionOption { border-color: #d5e2ec; background: #f8fafc; }
+.permissionOption strong { color: var(--admin-text); font-size: 10px; }
+.permissionOption small { color: #64748b; font-size: 9px; }
+.permissionActions button { font-size: 11px; }
+.permissionResetButton { border-color: #cbdbe7; color: #526b7a; background: #ffffff; }
+.permissionSaveButton { border-color: var(--admin-cyan); background: var(--admin-cyan); }
 .healthRing { background: conic-gradient(var(--admin-cyan) var(--health-score), #dce8f2 0); }
 .healthRing::before { background: #ffffff; }
 .healthRing strong { color: var(--admin-text); }
@@ -714,6 +743,7 @@
   .accountHeader { padding-inline: 12px; }
   .deleteUserButton { width: 34px; padding: 0; justify-content: center; font-size: 0; }
   .accountFacts { grid-template-columns: 1fr 1fr; padding-inline: 12px; }
+  .permissionGrid { grid-template-columns: 1fr; }
   .detailSection { padding-inline: 12px; }
   .adoptionGrid { grid-template-columns: 1fr; }
   .subscriptionGrid { grid-template-columns: 1fr 1fr; }
@@ -1970,4 +2000,3 @@
     max-width: 100%;
   }
 }
-

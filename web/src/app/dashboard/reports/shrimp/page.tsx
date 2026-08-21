@@ -32,6 +32,7 @@ import {
 } from '@/lib/generated/mobileSamplingReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -92,12 +93,15 @@ interface DashboardUser {
   name?: string;
   email?: string;
   companyId?: string;
+  role?: string;
+  permissionOverrides?: unknown;
 }
 
 interface Company {
   id: string;
   companyName?: string;
   timeZone?: string;
+  ownerId?: string;
 }
 
 /* --- Robust Calculation Utilities (Mobile + Web Parity) ---- */
@@ -320,6 +324,8 @@ export default function ShrimpReportsPage() {
   const [selectedPondIds, setSelectedPondIds] = useState<string[] | null>(null);
   const [draftPondIds, setDraftPondIds] = useState<string[]>([]);
   const [isPondSelectorOpen, setIsPondSelectorOpen] = useState(false);
+  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -391,6 +397,7 @@ export default function ShrimpReportsPage() {
   };
 
   const handleGenerateReport = async () => {
+    if (!canExportReports) return;
     if (selectedPonds.length === 0) return;
     setExportLoading(true);
     try {
@@ -463,6 +470,7 @@ export default function ShrimpReportsPage() {
   };
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;
+  if (!canViewReports) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to view reports.</div>;
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '40px' }}>
@@ -490,7 +498,7 @@ export default function ShrimpReportsPage() {
             <span>Select ponds</span>
             <span className="sampling-pond-count">{selectedPonds.length}</span>
           </button>
-          <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
+          <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading || !canExportReports || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
             {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
           </button>
         </div>

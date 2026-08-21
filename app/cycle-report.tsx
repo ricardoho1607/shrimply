@@ -21,6 +21,7 @@ import { exportCycleReportPDF } from './services/cycleReportExportService';
 import { useAssetStore } from './store/assetStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { usePondStore } from './store/pondStore';
+import { hasFarmPermission } from '../shared/permissions';
 
 type TabKey = 'overview' | 'ponds' | 'costs';
 
@@ -67,7 +68,9 @@ export default function CycleReportScreen() {
   const initializeAssets = useAssetStore((state) => state.initializeForCompany);
   const cleanupAssets = useAssetStore((state) => state.cleanup);
 
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewReports', company?.ownerId)
+    && hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   useEffect(() => {
     if (!company?.id || !hasFinanceAccess) return;
@@ -142,7 +145,7 @@ export default function CycleReportScreen() {
   };
 
   const handleExportPdf = async () => {
-    if (!report || exportingPdf) return;
+    if (!report || !canExportReports || exportingPdf) return;
     try {
       setExportingPdf(true);
       await exportCycleReportPDF({
@@ -421,7 +424,7 @@ export default function CycleReportScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={t.cycleReport.exportPdf}
-                disabled={!report || exportingPdf}
+                disabled={!report || !canExportReports || exportingPdf}
                 onPress={handleExportPdf}
                 style={[styles.exportPdfButton, (!report || exportingPdf) && styles.exportPdfButtonDisabled]}
               >

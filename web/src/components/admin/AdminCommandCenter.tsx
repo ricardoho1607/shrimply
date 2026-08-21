@@ -13,6 +13,7 @@ import type {
   AdminDirectoryResponse,
   AdminViewMode,
   DetailedFarm,
+  FarmBusinessSize,
   PlatformHealthOverview,
   PlatformOverviewMetrics,
   SecurityPostureData,
@@ -31,6 +32,7 @@ import { AccountTimeline } from './AccountTimeline';
 import { DeleteUserDialog } from './DeleteUserDialog';
 import { UserDirectory } from './UserDirectory';
 import { getFirestorePlatformHealth } from '@/lib/admin/firestoreAdminAdapter';
+import type { FarmPermissionOverrides } from '../../../../shared/permissions';
 import styles from '@/app/admin/admin.module.css';
 
 type AccessState = 'checking' | 'allowed' | 'denied' | 'signed-out';
@@ -62,6 +64,8 @@ export default function AdminCommandCenter() {
   const [account, setAccount] = useState<AccountIntelligence | null>(null);
   const [accountLoading, setAccountLoading] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
+  const [farmModeUpdating, setFarmModeUpdating] = useState(false);
+  const [permissionsUpdating, setPermissionsUpdating] = useState(false);
 
   // Overview metrics
   const [overviewMetrics, setOverviewMetrics] = useState<PlatformOverviewMetrics | null>(null);
@@ -443,6 +447,30 @@ export default function AdminCommandCenter() {
     await loadOverview();
   };
 
+  const updateSelectedFarmMode = async (companyId: string, businessSize: FarmBusinessSize) => {
+    if (!account) throw new Error('Select a user first.');
+    setFarmModeUpdating(true);
+    try {
+      await repository.updateFarmBusinessSize({ userId: account.id, companyId, businessSize });
+      await loadAccount();
+      setNotice(`Farm mode changed to ${businessSize}.`);
+    } finally {
+      setFarmModeUpdating(false);
+    }
+  };
+
+  const updateSelectedUserPermissions = async (permissionOverrides: FarmPermissionOverrides) => {
+    if (!account) throw new Error('Select a user first.');
+    setPermissionsUpdating(true);
+    try {
+      await repository.updateUserPermissions({ userId: account.id, permissionOverrides });
+      await loadAccount();
+      setNotice('User permissions updated.');
+    } finally {
+      setPermissionsUpdating(false);
+    }
+  };
+
   const getPageTitle = () => {
     if (activeView === 'overview') return 'Platform Overview';
     if (activeView === 'farms') return 'Farms & Operations Fleet';
@@ -600,10 +628,15 @@ export default function AdminCommandCenter() {
             <div className={styles.detailTabContent}>
               {detailTab === 'info' ? (
                 <AccountDetail
+                  key={`${account?.id || 'empty'}-${account?.farms?.[0]?.businessSize || 'none'}-${JSON.stringify(account?.permissionOverrides || {})}`}
                   account={account}
                   loading={accountLoading}
                   error={accountError}
+                  updatingFarmMode={farmModeUpdating}
+                  updatingPermissions={permissionsUpdating}
                   onRetry={() => void loadAccount()}
+                  onUpdateFarmMode={updateSelectedFarmMode}
+                  onUpdatePermissions={updateSelectedUserPermissions}
                 />
               ) : (
                 <AccountTimeline

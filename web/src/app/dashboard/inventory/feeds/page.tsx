@@ -36,6 +36,7 @@ import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../shared/financeSync';
 import styles from './InventoryFeeds.module.css';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 
@@ -83,7 +84,6 @@ interface InventoryItem {
 const UNITS = ['kg', 'L', 'pack', 'sack'];
 const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, {
   maximumFractionDigits: 2,
 }).format(Number.isFinite(value) ? value : 0);
@@ -109,7 +109,7 @@ export default function InventoryFeedsPage() {
     () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
     [ponds]
   );
-  const canEditInventory = canEditOperations(user?.role);
+  const canEditInventory = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
 
   useEffect(() => {
     if (!isInputMenuOpen && !isTransactionFilterOpen) return;

@@ -18,6 +18,7 @@ import {
   collection, addDoc, query, onSnapshot, orderBy,
   Timestamp, updateDoc, doc,
 } from 'firebase/firestore';
+import { hasFarmPermission } from '../shared/permissions';
 
 const { width, height } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -58,7 +59,9 @@ const DISEASE_TYPES_CONFIG = [
 export default function DiseaseReportScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { company } = useAuth();
+  const { user, company } = useAuth();
+  const canSubmitDiseaseReports = hasFarmPermission(user, 'submitDiseaseReports', company?.ownerId);
+  const canResolveDiseaseReports = hasFarmPermission(user, 'resolveDiseaseReports', company?.ownerId);
   const { t } = useLanguage();
   const mapRef = useRef<MapView>(null);
 
@@ -326,6 +329,7 @@ export default function DiseaseReportScreen() {
   };
 
   const handleSubmitReport = async () => {
+    if (!canSubmitDiseaseReports) return;
     const { selectedDisease, symptoms, notificationRadius } = formData;
     
     if (!selectedDisease) {
@@ -366,6 +370,7 @@ export default function DiseaseReportScreen() {
   };
 
   const submitReport = async () => {
+    if (!canSubmitDiseaseReports) return;
     try {
       setLoading(true);
       const diseaseInfo = DISEASE_TYPES.find(d => d.id === formData.selectedDisease);
@@ -469,7 +474,7 @@ export default function DiseaseReportScreen() {
   };
 
   const handleUpdateStatus = async (newStatus: 'contained' | 'resolved') => {
-    if (!selectedReport) return;
+    if (!selectedReport || !canResolveDiseaseReports) return;
 
     Alert.alert(
       `Mark as ${newStatus === 'contained' ? 'Contained' : 'Resolved'}`,

@@ -39,6 +39,7 @@ import {
 import { toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -199,8 +200,6 @@ interface DashboardUser {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
-
 export default function WaterQualityPage() {
   const { company } = useAuth();
   const today = useFarmDateKey(company?.timeZone);
@@ -260,7 +259,8 @@ export default function WaterQualityPage() {
   });
   const [selectedLabPondIds, setSelectedLabPondIds] = useState<string[]>([]);
   const [labRows, setLabRows] = useState<LabPondResult[]>([]);
-  const canEditWater = canEditOperations(user?.role);
+  const canEditWater = hasFarmPermission(user, 'recordPondData', company?.ownerId);
+  const canManageLabReports = hasFarmPermission(user, 'manageLabReports', company?.ownerId);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -819,7 +819,7 @@ export default function WaterQualityPage() {
   };
 
   const handleUploadLabPdf = async () => {
-    if (!companyId || !canEditWater || !user || !labPdfFile) return;
+    if (!companyId || !canManageLabReports || !user || !labPdfFile) return;
     const pdfActionState = getPdfActionState(labForm.reportType === 'plankton' ? 'plankton' : 'water_quality');
     if (pdfActionState.disabled) {
       alert(pdfActionState.message);
@@ -889,7 +889,7 @@ export default function WaterQualityPage() {
 
   const handleCreateManualLabReport = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId || !canEditWater || selectedLabPondIds.length === 0 || !user) return;
+    if (!companyId || !canManageLabReports || selectedLabPondIds.length === 0 || !user) return;
     const accessiblePondIds = new Set(accessiblePonds.map((pond) => pond.id));
     const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
     if (permittedLabRows.length === 0) return;
@@ -1101,7 +1101,7 @@ export default function WaterQualityPage() {
             <span>New Parameter Log</span>
           </button>
         )}
-        {canEditWater && activeView === 'lab' && (
+        {canManageLabReports && activeView === 'lab' && (
           <button
             type="button"
             onClick={() => setLabActionModalOpen(true)}
@@ -1335,7 +1335,7 @@ export default function WaterQualityPage() {
                     >
                       {isExpanded ? 'Hide Details' : 'Details'}
                     </button>
-                    {canEditWater && report.status !== 'confirmed' && (
+                    {canManageLabReports && report.status !== 'confirmed' && (
                       <button
                         type="button"
                         onClick={() => openLabReportReview(report)}

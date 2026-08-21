@@ -22,6 +22,7 @@ import { app, auth, db } from '@/lib/firebase';
 import { syncPublicCompanyMemberCount, syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../../../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../../../shared/onboarding';
+import type { FarmPermissionOverrides } from '../../../shared/permissions';
 
 type UserRole = 'owner' | 'co-owner' | 'technician' | 'manager' | 'admin' | 'buyer' | 'mechanic';
 type StaffRole = 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic';
@@ -83,6 +84,7 @@ interface User {
   inviteToken?: string;
   joinedDate?: string;
   lastActive?: string;
+  permissionOverrides?: FarmPermissionOverrides;
 }
 
 interface Company {

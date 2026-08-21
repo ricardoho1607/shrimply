@@ -39,6 +39,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 
@@ -99,7 +100,6 @@ interface FarmCycle {
 }
 
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 const assetManagementPermissionMessage = 'Only owners, co-owners, and technicians can change asset ownership or master records.';
 const assetMaintenancePermissionMessage = 'Only owners, co-owners, technicians, and mechanics can log maintenance.';
 const assetDeletePermissionMessage = 'Only owners, co-owners, and technicians can delete assets.';
@@ -112,9 +112,9 @@ export default function AssetInventoryPage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user: authUser, company } = useAuth();
-  const isMechanic = authUser?.role === 'mechanic';
-  const canManageAssets = canEditOperations(authUser?.role);
-  const canLogMaintenance = canManageAssets || isMechanic;
+  const canManageAssets = hasFarmPermission(authUser, 'manageAssets', company?.ownerId);
+  const canLogMaintenance = hasFarmPermission(authUser, 'logAssetMaintenance', company?.ownerId);
+  const isMaintenanceOnly = canLogMaintenance && !canManageAssets;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [loading, setLoading] = useState(true);
@@ -391,8 +391,8 @@ export default function AssetInventoryPage() {
         const maintRecord: MaintenanceRecord = {
           id: maintenanceId,
           date: Timestamp.now(),
-          cycleId: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.id,
-          cycleName: isMechanic ? undefined : cycles.find(isOpenFarmCycle)?.cycleName,
+          cycleId: isMaintenanceOnly ? undefined : cycles.find(isOpenFarmCycle)?.id,
+          cycleName: isMaintenanceOnly ? undefined : cycles.find(isOpenFarmCycle)?.cycleName,
           description: formData.maintDesc,
           technician: formData.technician,
           cost: cost,

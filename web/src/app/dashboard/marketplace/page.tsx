@@ -32,6 +32,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { getCompanyCountry, getDefaultMarketplaceExpiry, validateMarketplaceListing } from '../../../../../shared/marketplaceParity';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface PriceList {
@@ -86,6 +87,7 @@ export default function MarketplacePage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user, company } = useAuth();
+  const canManageMarketplace = hasFarmPermission(user, 'manageMarketplace', company?.ownerId);
   const [listings, setListings] = useState<BuyerListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -153,6 +155,7 @@ export default function MarketplacePage() {
   }, [filteredListings]);
 
   const handleDeleteListing = async (listingId: string) => {
+    if (!canManageMarketplace) return;
     setDeleteConfirm({ isOpen: true, id: listingId });
   };
 
@@ -183,6 +186,7 @@ export default function MarketplacePage() {
   };
 
   const handleEditListing = (listing: BuyerListing) => {
+    if (!canManageMarketplace) return;
     setEditingId(listing.id);
     setNewListing({
       buyerName: listing.buyerName,
@@ -216,7 +220,7 @@ export default function MarketplacePage() {
 
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) {
+    if (!user || !canManageMarketplace) {
       alert("You must be logged in to post.");
       return;
     }
@@ -294,7 +298,7 @@ export default function MarketplacePage() {
   return (
     <div className="dashboard-page authenticated-compact-page">
       <div className="dashboard-action-row">
-        <button 
+        {canManageMarketplace && <button
           onClick={() => {
             setEditingId(null);
             setNewListing({
@@ -310,7 +314,7 @@ export default function MarketplacePage() {
           className="btn-primary" 
         >
           <Plus size={20} /> {t.MarketplaceScreen.createListing}
-        </button>
+        </button>}
       </div>
 
       {/* Stats Bar */}
@@ -407,7 +411,7 @@ export default function MarketplacePage() {
                       <div style={{ padding: '4px 10px', borderRadius: '6px', background: listing.paymentMethod === 'cash' ? 'rgba(5, 150, 105, 0.1)' : 'rgba(15, 76, 117, 0.1)', color: listing.paymentMethod === 'cash' ? '#059669' : 'var(--primary)', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' }}>
                         {listing.paymentMethod === 'cash' ? (t.MarketplaceScreen.cod || 'COD') : `${t.CreateBuyerListingScreen.termsOfPayment || 'TOP'} ${listing.topDays}${t.CreateBuyerListingScreen.days || 'D'}`}
                       </div>
-                      {(listing.companyId === company?.id || listing.userId === user?.uid) && (
+                      {canManageMarketplace && (listing.companyId === company?.id || listing.userId === user?.uid) && (
                         <div style={{ display: 'flex', gap: '4px' }}>
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleEditListing(listing); }}

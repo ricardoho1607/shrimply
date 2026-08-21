@@ -37,6 +37,30 @@ test('selected account has a direct return path to the user directory', () => {
   assert.match(source, /backIconButton/);
 });
 
+test('selected account can change the linked farm mode with an audited Firestore update', () => {
+  const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
+  const adapter = fs.readFileSync(path.join(process.cwd(), 'src/lib/admin/firestoreAdminAdapter.ts'), 'utf8');
+  assert.match(detail, /Farm mode/);
+  assert.match(detail, /enterprise/);
+  assert.match(detail, /onUpdateFarmMode/);
+  assert.match(adapter, /businessSize: input\.businessSize/);
+  assert.match(adapter, /farm\.mode\.updated/);
+  assert.match(adapter, /savedBusinessSize !== input\.businessSize/);
+});
+
+test('selected account permissions use role defaults and audited Firestore overrides', () => {
+  const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
+  const adapter = fs.readFileSync(path.join(process.cwd(), 'src/lib/admin/firestoreAdminAdapter.ts'), 'utf8');
+  const rules = fs.readFileSync(path.join(process.cwd(), '..', 'firestore.rules'), 'utf8');
+  assert.match(detail, /FARM_PERMISSION_DEFINITIONS/);
+  assert.match(detail, /Use role defaults/);
+  assert.match(detail, /Owner · locked/);
+  assert.match(adapter, /account\.permissions\.updated/);
+  assert.match(adapter, /permissionOverrides/);
+  assert.match(rules, /hasCompanyPermission/);
+  assert.match(rules, /permissionsUpdatedBy == request\.auth\.uid/);
+});
+
 test('admin UI masks directory contacts and audits the selected email reveal', () => {
   const directory = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/UserDirectory.tsx'), 'utf8');
   const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');

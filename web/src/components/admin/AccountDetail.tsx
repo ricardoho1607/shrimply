@@ -9,9 +9,25 @@ import {
   MapPin,
   Phone,
 } from 'lucide-react';
+import { useState } from 'react';
 import { calculateAccountHealth } from '@/lib/admin/adminCore';
-import type { AccountIntelligence } from '@/lib/admin/types';
+import type { AccountIntelligence, FarmBusinessSize } from '@/lib/admin/types';
+import {
+  FARM_PERMISSION_DEFINITIONS,
+  createPermissionOverrides,
+  getDefaultPermissions,
+  type FarmPermissionKey,
+  type FarmPermissionOverrides,
+  type FarmPermissionSet,
+} from '../../../../shared/permissions';
 import styles from '@/app/admin/admin.module.css';
+
+const FARM_MODE_OPTIONS: Array<{ value: FarmBusinessSize; label: string }> = [
+  { value: 'small', label: 'Small' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'large', label: 'Large' },
+  { value: 'enterprise', label: 'Enterprise' },
+];
 
 const formatDate = (value: string | null, includeTime = false) => {
   if (!value) return 'Unavailable';
@@ -22,7 +38,67 @@ const formatDate = (value: string | null, includeTime = false) => {
     : { day: 'numeric', month: 'short', year: 'numeric' }).format(date);
 };
 
-export function AccountDetail({ account, loading, error, onRetry }: { account: AccountIntelligence | null; loading: boolean; error: string | null; onRetry: () => void }) {
+export function AccountDetail({
+  account,
+  loading,
+  error,
+  updatingFarmMode,
+  updatingPermissions,
+  onRetry,
+  onUpdateFarmMode,
+  onUpdatePermissions,
+}: {
+  account: AccountIntelligence | null;
+  loading: boolean;
+  error: string | null;
+  updatingFarmMode: boolean;
+  updatingPermissions: boolean;
+  onRetry: () => void;
+  onUpdateFarmMode: (companyId: string, businessSize: FarmBusinessSize) => Promise<void>;
+  onUpdatePermissions: (permissionOverrides: FarmPermissionOverrides) => Promise<void>;
+}) {
+  const linkedFarm = account?.farms?.[0];
+  const [farmMode, setFarmMode] = useState<FarmBusinessSize>(linkedFarm?.businessSize || 'medium');
+  const [farmModeError, setFarmModeError] = useState<string | null>(null);
+  const [permissionDraft, setPermissionDraft] = useState<FarmPermissionSet>(
+    account?.effectivePermissions || getDefaultPermissions(account?.role),
+  );
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+
+  const saveFarmMode = async () => {
+    if (!linkedFarm || farmMode === linkedFarm.businessSize) return;
+    const confirmed = window.confirm(`Change ${linkedFarm.name} from ${linkedFarm.businessSize} to ${farmMode}?`);
+    if (!confirmed) return;
+    setFarmModeError(null);
+    try {
+      await onUpdateFarmMode(linkedFarm.id, farmMode);
+    } catch (updateError) {
+      setFarmModeError(updateError instanceof Error ? updateError.message : 'Farm mode could not be changed.');
+    }
+  };
+
+  const permissionOverrides = account
+    ? createPermissionOverrides(account.role, permissionDraft, account.isCompanyOwner)
+    : {};
+  const permissionsChanged = account
+    ? JSON.stringify(permissionOverrides) !== JSON.stringify(account.permissionOverrides)
+    : false;
+
+  const togglePermission = (permission: FarmPermissionKey) => {
+    setPermissionDraft((current) => ({ ...current, [permission]: !current[permission] }));
+  };
+
+  const savePermissions = async () => {
+    if (!account || account.isCompanyOwner || !permissionsChanged) return;
+    if (!window.confirm(`Save permission changes for ${account.name}?`)) return;
+    setPermissionError(null);
+    try {
+      await onUpdatePermissions(permissionOverrides);
+    } catch (updateError) {
+      setPermissionError(updateError instanceof Error ? updateError.message : 'Permissions could not be changed.');
+    }
+  };
+
   if (loading) return <section className={styles.account}><div className={styles.accountSkeleton}><i /><span /><span /><span /><span /></div></section>;
   if (error) return <section className={styles.account}><div className={styles.stateMessage}><strong>Couldn’t load account intelligence</strong><span>{error}</span><button type="button" onClick={onRetry}>Retry</button></div></section>;
   if (!account) return <section className={styles.account}><div className={styles.stateMessage}><strong>Select a user</strong><span>Choose an account to view its operational history.</span></div></section>;
@@ -47,10 +123,31 @@ export function AccountDetail({ account, loading, error, onRetry }: { account: A
       </header>
 
       <div className={styles.accountFacts}>
+        <div><span>Role</span><strong>{account.role}</strong></div>
         <div><span>Plan</span><strong>{account.plan || 'Unavailable'}</strong></div>
         <div><span>Region</span><strong>{account.region || 'Unknown'}, {account.country || 'Unknown'}</strong></div>
         <div><span>Joined</span><strong>{formatDate(account.joinedAt)}</strong></div>
         <div><span>Last active</span><strong>{formatDate(account.lastActiveAt, true)}</strong></div>
+      </div>
+
+      <div className={styles.detailSection}>
+        <div className={styles.sectionHeading}><h3>Permissions</h3><span>{account.isCompanyOwner ? 'Owner · locked' : `${Object.keys(account.permissionOverrides).length} custom`}</span></div>
+        <p className={styles.permissionIntro}>{account.isCompanyOwner ? 'The company owner always keeps full access to prevent lockout.' : `Checked boxes include the ${account.role} defaults and any custom changes.`}</p>
+        <div className={styles.permissionGrid}>
+          {FARM_PERMISSION_DEFINITIONS.map((permission) => (
+            <label className={styles.permissionOption} key={permission.key}>
+              <input type="checkbox" checked={permissionDraft[permission.key]} disabled={account.isCompanyOwner || updatingPermissions} onChange={() => togglePermission(permission.key)} />
+              <span><strong>{permission.label}</strong><small>{permission.description}</small></span>
+            </label>
+          ))}
+        </div>
+        {!account.isCompanyOwner ? (
+          <div className={styles.permissionActions}>
+            <button type="button" className={styles.permissionResetButton} disabled={updatingPermissions} onClick={() => setPermissionDraft(getDefaultPermissions(account.role))}>Use role defaults</button>
+            <button type="button" className={styles.permissionSaveButton} disabled={updatingPermissions || !permissionsChanged} onClick={() => void savePermissions()}>{updatingPermissions ? 'Saving…' : 'Save permissions'}</button>
+          </div>
+        ) : null}
+        {permissionError ? <span className={styles.farmModeError}>{permissionError}</span> : null}
       </div>
 
       <div className={styles.detailSection}>
@@ -61,6 +158,13 @@ export function AccountDetail({ account, loading, error, onRetry }: { account: A
             <span>{farm.pondCount} ponds</span><span>{farm.totalAreaHa === null ? 'Area unavailable' : `${farm.totalAreaHa.toFixed(1)} ha`}</span>
           </div>
         ))}
+        {linkedFarm ? (
+          <div className={styles.farmModeControl}>
+            <label htmlFor="admin-farm-mode"><span>Farm mode</span><select id="admin-farm-mode" value={farmMode} disabled={updatingFarmMode} onChange={(event) => setFarmMode(event.target.value as FarmBusinessSize)}>{FARM_MODE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+            <button type="button" disabled={updatingFarmMode || farmMode === linkedFarm.businessSize} onClick={() => void saveFarmMode()}>{updatingFarmMode ? 'Saving…' : 'Save mode'}</button>
+            {farmModeError ? <span className={styles.farmModeError}>{farmModeError}</span> : null}
+          </div>
+        ) : null}
       </div>
 
       <div className={styles.detailSection}>

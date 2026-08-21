@@ -9,6 +9,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { usePondStore, type Pond, getPondCurrentDoc, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
 import { DAY_MS, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
+import { hasFarmPermission } from '../shared/permissions';
 
 const isAndroid = Platform.OS === 'android';
 
@@ -19,6 +20,8 @@ export default function ShrimpReportsScreen() {
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
   const [loading, setLoading] = useState(false);
   const [selectedPonds, setSelectedPonds] = useState<Set<string>>(new Set());
+  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   const activePonds = useMemo(
     () => ponds.filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone) >= 0),
@@ -82,6 +85,7 @@ export default function ShrimpReportsScreen() {
   };
 
   const handleGenerateReport = async () => {
+    if (!canExportReports) return;
     if (selectedPonds.size === 0) {
       Alert.alert(t.shrimpReports?.noSelection || 'No Ponds Selected', 
         t.shrimpReports?.selectAtLeastOne || 'Please select at least one pond to generate a report');
@@ -174,6 +178,10 @@ export default function ShrimpReportsScreen() {
     </View>
   );
 
+  if (!canViewReports) return (
+    <SafeAreaView style={s.container}><View style={s.empty}><Text style={s.emptyTitle}>You do not have permission to view reports.</Text></View></SafeAreaView>
+  );
+
   return (
     <View style={s.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
@@ -236,7 +244,7 @@ export default function ShrimpReportsScreen() {
 
       <View style={s.footer}>
         <TouchableOpacity style={[s.button, (loading || selectedPonds.size === 0) && s.buttonDisabled]}
-          onPress={handleGenerateReport} disabled={loading || selectedPonds.size === 0}>
+          onPress={handleGenerateReport} disabled={loading || !canExportReports || selectedPonds.size === 0}>
           {loading ? (
             <>
               <ActivityIndicator color="#FFFFFF" />

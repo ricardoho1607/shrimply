@@ -7,6 +7,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useLanguage } from '../context/LanguageContext';
+import { hasFarmPermission } from '../shared/permissions';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -38,6 +39,9 @@ export default function CompanyDetailsScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user, company, getTeamMembers, getCompanyLocationString, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
+  const canEditCompany = hasFarmPermission(user, 'editCompanySettings', company?.ownerId);
+  const canManageTeam = hasFarmPermission(user, 'manageTeam', company?.ownerId);
+  const canManageCompanyDeletion = hasFarmPermission(user, 'manageCompanyDeletion', company?.ownerId);
   
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
@@ -134,7 +138,7 @@ export default function CompanyDetailsScreen() {
         setTeamMembers([]);
       }
       
-      if ((user?.role === 'owner' || user?.role === 'co-owner') && getJoinRequests) {
+      if (canManageTeam && getJoinRequests) {
         try {
           const requests = await getJoinRequests();
           const pending = requests.filter(r => r.status === 'pending');
@@ -147,7 +151,7 @@ export default function CompanyDetailsScreen() {
     } catch (error: any) {
       console.error('Failed to load data:', error);
     }
-  }, [company?.id, company?.teamMembers, getTeamMembers, getJoinRequests, user?.role]);
+  }, [canManageTeam, company?.id, company?.teamMembers, getTeamMembers, getJoinRequests]);
 
   useEffect(() => {
     loadData();
@@ -429,9 +433,9 @@ export default function CompanyDetailsScreen() {
           <View style={styles.cardHeader}>
             <Ionicons name="business" size={Platform.OS === 'android' ? 20 : 24} color="#0d2137" />
             <Text style={styles.cardTitle}>{t.companyDetails.companyInformation}</Text>
-            <TouchableOpacity style={styles.editButton} onPress={() => router.push('/company-setup2?edit=true' as any)}>
+            {canEditCompany && <TouchableOpacity style={styles.editButton} onPress={() => router.push('/company-setup2?edit=true' as any)}>
               <Ionicons name="pencil-outline" size={Platform.OS === 'android' ? 16 : 18} color="#315f57" />
-            </TouchableOpacity>
+            </TouchableOpacity>}
           </View>
           
           <View style={styles.infoGrid}>
@@ -450,7 +454,7 @@ export default function CompanyDetailsScreen() {
         </View>
 
         {/* Join Requests Section */}
-        {(user?.role === 'owner' || user?.role === 'co-owner') && joinRequests.length > 0 && (
+        {canManageTeam && joinRequests.length > 0 && (
           <View style={styles.requestsSection}>
             <TouchableOpacity style={styles.requestsHeader} onPress={() => setShowRequestsTab(!showRequestsTab)}>
               <View style={styles.requestsHeaderLeft}>
@@ -521,7 +525,7 @@ export default function CompanyDetailsScreen() {
                     filled={filled}
                     members={roleMembers}
                     onRemoveMember={handleRemoveMember}
-                    isOwner={user?.role === 'owner' || user?.role === 'co-owner'}
+                    isOwner={canManageTeam}
                     t={t}
                   />
                 );
@@ -550,7 +554,7 @@ export default function CompanyDetailsScreen() {
             </View>
 
             <View style={styles.deletionActionsRow}>
-              {(user?.role === 'owner' || user?.role === 'co-owner') && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
+              {canManageCompanyDeletion && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
                 <TouchableOpacity
                   style={styles.deletionApproveBtn}
                   onPress={handleApproveCompanyDeletion}
@@ -560,7 +564,7 @@ export default function CompanyDetailsScreen() {
                   <Text style={styles.deletionApproveBtnText}>Approve Deletion</Text>
                 </TouchableOpacity>
               )}
-              {(user?.role === 'owner' || user?.role === 'co-owner') && (
+              {canManageCompanyDeletion && (
                 <TouchableOpacity
                   style={styles.deletionCancelBtn}
                   onPress={handleCancelCompanyDeletion}
@@ -574,7 +578,7 @@ export default function CompanyDetailsScreen() {
         )}
 
         {/* Danger Zone: Delete Company for Owners & Co-owners */}
-        {(user?.role === 'owner' || user?.role === 'co-owner') && company?.deletionRequest?.status !== 'pending' && (
+        {canManageCompanyDeletion && company?.deletionRequest?.status !== 'pending' && (
           <View style={styles.dangerZoneCard}>
             <View style={styles.dangerZoneHeader}>
               <Ionicons name="alert-circle-outline" size={20} color="#e74c3c" />

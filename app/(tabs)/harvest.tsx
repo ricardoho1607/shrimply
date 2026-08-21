@@ -18,6 +18,7 @@ import {
   harvestRecordMatchesCycle,
   isHistoricalHarvestRecord,
 } from '../../shared/harvestCycleScope';
+import { hasFarmPermission } from '../../shared/permissions';
 
 const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
   return (
@@ -91,7 +92,7 @@ export default function HarvestScreen() {
   const [historyCycleId, setHistoryCycleId] = useState('all');
   const [harvestDate, setHarvestDate] = useState(getFarmDateKey(new Date(), company?.timeZone));
   
-  const canEditHarvest = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canEditHarvest = hasFarmPermission(user, 'manageHarvests', company?.ownerId);
   const canModifyHarvestRecord = useCallback((harvestId: string) => {
     const record = harvestRecords.find((harvest) => harvest.id === harvestId);
     if (!record) return false;

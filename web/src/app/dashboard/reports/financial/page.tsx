@@ -33,6 +33,7 @@ import {
   isDateKeyInRange,
   normalizeFarmDateKey,
 } from '../../../../../../shared/farmDate';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 
 interface Expense {
   id: string;
@@ -76,7 +77,9 @@ const addBreakdown = (target: Record<string, number>, category: string, amount: 
 export default function FinancialReportsPage() {
   const { formatCurrency, currencyConfig } = useCurrency();
   const { currentLanguage, t } = useLanguage();
-  const { company, loading: authLoading } = useAuth();
+  const { user, company, loading: authLoading } = useAuth();
+  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
   const [selectedReport, setSelectedReport] = useState('profit-loss');
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
   const [cycleScope, setCycleScope] = useState('all');
@@ -186,6 +189,7 @@ export default function FinancialReportsPage() {
   const previewProfit = totalRevenue - totalExpenses;
 
   const handleExport = async () => {
+    if (!canExportReports) return;
     setExportLoading(true);
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');
@@ -336,6 +340,7 @@ export default function FinancialReportsPage() {
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   }
+  if (!canViewFinance) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to view financial reports.</div>;
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page">
@@ -385,7 +390,7 @@ export default function FinancialReportsPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
             </div>
             <div style={{ marginTop: '24px', padding: '14px', background: 'var(--bg-mid)', borderRadius: '14px', display: 'flex', gap: '12px', marginBottom: '24px' }}><AlertCircle size={20} color="var(--primary)" style={{ flexShrink: 0 }} /><p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>Your PDF uses the same report template as the mobile application.</p></div>
-            <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading} style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading || !canExportReports} style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
               <span style={{ fontWeight: 600 }}>{exportLoading ? 'Generating PDF...' : 'Download Statement'}</span>
             </button>

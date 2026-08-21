@@ -30,6 +30,7 @@ import {
   PanelLeft,
   type LucideIcon,
 } from 'lucide-react';
+import { hasFarmPermission } from '../../../../shared/permissions';
 
 /* --- Navigation Config --------------------------------------- */
 
@@ -119,24 +120,32 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
   const navigation = NAV_STRUCTURE(t);
-  const isMechanic = user?.role === 'mechanic';
+  const canViewFarm = hasFarmPermission(user, 'viewFarm', company?.ownerId);
+  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
+  const canViewAssets = hasFarmPermission(user, 'viewAssets', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const isNavLink = (item: NavItem): item is NavLinkItem => 'href' in item;
   const isNavGroup = (item: NavItem): item is NavGroupItem => Array.isArray((item as { children?: NavChild[] }).children);
-  const visibleNavigation = isMechanic ? {
-    management: navigation.management.filter((item): item is NavLinkItem => isNavLink(item) && ['/dashboard', '/dashboard/ponds'].includes(item.href)),
-    appServices: navigation.appServices.filter((item): item is NavLinkItem => isNavLink(item) && ['/dashboard/ai', '/dashboard/notifications'].includes(item.href)),
-    business: [
-      {
-        label: 'Inventory',
-        icon: Box,
-        id: 'inventory',
-        children: [
-          { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
-        ],
-      },
-    ],
+  const visibleNavigation: NavigationGroups = {
+    management: navigation.management.filter((item) => isNavLink(item) && (item.href === '/dashboard' || canViewFarm)),
+    appServices: navigation.appServices.filter((item) => !isNavLink(item) || item.href !== '/dashboard/ai' || canUseOrson),
+    business: navigation.business.flatMap<NavItem>((item) => {
+      if (isNavLink(item)) return item.href === '/dashboard/finance' && !canViewFinance ? [] : [item];
+      if (item.id === 'reports') {
+        if (!canViewReports) return [];
+        return [{ ...item, children: item.children.filter((child) => (
+          !['/dashboard/reports/financial', '/dashboard/reports/cycles'].includes(child.href) || canViewFinance
+        )) }];
+      }
+      if (item.id === 'inventory') {
+        const children = item.children.filter((child) => child.href === '/dashboard/inventory/assets' ? canViewAssets : canViewFarm);
+        return children.length > 0 ? [{ ...item, children }] : [];
+      }
+      return [item];
+    }),
     system: navigation.system,
-  } : navigation;
+  };
 
   const sectionLabels: Record<string, string> = {
     management: 'Management',

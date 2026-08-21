@@ -23,6 +23,7 @@ import {
 import AppDatePicker from './components/forms/AppDatePicker';
 import CycleSelector from './components/forms/CycleSelector';
 import { getOpenFinanceCycles } from '../shared/financeCycleAllocation';
+import { hasFarmPermission } from '../shared/permissions';
 
 type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
@@ -68,7 +69,8 @@ export default function FinancialReportsPage() {
   const [openingInventory, setOpeningInventory] = useState(0);
   const [closingInventory, setClosingInventory] = useState(0);
 
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   useEffect(() => {
     if (!hasFinanceAccess) {
@@ -292,6 +294,7 @@ export default function FinancialReportsPage() {
   );
 
   const handleGenerateReport = async () => {
+    if (!canExportReports) return;
     setGenerating(true);
     try {
       const { startDate, endDate } = getDateRange();
@@ -654,8 +657,8 @@ export default function FinancialReportsPage() {
           )}
         </View>
 
-        <TouchableOpacity style={[styles.generateButton, generating && styles.generateButtonDisabled]}
-          onPress={handleGenerateReport} disabled={generating}>
+        <TouchableOpacity style={[styles.generateButton, (generating || !canExportReports) && styles.generateButtonDisabled]}
+          onPress={handleGenerateReport} disabled={generating || !canExportReports}>
           {generating ? (
             <ActivityIndicator size="small" color="#FFFFFF" />
           ) : (

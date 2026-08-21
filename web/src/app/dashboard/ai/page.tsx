@@ -17,6 +17,7 @@ import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
 import { useAuth } from '@/contexts/AuthContext';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 interface ChatMessage {
   id: string;
@@ -67,7 +68,8 @@ const parseStoredMessages = (value: string | null): ChatMessage[] | null => {
 };
 
 export default function OrsonAIPage() {
-  const { company } = useAuth();
+  const { user, company } = useAuth();
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const [ponds, setPonds] = useState<PondContext[]>([]);
   const [companyId, setCompanyId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
@@ -160,6 +162,8 @@ export default function OrsonAIPage() {
   };
 
   const aiMessageCount = messages.filter(message => message.type === 'ai').length;
+
+  if (!canUseOrson) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to use Orson AI.</div>;
 
   return (
     <div className="dashboard-page authenticated-compact-page orson-page">

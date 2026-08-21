@@ -49,6 +49,7 @@ import {
 } from '../../../../../shared/enterpriseBlocks';
 import { normalizeFarmDateKey } from '../../../../../shared/farmDate';
 import type { FeedingResponse } from '../../../../../shared/pondCalculations';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -118,8 +119,6 @@ interface InventoryFeed {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
-
 export default function FeedRecordsPage() {
   const { t } = useLanguage();
   const { company } = useAuth();
@@ -157,7 +156,7 @@ export default function FeedRecordsPage() {
     normal: t.feed.feedingResponseNormal,
     weak: t.feed.feedingResponseWeak,
   };
-  const canEditFeed = canEditOperations(user?.role);
+  const canEditFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
@@ -315,7 +314,7 @@ export default function FeedRecordsPage() {
 
   const handleAddFeed = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId || !formData.pondId) return;
+    if (!companyId || !formData.pondId || !user) return;
     if (!canEditFeed) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
     if (!formData.feedingResponse) {

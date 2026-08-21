@@ -42,6 +42,7 @@ import {
   normalizeHarvestMarketPriceInputs,
   type HarvestMarketPriceInputs,
 } from '../shared/harvestProjectionSettings';
+import { hasFarmPermission } from '../shared/permissions';
 
 const totalScenarioCosts = (costs: { feed: number; additives: number; generalExpenses: number; other: number }) =>
   costs.feed + costs.additives + costs.generalExpenses + costs.other;
@@ -72,9 +73,8 @@ export default function HarvestProjectionScreen() {
 
   const selectedPond = activePonds.find(p => p.id === selectedPondId);
 
-  const canManagePriceLadder = Boolean(user && company && (
-    company.ownerId === user.uid || ['owner', 'co-owner', 'manager', 'admin'].includes(user.role || '')
-  ));
+  const canManagePriceLadder = hasFarmPermission(user, 'manageFinance', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const hasSavedPriceLadder = Object.values(savedMarketPrices).some((value) => value !== '');
   const hasUnsavedPriceChanges = !harvestMarketPriceInputsEqual(marketPrices, savedMarketPrices);
 
@@ -246,7 +246,7 @@ export default function HarvestProjectionScreen() {
   };
 
   const handleAskOrson = async () => {
-    if (!selectedPond || !projection) return;
+    if (!selectedPond || !projection || !canUseOrson) return;
     
     const prompt = `Please provide a risk analysis for this harvest projection:
 Pond: ${selectedPond.pondName}
@@ -444,7 +444,7 @@ Give a concise recommendation based on the operating-profit comparison and Orson
             )}
           </View>
 
-          <View style={styles.orsonCard}>
+          {canUseOrson && <View style={styles.orsonCard}>
             <View style={styles.orsonHeader}>
               <Ionicons name="sparkles" size={20} color="#315f57" />
               <Text style={styles.orsonTitle}>{t.harvestProjectionScreen?.orsonTitle || 'Orson AI Risk Analysis'}</Text>
@@ -462,7 +462,7 @@ Give a concise recommendation based on the operating-profit comparison and Orson
                 <Text style={styles.orsonBtnText}>{t.harvestProjectionScreen?.orsonAnalyzeBtn || 'Analyze this Projection'}</Text>
               </TouchableOpacity>
             )}
-          </View>
+          </View>}
 
         </ScrollView>
       </KeyboardAvoidingView>

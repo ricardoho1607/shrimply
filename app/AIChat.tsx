@@ -20,6 +20,7 @@ import { useGemini } from './hooks/useGemini';
 import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 import ShrimpIcon from './components/icons/ShrimpIcon';
+import { hasFarmPermission } from '../shared/permissions';
 
 const { width } = Dimensions.get('window');
 
@@ -73,7 +74,8 @@ export default function AIChat() {
   const { sendMessage, loading } = useGemini();
   const { ponds } = usePondStore(); 
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
-  const { company } = useAuth();
+  const { user, company } = useAuth();
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -147,6 +149,10 @@ export default function AIChat() {
       Alert.alert('Orson Error', 'Failed to get a response. Please check your internet.');
     }
   };
+
+  if (!canUseOrson) return (
+    <SafeAreaView style={styles.fullContainer}><View style={[styles.flex, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}><Text>You do not have permission to use Orson AI.</Text></View></SafeAreaView>
+  );
 
   return (
     <View style={styles.fullContainer}>

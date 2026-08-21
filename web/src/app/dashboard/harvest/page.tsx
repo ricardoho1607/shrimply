@@ -41,6 +41,7 @@ import {
   isHistoricalHarvestRecord,
 } from '../../../../../shared/harvestCycleScope';
 import styles from './HarvestPage.module.css';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -120,8 +121,6 @@ interface DashboardUser {
 
 type HarvestFormEntry = Omit<HarvestPond, 'pondName'> & { date: string };
 
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
-
 export default function HarvestPage() {
   const { company } = useAuth();
   const { t } = useLanguage();
@@ -153,7 +152,7 @@ export default function HarvestPage() {
     subPrice: ''
   });
   const [harvestBatch, setHarvestBatch] = useState<HarvestFormEntry[]>([]);
-  const canEditHarvest = canEditOperations(user?.role);
+  const canEditHarvest = hasFarmPermission(user, 'manageHarvests', company?.ownerId);
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,

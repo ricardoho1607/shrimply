@@ -9,12 +9,20 @@ import {
   getDocs,
   limit,
   query,
+  serverTimestamp,
   updateDoc,
   where,
+  writeBatch,
   type DocumentData,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import {
+  getEffectivePermissions,
+  normalizePermissionOverrides,
+  type FarmPermissionOverrides,
+  type FarmPermissionSet,
+} from '../../../../shared/permissions';
 import { getInitials, getLatestIsoTimestamp, maskEmail, maskPhone } from './adminCore';
 import type {
   AccountIntelligence,
@@ -33,6 +41,7 @@ import type {
   DetailedFarmMember,
   DetailedFarmPond,
   FeatureAdoptionItem,
+  FarmBusinessSize,
   HealthInput,
   OrsonAiTelemetry,
   OverviewTriageItem,
@@ -62,10 +71,138 @@ const DAY_MS = 86_400_000;
 const DIRECTORY_CACHE_MS = 30_000;
 let directorySnapshotCache: DirectorySnapshotCache | null = null;
 const accountCache = new Map<string, AccountCacheEntry>();
+const FARM_BUSINESS_SIZES: FarmBusinessSize[] = ['small', 'medium', 'large', 'enterprise'];
+const asText = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : '';
 
 export const clearFirestoreAdminCache = () => {
   directorySnapshotCache = null;
   accountCache.clear();
+};
+
+const normalizeFarmBusinessSize = (value: unknown): FarmBusinessSize => (
+  FARM_BUSINESS_SIZES.includes(value as FarmBusinessSize) ? value as FarmBusinessSize : 'medium'
+);
+
+export const getFirestoreFarmBusinessSize = async (companyId: string): Promise<FarmBusinessSize> => {
+  const companySnapshot = await getDoc(doc(db, 'companies', companyId));
+  if (!companySnapshot.exists()) throw new Error('Linked farm not found.');
+  return normalizeFarmBusinessSize(companySnapshot.data().businessSize);
+};
+
+export const updateFirestoreFarmBusinessSize = async (input: {
+  userId: string;
+  companyId: string;
+  businessSize: FarmBusinessSize;
+}): Promise<FarmBusinessSize> => {
+  if (!FARM_BUSINESS_SIZES.includes(input.businessSize)) throw new Error('Invalid farm mode.');
+  const [userSnapshot, companySnapshot] = await Promise.all([
+    getDoc(doc(db, 'users', input.userId)),
+    getDoc(doc(db, 'companies', input.companyId)),
+  ]);
+  if (!userSnapshot.exists()) throw new Error('User account not found.');
+  if (!companySnapshot.exists()) throw new Error('Linked farm not found.');
+  const user = userSnapshot.data();
+  const company = companySnapshot.data();
+  if (user.companyId !== input.companyId && company.ownerId !== input.userId) {
+    throw new Error('This farm is not linked to the selected user.');
+  }
+
+  const previousBusinessSize = normalizeFarmBusinessSize(company.businessSize);
+  if (previousBusinessSize === input.businessSize) return input.businessSize;
+
+  const auditRef = doc(collection(db, 'adminAuditEvents'));
+  const batch = writeBatch(db);
+  batch.update(companySnapshot.ref, {
+    businessSize: input.businessSize,
+    updatedAt: serverTimestamp(),
+  });
+  batch.set(auditRef, {
+    actorId: auth.currentUser?.uid || null,
+    targetId: input.userId,
+    action: 'farm.mode.updated',
+    timestamp: serverTimestamp(),
+    reason: 'Platform owner changed the farm mode from the User Database.',
+    metadata: {
+      source: 'admin-command-centre',
+      companyId: input.companyId,
+      previousBusinessSize,
+      businessSize: input.businessSize,
+    },
+  });
+  await batch.commit();
+  clearFirestoreAdminCache();
+
+  const savedBusinessSize = await getFirestoreFarmBusinessSize(input.companyId);
+  if (savedBusinessSize !== input.businessSize) throw new Error('Farm mode verification failed.');
+  return savedBusinessSize;
+};
+
+export const getFirestoreUserPermissionState = async (userId: string): Promise<{
+  permissionOverrides: FarmPermissionOverrides;
+  effectivePermissions: FarmPermissionSet;
+  isCompanyOwner: boolean;
+  role: string;
+}> => {
+  const userSnapshot = await getDoc(doc(db, 'users', userId));
+  if (!userSnapshot.exists()) throw new Error('User account not found.');
+  const user = userSnapshot.data();
+  const companyId = asText(user.companyId);
+  const companySnapshot = companyId ? await getDoc(doc(db, 'companies', companyId)) : null;
+  const isCompanyOwner = Boolean(companySnapshot?.exists() && companySnapshot.data().ownerId === userId);
+  const permissionOverrides = normalizePermissionOverrides(user.permissionOverrides);
+  return {
+    permissionOverrides,
+    effectivePermissions: getEffectivePermissions(user.role, permissionOverrides, isCompanyOwner),
+    isCompanyOwner,
+    role: asText(user.role) || 'technician',
+  };
+};
+
+export const updateFirestoreUserPermissions = async (input: {
+  userId: string;
+  permissionOverrides: FarmPermissionOverrides;
+}): Promise<void> => {
+  const userSnapshot = await getDoc(doc(db, 'users', input.userId));
+  if (!userSnapshot.exists()) throw new Error('User account not found.');
+  const user = userSnapshot.data();
+  const companyId = asText(user.companyId);
+  const companySnapshot = companyId ? await getDoc(doc(db, 'companies', companyId)) : null;
+  if (companySnapshot?.exists() && companySnapshot.data().ownerId === input.userId) {
+    throw new Error('The company owner must keep full permissions.');
+  }
+  const permissionOverrides = normalizePermissionOverrides(input.permissionOverrides);
+  if (Object.keys(permissionOverrides).length !== Object.keys(input.permissionOverrides).length) {
+    throw new Error('One or more permissions are invalid.');
+  }
+
+  const auditRef = doc(collection(db, 'adminAuditEvents'));
+  const batch = writeBatch(db);
+  batch.update(userSnapshot.ref, {
+    permissionOverrides,
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: auth.currentUser?.uid || null,
+  });
+  batch.set(auditRef, {
+    actorId: auth.currentUser?.uid || null,
+    targetId: input.userId,
+    action: 'account.permissions.updated',
+    timestamp: serverTimestamp(),
+    reason: 'Platform owner changed user permissions from the User Database.',
+    metadata: {
+      source: 'admin-command-centre',
+      companyId: companyId || null,
+      role: asText(user.role) || null,
+      previousOverrides: normalizePermissionOverrides(user.permissionOverrides),
+      permissionOverrides,
+    },
+  });
+  await batch.commit();
+  clearFirestoreAdminCache();
+
+  const saved = await getFirestoreUserPermissionState(input.userId);
+  if (JSON.stringify(saved.permissionOverrides) !== JSON.stringify(permissionOverrides)) {
+    throw new Error('Permission verification failed.');
+  }
 };
 
 const readDirectorySnapshots = async () => {
@@ -100,7 +237,6 @@ const toDate = (value: unknown): Date | null => {
 };
 
 const toIso = (value: unknown) => toDate(value)?.toISOString() || null;
-const asText = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : '';
 const asNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
 const percentage = (count: number, target: number) => Math.min(100, Math.max(0, Math.round((count / target) * 100)));
 
@@ -408,6 +544,9 @@ export const getFirestoreAccount = async (userId: string): Promise<AccountIntell
     maskedEmail: maskEmail(asText(user.email)),
     maskedPhone: maskPhone(asText(user.phone)),
     role: asText(user.role) || 'Unavailable',
+    permissionOverrides: normalizePermissionOverrides(user.permissionOverrides),
+    effectivePermissions: getEffectivePermissions(user.role, user.permissionOverrides, company.ownerId === userSnapshot.id),
+    isCompanyOwner: company.ownerId === userSnapshot.id,
     plan,
     country: location.country,
     region: location.region,
@@ -420,6 +559,7 @@ export const getFirestoreAccount = async (userId: string): Promise<AccountIntell
       location: location.display,
       pondCount: ponds.docs.length,
       totalAreaHa: totalAreaSquareMetres > 0 ? totalAreaSquareMetres / 10_000 : null,
+      businessSize: normalizeFarmBusinessSize(company.businessSize),
     }] : [],
     healthInputs,
     adoption,
@@ -1518,4 +1658,3 @@ export const getFirestoreAuditLogs = async (filters?: AuditLogFilters): Promise<
 
   return events.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
-

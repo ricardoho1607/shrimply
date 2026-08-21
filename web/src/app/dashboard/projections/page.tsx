@@ -53,6 +53,7 @@ import {
   normalizeHarvestMarketPriceInputs,
   type HarvestMarketPriceInputs,
 } from '../../../../../shared/harvestProjectionSettings';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 import styles from './ProjectionsPage.module.css';
 
 /* --- Types --------------------------------------------------- */
@@ -76,6 +77,7 @@ interface DashboardUser {
   uid: string;
   companyId?: string;
   role?: string;
+  permissionOverrides?: unknown;
 }
 
 interface Company {
@@ -309,9 +311,8 @@ export default function HarvestProjectionsPage() {
     return activePonds.find(p => p.id === selectedPondId) || activePonds[0] || null;
   }, [activePonds, selectedPondId]);
 
-  const canManagePriceLadder = Boolean(user && company && (
-    company.ownerId === user.uid || ['owner', 'co-owner', 'manager', 'admin'].includes(user.role || '')
-  ));
+  const canManagePriceLadder = hasFarmPermission(user, 'manageFinance', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const hasSavedPriceLadder = Object.values(savedMarketPrices).some((value) => value !== '');
   const hasUnsavedPriceChanges = !harvestMarketPriceInputsEqual(marketPrices, savedMarketPrices);
 
@@ -423,6 +424,7 @@ export default function HarvestProjectionsPage() {
   };
 
   const handleAskOrson = async () => {
+    if (!canUseOrson) return;
     if (!selectedPond || !projection) return;
     const prompt = `Please provide a risk analysis for this harvest projection:
 Pond: ${selectedPond.pondName}
@@ -835,7 +837,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
           </div>
 
           {/* Orson AI Card */}
-          <div className="glass-card" style={{ background: '#FFF', padding: '32px', border: '2px solid #BAE6FD' }}>
+          {canUseOrson && <div className="glass-card" style={{ background: '#FFF', padding: '32px', border: '2px solid #BAE6FD' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Sparkles size={24} color="#0EA5E9" />
@@ -878,7 +880,7 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 Orson will evaluate your growth rates, market pricing, and biological risks.
               </p>
             )}
-          </div>
+          </div>}
 
         </div>
 

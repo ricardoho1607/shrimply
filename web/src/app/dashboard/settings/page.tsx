@@ -32,6 +32,7 @@ import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
 import { getSupportedTimeZones, getSystemTimeZone, resolveFarmTimeZone } from '../../../../../shared/farmDate';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 const settingsShellStyle: React.CSSProperties = {
   display: 'flex',
@@ -107,6 +108,9 @@ export default function SettingsPage() {
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
   const timeZoneOptions = useMemo(() => getSupportedTimeZones(), []);
+  const canEditCompany = hasFarmPermission(user, 'editCompanySettings', company?.ownerId);
+  const canManageTeam = hasFarmPermission(user, 'manageTeam', company?.ownerId);
+  const canManageCompanyDeletion = hasFarmPermission(user, 'manageCompanyDeletion', company?.ownerId);
 
   const AVAILABLE_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -153,7 +157,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let isMounted = true;
-    if (activeTab !== 'organization' || !['owner', 'co-owner'].includes(user?.role || '') || !company) {
+    if (activeTab !== 'organization' || !canManageTeam || !company) {
       return;
     }
 
@@ -169,7 +173,7 @@ export default function SettingsPage() {
     return () => {
       isMounted = false;
     };
-  }, [activeTab, company, getJoinRequests, user?.role]);
+  }, [activeTab, canManageTeam, company, getJoinRequests]);
 
   const handleJoinRequestDecision = async (requestId: string, decision: 'approve' | 'reject') => {
     setProcessingRequestId(requestId);
@@ -273,6 +277,7 @@ export default function SettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    if (activeTab === 'company' && !canEditCompany) return;
     setSaving(true);
     setSuccess(false);
 
@@ -429,7 +434,7 @@ export default function SettingsPage() {
 
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '12px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                 {success && <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontSize: '13px', fontWeight: 600 }}><CheckCircle2 size={16} /> {t.settings.changesSaved || 'Changes saved'}</div>}
-                <button type="submit" disabled={saving} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button type="submit" disabled={saving || !canEditCompany} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   {saving && <Loader2 className="animate-spin" size={18} />}
                   {t.settings.saveChanges || 'Save Changes'}
                 </button>
@@ -570,7 +575,7 @@ export default function SettingsPage() {
                 <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
               </div>
 
-              {['owner', 'co-owner'].includes(user?.role || '') && (
+              {canManageTeam && (
                 <div className="settings-join-requests" style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '18px', borderRadius: '16px', background: '#F8FAFC', border: '1px solid var(--border)' }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -642,7 +647,7 @@ export default function SettingsPage() {
                       <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{member.role || 'Member'}</div>
                       <div style={{ fontSize: '11px', color: 'var(--text-faint)' }}>{member.id === company?.ownerId ? (t.roleSelection?.farmOwner || 'Owner') : member.role === 'co-owner' ? (t.roleSelection?.coOwner || 'Co-owner') : (t.roleSelection?.manager || 'Staff')}</div>
                     </div>
-                    {['owner', 'co-owner'].includes(user?.role || '')
+                    {canManageTeam
                       && member.id !== user?.uid
                       && member.id !== company?.ownerId
                       && !['owner', 'co-owner'].includes(member.role || '') && (
@@ -672,7 +677,7 @@ export default function SettingsPage() {
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
-                    {['owner', 'co-owner'].includes(user?.role || '') && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
+                    {canManageCompanyDeletion && !company.deletionRequest.approvedByIds?.includes(user?.uid || '') && (
                       <button
                         type="button"
                         disabled={deletionLoading}
@@ -683,7 +688,7 @@ export default function SettingsPage() {
                         Approve Deletion
                       </button>
                     )}
-                    {['owner', 'co-owner'].includes(user?.role || '') && (
+                    {canManageCompanyDeletion && (
                       <button
                         type="button"
                         disabled={deletionLoading}
@@ -698,7 +703,7 @@ export default function SettingsPage() {
               )}
 
               {/* Danger Zone */}
-              {['owner', 'co-owner'].includes(user?.role || '') && company?.deletionRequest?.status !== 'pending' && (
+              {canManageCompanyDeletion && company?.deletionRequest?.status !== 'pending' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #FECDCA' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B42318' }}>
                     <AlertTriangle size={18} />

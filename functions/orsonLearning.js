@@ -522,7 +522,7 @@ module.exports = ({ admin, assertCompanyMemberForCallable }) => {
     const companyId = safeString(request.data?.companyId, 160);
     const pondId = safeString(request.data?.pondId, 160);
     const db = admin.firestore();
-    await assertCompanyMemberForCallable(db, uid, companyId);
+    await assertCompanyMemberForCallable(db, uid, companyId, "useOrson");
     if (!pondId || pondId.includes("/")) throw new HttpsError("invalid-argument", "pondId is required.");
     await enforceFixedWindowLimits({
       db,

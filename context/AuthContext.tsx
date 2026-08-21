@@ -31,6 +31,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../shared/onboarding';
+import type { FarmPermissionOverrides } from '../shared/permissions';
 import {
   clearUserFarmCaches,
   enableFarmCacheForUser,
@@ -59,6 +60,7 @@ interface User {
   inviteToken?: string;
   joinedDate?: string;
   lastActive?: string;
+  permissionOverrides?: FarmPermissionOverrides;
 }
 
 interface Company {

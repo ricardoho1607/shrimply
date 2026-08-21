@@ -64,6 +64,7 @@ import {
   getAssignedEnterpriseBlockIds,
   type FarmBlock,
 } from '../../../../../../shared/enterpriseBlocks';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 
@@ -172,7 +173,6 @@ const getCycleStatus = (pond: Pond) => pond.cycleStatus === 'ended' ? 'ended' : 
 const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
 const getLabStatusStyle = (status?: LabReportStatus['status']) => {
   if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
@@ -295,7 +295,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
 };
 
 export default function PondDetailClient() {
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { t } = useLanguage();
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
@@ -432,10 +432,14 @@ export default function PondDetailClient() {
   const isEnterpriseTechnician = company?.businessSize === 'enterprise' && userRole === 'technician';
   const hasPondAccess = !isEnterpriseTechnician
     || (typeof pond?.blockId === 'string' && assignedBlockIds.has(pond.blockId));
-  const canEditPond = canEditOperations(userRole) && hasPondAccess;
+  const canManagePond = hasFarmPermission(user, 'managePonds', company?.ownerId) && hasPondAccess;
+  const canRecordPondData = hasFarmPermission(user, 'recordPondData', company?.ownerId) && hasPondAccess;
+  const canManageCycles = hasFarmPermission(user, 'manageCycles', company?.ownerId) && hasPondAccess;
+  const canManageFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId) && hasPondAccess;
+  const canEditPond = canManagePond || canRecordPondData;
 
   const handleDeleteSampling = async (samplingId: string) => {
-    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
+    if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
     if (!window.confirm('Delete this sampling record?')) return;
     try {
       const updatedSamplings = (pond.samplings || []).filter((s) => s.id !== samplingId);
@@ -450,7 +454,7 @@ export default function PondDetailClient() {
   };
 
   const handleDeleteMortality = async (recordId: string) => {
-    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
+    if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
     if (!window.confirm('Delete this mortality record?')) return;
     try {
       const updatedRecords = (pond.mortalityRecords || []).filter((r) => r.id !== recordId);
@@ -467,7 +471,7 @@ export default function PondDetailClient() {
   const handleSaveSampling = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
-    if (!canEditPond || !isActiveCycle(pond)) return;
+    if (!canRecordPondData || !isActiveCycle(pond)) return;
 
     setIsSubmitting(true);
     try {
@@ -514,7 +518,7 @@ export default function PondDetailClient() {
   const handleSaveMortality = async (e: React.FormEvent) => {
     e.preventDefault();
     const recordedBy = auth.currentUser?.uid;
-    if (!companyId || !pond || !canEditPond || !isActiveCycle(pond)) return;
+    if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
 
     const count = mortalityForm.observationType === 'none_observed'
       ? 0
@@ -601,7 +605,7 @@ export default function PondDetailClient() {
 
   const handleEndCycle = async () => {
     if (!companyId || !pond) return;
-    if (!canEditPond) return;
+    if (!canManagePond) return;
     try {
       if (endCycleForm.cycleEndReason === 'harvested') {
         const harvestSnapshot = await getDocs(collection(db, 'companies', companyId, 'harvestRecords'));
@@ -660,7 +664,7 @@ export default function PondDetailClient() {
   };
 
   const handleDeletePond = async () => {
-    if (!companyId || !pond || !canEditPond || isDeletingPond) return;
+    if (!companyId || !pond || !canManagePond || isDeletingPond) return;
     const confirmed = window.confirm(`Delete ${pond.pondName}? This permanently removes this pond cycle and its sampling history.`);
     if (!confirmed) return;
 
@@ -679,7 +683,7 @@ export default function PondDetailClient() {
   const handleStartCycle = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !pond) return;
-    if (!canEditPond) return;
+    if (!canManagePond || !canManageCycles) return;
     if (isEnterpriseTechnician && !cycles.some(isOpenFarmCycle)) {
       alert(t.enterprise.ownerMustStartCycle);
       return;
@@ -783,7 +787,7 @@ export default function PondDetailClient() {
 
   const openBaselineModal = () => {
     if (!pond) return;
-    if (!canEditPond) return;
+    if (!canRecordPondData) return;
     const baselineSampling = (pond.samplings || [])
       .filter(isBaselineSampling)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -800,7 +804,7 @@ export default function PondDetailClient() {
   const handleUpdateBaseline = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!companyId || !pond) return;
-    if (!canEditPond) return;
+    if (!canRecordPondData) return;
 
     const cycleStartDate = pond.docStart || pond.cycleStartedAt || baselineForm.baselineDate;
     const baselineDocValue = calculateDocFromDates(cycleStartDate, baselineForm.baselineDate);
@@ -960,7 +964,7 @@ export default function PondDetailClient() {
           </div>
         {canEditPond && (
           <div className="pond-detail-actions">
-            {!isActiveCycle(pond) && (
+            {!isActiveCycle(pond) && canManagePond && canManageCycles && (
               <button onClick={() => {
                 setStartCycleForm(prev => ({ ...prev, docStart: today }));
                 setStartCycleOpen(true);
@@ -969,12 +973,12 @@ export default function PondDetailClient() {
                 <span>Start New Cycle</span>
               </button>
             )}
-            {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && (
+            {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && canRecordPondData && (
               <button onClick={openBaselineModal} className="pond-detail-icon-action" title="Edit baseline estimates" aria-label="Edit baseline estimates">
                 <Settings size={16} />
               </button>
             )}
-            <div className="pond-detail-record-menu" ref={recordMenuRef}>
+            {canRecordPondData && <div className="pond-detail-record-menu" ref={recordMenuRef}>
               <button
                 type="button"
                 className="pond-detail-record-trigger"
@@ -1011,16 +1015,16 @@ export default function PondDetailClient() {
                   >
                     <Activity size={16} /><span><strong>Mortality</strong><small>Record daily mortality</small></span>
                   </button>
-                  <Link
+                  {canManageFeed && <Link
                     role="menuitem"
                     href={`/dashboard/feed?action=new&pondId=${encodeURIComponent(pond.id)}`}
                     onClick={() => setRecordMenuOpen(false)}
                   >
                     <ShoppingBag size={16} /><span><strong>Feed</strong><small>Deduct feed inventory</small></span>
-                  </Link>
+                  </Link>}
                 </div>
               )}
-            </div>
+            </div>}
           </div>
         )}
       </div>
@@ -1110,7 +1114,7 @@ export default function PondDetailClient() {
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Size (pcs/kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feed (kg)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mortality</th>
-                    {canEditPond && isActiveCycle(pond) && <th style={{ height: '44px', padding: '0 24px' }}>Action</th>}
+                    {canRecordPondData && isActiveCycle(pond) && <th style={{ height: '44px', padding: '0 24px' }}>Action</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1142,7 +1146,7 @@ export default function PondDetailClient() {
                         <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: s.mortality > 0 ? '#ef4444' : 'var(--text-muted)' }}>
                           {s.mortality > 0 ? `+${s.mortality}` : '0'}
                         </td>
-                        {canEditPond && isActiveCycle(pond) && (
+                        {canRecordPondData && isActiveCycle(pond) && (
                           <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                               <button type="button" aria-label="Edit sampling" onClick={() => {
@@ -1191,7 +1195,7 @@ export default function PondDetailClient() {
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                {canEditPond && isActiveCycle(pond) && (
+                {canRecordPondData && isActiveCycle(pond) && (
                   <button
                     type="button"
                     onClick={(e) => {
@@ -1256,7 +1260,7 @@ export default function PondDetailClient() {
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Count (pcs)</th>
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Est. Weight</th>
                         <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Notes</th>
-                        {canEditPond && isActiveCycle(pond) && (
+                        {canRecordPondData && isActiveCycle(pond) && (
                           <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Actions</th>
                         )}
                       </tr>
@@ -1302,7 +1306,7 @@ export default function PondDetailClient() {
                             <td style={{ padding: '16px 24px', fontSize: '0.84rem', color: 'var(--text-muted)', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {record.notes && !record.notes.toLowerCase().includes('projection testing') ? record.notes : '—'}
                             </td>
-                            {canEditPond && isActiveCycle(pond) && (
+                            {canRecordPondData && isActiveCycle(pond) && (
                               <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <button
@@ -1467,7 +1471,7 @@ export default function PondDetailClient() {
             <button
               type="button"
               onClick={handleDeletePond}
-              disabled={!canEditPond || isDeletingPond}
+              disabled={!canManagePond || isDeletingPond}
             >
               {isDeletingPond ? 'Deleting...' : 'Delete Pond'}
             </button>

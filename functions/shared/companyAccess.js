@@ -1,6 +1,7 @@
 const { HttpsError } = require("firebase-functions/v2/https");
+const { hasUserPermission } = require("./permissions");
 
-const assertCompanyMemberForCallable = async (db, uid, companyId) => {
+const assertCompanyMemberForCallable = async (db, uid, companyId, permission) => {
   if (!uid) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
@@ -26,6 +27,9 @@ const assertCompanyMemberForCallable = async (db, uid, companyId) => {
   const teamMembers = Array.isArray(company.teamMembers) ? company.teamMembers : [];
   if (company.ownerId !== uid && !(teamMembers.includes(uid) && user?.companyId === companyId)) {
     throw new HttpsError("permission-denied", "You do not have access to this company.");
+  }
+  if (permission && !hasUserPermission({ company: { ...company, id: companyId }, user, uid, permission })) {
+    throw new HttpsError("permission-denied", "You do not have permission to use this company feature.");
   }
   return company;
 };

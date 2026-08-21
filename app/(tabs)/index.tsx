@@ -15,10 +15,9 @@ import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
 import { getFarmDateKey } from '../../shared/farmDate';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
+import { hasFarmPermission } from '../../shared/permissions';
 import {
-  canManageEnterpriseFarmCycle,
   filterEnterpriseRecordsForUser,
-  isEnterpriseOwner,
   type FarmBlock,
 } from '../../shared/enterpriseBlocks';
 import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboard';
@@ -147,9 +146,12 @@ export default function PondManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user, company } = useAuth();
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canManagePonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
+  const canRecordPondData = hasFarmPermission(user, 'recordPondData', company?.ownerId);
+  const canEditPonds = canManagePonds || canRecordPondData;
   const isEnterpriseFarm = company?.businessSize === 'enterprise';
-  const canManageFarmCycle = canEditPonds && canManageEnterpriseFarmCycle(company?.businessSize, user?.role);
+  const canManageFarmCycle = hasFarmPermission(user, 'manageCycles', company?.ownerId);
+  const canManageEnterpriseBlocks = hasFarmPermission(user, 'manageEnterpriseBlocks', company?.ownerId);
   const enterpriseBlocks = useEnterpriseBlocks(isEnterpriseFarm ? company?.id : undefined, user?.uid);
   
   const { 
@@ -514,7 +516,7 @@ export default function PondManagementScreen() {
     submitLockRef.current = true;
     setIsSubmitting(true);
 
-    if (!canEditPonds) {
+    if (!canManagePonds) {
       Alert.alert(
         t.home.permissionDenied, 
         t.home.onlyTechniciansCanAdd, 
@@ -564,14 +566,14 @@ export default function PondManagementScreen() {
     closeModal();
     setCycleFilter('inactive');
     Alert.alert(t.messages.success, t.home.pondAddedSuccess);
-  }, [addPhysicalPond, availableEnterpriseBlocks, canEditPonds, closeModal, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
+  }, [addPhysicalPond, availableEnterpriseBlocks, canManagePonds, closeModal, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
 
   const handleAddCycle = useCallback(() => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
 
-    if (!canEditPonds) {
+    if (!canManagePonds || !canManageFarmCycle) {
       Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -736,14 +738,14 @@ export default function PondManagementScreen() {
     closeModal();
     setCycleFilter('active');
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
-  }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canEditPonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
+  }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canManageFarmCycle, canManagePonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
 
   const handleAddSamplingData = useCallback(() => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
 
-    if (!canEditPonds) {
+    if (!canRecordPondData) {
       Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -777,14 +779,14 @@ export default function PondManagementScreen() {
     
     closeModal();
     Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
-  }, [canEditPonds, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
+  }, [canRecordPondData, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
 
   const handleAddMortalityRecord = useCallback(() => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
 
-    if (!canEditPonds || !user?.uid) {
+    if (!canRecordPondData || !user?.uid) {
       Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAddMortality, [{ text: t.actions.confirm }]);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -851,10 +853,10 @@ export default function PondManagementScreen() {
 
     closeModal();
     Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
-  }, [activePonds, addMortalityRecord, canEditPonds, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user?.uid]);
+  }, [activePonds, addMortalityRecord, canRecordPondData, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user?.uid]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
-    if (!canEditPonds) {
+    if (!canManagePonds) {
       Alert.alert(
         t.home.permissionDenied, 
         t.home.onlyTechniciansCanDelete, 
@@ -906,10 +908,10 @@ export default function PondManagementScreen() {
         { text: t.farmCycle.reasons.nonHarvest, onPress: chooseNonHarvestReason },
       ]
     );
-  }, [canEditPonds, company?.timeZone, endPondCycle, harvestRecords, router, t, user?.uid]);
+  }, [canManagePonds, company?.timeZone, endPondCycle, harvestRecords, router, t, user?.uid]);
 
   const handleDeletePond = useCallback((pond: Pond) => {
-    if (!canEditPonds) {
+    if (!canManagePonds) {
       Alert.alert(
         t.home.permissionDenied,
         t.home.onlyTechniciansCanDelete,
@@ -942,10 +944,10 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [canEditPonds, deletePond, t]);
+  }, [canManagePonds, deletePond, t]);
 
   const handleDeletePhysicalPond = useCallback((pond: PhysicalPond) => {
-    if (!canEditPonds) {
+    if (!canManagePonds) {
       Alert.alert(
         t.home.permissionDenied,
         t.home.onlyTechniciansCanDelete,
@@ -993,7 +995,7 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [canEditPonds, company?.id, deletePhysicalPond, t]);
+  }, [canManagePonds, company?.id, deletePhysicalPond, t]);
 
   const handleRenameFarmCycle = useCallback(() => {
     if (!activeFarmCycle || !canManageFarmCycle) return;
@@ -1272,7 +1274,7 @@ export default function PondManagementScreen() {
     submitLockRef.current = true;
     setIsSubmitting(true);
 
-    if (!canEditPonds) {
+    if (!canRecordPondData) {
       Alert.alert(t.home.permissionDenied, t.home.onlyTechniciansCanAdd, [{ text: t.actions.confirm }]);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -1348,7 +1350,7 @@ export default function PondManagementScreen() {
     setEditingBaselinePondId(null);
     closeModal();
     Alert.alert(t.messages.success, t.midcycleOnboarding.baselineUpdated);
-  }, [accessiblePonds, calculateDocFromDates, canEditPonds, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, t, updatePond]);
+  }, [accessiblePonds, calculateDocFromDates, canRecordPondData, closeModal, editingBaselinePondId, formData, formatLocalDateKey, normalizeDateValue, t, updatePond]);
 
   const PondCard = useMemo(() => React.memo(function PondCardItem({ pond }: { pond: Pond }) {
     const metrics = calculateMetrics(pond);
@@ -1997,7 +1999,7 @@ export default function PondManagementScreen() {
     </Modal>
   );
 
-  if (isEnterpriseOwner(company?.businessSize, user?.role)) {
+  if (isEnterpriseFarm && canManageEnterpriseBlocks) {
     return (
       <>
         <EnterpriseDashboard

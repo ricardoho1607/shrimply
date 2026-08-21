@@ -26,6 +26,7 @@ import { filterEnterpriseRecordsForUser, isEnterpriseOwner } from '../../shared/
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import AppDatePicker from '../components/forms/AppDatePicker';
+import { hasFarmPermission } from '../../shared/permissions';
 
 interface FeedAllocationInput {
   inventoryFeedId: string;
@@ -56,7 +57,7 @@ export default function FeedManagementScreen() {
   const { user, company } = useAuth();
   const { ponds, addFeedData } = usePondStore();
   const { setCurrentCompanyId, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canEditPonds = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,

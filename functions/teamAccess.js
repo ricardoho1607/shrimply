@@ -12,6 +12,7 @@ const {
   normalizeEmail,
   toMillis: policyToMillis,
 } = require("./teamAccessPolicy");
+const { hasUserPermission } = require("./shared/permissions");
 
 const DAY_MS = 1000 * 60 * 60 * 24;
 const LEGACY_INVITE_TTL_MS = 30 * DAY_MS;
@@ -29,15 +30,8 @@ const TEAM_ACCESS_OPERATIONS = Object.freeze({
 });
 const isVerifiedAuth = (request) => request.auth?.token?.email_verified === true;
 
-const isCompanyOwnerOrCoOwner = (company, user, uid) => (
-  company?.ownerId === uid
-  || (
-    Array.isArray(company?.teamMembers)
-    && company.teamMembers.includes(uid)
-    && user?.companyId === company.id
-    && user?.role === "co-owner"
-  )
-);
+const canManageTeam = (company, user, uid) => hasUserPermission({ company, user, uid, permission: "manageTeam" });
+const canManageCompanyDeletion = (company, user, uid) => hasUserPermission({ company, user, uid, permission: "manageCompanyDeletion" });
 
 const publicMemberCountFor = (company, additionalMemberId = null, removedMemberId = null) => new Set([
   ...(Array.isArray(company?.teamMembers) ? company.teamMembers : []),
@@ -111,7 +105,7 @@ exports.createCompanyInvite = onCall(async (request) => {
 
     const company = { ...companySnap.data(), id: companySnap.id };
     const user = userSnap.exists ? userSnap.data() : null;
-    if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+    if (!canManageTeam(company, user, uid)) {
       throw new HttpsError("permission-denied", "Only company owners and co-owners can create invitations.");
     }
 
@@ -168,7 +162,7 @@ exports.revokeCompanyInvite = onCall(async (request) => {
     ]);
     const company = companySnap.exists ? { ...companySnap.data(), id: companySnap.id } : null;
     const user = userSnap.exists ? userSnap.data() : null;
-    if (!company || !isCompanyOwnerOrCoOwner(company, user, uid)) {
+    if (!company || !canManageTeam(company, user, uid)) {
       throw new HttpsError("permission-denied", "You cannot revoke this invitation.");
     }
     if (invite.status !== "pending") throw new HttpsError("failed-precondition", "Invitation is no longer pending.");
@@ -196,7 +190,7 @@ exports.listCompanyInvites = onCall(async (request) => {
   ]);
   const company = companySnap.exists ? { ...companySnap.data(), id: companySnap.id } : null;
   const user = userSnap.exists ? userSnap.data() : null;
-  if (!company || !isCompanyOwnerOrCoOwner(company, user, uid)) {
+  if (!company || !canManageTeam(company, user, uid)) {
     throw new HttpsError("permission-denied", "You cannot view these invitations.");
   }
 
@@ -445,7 +439,7 @@ exports.processCompanyJoinRequest = onCall(async (request) => {
 
     const company = { ...companySnap.data(), id: companySnap.id };
     const actor = actorSnap.exists ? actorSnap.data() : null;
-    if (!isCompanyOwnerOrCoOwner(company, actor, uid)) {
+    if (!canManageTeam(company, actor, uid)) {
       throw new HttpsError("permission-denied", "Only company owners and co-owners can process join requests.");
     }
 
@@ -526,7 +520,7 @@ exports.removeCompanyMember = onCall(async (request) => {
     const company = { ...companySnap.data(), id: companySnap.id };
     const actor = actorSnap.exists ? actorSnap.data() : null;
     const targetUser = targetUserSnap.data();
-    if (!isCompanyOwnerOrCoOwner(company, actor, uid)) {
+    if (!canManageTeam(company, actor, uid)) {
       throw new HttpsError("permission-denied", "Only company owners and co-owners can remove members.");
     }
     if (company.ownerId === memberId || ["owner", "co-owner"].includes(targetUser.role)) {
@@ -680,7 +674,7 @@ exports.requestCompanyDeletion = onCall(async (request) => {
 
   const company = { ...companySnap.data(), id: companySnap.id };
   const user = userSnap.exists ? userSnap.data() : null;
-  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+  if (!canManageCompanyDeletion(company, user, uid)) {
     throw new HttpsError("permission-denied", "Only company owners and co-owners can request company deletion.");
   }
 
@@ -759,7 +753,7 @@ exports.approveCompanyDeletion = onCall(async (request) => {
 
   const company = { ...companySnap.data(), id: companySnap.id };
   const user = userSnap.exists ? userSnap.data() : null;
-  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+  if (!canManageCompanyDeletion(company, user, uid)) {
     throw new HttpsError("permission-denied", "Only company owners and co-owners can approve company deletion.");
   }
 
@@ -807,7 +801,7 @@ exports.cancelCompanyDeletion = onCall(async (request) => {
 
   const company = { ...companySnap.data(), id: companySnap.id };
   const user = userSnap.exists ? userSnap.data() : null;
-  if (!isCompanyOwnerOrCoOwner(company, user, uid)) {
+  if (!canManageCompanyDeletion(company, user, uid)) {
     throw new HttpsError("permission-denied", "Only company owners and co-owners can cancel company deletion.");
   }
 
@@ -846,4 +840,3 @@ exports.cancelCompanyDeletion = onCall(async (request) => {
 
   return { success: true, status: "cancelled" };
 });
-

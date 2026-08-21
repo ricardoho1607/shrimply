@@ -33,6 +33,7 @@ import {
 } from '@/lib/cycleReport';
 import { generateCycleReportHtml } from '@/lib/generated/mobileCycleReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 import styles from './CycleReports.module.css';
 
 type TabKey = 'overview' | 'ponds' | 'costs';
@@ -69,7 +70,9 @@ function CycleReportsContent() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [exportLoading, setExportLoading] = useState(false);
 
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewReports', company?.ownerId)
+    && hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   useEffect(() => {
     if (!company?.id || !hasFinanceAccess) {
@@ -124,7 +127,7 @@ function CycleReportsContent() {
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;
 
   const handleExport = async () => {
-    if (!report) return;
+    if (!report || !canExportReports) return;
     setExportLoading(true);
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');
@@ -226,7 +229,7 @@ function CycleReportsContent() {
         </div>
         <div className={styles.headerActions}>
           <Link href="/dashboard/reports/cycles" className={styles.backButton}>{t.cycleReport.backToArchive}</Link>
-          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={exportLoading}>
+          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={exportLoading || !canExportReports}>
             {exportLoading ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {t.cycleReport.exportPdf}
           </button>
         </div>

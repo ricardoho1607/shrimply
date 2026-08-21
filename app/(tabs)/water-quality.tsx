@@ -15,6 +15,7 @@ import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOw
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import PlanktonOverwatchCard from '../components/PlanktonOverwatchCard';
+import { hasFarmPermission } from '../../shared/permissions';
 
 interface MobileLabReport {
   id: string;
@@ -139,7 +140,8 @@ export default function WaterQualityScreen() {
   const { user, company } = useAuth();
   const { t } = useLanguage();
   const { ponds, addWaterQuality } = usePondStore();
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canEditPonds = hasFarmPermission(user, 'recordPondData', company?.ownerId);
+  const canManageLabReports = hasFarmPermission(user, 'manageLabReports', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,
@@ -440,8 +442,8 @@ export default function WaterQualityScreen() {
   }, [formatRemainingTime, labPdfUsage, labUsageNowMs, t.waterQuality.mineralQuality, t.waterQuality.planktonQuality, toUsageMillis]);
 
   const handleUploadLabPdf = useCallback(async (reportType: 'water_quality' | 'plankton', pickerReserved = false) => {
-    if (!canEditPonds || !user || !company?.id || isLabUploading || (!pickerReserved && labPickerLockRef.current)) {
-      if (!canEditPonds) Alert.alert(t.waterQuality.permissionDenied, t.waterQuality.permissionMessage);
+    if (!canManageLabReports || !user || !company?.id || isLabUploading || (!pickerReserved && labPickerLockRef.current)) {
+      if (!canManageLabReports) Alert.alert(t.waterQuality.permissionDenied, t.waterQuality.permissionMessage);
       if (pickerReserved) labPickerLockRef.current = false;
       return;
     }
@@ -564,7 +566,7 @@ export default function WaterQualityScreen() {
       labPickerLockRef.current = false;
       setIsLabUploading(false);
     }
-  }, [canEditPonds, user, company, isLabUploading, t, getPdfActionState, formatRemainingTime]);
+  }, [canManageLabReports, user, company, isLabUploading, t, getPdfActionState, formatRemainingTime]);
 
   const startLabPdfUpload = useCallback((reportType: 'water_quality' | 'plankton') => {
     if (labPickerLockRef.current || isLabUploading) return;
@@ -711,7 +713,7 @@ export default function WaterQualityScreen() {
   }, [formatLabValue, getLabReportTypeLabel, openLabPdf, t.waterQuality]);
 
   const handleConfirmLabReport = useCallback(async () => {
-    if (!company?.id || !user || !selectedLabReport || isConfirmingLab) return;
+    if (!company?.id || !user || !selectedLabReport || !canManageLabReports || isConfirmingLab) return;
     const reportToConfirm = labReports.find(report => report.id === selectedLabReport.id) || selectedLabReport;
     if (reportToConfirm.status !== 'extracted') {
       Alert.alert(t.waterQuality.labNotReadyTitle, t.waterQuality.labNotReadyMessage);
@@ -736,7 +738,7 @@ export default function WaterQualityScreen() {
     } finally {
       setIsConfirmingLab(false);
     }
-  }, [company?.id, user, selectedLabReport, isConfirmingLab, labReports, t]);
+  }, [company?.id, user, selectedLabReport, canManageLabReports, isConfirmingLab, labReports, t]);
 
   const mineralPdfActionState = getPdfActionState('water_quality');
   const planktonPdfActionState = getPdfActionState('plankton');
@@ -830,7 +832,7 @@ export default function WaterQualityScreen() {
           <FlatList
             data={activePonds}
             keyExtractor={(item) => item.id}
-            ListHeaderComponent={canEditPonds ? (
+            ListHeaderComponent={canManageLabReports ? (
               <View>
                 <View style={styles.labUploadCard}>
                   <View style={styles.labUploadTextBlock}>

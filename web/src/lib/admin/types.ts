@@ -1,3 +1,5 @@
+import type { FarmPermissionOverrides, FarmPermissionSet } from '../../../../shared/permissions';
+
 export type AccountStatus = 'Healthy' | 'At Risk' | 'Inactive' | 'Suspended';
 
 export type AdminEventType =
@@ -14,6 +16,7 @@ export type AdminEventType =
   | 'admin';
 
 export type DataAvailability = 'live' | 'unavailable';
+export type FarmBusinessSize = 'small' | 'medium' | 'large' | 'enterprise';
 
 export interface AdminDirectoryUser {
   id: string;
@@ -43,6 +46,7 @@ export interface LinkedFarm {
   location: string;
   pondCount: number;
   totalAreaHa: number | null;
+  businessSize: FarmBusinessSize;
 }
 
 export interface HealthSignal {
@@ -102,6 +106,9 @@ export interface AccountIntelligence {
   maskedEmail: string;
   maskedPhone: string;
   role: string;
+  permissionOverrides: FarmPermissionOverrides;
+  effectivePermissions: FarmPermissionSet;
+  isCompanyOwner: boolean;
   plan: string;
   country: string;
   region: string;

@@ -13,6 +13,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { useSidebar } from '../../context/sidebarContext';
 import { useDataBackup } from '../hooks/useDataBackup';
+import { hasFarmPermission } from '../../shared/permissions';
 
 interface MenuButtonProps {
   icon: string;
@@ -68,7 +69,9 @@ export const RegularSidebar: React.FC = () => {
     slideAnimRef
   } = useSidebar();
 
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
 
   const loadTeamStats = useCallback(async () => {
     if (!company || !company.id) return;
@@ -335,7 +338,7 @@ export const RegularSidebar: React.FC = () => {
                 <MenuButton icon="home" text={t.nav.home} onPress={() => navigateAndClose('/')} active />
                 <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
-                <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />
+                {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
                 <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 {hasFinanceAccess && (
@@ -350,31 +353,31 @@ export const RegularSidebar: React.FC = () => {
                   </>
                 )}
 
-                {hasFinanceAccess && (
+                {canViewReports && (
                   <>
                     <View style={styles.separator} />
                     <ReportsMenuButton />
 
                     {reportsExpanded && (
                       <View style={styles.submenuContainer}>
-                        <MenuButton
+                        {hasFinanceAccess && <MenuButton
                           icon="stats-chart-outline"
                           text={t.sidebar.financialReports}
                           onPress={() => navigateAndClose('/financial-reports')}
                           color="#9B59B6"
-                        />
+                        />}
                         <MenuButton
                           icon="bar-chart-outline"
                           text={t.sidebar.shrimpReports}
                           onPress={() => navigateAndClose('/shrimp-reports')}
                           color="#9B59B6"
                         />
-                        <MenuButton
+                        {hasFinanceAccess && <MenuButton
                           icon="file-tray-full-outline"
                           text={t.sidebar.cycleReports}
                           onPress={() => navigateAndClose('/cycle-report')}
                           color="#9B59B6"
-                        />
+                        />}
                       </View>
                     )}
                   </>
@@ -546,7 +549,9 @@ export const StaticSidebar: React.FC = () => {
   const { t } = useLanguage();
   const router = useRouter();
   const { reportsExpanded, inventoryExpanded, toggleReports, toggleInventory } = useSidebar();
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
+  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
 
   const navigateTo = (route: string) => router.push(route as any);
   const handleSignOut = () => {
@@ -598,17 +603,21 @@ export const StaticSidebar: React.FC = () => {
         <View style={styles.menuContainer}>
           <MenuButton icon="home" text={t.nav.home} onPress={() => navigateTo('/')} active />
           <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
-          <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateTo('/AIChat')} />
+          {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
           {hasFinanceAccess && (
             <>
               <View style={styles.separator} />
               <MenuButton icon="wallet-outline" text={t.sidebar.finance} onPress={() => navigateTo('/finance')} color="#27AE60" />
+            </>
+          )}
+          {canViewReports && (
+            <>
               <StaticReportsMenuButton />
               {reportsExpanded && (
                 <View style={styles.submenuContainer}>
-                  <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />
+                  {hasFinanceAccess && <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />}
                   <MenuButton icon="bar-chart-outline" text={t.sidebar.shrimpReports} onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
-                  <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />
+                  {hasFinanceAccess && <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />}
                 </View>
               )}
             </>

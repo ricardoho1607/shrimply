@@ -33,11 +33,9 @@ import {
   startPondCycle,
   type StartPondCycleFormValue,
 } from '@/lib/startPondCycle';
-import {
-  canManageEnterpriseFarmCycle,
-  filterEnterpriseRecordsForUser,
-} from '../../../../../shared/enterpriseBlocks';
+import { filterEnterpriseRecordsForUser } from '../../../../../shared/enterpriseBlocks';
 import { getLatestGrowthSampling } from '../../../../../shared/pondCalculations';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -128,7 +126,6 @@ const isPhysicalPondActive = (pond: PhysicalPond) => pond.status === 'active' ||
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const getDateOnlyUtcTime = (dateString: string): number => {
@@ -255,9 +252,9 @@ export default function PondsPage() {
     }
     return openFarmCycles[0] || undefined;
   }, [openFarmCycles, selectedCycleId]);
-  const canEditPonds = canEditOperations(user?.role);
+  const canEditPonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
   const isEnterpriseFarm = company?.businessSize === 'enterprise';
-  const canManageFarmCycle = canEditPonds && canManageEnterpriseFarmCycle(company?.businessSize, user?.role);
+  const canManageFarmCycle = hasFarmPermission(user, 'manageCycles', company?.ownerId);
   const availableFarmBlocks = useMemo(() => {
     if (!isEnterpriseFarm) return [];
     if (user?.role === 'owner' || user?.role === 'co-owner') return farmBlocks;

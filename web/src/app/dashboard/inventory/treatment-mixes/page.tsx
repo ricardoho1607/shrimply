@@ -15,6 +15,7 @@ import {
 } from '@/lib/treatmentMixInventory';
 import { calculateTreatmentDoseLiters } from '../../../../../../shared/treatmentMix';
 import styles from './TreatmentMixesPage.module.css';
+import { hasFarmPermission } from '../../../../../../shared/permissions';
 
 type Pond = {
   id: string;
@@ -26,7 +27,6 @@ type Pond = {
   pondCycleId?: string;
 };
 
-const canEdit = (role?: string) => ['owner', 'co-owner', 'technician'].includes(role || '');
 const positiveNumber = (value: string) => {
   const parsed = Number(value.replace(',', '.'));
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
@@ -49,6 +49,7 @@ export default function TreatmentMixesPage() {
   const [pondId, setPondId] = useState('');
   const [ppm, setPpm] = useState('');
   const [saving, setSaving] = useState(false);
+  const canEdit = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
 
   const additives = useMemo(() => inventory.filter((item) => item.inventoryKind !== 'treatmentMix'), [inventory]);
   const mixes = useMemo(() => inventory.filter((item) => item.inventoryKind === 'treatmentMix'), [inventory]);
@@ -155,7 +156,7 @@ export default function TreatmentMixesPage() {
           <h1>Treatment Mixes</h1>
           <p>Prepare recipes, then apply finished mix to ponds by PPM.</p>
         </div>
-        {canEdit(user?.role) && <button className="dashboard-action dashboard-action-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> Create Mix</button>}
+        {canEdit && <button className="dashboard-action dashboard-action-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> Create Mix</button>}
       </div>
 
       <div className={styles.doseLogic}>
@@ -173,7 +174,7 @@ export default function TreatmentMixesPage() {
               <strong>Recipe for {mix.treatmentMixRecipe?.yieldLiters || 0} L</strong>
               {(mix.treatmentMixRecipe?.components || []).map((component) => <div key={component.additiveId} style={{ marginTop: 7, color: 'var(--text-muted)' }}>{component.quantity} {component.unit} · {component.additiveName}</div>)}
             </div>
-            {canEdit(user?.role) && <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            {canEdit && <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button className="dashboard-action dashboard-action-secondary" style={{ flex: 1 }} onClick={() => setBatchMix(mix)}><RefreshCw size={17} /> Make Batch</button>
               <button className="dashboard-action dashboard-action-primary" style={{ flex: 1 }} onClick={() => setUseMix(mix)} disabled={(mix.totalStock || 0) <= 0}><Waves size={17} /> Use</button>
             </div>}

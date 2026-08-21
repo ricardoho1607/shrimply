@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { useAssetStore, type Asset, type MaintenanceType } from '../store/assetStore';
 import { useLanguage } from '../../context/LanguageContext';
 import AppDatePicker from '../components/forms/AppDatePicker';
+import { hasFarmPermission } from '../../shared/permissions';
 
 type ModalType = 'add' | 'transfer' | 'maintenance' | 'history' | 'return' | 'qr-view' | 'qr-scan';
 
@@ -24,7 +25,6 @@ const MAINTENANCE_TYPE_COLORS: Record<MaintenanceType, string> = {
   Preventive: '#27ae60', Corrective: '#f39c12', Inspection: '#315f57', Repair: '#e74c3c', Upgrade: '#9b59b6'
 };
 
-const canEditOperations = (role?: string) => role === 'owner' || role === 'co-owner' || role === 'technician';
 const assetManagementPermissionMessage = 'Only owners, co-owners, and technicians can change asset ownership or master records.';
 const assetMaintenancePermissionMessage = 'Only owners, co-owners, technicians, and mechanics can log maintenance.';
 const assetDeletePermissionMessage = 'Only owners, co-owners, and technicians can delete assets.';
@@ -34,9 +34,9 @@ export default function AssetInventoryScreen() {
   const { company, user } = useAuth();
   const { t } = useLanguage();
   const store = useAssetStore();
-  const isMechanic = user?.role === 'mechanic';
-  const canManageAssets = canEditOperations(user?.role);
-  const canLogMaintenance = canManageAssets || isMechanic;
+  const canManageAssets = hasFarmPermission(user, 'manageAssets', company?.ownerId);
+  const canLogMaintenance = hasFarmPermission(user, 'logAssetMaintenance', company?.ownerId);
+  const isMaintenanceOnly = canLogMaintenance && !canManageAssets;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
@@ -202,7 +202,7 @@ export default function AssetInventoryScreen() {
         photos: photos, severity: formData.severity as any, type: formData.maintenanceType,
         conditionBefore: formData.conditionBefore as any, conditionAfter: formData.conditionAfter as any,
         notes: formData.notes || '',
-        skipCycleLink: isMechanic,
+        skipCycleLink: isMaintenanceOnly,
       };
 
       if (formData.cost?.trim()) {

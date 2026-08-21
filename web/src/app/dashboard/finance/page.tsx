@@ -38,6 +38,7 @@ import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
 } from '../../../../../shared/financeCycleAllocation';
+import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface Transaction {
@@ -64,6 +65,8 @@ export default function FinancePage() {
   const generalCategoryLabel = t.financeCycle.general;
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
+  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canManageFinance = hasFarmPermission(user, 'manageFinance', company?.ownerId);
   const today = useFarmDateKey(company?.timeZone);
 
   const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics];
@@ -201,7 +204,7 @@ export default function FinancePage() {
   };
 
   const handleDelete = async (id: string, type: 'expense' | 'income') => {
-    if (!company?.id) return;
+    if (!company?.id || !canManageFinance) return;
     if (!window.confirm(t.messages.deleteConfirm)) return;
     const collectionName = type === 'expense' ? 'expenses' : 'revenues';
     try {
@@ -212,7 +215,7 @@ export default function FinancePage() {
   };
 
 
-  if (user?.role === 'technician' || user?.role === 'mechanic') {
+  if (!canViewFinance) {
     return (
       <div style={{ textAlign: 'center', padding: '100px' }}>
         <AlertCircle size={48} color="#ef4444" style={{ marginBottom: '16px' }} />
@@ -240,7 +243,7 @@ export default function FinancePage() {
           </select>
         </div>
 
-        <div className="pond-detail-record-menu finance-input-menu" ref={inputMenuRef} style={{ position: 'relative', flex: '0 0 auto', zIndex: 30 }}>
+        {canManageFinance && <div className="pond-detail-record-menu finance-input-menu" ref={inputMenuRef} style={{ position: 'relative', flex: '0 0 auto', zIndex: 30 }}>
           <button
             type="button"
             className="pond-detail-record-trigger finance-input-trigger"
@@ -276,7 +279,7 @@ export default function FinancePage() {
               </button>
             </div>
           )}
-        </div>
+        </div>}
       </div>
 
       {/* Summary Cards */}
@@ -478,6 +481,7 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
+                      {canManageFinance && (
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
                         style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer', transition: 'opacity 0.2s' }}
@@ -486,6 +490,7 @@ export default function FinancePage() {
                       >
                         <Trash2 size={18} />
                       </button>
+                      )}
                     </td>
                   </tr>
                 ))}

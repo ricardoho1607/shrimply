@@ -20,6 +20,7 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useMarketplaceStore } from '../store/marketplaceStore';
 import * as Location from 'expo-location';
 import AppDatePicker from '../components/forms/AppDatePicker';
+import { hasFarmPermission } from '../../shared/permissions';
 
 const { width } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -72,6 +73,7 @@ const CreateBuyerListingScreen = () => {
   const { t } = useLanguage();
   const { currencyConfig } = useCurrency();
   const { addBuyerListing } = useMarketplaceStore();
+  const canManageMarketplace = hasFarmPermission(user, 'manageMarketplace', company?.ownerId);
 
   const [formData, setFormData] = useState<FormData>({
     buyerName: user?.email?.split('@')[0] || '',
@@ -211,6 +213,7 @@ const CreateBuyerListingScreen = () => {
   }, [formData, t]);
 
   const handleSubmit = useCallback(async () => {
+    if (!canManageMarketplace) return;
     if (!validateForm()) return;
 
     setIsSubmitting(true);
@@ -258,7 +261,7 @@ const CreateBuyerListingScreen = () => {
     } finally {
       setIsSubmitting(false);
     }
-  }, [formData, validateForm, addBuyerListing, router, company, t]);
+  }, [addBuyerListing, canManageMarketplace, company, formData, router, t, validateForm]);
 
   const maxExpiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
 
@@ -500,9 +503,9 @@ const CreateBuyerListingScreen = () => {
             <Text style={styles.cancelButtonText}>{t.CreateBuyerListingScreen.cancel}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
-            style={[styles.submitButton, isSubmitting && styles.submitButtonDisabled]} 
+            style={[styles.submitButton, (isSubmitting || !canManageMarketplace) && styles.submitButtonDisabled]}
             onPress={handleSubmit} 
-            disabled={isSubmitting}
+            disabled={isSubmitting || !canManageMarketplace}
           >
             <Text style={styles.submitButtonText}>
               {isSubmitting ? t.CreateBuyerListingScreen.posting : t.CreateBuyerListingScreen.postListing}

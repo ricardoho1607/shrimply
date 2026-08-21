@@ -30,6 +30,7 @@ import {
 } from '../shared/feedInventoryUsage';
 import { filterEnterpriseRecordsForUser } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
+import { hasFarmPermission } from '../shared/permissions';
 
 type FeedHistoryRecord = FeedData & { date: string; id: string };
 type FeedAllocationInput = { inventoryFeedId: string; quantityKg: string };
@@ -62,7 +63,7 @@ export default function FeedHistoryScreen() {
   }), [company?.businessSize, enterpriseBlocks.blocks, ponds, user?.role, user?.uid]);
   const pond: Pond | undefined = accessiblePonds.find((p: Pond) => p.id === resolvedPondId);
   const displayPondName = Array.isArray(pondName) ? pondName[0] : pondName;
-  const canEditFeed = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canEditFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
   const feedingResponseLabels: Record<FeedingResponse, string> = {
     strong: t.feed.feedingResponseStrong,
     normal: t.feed.feedingResponseNormal,

@@ -23,6 +23,7 @@ import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
 } from '../shared/financeCycleAllocation';
+import { hasFarmPermission } from '../shared/permissions';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
@@ -171,7 +172,8 @@ export default function FinancePage() {
     ? ponds.filter((pond) => pond.cycleId === selectedFormCycle.id)
     : [];
 
-  const hasFinanceAccess = ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
+  const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
+  const canManageFinance = hasFarmPermission(user, 'manageFinance', company?.ownerId);
 
   const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
     switch (period) {
@@ -397,6 +399,7 @@ export default function FinancePage() {
   };
 
   const handleSubmit = async () => {
+    if (!canManageFinance) return;
     if (!formData.item.trim() || !formData.amount) {
       Alert.alert(t.finance?.validationError || 'Validation Error', t.finance?.fillAllFields || 'Please fill in all required fields');
       return;
@@ -465,6 +468,7 @@ export default function FinancePage() {
   };
 
   const handleEdit = (type: 'expense' | 'revenue', item: Expense | Revenue) => {
+    if (!canManageFinance) return;
     if (type === 'revenue' && item.reference?.startsWith('HARVEST-')) {
       Alert.alert(t.finance?.cannotEdit || 'Cannot Edit', t.finance?.cannotEditHarvest || 'This revenue was auto-synced from a harvest record and cannot be edited directly.');
       return;
@@ -488,6 +492,7 @@ export default function FinancePage() {
   };
 
   const handleDelete = async (type: 'expense' | 'revenue', item: Expense | Revenue) => {
+    if (!canManageFinance) return;
     if (type === 'revenue' && item.reference?.startsWith('HARVEST-')) {
       Alert.alert(t.finance?.cannotDelete || 'Cannot Delete', t.finance?.cannotDeleteHarvest || 'This revenue was auto-synced from a harvest record. To remove it, delete the corresponding harvest record or disable harvest sync.');
       return;
@@ -646,7 +651,7 @@ export default function FinancePage() {
         {item.notes && <Text style={styles.ledgerNotes}>{item.notes}</Text>}
         <View style={styles.ledgerFooter}>
           <Text style={styles.ledgerAddedBy}>{item.addedByName}</Text>
-          <View style={styles.ledgerActions}>
+          {canManageFinance && <View style={styles.ledgerActions}>
             <TouchableOpacity onPress={() => handleEdit(type, item)} 
               style={[styles.iconButton, isSynced && styles.iconButtonDisabled]} disabled={isSynced}>
               <Ionicons name="create-outline" size={18} color={isSynced ? "#BDC3C7" : "#3498DB"} />
@@ -655,7 +660,7 @@ export default function FinancePage() {
               style={[styles.iconButton, isSynced && styles.iconButtonDisabled]} disabled={isSynced}>
               <Ionicons name="trash-outline" size={18} color={isSynced ? "#BDC3C7" : "#E74C3C"} />
             </TouchableOpacity>
-          </View>
+          </View>}
         </View>
       </View>
     );
@@ -685,7 +690,7 @@ export default function FinancePage() {
             <Ionicons name="arrow-back" size={24} color="#2C3E50" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
-          <View style={styles.headerActions}>
+          {canManageFinance && <View style={styles.headerActions}>
             <TouchableOpacity onPress={() => {
                 resetForm();
                 setFormType('revenue');
@@ -702,7 +707,7 @@ export default function FinancePage() {
               }} style={styles.addButtonIcon}>
               <Ionicons name="arrow-up-circle" size={28} color="#E74C3C" />
             </TouchableOpacity>
-          </View>
+          </View>}
         </View>
       </SafeAreaView>
 
@@ -926,7 +931,7 @@ export default function FinancePage() {
                   <Text style={styles.syncToggleSubtext}>{t.finance?.autoSyncInventorySubtext || 'Automatically add stock-in expenses from inventory'}</Text>
                 </View>
               </View>
-              <Switch value={inventorySyncEnabled} onValueChange={setInventorySyncEnabled}
+              <Switch value={inventorySyncEnabled} onValueChange={setInventorySyncEnabled} disabled={!canManageFinance}
                 trackColor={{ false: '#ECF0F1', true: '#3498DB' }} thumbColor={inventorySyncEnabled ? '#FFFFFF' : '#BDC3C7'} />
             </View>
 
@@ -969,7 +974,7 @@ export default function FinancePage() {
                   <Text style={styles.syncToggleSubtext}>{t.finance?.autoSyncHarvestSubtext || 'Automatically add harvest sales to revenue'}</Text>
                 </View>
               </View>
-              <Switch value={harvestSyncEnabled} onValueChange={setHarvestSyncEnabled}
+              <Switch value={harvestSyncEnabled} onValueChange={setHarvestSyncEnabled} disabled={!canManageFinance}
                 trackColor={{ false: '#ECF0F1', true: '#27AE60' }} thumbColor={harvestSyncEnabled ? '#FFFFFF' : '#BDC3C7'} />
             </View>
 

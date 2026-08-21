@@ -25,6 +25,7 @@ import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
 import PlanktonOverwatchCard from './components/PlanktonOverwatchCard';
+import { hasFarmPermission } from '../shared/permissions';
 
 const InputField = React.memo(({ 
   label, 
@@ -437,7 +438,9 @@ export default function PondDetails() {
   const { user, company } = useAuth();
   const insets = useSafeAreaInsets();
   
-  const canEditPonds = user?.role === 'technician' || user?.role === 'owner' || user?.role === 'co-owner';
+  const canManagePonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
+  const canRecordPondData = hasFarmPermission(user, 'recordPondData', company?.ownerId);
+  const canManageCycles = hasFarmPermission(user, 'manageCycles', company?.ownerId);
   const isEnterpriseTechnician = company?.businessSize === 'enterprise' && user?.role === 'technician';
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,
@@ -678,7 +681,7 @@ export default function PondDetails() {
   }, [pond]);
 
   const openEditModal = useCallback((sample: Sampling) => {
-    if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
+    if (!canRecordPondData || !pond || !isPondCycleActive(pond)) {
       Alert.alert(
         t.home.permissionDenied,
         !pond || !isPondCycleActive(pond) ? 'Ended cycles are read-only. Start a new cycle before adding or editing sampling data.' : t.home.onlyTechniciansCanEdit,
@@ -689,10 +692,10 @@ export default function PondDetails() {
     
     setSelectedSample(sample);
     setEditModalVisible(true);
-  }, [canEditPonds, pond, t]);
+  }, [canRecordPondData, pond, t]);
 
   const handleStartNewCycle = useCallback(() => {
-    if (!pond || !canEditPonds) return;
+    if (!pond || !canManagePonds || !canManageCycles) return;
     if (isEnterpriseTechnician && !activeFarmCycle) {
       Alert.alert(t.farmCycle.noActiveCycle, t.enterprise.ownerMustStartCycle);
       return;
@@ -747,7 +750,7 @@ export default function PondDetails() {
     });
     router.push('/(tabs)' as any);
     Alert.alert(t.messages.success, `${pond.pondName} new cycle started.`);
-  }, [activeFarmCycle, addPond, canEditPonds, company?.timeZone, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
+  }, [activeFarmCycle, addPond, canManageCycles, canManagePonds, company?.timeZone, isEnterpriseTechnician, newCycleForm, pond, ponds, router, t]);
 
   const closeEditModal = useCallback(() => {
     setEditModalVisible(false);
@@ -769,7 +772,7 @@ export default function PondDetails() {
   }, [pond, updateSampling, getPondById]);
 
   const openEditMortalityModal = useCallback((record: MortalityRecord) => {
-    if (!canEditPonds || !pond || !isPondCycleActive(pond)) {
+    if (!canRecordPondData || !pond || !isPondCycleActive(pond)) {
       Alert.alert(
         t.home.permissionDenied,
         !pond || !isPondCycleActive(pond)
@@ -782,7 +785,7 @@ export default function PondDetails() {
     
     setSelectedMortalityRecord(record);
     setEditMortalityModalVisible(true);
-  }, [canEditPonds, pond, t]);
+  }, [canRecordPondData, pond, t]);
 
   const closeEditMortalityModal = useCallback(() => {
     setEditMortalityModalVisible(false);
@@ -804,7 +807,7 @@ export default function PondDetails() {
   }, [pond, updateMortalityRecord, getPondById]);
 
   const handleDeleteMortality = useCallback((record: MortalityRecord) => {
-    if (!pond || !canEditPonds || !isPondCycleActive(pond)) return;
+    if (!pond || !canRecordPondData || !isPondCycleActive(pond)) return;
     const formattedDate = new Date(record.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     const countText = record.observationType === 'none_observed' ? '0 pcs' : `${record.count} pcs`;
     Alert.alert(
@@ -825,10 +828,10 @@ export default function PondDetails() {
         },
       ]
     );
-  }, [pond, canEditPonds, deleteMortalityRecord, getPondById, t]);
+  }, [pond, canRecordPondData, deleteMortalityRecord, getPondById, t]);
 
   const handleDeleteSampling = useCallback((sample: Sampling) => {
-    if (!pond || !canEditPonds || !isPondCycleActive(pond)) return;
+    if (!pond || !canRecordPondData || !isPondCycleActive(pond)) return;
     const formattedDate = new Date(sample.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
     Alert.alert(
       t.actions.delete,
@@ -848,7 +851,7 @@ export default function PondDetails() {
         },
       ]
     );
-  }, [pond, canEditPonds, deleteSampling, getPondById, t]);
+  }, [pond, canRecordPondData, deleteSampling, getPondById, t]);
 
   if (!pond || !calculations) {
     return (
@@ -933,7 +936,7 @@ export default function PondDetails() {
                 <Text style={styles.midcycleBadgeText}>{t.midcycleOnboarding.importedMidcycle}</Text>
               </View>
             )}
-            {getPondCycleStatus(pond) === 'ended' && canEditPonds && (
+            {getPondCycleStatus(pond) === 'ended' && canManagePonds && canManageCycles && (
               <TouchableOpacity style={styles.startCycleButton} onPress={() => setStartCycleVisible(true)}>
                 <Text style={styles.startCycleButtonText}>Start New Cycle</Text>
               </TouchableOpacity>
@@ -1163,9 +1166,9 @@ export default function PondDetails() {
 
                   const rowContent = (
                     <TouchableOpacity
-                      activeOpacity={canEditPonds && isPondCycleActive(pond) ? 0.7 : 1}
+                      activeOpacity={canRecordPondData && isPondCycleActive(pond) ? 0.7 : 1}
                       onPress={() => {
-                        if (canEditPonds && isPondCycleActive(pond)) {
+                        if (canRecordPondData && isPondCycleActive(pond)) {
                           openEditMortalityModal(record);
                         }
                       }}
@@ -1196,7 +1199,7 @@ export default function PondDetails() {
                         )}
                       </View>
 
-                      {canEditPonds && isPondCycleActive(pond) && (
+                      {canRecordPondData && isPondCycleActive(pond) && (
                         <TouchableOpacity
                           style={styles.samplingEditBtn}
                           onPress={() => openEditMortalityModal(record)}
@@ -1208,7 +1211,7 @@ export default function PondDetails() {
                     </TouchableOpacity>
                   );
 
-                  return canEditPonds && isPondCycleActive(pond) ? (
+                  return canRecordPondData && isPondCycleActive(pond) ? (
                     <Swipeable
                       key={record.id || index}
                       overshootRight={false}
@@ -1247,9 +1250,9 @@ export default function PondDetails() {
                 {pondSamplingData.map((sample, index) => {
                   const rowContent = (
                     <TouchableOpacity
-                      activeOpacity={canEditPonds && isPondCycleActive(pond) ? 0.7 : 1}
+                      activeOpacity={canRecordPondData && isPondCycleActive(pond) ? 0.7 : 1}
                       onPress={() => {
-                        if (canEditPonds && isPondCycleActive(pond)) {
+                        if (canRecordPondData && isPondCycleActive(pond)) {
                           openEditModal(sample);
                         }
                       }}
@@ -1278,7 +1281,7 @@ export default function PondDetails() {
                         )}
                       </View>
 
-                      {canEditPonds && isPondCycleActive(pond) && (
+                      {canRecordPondData && isPondCycleActive(pond) && (
                         <TouchableOpacity 
                           style={styles.samplingEditBtn} 
                           onPress={() => openEditModal(sample)}
@@ -1290,7 +1293,7 @@ export default function PondDetails() {
                     </TouchableOpacity>
                   );
 
-                  return canEditPonds && isPondCycleActive(pond) ? (
+                  return canRecordPondData && isPondCycleActive(pond) ? (
                     <Swipeable
                       key={sample.id || index}
                       overshootRight={false}

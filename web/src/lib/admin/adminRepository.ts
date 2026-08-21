@@ -6,12 +6,16 @@ import {
   getFirestoreAccount,
   getFirestoreAuditLogs,
   getFirestoreDetailedFarms,
+  getFirestoreFarmBusinessSize,
+  getFirestoreUserPermissionState,
   getFirestoreOverviewMetrics,
   getFirestoreSecurityPosture,
   getFirestoreSupportData,
   resolveFirestoreDiseaseReport,
   searchFirestoreAccounts,
   updateFirestoreTesterStatus,
+  updateFirestoreFarmBusinessSize,
+  updateFirestoreUserPermissions,
 } from './firestoreAdminAdapter';
 import type {
   AccountIntelligence,
@@ -22,10 +26,12 @@ import type {
   DeleteAdminUserInput,
   DeleteAdminUserResult,
   DetailedFarm,
+  FarmBusinessSize,
   PlatformOverviewMetrics,
   SecurityPostureData,
   SupportOverviewData,
 } from './types';
+import type { FarmPermissionOverrides } from '../../../../shared/permissions';
 
 const functions = getFunctions(app);
 
@@ -39,6 +45,8 @@ export interface DirectoryQuery {
 export interface AdminIntelligenceRepository {
   searchAccounts(query: DirectoryQuery): Promise<AdminDirectoryResponse>;
   getAccount(userId: string): Promise<AccountIntelligence>;
+  updateFarmBusinessSize(input: { userId: string; companyId: string; businessSize: FarmBusinessSize }): Promise<FarmBusinessSize>;
+  updateUserPermissions(input: { userId: string; permissionOverrides: FarmPermissionOverrides }): Promise<void>;
   getOverviewMetrics(periodDays?: 7 | 30): Promise<PlatformOverviewMetrics>;
   deleteUser(input: DeleteAdminUserInput): Promise<DeleteAdminUserResult>;
   getDetailedFarms(): Promise<DetailedFarm[]>;
@@ -71,10 +79,28 @@ class FirebaseAdminIntelligenceRepository implements AdminIntelligenceRepository
     if (process.env.NODE_ENV !== 'production') return getFirestoreAccount(userId);
     try {
       const callable = httpsCallable<{ userId: string }, AccountIntelligence>(functions, 'getAdminAccountIntelligence');
-      return (await callable({ userId })).data;
+      const account = (await callable({ userId })).data;
+      account.farms = await Promise.all(account.farms.map(async (farm) => ({
+        ...farm,
+        businessSize: await getFirestoreFarmBusinessSize(farm.id),
+      })));
+      const permissionState = await getFirestoreUserPermissionState(userId);
+      account.role = permissionState.role;
+      account.permissionOverrides = permissionState.permissionOverrides;
+      account.effectivePermissions = permissionState.effectivePermissions;
+      account.isCompanyOwner = permissionState.isCompanyOwner;
+      return account;
     } catch {
       throw new Error('Secure owner account details are unavailable until the audited admin callable is deployed.');
     }
+  }
+
+  async updateFarmBusinessSize(input: { userId: string; companyId: string; businessSize: FarmBusinessSize }) {
+    return updateFirestoreFarmBusinessSize(input);
+  }
+
+  async updateUserPermissions(input: { userId: string; permissionOverrides: FarmPermissionOverrides }) {
+    return updateFirestoreUserPermissions(input);
   }
 
   async getOverviewMetrics(periodDays: 7 | 30 = 7) {

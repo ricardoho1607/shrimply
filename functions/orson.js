@@ -237,7 +237,7 @@ exports.getOrsonMortalityContext = onCall({ timeoutSeconds: 30 }, async (request
   }
 
   const db = admin.firestore();
-  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+  const company = await assertCompanyMemberForCallable(db, uid, companyId, "useOrson");
   await enforceFixedWindowLimits({
     db,
     admin,
@@ -370,7 +370,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
   const aiFunction = resolveOrsonAiFunction(request.data);
 
   const db = admin.firestore();
-  const company = await assertCompanyMemberForCallable(db, uid, companyId);
+  const company = await assertCompanyMemberForCallable(db, uid, companyId, "useOrson");
 
   // Keep the data-only path for already-installed clients. It does not invoke the
   // model and therefore does not consume server AI quota.
@@ -1449,7 +1449,7 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
 
   const db = admin.firestore();
   try {
-    await assertCompanyMemberForCallable(db, uid, companyId);
+    await assertCompanyMemberForCallable(db, uid, companyId, "manageLabReports");
   } catch (error) {
     if (error instanceof HttpsError) throw error;
     console.error("Lab report extraction permission check failed", {

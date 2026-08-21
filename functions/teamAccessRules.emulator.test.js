@@ -7,7 +7,7 @@ const {
   assertSucceeds,
   initializeTestEnvironment,
 } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, setDoc, updateDoc } = require("firebase/firestore");
+const { doc, getDoc, serverTimestamp, setDoc, updateDoc } = require("firebase/firestore");
 
 const projectId = "demo-shrimply-team-security";
 let testEnvironment;
@@ -121,5 +121,59 @@ test("only an unassigned user can create their first company", async () => {
   await assertFails(setDoc(doc(assignedDb, "companies/company-second"), companyPayload("assigned-owner")));
   const created = await getDoc(doc(freeDb, "companies/company-new"));
   assert.equal(created.exists(), true);
+});
+
+test("platform owners can grant a user permission that Firestore enforces", async () => {
+  await seed([
+    ["users/founder-a", { email: "founder@example.com", role: "admin" }],
+    ["users/owner-a", { email: "owner@example.com", companyId: "company-a", role: "owner" }],
+    ["users/manager-a", { email: "manager@example.com", companyId: "company-a", role: "manager" }],
+    ["companies/company-a", {
+      ownerId: "owner-a",
+      teamMembers: ["owner-a", "manager-a"],
+      companyName: "Company A",
+      farmType: "shrimp",
+      businessSize: "medium",
+      primaryLocation: "Farm A",
+    }],
+  ]);
+  const managerDb = testEnvironment.authenticatedContext("manager-a", { email: "manager@example.com" }).firestore();
+  const founderDb = testEnvironment.authenticatedContext("founder-a", {
+    email: "founder@example.com",
+    platformOwner: true,
+  }).firestore();
+
+  await assertFails(setDoc(doc(managerDb, "companies/company-a/ponds/pond-a"), { pondName: "Pond A" }));
+  await assertSucceeds(updateDoc(doc(founderDb, "users/manager-a"), {
+    permissionOverrides: { managePonds: true },
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "founder-a",
+  }));
+  await assertSucceeds(setDoc(doc(managerDb, "companies/company-a/ponds/pond-a"), { pondName: "Pond A" }));
+});
+
+test("platform owners cannot remove permissions from the actual company owner", async () => {
+  await seed([
+    ["users/founder-a", { email: "founder@example.com", role: "admin" }],
+    ["users/owner-a", { email: "owner@example.com", companyId: "company-a", role: "owner" }],
+    ["companies/company-a", {
+      ownerId: "owner-a",
+      teamMembers: ["owner-a"],
+      companyName: "Company A",
+      farmType: "shrimp",
+      businessSize: "medium",
+      primaryLocation: "Farm A",
+    }],
+  ]);
+  const founderDb = testEnvironment.authenticatedContext("founder-a", {
+    email: "founder@example.com",
+    platformOwner: true,
+  }).firestore();
+
+  await assertFails(updateDoc(doc(founderDb, "users/owner-a"), {
+    permissionOverrides: { managePonds: false },
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "founder-a",
+  }));
 });
 }
