@@ -7,9 +7,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useCurrency } from '../../context/CurrencyContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { NotificationService } from '../services/notificationService';
+import AppDatePicker from '../components/forms/AppDatePicker';
 import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedAdditiveStore';
 import { isPondCycleActive, usePondStore } from './../store/pondStore';
 import TreatmentMixesScreen from './treatmentMixes';
+import { getFarmDateKey } from '../../shared/farmDate';
 
 type FormData = {
   itemName: string;
@@ -20,7 +22,7 @@ type FormData = {
   pondId: string;
   notes: string;
   unit?: string;
-  batch?: string;
+  stockDate: string;
   expiry?: string;
   reorderLevel?: string;
 };
@@ -32,16 +34,18 @@ const UNITS = ['kg', 'L', 'pack', 'sack'];
 const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
 
+const getEmptyFormData = (type: ItemType, stockDate: string): FormData => ({
+  itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', stockDate, expiry: '', reorderLevel: '',
+});
+
 const formatDate = (date: any): string => {
   if (!date) return '';
-  const d = date.seconds ? new Date(date.seconds * 1000) : date instanceof Date ? date : new Date(date);
+  const d = date.seconds
+    ? new Date(date.seconds * 1000)
+    : date instanceof Date
+      ? date
+      : new Date(typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? `${date}T00:00:00` : date);
   return d.toLocaleDateString();
-};
-
-const formatDateTime = (date: any): string => {
-  if (!date) return '';
-  const d = date.seconds ? new Date(date.seconds * 1000) : date instanceof Date ? date : new Date(date);
-  return d.toLocaleString();
 };
 
 export default function FeedAdditivesScreen() {
@@ -63,7 +67,7 @@ export default function FeedAdditivesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
-  const [formData, setFormData] = useState<FormData>(getEmptyFormData('feed'));
+  const [formData, setFormData] = useState<FormData>(getEmptyFormData('feed', getFarmDateKey(new Date(), company?.timeZone)));
 
   useEffect(() => {
     if (company?.id) {
@@ -71,10 +75,6 @@ export default function FeedAdditivesScreen() {
       store.initializeForCompany(company.id, company.timeZone);
     }
   }, [company?.id, company?.timeZone]);
-
-  function getEmptyFormData(type: ItemType): FormData {
-    return { itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', batch: '', expiry: '', reorderLevel: '' };
-  }
 
   const getCategoryLabel = (category: string): string => {
     const map: Record<string, string> = { 'Starter': t.inventory.starter, 'Grower': t.inventory.grower, 'Finisher': t.inventory.finisher, 'Water Conditioner': t.inventory.waterConditioner, 'Probiotic': t.inventory.probiotic, 'Mineral': t.inventory.mineral, 'Vitamin': t.inventory.vitamin, 'Other': t.inventory.other };
@@ -156,7 +156,10 @@ export default function FeedAdditivesScreen() {
     }
   }, [company?.id]);
 
-  const resetForm = useCallback(() => setFormData(getEmptyFormData(itemType)), [itemType]);
+  const resetForm = useCallback(
+    () => setFormData(getEmptyFormData(itemType, getFarmDateKey(new Date(), company?.timeZone))),
+    [company?.timeZone, itemType],
+  );
 
   const closeModal = useCallback(() => {
     resetForm();
@@ -190,12 +193,11 @@ export default function FeedAdditivesScreen() {
 
     const stockInRecord: any = {
       id: Date.now().toString(),
-      date: new Date(),
+      date: formData.stockDate,
       quantity: qty,
       price,
       notes: formData.notes || '',
       unit: formData.unit || 'kg',
-      ...(formData.batch && { batch: formData.batch }),
       ...(formData.expiry && { expiry: formData.expiry }),
     };
 
@@ -215,7 +217,7 @@ export default function FeedAdditivesScreen() {
     if (isNaN(qty) || qty <= 0 || isNaN(price) || price <= 0) return Alert.alert(t.inventory.error, t.inventory.invalidValues);
 
     const method = itemType === 'feed' ? store.stockInFeed : store.stockInAdditive;
-    handleAction(() => method(selectedItem.id, qty, price, formData.notes || '', { batch: formData.batch, expiry: formData.expiry, unit: formData.unit || selectedItem.unit || 'kg' }), t.inventory.stockAdded);
+    handleAction(() => method(selectedItem.id, qty, price, formData.notes || '', { stockDate: formData.stockDate, expiry: formData.expiry, unit: formData.unit || selectedItem.unit || 'kg' }), t.inventory.stockAdded);
   }, [selectedItem, formData, itemType, store, handleAction, t]);
 
   const handleUsage = useCallback(async () => {
@@ -256,14 +258,14 @@ export default function FeedAdditivesScreen() {
         unitPrice: '', 
         pondId: '', 
         notes: '', 
-        batch: '', 
+        stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         reorderLevel: String(item.reorderLevel ?? '')
       }));
     }
     setMenuModalVisible(false);
     setModalVisible(true);
-  }, []);
+  }, [company?.timeZone]);
 
   const ItemCard = ({ item, type }: { item: Feed | Additive; type: ItemType }) => {
     const name = type === 'feed' ? (item as Feed).feedName : (item as Additive).additiveName;
@@ -362,8 +364,7 @@ export default function FeedAdditivesScreen() {
             </View>
             <View style={styles.historyContent}>
               <Text style={styles.historyQty}>{type === 'stock' ? '+' : '-'}{(h.quantity || 0).toFixed(1)} {getUnitLabel(h.unit || selectedItem.unit || 'kg')}{type === 'stock' ? ` @ Rp${(h.price || 0).toFixed(2)}${t.inventory.unitAbbrev}` : ''}</Text>
-              <Text style={styles.historyDate}>{formatDateTime(h.date)}{type === 'stock' ? ` • ${t.inventory.total}: Rp${((h.quantity || 0) * (h.price || 0)).toFixed(2)}` : h.pondId ? ` • ${h.pondId}` : ''}</Text>
-              {h.batch && <Text style={styles.historyNotes}>{t.inventory.batch}: {h.batch}</Text>}
+              <Text style={styles.historyDate}>{formatDate(h.date)}{type === 'stock' ? ` • ${t.inventory.total}: Rp${((h.quantity || 0) * (h.price || 0)).toFixed(2)}` : h.pondId ? ` • ${h.pondId}` : ''}</Text>
               {h.expiry && <Text style={styles.historyNotes}>{t.inventory.expiry}: {h.expiry}</Text>}
               {h.notes && <Text style={styles.historyNotes}>{h.notes}</Text>}
             </View>
@@ -694,7 +695,16 @@ export default function FeedAdditivesScreen() {
                     {renderChipSelector(t.inventory.unit, UNITS, formData.unit || 'kg', (v) => setFormData(prev => ({ ...prev, unit: v })))}
                     {renderFormInput(`${t.inventory.initialQuantity} (${getUnitLabel(formData.unit || 'kg')})`, t.inventory.quantityPlaceholder, formData.quantity, (v) => setFormData(prev => ({ ...prev, quantity: v })), { keyboardType: 'numeric', required: true })}
                     {renderFormInput(`${t.inventory.unitPrice} (Rp/unit)`, t.inventory.unitPricePlaceholder, formData.unitPrice, (v) => setFormData(prev => ({ ...prev, unitPrice: v })), { keyboardType: 'decimal-pad', required: true })}
-                    {renderFormInput(t.inventory.batchOptional, t.inventory.batchPlaceholder, formData.batch || '', (v) => setFormData(prev => ({ ...prev, batch: v })))}
+                    <View style={styles.input}>
+                      <AppDatePicker
+                        label={t.inventory.stockDate}
+                        value={formData.stockDate}
+                        maximumDate={new Date()}
+                        onChange={(date) => setFormData(prev => ({ ...prev, stockDate: getFarmDateKey(date, company?.timeZone) }))}
+                        cancelLabel={t.actions.cancel}
+                        confirmLabel={t.actions.confirm}
+                      />
+                    </View>
                     {renderFormInput(t.inventory.expiryOptional, t.inventory.expiryPlaceholder, formData.expiry || '', (v) => setFormData(prev => ({ ...prev, expiry: v })))}
                     {renderFormInput(t.inventory.reorderLevelOptional, t.inventory.reorderLevelPlaceholder, formData.reorderLevel || '', (v) => setFormData(prev => ({ ...prev, reorderLevel: v })), { keyboardType: 'numeric' })}
                     {renderFormInput(t.inventory.notesOptional, t.inventory.notesPlaceholder, formData.notes, (v) => setFormData(prev => ({ ...prev, notes: v })), { multiline: true })}
@@ -720,7 +730,16 @@ export default function FeedAdditivesScreen() {
                     {modalType === 'stockIn' && (
                       <>
                         {renderFormInput(`${t.inventory.unitPrice} (Rp/unit)`, t.inventory.unitPricePlaceholder, formData.unitPrice, (v) => setFormData(prev => ({ ...prev, unitPrice: v })), { keyboardType: 'decimal-pad', required: true })}
-                        {renderFormInput(t.inventory.batchOptional, t.inventory.batchPlaceholder, formData.batch || '', (v) => setFormData(prev => ({ ...prev, batch: v })))}
+                        <View style={styles.input}>
+                          <AppDatePicker
+                            label={t.inventory.stockDate}
+                            value={formData.stockDate}
+                            maximumDate={new Date()}
+                            onChange={(date) => setFormData(prev => ({ ...prev, stockDate: getFarmDateKey(date, company?.timeZone) }))}
+                            cancelLabel={t.actions.cancel}
+                            confirmLabel={t.actions.confirm}
+                          />
+                        </View>
                         {renderFormInput(t.inventory.expiryOptional, t.inventory.expiryPlaceholder, formData.expiry || '', (v) => setFormData(prev => ({ ...prev, expiry: v })))}
                       </>
                     )}

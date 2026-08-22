@@ -46,7 +46,6 @@ interface StockHistory {
   quantity: number;
   price: number;
   notes?: string;
-  batch?: string;
   expiry?: string;
   unit?: string;
   createdAt: any;
@@ -163,7 +162,7 @@ export default function InventoryFeedsPage() {
     pondId: '',
     notes: '',
     unit: 'kg',
-    batch: '',
+    stockDate: getFarmDateKey(new Date(), company?.timeZone),
     expiry: '',
     reorderLevel: ''
   });
@@ -251,7 +250,7 @@ export default function InventoryFeedsPage() {
         quantity: '',
         unitPrice: '',
         notes: '',
-        batch: '',
+        stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         pondId: ''
       });
@@ -266,7 +265,7 @@ export default function InventoryFeedsPage() {
         pondId: '',
         notes: '',
         unit: 'kg',
-        batch: '',
+        stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
         reorderLevel: ''
       });
@@ -297,7 +296,7 @@ export default function InventoryFeedsPage() {
         const now = serverTimestamp();
         const itemRef = doc(collection(db, 'companies', companyId, collectionName));
         const stockId = crypto.randomUUID();
-        const stockDate = getFarmDateKey(new Date(), company?.timeZone);
+        const stockDate = formData.stockDate;
         const itemData: any = {
           companyId,
           [itemType === 'feed' ? 'feedName' : 'additiveName']: formData.itemName,
@@ -313,7 +312,6 @@ export default function InventoryFeedsPage() {
             quantity: qty,
             price: price,
             notes: formData.notes,
-            batch: formData.batch,
             expiry: formData.expiry,
             createdAt: Timestamp.now()
           }],
@@ -330,7 +328,6 @@ export default function InventoryFeedsPage() {
           price,
           unit: formData.unit,
           date: stockDate,
-          batch: formData.batch,
           notes: formData.notes,
         });
         await runTransaction(db, async (tx) => {
@@ -350,7 +347,7 @@ export default function InventoryFeedsPage() {
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
         const stockId = crypto.randomUUID();
-        const stockDate = getFarmDateKey(new Date(), company?.timeZone);
+        const stockDate = formData.stockDate;
         const expense = buildInventoryExpense({
           id: stockId,
           itemId: selectedItem.id,
@@ -360,7 +357,6 @@ export default function InventoryFeedsPage() {
           price,
           unit: selectedItem.unit,
           date: stockDate,
-          batch: formData.batch,
           notes: formData.notes,
         });
 
@@ -381,7 +377,6 @@ export default function InventoryFeedsPage() {
               quantity: qty,
               price: price,
               notes: formData.notes,
-              batch: formData.batch,
               expiry: formData.expiry,
               createdAt: Timestamp.now()
             }),
@@ -1023,8 +1018,8 @@ export default function InventoryFeedsPage() {
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
                               <div>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>Batch</span>
-                                {h.batch || 'N/A'}
+                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{t.inventory.stockDate}</span>
+                                {formatDate(h.date)}
                               </div>
                               <div style={{ textAlign: 'right' }}>
                                 <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>Unit Price</span>
@@ -1167,8 +1162,8 @@ export default function InventoryFeedsPage() {
                       {(modalType === 'add' || modalType === 'stockIn') && (
                         <>
                           <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Batch Number</label>
-                            <input value={formData.batch} onChange={e => setFormData({...formData, batch: e.target.value})} placeholder="Lot/Batch #" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.stockDate}</label>
+                            <input required type="date" max={getFarmDateKey(new Date(), company?.timeZone)} value={formData.stockDate} onChange={e => setFormData({...formData, stockDate: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                           </div>
                           <div>
                             <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Expiry Date</label>

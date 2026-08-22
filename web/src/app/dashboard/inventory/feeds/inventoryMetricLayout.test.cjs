@@ -67,3 +67,9 @@ test('inventory create form stays compact with constrained dropdown choices', ()
   assert.match(source, /maxWidth: modalType === 'history' \? '920px' : '560px'/);
   assert.match(source, /\.inventory-add-details,[\s\S]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\) !important;/);
 });
+
+test('inventory stock intake records the selected arrival date without batch fields', () => {
+  assert.match(source, /type="date"[^>]*value=\{formData\.stockDate\}/);
+  assert.match(source, /const stockDate = formData\.stockDate/);
+  assert.doesNotMatch(source, /formData\.batch|Batch Number|Lot\/Batch/);
+});

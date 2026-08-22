@@ -138,7 +138,7 @@ interface FeedAdditiveStore {
   initializeForCompany: (companyId: string, timeZone?: string) => () => void;
   setCurrentCompanyId: (companyId: string | null, timeZone?: string) => void;
   addFeed: (feed: Partial<Feed>) => Promise<void>;
-  stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { batch?: string; expiry?: string; unit?: string }) => Promise<void>;
+  stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string }) => Promise<void>;
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
   reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string) => Promise<void>;
@@ -146,7 +146,7 @@ interface FeedAdditiveStore {
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
   addAdditive: (additive: Partial<Additive>) => Promise<void>;
-  stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { batch?: string; expiry?: string; unit?: string }) => Promise<void>;
+  stockInAdditive: (additiveId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string }) => Promise<void>;
   useAdditive: (additiveId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   createTreatmentMix: (input: { name: string; yieldLiters: number; components: TreatmentMixComponent[]; notes?: string }) => Promise<string>;
   makeTreatmentMixBatch: (treatmentMixId: string) => Promise<void>;
@@ -446,11 +446,10 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const stock: StockHistory = {
           id: Date.now().toString(),
-          date: isoDate(new Date(), get().currentTimeZone),
+          date: opts.stockDate || isoDate(new Date(), get().currentTimeZone),
           quantity,
           price,
           notes,
-          batch: opts.batch,
           expiry: opts.expiry,
           unit: opts.unit || feed.unit || 'kg',
           createdAt: Timestamp.now(),
@@ -961,11 +960,10 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
 
         const stock: StockHistory = {
           id: Date.now().toString(),
-          date: isoDate(new Date(), get().currentTimeZone),
+          date: opts.stockDate || isoDate(new Date(), get().currentTimeZone),
           quantity,
           price,
           notes,
-          batch: opts.batch,
           expiry: opts.expiry,
           unit: opts.unit || additive.unit || 'kg',
           createdAt: Timestamp.now(),
