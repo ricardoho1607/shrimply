@@ -1,14 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import {
-  CheckCircle2,
-  MonitorSmartphone,
-  Share,
-  Smartphone,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
 import Cursor from "@/components/Cursor";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
@@ -24,358 +16,213 @@ export default function DownloadPageContent() {
       <Cursor />
       <Navbar />
 
-      <section className="section download-hero">
-        <div className="container">
-          <div className="mobile-stack-grid download-hero-grid">
-            <div>
-              <div className="eyebrow" style={{ marginBottom: "20px" }}>{copy.eyebrow}</div>
-              <h1 style={{ maxWidth: "900px", marginBottom: "28px" }}>{copy.heroTitle}</h1>
-              <p className="download-hero-copy">{copy.heroBody}</p>
+      <section className="download-simple">
+        <div className="container download-simple-wrap">
+          <div className="download-simple-intro">
+            <div className="eyebrow">{copy.eyebrow}</div>
+            <h1>{copy.heroTitle}</h1>
+            <p>{copy.heroBody}</p>
+          </div>
 
-              <div className="download-status-list">
-                <StatusLine icon={Smartphone} title={copy.iosAvailableTitle} body={copy.iosAvailableBody} />
-                <StatusLine icon={UsersRound} title={copy.androidTestingTitle} body={copy.androidTestingBody} />
-                <StatusLine icon={MonitorSmartphone} title={copy.sharedWorkspaceTitle} body={copy.sharedWorkspaceBody} />
-              </div>
+          <div className="download-options">
+            <article className="download-option download-option-android">
+              <p className="download-option-label">{copy.androidSectionKicker}</p>
+              <h2>{copy.androidTestingTitle}</h2>
+              <p>{copy.androidTestingBody}</p>
+              <a
+                href={GOOGLE_PLAY_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-primary download-action"
+              >
+                {copy.downloadAndroid}
+              </a>
+            </article>
 
-              <div className="mobile-cta-row download-hero-actions">
-                <a href={GOOGLE_PLAY_URL} target="_blank" rel="noopener noreferrer" className="btn-primary">
-                  {copy.downloadAndroid}
-                </a>
-                <Link href="/auth" prefetch={false} className="btn-primary">{copy.openWebApp}</Link>
-                <Link href="/vannamei-shrimp-farming-app" className="btn-outline">{copy.viewFeatures}</Link>
-              </div>
-            </div>
-
-            <aside className="download-install-card" aria-label={copy.installTitle}>
-              <div className="download-card-kicker">
-                <CheckCircle2 size={20} />
-                {copy.installKicker}
-              </div>
-              <h2 className="feature-title download-card-title">{copy.installTitle}</h2>
-              <p className="download-card-copy">{copy.installBody}</p>
-
-              <ol className="download-install-steps">
-                <InstallStep number="1" icon={Smartphone} title={copy.stepSafariTitle} body={copy.stepSafariBody} />
-                <InstallStep number="2" icon={Share} title={copy.stepShareTitle} body={copy.stepShareBody} />
-                <InstallStep number="3" icon={CheckCircle2} title={copy.stepHomeTitle} body={copy.stepHomeBody} />
-              </ol>
-
-              <Link href="/auth" prefetch={false} className="btn-primary download-install-action">
-                {copy.openDashboard}
+            <article className="download-option">
+              <p className="download-option-label">{copy.installKicker}</p>
+              <h2>{copy.iosAvailableTitle}</h2>
+              <p>{copy.iosAvailableBody}</p>
+              <p className="download-ios-steps">
+                {copy.stepSafariTitle} <span>→</span> {copy.stepShareTitle} <span>→</span> {copy.stepHomeTitle}
+              </p>
+              <Link href="/auth" prefetch={false} className="btn-outline download-action">
+                {copy.openWebApp}
               </Link>
-            </aside>
-          </div>
-        </div>
-      </section>
-
-      <section className="section download-android-section">
-        <div className="container download-request-layout">
-          <div>
-            <div className="eyebrow" style={{ marginBottom: "18px" }}>{copy.androidSectionKicker}</div>
-            <h2 className="section-title" style={{ marginBottom: "20px" }}>{copy.androidSectionTitle}</h2>
-            <p className="download-section-copy">{copy.androidSectionBody}</p>
-
-            <div className="download-expectations">
-              <Expectation title={copy.androidDeviceTitle} body={copy.androidDeviceBody} />
-              <Expectation title={copy.earlyFeedbackTitle} body={copy.earlyFeedbackBody} />
-              <Expectation title={copy.manualApprovalTitle} body={copy.manualApprovalBody} />
-            </div>
+            </article>
           </div>
 
-          <div className="download-request-card">
-            <div className="download-card-kicker">
-              <CheckCircle2 size={20} />
-              {copy.testerRequestKicker}
-            </div>
-            <h2 className="feature-title download-card-title">{copy.testerRequestTitle}</h2>
-            <p className="download-card-copy">{copy.testerRequestBody}</p>
-            <a
-              href={GOOGLE_PLAY_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn-primary download-install-action"
-            >
-              {copy.downloadAndroid}
-            </a>
-          </div>
+          <p className="download-shared-note">{copy.sharedWorkspaceBody}</p>
         </div>
       </section>
 
       <Footer />
 
       <style jsx global>{`
-        .download-hero {
-          min-height: 82svh;
-          display: flex;
-          align-items: center;
+        .download-simple {
+          min-height: 76svh;
+          padding: calc(148px + var(--safe-area-top)) 0 88px;
           background: var(--off-white);
         }
 
-        .download-hero-grid {
-          display: grid;
-          grid-template-columns: minmax(0, 0.95fr) minmax(360px, 0.75fr);
-          gap: 56px;
-          align-items: center;
+        .download-simple-wrap {
+          width: 100%;
+          max-width: 980px;
+          padding-right: 24px;
+          padding-left: 24px;
         }
 
-        .download-hero-copy,
-        .download-section-copy,
-        .download-card-copy {
+        .download-simple-intro {
+          max-width: 720px;
+          margin-bottom: 40px;
+        }
+
+        .download-simple-intro .eyebrow {
+          margin-bottom: 16px;
+        }
+
+        .download-simple-intro h1 {
+          margin-bottom: 18px;
+        }
+
+        .download-simple-intro > p {
+          max-width: 680px;
+          color: var(--ocean);
+          font-size: 1.05rem;
+          font-weight: 500;
+        }
+
+        .download-options {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 20px;
+        }
+
+        .download-option {
+          display: flex;
+          flex-direction: column;
+          min-height: 290px;
+          padding: 30px;
+          border: 1px solid var(--slate);
+          border-radius: 18px;
+          background: var(--white);
+        }
+
+        .download-option-android {
+          border-color: rgba(15, 76, 117, 0.32);
+        }
+
+        .download-option-label {
+          margin-bottom: 10px;
+          color: var(--blue);
+          font-size: 0.76rem;
+          font-weight: 800;
+          letter-spacing: 0.1em;
+          text-transform: uppercase;
+        }
+
+        .download-option h2 {
+          margin-bottom: 10px;
+          color: var(--ink);
+          font-size: 1.55rem;
+        }
+
+        .download-option > p:not(.download-option-label) {
           color: var(--ocean);
           font-weight: 500;
         }
 
-        .download-hero-copy {
-          max-width: 720px;
-          margin-bottom: 32px;
-          font-size: 1.08rem;
+        .download-ios-steps {
+          margin-top: 16px;
+          font-size: 0.86rem;
         }
 
-        .download-status-list {
-          display: grid;
-          gap: 14px;
-          max-width: 680px;
-        }
-
-        .download-hero-actions {
-          display: flex;
-          gap: 16px;
-          margin-top: 36px;
-          flex-wrap: wrap;
-        }
-
-        .download-install-card,
-        .download-request-card {
-          background: var(--white);
-          border: 1px solid var(--slate);
-          border-radius: 20px;
-          padding: 28px;
-          box-shadow: 0 20px 60px rgba(13, 33, 55, 0.08);
-        }
-
-        .download-card-kicker {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 18px;
-          color: var(--blue);
-          font-weight: 800;
-        }
-
-        .download-card-title {
-          margin-bottom: 10px;
-          font-size: 1.7rem;
-        }
-
-        .download-card-copy {
-          margin-bottom: 24px;
-        }
-
-        .download-install-steps,
-        .download-expectations {
-          display: grid;
-          gap: 14px;
-        }
-
-        .download-install-steps {
-          margin: 0 0 24px;
-          padding: 0;
-          list-style: none;
-        }
-
-        .download-status-line {
-          display: grid;
-          grid-template-columns: 44px minmax(0, 1fr);
-          gap: 14px;
-          align-items: start;
-          padding: 16px;
-          background: var(--white);
-          border: 1px solid var(--slate);
-          border-radius: 14px;
-        }
-
-        .download-status-icon {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
-          background: var(--blue);
-          color: var(--white);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          box-shadow: 0 10px 22px rgba(15, 76, 117, 0.18);
-        }
-
-        .download-install-step {
-          min-height: 70px;
-          display: grid;
-          grid-template-columns: 30px 24px minmax(0, 1fr);
-          gap: 12px;
-          align-items: center;
-          padding: 14px;
-          border: 1px solid var(--slate);
-          border-radius: 14px;
-          background: var(--off-white);
+        .download-ios-steps span {
+          padding: 0 4px;
           color: var(--blue);
         }
 
-        .download-step-number {
-          width: 30px;
-          height: 30px;
-          display: grid;
-          place-items: center;
-          border-radius: 999px;
-          background: var(--blue);
-          color: var(--white);
-          font-weight: 800;
-        }
-
-        .download-install-step strong,
-        .download-install-step small {
-          display: block;
-        }
-
-        .download-install-step strong {
-          color: var(--ink);
-          font-size: 0.94rem;
-        }
-
-        .download-install-step small {
-          margin-top: 3px;
-          color: var(--ocean);
-          font-size: 0.82rem;
-          line-height: 1.45;
-        }
-
-        .download-install-action {
+        .download-action {
           width: 100%;
+          margin-top: auto;
+          padding-left: 18px;
+          padding-right: 18px;
           text-align: center;
         }
 
-        .download-android-section {
-          background: var(--white);
-          padding-top: 96px;
-          padding-bottom: 96px;
-        }
-
-        .download-request-layout {
-          display: grid;
-          grid-template-columns: minmax(0, 0.72fr) minmax(420px, 1fr);
-          gap: 64px;
-          align-items: start;
-        }
-
-        .download-section-copy {
-          max-width: 560px;
-          margin-bottom: 28px;
-          font-size: 1rem;
-        }
-
-        .download-expectation {
-          padding: 18px;
-          border: 1px solid var(--slate);
-          border-radius: 14px;
-          background: var(--off-white);
-        }
-
-        .download-expectation h3 {
-          margin-bottom: 6px;
-          color: var(--ink);
-          font-family: var(--sans);
-          font-size: 1rem;
-        }
-
-        .download-expectation p {
+        .download-shared-note {
+          margin: 24px 0 0;
           color: var(--ocean);
-          font-weight: 500;
+          font-size: 0.92rem;
+          font-weight: 600;
+          text-align: center;
         }
 
-        @media (max-width: 992px) {
-          .download-hero {
-            padding-top: calc(120px + var(--safe-area-top));
+        @media (max-width: 900px) {
+          .download-simple {
+            min-height: auto;
+            padding: calc(106px + var(--safe-area-top)) 0 56px;
           }
 
-          .download-hero-grid,
-          .download-request-layout {
+          .download-simple-intro {
+            margin-bottom: 28px;
+          }
+
+          .download-simple-intro .eyebrow {
+            margin-bottom: 12px;
+          }
+
+          .download-simple-intro h1 {
+            margin-bottom: 14px;
+            font-size: clamp(2.35rem, 12vw, 3.2rem);
+            line-height: 1.02;
+          }
+
+          .download-simple-intro > p {
+            font-size: 0.96rem;
+            line-height: 1.65;
+          }
+
+          .download-options {
             grid-template-columns: minmax(0, 1fr);
-            gap: 40px;
+            gap: 14px;
           }
 
-          .download-request-card {
-            max-width: 720px;
+          .download-option {
+            min-height: 0;
+            padding: 22px 18px;
+            border-radius: 14px;
+          }
+
+          .download-option h2 {
+            font-size: 1.28rem;
+          }
+
+          .download-action {
+            margin-top: 22px;
+          }
+
+          .download-shared-note {
+            margin-top: 20px;
+            text-align: left;
           }
         }
 
         @media (max-width: 480px) {
-          .download-hero {
-            align-items: flex-start;
-            padding-top: calc(112px + var(--safe-area-top));
+          .download-simple-wrap {
+            padding-right: 18px;
+            padding-left: 18px;
           }
 
-          .download-install-card,
-          .download-request-card {
-            padding: 22px 18px;
-            border-radius: 18px;
+          .download-simple-intro h1 {
+            font-size: clamp(2.15rem, 11vw, 2.7rem);
           }
 
-          .download-card-title {
-            font-size: 1.45rem;
+          .download-option {
+            padding: 20px 16px;
           }
         }
       `}</style>
     </main>
-  );
-}
-
-function StatusLine({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <div className="download-status-line">
-      <div className="download-status-icon"><Icon size={22} /></div>
-      <div>
-        <h2 className="feature-title" style={{ fontSize: "1.06rem", marginBottom: "6px" }}>{title}</h2>
-        <p style={{ color: "var(--ocean)", fontWeight: 500 }}>{body}</p>
-      </div>
-    </div>
-  );
-}
-
-function InstallStep({
-  number,
-  icon: Icon,
-  title,
-  body,
-}: {
-  number: string;
-  icon: LucideIcon;
-  title: string;
-  body: string;
-}) {
-  return (
-    <li className="download-install-step">
-      <span className="download-step-number">{number}</span>
-      <Icon size={20} />
-      <span>
-        <strong>{title}</strong>
-        <small>{body}</small>
-      </span>
-    </li>
-  );
-}
-
-function Expectation({ title, body }: { title: string; body: string }) {
-  return (
-    <article className="download-expectation">
-      <h3>{title}</h3>
-      <p>{body}</p>
-    </article>
   );
 }
