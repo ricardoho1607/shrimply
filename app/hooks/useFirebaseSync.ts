@@ -25,6 +25,11 @@ import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
 import { readProtectedItem, removeProtectedItem, writeProtectedItem } from '../services/protectedStorage';
 import { getPendingSyncKey } from '../../shared/farmCache';
+import {
+  getOfflineRetryDelay,
+  isUsableNetworkState,
+  shouldApplyRemoteCollectionSnapshot,
+} from '../../shared/offlineSnapshotPolicy';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -149,6 +154,11 @@ const useFirebaseSyncController = () => {
   const [listenerOwner] = useState(createFirebaseSyncListenerOwner);
   const pendingChangesRef = useRef<PendingChange[]>([]);
   const initialLoadComplete = useRef(false);
+  const isOnlineRef = useRef(false);
+  const syncInProgressRef = useRef(false);
+  const retryAttemptRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const syncPendingChangesRef = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     pendingChangesRef.current = pendingChanges;
@@ -283,6 +293,12 @@ const useFirebaseSyncController = () => {
               };
               return getTime(a) - getTime(b);
             });
+            const currentState = usePondStore.getState();
+            if (!shouldApplyRemoteCollectionSnapshot({
+              fromCache: snapshot.metadata.fromCache,
+              incomingCount: serverCycles.length,
+              currentCount: currentState.cycles.length,
+            })) return;
             usePondStore.setState({
               cycles: applyPendingEntityChanges(serverCycles, pendingChangesRef.current, 'cycle'),
               farmCacheStatus: 'ready',
@@ -330,6 +346,12 @@ const useFirebaseSyncController = () => {
                 updatedBy: data.updatedBy,
               });
             });
+            const currentState = usePondStore.getState();
+            if (!shouldApplyRemoteCollectionSnapshot({
+              fromCache: snapshot.metadata.fromCache,
+              incomingCount: serverPhysicalPonds.length,
+              currentCount: currentState.physicalPonds.length,
+            })) return;
             usePondStore.setState({
               physicalPonds: applyPendingPhysicalPondChanges(
                 serverPhysicalPonds,
@@ -417,6 +439,11 @@ const useFirebaseSyncController = () => {
             const mergedPonds = applyPendingEntityChanges(serverPonds, pendingChangesRef.current, 'pond')
               .map(normalizePondLifecycle);
             const currentPonds = usePondStore.getState().ponds;
+            if (!shouldApplyRemoteCollectionSnapshot({
+              fromCache: snapshot.metadata.fromCache,
+              incomingCount: serverPonds.length,
+              currentCount: currentPonds.length,
+            })) return;
             const hasChanges = !initialLoadComplete.current || 
               JSON.stringify(currentPonds) !== JSON.stringify(mergedPonds);
 
@@ -469,6 +496,12 @@ const useFirebaseSyncController = () => {
                 ponds: data.ponds || []
               });
             });
+            const currentState = usePondStore.getState();
+            if (!shouldApplyRemoteCollectionSnapshot({
+              fromCache: snapshot.metadata.fromCache,
+              incomingCount: serverHarvestRecords.length,
+              currentCount: currentState.harvestRecords.length,
+            })) return;
 
             usePondStore.setState({
               harvestRecords: applyPendingEntityChanges(serverHarvestRecords, pendingChangesRef.current, 'harvest'),
@@ -711,6 +744,7 @@ const useFirebaseSyncController = () => {
           if (didProcess) processedChanges.push(change.id);
         } catch (error) {
           console.error(`Error processing change ${change.id}:`, error);
+          throw error;
         }
       }
 
@@ -732,40 +766,50 @@ const useFirebaseSyncController = () => {
     pendingChangesRef.current = [...pendingChangesRef.current, pendingChange];
     setPendingChanges(pendingChangesRef.current);
 
-    if (!syncStatus.isOnline) {
+    if (!isOnlineRef.current) {
       setSyncStatus(prev => ({ ...prev, error: undefined }));
       return;
     }
+    syncPendingChangesRef.current();
+  }, []);
 
-    commitChanges([pendingChange])
-      .then((processedChanges) => {
-        if (processedChanges.length === 0) return;
-        console.log(`Synced ${processedChanges.length} changes to server`);
-        setPendingChanges(prev => prev.filter(c => !processedChanges.includes(c.id)));
-        setSyncStatus(prev => ({
-          ...prev,
-          lastSync: new Date(),
-          error: undefined,
-        }));
-      })
-      .catch(() => {
-        setSyncStatus(prev => ({
-          ...prev,
-          error: 'Sync failed. Please try again.',
-        }));
-      });
-  }, [commitChanges, syncStatus.isOnline]);
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    retryTimerRef.current = undefined;
+  }, []);
+
+  useEffect(() => {
+    clearRetryTimer();
+    retryAttemptRef.current = 0;
+    syncInProgressRef.current = false;
+  }, [activeCompanyId, activeUserId, clearRetryTimer]);
+
+  const scheduleSyncRetry = useCallback(() => {
+    if (!isOnlineRef.current || retryTimerRef.current || pendingChangesRef.current.length === 0) return;
+    const delay = getOfflineRetryDelay(retryAttemptRef.current);
+    retryAttemptRef.current += 1;
+    retryTimerRef.current = setTimeout(() => {
+      retryTimerRef.current = undefined;
+      syncPendingChangesRef.current();
+    }, delay);
+  }, []);
 
   // Sync pending changes to Firebase
   const syncPendingChanges = useCallback(async () => {
-    if (!activeCompanyId || !user || pendingChanges.length === 0 || syncStatus.isSyncing) return;
+    const changesToSync = [...pendingChangesRef.current].sort((a, b) => a.timestamp - b.timestamp);
+    if (!activeCompanyId || !user || changesToSync.length === 0 || !isOnlineRef.current || syncInProgressRef.current) return;
 
+    clearRetryTimer();
+    syncInProgressRef.current = true;
     setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
 
     try {
       const processedChanges: string[] = [];
-      for (const pendingChange of [...pendingChanges].sort((a, b) => a.timestamp - b.timestamp)) {
+      for (const pendingChange of changesToSync) {
         const processed = await commitChanges([pendingChange]);
+        if (!processed.includes(pendingChange.id)) {
+          throw new Error(`Pending change ${pendingChange.id} was not applied`);
+        }
         processedChanges.push(...processed);
       }
       if (processedChanges.length > 0) {
@@ -776,42 +820,53 @@ const useFirebaseSyncController = () => {
       setSyncStatus(prev => ({ 
         ...prev, 
         pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
-        lastSync: new Date()
+        lastSync: new Date(),
+        error: undefined,
       }));
-      
+      retryAttemptRef.current = 0;
     } catch {
       setSyncStatus(prev => ({ 
         ...prev, 
         error: 'Sync failed. Please try again.' 
       }));
+      scheduleSyncRetry();
     } finally {
+      syncInProgressRef.current = false;
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
-  }, [activeCompanyId, commitChanges, user, pendingChanges, syncStatus.isSyncing]);
+  }, [activeCompanyId, clearRetryTimer, commitChanges, scheduleSyncRetry, user]);
+
+  syncPendingChangesRef.current = () => {
+    void syncPendingChanges();
+  };
 
   // Monitor network status after the sync callback is available.
   useEffect(() => {
-    let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const unsubscribe = NetInfo.addEventListener((state: any) => {
-      const isOnline = state.isConnected === true;
+      const wasOnline = isOnlineRef.current;
+      const isOnline = isUsableNetworkState(state);
+      isOnlineRef.current = isOnline;
       setSyncStatus(prev => ({ ...prev, isOnline }));
 
-      if (isOnline && pendingChangesRef.current.length > 0) {
-        retryTimer = setTimeout(() => syncPendingChanges(), 1000);
+      if (!isOnline) {
+        clearRetryTimer();
+        retryAttemptRef.current = 0;
+      } else if (!wasOnline && pendingChangesRef.current.length > 0) {
+        syncPendingChangesRef.current();
       }
     });
 
     return () => {
-      if (retryTimer) clearTimeout(retryTimer);
+      clearRetryTimer();
       unsubscribe();
     };
-  }, [syncPendingChanges]);
+  }, [clearRetryTimer]);
 
   useEffect(() => {
-    if (pendingStorageReady && syncStatus.isOnline && !syncStatus.isSyncing && pendingChanges.length > 0) {
-      syncPendingChanges();
+    if (pendingStorageReady && syncStatus.isOnline && pendingChanges.length > 0) {
+      syncPendingChangesRef.current();
     }
-  }, [pendingStorageReady, pendingChanges.length, syncPendingChanges, syncStatus.isOnline, syncStatus.isSyncing]);
+  }, [pendingStorageReady, pendingChanges.length, syncStatus.isOnline]);
 
   // Sync methods
   const syncPond = useCallback((action: 'create' | 'update' | 'delete', pond: Pond) => {
