@@ -1,4 +1,5 @@
 import { differenceInFarmCalendarDays, normalizeFarmDateKey } from './farmDate';
+import { daysToTargetMbwWithTapering } from './pondCalculations';
 
 export type HarvestDecision = 'harvest_now' | 'keep_growing' | 'review_data';
 
@@ -117,6 +118,7 @@ export interface HarvestProfitabilityInput {
   adgGPerDay: number;
   historicalFcr?: number | null;
   dailyMortalityRatePercent?: number | null;
+  fallbackDailyMortalityRatePercent?: number | null;
   recentDailyFeedTotals: DailyFeedTotal[];
   feedUnitCostPerKg: number;
   priceLadder: PriceTier[];
@@ -610,7 +612,10 @@ export const calculateHarvestProfitability = (
   const startingDailyFeedKg = validFeedTotals.length > 0
     ? nonNegative(validFeedTotals[validFeedTotals.length - 1].quantityKg)
     : 0;
-  const mortalityRate = Math.min(0.2, nonNegative(input.dailyMortalityRatePercent) / 100);
+  const mortalityRate = Math.min(0.2, Math.max(
+    nonNegative(input.dailyMortalityRatePercent),
+    nonNegative(input.fallbackDailyMortalityRatePercent),
+  ) / 100);
 
   if (currentPopulation <= 0) warnings.push('Current population is missing or zero.');
   if (currentMbwG <= 0) warnings.push('Current MBW is missing or zero.');
@@ -641,7 +646,12 @@ export const calculateHarvestProfitability = (
       .filter((tier) => tier.sizeCountPerKg < currentSizeCountPerKg)
       .map((tier) => {
         const targetMbwG = 1000 / tier.sizeCountPerKg;
-        const daysFromNow = Math.max(1, Math.ceil((targetMbwG - currentMbwG) / input.adgGPerDay));
+        const daysFromNow = Math.max(1, Math.ceil(daysToTargetMbwWithTapering(
+          currentMbwG,
+          targetMbwG,
+          input.adgGPerDay,
+          Math.max(50, targetMbwG * 1.15),
+        )));
         return { tier, daysFromNow };
       })
       .filter(({ daysFromNow }) => daysFromNow <= maxProjectionDays)

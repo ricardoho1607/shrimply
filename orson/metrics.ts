@@ -8,14 +8,13 @@ import type {
   OrsonNumber,
   OrsonPondMetrics,
   OrsonPromptDailyRecord,
-  OrsonPromptHistoricalBenchmark,
   OrsonPromptLabReport,
-  OrsonPromptTreatmentEvent,
   OrsonRangeEstimate,
   OrsonSurvivalAssumption,
   OrsonTrendResult,
 } from './types';
 import { getOrsonCalibrationAdjustment } from './learning';
+import { shiftDateKey } from '../shared/farmDate';
 import {
   calculateAdg as calculateSharedAdg,
   calculatePondMetricsWithHarvest,
@@ -23,6 +22,7 @@ import {
   getFeedRateFromMbw,
   getPondBaselineFeed,
   getPondOperationalFeed,
+  type PondMetricsWithHarvest,
   type SharedPond,
 } from '../shared/pondCalculations';
 
@@ -104,32 +104,6 @@ export const calculateTrend = (
   };
 };
 
-const calculateSmoothedAdg = (
-  pond: OrsonNormalizedPond,
-  mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
-): OrsonNumber => {
-  const recent = mbwPoints.slice(-4);
-  if (recent.length >= 2) {
-    const first = recent[0];
-    const last = recent[recent.length - 1];
-    if (first.record.timestampMs !== null && last.record.timestampMs !== null) {
-      const days = Math.max(1, (last.record.timestampMs - first.record.timestampMs) / (1000 * 60 * 60 * 24));
-      return round((last.value - first.value) / days);
-    }
-  }
-
-  if (mbwPoints.length === 1) {
-    const point = mbwPoints[0];
-    const initialWeight = positive(pond.initialWeightG) ?? 0.5;
-    if (pond.docStartTimestampMs !== null && point.record.timestampMs !== null) {
-      const days = Math.max(1, (point.record.timestampMs - pond.docStartTimestampMs) / (1000 * 60 * 60 * 24));
-      return round((point.value - initialWeight) / days);
-    }
-  }
-
-  return null;
-};
-
 const detectMbwOutliers = (
   mbwPoints: { record: OrsonNormalizedRecord; value: number }[],
 ): string[] => {
@@ -179,112 +153,6 @@ const calculateDataCompleteness = (pond: OrsonNormalizedPond): OrsonDataComplete
   };
 };
 
-const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
-
-const calculateSurvivalAssumption = (
-  pond: OrsonNormalizedPond,
-  doMinimumLatest: OrsonNumber,
-  calibration: OrsonCalibrationAdjustment,
-): OrsonSurvivalAssumption => {
-  const doc = pond.currentDoc;
-
-  const applyCalibration = (assumption: OrsonSurvivalAssumption): OrsonSurvivalAssumption => {
-    if (calibration.sampleSize <= 0 || calibration.survivalOffsetPercentagePoints === 0) return assumption;
-    const offset = calibration.survivalOffsetPercentagePoints;
-    return {
-      ...assumption,
-      lowPercent: hasNumber(assumption.lowPercent) ? round(clamp(assumption.lowPercent + offset, 50, 99), 1) : null,
-      expectedPercent: hasNumber(assumption.expectedPercent) ? round(clamp(assumption.expectedPercent + offset, 50, 99), 1) : null,
-      highPercent: hasNumber(assumption.highPercent) ? round(clamp(assumption.highPercent + offset, 50, 99), 1) : null,
-      reason: `${assumption.reason} A bounded ${offset > 0 ? '+' : ''}${round(offset, 1)} percentage-point company calibration is applied.`,
-    };
-  };
-
-  if (doc === null) {
-    return applyCalibration({
-      lowPercent: 70,
-      expectedPercent: 85,
-      highPercent: 95,
-      confidence: 'low',
-      reason: 'DOC is missing, so early survival cannot be staged reliably.',
-    });
-  }
-
-  if (doc <= 10) {
-    return applyCalibration({
-      lowPercent: 70,
-      expectedPercent: 85,
-      highPercent: 95,
-      confidence: 'low',
-      reason: 'Early PL survival is not directly observable during the first 10 DOC.',
-    });
-  }
-
-  if (doc <= 30) {
-    let expected = 88;
-    const reasons = ['DOC 11-30 survival is estimated from stocking, mortality, harvest, sampling, and water-quality records.'];
-
-    if (hasNumber(doMinimumLatest) && doMinimumLatest < 4) {
-      expected -= 5;
-      reasons.push('Recent DO minimum is below 4.0.');
-    }
-
-    expected = clamp(expected, 75, 92);
-    return applyCalibration({
-      lowPercent: clamp(expected - 10, 60, 90),
-      expectedPercent: expected,
-      highPercent: clamp(expected + 7, 80, 97),
-      confidence: 'low',
-      reason: reasons.join(' '),
-    });
-  }
-
-  return applyCalibration({
-    lowPercent: 80,
-    expectedPercent: 90,
-    highPercent: 97,
-    confidence: 'low',
-    reason: 'Later-cycle survival is still estimated unless mortality, harvest, and sampling records are complete.',
-  });
-};
-
-const rangeFromPopulation = (
-  initialPopulation: OrsonNumber,
-  totalMortalityCount: number,
-  harvestedPopulation: number,
-  survivalAssumption: OrsonSurvivalAssumption,
-): OrsonRangeEstimate => {
-  if (!hasNumber(initialPopulation)) {
-    return { low: null, expected: null, high: null };
-  }
-
-  const bySurvival = (survivalPercent: OrsonNumber) => {
-    if (!hasNumber(survivalPercent)) return null;
-    return Math.max(0, (initialPopulation * survivalPercent) / 100 - totalMortalityCount - harvestedPopulation);
-  };
-
-  return {
-    low: round(bySurvival(survivalAssumption.lowPercent) ?? 0, 0),
-    expected: round(bySurvival(survivalAssumption.expectedPercent) ?? 0, 0),
-    high: round(bySurvival(survivalAssumption.highPercent) ?? 0, 0),
-  };
-};
-
-const biomassRangeFromPopulationRange = (
-  populationRange: OrsonRangeEstimate,
-  mbwG: OrsonNumber,
-): OrsonRangeEstimate => {
-  if (!hasNumber(mbwG)) return { low: null, expected: null, high: null };
-
-  const toBiomass = (population: OrsonNumber) => (hasNumber(population) ? round((population * mbwG) / 1000, 2) : null);
-
-  return {
-    low: toBiomass(populationRange.low),
-    expected: toBiomass(populationRange.expected),
-    high: toBiomass(populationRange.high),
-  };
-};
-
 const toSharedPond = (pond: OrsonNormalizedPond): SharedPond => ({
   docStart: pond.docStartDate,
   baselineDate: pond.baselineDate,
@@ -307,37 +175,50 @@ const toSharedPond = (pond: OrsonNormalizedPond): SharedPond => ({
     id: record.id ?? undefined,
     date: record.date ?? undefined,
     mbw: record.mbwG,
-    mortality: record.mortalityCount,
+    mortality: record.mortalityObservationType ? null : record.mortalityCount,
     feed: record.feedKg,
     feedData: record.feedData
       ? {
           totalDailyFeed: record.feedData.totalDailyFeedKg,
+          feedingResponse: record.feedData.feedingResponse,
         }
       : null,
     isBaselineEstimate: record.isBaselineEstimate,
     source: record.isBaselineEstimate ? 'midcycle_onboarding' : null,
     cumulativeFeedToDate: record.isBaselineEstimate ? record.feedKg : null,
   })),
+  mortalityRecords: pond.records
+    .filter((record) => record.mortalityObservationType !== null)
+    .map((record) => ({
+      id: record.id ?? undefined,
+      date: record.date ?? undefined,
+      observationType: record.mortalityObservationType ?? undefined,
+      count: record.mortalityObservedCount,
+      notes: record.mortalityNotes,
+    })),
+  historicalBenchmark: pond.historicalBenchmark
+    ? {
+        completedCycleCount: pond.historicalBenchmark.completedCycleCount,
+        averageSurvivalRate: pond.historicalBenchmark.averageSurvivalPercent,
+        averageFinalMbwG: pond.historicalBenchmark.averageFinalMbwG,
+      }
+    : null,
 });
 
 const calculateFeedBiomassModel = (params: {
   pond: OrsonNormalizedPond;
   latestMbwG: OrsonNumber;
   estimatedBiomassKg: OrsonNumber;
-  totalMortalityCount: number;
-  harvestedPopulation: number;
-  doMinimumLatest: OrsonNumber;
   sharedPond: SharedPond;
+  sharedMetrics: PondMetricsWithHarvest;
   calibration: OrsonCalibrationAdjustment;
 }): OrsonFeedBiomassModel => {
   const {
     pond,
     latestMbwG,
     estimatedBiomassKg,
-    totalMortalityCount,
-    harvestedPopulation,
-    doMinimumLatest,
     sharedPond,
+    sharedMetrics,
     calibration,
   } = params;
 
@@ -358,14 +239,26 @@ const calculateFeedBiomassModel = (params: {
     ? round((feedBasedPopulation * latestMbwG) / 1000, 2)
     : null;
 
-  const survivalAssumption = calculateSurvivalAssumption(pond, doMinimumLatest, calibration);
-  const populationRange = rangeFromPopulation(
-    pond.initialPopulation,
-    totalMortalityCount,
-    harvestedPopulation,
-    survivalAssumption,
-  );
-  const rawBiomassRangeKg = biomassRangeFromPopulationRange(populationRange, latestMbwG);
+  const estimate = sharedMetrics.biomassEstimate;
+  const survivalAssumption: OrsonSurvivalAssumption = {
+    lowPercent: round(estimate.lowSurvivalPercent, 1),
+    expectedPercent: round(estimate.expectedSurvivalPercent, 1),
+    highPercent: round(estimate.highSurvivalPercent, 1),
+    confidence: estimate.confidence,
+    reason: estimate.method === 'record_only'
+      ? 'Pond age is unavailable, so survival uses recorded mortality and harvest only.'
+      : 'Survival combines the age-based loss curve, recorded mortality, harvests, and eligible recent feed data.',
+  };
+  const populationRange: OrsonRangeEstimate = {
+    low: estimate.lowPopulation,
+    expected: estimate.bestPopulation,
+    high: estimate.highPopulation,
+  };
+  const rawBiomassRangeKg: OrsonRangeEstimate = {
+    low: round(estimate.lowEstimateKg, 2),
+    expected: round(estimate.bestEstimateKg, 2),
+    high: round(estimate.highEstimateKg, 2),
+  };
   const applyBiomassMultiplier = (value: OrsonNumber): OrsonNumber =>
     hasNumber(value) ? round(value * calibration.biomassMultiplier, 2) : null;
   const biomassRangeKg = calibration.sampleSize > 0
@@ -390,6 +283,9 @@ const calculateFeedBiomassModel = (params: {
   if (survivalAssumption.confidence === 'low') {
     warnings.push(survivalAssumption.reason);
   }
+  if (estimate.warnings.includes('feed_biomass_disagreement')) {
+    warnings.push('Recent normal-response feed data disagrees with the biological biomass estimate, so feed was not blended into the result.');
+  }
 
   return {
     feedRatePercent,
@@ -401,6 +297,7 @@ const calculateFeedBiomassModel = (params: {
     populationRange,
     biomassRangeKg,
     survivalAssumption,
+    expectedDailyMortalityRatePercent: estimate.expectedDailyMortalityRatePercent,
     warnings,
   };
 };
@@ -411,7 +308,13 @@ export const calculatePondMetrics = (
 ): OrsonPondMetrics => {
   const calibration = getOrsonCalibrationAdjustment(calibrationProfile, pond.pondName);
   const sharedPond = toSharedPond(pond);
-  const sharedMetrics = calculatePondMetricsWithHarvest(sharedPond);
+  const currentDateKey = pond.docStartDate && pond.currentDoc !== null
+    ? shiftDateKey(pond.docStartDate, pond.currentDoc)
+    : [...pond.records].reverse().find((record) => record.date)?.date ?? undefined;
+  const sharedMetrics = calculatePondMetricsWithHarvest(sharedPond, undefined, {
+    currentDoc: pond.currentDoc ?? undefined,
+    currentDateKey,
+  });
   const mbwPoints = recordsWith(pond, (record) => positive(record.mbwG));
   const mbwOutlierDates = detectMbwOutliers(mbwPoints);
   const mbwOutlierDateSet = new Set(mbwOutlierDates);
@@ -422,8 +325,8 @@ export const calculatePondMetrics = (
   const totalFeedKg = sharedMetrics.totalFeedConsumed;
   const operationalFeedKg = getPondOperationalFeed(sharedPond);
   const totalMortalityCount = sharedMetrics.totalMortality;
-  const harvestedPopulation = positive(pond.totalHarvestedPopulation) ?? 0;
   const estimatedCurrentPopulation = sharedMetrics.currentPopulation;
+  const sharedAdg = round(calculateSharedAdg(sharedPond));
 
   const hasMidcycleBaseline = pond.cycleStartMode === 'midcycle' ||
     Boolean(pond.baselineDate) ||
@@ -504,10 +407,8 @@ export const calculatePondMetrics = (
     pond,
     latestMbwG,
     estimatedBiomassKg,
-    totalMortalityCount,
-    harvestedPopulation,
-    doMinimumLatest: roundedDoMinimumLatest,
     sharedPond,
+    sharedMetrics,
     calibration: calibration.adjustment,
   });
 
@@ -517,8 +418,8 @@ export const calculatePondMetrics = (
     currentDoc: pond.currentDoc,
     latestMbwG: hasNumber(latestMbwG) ? round(latestMbwG) : null,
     latestMbwDate: latestMbw?.record.date ?? null,
-    adgGPerDay: round(calculateSharedAdg(sharedPond)),
-    smoothedAdgGPerDay: calculateSmoothedAdg(pond, cleanMbwPoints),
+    adgGPerDay: sharedAdg,
+    smoothedAdgGPerDay: sharedAdg,
     growthConfidence: cleanMbwPoints.length < 2 ? 'low' : mbwOutlierDates.length > 0 || cleanMbwPoints.length < 3 ? 'medium' : 'high',
     mbwOutlierDates,
     totalFeedKg: round(totalFeedKg, 2),

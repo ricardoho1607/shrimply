@@ -9,6 +9,7 @@ import type {
 } from './types';
 import { getOrsonCalibrationAdjustment } from './learning';
 import { getFarmDateKey, shiftDateKey } from '../shared/farmDate';
+import { calculateExpectedSurvivalRetention, projectMbwWithTapering } from '../shared/pondCalculations';
 
 const round = (value: number, decimals = 2): number => {
   const factor = 10 ** decimals;
@@ -88,26 +89,57 @@ export const calculateOrsonHarvestProjection = (
     : null;
 
   const initialPopulation = normalized.initialPopulation;
-  const baseCurrentPopulation = isNumber(initialPopulation) && isNumber(baseAssumedSurvivalPercent)
-    ? round((initialPopulation * baseAssumedSurvivalPercent) / 100, 0) - metrics.totalMortalityCount - (normalized.totalHarvestedPopulation ?? 0)
-    : metrics.estimatedCurrentPopulation;
+  const harvestedPopulation = normalized.totalHarvestedPopulation ?? 0;
+  const recordPopulationCap = isNumber(initialPopulation)
+    ? Math.max(0, initialPopulation - metrics.totalMortalityCount - harvestedPopulation)
+    : null;
+  const baseCurrentPopulation = metrics.estimatedCurrentPopulation;
   const boundedBasePopulation = isNumber(baseCurrentPopulation) ? Math.max(0, baseCurrentPopulation) : null;
-  const currentPopulation = isNumber(initialPopulation) && isNumber(assumedSurvivalPercent)
-    ? round((initialPopulation * assumedSurvivalPercent) / 100, 0) - metrics.totalMortalityCount - (normalized.totalHarvestedPopulation ?? 0)
-    : metrics.estimatedCurrentPopulation;
+  const currentPopulation = manualSurvivalOverride && isNumber(initialPopulation) && isNumber(assumedSurvivalPercent)
+    ? Math.min(recordPopulationCap ?? Number.POSITIVE_INFINITY, Math.max(0, round(
+        (initialPopulation * assumedSurvivalPercent) / 100 - harvestedPopulation,
+        0,
+      )))
+    : isNumber(boundedBasePopulation) && isNumber(initialPopulation)
+      ? Math.min(
+          recordPopulationCap ?? Number.POSITIVE_INFINITY,
+          Math.max(0, boundedBasePopulation + ((initialPopulation * calibration.adjustment.survivalOffsetPercentagePoints) / 100)),
+        )
+      : boundedBasePopulation;
   const boundedPopulation = isNumber(currentPopulation) ? Math.max(0, currentPopulation) : null;
 
+  const maximumMbwG = Math.max(
+    50,
+    (normalized.historicalBenchmark?.averageFinalMbwG ?? 0) * 1.15,
+    (input.targetMarketSizeG ?? 0) * 1.15,
+    (currentMbwG ?? 0) + 1,
+  );
   const baseProjectedMbwG = isNumber(currentMbwG)
-    ? round(currentMbwG + baseAssumedAdgGPerDay * daysToHarvest, 2)
+    ? round(projectMbwWithTapering(currentMbwG, baseAssumedAdgGPerDay, daysToHarvest, maximumMbwG), 2)
     : null;
   const projectedMbwG = isNumber(currentMbwG)
-    ? round(currentMbwG + assumedAdgGPerDay * daysToHarvest, 2)
+    ? round(projectMbwWithTapering(currentMbwG, assumedAdgGPerDay, daysToHarvest, maximumMbwG), 2)
     : null;
-  const baseProjectedBiomassKg = isNumber(boundedBasePopulation) && isNumber(baseProjectedMbwG)
-    ? round((boundedBasePopulation * baseProjectedMbwG) / 1000, 2)
+  const futurePopulationRetention = calculateExpectedSurvivalRetention({
+    historicalBenchmark: normalized.historicalBenchmark
+      ? {
+          completedCycleCount: normalized.historicalBenchmark.completedCycleCount,
+          averageSurvivalRate: normalized.historicalBenchmark.averageSurvivalPercent,
+          averageFinalMbwG: normalized.historicalBenchmark.averageFinalMbwG,
+        }
+      : null,
+  }, normalized.currentDoc ?? 0, daysToHarvest);
+  const baseFuturePopulation = isNumber(boundedBasePopulation)
+    ? boundedBasePopulation * futurePopulationRetention
     : null;
-  const calibratedBiomassKg = isNumber(boundedPopulation) && isNumber(projectedMbwG)
-    ? (boundedPopulation * projectedMbwG) / 1000
+  const futurePopulation = isNumber(boundedPopulation)
+    ? boundedPopulation * futurePopulationRetention
+    : null;
+  const baseProjectedBiomassKg = isNumber(baseFuturePopulation) && isNumber(baseProjectedMbwG)
+    ? round((baseFuturePopulation * baseProjectedMbwG) / 1000, 2)
+    : null;
+  const calibratedBiomassKg = isNumber(futurePopulation) && isNumber(projectedMbwG)
+    ? (futurePopulation * projectedMbwG) / 1000
     : null;
   const projectedBiomassKg = isNumber(calibratedBiomassKg)
     ? round(calibratedBiomassKg * calibration.adjustment.biomassMultiplier, 2)

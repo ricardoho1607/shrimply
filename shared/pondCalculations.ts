@@ -70,6 +70,33 @@ export interface SharedPond {
   postHarvestReferenceMbw?: number | string | null;
   samplings?: SharedSampling[] | null;
   mortalityRecords?: SharedMortalityRecord[] | null;
+  historicalBenchmark?: {
+    completedCycleCount?: number | string | null;
+    averageSurvivalRate?: number | string | null;
+    averageCycleDoc?: number | string | null;
+    averageFinalMbwG?: number | string | null;
+  } | null;
+}
+
+export interface PondBiomassEstimate {
+  bestEstimateKg: number;
+  lowEstimateKg: number;
+  highEstimateKg: number;
+  bestPopulation: number;
+  lowPopulation: number;
+  highPopulation: number;
+  recordBasedPopulation: number;
+  biologicalPopulation: number | null;
+  feedBasedBiomassKg: number | null;
+  feedBasedPopulation: number | null;
+  recentFeedDays: number;
+  expectedSurvivalPercent: number;
+  lowSurvivalPercent: number;
+  highSurvivalPercent: number;
+  expectedDailyMortalityRatePercent: number;
+  confidence: 'low' | 'medium';
+  method: 'post_harvest' | 'record_only' | 'biological' | 'biological_feed';
+  warnings: string[];
 }
 
 export interface PondMetricsWithHarvest {
@@ -85,8 +112,15 @@ export interface PondMetricsWithHarvest {
   doc: number;
   totalMortality: number;
   totalMortalityWeight: number;
+  biomassEstimate: PondBiomassEstimate;
   latestSampling?: SharedSampling;
   latestValidMbwSampling?: SharedSampling;
+}
+
+export interface PondCalculationOptions {
+  now?: Date;
+  currentDoc?: number;
+  currentDateKey?: string;
 }
 
 export interface FeedBiomassMismatchRecord {
@@ -115,6 +149,52 @@ export interface FeedBiomassMismatchInsight {
 export const toFiniteNumber = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(String(value ?? '').replace(',', '.'));
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const clamp = (value: number, minimum: number, maximum: number): number =>
+  Math.min(maximum, Math.max(minimum, value));
+
+const median = (values: number[]): number => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle];
+};
+
+export const projectMbwWithTapering = (
+  currentMbwInput: number,
+  adgInput: number,
+  daysInput: number,
+  maximumMbwInput = 50,
+): number => {
+  const currentMbw = Math.max(0, toFiniteNumber(currentMbwInput));
+  const adg = toFiniteNumber(adgInput);
+  const days = Math.max(0, toFiniteNumber(daysInput));
+  if (days <= 0) return currentMbw;
+  if (adg <= 0) return Math.max(0, currentMbw + adg * days);
+
+  const maximumMbw = Math.max(currentMbw + 1, toFiniteNumber(maximumMbwInput) || 50);
+  const growthConstant = adg / (maximumMbw - currentMbw);
+  return maximumMbw - ((maximumMbw - currentMbw) * Math.exp(-growthConstant * days));
+};
+
+export const daysToTargetMbwWithTapering = (
+  currentMbwInput: number,
+  targetMbwInput: number,
+  adgInput: number,
+  maximumMbwInput = 50,
+): number => {
+  const currentMbw = Math.max(0, toFiniteNumber(currentMbwInput));
+  const targetMbw = Math.max(0, toFiniteNumber(targetMbwInput));
+  const adg = toFiniteNumber(adgInput);
+  if (targetMbw <= currentMbw) return 0;
+  if (adg <= 0) return Number.POSITIVE_INFINITY;
+
+  const maximumMbw = Math.max(targetMbw * 1.15, currentMbw + 1, toFiniteNumber(maximumMbwInput) || 50);
+  const growthConstant = adg / (maximumMbw - currentMbw);
+  return Math.log((maximumMbw - currentMbw) / (maximumMbw - targetMbw)) / growthConstant;
 };
 
 const getValidTime = (date?: string | null): number | null => {
@@ -367,6 +447,21 @@ export const calculateAdg = (
   const currentSamplingTime = getValidTime(currentSampling.date);
   if (currentSamplingTime === null) return 0;
 
+  if (validOperational.length >= 2) {
+    const recent = validOperational.slice(-5);
+    const intervalGrowth = recent.slice(1).map((sampling, index) => {
+      const previous = recent[index];
+      const currentTime = getValidTime(sampling.date);
+      const previousTime = getValidTime(previous.date);
+      if (currentTime === null || previousTime === null) return null;
+      const daysDiff = (currentTime - previousTime) / DAY_MS;
+      if (daysDiff <= 0) return null;
+      return (getSamplingMbw(sampling) - getSamplingMbw(previous)) / daysDiff;
+    }).filter((growth): growth is number => growth !== null && Number.isFinite(growth));
+
+    if (intervalGrowth.length) return median(intervalGrowth);
+  }
+
   const baselineSampling = [...sorted]
     .reverse()
     .find((sampling) => isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0 && (getValidTime(sampling.date) ?? Infinity) < currentSamplingTime);
@@ -385,7 +480,144 @@ export const calculateAdg = (
   return (getSamplingMbw(currentSampling) - previousWeight) / daysDiff;
 };
 
-export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: string): PondMetricsWithHarvest => {
+interface MortalityModel {
+  expectedDailyRate: number;
+  lowSurvivalDailyRate: number;
+  highSurvivalDailyRate: number;
+  calibrated: boolean;
+}
+
+const getDefaultDailyMortalityRate = (
+  doc: number,
+  band: 'expected' | 'low_survival' | 'high_survival',
+): number => {
+  if (band === 'low_survival') return doc <= 10 ? 0.008 : doc <= 30 ? 0.005 : 0.0025;
+  if (band === 'high_survival') return doc <= 10 ? 0.0015 : doc <= 30 ? 0.001 : 0.0005;
+  return doc <= 10 ? 0.004 : doc <= 30 ? 0.003 : 0.0015;
+};
+
+const getMortalityModel = (pond: SharedPond, currentDoc: number): MortalityModel => {
+  const completedCycles = toFiniteNumber(pond.historicalBenchmark?.completedCycleCount);
+  const historicalSurvival = toFiniteNumber(pond.historicalBenchmark?.averageSurvivalRate);
+  const historicalDoc = toFiniteNumber(pond.historicalBenchmark?.averageCycleDoc) || 120;
+
+  if (completedCycles >= 3 && historicalSurvival >= 50 && historicalSurvival < 100 && historicalDoc > 0) {
+    const expectedDailyRate = clamp(1 - Math.pow(historicalSurvival / 100, 1 / historicalDoc), 0.0001, 0.01);
+    const uncertainty = Math.max(0.00075, expectedDailyRate * 0.35);
+    return {
+      expectedDailyRate,
+      lowSurvivalDailyRate: clamp(expectedDailyRate + uncertainty, 0.0002, 0.015),
+      highSurvivalDailyRate: clamp(expectedDailyRate - uncertainty, 0.0001, 0.01),
+      calibrated: true,
+    };
+  }
+
+  return {
+    expectedDailyRate: getDefaultDailyMortalityRate(currentDoc, 'expected'),
+    lowSurvivalDailyRate: getDefaultDailyMortalityRate(currentDoc, 'low_survival'),
+    highSurvivalDailyRate: getDefaultDailyMortalityRate(currentDoc, 'high_survival'),
+    calibrated: false,
+  };
+};
+
+const calculateSurvivalRetention = (
+  model: MortalityModel,
+  startDoc: number,
+  days: number,
+  band: 'expected' | 'low_survival' | 'high_survival',
+): number => {
+  if (model.calibrated) {
+    const rate = band === 'expected'
+      ? model.expectedDailyRate
+      : band === 'low_survival'
+        ? model.lowSurvivalDailyRate
+        : model.highSurvivalDailyRate;
+    return Math.pow(1 - rate, days);
+  }
+
+  let retention = 1;
+  for (let day = 1; day <= days; day += 1) {
+    retention *= 1 - getDefaultDailyMortalityRate(startDoc + day, band);
+  }
+  return retention;
+};
+
+export const calculateExpectedSurvivalRetention = (
+  pond: Pick<SharedPond, 'historicalBenchmark'>,
+  startDocInput: number,
+  daysInput: number,
+): number => {
+  const startDoc = Math.max(0, Math.floor(toFiniteNumber(startDocInput)));
+  const days = Math.max(0, Math.floor(toFiniteNumber(daysInput)));
+  return calculateSurvivalRetention(getMortalityModel(pond, startDoc), startDoc, days, 'expected');
+};
+
+interface RecentFeedCrossCheck {
+  biomassKg: number | null;
+  population: number | null;
+  days: number;
+  excludedAtypicalDays: number;
+}
+
+const getRecentFeedCrossCheck = (
+  pond: SharedPond,
+  latestMbw: number,
+  currentDoc: number,
+  currentDateKey: string,
+  timeZone: string | undefined,
+): RecentFeedCrossCheck => {
+  if (currentDoc < 15 || latestMbw < 1.65) {
+    return { biomassKg: null, population: null, days: 0, excludedAtypicalDays: 0 };
+  }
+
+  const dailyFeed = new Map<string, number>();
+  let excludedAtypicalDays = 0;
+
+  (pond.samplings || []).forEach((sampling) => {
+    if (isBaselineSampling(sampling) || !sampling.feedData) return;
+    const dateKey = normalizeFarmDateKey(sampling.date, timeZone);
+    if (!dateKey) return;
+    const ageDays = differenceInFarmCalendarDays(currentDateKey, dateKey);
+    if (ageDays < 0 || ageDays > 6) return;
+
+    const response = sampling.feedData.feedingResponse;
+    if (response === 'weak' || response === 'strong') {
+      excludedAtypicalDays += 1;
+      return;
+    }
+
+    const amount = getSamplingFeedAmount(sampling);
+    if (amount <= 0) return;
+    dailyFeed.set(dateKey, Math.max(dailyFeed.get(dateKey) || 0, amount));
+  });
+
+  const recentAmounts = [...dailyFeed.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .slice(-5)
+    .map(([, amount]) => amount);
+  if (recentAmounts.length < 3) {
+    return { biomassKg: null, population: null, days: recentAmounts.length, excludedAtypicalDays };
+  }
+
+  const feedRatePercent = getFeedRateFromMbw(latestMbw);
+  if (!feedRatePercent) {
+    return { biomassKg: null, population: null, days: recentAmounts.length, excludedAtypicalDays };
+  }
+
+  const biomassKg = median(recentAmounts) / (feedRatePercent / 100);
+  return {
+    biomassKg,
+    population: (biomassKg * 1000) / latestMbw,
+    days: recentAmounts.length,
+    excludedAtypicalDays,
+  };
+};
+
+export const calculatePondMetricsWithHarvest = (
+  pond: SharedPond,
+  timeZone?: string,
+  options: PondCalculationOptions = {},
+): PondMetricsWithHarvest => {
   const samplings = pond.samplings || [];
   const mortalityRecords = pond.mortalityRecords || [];
   const validSamplings = sortByDateAsc(
@@ -418,19 +650,92 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
   const postBaselineMortality = postBaselineSamplingMortality + postBaselineDailyMortality;
   const totalMortality = samplingMortality + dailyMortality;
 
-  let currentPopulation = initialPopulation;
+  let recordBasedPopulation = initialPopulation;
   if (baselinePopulation !== null) {
-    currentPopulation = Math.max(0, baselinePopulation - postBaselineMortality);
+    recordBasedPopulation = Math.max(0, baselinePopulation - postBaselineMortality);
   } else {
-    currentPopulation = Math.max(0, initialPopulation - totalMortality);
+    recordBasedPopulation = Math.max(0, initialPopulation - totalMortality);
   }
 
-  currentPopulation = Math.max(0, currentPopulation - toFiniteNumber(pond.totalHarvestedPopulation));
+  const totalHarvestedPopulation = Math.max(0, toFiniteNumber(pond.totalHarvestedPopulation));
+  recordBasedPopulation = Math.max(0, recordBasedPopulation - totalHarvestedPopulation);
 
   const latestMbw =
     getSamplingMbw(latestValidMbwSampling) ||
     toFiniteNumber(pond.baselineMbw) ||
     initialWeight;
+  const now = options.now || new Date();
+  const currentDateKey = normalizeFarmDateKey(options.currentDateKey, timeZone) || getFarmDateKey(now, timeZone);
+  const currentDoc = options.currentDoc === undefined
+    ? getPondCurrentDoc(pond, timeZone, now)
+    : Math.max(0, Math.floor(toFiniteNumber(options.currentDoc)));
+  const hasAgeAnchor = options.currentDoc !== undefined || Boolean(normalizeFarmDateKey(pond.docStart, timeZone));
+  let modelDays = currentDoc;
+  let modelPopulation = initialPopulation;
+  let modelStartDoc = 0;
+  const baselineDoc = Math.max(0, toFiniteNumber(pond.baselineDoc));
+  const baselineDateKey = normalizeFarmDateKey(pond.baselineDate, timeZone);
+  if (baselinePopulation !== null && baselineDateKey) {
+    modelPopulation = baselinePopulation;
+    modelDays = Math.max(0, differenceInFarmCalendarDays(currentDateKey, baselineDateKey));
+    modelStartDoc = Math.max(0, baselineDoc || currentDoc - modelDays);
+  } else if (baselinePopulation !== null && baselineDoc > 0 && currentDoc >= baselineDoc) {
+    modelPopulation = baselinePopulation;
+    modelDays = currentDoc - baselineDoc;
+    modelStartDoc = baselineDoc;
+  }
+  const mortalityModel = getMortalityModel(pond, currentDoc);
+
+  let biologicalPopulation: number | null = null;
+  let lowBiologicalPopulation = recordBasedPopulation;
+  let highBiologicalPopulation = recordBasedPopulation;
+  if (hasAgeAnchor && modelPopulation > 0 && modelDays > 0) {
+    const populationAfterExpectedLoss = (modelPopulation * calculateSurvivalRetention(
+      mortalityModel,
+      modelStartDoc,
+      modelDays,
+      'expected',
+    ))
+      - totalHarvestedPopulation;
+    const populationAfterLowSurvival = (modelPopulation * calculateSurvivalRetention(
+      mortalityModel,
+      modelStartDoc,
+      modelDays,
+      'low_survival',
+    ))
+      - totalHarvestedPopulation;
+    const populationAfterHighSurvival = (modelPopulation * calculateSurvivalRetention(
+      mortalityModel,
+      modelStartDoc,
+      modelDays,
+      'high_survival',
+    ))
+      - totalHarvestedPopulation;
+    biologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterExpectedLoss));
+    lowBiologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterLowSurvival));
+    highBiologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterHighSurvival));
+  }
+
+  const recentFeed = getRecentFeedCrossCheck(pond, latestMbw, currentDoc, currentDateKey, timeZone);
+  const feedDifference = biologicalPopulation && recentFeed.population
+    ? Math.abs(recentFeed.population - biologicalPopulation) / biologicalPopulation
+    : Number.POSITIVE_INFINITY;
+  const feedAgrees = biologicalPopulation !== null && recentFeed.population !== null && feedDifference <= 0.35;
+  let currentPopulation = biologicalPopulation ?? recordBasedPopulation;
+  let lowPopulation = biologicalPopulation === null ? recordBasedPopulation : lowBiologicalPopulation;
+  let highPopulation = biologicalPopulation === null ? recordBasedPopulation : highBiologicalPopulation;
+  let method: PondBiomassEstimate['method'] = biologicalPopulation === null ? 'record_only' : 'biological';
+
+  if (feedAgrees && recentFeed.population !== null) {
+    currentPopulation = Math.min(recordBasedPopulation, (currentPopulation * 0.8) + (recentFeed.population * 0.2));
+    lowPopulation = Math.min(recordBasedPopulation, (lowPopulation * 0.8) + (recentFeed.population * 0.75 * 0.2));
+    highPopulation = Math.min(recordBasedPopulation, (highPopulation * 0.8) + (recentFeed.population * 1.25 * 0.2));
+    method = 'biological_feed';
+  }
+
+  currentPopulation = Math.round(Math.max(0, currentPopulation));
+  lowPopulation = Math.min(currentPopulation, Math.round(Math.max(0, lowPopulation)));
+  highPopulation = Math.max(currentPopulation, Math.round(Math.max(0, highPopulation)));
   const postHarvestBiomass = pond.postHarvestRemainingBiomass;
   const postHarvestPopulation = toFiniteNumber(pond.postHarvestRemainingPopulation);
   const referenceSamplingId = pond.postHarvestReferenceSamplingId || '';
@@ -448,6 +753,47 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
   const currentBiomass = canUsePostHarvestBiomass
     ? Math.max(0, toFiniteNumber(postHarvestBiomass) - ((populationRemovedAfterBaseline * latestMbw) / 1000))
     : Math.max(0, (currentPopulation * latestMbw) / 1000);
+  if (canUsePostHarvestBiomass) {
+    method = 'post_harvest';
+    lowPopulation = currentPopulation;
+    highPopulation = currentPopulation;
+  }
+  const lowEstimateKg = canUsePostHarvestBiomass
+    ? currentBiomass
+    : (lowPopulation * latestMbw) / 1000;
+  const highEstimateKg = canUsePostHarvestBiomass
+    ? currentBiomass
+    : (highPopulation * latestMbw) / 1000;
+  const warnings: string[] = [];
+  if (!hasAgeAnchor) warnings.push('age_missing_record_only');
+  if (hasAgeAnchor && biologicalPopulation !== null) warnings.push('mortality_logs_are_minimum');
+  if (currentDoc >= 15 && recentFeed.days < 3) warnings.push('recent_feed_cross_check_unavailable');
+  if (recentFeed.population !== null && !feedAgrees) warnings.push('feed_biomass_disagreement');
+  if (recentFeed.excludedAtypicalDays > 0) warnings.push('atypical_feed_days_excluded');
+  const confidence: PondBiomassEstimate['confidence'] = method === 'post_harvest' ||
+    mortalityModel.calibrated || feedAgrees || baselinePopulation !== null
+    ? 'medium'
+    : 'low';
+  const biomassEstimate: PondBiomassEstimate = {
+    bestEstimateKg: currentBiomass,
+    lowEstimateKg,
+    highEstimateKg,
+    bestPopulation: currentPopulation,
+    lowPopulation,
+    highPopulation,
+    recordBasedPopulation,
+    biologicalPopulation: biologicalPopulation === null ? null : Math.round(biologicalPopulation),
+    feedBasedBiomassKg: recentFeed.biomassKg,
+    feedBasedPopulation: recentFeed.population === null ? null : Math.round(recentFeed.population),
+    recentFeedDays: recentFeed.days,
+    expectedSurvivalPercent: initialPopulation > 0 ? (currentPopulation / initialPopulation) * 100 : 0,
+    lowSurvivalPercent: initialPopulation > 0 ? (lowPopulation / initialPopulation) * 100 : 0,
+    highSurvivalPercent: initialPopulation > 0 ? (highPopulation / initialPopulation) * 100 : 0,
+    expectedDailyMortalityRatePercent: mortalityModel.expectedDailyRate * 100,
+    confidence,
+    method,
+    warnings,
+  };
   const totalFeedConsumed = Math.max(0, getPondTotalFeedConsumed(pond));
   const adjustedSR = initialPopulation > 0 ? (currentPopulation / initialPopulation) * 100 : 0;
   const totalHarvestedBiomass = toFiniteNumber(pond.totalHarvestedBiomass);
@@ -476,9 +822,10 @@ export const calculatePondMetricsWithHarvest = (pond: SharedPond, timeZone?: str
     latestMbw,
     size: latestMbw > 0 ? Math.round(1000 / latestMbw) : 0,
     adg: calculateAdg(pond),
-    doc: getPondCurrentDoc(pond, timeZone),
+    doc: currentDoc,
     totalMortality,
     totalMortalityWeight,
+    biomassEstimate,
     latestSampling,
     latestValidMbwSampling,
   };
@@ -513,6 +860,9 @@ export const detectFeedBiomassMismatchInsight = (
           if (recordTime === null || samplingTime === null) return false;
           return recordTime <= samplingTime;
         }),
+      }, undefined, {
+        now: getValidTime(sampling.date) === null ? undefined : new Date(getValidTime(sampling.date)!),
+        currentDateKey: sampling.date ? normalizeFarmDateKey(sampling.date) ?? undefined : undefined,
       });
       const recordBiomassKg = metricsToDate.currentBiomass;
       if (recordBiomassKg <= 0) return null;

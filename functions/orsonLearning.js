@@ -15,7 +15,7 @@ const {
 const DAY_MS = 24 * 60 * 60 * 1000;
 const LEARNING_SCHEMA_VERSION = 1;
 const DEFAULT_VERSION_ID = "default-v1";
-const PROJECTION_MODEL_VERSION = "harvest-projection-v2";
+const PROJECTION_MODEL_VERSION = "harvest-projection-v3";
 const MAX_CALIBRATION_OUTCOMES = 1000;
 
 const finiteNumber = (value) => typeof value === "number" && Number.isFinite(value) ? value : null;
@@ -63,20 +63,60 @@ const samplingDateMs = (sampling) => {
 
 const samplingMbw = (sampling) => positiveNumber(sampling?.mbw ?? sampling?.abw);
 
+const median = (values) => {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+};
+
+const projectMbwWithTapering = (currentMbw, adg, days, maximumMbw = 50) => {
+  if (days <= 0) return currentMbw;
+  const boundedMaximum = Math.max(currentMbw + 1, maximumMbw);
+  const growthConstant = adg / (boundedMaximum - currentMbw);
+  return boundedMaximum - ((boundedMaximum - currentMbw) * Math.exp(-growthConstant * days));
+};
+
+const feedRateFromMbw = (mbw) => {
+  const table = [[1.65, 6.5], [3, 6.5], [5, 5.5], [7.5, 4.2], [10.5, 3.6], [14, 3.3], [17.5, 3.1], [21, 2.9], [25, 2.7], [29, 2.5], [33, 2.3]];
+  if (mbw < 1.65) return null;
+  if (mbw > 33) return 2.1;
+  for (let index = 0; index < table.length - 1; index += 1) {
+    const [leftMbw, leftRate] = table[index];
+    const [rightMbw, rightRate] = table[index + 1];
+    if (mbw <= leftMbw) return leftRate;
+    if (mbw <= rightMbw) {
+      const ratio = (mbw - leftMbw) / (rightMbw - leftMbw);
+      return leftRate + ratio * (rightRate - leftRate);
+    }
+  }
+  return 2.3;
+};
+
+const defaultDailyMortalityRate = (doc) => doc <= 10 ? 0.004 : doc <= 30 ? 0.003 : 0.0015;
+
+const defaultSurvivalRetention = (startDoc, days) => {
+  let retention = 1;
+  for (let day = 1; day <= days; day += 1) retention *= 1 - defaultDailyMortalityRate(startDoc + day);
+  return retention;
+};
+
 const calculateServerProjectionBase = (pond, daysToHarvest, now = new Date()) => {
   const samplings = (Array.isArray(pond.samplings) ? pond.samplings : [])
     .filter((sampling) => sampling && typeof sampling === "object")
     .sort((a, b) => (samplingDateMs(a) ?? 0) - (samplingDateMs(b) ?? 0));
   const validMbw = samplings.filter((sampling) => samplingMbw(sampling) !== null);
-  const recentMbw = validMbw.slice(-4);
+  const recentMbw = validMbw.slice(-5);
   const initialWeight = positiveNumber(pond.initialWeight ?? pond.initialWeightG) ?? 0.5;
   const currentMbwG = samplingMbw(validMbw[validMbw.length - 1]) ?? positiveNumber(pond.baselineMbw) ?? initialWeight;
   let baseAdg = null;
   if (recentMbw.length >= 2) {
-    const first = recentMbw[0];
-    const last = recentMbw[recentMbw.length - 1];
-    const days = ((samplingDateMs(last) ?? 0) - (samplingDateMs(first) ?? 0)) / DAY_MS;
-    if (days > 0) baseAdg = (samplingMbw(last) - samplingMbw(first)) / days;
+    const intervalGrowth = recentMbw.slice(1).map((sampling, index) => {
+      const previous = recentMbw[index];
+      const days = ((samplingDateMs(sampling) ?? 0) - (samplingDateMs(previous) ?? 0)) / DAY_MS;
+      return days > 0 ? (samplingMbw(sampling) - samplingMbw(previous)) / days : null;
+    }).filter((growth) => finiteNumber(growth) !== null);
+    if (intervalGrowth.length > 0) baseAdg = median(intervalGrowth);
   } else if (recentMbw.length === 1) {
     const sampling = recentMbw[0];
     const startValue = pond.docStart || pond.stockingDate || pond.startDate;
@@ -91,34 +131,83 @@ const calculateServerProjectionBase = (pond, daysToHarvest, now = new Date()) =>
   const startValue = pond.docStart || pond.stockingDate || pond.startDate;
   const startMs = startValue ? new Date(startValue).getTime() : NaN;
   const currentDoc = Number.isFinite(startMs) ? Math.max(0, Math.floor((now.getTime() - startMs) / DAY_MS)) : null;
-  const latestWater = [...samplings].reverse().find((sampling) =>
-    parsedNumber(sampling?.doMorning) !== null || parsedNumber(sampling?.doEvening) !== null
-  );
-  const doValues = [parsedNumber(latestWater?.doMorning), parsedNumber(latestWater?.doEvening)].filter((value) => value !== null);
-  const doMinimum = doValues.length > 0 ? Math.min(...doValues) : null;
-  let baseSurvival = currentDoc === null || currentDoc <= 10 ? 85 : currentDoc <= 30 ? 88 : 90;
-  if (currentDoc !== null && currentDoc > 10 && currentDoc <= 30 && doMinimum !== null && doMinimum < 4) baseSurvival -= 5;
-
   const explicitPopulation = positiveNumber(pond.initialPopulation ?? pond.initialStock);
   const area = positiveNumber(pond.pondArea ?? pond.area ?? pond.areaM2);
   const density = positiveNumber(pond.density ?? pond.stockingDensity ?? pond.densityPerM2);
   const initialPopulation = explicitPopulation ?? (area !== null && density !== null ? area * density : null);
-  const mortalityCount = samplings
+  const samplingMortality = samplings
     .filter((sampling) => !isBaselineSampling(sampling))
     .reduce((sum, sampling) => sum + (positiveNumber(sampling?.mortality ?? sampling?.dead ?? sampling?.deaths) ?? 0), 0);
+  const mortalityRecordCount = (Array.isArray(pond.mortalityRecords) ? pond.mortalityRecords : [])
+    .reduce((sum, record) => record?.observationType === "none_observed"
+      ? sum
+      : sum + (positiveNumber(record?.count) ?? 0), 0);
+  const mortalityCount = samplingMortality + mortalityRecordCount;
   const harvestedPopulation = parsedNumber(pond.totalHarvestedPopulation ?? pond.harvestedPopulation) ?? 0;
-  const baseProjectedMbwG = round(currentMbwG + baseAdg * daysToHarvest, 3);
-  const basePopulation = initialPopulation !== null
-    ? Math.max(0, (initialPopulation * baseSurvival) / 100 - mortalityCount - harvestedPopulation)
+  const recordPopulation = initialPopulation !== null
+    ? Math.max(0, initialPopulation - mortalityCount - harvestedPopulation)
     : null;
-  const baseProjectedBiomassKg = basePopulation !== null ? round((basePopulation * baseProjectedMbwG) / 1000, 3) : null;
+  const benchmark = pond.historicalBenchmark || pond.pastCycleBenchmark || {};
+  const completedCycles = positiveNumber(benchmark.completedCycleCount) ?? 0;
+  const historicalSurvival = positiveNumber(benchmark.averageSurvivalPercent ?? benchmark.survivalRate);
+  const historicalDoc = positiveNumber(benchmark.averageCycleDoc) ?? 120;
+  const calibratedDailyMortalityRate = completedCycles >= 3 && historicalSurvival !== null && historicalSurvival >= 50 && historicalSurvival < 100
+    ? Math.min(0.01, Math.max(0.0001, 1 - Math.pow(historicalSurvival / 100, 1 / historicalDoc)))
+    : null;
+  const expectedDailyMortalityRate = calibratedDailyMortalityRate ?? defaultDailyMortalityRate(currentDoc ?? 0);
+  const currentSurvivalRetention = currentDoc === null
+    ? 1
+    : calibratedDailyMortalityRate !== null
+      ? Math.pow(1 - calibratedDailyMortalityRate, currentDoc)
+      : defaultSurvivalRetention(0, currentDoc);
+  let basePopulation = initialPopulation !== null && currentDoc !== null
+    ? Math.min(recordPopulation, Math.max(0, initialPopulation * currentSurvivalRetention - harvestedPopulation))
+    : recordPopulation;
+
+  if (basePopulation !== null && currentDoc !== null && currentDoc >= 15 && currentMbwG >= 1.65) {
+    const feedByDate = new Map();
+    samplings.forEach((sampling) => {
+      if (isBaselineSampling(sampling) || !sampling?.feedData) return;
+      const response = sampling.feedData.feedingResponse;
+      if (response === "weak" || response === "strong") return;
+      const samplingMs = samplingDateMs(sampling);
+      if (samplingMs === null) return;
+      const ageDays = Math.floor((now.getTime() - samplingMs) / DAY_MS);
+      if (ageDays < 0 || ageDays > 6) return;
+      const feed = positiveNumber(sampling.feedData.totalDailyFeed ?? sampling.feed);
+      const key = dateString(sampling.date);
+      if (feed !== null && key) feedByDate.set(key, Math.max(feedByDate.get(key) || 0, feed));
+    });
+    const recentFeed = [...feedByDate.entries()].sort(([left], [right]) => left.localeCompare(right)).slice(-5).map(([, feed]) => feed);
+    const feedRate = feedRateFromMbw(currentMbwG);
+    if (recentFeed.length >= 3 && feedRate !== null) {
+      const feedPopulation = ((median(recentFeed) / (feedRate / 100)) * 1000) / currentMbwG;
+      const difference = Math.abs(feedPopulation - basePopulation) / basePopulation;
+      if (difference <= 0.35) basePopulation = Math.min(recordPopulation, (basePopulation * 0.8) + (feedPopulation * 0.2));
+    }
+  }
+
+  const baseSurvival = initialPopulation !== null && basePopulation !== null ? (basePopulation / initialPopulation) * 100 : null;
+  const maximumMbw = Math.max(50, (positiveNumber(benchmark.averageFinalMbwG) ?? 0) * 1.15, currentMbwG + 1);
+  const baseProjectedMbwG = round(projectMbwWithTapering(currentMbwG, baseAdg, daysToHarvest, maximumMbw), 3);
+  const futureSurvivalRetention = calibratedDailyMortalityRate !== null
+    ? Math.pow(1 - calibratedDailyMortalityRate, daysToHarvest)
+    : defaultSurvivalRetention(currentDoc ?? 0, daysToHarvest);
+  const futurePopulation = basePopulation !== null
+    ? basePopulation * futureSurvivalRetention
+    : null;
+  const baseProjectedBiomassKg = futurePopulation !== null ? round((futurePopulation * baseProjectedMbwG) / 1000, 3) : null;
 
   return {
     currentMbwG: round(currentMbwG, 3),
     baseAssumedAdgGPerDay: round(baseAdg, 4),
     baseProjectedMbwG,
-    baseAssumedSurvivalPercent: baseSurvival,
+    baseAssumedSurvivalPercent: baseSurvival === null ? null : round(baseSurvival, 3),
     baseProjectedBiomassKg,
+    currentPopulationAtPrediction: basePopulation === null ? null : round(basePopulation, 0),
+    recordPopulationCap: recordPopulation === null ? null : round(recordPopulation, 0),
+    expectedDailyMortalityRatePercent: round(expectedDailyMortalityRate * 100, 4),
+    futureSurvivalRetention: round(futureSurvivalRetention, 8),
     initialPopulation,
     mortalityCountAtPrediction: round(mortalityCount, 0),
     harvestedPopulationAtPrediction: round(Math.max(0, harvestedPopulation), 0),
@@ -585,18 +674,26 @@ module.exports = ({ admin, assertCompanyMemberForCallable }) => {
       projected = requestProjected;
     } else {
       const adjustedAdg = serverBase.baseAssumedAdgGPerDay * calibration.adjustment.adgMultiplier;
-      const projectedMbwG = round(serverBase.currentMbwG + adjustedAdg * daysToHarvest, 3);
-      const survivalPercent = round(Math.min(100, Math.max(
-        1,
-        serverBase.baseAssumedSurvivalPercent + calibration.adjustment.survivalOffsetPercentagePoints,
-      )), 3);
-      const projectedPopulation = serverBase.initialPopulation !== null
-        ? Math.max(
-          0,
-          (serverBase.initialPopulation * survivalPercent) / 100 -
-            serverBase.mortalityCountAtPrediction -
-            serverBase.harvestedPopulationAtPrediction,
+      const benchmark = pond.historicalBenchmark || pond.pastCycleBenchmark || {};
+      const maximumMbw = Math.max(50, (positiveNumber(benchmark.averageFinalMbwG) ?? 0) * 1.15, serverBase.currentMbwG + 1);
+      const projectedMbwG = round(projectMbwWithTapering(
+        serverBase.currentMbwG,
+        adjustedAdg,
+        daysToHarvest,
+        maximumMbw,
+      ), 3);
+      const calibratedCurrentPopulation = serverBase.currentPopulationAtPrediction !== null && serverBase.initialPopulation !== null
+        ? Math.min(
+          serverBase.recordPopulationCap,
+          Math.max(0, serverBase.currentPopulationAtPrediction +
+            (serverBase.initialPopulation * calibration.adjustment.survivalOffsetPercentagePoints) / 100),
         )
+        : null;
+      const projectedPopulation = calibratedCurrentPopulation !== null
+        ? calibratedCurrentPopulation * serverBase.futureSurvivalRetention
+        : null;
+      const survivalPercent = serverBase.initialPopulation !== null && projectedPopulation !== null
+        ? round((projectedPopulation / serverBase.initialPopulation) * 100, 3)
         : null;
       const projectedBiomassKg = projectedPopulation !== null
         ? round((projectedPopulation * projectedMbwG) / 1000 * calibration.adjustment.biomassMultiplier, 3)

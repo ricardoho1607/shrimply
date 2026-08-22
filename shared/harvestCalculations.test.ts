@@ -7,7 +7,14 @@ import {
   withHarvestReference,
   type HarvestTrackingPond,
 } from './harvestCalculations';
-import { calculatePondMetricsWithHarvest, calculatePondMortalityForDate, getLatestFeedResponseForDate, getLatestGrowthSampling } from './pondCalculations';
+import {
+  calculateAdg,
+  calculatePondMetricsWithHarvest,
+  calculatePondMortalityForDate,
+  getLatestFeedResponseForDate,
+  getLatestGrowthSampling,
+  projectMbwWithTapering,
+} from './pondCalculations';
 
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
@@ -109,5 +116,82 @@ export const runHarvestCalculationsSelfTest = () => {
   }
   if (hasFinalHarvestForPondCycle(readinessRecords, { id: 'pond-2', pondCycleId: 'pond-cycle-2', cycleId: 'cycle-1' })) {
     throw new Error('final harvest readiness leaked to another pond');
+  }
+
+  const hiddenMortalityMetrics = calculatePondMetricsWithHarvest({
+    docStart: '2026-05-24',
+    initialPopulation: 100_000,
+    initialWeight: 0.5,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'feed-1', date: '2026-08-20', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' } },
+      { id: 'feed-2', date: '2026-08-21', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' } },
+      { id: 'feed-3', date: '2026-08-22', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' } },
+    ],
+  }, 'Australia/Melbourne', { now: new Date('2026-08-22T12:00:00+10:00') });
+  if (hiddenMortalityMetrics.currentPopulation >= 90_000 || hiddenMortalityMetrics.currentPopulation <= 65_000) {
+    throw new Error(`hidden mortality estimate is unrealistic: ${hiddenMortalityMetrics.currentPopulation}`);
+  }
+  assertClose(
+    hiddenMortalityMetrics.currentBiomass,
+    hiddenMortalityMetrics.biomassEstimate.bestEstimateKg,
+    'dashboard biomass uses the consolidated estimate',
+  );
+  if (hiddenMortalityMetrics.biomassEstimate.recentFeedDays !== 3) {
+    throw new Error('three recent feed days should qualify as a biomass cross-check');
+  }
+  if (
+    hiddenMortalityMetrics.currentBiomass < hiddenMortalityMetrics.biomassEstimate.lowEstimateKg ||
+    hiddenMortalityMetrics.currentBiomass > hiddenMortalityMetrics.biomassEstimate.highEstimateKg
+  ) {
+    throw new Error('best biomass estimate must remain inside its confidence range');
+  }
+
+  const largeKnownMortalityMetrics = calculatePondMetricsWithHarvest({
+    docStart: '2026-07-23',
+    initialPopulation: 100_000,
+    initialWeight: 0.5,
+    mortalityRecords: [{
+      id: 'known-loss',
+      date: '2026-08-10',
+      observationType: 'estimated_total',
+      count: 20_000,
+      mbwAtRecord: 8,
+    }],
+    samplings: [{ id: 'growth-1', date: '2026-08-20', mbw: 10, mortality: 0 }],
+  }, 'Australia/Melbourne', { now: new Date('2026-08-22T12:00:00+10:00') });
+  assertClose(largeKnownMortalityMetrics.currentPopulation, 80_000, 'known mortality is a cap, not deducted twice');
+
+  const calibratedMetrics = calculatePondMetricsWithHarvest({
+    initialPopulation: 100_000,
+    initialWeight: 0.5,
+    historicalBenchmark: {
+      completedCycleCount: 4,
+      averageSurvivalRate: 80,
+      averageCycleDoc: 120,
+      averageFinalMbwG: 25,
+    },
+    samplings: [{ id: 'growth-1', date: '2026-08-20', mbw: 20, mortality: 0 }],
+  }, undefined, { currentDoc: 120 });
+  assertClose(calibratedMetrics.currentPopulation, 80_000, 'completed harvests calibrate the survival curve');
+  if (calibratedMetrics.biomassEstimate.confidence !== 'medium') {
+    throw new Error('completed-cycle calibration should improve biomass confidence');
+  }
+
+  const robustAdg = calculateAdg({
+    docStart: '2026-07-01',
+    initialWeight: 0.5,
+    samplings: [
+      { date: '2026-07-11', mbw: 2.5 },
+      { date: '2026-07-21', mbw: 4.5 },
+      { date: '2026-07-31', mbw: 6.5 },
+      { date: '2026-08-10', mbw: 16.5 },
+    ],
+  });
+  assertClose(robustAdg, 0.2, 'ADG uses a robust recent trend instead of one outlier');
+
+  const taperedMbw = projectMbwWithTapering(8, 0.3, 14, 50);
+  if (taperedMbw <= 8 || taperedMbw >= 12.2) {
+    throw new Error(`growth taper must grow more slowly than a straight line: ${taperedMbw}`);
   }
 };

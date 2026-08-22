@@ -107,5 +107,5 @@ const serverBase = calculateServerProjectionBase({
   ],
 }, 14, new Date("2026-02-01T00:00:00Z"));
 assert.equal(serverBase.baseAssumedAdgGPerDay, 0.3, "reconstructs the shared ADG base on the server");
-assert.equal(serverBase.baseAssumedSurvivalPercent, 90, "reconstructs the later-cycle survival base on the server");
+assert.equal(serverBase.baseAssumedSurvivalPercent, 90.333, "reconstructs the stage-based survival base on the server");
 assert.equal(serverBase.mortalityCountAtPrediction, 300, "uses company pond mortality instead of client-supplied totals");

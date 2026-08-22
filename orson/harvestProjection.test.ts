@@ -50,7 +50,7 @@ export const runHarvestProjectionSelfTest = () => {
   assert(projection.futureDoc === 45, 'calculates harvest DOC');
   assert(projection.historicalAdgGPerDay === 0.3, 'uses historical ADG');
   assert(projection.assumedAdgGPerDay === 0.3, 'defaults projection ADG to historical ADG');
-  assert(projection.projectedMbwG === 12.2, 'projects MBW from ADG and days');
+  assert(projection.projectedMbwG === 12, 'projects MBW with a biological growth taper');
   assert(projection.assumedSurvivalPercent !== 80, 'does not use fixed mock survival');
   assert(projection.projectedBiomassKg !== null && projection.projectedBiomassKg > 0, 'projects biomass from survival and MBW');
   assert(projection.marketSizeRisk === 'undersize', 'flags undersize market risk');

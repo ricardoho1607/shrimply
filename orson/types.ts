@@ -227,6 +227,7 @@ export interface OrsonFeedBiomassModel {
   populationRange: OrsonRangeEstimate;
   biomassRangeKg: OrsonRangeEstimate;
   survivalAssumption: OrsonSurvivalAssumption;
+  expectedDailyMortalityRatePercent: number;
   warnings: string[];
 }
 

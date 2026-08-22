@@ -111,6 +111,7 @@ export default function HarvestProjectionScreen() {
       adgGPerDay: metrics.adg,
       historicalFcr: metrics.biomassGainFCR > 0 ? metrics.biomassGainFCR : metrics.adjustedFCR,
       dailyMortalityRatePercent: mortality.dailyRatePercent,
+      fallbackDailyMortalityRatePercent: metrics.biomassEstimate.expectedDailyMortalityRatePercent,
       recentDailyFeedTotals,
       feedUnitCostPerKg: costSnapshot.feedUnitCostPerKg,
       priceLadder,

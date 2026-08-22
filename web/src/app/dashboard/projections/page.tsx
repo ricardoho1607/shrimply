@@ -348,6 +348,7 @@ export default function HarvestProjectionsPage() {
       adgGPerDay: metrics.adg,
       historicalFcr: metrics.biomassGainFCR > 0 ? metrics.biomassGainFCR : metrics.adjustedFCR,
       dailyMortalityRatePercent: mortality.dailyRatePercent,
+      fallbackDailyMortalityRatePercent: metrics.biomassEstimate.expectedDailyMortalityRatePercent,
       recentDailyFeedTotals: buildDailyFeedTotalsForPond(feeds, selectedPond.id, company?.timeZone),
       feedUnitCostPerKg: costSnapshot.feedUnitCostPerKg,
       priceLadder,

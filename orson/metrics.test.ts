@@ -1,5 +1,6 @@
 import { calculatePondMetrics } from './metrics';
 import { normalizePondData } from './normalizePondData';
+import { calculatePondMetricsWithHarvest } from '../shared/pondCalculations';
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message);
@@ -61,20 +62,20 @@ export const runMetricsSelfTest = () => {
   assert(metrics.smoothedAdgGPerDay === 0.2, 'calculates smoothed ADG');
   assert(metrics.totalFeedKg === 50, 'calculates total feed');
   assert(metrics.totalMortalityCount === 300, 'calculates total mortality');
-  assert(metrics.estimatedCurrentPopulation === 94700, 'subtracts mortality and harvest population');
-  assert(metrics.estimatedSurvivalPercent === 94.7, 'calculates survival percent');
-  assert(metrics.estimatedBiomassKg === 189.4, 'calculates biomass from population and MBW');
+  assert(metrics.estimatedCurrentPopulation === 91071, 'uses the age-based survival estimate without double-counting mortality');
+  assert(metrics.estimatedSurvivalPercent === 91.07, 'calculates survival percent from the consolidated population');
+  assert(metrics.estimatedBiomassKg === 182.14, 'calculates biomass from consolidated population and MBW');
   assert(metrics.feedBiomassModel.feedRatePercent === 6.5, 'looks up feed-rate percentage from MBW');
-  assert(metrics.feedBiomassModel.expectedFeedKg === 12.31, 'calculates expected feed from biomass and feed rate');
+  assert(metrics.feedBiomassModel.expectedFeedKg === 11.84, 'calculates expected feed from biomass and feed rate');
   assert(metrics.feedBiomassModel.actualFeedKg === 30, 'uses latest daily feed as actual feed pressure');
-  assert(metrics.feedBiomassModel.feedPressureRatio === 2.437, 'calculates feed pressure ratio');
+  assert(metrics.feedBiomassModel.feedPressureRatio === 2.534, 'calculates feed pressure ratio');
   assert(metrics.feedBiomassModel.feedBasedPopulation === 230769, 'backsolves population from feed, MBW, and feed rate');
-  assert(metrics.feedBiomassModel.populationRange.expected === 79700, 'estimates conservative early survival population range');
-  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 159.4, 'estimates biomass range from survival range');
+  assert(metrics.feedBiomassModel.populationRange.expected === 91071, 'uses the shared consolidated population range');
+  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 182.14, 'uses the shared consolidated biomass range');
   assert(metrics.feedBiomassModel.survivalAssumption.confidence === 'low', 'marks early survival confidence as low');
   assert(metrics.feedBiomassModel.warnings.length >= 2, 'flags feed pressure and survival confidence warnings');
-  assert(metrics.biomassGainKg === 189.4, 'includes harvested biomass in biomass gain');
-  assert(metrics.fcr === 0.264, 'calculates FCR from feed and biomass gain');
+  assert(metrics.biomassGainKg === 182.14, 'includes harvested biomass in biomass gain');
+  assert(metrics.fcr === 0.275, 'calculates FCR from feed and biomass gain');
   assert(metrics.phSwingLatest === 0.6, 'calculates latest pH swing');
   assert(metrics.doMinimumLatest === 3.9, 'calculates latest DO minimum');
   assert(metrics.doMinimumTrend.direction === 'down', 'calculates DO trend direction');
@@ -124,9 +125,9 @@ export const runDoc11To30SurvivalRefinementSelfTest = () => {
 
   assert(metrics.currentDoc === 15, 'sets up DOC 11-30 scenario');
   assert(metrics.feedBiomassModel.survivalAssumption.confidence === 'low', 'keeps inferred early survival confidence low');
-  assert(metrics.feedBiomassModel.survivalAssumption.expectedPercent === 83, 'adjusts expected survival only for measured low DO');
-  assert(metrics.feedBiomassModel.populationRange.expected === 82900, 'refines expected population from measured records');
-  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 165.8, 'refines biomass range without inferred appetite');
+  assert(metrics.feedBiomassModel.survivalAssumption.expectedPercent === 94.6, 'uses the same stage-based survival curve as the app');
+  assert(metrics.feedBiomassModel.populationRange.expected === 94639, 'refines expected population without double-counting mortality');
+  assert(metrics.feedBiomassModel.biomassRangeKg.expected === 189.28, 'refines biomass range without inferred appetite');
 
   return metrics;
 };
@@ -167,8 +168,42 @@ export const runBiologyParityFallbackSelfTest = () => {
   assert(metrics.adgGPerDay === 0.15, 'uses 0.5g initial-weight fallback for single-sampling ADG');
   assert(metrics.smoothedAdgGPerDay === 0.15, 'uses shared ADG fallback for smoothed ADG with one valid MBW point');
   assert(metrics.totalMortalityCount === 1500, 'counts mortality from records after the latest valid MBW');
-  assert(metrics.estimatedCurrentPopulation === 86500, 'subtracts cumulative mortality and harvested population');
-  assert(metrics.estimatedBiomassKg === 173, 'uses looked-back MBW with harvest-adjusted current population');
+  assert(metrics.estimatedCurrentPopulation === 81790, 'combines age-based survival with cumulative harvests');
+  assert(metrics.estimatedBiomassKg === 163.58, 'uses looked-back MBW with consolidated current population');
 
   return metrics;
+};
+
+export const runUnifiedBiomassParitySelfTest = () => {
+  const now = new Date('2026-08-23T12:00:00+10:00');
+  const pond = {
+    id: 'pond-parity',
+    pondName: 'Parity',
+    docStart: '2026-05-25',
+    initialPopulation: 100000,
+    initialWeight: 0.5,
+    totalHarvestedPopulation: 5000,
+    samplings: [
+      { id: 'growth', date: '2026-08-18', mbw: 14, mortality: 200 },
+      { id: 'feed-1', date: '2026-08-21', feedData: { totalDailyFeed: 31, feedingResponse: 'normal' as const } },
+      { id: 'feed-2', date: '2026-08-22', feedData: { totalDailyFeed: 32, feedingResponse: 'normal' as const } },
+      { id: 'feed-3', date: '2026-08-23', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' as const } },
+    ],
+    mortalityRecords: [{
+      id: 'mortality-1',
+      date: '2026-08-20',
+      observationType: 'estimated_total' as const,
+      count: 300,
+      mbwAtRecord: 14,
+    }],
+  };
+  const normalized = normalizePondData(pond, { now });
+  const shared = calculatePondMetricsWithHarvest(pond, 'Australia/Melbourne', {
+    currentDoc: normalized.currentDoc ?? undefined,
+    now,
+  });
+  const metrics = calculatePondMetrics(normalized);
+
+  assert(metrics.estimatedCurrentPopulation === shared.currentPopulation, 'Orson and the app use one population estimate');
+  assert(metrics.estimatedBiomassKg === Number(shared.currentBiomass.toFixed(2)), 'Orson and the app use one biomass estimate');
 };

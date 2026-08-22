@@ -140,6 +140,7 @@ export const runHarvestProfitabilitySelfTest = () => {
   assert(profitableGrowth.today.operatingProfit === 3500, 'calculates harvest-today operating profit after incurred costs');
   assert(profitableGrowth.targets.length > 0, 'builds reachable larger-size scenarios from the price ladder');
   const firstGrowthTarget = profitableGrowth.targets[0];
+  assert(firstGrowthTarget.daysFromNow > Math.ceil((firstGrowthTarget.targetMbwG - 20) / 0.3), 'uses tapered growth instead of a straight-line forecast');
   const firstGrowthBiomassGain = firstGrowthTarget.projectedBiomassKg - profitableGrowth.today.projectedBiomassKg;
   assert(firstGrowthTarget.futureFeedKg >= firstGrowthBiomassGain * 1.4 - 0.01, 'does not project feed below the quantity implied by historical FCR');
   assert(profitableGrowth.bestScenario.operatingProfit >= profitableGrowth.today.operatingProfit, 'selects the highest-profit scenario');
@@ -168,6 +169,23 @@ export const runHarvestProfitabilitySelfTest = () => {
     dailyMortalityRatePercent: 0.8,
   });
   assert(highMortality.decision === 'harvest_now', 'recommends harvest when waiting destroys operating profit');
+
+  const hiddenMortalityFallback = calculateHarvestProfitability({
+    ...profitableGrowth,
+    currentPopulation: 90000,
+    currentMbwG: 20,
+    adgGPerDay: 0.3,
+    historicalFcr: 1.4,
+    dailyMortalityRatePercent: 0,
+    fallbackDailyMortalityRatePercent: 0.25,
+    recentDailyFeedTotals: [],
+    feedUnitCostPerKg: 1.2,
+    priceLadder: [{ sizeCountPerKg: 40, pricePerKg: 7.5 }],
+    costsToDate: { feed: 4000, additives: 500, generalExpenses: 1000, other: 0 },
+    projectedDailyAdditiveCost: 10,
+    projectedDailyGeneralExpense: 20,
+  });
+  assert(hiddenMortalityFallback.dailyMortalityRatePercent === 0.25, 'uses the biological mortality fallback when logs show zero deaths');
 
   return profitableGrowth;
 };
