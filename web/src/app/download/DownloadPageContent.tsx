@@ -3,6 +3,7 @@
 import Link from "next/link";
 import Cursor from "@/components/Cursor";
 import Footer from "@/components/Footer";
+import { trackMetaDownloadClick } from "@/components/MetaPixel";
 import Navbar from "@/components/Navbar";
 import { GOOGLE_PLAY_URL } from "@/config/site";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -34,6 +35,7 @@ export default function DownloadPageContent() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn-primary download-action"
+                onClick={trackMetaDownloadClick}
               >
                 {copy.downloadAndroid}
               </a>

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { SITE_CONFIG } from "@/config/site";
+import MetaPixel from "@/components/MetaPixel";
 import PortalProviders from "@/components/PortalProviders";
 
 export const viewport: Viewport = {
@@ -96,6 +97,12 @@ export default function RootLayout({
             {children}
           </div>
         </PortalProviders>
+        <MetaPixel />
+        <noscript
+          dangerouslySetInnerHTML={{
+            __html: '<img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1946977685993378&ev=PageView&noscript=1" alt="" />',
+          }}
+        />
       </body>
     </html>
   );
