@@ -689,7 +689,7 @@ export default function MarketplacePage() {
                         return (
                           <tr key={size} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                             <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600 }}>Size {size}</td>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600, textAlign: 'right', color: 'var(--primary)' }}>${price.toFixed(2)}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600, textAlign: 'right', color: 'var(--primary)' }}>{formatCurrency(price)}</td>
                           </tr>
                         );
                       })}

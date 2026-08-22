@@ -110,7 +110,7 @@ const MAINTENANCE_TYPES = ['Preventive', 'Corrective', 'Inspection', 'Repair', '
 
 export default function AssetInventoryPage() {
   const { t } = useLanguage();
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, currencyConfig } = useCurrency();
   const { user: authUser, company } = useAuth();
   const canManageAssets = hasFarmPermission(authUser, 'manageAssets', company?.ownerId);
   const canLogMaintenance = hasFarmPermission(authUser, 'logAssetMaintenance', company?.ownerId);
@@ -814,7 +814,7 @@ export default function AssetInventoryPage() {
                       </div>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Cost (Rp)</label>
+                          <label style={{ fontSize: '13px', fontWeight: 600 }}>Cost ({currencyConfig.symbol})</label>
                           <input type="number" value={formData.maintCost} onChange={e => setFormData({...formData, maintCost: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

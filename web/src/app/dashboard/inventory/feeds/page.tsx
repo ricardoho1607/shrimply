@@ -90,7 +90,7 @@ const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, {
 
 export default function InventoryFeedsPage() {
   const { t } = useLanguage();
-  const { formatCurrency } = useCurrency();
+  const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
@@ -1159,7 +1159,7 @@ export default function InventoryFeedsPage() {
 
                       {modalType !== 'usage' && (
                         <div>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} (Rp)</label>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} ({currencyConfig.symbol})</label>
                           <input required type="number" value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: e.target.value})} placeholder="Current Price" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                         </div>
                       )}

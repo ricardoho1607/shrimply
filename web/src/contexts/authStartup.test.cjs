@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
+const ts = require('typescript');
 
 const authContext = fs.readFileSync(path.join(__dirname, 'AuthContext.tsx'), 'utf8');
 const firebaseClient = fs.readFileSync(path.join(__dirname, '../lib/firebase.ts'), 'utf8');
@@ -16,6 +17,13 @@ const portalProvidersPath = path.join(__dirname, '../components/PortalProviders.
 const portalProviders = fs.existsSync(portalProvidersPath)
   ? fs.readFileSync(portalProvidersPath, 'utf8')
   : '';
+const firestoreDataSource = fs.readFileSync(path.join(__dirname, '../lib/firestoreData.ts'), 'utf8');
+const compiledFirestoreData = ts.transpileModule(firestoreDataSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const firestoreDataModule = { exports: {} };
+new Function('module', 'exports', 'require', compiledFirestoreData)(firestoreDataModule, firestoreDataModule.exports, require);
+const { removeUndefinedFields } = firestoreDataModule.exports;
 
 test('App Check requires explicit registration before it can block authentication startup', () => {
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED/);
@@ -122,4 +130,22 @@ test('returning users hydrate Firestore listeners from persistent multi-tab cach
 test('auth query-parameter routes render within a Suspense boundary', () => {
   assert.match(authLayout, /import \{ Suspense,/);
   assert.match(authLayout, /<Suspense[\s\S]*>\s*\{children\}\s*<\/Suspense>/);
+});
+
+test('new login profiles remove undefined optional fields before Firestore writes', () => {
+  const profileCreation = authContext.slice(
+    authContext.indexOf('const newUser: User = {'),
+    authContext.indexOf("console.error('User profile creation failed:'"),
+  );
+
+  assert.match(profileCreation, /removeUndefinedFields\(newUser\)/);
+  assert.deepEqual(removeUndefinedFields({
+    id: 'pilot-user',
+    name: undefined,
+    profileImage: undefined,
+    settings: { phone: undefined, locale: 'id' },
+  }), {
+    id: 'pilot-user',
+    settings: { locale: 'id' },
+  });
 });

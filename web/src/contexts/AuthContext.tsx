@@ -20,6 +20,7 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
 import { syncPublicCompanyMemberCount, syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
+import { removeUndefinedFields } from '@/lib/firestoreData';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../../../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../../../shared/onboarding';
 import type { FarmPermissionOverrides } from '../../../shared/permissions';
@@ -112,6 +113,8 @@ interface Company {
   timeZone?: string;
   harvestProjectionMarketPrices?: Record<string, number>;
   deletionRequest?: CompanyDeletionRequest;
+  currency?: string;
+  currencyCode?: string;
 }
 
 export interface CompanyDeletionRequest {
@@ -337,7 +340,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setUser(newUser);
             setCompany(null);
             setCompanyResolved(true);
-            void setDoc(doc(db, 'users', firebaseUser.uid), newUser, { merge: true }).catch((error) => {
+            void setDoc(doc(db, 'users', firebaseUser.uid), removeUndefinedFields(newUser), { merge: true }).catch((error) => {
               console.error('User profile creation failed:', error);
             });
           }

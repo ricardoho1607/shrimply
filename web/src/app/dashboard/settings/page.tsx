@@ -791,6 +791,7 @@ export default function SettingsPage() {
                   {Object.values(CURRENCIES).map((curr) => (
                     <button
                       key={curr.code}
+                      disabled={!canEditCompany}
                       onClick={() => setCurrency(curr.code as any)}
                       style={{
                         padding: '16px', borderRadius: '16px', border: '1px solid',

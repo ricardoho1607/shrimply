@@ -21,6 +21,7 @@ import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 import {
   DAY_MS,
   calculatePondMetricsWithHarvest,
+  getLatestGrowthSampling,
   getSamplingMbw,
   isBaselineSampling,
   toFiniteNumber,
@@ -143,7 +144,7 @@ const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
         .map((sampling) => {
           const samplingTime = getValidDateTime(sampling.date);
           const mbw = toFiniteNumber(sampling.mbw || sampling.abw);
-          if (samplingTime === null || mbw <= 0) return null;
+          if (samplingTime === null || mbw <= 0 || isBaselineSampling(sampling)) return null;
           return {
             x: Math.max(0, Math.floor((samplingTime - startTime) / DAY_MS)),
             y: mbw
@@ -179,6 +180,7 @@ const calculatePondStats = (pond: Pond, timeZone?: string) => {
 
   return {
     pondName: pond.pondName,
+    hasGrowthSampling: Boolean(getLatestGrowthSampling(pond)),
     doc: biologicalMetrics.doc,
     population: biologicalMetrics.currentPopulation,
     biomass: biologicalMetrics.currentBiomass,
@@ -532,7 +534,7 @@ export default function ShrimpReportsPage() {
               <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
                   <div><div style={{ fontSize: '16px', fontWeight: 600 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>
-                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL'}</div>
+                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: !s.hasGrowthSampling ? 'var(--text-muted)' : s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.hasGrowthSampling ? (s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL') : 'Awaiting sampling'}</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', gap: '8px' }}>
                   <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600 }}>ABW</div><div style={{ fontSize: '14px', fontWeight: 600 }}>{s.mbw.toFixed(2)}g</div></div>

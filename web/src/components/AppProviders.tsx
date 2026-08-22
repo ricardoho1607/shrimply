@@ -9,12 +9,12 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 export default function AppProviders({ children }: { children: ReactNode }) {
   return (
     <LanguageProvider>
-      <CurrencyProvider>
-        <AuthProvider>
+      <AuthProvider>
+        <CurrencyProvider>
           <LanguageCurrencySync />
           {children}
-        </AuthProvider>
-      </CurrencyProvider>
+        </CurrencyProvider>
+      </AuthProvider>
     </LanguageProvider>
   );
 }

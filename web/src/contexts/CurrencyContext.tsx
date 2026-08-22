@@ -1,7 +1,11 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { doc, updateDoc } from 'firebase/firestore';
 import { Language } from '../translations';
+import { useAuth } from './AuthContext';
+import { db } from '@/lib/firebase';
+import { resolveCompanyCurrency } from '@/lib/companyCurrency';
 
 // Supported currencies
 export type Currency = 'USD' | 'IDR' | 'THB' | 'CNY' | 'VND';
@@ -103,14 +107,26 @@ const CurrencyContext = createContext<CurrencyContextType>({
 
 // Provider component
 export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
+  const { company, loading: authLoading, companyLoading } = useAuth();
   const [currentCurrency, setCurrentCurrency] = useState<Currency>(defaultCurrency);
   const [autoSyncEnabled, setAutoSyncEnabledState] = useState(true);
   const [currencyConfig, setCurrencyConfig] = useState<CurrencyConfig>(CURRENCIES[defaultCurrency]);
   const [isCurrencyLoaded, setIsCurrencyLoaded] = useState(false);
+  const companyCurrency = resolveCompanyCurrency(company);
 
-  // Load currency settings from storage on mount
+  // Company configuration is authoritative after authentication resolves.
   useEffect(() => {
+    if (authLoading || companyLoading) return;
+
     queueMicrotask(() => {
+      if (company?.id) {
+        setCurrentCurrency(companyCurrency);
+        setCurrencyConfig(CURRENCIES[companyCurrency]);
+        localStorage.setItem('@currency', companyCurrency);
+        setIsCurrencyLoaded(true);
+        return;
+      }
+
       const storedCurrency = localStorage.getItem('@currency');
       const storedAutoSync = localStorage.getItem('@currencyAutoSync');
 
@@ -125,7 +141,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
       }
       setIsCurrencyLoaded(true);
     });
-  }, []);
+  }, [authLoading, company?.id, companyCurrency, companyLoading]);
 
   const applyCurrency = (currency: Currency) => {
     setCurrentCurrency(currency);
@@ -137,6 +153,9 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
   const setCurrency = async (currency: Currency) => {
     if (!CURRENCIES[currency]) return;
 
+    if (company?.id) {
+      await updateDoc(doc(db, 'companies', company.id), { currency });
+    }
     applyCurrency(currency);
     setAutoSyncEnabledState(false);
     localStorage.setItem('@currencyAutoSync', 'false');
@@ -150,7 +169,7 @@ export const CurrencyProvider = ({ children }: { children: ReactNode }) => {
 
   // Sync currency with language (called when language changes)
   const syncCurrencyWithLanguage = async (language: Language) => {
-    if (!autoSyncEnabled) return;
+    if (!autoSyncEnabled || company?.id) return;
 
     const newCurrency = LANGUAGE_TO_CURRENCY[language] || defaultCurrency;
     applyCurrency(newCurrency);

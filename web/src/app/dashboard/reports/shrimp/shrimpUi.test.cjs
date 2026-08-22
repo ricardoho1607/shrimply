@@ -37,3 +37,10 @@ test('sampling PDF shows supplier between pond and stocking date', () => {
   assert.match(reportGenerator, /<th>Pond<\/th><th>Supplier<\/th><th>Stock<br\/>Date<\/th>/);
   assert.match(reportGenerator, /escapeXml\(pond\.supplier \|\| 'N\/A'\)/);
 });
+
+test('ponds without a real growth sampling are not performance-rated', () => {
+  assert.match(source, /getLatestGrowthSampling/);
+  assert.match(source, /hasGrowthSampling/);
+  assert.match(source, /Awaiting sampling/);
+  assert.match(source, /hasGrowthSampling \? \(s\.sr >= 85 \? 'EXCELLENT' : 'CRITICAL'\) : 'Awaiting sampling'/);
+});
