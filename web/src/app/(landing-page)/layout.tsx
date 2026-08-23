@@ -60,18 +60,15 @@ const websiteJsonLd = {
 export default function LandingPageLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <Script
-        id="shrimply-organization-json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
       />
-      <Script
-        id="shrimply-software-json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
       />
-      <Script
-        id="shrimply-website-json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
       />

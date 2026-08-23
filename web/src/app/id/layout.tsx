@@ -57,18 +57,15 @@ const websiteJsonLd = {
 export default function IndonesianRootLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <Script
-        id="shrimply-organization-json-ld-id"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd) }}
       />
-      <Script
-        id="shrimply-software-json-ld-id"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(softwareJsonLd) }}
       />
-      <Script
-        id="shrimply-website-json-ld-id"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
       />

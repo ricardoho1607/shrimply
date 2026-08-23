@@ -67,13 +67,11 @@ const orsonSoftwareJsonLd = {
 export default function OrsonLayout({ children }: { children: ReactNode }) {
   return (
     <>
-      <Script
-        id="orson-webpage-json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orsonWebPageJsonLd) }}
       />
-      <Script
-        id="orson-software-json-ld"
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(orsonSoftwareJsonLd) }}
       />
