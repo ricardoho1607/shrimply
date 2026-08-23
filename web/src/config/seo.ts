@@ -25,6 +25,18 @@ const toIdPath = (enPath: string) => {
   return `/id${enPath.startsWith("/") ? enPath : `/${enPath}`}`;
 };
 
+/** Build the /th/ path equivalent for an English page path. */
+const toThPath = (enPath: string) => {
+  if (enPath === "/") return "/th";
+  return `/th${enPath.startsWith("/") ? enPath : `/${enPath}`}`;
+};
+
+/** Build the /vi/ path equivalent for an English page path. */
+const toViPath = (enPath: string) => {
+  if (enPath === "/") return "/vi";
+  return `/vi${enPath.startsWith("/") ? enPath : `/${enPath}`}`;
+};
+
 export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description">): Metadata => ({
   title: {
     absolute: page.title,
@@ -35,6 +47,8 @@ export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description"
     languages: {
       "en": canonicalUrl(page.path),
       "id": canonicalUrl(toIdPath(page.path)),
+      "th": canonicalUrl(toThPath(page.path)),
+      "vi": canonicalUrl(toViPath(page.path)),
       "x-default": canonicalUrl(page.path),
     },
   },
@@ -73,7 +87,7 @@ export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description"
   },
 });
 
-/** SEO metadata for Indonesian pages — locale set to id_ID, hreflang links back to English. */
+/** SEO metadata for Indonesian pages — locale set to id_ID. */
 export const seoMetadataID = (
   idPage: Pick<SeoPage, "path" | "title" | "description">,
   enPath: string,
@@ -87,6 +101,8 @@ export const seoMetadataID = (
     languages: {
       "en": canonicalUrl(enPath),
       "id": canonicalUrl(idPage.path),
+      "th": canonicalUrl(toThPath(enPath)),
+      "vi": canonicalUrl(toViPath(enPath)),
       "x-default": canonicalUrl(enPath),
     },
   },
@@ -104,7 +120,7 @@ export const seoMetadataID = (
       },
     ],
     locale: "id_ID",
-    alternateLocale: "en_US",
+    alternateLocale: ["en_US", "th_TH", "vi_VN"],
     type: "website",
   },
   twitter: {
@@ -125,6 +141,117 @@ export const seoMetadataID = (
     },
   },
 });
+
+/** SEO metadata for Thai pages — locale set to th_TH. */
+export const seoMetadataTH = (
+  thPage: Pick<SeoPage, "path" | "title" | "description">,
+  enPath: string,
+): Metadata => ({
+  title: {
+    absolute: thPage.title,
+  },
+  description: thPage.description,
+  alternates: {
+    canonical: canonicalUrl(thPage.path),
+    languages: {
+      "en": canonicalUrl(enPath),
+      "id": canonicalUrl(toIdPath(enPath)),
+      "th": canonicalUrl(thPage.path),
+      "vi": canonicalUrl(toViPath(enPath)),
+      "x-default": canonicalUrl(enPath),
+    },
+  },
+  openGraph: {
+    title: thPage.title,
+    description: thPage.description,
+    url: canonicalUrl(thPage.path),
+    siteName: SITE_CONFIG.name,
+    images: [
+      {
+        url: SITE_CONFIG.ogImage.path,
+        width: SITE_CONFIG.ogImage.width,
+        height: SITE_CONFIG.ogImage.height,
+        alt: SITE_CONFIG.ogImage.alt,
+      },
+    ],
+    locale: "th_TH",
+    alternateLocale: ["en_US", "id_ID", "vi_VN"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: thPage.title,
+    description: thPage.description,
+    images: [SITE_CONFIG.ogImage.path],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+});
+
+/** SEO metadata for Vietnamese pages — locale set to vi_VN. */
+export const seoMetadataVI = (
+  viPage: Pick<SeoPage, "path" | "title" | "description">,
+  enPath: string,
+): Metadata => ({
+  title: {
+    absolute: viPage.title,
+  },
+  description: viPage.description,
+  alternates: {
+    canonical: canonicalUrl(viPage.path),
+    languages: {
+      "en": canonicalUrl(enPath),
+      "id": canonicalUrl(toIdPath(enPath)),
+      "th": canonicalUrl(toThPath(enPath)),
+      "vi": canonicalUrl(viPage.path),
+      "x-default": canonicalUrl(enPath),
+    },
+  },
+  openGraph: {
+    title: viPage.title,
+    description: viPage.description,
+    url: canonicalUrl(viPage.path),
+    siteName: SITE_CONFIG.name,
+    images: [
+      {
+        url: SITE_CONFIG.ogImage.path,
+        width: SITE_CONFIG.ogImage.width,
+        height: SITE_CONFIG.ogImage.height,
+        alt: SITE_CONFIG.ogImage.alt,
+      },
+    ],
+    locale: "vi_VN",
+    alternateLocale: ["en_US", "id_ID", "th_TH"],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: viPage.title,
+    description: viPage.description,
+    images: [SITE_CONFIG.ogImage.path],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+});
+
 
 export const coreSeoPages: SeoPage[] = [
   {
@@ -367,11 +494,245 @@ export const featureSeoPages_id: SeoPage[] = [
   },
 ];
 
+/* ── Thai (th) SEO pages ─────────────────────────────────────────── */
+
+const TH_LAST_MODIFIED = "2026-08-23";
+
+export const coreSeoPages_th: SeoPage[] = [
+  {
+    path: "/th",
+    title: "Shrimply | ซอฟต์แวร์จัดการฟาร์มกุ้งสำหรับการเลี้ยงกุ้งขาวแวนนาไม",
+    description: "Shrimply ช่วยฟาร์มกุ้งติดตามประสิทธิภาพบ่อ สต็อกอาหาร คุณภาพน้ำ การสุ่มตัวอย่าง การเก็บเกี่ยว การเงิน และการแจ้งเตือนโรคในแพลตฟอร์มเดียว",
+    priority: 1,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/about",
+    title: "เกี่ยวกับ Shrimply | ซอฟต์แวร์ฟาร์มกุ้งสำหรับทีมเพาะเลี้ยงสัตว์น้ำ",
+    description: "เรียนรู้ว่าทำไม Shrimply จึงถูกสร้างขึ้นสำหรับเกษตรกรผู้เลี้ยงกุ้งที่ต้องการข้อมูลบ่อ อาหาร คุณภาพน้ำ การเงิน และความเสี่ยงของโรคในระบบเดียว",
+    priority: 0.75,
+    changeFrequency: "monthly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/how-it-works",
+    title: "วิธีใช้งาน Shrimply | แพลตฟอร์มการดำเนินงานฟาร์มกุ้ง",
+    description: "ดูวิธีที่ Shrimply เชื่อมโยงการบันทึกข้อมูลภาคสนาม ข้อมูลบ่อ คลังสินค้า การรายงาน การเงิน ตลาด และข้อมูลเชิงลึกจาก Orson AI",
+    priority: 0.85,
+    changeFrequency: "monthly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/orson",
+    title: "Orson AI | ปัญญาประดิษฐ์สำหรับฟาร์มกุ้งเพื่ออาหาร การเติบโต และความเสี่ยง",
+    description: "Orson AI ช่วยฟาร์มกุ้งวิเคราะห์ข้อมูลบ่อ การตอบสนองต่ออาหาร แนวโน้มคุณภาพน้ำ ข้อมูลการสุ่มตัวอย่าง และรูปแบบความเสี่ยงทางชีวภาพ",
+    priority: 0.8,
+    changeFrequency: "monthly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/download",
+    title: "ดาวน์โหลด Shrimply สำหรับ Android | Google Play",
+    description: "ดาวน์โหลดแอปจัดการฟาร์มกุ้ง Shrimply สำหรับ Android บน Google Play หรือเพิ่มเว็บแอป Shrimply ไปยังหน้าจอหลักของ iPhone",
+    priority: 0.86,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+];
+
+export const featureSeoPages_th: SeoPage[] = [
+  {
+    path: "/th/shrimp-farm-management-software",
+    title: "ซอฟต์แวร์จัดการฟาร์มกุ้ง | Shrimply",
+    description: "Shrimply มอบแพลตฟอร์มเดียวสำหรับประสิทธิภาพของบ่อ สต็อกอาหาร คุณภาพน้ำ การสุ่มตัวอย่าง การเก็บเกี่ยว การเงิน สินทรัพย์ และการแจ้งเตือนโรค",
+    priority: 0.95,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/vannamei-shrimp-farming-app",
+    title: "แอปเลี้ยงกุ้งขาวแวนนาไม | Shrimply",
+    description: "แอปพลิเคชันมือถือและเว็บสำหรับฟาร์มกุ้งแวนนาไมเพื่อติดตามบ่อ DOC, MBW, ADG, FCR, การใช้อาหาร, คุณภาพน้ำ, อัตราการตาย และผลผลิต",
+    priority: 0.9,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/feed-inventory",
+    title: "ซอฟต์แวร์ติดตามสต็อกอาหารกุ้ง | Shrimply",
+    description: "ติดตามสต็อกอาหาร แบรนด์อาหาร บันทึกการให้อาหาร การสั่งซื้อล่วงหน้า และการเคลื่อนไหวของคลังสินค้าในทุกบ่อด้วย Shrimply",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/water-quality-monitoring",
+    title: "ซอฟต์แวร์ตรวจสอบคุณภาพน้ำในบ่อกุ้ง | Shrimply",
+    description: "บันทึกและตรวจสอบแนวโน้มคุณภาพน้ำในบ่อกุ้ง รวมถึง DO, pH, อุณหภูมิ, ความเค็ม, ความเป็นด่าง, แอมโมเนีย และสัญญาณความเสี่ยง",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/growth-sampling",
+    title: "การสุ่มตัวอย่างการเติบโตของกุ้งและการติดตาม MBW | Shrimply",
+    description: "ติดตามบันทึกการสุ่มตัวอย่างกุ้ง MBW, ADG, อัตราการตาย, มวลชีวภาพ, ประชากร และแนวโน้มการเติบโตเพื่อการตัดสินใจที่ดีขึ้น",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/shrimp-harvest-tracking",
+    title: "ซอฟต์แวร์ติดตามการเก็บเกี่ยวกุ้ง | Shrimply",
+    description: "ติดตามน้ำหนักการเก็บเกี่ยว ขนาด ผลผลิตต่อบ่อ ผลผลิตรวมรอบเลี้ยง ความพร้อมของผู้ซื้อ และประวัติการผลิต",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/shrimp-farm-finance",
+    title: "การเงินและการติดตามต้นทุนฟาร์มกุ้ง | Shrimply",
+    description: "เข้าใจกระแสเงินสดของฟาร์มกุ้ง ต้นทุนขาย (COGS) กำไรขาดทุน ต้นทุนอาหาร รายได้จากการเก็บเกี่ยว และการคาดการณ์ทางการเงิน",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+  {
+    path: "/th/features/disease-alerts",
+    title: "การแจ้งเตือนโรคและซอฟต์แวร์ความปลอดภัยทางชีวภาพ | Shrimply",
+    description: "Shrimply ช่วยฟาร์มติดตามการแจ้งเตือนโรค ความเสี่ยงของการระบาดใกล้เคียง สัญญาณความปลอดภัยทางชีวภาพ และสภาพบ่อที่ต้องรับมืออย่างรวดเร็ว",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
+];
+
+/* ── Vietnamese (vi) SEO pages ───────────────────────────────────── */
+
+const VI_LAST_MODIFIED = "2026-08-23";
+
+export const coreSeoPages_vi: SeoPage[] = [
+  {
+    path: "/vi",
+    title: "Shrimply | Phần mềm quản lý trang trại nuôi tôm thẻ chân trắng",
+    description: "Shrimply giúp các trang trại nuôi tôm theo dõi hiệu suất ao, kho thức ăn, chất lượng nước, lấy mẫu tăng trưởng, thu hoạch, tài chính và cảnh báo dịch bệnh trên một nền tảng.",
+    priority: 1,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/about",
+    title: "Về Shrimply | Phần mềm quản lý nuôi tôm cho đội ngũ trang trại",
+    description: "Tìm hiểu lý do Shrimply được xây dựng cho người nuôi tôm cần dữ liệu ao nuôi, thức ăn, chất lượng nước, tài chính và rủi ro dịch bệnh trong một hệ điều hành duy nhất.",
+    priority: 0.75,
+    changeFrequency: "monthly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/how-it-works",
+    title: "Cách Shrimply hoạt động | Nền tảng vận hành trang trại nuôi tôm",
+    description: "Xem cách Shrimply kết nối ghi chép thực địa, dữ liệu ao nuôi, kho hàng, báo cáo, tài chính, chợ tôm và thông tin chi tiết từ Orson AI.",
+    priority: 0.85,
+    changeFrequency: "monthly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/orson",
+    title: "Orson AI | Trí tuệ nhân tạo quản lý nuôi tôm cho thức ăn, tăng trưởng và rủi ro",
+    description: "Orson AI giúp trang trại tôm phân tích dữ liệu ao, phản ứng thức ăn, xu hướng chất lượng nước, dữ liệu lấy mẫu và mô hình rủi ro sinh học.",
+    priority: 0.8,
+    changeFrequency: "monthly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/download",
+    title: "Tải Shrimply cho Android | Google Play",
+    description: "Tải ứng dụng quản lý trang trại tôm Shrimply cho Android trên Google Play hoặc thêm ứng dụng web Shrimply vào màn hình chính iPhone.",
+    priority: 0.86,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+];
+
+export const featureSeoPages_vi: SeoPage[] = [
+  {
+    path: "/vi/shrimp-farm-management-software",
+    title: "Phần mềm quản lý trang trại nuôi tôm | Shrimply",
+    description: "Shrimply cung cấp cho các trang trại nuôi tôm một nền tảng duy nhất cho hiệu suất ao, kho thức ăn, chất lượng nước, lấy mẫu, thu hoạch, tài chính, tài sản và cảnh báo dịch bệnh.",
+    priority: 0.95,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/vannamei-shrimp-farming-app",
+    title: "Ứng dụng nuôi tôm thẻ chân trắng Vannamei | Shrimply",
+    description: "Ứng dụng di động và web cho các trang trại tôm thẻ chân trắng theo dõi ao nuôi, DOC, MBW, ADG, FCR, sử dụng thức ăn, chất lượng nước, tỷ lệ sống và sản lượng thu hoạch.",
+    priority: 0.9,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/feed-inventory",
+    title: "Phần mềm quản lý kho thức ăn tôm | Shrimply",
+    description: "Theo dõi kho thức ăn, thương hiệu thức ăn, nhật ký cho ăn, nhu cầu đặt hàng và luân chuyển tồn kho trên tất cả các ao với Shrimply.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/water-quality-monitoring",
+    title: "Phần mềm giám sát chất lượng nước ao tôm | Shrimply",
+    description: "Ghi lại và theo dõi xu hướng chất lượng nước ao tôm bao gồm DO, pH, nhiệt độ, độ mặn, độ kiềm, khí độc và các tín hiệu rủi ro vận hành.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/growth-sampling",
+    title: "Lấy mẫu tăng trưởng tôm và theo dõi MBW | Shrimply",
+    description: "Theo dõi hồ sơ lấy mẫu tôm, MBW, ADG, tỷ lệ chết, sinh khối, quần đàn và xu hướng tăng trưởng để đưa ra quyết định tốt hơn cho vụ nuôi.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/shrimp-harvest-tracking",
+    title: "Phần mềm theo dõi thu hoạch tôm | Shrimply",
+    description: "Theo dõi sản lượng thu hoạch, kích cỡ tôm, năng suất từng ao, tổng vụ nuôi, khả năng sẵn sàng của người mua và lịch sử sản xuất.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/shrimp-farm-finance",
+    title: "Tài chính và theo dõi chi phí trang trại tôm | Shrimply",
+    description: "Hiểu rõ dòng tiền trang trại tôm, giá vốn hàng bán (COGS), lãi lỗ, chi phí thức ăn, doanh thu thu hoạch và dự báo tài chính.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/features/disease-alerts",
+    title: "Cảnh báo dịch bệnh và phần mềm an toàn sinh học | Shrimply",
+    description: "Shrimply giúp trang trại theo dõi cảnh báo dịch bệnh, nguy cơ bùng phát lân cận, tín hiệu an toàn sinh học và điều kiện ao nuôi cần xử lý nhanh.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+];
+
 export const sitemapPages = [
   ...coreSeoPages,
   ...featureSeoPages,
   ...resourceSeoPages,
   ...coreSeoPages_id,
   ...featureSeoPages_id,
+  ...coreSeoPages_th,
+  ...featureSeoPages_th,
+  ...coreSeoPages_vi,
+  ...featureSeoPages_vi,
 ];
+
+
 

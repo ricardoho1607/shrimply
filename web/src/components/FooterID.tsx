@@ -32,6 +32,10 @@ export default function FooterID() {
             <Link href="/" style={{ color: 'var(--muted)', textDecoration: 'none' }}>English</Link>
             <span style={{ opacity: 0.4 }}>•</span>
             <Link href="/id" style={{ color: 'var(--white)', fontWeight: 600, textDecoration: 'none' }}>Bahasa Indonesia</Link>
+            <span style={{ opacity: 0.4 }}>•</span>
+            <Link href="/th" style={{ color: 'var(--muted)', textDecoration: 'none' }}>ภาษาไทย</Link>
+            <span style={{ opacity: 0.4 }}>•</span>
+            <Link href="/vi" style={{ color: 'var(--muted)', textDecoration: 'none' }}>Tiếng Việt</Link>
           </div>
         </div>
         
