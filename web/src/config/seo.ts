@@ -19,6 +19,12 @@ export const canonicalUrl = (path: string) => {
   return `${siteUrl}${normalizedPath}`;
 };
 
+/** Build the /id/ path equivalent for an English page path. */
+const toIdPath = (enPath: string) => {
+  if (enPath === "/") return "/id";
+  return `/id${enPath.startsWith("/") ? enPath : `/${enPath}`}`;
+};
+
 export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description">): Metadata => ({
   title: {
     absolute: page.title,
@@ -26,6 +32,11 @@ export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description"
   description: page.description,
   alternates: {
     canonical: canonicalUrl(page.path),
+    languages: {
+      "en": canonicalUrl(page.path),
+      "id": canonicalUrl(toIdPath(page.path)),
+      "x-default": canonicalUrl(page.path),
+    },
   },
   openGraph: {
     title: page.title,
@@ -47,6 +58,59 @@ export const seoMetadata = (page: Pick<SeoPage, "path" | "title" | "description"
     card: "summary_large_image",
     title: page.title,
     description: page.description,
+    images: [SITE_CONFIG.ogImage.path],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+});
+
+/** SEO metadata for Indonesian pages — locale set to id_ID, hreflang links back to English. */
+export const seoMetadataID = (
+  idPage: Pick<SeoPage, "path" | "title" | "description">,
+  enPath: string,
+): Metadata => ({
+  title: {
+    absolute: idPage.title,
+  },
+  description: idPage.description,
+  alternates: {
+    canonical: canonicalUrl(idPage.path),
+    languages: {
+      "en": canonicalUrl(enPath),
+      "id": canonicalUrl(idPage.path),
+      "x-default": canonicalUrl(enPath),
+    },
+  },
+  openGraph: {
+    title: idPage.title,
+    description: idPage.description,
+    url: canonicalUrl(idPage.path),
+    siteName: SITE_CONFIG.name,
+    images: [
+      {
+        url: SITE_CONFIG.ogImage.path,
+        width: SITE_CONFIG.ogImage.width,
+        height: SITE_CONFIG.ogImage.height,
+        alt: SITE_CONFIG.ogImage.alt,
+      },
+    ],
+    locale: "id_ID",
+    alternateLocale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: idPage.title,
+    description: idPage.description,
     images: [SITE_CONFIG.ogImage.path],
   },
   robots: {
@@ -189,4 +253,125 @@ export const resourceSeoPages: SeoPage[] = resourceArticles.map(article => ({
   lastModified: article.updatedAt ?? article.publishedAt ?? PUBLIC_SITE_LAST_MODIFIED,
 }));
 
-export const sitemapPages = [...coreSeoPages, ...featureSeoPages, ...resourceSeoPages];
+/* ── Indonesian (id) SEO pages ─────────────────────────────────────── */
+
+const ID_LAST_MODIFIED = "2026-08-23";
+
+export const coreSeoPages_id: SeoPage[] = [
+  {
+    path: "/id",
+    title: "Shrimply | Software Manajemen Tambak Udang untuk Budidaya Vannamei",
+    description: "Shrimply membantu tambak udang melacak kinerja kolam, inventaris pakan, kualitas air, sampling pertumbuhan, panen, keuangan, aset, dan peringatan penyakit dalam satu platform.",
+    priority: 1,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/about",
+    title: "Tentang Shrimply | Software Tambak Udang untuk Tim Akuakultur",
+    description: "Pelajari mengapa Shrimply dibangun untuk petambak udang yang membutuhkan data kolam, pakan, kualitas air, keuangan, dan risiko penyakit dalam satu sistem operasi.",
+    priority: 0.75,
+    changeFrequency: "monthly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/how-it-works",
+    title: "Cara Kerja Shrimply | Platform Operasi Tambak Udang",
+    description: "Lihat bagaimana Shrimply menghubungkan pencatatan mobile di lapangan, data kolam, inventaris, pelaporan, keuangan, visibilitas pasar, dan wawasan Orson AI.",
+    priority: 0.85,
+    changeFrequency: "monthly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/orson",
+    title: "Orson AI | Kecerdasan Tambak Udang untuk Pakan, Pertumbuhan, dan Risiko",
+    description: "Orson AI membantu tambak udang menginterpretasikan catatan kolam, respons pakan, tren kualitas air, data sampling, dan pola risiko biologis.",
+    priority: 0.8,
+    changeFrequency: "monthly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/download",
+    title: "Unduh Shrimply untuk Android | Google Play",
+    description: "Unduh aplikasi manajemen tambak udang Shrimply untuk Android dari Google Play, atau tambahkan aplikasi web Shrimply ke Home Screen iPhone Anda.",
+    priority: 0.86,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+];
+
+export const featureSeoPages_id: SeoPage[] = [
+  {
+    path: "/id/shrimp-farm-management-software",
+    title: "Software Manajemen Tambak Udang | Shrimply",
+    description: "Shrimply memberikan tambak udang satu platform untuk kinerja kolam, inventaris pakan, kualitas air, sampling, panen, keuangan, aset, peringatan penyakit, dan laporan.",
+    priority: 0.95,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/vannamei-shrimp-farming-app",
+    title: "Aplikasi Budidaya Udang Vannamei | Shrimply",
+    description: "Aplikasi mobile dan web untuk tambak udang vannamei untuk melacak kolam, DOC, MBW, ADG, FCR, penggunaan pakan, kualitas air, mortalitas, panen, dan kinerja siklus.",
+    priority: 0.9,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/feed-inventory",
+    title: "Software Pelacakan Inventaris Pakan Udang | Shrimply",
+    description: "Lacak stok pakan, merek pakan, aktivitas pemberian pakan, kebutuhan pemesanan ulang, pergerakan inventaris, dan konsumsi tambak di seluruh kolam udang dengan Shrimply.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/water-quality-monitoring",
+    title: "Software Monitoring Kualitas Air Kolam Udang | Shrimply",
+    description: "Catat dan tinjau tren kualitas air kolam udang termasuk DO, pH, suhu, salinitas, alkalinitas, amonia, dan sinyal risiko operasional.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/growth-sampling",
+    title: "Sampling Pertumbuhan Udang dan Pelacakan MBW | Shrimply",
+    description: "Lacak catatan sampling udang, MBW, ADG, mortalitas, biomassa, populasi, dan tren pertumbuhan agar tim tambak dapat membuat keputusan siklus yang lebih baik.",
+    priority: 0.85,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/shrimp-harvest-tracking",
+    title: "Software Pelacakan Panen Udang | Shrimply",
+    description: "Lacak berat panen udang, ukuran, hasil kolam, total siklus, kesiapan pembeli, dan riwayat produksi dalam satu platform manajemen tambak udang.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/shrimp-farm-finance",
+    title: "Keuangan dan Pelacakan Biaya Tambak Udang | Shrimply",
+    description: "Pahami arus kas tambak udang, COGS, laba rugi, biaya inventaris, pendapatan panen, dan proyeksi keuangan dengan laporan Shrimply.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+  {
+    path: "/id/features/disease-alerts",
+    title: "Peringatan Penyakit dan Software Biosekuriti Tambak Udang | Shrimply",
+    description: "Shrimply membantu tambak melacak peringatan penyakit, risiko wabah terdekat, sinyal biosekuriti, dan kondisi kolam yang membutuhkan respons operasional lebih cepat.",
+    priority: 0.8,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
+];
+
+export const sitemapPages = [
+  ...coreSeoPages,
+  ...featureSeoPages,
+  ...resourceSeoPages,
+  ...coreSeoPages_id,
+  ...featureSeoPages_id,
+];
+

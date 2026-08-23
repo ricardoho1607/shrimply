@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { GOOGLE_PLAY_URL } from '@/config/site';
+import LanguageToggle from '@/components/LanguageToggle';
 
 const navItems = [
   { href: '/', label: 'Home' },
@@ -147,6 +148,7 @@ export default function Navbar() {
       </div>
 
       <div className="desktop-actions">
+        <LanguageToggle />
         <Link href="/auth" prefetch={false} className="signin-link">
           Sign In
         </Link>
@@ -228,6 +230,7 @@ export default function Navbar() {
         </div>
 
         <div className="drawer-actions">
+          <LanguageToggle isMobile />
           <Link
             href="/auth"
             prefetch={false}

@@ -29,6 +29,11 @@ export default function Footer() {
           <p style={{ fontSize: '0.72rem' }}>
             © 2026 Shrimply Technologies.
           </p>
+          <div style={{ marginTop: '14px', display: 'inline-flex', alignItems: 'center', gap: '8px', fontSize: '0.75rem' }}>
+            <Link href="/" style={{ color: 'var(--white)', fontWeight: 600, textDecoration: 'none' }}>English</Link>
+            <span style={{ opacity: 0.4 }}>•</span>
+            <Link href="/id" style={{ color: 'var(--muted)', textDecoration: 'none' }}>Bahasa Indonesia</Link>
+          </div>
         </div>
         
         <div>
