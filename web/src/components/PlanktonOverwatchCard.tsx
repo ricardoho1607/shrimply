@@ -3,6 +3,7 @@
 import { AlertCircle, CheckCircle2, CircleHelp, Eye, TriangleAlert } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { PlanktonOverwatchSnapshot, PlanktonOverwatchState } from '../../../shared/planktonOverwatch';
+import { localizePlanktonOverwatchSnapshot } from '../../../shared/planktonOverwatchI18n';
 
 interface Props {
   snapshot?: PlanktonOverwatchSnapshot | null;
@@ -37,9 +38,9 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
     critical: t.waterQuality.overwatchCritical,
   };
   const Icon = STATE_ICON[snapshot.state] || CircleHelp;
-  const evidence = (snapshot.signals || []).slice(0, compact ? 1 : 2);
-  const missing = snapshot.dataQuality?.missing?.slice(0, 3) || [];
-  const nextAction = snapshot.recommendations?.[0];
+  const localized = localizePlanktonOverwatchSnapshot(snapshot, t.waterQuality);
+  const evidence = localized.evidence.slice(0, compact ? 1 : 2);
+  const missing = localized.missing.slice(0, 3);
 
   return (
     <section className={`plankton-overwatch-card ${STATE_CLASS[snapshot.state] || STATE_CLASS.insufficient}${compact ? ' is-compact' : ''}`}>
@@ -51,12 +52,12 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
         <span className="plankton-overwatch-badge">{labels[snapshot.state]}</span>
       </div>
 
-      <p className="plankton-overwatch-message">{snapshot.message}</p>
+      <p className="plankton-overwatch-message">{localized.message}</p>
 
       {!compact && evidence.length > 0 && (
         <div className="plankton-overwatch-section">
           <span>{t.waterQuality.overwatchEvidence}</span>
-          {evidence.map((signal) => <p key={signal.id}>{signal.evidence}</p>)}
+          {evidence.map((item) => <p key={item.id}>{item.text}</p>)}
         </div>
       )}
 
@@ -67,10 +68,10 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
         </div>
       )}
 
-      {nextAction && (
+      {localized.nextAction && (
         <div className="plankton-overwatch-action">
           <span>{t.waterQuality.overwatchNextAction}</span>
-          <p>{nextAction}</p>
+          <p>{localized.nextAction}</p>
         </div>
       )}
     </section>

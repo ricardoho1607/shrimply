@@ -416,7 +416,7 @@ export const generateSamplingReportHTML = (
           overflow: hidden;
           background: #0F4C75;
           page-break-after: always;
-          ${useIosPrintLayout ? '' : 'break-inside: avoid;'}
+          ${useIosPrintLayout ? '' : 'break-inside: avoid; page-break-inside: avoid;'}
         }
         .page-bg {
           position: absolute;
@@ -456,8 +456,9 @@ export const generateSamplingReportHTML = (
         table { width: 100%; border-collapse: collapse; background: transparent; table-layout: fixed; box-shadow: none; }
         th { background: rgba(15, 76, 117, 0.90); color: white; padding: 4px 2px; text-align: center; font-size: 5.8px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1px; border-right: 1px solid rgba(255,255,255,0.22); line-height: 1.05; }
         td { padding: 5px 2px; text-align: center; vertical-align: middle; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); white-space: normal; overflow: hidden; line-height: 1.15; font-variant-numeric: tabular-nums; background: rgba(255, 255, 255, 0.50); }
-        .pond-cell { padding-left: 4px; padding-right: 4px; text-align: left; overflow-wrap: anywhere; word-break: break-word; }
-        .supplier-cell { overflow-wrap: anywhere; word-break: break-word; }
+        .sampling-table th, .sampling-table td { overflow-wrap: anywhere; word-break: normal; }
+        .pond-cell { padding-left: 2px; padding-right: 2px; text-align: center; overflow-wrap: anywhere; word-break: normal; }
+        .supplier-cell { overflow-wrap: anywhere; word-break: normal; }
         .stock-date-cell { overflow-wrap: normal; word-break: normal; }
         .row-alt td { background: rgba(255, 255, 255, 0.64); }
         .strong { font-weight: 800; }
@@ -502,25 +503,25 @@ export const generateSamplingReportHTML = (
             <div class="summary-card"><div class="summary-label">Avg Survival Rate</div><div class="summary-value">${formatNumber(averages.avgSR, 0)}<span class="summary-unit">%</span></div></div>
           </div>
           <div class="table-container">
-            <table>
+            <table class="sampling-table">
               <colgroup>
-                <col style="width:13%" />
-                <col style="width:10%" />
-                <col style="width:8.5%" />
-                <col style="width:4%" />
-                <col style="width:4%" />
-                <col style="width:6.5%" />
-                <col style="width:4.5%" />
-                <col style="width:5.5%" />
-                <col style="width:5%" />
-                <col style="width:4.5%" />
-                <col style="width:4.5%" />
-                <col style="width:4.5%" />
-                <col style="width:5%" />
-                <col style="width:5%" />
-                <col style="width:4.5%" />
-                <col style="width:5.5%" />
-                <col style="width:5.5%" />
+                <col style="width:7.8%" />
+                <col style="width:10.6%" />
+                <col style="width:9%" />
+                <col style="width:4.2%" />
+                <col style="width:4.2%" />
+                <col style="width:6.9%" />
+                <col style="width:4.8%" />
+                <col style="width:5.8%" />
+                <col style="width:5.3%" />
+                <col style="width:4.8%" />
+                <col style="width:4.8%" />
+                <col style="width:4.8%" />
+                <col style="width:5.3%" />
+                <col style="width:5.3%" />
+                <col style="width:4.8%" />
+                <col style="width:5.8%" />
+                <col style="width:5.8%" />
               </colgroup>
               <thead>
                 <tr>

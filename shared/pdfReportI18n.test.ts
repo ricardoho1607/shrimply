@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { localizePdfText } from './pdfReportI18n.ts';
+
+const noOverwatchResult = 'No Plankton Overwatch result was available for the selected ponds. Missing observations were not treated as stable.';
+const oneHighRiskPond = '1 pond shows high-risk indicators such as low survival, elevated FCR, flat growth, or high mortality.';
+const savedOverwatchResult = 'Plankton Overwatch: A1 HIGH; A2 STABLE. No high or critical plankton state is currently saved for the selected ponds.';
+
+test('sampling risk text is fully localized without mixed English pond wording', () => {
+  const expected = {
+    en: {
+      noOverwatchResult,
+      oneHighRiskPond,
+    },
+    id: {
+      noOverwatchResult: 'Tidak tersedia hasil Pengawasan Plankton untuk kolam yang dipilih. Pengamatan yang tidak tersedia tidak dianggap stabil.',
+      oneHighRiskPond: '1 kolam menunjukkan indikator risiko tinggi seperti kelangsungan hidup rendah, FCR tinggi, pertumbuhan datar, atau mortalitas tinggi.',
+    },
+    th: {
+      noOverwatchResult: 'ไม่มีผลการเฝ้าระวังแพลงก์ตอนสำหรับบ่อที่เลือก ข้อมูลสังเกตการณ์ที่ขาดหายไม่ได้ถือว่ามีเสถียรภาพ',
+      oneHighRiskPond: '1 บ่อแสดงตัวชี้วัดความเสี่ยงสูง เช่น อัตรารอดต่ำ FCR สูง การเติบโตคงที่ หรือการตายสูง',
+    },
+    vi: {
+      noOverwatchResult: 'Không có kết quả Giám sát Sinh vật phù du cho các ao đã chọn. Các quan sát còn thiếu không được xem là ổn định.',
+      oneHighRiskPond: '1 ao có chỉ báo rủi ro cao như tỷ lệ sống thấp, FCR cao, tăng trưởng chậm hoặc tỷ lệ chết cao.',
+    },
+    zh: {
+      noOverwatchResult: '所选池塘没有浮游生物监测结果。缺失的观测不会被视为稳定。',
+      oneHighRiskPond: '1 个池塘显示高风险指标，例如成活率低、FCR 偏高、生长停滞或死亡率高。',
+    },
+  } as const;
+
+  for (const [language, copy] of Object.entries(expected)) {
+    assert.equal(localizePdfText(noOverwatchResult, language), copy.noOverwatchResult, language);
+    assert.equal(localizePdfText(oneHighRiskPond, language), copy.oneHighRiskPond, language);
+  }
+});
+
+test('Indonesian PDF terminology distinguishes ponds from farms', () => {
+  assert.equal(localizePdfText('Pond', 'id'), 'Kolam');
+  assert.equal(localizePdfText('Pond Name', 'id'), 'Nama Kolam');
+  assert.equal(localizePdfText('Pond Performance Summary', 'id'), 'Ringkasan Kinerja Kolam');
+  assert.equal(localizePdfText('Farm', 'id'), 'Tambak');
+});
+
+test('saved Overwatch statuses and summary are localized together', () => {
+  assert.equal(
+    localizePdfText(savedOverwatchResult, 'id'),
+    'Pengawasan Plankton: A1 TINGGI; A2 STABIL. Saat ini tidak ada status plankton tinggi atau kritis yang tersimpan untuk kolam yang dipilih.',
+  );
+  for (const language of ['th', 'vi', 'zh']) {
+    const localized = localizePdfText(savedOverwatchResult, language);
+    assert.doesNotMatch(localized, /Plankton Overwatch|\bHIGH\b|\bSTABLE\b|No high or critical/);
+  }
+});

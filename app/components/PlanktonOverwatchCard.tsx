@@ -3,6 +3,7 @@ import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useLanguage } from '../../context/LanguageContext';
 import type { PlanktonOverwatchSnapshot, PlanktonOverwatchState } from '../../shared/planktonOverwatch';
+import { localizePlanktonOverwatchSnapshot } from '../../shared/planktonOverwatchI18n';
 
 interface Props {
   snapshot?: PlanktonOverwatchSnapshot | null;
@@ -29,9 +30,9 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
     critical: t.waterQuality.overwatchCritical,
   };
   const tone = STATE_STYLE[snapshot.state] || STATE_STYLE.insufficient;
-  const evidence = (snapshot.signals || []).slice(0, compact ? 1 : 2);
-  const nextAction = snapshot.recommendations?.[0];
-  const missing = snapshot.dataQuality?.missing?.slice(0, 3) || [];
+  const localized = localizePlanktonOverwatchSnapshot(snapshot, t.waterQuality);
+  const evidence = localized.evidence.slice(0, compact ? 1 : 2);
+  const missing = localized.missing.slice(0, 3);
 
   return (
     <View style={[styles.card, { backgroundColor: tone.background, borderColor: tone.border }, compact && styles.compactCard]}>
@@ -45,15 +46,15 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
         </View>
       </View>
 
-      <Text style={styles.message}>{snapshot.message}</Text>
+      <Text style={styles.message}>{localized.message}</Text>
 
       {!compact && evidence.length > 0 && (
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>{t.waterQuality.overwatchEvidence}</Text>
-          {evidence.map((signal) => (
-            <View key={signal.id} style={styles.evidenceRow}>
+          {evidence.map((item) => (
+            <View key={item.id} style={styles.evidenceRow}>
               <View style={[styles.dot, { backgroundColor: tone.color }]} />
-              <Text style={styles.detailText}>{signal.evidence}</Text>
+              <Text style={styles.detailText}>{item.text}</Text>
             </View>
           ))}
         </View>
@@ -66,10 +67,10 @@ export default function PlanktonOverwatchCard({ snapshot, compact = false }: Pro
         </View>
       )}
 
-      {nextAction && (
+      {localized.nextAction && (
         <View style={styles.actionBox}>
           <Text style={[styles.sectionLabel, { color: tone.color }]}>{t.waterQuality.overwatchNextAction}</Text>
-          <Text style={styles.detailText}>{nextAction}</Text>
+          <Text style={styles.detailText}>{localized.nextAction}</Text>
         </View>
       )}
     </View>

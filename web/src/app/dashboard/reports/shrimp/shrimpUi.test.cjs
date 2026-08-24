@@ -45,7 +45,7 @@ test('sampling PDF uses platform-safe page sizing without scaling or an extra iO
   assert.match(reportGenerator, /useIosPrintLayout \? '792px 612px' : '11in 8\.5in'/);
   assert.match(reportGenerator, /useIosPrintLayout \? '100%' : '11in'/);
   assert.match(reportGenerator, /useIosPrintLayout \? '100%' : '8\.5in'/);
-  assert.match(reportGenerator, /useIosPrintLayout \? '' : 'break-inside: avoid;'/);
+  assert.match(reportGenerator, /useIosPrintLayout \? '' : 'break-inside: avoid; page-break-inside: avoid;'/);
   assert.match(reportGenerator, /\.header \{ position: relative; min-height: 62px;[^}]*page-break-inside: avoid;/);
   assert.match(reportGenerator, /\.header-logo \{ position: absolute; top: 0; right: 0;/);
   assert.doesNotMatch(reportGenerator, /\.header \{ display: flex;/);

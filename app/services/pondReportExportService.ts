@@ -2,7 +2,7 @@
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import * as FileSystem from 'expo-file-system/legacy';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import {
   formatPdfDate,
   formatPdfNumber,
@@ -18,7 +18,7 @@ interface PondReportData {
   totalArea: number;
   totalBiomass: number;
   avgSR: number;
-  ponds: Array<{
+  ponds: {
     name: string;
     area: number;
     density: number;
@@ -35,12 +35,17 @@ interface PondReportData {
       transparency: string;
       salinity: string;
     };
-  }>;
+  }[];
 }
 
-const generatePondReportHTML = (data: PondReportData, language: PdfLanguage): string => {
+const generatePondReportHTML = (
+  data: PondReportData,
+  language: PdfLanguage,
+  useIosPrintLayout = false,
+): string => {
   const number = (value: number, maximumFractionDigits = 0) =>
     formatPdfNumber(value, language, { maximumFractionDigits });
+  const printPageSize = useIosPrintLayout ? '612px 792px' : '8.5in 11in';
 
   return localizePdfHtml(`
     <!DOCTYPE html>
@@ -51,7 +56,10 @@ const generatePondReportHTML = (data: PondReportData, language: PdfLanguage): st
       <title>Comprehensive Pond Report</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        @page { size: ${printPageSize}; margin: 0; }
+        html { width: 100%; }
         body { 
+          width: 100%;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; 
           padding: 40px; 
           color: #1B262C; 
@@ -246,10 +254,19 @@ const generatePondReportHTML = (data: PondReportData, language: PdfLanguage): st
 
 export const exportPondReportPDF = async (data: PondReportData, language: PdfLanguage = 'en') => {
   try {
-    const html = generatePondReportHTML(data, language);
+    const html = generatePondReportHTML(data, language, Platform.OS === 'ios');
     
     const { uri } = await Print.printToFileAsync({
       html,
+      textZoom: 100,
+      width: 612,
+      height: 792,
+      margins: {
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+      },
       base64: false,
     });
     

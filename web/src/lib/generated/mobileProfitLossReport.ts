@@ -126,7 +126,12 @@ const getProfitLossAnalysis = (data: FinancialData, language: PdfLanguage) => {
   return { executiveSummary, riskAssessment };
 };
 
-export const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
+export const generateProfitLossHTML = (
+  data: FinancialData,
+  brandAssets: PdfBrandAssets,
+  language: PdfLanguage,
+  useIosPrintLayout = false,
+): string => {
   const {
     startDate,
     endDate,
@@ -147,6 +152,9 @@ export const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBran
   } = data;
   const reportAnalysis = getProfitLossAnalysis(data, language);
   const money = (amount: number) => formatCurrency(amount, currencyCode, currencySymbol, language);
+  const printPageSize = useIosPrintLayout ? '612px 792px' : '8.5in 11in';
+  const printPageWidth = useIosPrintLayout ? '100%' : '8.5in';
+  const printPageHeight = useIosPrintLayout ? '100%' : '11in';
 
   return localizePdfHtml(`
     <!DOCTYPE html>
@@ -157,11 +165,11 @@ export const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBran
       <title>Profit and Loss Statement</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        @page { size: 612px 792px; margin: 0; }
+        @page { size: ${printPageSize}; margin: 0; }
         html { width: 100%; height: 100%; }
         body {
-          width: 100%;
-          height: 100%;
+          width: ${printPageWidth};
+          height: ${printPageHeight};
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
           color: #2C3E50;
           background: #0F4C75;
@@ -176,6 +184,7 @@ export const generateProfitLossHTML = (data: FinancialData, brandAssets: PdfBran
           overflow: hidden;
           background: #0F4C75;
           page-break-after: always;
+          ${useIosPrintLayout ? '' : 'break-inside: avoid; page-break-inside: avoid;'}
         }
         .pdf-page:last-child { page-break-after: auto; }
         .page-bg {
