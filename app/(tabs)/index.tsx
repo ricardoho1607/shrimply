@@ -182,6 +182,7 @@ export default function PondManagementScreen() {
   const [cycleNameDraft, setCycleNameDraft] = useState('');
   const [selectedDashboardCycleId, setSelectedDashboardCycleId] = useState('');
   const [cycleManagerExpanded, setCycleManagerExpanded] = useState(false);
+  const [dashboardMode, setDashboardMode] = useState<'enterprise' | 'normal'>('enterprise');
   const [editingBaselinePondId, setEditingBaselinePondId] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     pondName: '', 
@@ -2034,7 +2035,28 @@ export default function PondManagementScreen() {
     </Modal>
   );
 
-  if (isEnterpriseFarm && canManageEnterpriseBlocks) {
+  const dashboardModeSwitch = isEnterpriseFarm && canManageEnterpriseBlocks ? (
+    <View style={styles.dashboardModeSwitch} accessibilityRole="tablist">
+      {(['enterprise', 'normal'] as const).map((mode) => {
+        const selected = dashboardMode === mode;
+        return (
+          <TouchableOpacity
+            key={mode}
+            style={[styles.dashboardModeOption, selected && styles.dashboardModeOptionSelected]}
+            onPress={() => setDashboardMode(mode)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected }}
+          >
+            <Text style={[styles.dashboardModeText, selected && styles.dashboardModeTextSelected]}>
+              {mode === 'enterprise' ? t.enterpriseCycle.enterpriseView : t.enterpriseCycle.normalView}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  ) : null;
+
+  if (isEnterpriseFarm && canManageEnterpriseBlocks && dashboardMode === 'enterprise') {
     return (
       <>
         <EnterpriseDashboard
@@ -2046,7 +2068,8 @@ export default function PondManagementScreen() {
           timeZone={company?.timeZone}
           loading={enterpriseBlocks.loading}
           error={enterpriseBlocks.error}
-        onSaveProductionCycle={handleSaveEnterpriseProductionCycle}
+          dashboardModeSwitch={dashboardModeSwitch}
+          onSaveProductionCycle={handleSaveEnterpriseProductionCycle}
           onCreatePond={handleCreateEnterprisePhysicalPond}
           onEditCycle={handleEditEnterpriseCycle}
           onCloseCycle={handleCloseEnterpriseBlockCycle}
@@ -2212,6 +2235,8 @@ export default function PondManagementScreen() {
             </Text>
           ) : null}
         </View>
+
+        {dashboardModeSwitch}
 
         <View style={styles.cycleFilterContainer}>
           <TouchableOpacity
@@ -2398,6 +2423,32 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.03,
     shadowRadius: 6,
     elevation: 1,
+  },
+  dashboardModeSwitch: {
+    flexDirection: 'row',
+    marginHorizontal: Platform.OS === 'android' ? 16 : 20,
+    marginTop: 8,
+    padding: 3,
+    borderRadius: 11,
+    backgroundColor: '#E9F0F5',
+  },
+  dashboardModeOption: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dashboardModeOptionSelected: {
+    backgroundColor: '#FFFFFF',
+  },
+  dashboardModeText: {
+    color: '#6B7F8E',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  dashboardModeTextSelected: {
+    color: '#0F4C75',
   },
   cycleManagerHeader: {
     flexDirection: 'row',

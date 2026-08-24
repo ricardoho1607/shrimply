@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { type ReactNode, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -59,6 +59,7 @@ interface EnterpriseCycleDashboardProps {
   timeZone?: string;
   loading: boolean;
   error?: string | null;
+  dashboardModeSwitch?: ReactNode;
   onSaveProductionCycle: (input: {
     cycle?: FarmCycle;
     cycleName: string;
@@ -103,6 +104,7 @@ export default function EnterpriseCycleDashboard({
   timeZone,
   loading,
   error,
+  dashboardModeSwitch,
   onSaveProductionCycle,
   onCreatePond,
   onEditCycle,
@@ -455,6 +457,7 @@ export default function EnterpriseCycleDashboard({
         company={company}
         onPress={() => router.push('/company-setup2?edit=true' as never)}
       />
+      <View style={styles.dashboardModeSwitchContainer}>{dashboardModeSwitch}</View>
       <View style={styles.cycleFilterContainer}>
         {(['active', 'inactive', 'ended'] as PondFilter[]).map((filter) => (
           <TouchableOpacity key={filter} style={[styles.cycleFilterButton, pondFilter === filter && styles.cycleFilterButtonActive]} onPress={() => setPondFilter(filter)}>
@@ -748,6 +751,7 @@ export default function EnterpriseCycleDashboard({
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F8FC', paddingHorizontal: 16, paddingTop: 10, gap: 14 },
   enterpriseHeader: { minHeight: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  dashboardModeSwitchContainer: { marginHorizontal: -16 },
   enterpriseHeaderCopy: { flex: 1, minWidth: 0 },
   enterpriseHeaderTitle: { color: '#102F46', fontSize: 24, fontWeight: '900' },
   enterpriseCompanyName: { marginTop: 3, color: '#6A8191', fontSize: 12, fontWeight: '700' },
