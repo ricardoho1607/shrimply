@@ -5,13 +5,11 @@ import Link from 'next/link';
 import {
   Plus,
   Search,
-  Trash2,
   Box,
   FlaskConical,
   ArrowDownCircle,
   ArrowUpCircle,
   AlertCircle,
-  History,
   X,
   Loader2,
   Calendar,
@@ -69,6 +67,7 @@ interface InventoryItem {
   itemName: string;
   brand?: string;
   category: string;
+  feedType?: string;
   inventoryKind?: 'additive' | 'treatmentMix';
   unit?: string;
   reorderLevel?: number;
@@ -811,53 +810,31 @@ export default function InventoryFeedsPage() {
                       transform: 'translateZ(0)',
                       transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}>
-                      <div style={{ padding: '20px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--bg-mid)' }}>
-                        <div style={{ display: 'flex', gap: '14px' }}>
-                          <div style={{
-                            width: '48px',
-                            height: '48px',
-                            borderRadius: '14px',
-                            background: 'white',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: isLow ? '#e74c3c' : 'var(--primary)',
-                            border: '1px solid var(--border)',
-                            boxShadow: '0 8px 20px rgba(0,0,0,0.06)'
-                          }}>
-                            {activeTab === 'feed' ? <Box size={24} /> : <FlaskConical size={24} />}
-                          </div>
-                          <div>
-                            <h3 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.itemName}</h3>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
-                              <span style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600 }}>{item.brand || 'No Brand'}</span>
-                              <span style={{ opacity: 0.2, fontWeight: 600 }}>•</span>
-                              <span style={{
-                                padding: '2px 10px', background: 'var(--primary-dim)', color: 'var(--primary)',
-                                borderRadius: '20px', fontSize: '11px', fontWeight: 600, textTransform: 'uppercase'
-                              }}>
-                                {(item as any).feedType || (item as any).category}
-                              </span>
-                            </div>
+                      <div className={styles.inventoryCardHeader}>
+                        <div className={styles.inventoryCardIdentity}>
+                          <h3>{item.itemName}</h3>
+                          <div className={styles.inventoryCardMeta}>
+                            <span>{item.brand || 'No Brand'}</span>
+                            <span className={styles.inventoryCardCategory}>
+                              {item.feedType || item.category}
+                            </span>
                           </div>
                         </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
+                        <div className={styles.inventoryCardHeaderActions}>
                           <button
-                            className="btn-secondary"
-                            style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'white' }}
+                            type="button"
+                            className={styles.inventoryCardHeaderAction}
                             onClick={() => handleOpenModal('history', item, activeTab)}
-                            title="Transaction History"
                           >
-                            <History size={20} />
+                            History
                           </button>
                           {canEditInventory && (
                             <button
+                              type="button"
+                              className={`${styles.inventoryCardHeaderAction} ${styles.inventoryCardDeleteAction}`}
                               onClick={() => handleDeleteItem(item, activeTab)}
-                              style={{ width: '42px', height: '42px', padding: '0', borderRadius: '14px', background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.3s' }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#ef4444'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.05)'}
                             >
-                              <Trash2 size={20} />
+                              Delete
                             </button>
                           )}
                         </div>
@@ -888,44 +865,37 @@ export default function InventoryFeedsPage() {
                         </div>
                       </div>
 
-                      <div style={{ padding: '14px 20px', display: 'flex', gap: '18px', background: 'var(--bg-mid)', borderTop: '1px solid var(--border)', flexWrap: 'wrap' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ArrowDownCircle size={14} />
-                          </div>
+                      <div className={styles.inventoryCardActivity}>
+                        <div>
                           {t.inventory.in}: {formatQuantity(totalIn)} {item.unit}
                         </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-muted)', fontWeight: 600, fontSize: '13px' }}>
-                          <div style={{ width: '24px', height: '24px', borderRadius: '6px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <ArrowUpCircle size={14} />
-                          </div>
+                        <div>
                           {t.inventory.out}: {formatQuantity(totalOut)} {item.unit}
                         </div>
                       </div>
 
                       {canEditInventory && (
-                        <div style={{ padding: '18px 20px', display: 'flex', gap: '12px', background: 'white', borderTop: '1px solid var(--border)' }}>
+                        <div className={styles.inventoryCardActions}>
                           <button
-                            className="btn-primary"
-                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600, fontSize: '13px', boxShadow: 'none' }}
+                            type="button"
+                            className={styles.inventoryCardPrimaryAction}
                             onClick={() => handleOpenModal('stockIn', item, activeTab)}
                           >
-                            <Plus size={18} /> {t.inventory.stockIn}
+                            {t.inventory.stockIn}
                           </button>
                           <button
-                            className="btn-secondary"
-                            style={{ flex: 1, borderRadius: '12px', padding: '12px', fontWeight: 600, fontSize: '13px', color: 'var(--primary)', borderColor: 'var(--primary)', background: 'white' }}
+                            type="button"
+                            className={styles.inventoryCardSecondaryAction}
                             onClick={() => handleOpenModal('usage', item, activeTab)}
                           >
-                            <ArrowUpCircle size={18} /> {t.inventory.use}
+                            {t.inventory.use}
                           </button>
                           <button
-                            className="btn-secondary"
-                            style={{ width: '46px', height: '46px', padding: '0', borderRadius: '12px', background: 'white', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            type="button"
+                            className={styles.inventoryCardSecondaryAction}
                             onClick={() => handleOpenModal('editReorder', item, activeTab)}
-                            title="Threshold Settings"
                           >
-                            <AlertCircle size={22} style={{ color: isLow ? '#e74c3c' : 'var(--text-faint)' }} />
+                            Threshold
                           </button>
                         </div>
                       )}

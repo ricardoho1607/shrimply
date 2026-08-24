@@ -362,6 +362,56 @@ Buyer-setup result: passed
 - None required for the requested scope.
 
 final result: passed
+
+---
+
+# Inventory Feed Card Design QA — 2026-08-24
+
+- Source visual truth: `/Users/ricardoho/.codex/visualizations/2026/08/24/01a03253-d09d-7a91-85c2-ea65aff2cb5d/inventory-feed-card/source.png` plus the two browser annotations for the feed card header and action area.
+- Implementation screenshot: `/Users/ricardoho/.codex/visualizations/2026/08/24/01a03253-d09d-7a91-85c2-ea65aff2cb5d/inventory-feed-card/implementation.png`.
+- Viewport: 830 × 789 CSS px at device pixel ratio 1.
+- Source pixels: 830 × 789. Implementation pixels: 830 × 789. No density normalization required.
+- State: authenticated Feeds tab with the Demo Grower Feed card visible.
+
+## Full-view comparison evidence
+
+- The card height decreased from approximately 371 px to 276 px while retaining every metric and action.
+- The header and bottom actions contain zero icons; History, Delete, Stock In, Use, and Threshold remain visible as text controls.
+- The movement totals now use one compact row, and the three primary actions use one equal-width row.
+- No horizontal overflow or clipping is visible at the annotated viewport.
+
+## Focused-region comparison evidence
+
+- A separate crop was not needed because the 374 px-wide card, its labels, and all five actions are clearly legible at 1:1 scale in both full-view screenshots.
+
+## Required fidelity surfaces
+
+- Fonts and typography: the existing product font, weights, numeric alignment, and hierarchy are preserved; secondary labels are reduced without becoming hard to read.
+- Spacing and layout rhythm: header, metrics, movement totals, and actions now use a compact 9–16 px rhythm.
+- Colors and visual tokens: existing primary, muted, border, background, and danger tokens are retained.
+- Image quality and asset fidelity: the affected card no longer uses decorative image or icon assets, as requested.
+- Copy and content: item name, brand, category, stock, price, value, movement totals, and all actions are preserved.
+
+## Interaction and console checks
+
+- History, Stock In, Use, and Threshold each opened the expected dialog and closed successfully.
+- Browser console errors: none.
+
+## Comparison history
+
+1. The source card used four heavily padded rows and seven visible icons, producing a bulky 371 px card.
+2. The header and footer were converted to compact text-first controls; movement totals and actions were consolidated.
+3. The final 276 px card has no header/action icons and no remaining P0, P1, or P2 issues.
+
+## Findings
+
+- No actionable P0, P1, or P2 findings remain.
+
+## Follow-up polish
+
+- None required for the requested scope.
+
+final result: passed
 ---
 
 # Admin Command Centre Design QA — 2026-08-15

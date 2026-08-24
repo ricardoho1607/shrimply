@@ -1,20 +1,20 @@
 .inventoryMetrics {
   display: grid;
   grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr) minmax(0, 1.25fr);
-  gap: 12px;
-  padding: 20px;
+  gap: 10px;
+  padding: 14px 16px;
 }
 
 .inventoryMetric {
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .inventoryMetricValue {
   display: flex;
-  min-height: 32px;
+  min-height: 24px;
   align-items: baseline;
   gap: 4px;
   color: var(--text-primary);
@@ -23,6 +23,136 @@
   font-weight: 600;
   letter-spacing: -0.015em;
   white-space: nowrap;
+}
+
+.inventoryCardHeader {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-mid);
+}
+
+.inventoryCardIdentity {
+  min-width: 0;
+}
+
+.inventoryCardIdentity h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.inventoryCardMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inventoryCardCategory {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--primary-dim);
+  color: var(--primary);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.inventoryCardHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inventoryCardHeaderAction {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.inventoryCardHeaderAction:hover,
+.inventoryCardHeaderAction:focus-visible {
+  background: var(--primary-dim);
+}
+
+.inventoryCardDeleteAction {
+  color: #d64545;
+}
+
+.inventoryCardDeleteAction:hover,
+.inventoryCardDeleteAction:focus-visible {
+  background: rgba(214, 69, 69, 0.08);
+}
+
+.inventoryCardActivity {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-mid);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inventoryCardActions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+.inventoryCardPrimaryAction,
+.inventoryCardSecondaryAction {
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inventoryCardPrimaryAction {
+  border: 1px solid var(--primary);
+  background: var(--primary);
+  color: #fff;
+}
+
+.inventoryCardSecondaryAction {
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--primary);
+}
+
+.inventoryCardPrimaryAction:hover,
+.inventoryCardPrimaryAction:focus-visible {
+  filter: brightness(0.95);
+}
+
+.inventoryCardSecondaryAction:hover,
+.inventoryCardSecondaryAction:focus-visible {
+  border-color: var(--primary);
+  background: var(--primary-dim);
 }
 
 .inventoryMetricUnit {
@@ -38,5 +168,13 @@
 
   .inventoryMetric:last-child {
     grid-column: 1 / -1;
+  }
+
+  .inventoryCardHeader {
+    grid-template-columns: 1fr;
+  }
+
+  .inventoryCardHeaderActions {
+    margin-left: -8px;
   }
 }
