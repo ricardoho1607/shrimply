@@ -159,6 +159,7 @@ export interface OrsonNormalizedPond {
 
 export interface OrsonNormalizeOptions {
   now?: Date;
+  timeZone?: string;
 }
 
 export interface OrsonTrendResult {

@@ -159,7 +159,7 @@ export const useGemini = () => {
         }
       }
 
-      analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration);
+      analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, undefined, options.timeZone);
       if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
         return analysis.diagnosticRequest.status === 'ambiguous'
@@ -184,7 +184,7 @@ export const useGemini = () => {
             ORSON_RESPONSE_TIMEOUT_MS,
             'Orson diagnostic context timed out.',
           );
-          analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, contextResult.data);
+          analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, contextResult.data, options.timeZone);
         } catch (contextError) {
           console.warn('Orson mortality context could not be loaded; using pond records only.', contextError);
           analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, {
@@ -193,7 +193,7 @@ export const useGemini = () => {
             treatments: [],
             harvests: [],
             unavailableSources: ['lab history', 'treatment history', 'harvest history'],
-          });
+          }, options.timeZone);
         }
       }
       void createRiskNotifications(options.companyId, analysis);

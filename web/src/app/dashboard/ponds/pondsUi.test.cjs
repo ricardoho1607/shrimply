@@ -28,3 +28,8 @@ test('pond cards only report a last sampling date for a real growth sample', () 
   assert.match(pondsPage, /getLatestGrowthSampling/);
   assert.match(pondsPage, /t\.ponds\.never \|\| 'Never'/);
 });
+
+test('pond cards and list show estimated living population', () => {
+  assert.match(pondsPage, /calculatePondMetricsWithHarvest/);
+  assert.doesNotMatch(pondsPage, /cyclePond\.initialPopulation\.toLocaleString\(\)/);
+});

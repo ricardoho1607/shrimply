@@ -13,11 +13,14 @@ import type {
   OrsonPromptTreatmentEvent,
   OrsonRecordKind,
 } from './types';
+import {
+  differenceInFarmCalendarDays,
+  getFarmDateKey,
+  normalizeFarmDateKey,
+} from '../shared/farmDate';
 
 type RawRecord = Record<string, any>;
 type RawPond = Record<string, any>;
-
-const DAY_MS = 1000 * 60 * 60 * 24;
 
 const EMPTY_VALUES = new Set(['', 'n/a', 'na', 'null', 'undefined', '--', '-']);
 
@@ -317,9 +320,17 @@ const toTimestampMs = (dateString: string | null): number | null => {
   return Number.isNaN(timestamp) ? null : timestamp;
 };
 
-const calculateDoc = (docStartMs: number | null, targetMs: number | null): number | null => {
-  if (docStartMs === null || targetMs === null) return null;
-  return Math.max(0, Math.floor((targetMs - docStartMs) / DAY_MS));
+const calculateDoc = (
+  docStartDate: string | null,
+  target: string | Date | null,
+  timeZone?: string,
+): number | null => {
+  const startDateKey = normalizeFarmDateKey(docStartDate, timeZone);
+  const targetDateKey = target instanceof Date
+    ? getFarmDateKey(target, timeZone)
+    : normalizeFarmDateKey(target, timeZone);
+  if (!startDateKey || !targetDateKey) return null;
+  return Math.max(0, differenceInFarmCalendarDays(targetDateKey, startDateKey));
 };
 
 const collectMissingFields = (fields: Record<string, unknown>): string[] => {
@@ -427,7 +438,7 @@ const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null
   return kinds.length > 0 ? kinds : ['unknown'];
 };
 
-const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNormalizedRecord => {
+const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZone?: string): OrsonNormalizedRecord => {
   const date = normalizeDateString(record.date);
   const timestampMs = toTimestampMs(date);
   const feedData = normalizeFeedData(record);
@@ -451,7 +462,7 @@ const normalizeRecord = (record: RawRecord, docStartMs: number | null): OrsonNor
     id: firstString(record.id),
     date,
     timestampMs,
-    doc: calculateDoc(docStartMs, timestampMs),
+    doc: calculateDoc(docStartDate, date, timeZone),
     kinds: recordKinds(record, feedData),
     mbwG,
     mortalityCount,
@@ -522,7 +533,7 @@ export const normalizePondData = (
 
   const records = rawRecords
     .filter((record) => record && typeof record === 'object')
-    .map((record) => normalizeRecord(record, docStartTimestampMs))
+    .map((record) => normalizeRecord(record, docStartDate, options.timeZone))
     .sort((a, b) => {
       if (a.timestampMs === null && b.timestampMs === null) return 0;
       if (a.timestampMs === null) return 1;
@@ -535,7 +546,7 @@ export const normalizePondData = (
     pondName: firstString(pond.pondName, pond.name) ?? 'Unnamed pond',
     docStartDate,
     docStartTimestampMs,
-    currentDoc: calculateDoc(docStartTimestampMs, now.getTime()),
+    currentDoc: calculateDoc(docStartDate, now, options.timeZone),
     pondAreaM2,
     densityPerM2,
     initialPopulation,

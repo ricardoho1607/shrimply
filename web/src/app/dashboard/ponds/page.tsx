@@ -34,12 +34,17 @@ import {
   type StartPondCycleFormValue,
 } from '@/lib/startPondCycle';
 import { filterEnterpriseRecordsForUser } from '../../../../../shared/enterpriseBlocks';
-import { getLatestGrowthSampling } from '../../../../../shared/pondCalculations';
+import {
+  calculatePondMetricsWithHarvest,
+  getLatestGrowthSampling,
+  type SharedMortalityRecord,
+} from '../../../../../shared/pondCalculations';
 import { hasFarmPermission } from '../../../../../shared/permissions';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
   id: string; date: string; mbw: number; mortality: number; feed: number;
+  feedData?: { totalDailyFeed?: number | string | null; feedingResponse?: 'strong' | 'normal' | 'weak' | null } | null;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: string;
   estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
@@ -50,6 +55,7 @@ interface Pond {
   blockId?: string;
   blockName?: string;
   docStart: string; supplier: string; plSupplier?: string; initialWeight: number; samplings: Sampling[];
+  mortalityRecords?: SharedMortalityRecord[];
   totalHarvestedBiomass?: number; totalHarvestedPopulation?: number;
   cycleId?: string;
   cycleName?: string;
@@ -841,6 +847,12 @@ export default function PondsPage() {
     ...filteredPhysicalPonds.map((pond) => ({ kind: 'physical' as const, pond })),
     ...filteredPonds.map((pond) => ({ kind: 'cycle' as const, pond })),
   ];
+  const estimatedPopulationByPondId = useMemo(() => new Map(
+    filteredPonds.map((pond) => [
+      pond.id,
+      calculatePondMetricsWithHarvest(pond, company?.timeZone, { currentDateKey: today }).currentPopulation,
+    ]),
+  ), [company?.timeZone, filteredPonds, today]);
 
   return (
     <div className="dashboard-page ponds-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -1028,7 +1040,7 @@ export default function PondsPage() {
                 <div className="ponds-card-metrics">
                   <div><span>{t.ponds.area || 'Area'}</span><strong>{pond.pondArea.toLocaleString()} m²</strong></div>
                   <div><span>{t.ponds.density || 'Density'}</span><strong>{cyclePond ? `${cyclePond.density.toLocaleString()} PL/m²` : '—'}</strong></div>
-                  <div><span>{t.ponds.population || 'Population'}</span><strong>{cyclePond ? cyclePond.initialPopulation.toLocaleString() : '—'}</strong></div>
+                  <div><span>{t.ponds.population || 'Population'}</span><strong>{cyclePond ? estimatedPopulationByPondId.get(cyclePond.id)?.toLocaleString() : '—'}</strong></div>
                   <div><span>{t.ponds.started || 'Started'}</span><strong>{cyclePond ? new Date(cyclePond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : 'Not started'}</strong></div>
                 </div>
 
@@ -1062,7 +1074,7 @@ export default function PondsPage() {
                 <span className={`ponds-list-status is-${statusLabel.toLowerCase()}`}>{statusLabel}</span>
                 <span>{pond.pondArea.toLocaleString()} m²</span>
                 <span>{cyclePond ? cyclePond.density.toLocaleString() : '—'}</span>
-                <span>{cyclePond ? cyclePond.initialPopulation.toLocaleString() : '—'}</span>
+                <span>{cyclePond ? estimatedPopulationByPondId.get(cyclePond.id)?.toLocaleString() : '—'}</span>
                 <div className="ponds-list-actions">
                   {cyclePond && <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`} aria-label={`View ${pond.pondName} details`}><ChevronRight size={16} /></Link>}
                   {canEditPonds && (

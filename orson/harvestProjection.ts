@@ -61,7 +61,7 @@ export const calculateOrsonHarvestProjection = (
   input: OrsonHarvestProjectionInput,
 ): OrsonHarvestProjection => {
   const now = input.now ?? new Date();
-  const normalized = normalizePondData(input.pond, { now });
+  const normalized = normalizePondData(input.pond, { now, timeZone: input.timeZone });
   const metrics = calculatePondMetrics(normalized);
   const calibration = getOrsonCalibrationAdjustment(input.calibration, normalized.pondName);
   const daysToHarvest = Math.max(0, Math.floor(input.daysToHarvest || 0));

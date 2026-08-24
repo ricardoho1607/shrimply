@@ -98,5 +98,20 @@ export const runNormalizePondDataSelfTest = () => {
   assert(pond.records[3].mortalityCount === 25, 'deducts estimated total mortality');
   assert(pond.records[4].mortalityCount === 0, 'does not deduct observed recovered mortality');
 
+  const farmCalendarPond = normalizePondData(
+    {
+      id: 'pond-midnight',
+      pondName: 'Midnight pond',
+      docStart: '2026-08-20',
+      initialPopulation: 347200,
+    },
+    {
+      now: new Date('2026-08-24T00:30:00+10:00'),
+      timeZone: 'Australia/Melbourne',
+    },
+  );
+
+  assert(farmCalendarPond.currentDoc === 4, 'uses the farm calendar date for current DOC');
+
   return pond;
 };

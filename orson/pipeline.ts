@@ -12,8 +12,9 @@ export const buildOrsonAnalysis = (
   now = new Date(),
   calibration?: OrsonCalibrationProfile | null,
   mortalityContext?: OrsonMortalityDiagnosticContext | null,
+  timeZone?: string,
 ) => {
-  const normalizedPonds = normalizePondsData(ponds, { now }).filter((pond) => pond.cycleStatus !== 'ended');
+  const normalizedPonds = normalizePondsData(ponds, { now, timeZone }).filter((pond) => pond.cycleStatus !== 'ended');
   const metrics = calculatePondsMetrics(normalizedPonds, calibration);
   const reports = analyzePondsRisks(metrics, now);
   const outlooks = build72HourOutlooks(reports, now);

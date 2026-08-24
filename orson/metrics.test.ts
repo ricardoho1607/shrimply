@@ -197,7 +197,7 @@ export const runUnifiedBiomassParitySelfTest = () => {
       mbwAtRecord: 14,
     }],
   };
-  const normalized = normalizePondData(pond, { now });
+  const normalized = normalizePondData(pond, { now, timeZone: 'Australia/Melbourne' });
   const shared = calculatePondMetricsWithHarvest(pond, 'Australia/Melbourne', {
     currentDoc: normalized.currentDoc ?? undefined,
     now,
@@ -206,4 +206,28 @@ export const runUnifiedBiomassParitySelfTest = () => {
 
   assert(metrics.estimatedCurrentPopulation === shared.currentPopulation, 'Orson and the app use one population estimate');
   assert(metrics.estimatedBiomassKg === Number(shared.currentBiomass.toFixed(2)), 'Orson and the app use one biomass estimate');
+
+  const midnightNow = new Date('2026-08-24T00:30:00+10:00');
+  const midnightPond = {
+    id: 'sim-c1',
+    pondName: 'SIM-C1',
+    docStart: '2026-08-20',
+    initialPopulation: 347200,
+    initialWeight: 0.5,
+    samplings: [],
+    mortalityRecords: [],
+    totalHarvestedPopulation: 0,
+  };
+  const normalizedMidnightPond = normalizePondData(midnightPond, {
+    now: midnightNow,
+    timeZone: 'Australia/Melbourne',
+  });
+  const sharedMidnightMetrics = calculatePondMetricsWithHarvest(midnightPond, 'Australia/Melbourne', {
+    now: midnightNow,
+  });
+  const orsonMidnightMetrics = calculatePondMetrics(normalizedMidnightPond);
+
+  assert(normalizedMidnightPond.currentDoc === 4, 'Orson uses the farm calendar DOC after local midnight');
+  assert(sharedMidnightMetrics.currentPopulation === 341678, 'the shared model estimates SIM-C1 living population');
+  assert(orsonMidnightMetrics.estimatedCurrentPopulation === sharedMidnightMetrics.currentPopulation, 'Orson matches the shared living population after local midnight');
 };

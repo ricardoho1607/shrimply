@@ -222,7 +222,12 @@ const getReportAnalysis = (ponds: PondData[], language: PdfLanguage) => {
   return { executiveSummary, riskAssessment };
 };
 
-export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets: PdfBrandAssets, language: PdfLanguage): string => {
+export const generateSamplingReportHTML = (
+  data: SamplingReportData,
+  brandAssets: PdfBrandAssets,
+  language: PdfLanguage,
+  useIosPrintLayout = false,
+): string => {
   const {
     farmName,
     block,
@@ -232,6 +237,10 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
     companyName,
     ponds,
   } = data;
+  const printViewportWidth = useIosPrintLayout ? 1000 : 1056;
+  const printPageSize = useIosPrintLayout ? '792px 612px' : '11in 8.5in';
+  const printPageWidth = useIosPrintLayout ? '100%' : '11in';
+  const printPageHeight = useIosPrintLayout ? '100%' : '8.5in';
 
   const averages = calculateAverages(ponds);
   const reportAnalysis = getReportAnalysis(ponds, language);
@@ -380,11 +389,11 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
     <html>
     <head>
       <meta charset="utf-8">
-      <meta name="viewport" content="width=1000, initial-scale=1.0, maximum-scale=1.0">
+      <meta name="viewport" content="width=${printViewportWidth}, initial-scale=1.0, maximum-scale=1.0">
       <title>Sampling Report</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        @page { size: 792px 612px; margin: 0; }
+        @page { size: ${printPageSize}; margin: 0; }
         html {
           width: 100%;
           height: 100%;
@@ -400,13 +409,14 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
           line-height: 1.2;
         }
         .pdf-page {
-          width: 100%;
-          height: 100%;
+          width: ${printPageWidth};
+          height: ${printPageHeight};
           padding: 26px 36px 26px 26px;
           position: relative;
           overflow: hidden;
           background: #0F4C75;
           page-break-after: always;
+          ${useIosPrintLayout ? '' : 'break-inside: avoid;'}
         }
         .page-bg {
           position: absolute;
@@ -429,9 +439,9 @@ export const generateSamplingReportHTML = (data: SamplingReportData, brandAssets
           border: 0;
           border-radius: 0;
         }
-        .header { display: flex; justify-content: space-between; gap: 14px; margin-bottom: 8px; }
-        .header-main { flex: 1; }
-        .header-logo { width: 62px; height: 62px; object-fit: contain; }
+        .header { position: relative; min-height: 62px; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
+        .header-main { padding-right: 76px; }
+        .header-logo { position: absolute; top: 0; right: 0; width: 62px; height: 62px; object-fit: contain; }
         .title { font-size: 20px; font-weight: 800; color: #0F4C75; margin-bottom: 3px; }
         .farm-info { font-size: 9px; color: #1B262C; margin-bottom: 1px; }
         .farm-info strong { color: #0F4C75; }

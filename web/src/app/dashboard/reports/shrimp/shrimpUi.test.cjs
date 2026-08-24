@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const reportGenerator = fs.readFileSync(path.join(__dirname, '../../../../lib/generated/mobileSamplingReport.ts'), 'utf8');
+const mobileReportGenerator = fs.readFileSync(path.join(__dirname, '../../../../../../app/services/samplingReportExportService.ts'), 'utf8');
 
 test('sampling report metrics use one compact icon-free summary row', () => {
   assert.match(source, /className="glass-card sampling-summary-bar"/);
@@ -36,6 +37,19 @@ test('sampling PDF shows supplier between pond and stocking date', () => {
   assert.match(source, /supplier: pond\.plSupplier \|\| pond\.supplier \|\| 'N\/A'/);
   assert.match(reportGenerator, /<th>Pond<\/th><th>Supplier<\/th><th>Stock<br\/>Date<\/th>/);
   assert.match(reportGenerator, /escapeXml\(pond\.supplier \|\| 'N\/A'\)/);
+});
+
+test('sampling PDF uses platform-safe page sizing without scaling or an extra iOS page', () => {
+  assert.match(reportGenerator, /useIosPrintLayout = false/);
+  assert.match(reportGenerator, /useIosPrintLayout \? 1000 : 1056/);
+  assert.match(reportGenerator, /useIosPrintLayout \? '792px 612px' : '11in 8\.5in'/);
+  assert.match(reportGenerator, /useIosPrintLayout \? '100%' : '11in'/);
+  assert.match(reportGenerator, /useIosPrintLayout \? '100%' : '8\.5in'/);
+  assert.match(reportGenerator, /useIosPrintLayout \? '' : 'break-inside: avoid;'/);
+  assert.match(reportGenerator, /\.header \{ position: relative; min-height: 62px;[^}]*page-break-inside: avoid;/);
+  assert.match(reportGenerator, /\.header-logo \{ position: absolute; top: 0; right: 0;/);
+  assert.doesNotMatch(reportGenerator, /\.header \{ display: flex;/);
+  assert.match(mobileReportGenerator, /generateSamplingReportHTML\(data, brandAssets, language, Platform\.OS === 'ios'\)/);
 });
 
 test('ponds without a real growth sampling are not performance-rated', () => {

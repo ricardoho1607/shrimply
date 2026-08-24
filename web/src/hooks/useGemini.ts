@@ -158,6 +158,8 @@ export const useGemini = () => {
         userMessage,
         new Date(),
         calibration,
+        undefined,
+        options.timeZone,
       );
       if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
@@ -189,6 +191,7 @@ export const useGemini = () => {
             new Date(),
             calibration,
             contextResult.data,
+            options.timeZone,
           );
         } catch (contextError) {
           console.warn('Orson mortality context could not be loaded; using pond records only.', contextError);
@@ -204,6 +207,7 @@ export const useGemini = () => {
               harvests: [],
               unavailableSources: ['lab history', 'treatment history', 'harvest history'],
             },
+            options.timeZone,
           );
         }
       }

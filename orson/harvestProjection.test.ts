@@ -91,5 +91,22 @@ export const runHarvestProjectionSelfTest = () => {
   assert(calibrated.learningContext.baseAssumedAdgGPerDay === 0.3, 'preserves the uncalibrated ADG for backtesting');
   assert(calibrated.projectedBiomassKg! < calibrated.learningContext.baseProjectedBiomassKg!, 'applies bounded survival and biomass corrections');
 
+  const farmCalendarProjection = calculateOrsonHarvestProjection({
+    pond: {
+      id: 'pond-midnight',
+      pondName: 'Midnight pond',
+      initialPopulation: 347200,
+      initialWeight: 0.5,
+      docStart: '2026-08-20',
+      samplings: [],
+    },
+    daysToHarvest: 10,
+    expectedPricePerKg: 5,
+    dailyFeedCost: 0,
+    now: new Date('2026-08-24T00:30:00+10:00'),
+    timeZone: 'Australia/Melbourne',
+  });
+  assert(farmCalendarProjection.currentDoc === 4, 'projection uses the farm calendar DOC after local midnight');
+
   return projection;
 };
