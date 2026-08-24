@@ -44,12 +44,14 @@ import {
   summarizeEnterpriseCycle,
   type EnterpriseCycleRecord,
 } from '../../../shared/enterpriseCycles';
-import { getFarmDateKey } from '../../../shared/farmDate';
+import { differenceInFarmCalendarDays, getFarmDateKey } from '../../../shared/farmDate';
 import {
   countCompletedEnterprisePondSetups,
   createEnterprisePondSetupValues,
   isEnterprisePondSetupComplete,
   parseEnterprisePondDensity,
+  parseOptionalEnterprisePondNumber,
+  type EnterpriseCycleStartMode,
   type EnterprisePondSetupValue,
 } from '../../../shared/enterpriseCycleSetup';
 import EnterpriseHealthDisplay from './EnterpriseHealthDisplay';
@@ -110,6 +112,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   const [editingCycle, setEditingCycle] = useState<EnterpriseCycleRecord | null>(null);
   const [cycleName, setCycleName] = useState('');
   const [plannedStartDate, setPlannedStartDate] = useState(() => getFarmDateKey(new Date(), timeZone));
+  const [cycleStartMode, setCycleStartMode] = useState<EnterpriseCycleStartMode>('new');
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [cycleFormStep, setCycleFormStep] = useState<'details' | 'ponds'>('details');
   const [stockingCycle, setStockingCycle] = useState<EnterpriseCycleRecord | null>(null);
@@ -184,7 +187,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   const setupPonds = useMemo(() => physicalPonds
     .filter((pond) => pond.blockId === selectedSetupBlock?.id && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
     .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true })), [activePhysicalPondIds, activePondNames, physicalPonds, selectedSetupBlock?.id]);
-  const completedSetupCount = countCompletedEnterprisePondSetups(setupPonds.map((pond) => pond.id), pondSetupValues);
+  const completedSetupCount = countCompletedEnterprisePondSetups(setupPonds.map((pond) => pond.id), pondSetupValues, cycleStartMode);
 
   const resetCycleForm = () => {
     setCycleFormOpen(false);
@@ -192,6 +195,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     setStockingCycle(null);
     setCycleName('');
     setPlannedStartDate(getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([]);
     setCycleFormStep('details');
     setPondSetupValues({});
@@ -203,6 +207,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     setCycleFormOpen(true);
     setCycleName(copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
     setPlannedStartDate(getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([]);
     setCycleFormStep('details');
     setStockingCycle(null);
@@ -224,6 +229,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     setCycleFormOpen(true);
     setCycleName(existingCycle?.cycleName || copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
     setPlannedStartDate(existingCycle?.plannedStartDate || getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([blockId]);
     setPondSetupValues(createEnterprisePondSetupValues(blockPonds.map((pond) => pond.id)));
     setExpandedSetupPondId(blockPonds[0]?.id || null);
@@ -263,6 +269,12 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   const createCycle = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!company?.id || !user?.uid || !cycleName.trim() || selectedBlockIds.length !== 1) return;
+    const baselineDate = getFarmDateKey(new Date(), timeZone);
+    const baselineDoc = differenceInFarmCalendarDays(baselineDate, plannedStartDate);
+    if (cycleStartMode === 'midcycle' && baselineDoc < 0) {
+      window.alert(copy.baselineDateInvalid);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -294,6 +306,10 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
           const value = pondSetupValues[pond.id];
           const density = parseEnterprisePondDensity(value.density);
           const supplier = value.supplier.trim();
+          const baselineMbw = parseOptionalEnterprisePondNumber(value.baselineMbw);
+          const baselineEstimatedPopulation = parseOptionalEnterprisePondNumber(value.baselineEstimatedPopulation);
+          const baselineSurvivalRate = parseOptionalEnterprisePondNumber(value.baselineSurvivalRate);
+          const baselineCumulativeFeed = parseOptionalEnterprisePondNumber(value.baselineCumulativeFeed);
           const pondRef = doc(collection(db, 'companies', company.id, 'ponds'));
           batch.set(pondRef, {
             pondName: pond.pondName,
@@ -306,7 +322,21 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
             supplier,
             plSupplier: supplier,
             initialWeight: 0.5,
-            samplings: [],
+            samplings: cycleStartMode === 'midcycle' && baselineMbw ? [{
+              id: `baseline-${pondRef.id}`,
+              date: baselineDate,
+              mbw: baselineMbw,
+              mortality: 0,
+              feed: baselineCumulativeFeed ?? 0,
+              isBaselineEstimate: true,
+              source: 'midcycle_onboarding',
+              ...(baselineEstimatedPopulation === undefined ? {} : { estimatedPopulation: baselineEstimatedPopulation }),
+              ...(baselineSurvivalRate === undefined ? {} : { estimatedSurvivalRate: baselineSurvivalRate }),
+              ...(baselineCumulativeFeed === undefined ? {} : { cumulativeFeedToDate: baselineCumulativeFeed }),
+              cycleId: cycleRef.id,
+              cycleName: cycleName.trim(),
+              pondCycleId: pondRef.id,
+            }] : [],
             mortalityRecords: [],
             totalHarvestedBiomass: 0,
             totalHarvestedPopulation: 0,
@@ -318,7 +348,16 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
             pondCycleId: pondRef.id,
             cycleStatus: 'active',
             cycleStartedAt: plannedStartDate,
-            cycleStartMode: 'new',
+            cycleStartMode,
+            ...(cycleStartMode === 'midcycle' && baselineMbw ? {
+              baselineDate,
+              baselineDoc,
+              baselineMbw,
+              ...(baselineEstimatedPopulation === undefined ? {} : { baselineEstimatedPopulation }),
+              ...(baselineSurvivalRate === undefined ? {} : { baselineSurvivalRate }),
+              ...(baselineCumulativeFeed === undefined ? {} : { baselineCumulativeFeed }),
+              baselineSource: 'user_midcycle_estimate',
+            } : {}),
             createdAt: serverTimestamp(),
             createdBy: user.uid,
             updatedAt: serverTimestamp(),
@@ -566,14 +605,31 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
               </fieldset>
               <button className={styles.saveButton} disabled={saving || !cycleName.trim() || selectedBlockIds.length !== 1 || (!editingCycle && setupPonds.length === 0)}>{saving ? t.actions.loading : editingCycle ? copy.saveChanges : t.actions.next}</button>
             </> : <>
-              <div className={styles.setupProgress}><strong>{copy.pondsReady.replace('{{completed}}', String(completedSetupCount)).replace('{{total}}', String(setupPonds.length))}</strong><small>{copy.densitySupplierRequired}</small></div>
+              <fieldset className={styles.cycleModeSelector}>
+                <legend>{copy.cycleStartQuestion}</legend>
+                {(['new', 'midcycle'] as const).map((mode) => <label key={mode} className={cycleStartMode === mode ? styles.cycleModeSelected : ''}>
+                  <input type="radio" name="enterprise-cycle-start-mode" checked={cycleStartMode === mode} onChange={() => setCycleStartMode(mode)} />
+                  <span><b>{mode === 'new' ? copy.newCycle : copy.existingCycle}</b><small>{mode === 'new' ? copy.newCycleHint : copy.existingCycleHint}</small></span>
+                </label>)}
+              </fieldset>
+              <div className={styles.setupProgress}><strong>{copy.pondsReady.replace('{{completed}}', String(completedSetupCount)).replace('{{total}}', String(setupPonds.length))}</strong><small>{cycleStartMode === 'midcycle' ? copy.baselineMbwRequired : copy.densitySupplierRequired}</small></div>
               <div className={styles.setupPondList}>{setupPonds.map((pond) => {
                 const value = pondSetupValues[pond.id] || { density: '', supplier: '' };
                 const expanded = expandedSetupPondId === pond.id;
-                const complete = isEnterprisePondSetupComplete(value);
+                const complete = isEnterprisePondSetupComplete(value, cycleStartMode);
                 return <section key={pond.id} className={`${styles.setupPondCard} ${expanded ? styles.setupPondCardExpanded : ''}`}>
                   <button type="button" className={styles.setupPondHeader} onClick={() => setExpandedSetupPondId(expanded ? null : pond.id)} aria-expanded={expanded}><span><b>{pond.pondName}</b><small>{complete ? `${value.density} PL/m² · ${value.supplier}` : copy.stockingMissing}</small></span>{complete ? <CheckCircle2 size={18} /> : null}{expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</button>
-                  {expanded ? <div className={styles.setupPondForm}><label>{copy.density}<input required min="0.01" step="0.01" inputMode="decimal" value={value.density} onChange={(event) => updatePondSetup(pond.id, 'density', event.target.value)} /></label><label>{copy.supplier}<input required value={value.supplier} onChange={(event) => updatePondSetup(pond.id, 'supplier', event.target.value)} placeholder={copy.hatcheryName} /></label></div> : null}
+                  {expanded ? <div className={styles.setupPondForm}>
+                    <label>{copy.density}<input required min="0.01" step="0.01" inputMode="decimal" value={value.density} onChange={(event) => updatePondSetup(pond.id, 'density', event.target.value)} /></label>
+                    <label>{copy.supplier}<input required value={value.supplier} onChange={(event) => updatePondSetup(pond.id, 'supplier', event.target.value)} placeholder={copy.hatcheryName} /></label>
+                    {cycleStartMode === 'midcycle' ? <>
+                      <label>{copy.currentMbw}<input required min="0.01" step="0.01" inputMode="decimal" value={value.baselineMbw || ''} onChange={(event) => updatePondSetup(pond.id, 'baselineMbw', event.target.value)} placeholder={copy.currentMbwPlaceholder} /></label>
+                      <label>{copy.currentPopulation}<input min="0" step="1" inputMode="numeric" value={value.baselineEstimatedPopulation || ''} onChange={(event) => updatePondSetup(pond.id, 'baselineEstimatedPopulation', event.target.value)} placeholder={copy.currentPopulationPlaceholder} /></label>
+                      <label>{copy.currentSurvivalRate}<input min="0" max="100" step="0.1" inputMode="decimal" value={value.baselineSurvivalRate || ''} onChange={(event) => updatePondSetup(pond.id, 'baselineSurvivalRate', event.target.value)} placeholder={copy.survivalRatePlaceholder} /></label>
+                      <label>{copy.feedUsedSoFar}<input min="0" step="0.01" inputMode="decimal" value={value.baselineCumulativeFeed || ''} onChange={(event) => updatePondSetup(pond.id, 'baselineCumulativeFeed', event.target.value)} placeholder={copy.feedUsedSoFarPlaceholder} /></label>
+                      <small className={styles.setupHint}>{copy.feedUsedSoFarHint}</small>
+                    </> : null}
+                  </div> : null}
                 </section>;
               })}</div>
               <div className={styles.setupActions}><button type="button" className={styles.backButton} onClick={() => stockingCycle ? resetCycleForm() : setCycleFormStep('details')}>{stockingCycle ? t.actions.cancel : t.actions.back}</button><button className={styles.saveButton} disabled={saving || setupPonds.length === 0 || completedSetupCount !== setupPonds.length}>{saving ? copy.startingBlock : stockingCycle ? copy.startRemainingPonds : copy.startProductionCycle}</button></div>

@@ -37,12 +37,14 @@ import {
   isEnterpriseCycleOpen,
   summarizeEnterpriseCycle,
 } from '../../../shared/enterpriseCycles';
-import { getFarmDateKey } from '../../../shared/farmDate';
+import { differenceInFarmCalendarDays, getFarmDateKey } from '../../../shared/farmDate';
 import {
   countCompletedEnterprisePondSetups,
   createEnterprisePondSetupValues,
   isEnterprisePondSetupComplete,
   parseEnterprisePondDensity,
+  parseOptionalEnterprisePondNumber,
+  type EnterpriseCycleStartMode,
   type EnterprisePondSetupValue,
 } from '../../../shared/enterpriseCycleSetup';
 import ProfileCompletionCard from '../onboarding/ProfileCompletionCard';
@@ -62,7 +64,16 @@ interface EnterpriseCycleDashboardProps {
     cycleName: string;
     block: FarmBlock;
     stockingDate: string;
-    ponds: { pond: PhysicalPond; density: number; supplier: string }[];
+    cycleStartMode: EnterpriseCycleStartMode;
+    ponds: {
+      pond: PhysicalPond;
+      density: number;
+      supplier: string;
+      baselineMbw?: number;
+      baselineEstimatedPopulation?: number;
+      baselineSurvivalRate?: number;
+      baselineCumulativeFeed?: number;
+    }[];
   }) => void | Promise<void>;
   onCreatePond: (input: { pondName: string; pondArea: number; block: FarmBlock }) => void | Promise<void>;
   onEditCycle: (cycle: FarmCycle, input: { cycleName: string; blocks: FarmBlock[] }) => void | Promise<void>;
@@ -118,6 +129,7 @@ export default function EnterpriseCycleDashboard({
   const [editingCycle, setEditingCycle] = useState<FarmCycle | null>(null);
   const [cycleName, setCycleName] = useState('');
   const [plannedStartDate, setPlannedStartDate] = useState(getFarmDateKey(new Date(), timeZone));
+  const [cycleStartMode, setCycleStartMode] = useState<EnterpriseCycleStartMode>('new');
   const [selectedBlockIds, setSelectedBlockIds] = useState<string[]>([]);
   const [cycleFormStep, setCycleFormStep] = useState<'details' | 'ponds'>('details');
   const [stockingCycle, setStockingCycle] = useState<FarmCycle | null>(null);
@@ -206,6 +218,7 @@ export default function EnterpriseCycleDashboard({
   const completedSetupCount = countCompletedEnterprisePondSetups(
     setupPonds.map((pond) => pond.id),
     pondSetupValues,
+    cycleStartMode,
   );
 
   const resetCycleForm = () => {
@@ -214,6 +227,7 @@ export default function EnterpriseCycleDashboard({
     setStockingCycle(null);
     setCycleName('');
     setPlannedStartDate(getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([]);
     setCycleFormStep('details');
     setPondSetupValues({});
@@ -225,6 +239,7 @@ export default function EnterpriseCycleDashboard({
     setCycleFormOpen(true);
     setCycleName(copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
     setPlannedStartDate(getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([]);
     setCycleFormStep('details');
     setStockingCycle(null);
@@ -246,6 +261,7 @@ export default function EnterpriseCycleDashboard({
     setCycleFormOpen(true);
     setCycleName(existingCycle?.cycleName || copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
     setPlannedStartDate(existingCycle?.plannedStartDate || getFarmDateKey(new Date(), timeZone));
+    setCycleStartMode('new');
     setSelectedBlockIds([blockId]);
     setPondSetupValues(createEnterprisePondSetupValues(blockPonds.map((pond) => pond.id)));
     setExpandedSetupPondId(blockPonds[0]?.id || null);
@@ -278,6 +294,10 @@ export default function EnterpriseCycleDashboard({
 
   const submitCycle = async () => {
     if (!cycleName.trim() || selectedBlockIds.length !== 1) return;
+    if (cycleStartMode === 'midcycle' && differenceInFarmCalendarDays(getFarmDateKey(new Date(), timeZone), plannedStartDate) < 0) {
+      Alert.alert(t.messages.error, copy.baselineDateInvalid);
+      return;
+    }
     setSaving(true);
     try {
       const selectedBlocks = sortedBlocks.filter((block) => selectedBlockIds.includes(block.id));
@@ -290,10 +310,15 @@ export default function EnterpriseCycleDashboard({
           cycleName: cycleName.trim(),
           block: selectedSetupBlock,
           stockingDate: plannedStartDate,
+          cycleStartMode,
           ponds: setupPonds.map((pond) => ({
             pond,
             density: parseEnterprisePondDensity(pondSetupValues[pond.id].density),
             supplier: pondSetupValues[pond.id].supplier.trim(),
+            baselineMbw: parseOptionalEnterprisePondNumber(pondSetupValues[pond.id].baselineMbw),
+            baselineEstimatedPopulation: parseOptionalEnterprisePondNumber(pondSetupValues[pond.id].baselineEstimatedPopulation),
+            baselineSurvivalRate: parseOptionalEnterprisePondNumber(pondSetupValues[pond.id].baselineSurvivalRate),
+            baselineCumulativeFeed: parseOptionalEnterprisePondNumber(pondSetupValues[pond.id].baselineCumulativeFeed),
           })),
         });
         setPondFilter('active');
@@ -565,17 +590,40 @@ export default function EnterpriseCycleDashboard({
                   {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{editingCycle ? copy.saveChanges : t.actions.next}</Text>}
                 </TouchableOpacity>
               </> : <>
-                <View style={styles.setupProgress}><Text style={styles.setupProgressTitle}>{copy.pondsReady.replace('{{completed}}', String(completedSetupCount)).replace('{{total}}', String(setupPonds.length))}</Text><Text style={styles.setupProgressText}>{copy.densitySupplierRequired}</Text></View>
+                <Text style={styles.inputLabel}>{copy.cycleStartQuestion}</Text>
+                <View style={styles.cycleModeRow}>
+                  {(['new', 'midcycle'] as const).map((mode) => {
+                    const selected = cycleStartMode === mode;
+                    return <TouchableOpacity key={mode} style={[styles.cycleModeOption, selected && styles.cycleModeOptionSelected]} onPress={() => setCycleStartMode(mode)}>
+                      <Ionicons name={selected ? 'checkmark-circle' : 'ellipse-outline'} size={19} color={selected ? '#0F4C75' : '#8AA3B3'} />
+                      <View style={styles.cycleModeCopy}>
+                        <Text style={styles.cycleModeTitle}>{mode === 'new' ? copy.newCycle : copy.existingCycle}</Text>
+                        <Text style={styles.cycleModeHint}>{mode === 'new' ? copy.newCycleHint : copy.existingCycleHint}</Text>
+                      </View>
+                    </TouchableOpacity>;
+                  })}
+                </View>
+                <View style={styles.setupProgress}><Text style={styles.setupProgressTitle}>{copy.pondsReady.replace('{{completed}}', String(completedSetupCount)).replace('{{total}}', String(setupPonds.length))}</Text><Text style={styles.setupProgressText}>{cycleStartMode === 'midcycle' ? copy.baselineMbwRequired : copy.densitySupplierRequired}</Text></View>
                 {setupPonds.map((pond) => {
                   const value = pondSetupValues[pond.id] || { density: '', supplier: '' };
                   const expanded = expandedSetupPondId === pond.id;
-                  const complete = isEnterprisePondSetupComplete(value);
+                  const complete = isEnterprisePondSetupComplete(value, cycleStartMode);
                   return <View key={pond.id} style={[styles.setupPondCard, expanded && styles.setupPondCardExpanded]}>
                     <TouchableOpacity style={styles.setupPondHeader} onPress={() => setExpandedSetupPondId(expanded ? null : pond.id)} accessibilityRole="button" accessibilityState={{ expanded }}>
                       <View style={styles.setupPondCopy}><View style={styles.setupPondTitleRow}><Text style={styles.setupPondTitle}>{pond.pondName}</Text>{complete ? <Ionicons name="checkmark-circle" size={18} color="#2E7D63" /> : null}</View><Text style={styles.setupPondStatus}>{complete ? `${value.density} PL/m² · ${value.supplier}` : copy.stockingMissing}</Text></View>
                       <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color="#315F57" />
                     </TouchableOpacity>
-                    {expanded ? <View style={styles.setupPondForm}><Text style={styles.inputLabel}>{copy.density}</Text><TextInput style={styles.input} value={value.density} onChangeText={(text) => updatePondSetup(pond.id, 'density', text)} keyboardType="numeric" placeholder="120" placeholderTextColor="#8A9BA8" /><Text style={styles.inputLabel}>{copy.supplier}</Text><TextInput style={styles.input} value={value.supplier} onChangeText={(text) => updatePondSetup(pond.id, 'supplier', text)} placeholder={copy.hatcheryName} placeholderTextColor="#8A9BA8" /></View> : null}
+                    {expanded ? <View style={styles.setupPondForm}>
+                      <Text style={styles.inputLabel}>{copy.density}</Text><TextInput style={styles.input} value={value.density} onChangeText={(text) => updatePondSetup(pond.id, 'density', text)} keyboardType="numeric" placeholder="120" placeholderTextColor="#8A9BA8" />
+                      <Text style={styles.inputLabel}>{copy.supplier}</Text><TextInput style={styles.input} value={value.supplier} onChangeText={(text) => updatePondSetup(pond.id, 'supplier', text)} placeholder={copy.hatcheryName} placeholderTextColor="#8A9BA8" />
+                      {cycleStartMode === 'midcycle' ? <>
+                        <Text style={styles.inputLabel}>{copy.currentMbw}</Text><TextInput style={styles.input} value={value.baselineMbw || ''} onChangeText={(text) => updatePondSetup(pond.id, 'baselineMbw', text)} keyboardType="numeric" placeholder={copy.currentMbwPlaceholder} placeholderTextColor="#8A9BA8" />
+                        <Text style={styles.inputLabel}>{copy.currentPopulation}</Text><TextInput style={styles.input} value={value.baselineEstimatedPopulation || ''} onChangeText={(text) => updatePondSetup(pond.id, 'baselineEstimatedPopulation', text)} keyboardType="numeric" placeholder={copy.currentPopulationPlaceholder} placeholderTextColor="#8A9BA8" />
+                        <Text style={styles.inputLabel}>{copy.currentSurvivalRate}</Text><TextInput style={styles.input} value={value.baselineSurvivalRate || ''} onChangeText={(text) => updatePondSetup(pond.id, 'baselineSurvivalRate', text)} keyboardType="numeric" placeholder={copy.survivalRatePlaceholder} placeholderTextColor="#8A9BA8" />
+                        <Text style={styles.inputLabel}>{copy.feedUsedSoFar}</Text><TextInput style={styles.input} value={value.baselineCumulativeFeed || ''} onChangeText={(text) => updatePondSetup(pond.id, 'baselineCumulativeFeed', text)} keyboardType="numeric" placeholder={copy.feedUsedSoFarPlaceholder} placeholderTextColor="#8A9BA8" />
+                        <Text style={styles.setupProgressText}>{copy.feedUsedSoFarHint}</Text>
+                      </> : null}
+                    </View> : null}
                   </View>;
                 })}
                 <View style={styles.setupActions}><TouchableOpacity style={styles.secondaryAction} onPress={() => stockingCycle ? resetCycleForm() : setCycleFormStep('details')}><Text style={styles.secondaryActionText}>{stockingCycle ? t.actions.cancel : t.actions.back}</Text></TouchableOpacity><TouchableOpacity style={[styles.primaryButton, styles.setupSubmitButton, (saving || setupPonds.length === 0 || completedSetupCount !== setupPonds.length) && styles.disabledAction]} disabled={saving || setupPonds.length === 0 || completedSetupCount !== setupPonds.length} onPress={submitCycle}>{saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>{stockingCycle ? copy.startRemainingPonds : copy.startProductionCycle}</Text>}</TouchableOpacity></View>
@@ -804,6 +852,12 @@ const styles = StyleSheet.create({
   setupProgress: { marginTop: 2, marginBottom: 10, borderRadius: 13, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#F4F8FC', padding: 13 },
   setupProgressTitle: { color: '#102F46', fontSize: 13, fontWeight: '900' },
   setupProgressText: { marginTop: 3, color: '#6A8191', fontSize: 10, fontWeight: '600' },
+  cycleModeRow: { gap: 8, marginBottom: 12 },
+  cycleModeOption: { minHeight: 64, borderRadius: 12, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#FFFFFF', padding: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  cycleModeOptionSelected: { borderColor: '#3282B8', backgroundColor: '#EAF6FD' },
+  cycleModeCopy: { flex: 1, minWidth: 0 },
+  cycleModeTitle: { color: '#102F46', fontSize: 12, fontWeight: '900' },
+  cycleModeHint: { marginTop: 3, color: '#6A8191', fontSize: 10, lineHeight: 14, fontWeight: '600' },
   setupPondCard: { marginBottom: 9, borderRadius: 13, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#FFFFFF', overflow: 'hidden' },
   setupPondCardExpanded: { borderColor: '#8FB7D1' },
   setupPondHeader: { minHeight: 62, paddingHorizontal: 13, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', gap: 10 },

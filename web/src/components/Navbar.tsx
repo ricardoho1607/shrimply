@@ -301,27 +301,44 @@ export default function Navbar() {
 
         .desktop-links {
           display: flex;
-          gap: 32px;
+          flex: 1;
+          justify-content: center;
+          gap: clamp(18px, 2.4vw, 32px);
           align-items: center;
+          min-width: 0;
+          margin: 0 24px;
+        }
+
+        :global(.nav-link) {
+          white-space: nowrap;
+          flex-shrink: 0;
         }
 
         .desktop-actions {
           display: flex;
-          gap: 24px;
+          gap: 14px;
           align-items: center;
+          flex-shrink: 0;
         }
 
-        .signin-link {
+        :global(.signin-link) {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-height: 36px;
           color: var(--blue);
           font-weight: 500;
           font-size: 0.72rem;
           text-transform: uppercase;
           letter-spacing: 0.12em;
+          line-height: 1;
+          white-space: nowrap;
           text-decoration: none;
         }
 
-        .get-started-link {
-          padding: 10px 24px;
+        :global(.get-started-link) {
+          padding: 10px 20px;
+          white-space: nowrap;
         }
 
         .mobile-menu-button,
@@ -332,6 +349,26 @@ export default function Navbar() {
 
         .mobile-drawer {
           display: none;
+        }
+
+        @media (max-width: 1180px) {
+          nav {
+            padding-left: 32px !important;
+            padding-right: 32px !important;
+          }
+
+          .desktop-links {
+            gap: 18px;
+            margin: 0 16px;
+          }
+
+          .desktop-actions {
+            gap: 12px;
+          }
+
+          :global(.get-started-link) {
+            padding-inline: 16px;
+          }
         }
 
         @media (max-width: 920px) {

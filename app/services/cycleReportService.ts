@@ -36,6 +36,8 @@ export type CycleReportPond = {
   initialPopulation: number;
   latestMbw: number;
   finalHarvestMbw: number;
+  averageHarvestMbw: number;
+  productivityKgPerHa: number;
   estimatedBiomass: number;
   survivalRate: number;
   fcr: number;
@@ -185,6 +187,8 @@ const calculateHarvestTotals = (records: HarvestRecord[]) => {
 export const calculatePondHarvestTotals = (records: HarvestRecord[], pondId: string) => {
   let biomass = 0;
   let population = 0;
+  let weightedMbw = 0;
+  let weightedMbwBiomass = 0;
   const finalHarvests: { date: string; biomass: number; population: number }[] = [];
 
   records.forEach((record) => {
@@ -200,6 +204,14 @@ export const calculatePondHarvestTotals = (records: HarvestRecord[], pondId: str
 
         biomass += pondBiomass;
         population += pondPopulation;
+        if (mainBiomass > 0 && toNumber(harvestPond.size) > 0) {
+          weightedMbw += mainBiomass * (1000 / toNumber(harvestPond.size));
+          weightedMbwBiomass += mainBiomass;
+        }
+        if (subBiomass > 0 && toNumber(harvestPond.subSize) > 0) {
+          weightedMbw += subBiomass * (1000 / toNumber(harvestPond.subSize));
+          weightedMbwBiomass += subBiomass;
+        }
         if (harvestPond.harvestType === 'final') {
           finalHarvests.push({ date: record.date, biomass: pondBiomass, population: pondPopulation });
         }
@@ -214,6 +226,7 @@ export const calculatePondHarvestTotals = (records: HarvestRecord[], pondId: str
     finalHarvestMbw: finalHarvest && finalHarvest.population > 0
       ? (finalHarvest.biomass * 1000) / finalHarvest.population
       : 0,
+    averageHarvestMbw: weightedMbwBiomass > 0 ? weightedMbw / weightedMbwBiomass : 0,
   };
 };
 
@@ -236,6 +249,12 @@ export const calculateActualPondPerformance = ({
     actualSurvivalRate: initialPopulation > 0 ? (harvestedPopulation / initialPopulation) * 100 : 0,
     actualFcr: biomassGain > 0 ? totalFeedUsed / biomassGain : 0,
   };
+};
+
+export const calculateProductivityKgPerHa = (harvestedBiomass: number, areaSquareMetres: number): number => {
+  const biomass = toNumber(harvestedBiomass);
+  const area = toNumber(areaSquareMetres);
+  return area > 0 ? biomass / (area / 10_000) : 0;
 };
 
 const inferCycle = (cycleId: string, cycles: FarmCycle[], ponds: Pond[]): FarmCycle | undefined => {
@@ -326,6 +345,7 @@ export const buildCycleReport = ({
     const harvestedBiomass = pondHarvest.biomass || toNumber(pond.totalHarvestedBiomass);
     const harvestedPopulation = pondHarvest.population || toNumber(pond.totalHarvestedPopulation);
     const initialPopulation = toNumber(pond.initialPopulation);
+    const area = toNumber(pond.pondArea);
     const actualPerformance = calculateActualPondPerformance({
       initialPopulation,
       initialWeight: toNumber(pond.initialWeight || 0.5),
@@ -342,11 +362,13 @@ export const buildCycleReport = ({
       stockingDate: pond.cycleStartedAt || pond.docStart,
       endedAt: pond.cycleEndedAt,
       doc: daysBetween(pond.cycleStartedAt || pond.docStart, pond.cycleEndedAt || cycle.closedAt),
-      area: toNumber(pond.pondArea),
+      area,
       density: toNumber(pond.density),
       initialPopulation: toNumber(pond.initialPopulation),
       latestMbw: getLatestMbw(pond),
       finalHarvestMbw: pondHarvest.finalHarvestMbw,
+      averageHarvestMbw: pondHarvest.averageHarvestMbw,
+      productivityKgPerHa: calculateProductivityKgPerHa(harvestedBiomass, area),
       estimatedBiomass: metrics.currentBiomass,
       survivalRate: metrics.adjustedSR,
       fcr: metrics.adjustedFCR,

@@ -1,11 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Globe } from "lucide-react";
+import { Check, ChevronDown, Globe } from "lucide-react";
 
 export default function LanguageToggle({ isMobile = false }: { isMobile?: boolean }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname() || "/";
   const isVietnamese = pathname === "/vi" || pathname.startsWith("/vi/");
   const isThai = !isVietnamese && (pathname === "/th" || pathname.startsWith("/th/"));
@@ -31,6 +33,31 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
   const idHref = basePath === "/" ? "/id" : `/id${basePath}`;
   const thHref = basePath === "/" ? "/th" : `/th${basePath}`;
   const viHref = basePath === "/" ? "/vi" : `/vi${basePath}`;
+  const languages = [
+    { code: "EN", name: "English", href: enHref, active: isEnglish, ariaLabel: "Switch to English" },
+    { code: "ID", name: "Bahasa Indonesia", href: idHref, active: isIndonesian, ariaLabel: "Ganti ke Bahasa Indonesia" },
+    { code: "TH", name: "ภาษาไทย", href: thHref, active: isThai, ariaLabel: "เปลี่ยนเป็นภาษาไทย" },
+    { code: "VI", name: "Tiếng Việt", href: viHref, active: isVietnamese, ariaLabel: "Chuyển sang Tiếng Việt" },
+  ];
+  const currentLanguage = languages.find((language) => language.active) || languages[0];
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen]);
 
   if (isMobile) {
     return (
@@ -119,101 +146,141 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
   }
 
   return (
-    <div className="lang-toggle-wrap">
-      <div className="lang-toggle-pill">
+    <div className="lang-toggle-wrap" ref={menuRef}>
+      <button
+        type="button"
+        className="lang-toggle-button"
+        aria-label={`Choose language. Current language: ${currentLanguage.name}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={() => setMenuOpen((current) => !current)}
+      >
         <Globe size={13} strokeWidth={1.8} className="globe-icon" />
-        <Link
-          href={enHref}
-          className={`lang-tag ${isEnglish ? "active" : ""}`}
-          title="Switch to English"
-          aria-label="Switch to English"
-        >
-          EN
-        </Link>
-        <span className="lang-sep">/</span>
-        <Link
-          href={idHref}
-          className={`lang-tag ${isIndonesian ? "active" : ""}`}
-          title="Ganti ke Bahasa Indonesia"
-          aria-label="Ganti ke Bahasa Indonesia"
-        >
-          ID
-        </Link>
-        <span className="lang-sep">/</span>
-        <Link
-          href={thHref}
-          className={`lang-tag ${isThai ? "active" : ""}`}
-          title="เปลี่ยนเป็นภาษาไทย"
-          aria-label="เปลี่ยนเป็นภาษาไทย"
-        >
-          TH
-        </Link>
-        <span className="lang-sep">/</span>
-        <Link
-          href={viHref}
-          className={`lang-tag ${isVietnamese ? "active" : ""}`}
-          title="Chuyển sang Tiếng Việt"
-          aria-label="Chuyển sang Tiếng Việt"
-        >
-          VI
-        </Link>
-      </div>
+        <span>{currentLanguage.code}</span>
+        <ChevronDown size={13} strokeWidth={2} className={`chevron-icon ${menuOpen ? "open" : ""}`} />
+      </button>
+
+      {menuOpen && (
+        <div className="language-menu" role="menu" aria-label="Choose language">
+          {languages.map((language) => (
+            <Link
+              key={language.code}
+              href={language.href}
+              className={`language-option ${language.active ? "active" : ""}`}
+              role="menuitem"
+              aria-label={language.ariaLabel}
+              aria-current={language.active ? "page" : undefined}
+              onClick={() => setMenuOpen(false)}
+            >
+              <span className="language-code">{language.code}</span>
+              <span className="language-name">{language.name}</span>
+              {language.active && <Check size={14} strokeWidth={2.2} />}
+            </Link>
+          ))}
+        </div>
+      )}
 
       <style jsx>{`
         .lang-toggle-wrap {
+          position: relative;
           display: inline-flex;
           align-items: center;
         }
 
-        .lang-toggle-pill {
+        .lang-toggle-button {
           display: inline-flex;
           align-items: center;
-          gap: 4px;
-          padding: 6px 12px;
+          justify-content: center;
+          gap: 5px;
+          min-width: 62px;
+          min-height: 36px;
+          padding: 6px 10px;
           border-radius: 999px;
           border: 1px solid rgba(15, 76, 117, 0.18);
           background: rgba(255, 255, 255, 0.85);
           color: var(--ink);
+          font-family: inherit;
           font-size: 0.7rem;
           font-weight: 700;
           letter-spacing: 0.04em;
+          cursor: pointer;
           transition: all 0.25s ease;
           backdrop-filter: blur(8px);
           user-select: none;
         }
 
-        .lang-toggle-pill:hover {
+        .lang-toggle-button:hover,
+        .lang-toggle-button:focus-visible {
           border-color: var(--sky);
           background: rgba(255, 255, 255, 0.98);
           box-shadow: 0 4px 14px rgba(26, 184, 232, 0.15);
+          outline: none;
         }
 
-        .lang-toggle-pill :global(.globe-icon) {
+        .lang-toggle-button :global(.globe-icon) {
           color: var(--sky);
-          margin-right: 2px;
           flex-shrink: 0;
         }
 
-        .lang-sep {
-          color: var(--slate);
-          font-weight: 400;
-          font-size: 0.65rem;
+        .lang-toggle-button :global(.chevron-icon) {
+          color: var(--muted);
+          transition: transform 0.2s ease;
         }
 
-        :global(.lang-tag) {
-          color: var(--muted) !important;
+        .lang-toggle-button :global(.chevron-icon.open) {
+          transform: rotate(180deg);
+        }
+
+        .language-menu {
+          position: absolute;
+          top: calc(100% + 8px);
+          right: 0;
+          z-index: 20;
+          width: 196px;
+          padding: 6px;
+          border: 1px solid rgba(15, 76, 117, 0.14);
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.98);
+          box-shadow: 0 18px 42px rgba(13, 33, 55, 0.16);
+          backdrop-filter: blur(16px);
+        }
+
+        :global(.language-option) {
+          display: grid;
+          grid-template-columns: 28px 1fr 16px;
+          align-items: center;
+          gap: 8px;
+          min-height: 40px;
+          padding: 7px 9px;
+          border-radius: 9px;
+          color: var(--ink) !important;
           text-decoration: none !important;
-          transition: color 0.2s ease;
-          padding: 0 1px;
+          transition: background 0.18s ease, color 0.18s ease;
         }
 
-        :global(.lang-tag:hover) {
-          color: var(--sky) !important;
+        :global(.language-option:hover),
+        :global(.language-option:focus-visible) {
+          background: rgba(26, 184, 232, 0.09);
+          color: var(--blue) !important;
+          outline: none;
         }
 
-        :global(.lang-tag.active) {
+        :global(.language-option.active) {
+          background: rgba(15, 76, 117, 0.08);
           color: var(--navy) !important;
+        }
+
+        .language-code {
+          color: var(--sky);
+          font-size: 0.68rem;
           font-weight: 800;
+          letter-spacing: 0.06em;
+        }
+
+        .language-name {
+          font-size: 0.76rem;
+          font-weight: 600;
+          white-space: nowrap;
         }
       `}</style>
     </div>

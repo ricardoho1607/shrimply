@@ -1,6 +1,7 @@
 import {
   calculateActualPondPerformance,
   calculatePondHarvestTotals,
+  calculateProductivityKgPerHa,
 } from './cycleReportService';
 import type { HarvestRecord } from '../store/pondStore';
 
@@ -33,7 +34,10 @@ export const runCycleReportServiceSelfTest = () => {
   assertClose(harvest.biomass, 1_000, 'total harvested biomass');
   assertClose(harvest.population, 100_500, 'total harvested population');
   assertClose(harvest.finalHarvestMbw, (900 * 1000) / 92_500, 'weighted final harvest MBW');
+  assertClose(harvest.averageHarvestMbw, 10.05, 'biomass-weighted cycle harvest MBW');
   if (!harvest.hasFinalHarvest) throw new Error('final harvest was not detected');
+  assertClose(calculateProductivityKgPerHa(harvest.biomass, 2_000), 5_000, 'pond productivity per hectare');
+  assertClose(calculateProductivityKgPerHa(harvest.biomass, 0), 0, 'missing pond area productivity');
 
   const performance = calculateActualPondPerformance({
     initialPopulation: 110_000,

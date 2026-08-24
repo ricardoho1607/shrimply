@@ -54,6 +54,7 @@ export default function CycleReportScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loadingFinance, setLoadingFinance] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [expandedPondIds, setExpandedPondIds] = useState<Set<string>>(() => new Set());
 
   const {
     cycles,
@@ -162,6 +163,15 @@ export default function CycleReportScreen() {
     }
   };
 
+  const togglePond = (pondId: string) => {
+    setExpandedPondIds((current) => {
+      const next = new Set(current);
+      if (next.has(pondId)) next.delete(pondId);
+      else next.add(pondId);
+      return next;
+    });
+  };
+
   const MetricCard = ({
     label,
     value,
@@ -194,7 +204,7 @@ export default function CycleReportScreen() {
       <>
         <View style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
-            <View>
+            <View style={styles.summaryCopy}>
               <Text style={styles.eyebrow}>{t.cycleReport.summary.title}</Text>
               <Text style={styles.summaryTitle}>{report.cycle.cycleName}</Text>
               <Text style={styles.summarySub}>
@@ -235,47 +245,77 @@ export default function CycleReportScreen() {
     return (
       <>
         <Section title={t.cycleReport.sections.harvestedPonds}>
-          {harvestedPonds.map((pond) => (
-            <View key={pond.id} style={styles.detailCard}>
-              <View style={styles.detailHeader}>
-                <View>
-                  <Text style={styles.detailTitle}>{pond.pondName}</Text>
-                  <Text style={styles.detailSub}>{pond.supplier}</Text>
-                </View>
+          {harvestedPonds.map((pond) => {
+            const isExpanded = expandedPondIds.has(pond.id);
+            return (
+              <View key={pond.id} style={styles.detailCard}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel={`${pond.pondName}. ${isExpanded ? t.home.hideDetails : t.home.moreDetails}`}
+                  accessibilityState={{ expanded: isExpanded }}
+                  onPress={() => togglePond(pond.id)}
+                  style={[styles.detailHeader, isExpanded && styles.detailHeaderExpanded]}
+                >
+                  <View style={styles.detailHeaderCopy}>
+                    <Text style={styles.detailTitle}>{pond.pondName}</Text>
+                    <Text style={styles.detailSub}>{pond.supplier}</Text>
+                  </View>
+                  <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color="#315f57" />
+                </TouchableOpacity>
+                {isExpanded && (
+                  <View style={styles.detailGrid}>
+                    <Detail label="DOC" value={pond.doc.toString()} />
+                    <Detail label={t.cycleReport.metrics.productivityPerHa} value={pond.area > 0 ? `${formatCompact(pond.productivityKgPerHa)} kg/ha` : '—'} />
+                    <Detail label={t.cycleReport.metrics.finalHarvestMbw} value={pond.hasFinalHarvest ? `${formatCompact(pond.finalHarvestMbw, 2)} g` : '—'} />
+                    <Detail label={t.cycleReport.metrics.averageCycleMbw} value={pond.averageHarvestMbw > 0 ? `${formatCompact(pond.averageHarvestMbw, 2)} g` : '—'} />
+                    <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
+                    <Detail label={t.cycleReport.metrics.harvestedPopulation} value={formatCompact(pond.harvestedPopulation, 0)} />
+                    <Detail label={t.cycleReport.metrics.actualSr} value={pond.hasFinalHarvest ? `${formatCompact(pond.actualSurvivalRate)}%` : '—'} />
+                    <Detail label={t.cycleReport.metrics.actualFcr} value={pond.hasFinalHarvest && pond.actualFcr > 0 ? formatCompact(pond.actualFcr, 2) : '—'} />
+                  </View>
+                )}
               </View>
-              <View style={styles.detailGrid}>
-                <Detail label="DOC" value={pond.doc.toString()} />
-                <Detail label={t.cycleReport.metrics.finalHarvestMbw} value={pond.hasFinalHarvest ? `${formatCompact(pond.finalHarvestMbw, 2)} g` : '—'} />
-                <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
-                <Detail label={t.cycleReport.metrics.harvestedPopulation} value={formatCompact(pond.harvestedPopulation, 0)} />
-                <Detail label={t.cycleReport.metrics.actualSr} value={pond.hasFinalHarvest ? `${formatCompact(pond.actualSurvivalRate)}%` : '—'} />
-                <Detail label={t.cycleReport.metrics.actualFcr} value={pond.hasFinalHarvest && pond.actualFcr > 0 ? formatCompact(pond.actualFcr, 2) : '—'} />
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </Section>
 
         {nonHarvestPonds.length > 0 && (
           <Section title={t.cycleReport.sections.nonHarvestClosures}>
-            {nonHarvestPonds.map((pond) => (
-              <View key={pond.id} style={styles.detailCard}>
-                <View style={styles.detailHeader}>
-                  <View>
-                    <Text style={styles.detailTitle}>{pond.pondName}</Text>
-                    <Text style={styles.detailSub}>{pond.supplier}</Text>
-                  </View>
-                  <View style={styles.smallBadge}>
-                    <Text style={styles.smallBadgeText}>{closureReasonText(pond.closureReason)}</Text>
-                  </View>
+            {nonHarvestPonds.map((pond) => {
+              const isExpanded = expandedPondIds.has(pond.id);
+              return (
+                <View key={pond.id} style={styles.detailCard}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`${pond.pondName}. ${isExpanded ? t.home.hideDetails : t.home.moreDetails}`}
+                    accessibilityState={{ expanded: isExpanded }}
+                    onPress={() => togglePond(pond.id)}
+                    style={[styles.detailHeader, isExpanded && styles.detailHeaderExpanded]}
+                  >
+                    <View style={styles.detailHeaderCopy}>
+                      <Text style={styles.detailTitle}>{pond.pondName}</Text>
+                      <Text style={styles.detailSub}>{pond.supplier}</Text>
+                    </View>
+                    <View style={styles.detailHeaderActions}>
+                      <View style={styles.smallBadge}>
+                        <Text style={styles.smallBadgeText}>{closureReasonText(pond.closureReason)}</Text>
+                      </View>
+                      <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={20} color="#315f57" />
+                    </View>
+                  </TouchableOpacity>
+                  {isExpanded && (
+                    <View style={styles.detailGrid}>
+                      <Detail label="DOC" value={pond.doc.toString()} />
+                      <Detail label={t.cycleReport.metrics.productivityPerHa} value={pond.area > 0 ? `${formatCompact(pond.productivityKgPerHa)} kg/ha` : '—'} />
+                      <Detail label={t.cycleReport.metrics.lastSamplingMbw} value={pond.latestMbw > 0 ? `${formatCompact(pond.latestMbw, 2)} g` : '—'} />
+                      <Detail label={t.cycleReport.metrics.averageCycleMbw} value={pond.averageHarvestMbw > 0 ? `${formatCompact(pond.averageHarvestMbw, 2)} g` : '—'} />
+                      <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
+                      <Detail label={t.cycleReport.metrics.feedUsed} value={`${formatCompact(pond.totalFeedUsed)} kg`} />
+                    </View>
+                  )}
                 </View>
-                <View style={styles.detailGrid}>
-                  <Detail label="DOC" value={pond.doc.toString()} />
-                  <Detail label={t.cycleReport.metrics.lastSamplingMbw} value={pond.latestMbw > 0 ? `${formatCompact(pond.latestMbw, 2)} g` : '—'} />
-                  <Detail label={t.cycleReport.metrics.harvested} value={`${formatCompact(pond.harvestedBiomass)} kg`} />
-                  <Detail label={t.cycleReport.metrics.feedUsed} value={`${formatCompact(pond.totalFeedUsed)} kg`} />
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </Section>
         )}
       </>
@@ -534,10 +574,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   summaryHeader: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
+  summaryCopy: { flex: 1, minWidth: 0 },
   eyebrow: { color: '#315f57', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0.4 },
   summaryTitle: { color: '#0d2137', fontSize: 20, fontWeight: '900', marginTop: 4 },
   summarySub: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', marginTop: 4 },
-  statusBadge: { backgroundColor: '#315f57', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start' },
+  statusBadge: { backgroundColor: '#315f57', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start', flexShrink: 0 },
   statusOpen: { backgroundColor: '#6b8aa0' },
   statusText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
   summaryStats: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
@@ -560,7 +601,10 @@ const styles = StyleSheet.create({
   pondNumber: { color: '#0d2137', fontSize: 14, fontWeight: '900' },
   pondSmall: { color: '#315f57', fontSize: 11, fontWeight: '700', marginTop: 3 },
   detailCard: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#e8f2f9', marginBottom: 10 },
-  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  detailHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 },
+  detailHeaderExpanded: { marginBottom: 12 },
+  detailHeaderCopy: { flex: 1, minWidth: 0 },
+  detailHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 0 },
   detailTitle: { color: '#0d2137', fontSize: 16, fontWeight: '900' },
   detailSub: { color: '#6b8aa0', fontSize: 12, fontWeight: '700', marginTop: 2 },
   smallBadge: { backgroundColor: '#dce8f2', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },

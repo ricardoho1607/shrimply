@@ -136,6 +136,14 @@
 .addMenuGrid button, .addMenuGrid a { min-height: 96px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); color: var(--primary); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; }
 .addMenuGrid button:disabled { opacity: .45; cursor: not-allowed; }
 .dateFieldGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.cycleModeSelector { min-width: 0; border: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+.cycleModeSelector legend { grid-column: 1 / -1; margin-bottom: 2px; color: var(--text-muted); font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; }
+.cycleModeSelector > label { min-width: 0; border: 1px solid var(--border); border-radius: 13px; background: #fff; padding: 12px; display: flex; flex-direction: row; align-items: flex-start; gap: 9px; color: var(--text-primary); text-transform: none; letter-spacing: normal; cursor: pointer; }
+.cycleModeSelector > label input { width: 16px; height: 16px; margin-top: 2px; padding: 0; flex: 0 0 16px; }
+.cycleModeSelector > label span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cycleModeSelector > label b { font-size: .8rem; }
+.cycleModeSelector > label small { color: var(--text-muted); font-size: .68rem; line-height: 1.4; }
+.cycleModeSelector .cycleModeSelected { border-color: #3282b8; background: #eaf6fd; }
 .setupProgress { border: 1px solid var(--border); border-radius: 14px; background: var(--bg-mid); padding: 14px; display: flex; flex-direction: column; gap: 4px; }
 .setupProgress strong { color: var(--text-primary); font-size: .9rem; }
 .setupProgress small { color: var(--text-muted); font-size: .72rem; }
@@ -147,6 +155,7 @@
 .setupPondHeader b { color: var(--text-primary); font-size: .88rem; }
 .setupPondHeader small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .7rem; }
 .setupPondForm { border-top: 1px solid var(--border); background: var(--bg-mid); padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.setupPondForm .setupHint { grid-column: 1 / -1; color: var(--text-muted); font-size: .7rem; line-height: 1.45; }
 .setupActions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
 .setupActions .saveButton { width: 100%; }
 .backButton { border: 1px solid var(--border); border-radius: 14px; background: #fff; color: var(--primary); padding: 13px 18px; font: inherit; font-weight: 600; cursor: pointer; }
@@ -163,7 +172,7 @@
 .error { color: #b42318; }
 .overlay { position: fixed; inset: 0; z-index: 1000; background: rgba(15, 42, 60, .45); backdrop-filter: blur(8px); display: flex; justify-content: center; align-items: center; padding: 24px; }
 .modal { width: min(560px, 100%); max-height: min(90dvh, 860px); overflow-y: auto; border-radius: 24px; background: #fff; padding: 26px 28px 28px; display: flex; flex-direction: column; gap: 20px; box-shadow: 0 30px 80px rgba(15, 42, 60, .22); }
-.modalHeader { min-height: 40px; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
+.modalHeader { min-height: 40px; flex-shrink: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; }
 .modalHeader > div { min-width: 0; flex: 1; padding-top: 1px; }
 .modalHeader h2 { margin: 0 0 5px; color: var(--text-primary); line-height: 1.25; }
 .modalHeader p { margin: 0; color: var(--text-muted); font-size: .82rem; line-height: 1.5; }
@@ -196,7 +205,7 @@
   .cyclePondPreview .pondTile { min-height: 60px; border-radius: 8px; padding: 3px; font-size: .6rem; }
   .addMenuGrid { grid-template-columns: 1fr; }
   .addMenuGrid button, .addMenuGrid a { min-height: 58px; flex-direction: row; }
-  .dateFieldGrid, .pondSelector { grid-template-columns: 1fr; }
+  .dateFieldGrid, .cycleModeSelector, .pondSelector { grid-template-columns: 1fr; }
   .setupPondForm { grid-template-columns: 1fr; }
   .cycleStats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cycleActions { flex-wrap: wrap; }

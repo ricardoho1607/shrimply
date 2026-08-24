@@ -13,7 +13,7 @@ import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
-import { getFarmDateKey } from '../../shared/farmDate';
+import { differenceInFarmCalendarDays, getFarmDateKey } from '../../shared/farmDate';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 import { hasFarmPermission } from '../../shared/permissions';
 import {
@@ -1139,7 +1139,16 @@ export default function PondManagementScreen() {
     cycleName: string;
     block: FarmBlock;
     stockingDate: string;
-    ponds: { pond: PhysicalPond; density: number; supplier: string }[];
+    cycleStartMode: 'new' | 'midcycle';
+    ponds: {
+      pond: PhysicalPond;
+      density: number;
+      supplier: string;
+      baselineMbw?: number;
+      baselineEstimatedPopulation?: number;
+      baselineSurvivalRate?: number;
+      baselineCumulativeFeed?: number;
+    }[];
   }) => {
     const cycle = input.cycle || addFarmCycle({
       cycleName: input.cycleName,
@@ -1158,8 +1167,25 @@ export default function PondManagementScreen() {
       });
     }
     const startedAt = Date.now();
-    input.ponds.forEach(({ pond, density, supplier }, index) => {
+    const baselineDate = getFarmDateKey(new Date(), company?.timeZone);
+    const baselineDoc = differenceInFarmCalendarDays(baselineDate, input.stockingDate);
+    input.ponds.forEach(({ pond, density, supplier, baselineMbw, baselineEstimatedPopulation, baselineSurvivalRate, baselineCumulativeFeed }, index) => {
       const pondCycleId = `${startedAt}-${index}`;
+      const baselineSampling = input.cycleStartMode === 'midcycle' && baselineMbw ? [{
+        id: `baseline-${startedAt}-${index}`,
+        date: baselineDate,
+        mbw: baselineMbw,
+        mortality: 0,
+        feed: baselineCumulativeFeed ?? 0,
+        isBaselineEstimate: true,
+        source: 'midcycle_onboarding',
+        ...(baselineEstimatedPopulation === undefined ? {} : { estimatedPopulation: baselineEstimatedPopulation }),
+        ...(baselineSurvivalRate === undefined ? {} : { estimatedSurvivalRate: baselineSurvivalRate }),
+        ...(baselineCumulativeFeed === undefined ? {} : { cumulativeFeedToDate: baselineCumulativeFeed }),
+        cycleId: cycle.id,
+        cycleName: cycle.cycleName,
+        pondCycleId,
+      }] : [];
       addPond({
         id: pondCycleId,
         pondName: pond.pondName,
@@ -1172,7 +1198,7 @@ export default function PondManagementScreen() {
         supplier,
         plSupplier: supplier,
         initialWeight: 0.5,
-        samplings: [],
+        samplings: baselineSampling,
         mortalityRecords: [],
         totalHarvestedBiomass: 0,
         totalHarvestedPopulation: 0,
@@ -1184,10 +1210,19 @@ export default function PondManagementScreen() {
         pondCycleId,
         cycleStatus: 'active',
         cycleStartedAt: input.stockingDate,
-        cycleStartMode: 'new',
+        cycleStartMode: input.cycleStartMode,
+        ...(input.cycleStartMode === 'midcycle' && baselineMbw ? {
+          baselineDate,
+          baselineDoc,
+          baselineMbw,
+          baselineEstimatedPopulation,
+          baselineSurvivalRate,
+          baselineCumulativeFeed,
+          baselineSource: 'user_midcycle_estimate',
+        } : {}),
       });
     });
-  }, [addFarmCycle, addPond, updateFarmCycle]);
+  }, [addFarmCycle, addPond, company?.timeZone, updateFarmCycle]);
 
   const handleCreateEnterprisePhysicalPond = useCallback(async (input: {
     pondName: string;
