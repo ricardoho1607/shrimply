@@ -140,7 +140,14 @@ export default function OrsonAIPage() {
     setInputText('');
 
     try {
-      const aiResponse = await sendMessage(text.trim(), ponds, { companyId, timeZone: company?.timeZone });
+      const aiResponse = await sendMessage(text.trim(), ponds, {
+        companyId,
+        timeZone: company?.timeZone,
+        conversationHistory: messages
+          .filter((message) => message.id !== 'welcome')
+          .slice(-10)
+          .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
+      });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',

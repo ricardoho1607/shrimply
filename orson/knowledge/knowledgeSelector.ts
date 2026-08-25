@@ -2,6 +2,7 @@ import type {
   OrsonPondMetrics,
   OrsonQuestionFocus,
 } from '../types';
+import { ADDITIVE_KNOWLEDGE } from './additiveKnowledge';
 import { CROSS_PARAMETER_RULES } from './crossParameterRules';
 import { FEED_KNOWLEDGE } from './feedKnowledge';
 import { GROWTH_KNOWLEDGE } from './growthKnowledge';
@@ -15,6 +16,7 @@ const ALL_PARAMETER_KNOWLEDGE = [
   ...FEED_KNOWLEDGE,
   ...GROWTH_KNOWLEDGE,
   ...LAB_KNOWLEDGE,
+  ...ADDITIVE_KNOWLEDGE,
 ];
 
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -51,6 +53,7 @@ const selectParameterKnowledge = (
   if (focus.intent === 'feed') selected.push(...FEED_KNOWLEDGE);
   if (focus.intent === 'growth' || focus.intent === 'biomass' || focus.intent === 'survival') selected.push(...GROWTH_KNOWLEDGE);
   if (focus.intent === 'lab') selected.push(...LAB_KNOWLEDGE);
+  if (focus.route === 'inventory_product') selected.push(...ADDITIVE_KNOWLEDGE.filter((knowledge) => questionMatchesKnowledge(userMessage, knowledge)));
   if (focus.intent === 'water_quality' || focus.intent === 'parameter_control') {
     selected.push(...WATER_QUALITY_KNOWLEDGE.filter((knowledge) => {
       return ['dissolved_oxygen', 'ph', 'ammonia', 'nitrite', 'salinity', 'alkalinity', 'plankton_transparency'].includes(knowledge.id);
@@ -63,7 +66,9 @@ const selectParameterKnowledge = (
 const selectCrossParameterRules = (
   parameterGuidance: ParameterKnowledge[],
   metrics: OrsonPondMetrics[],
+  focus: OrsonQuestionFocus,
 ): CrossParameterRule[] => {
+  if (focus.route !== 'farm_analysis') return [];
   const ids = new Set(parameterGuidance.map((knowledge) => knowledge.id));
   const selected: CrossParameterRule[] = [];
   const hasLowDo = metrics.some((metric) => metric.doMinimumLatest !== null && metric.doMinimumLatest < 5);
@@ -120,7 +125,7 @@ export const selectOrsonKnowledge = (params: {
   metrics: OrsonPondMetrics[];
 }): SelectedKnowledge => {
   const parameterGuidance = selectParameterKnowledge(params.userMessage, params.questionFocus);
-  const crossParameterRules = selectCrossParameterRules(parameterGuidance, params.metrics);
+  const crossParameterRules = selectCrossParameterRules(parameterGuidance, params.metrics, params.questionFocus);
   const sourceIds = [
     ...parameterGuidance.flatMap((knowledge) => knowledge.sourceIds),
     ...crossParameterRules.flatMap((rule) => rule.sourceIds),

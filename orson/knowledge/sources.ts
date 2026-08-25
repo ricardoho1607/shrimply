@@ -32,6 +32,12 @@ export const KNOWLEDGE_SOURCES: KnowledgeSource[] = [
     reviewedAt: '2026-06-06',
   },
   {
+    id: 'shrimply-vannamei-additives-v1',
+    label: 'Shrimply curated vannamei additive and product-label guidance v1',
+    sourceType: 'curated_guidance',
+    reviewedAt: '2026-08-25',
+  },
+  {
     id: 'fao-srac-anchor',
     label: 'FAO and SRAC aquaculture extension principles summarized in Shrimply guidance',
     sourceType: 'extension_guidance',

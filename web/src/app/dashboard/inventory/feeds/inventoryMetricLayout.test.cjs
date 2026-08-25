@@ -21,7 +21,7 @@ test('inventory cards keep header and actions compact without decorative icons',
   assert.match(source, /className=\{styles\.inventoryCardActions\}/);
   assert.match(source, />\s*History\s*<\/button>/);
   assert.match(source, />\s*Delete\s*<\/button>/);
-  assert.match(source, />\s*Threshold\s*<\/button>/);
+  assert.match(source, /activeTab === 'additive' \? 'Product' : 'Threshold'/);
   assert.doesNotMatch(source, /<History size=/);
   assert.doesNotMatch(source, /<Trash2 size=/);
   assert.match(stylesheet, /\.inventoryCardActions\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);

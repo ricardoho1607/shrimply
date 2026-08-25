@@ -35,6 +35,7 @@ import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../shared/financeSync';
 import styles from './InventoryFeeds.module.css';
 import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { buildInventoryProductLabel, type InventoryProductLabel } from '../../../../../../shared/productLabel';
 
 /* --- Types --------------------------------------------------- */
 
@@ -69,6 +70,7 @@ interface InventoryItem {
   category: string;
   feedType?: string;
   inventoryKind?: 'additive' | 'treatmentMix';
+  productLabel?: InventoryProductLabel | null;
   unit?: string;
   reorderLevel?: number;
   stockInHistory: StockHistory[];
@@ -163,7 +165,10 @@ export default function InventoryFeedsPage() {
     unit: 'kg',
     stockDate: getFarmDateKey(new Date(), company?.timeZone),
     expiry: '',
-    reorderLevel: ''
+    reorderLevel: '',
+    manufacturer: '',
+    ingredients: '',
+    labelSourceUrl: '',
   });
 
   const metrics = useMemo(() => {
@@ -240,6 +245,7 @@ export default function InventoryFeedsPage() {
     setItemType(effectiveItemType);
     if (item) {
       setSelectedItem(item);
+      const productLabel = effectiveItemType === 'additive' ? item.productLabel : undefined;
       setFormData({
         ...formData,
         itemName: item.itemName,
@@ -251,7 +257,10 @@ export default function InventoryFeedsPage() {
         notes: '',
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
-        pondId: ''
+        pondId: '',
+        manufacturer: productLabel?.manufacturer || '',
+        ingredients: productLabel?.ingredients?.join('\n') || '',
+        labelSourceUrl: productLabel?.sourceUrl || '',
       });
     } else {
       setSelectedItem(null);
@@ -266,7 +275,10 @@ export default function InventoryFeedsPage() {
         unit: 'kg',
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
-        reorderLevel: ''
+        reorderLevel: '',
+        manufacturer: '',
+        ingredients: '',
+        labelSourceUrl: '',
       });
     }
     setModalOpen(true);
@@ -296,11 +308,18 @@ export default function InventoryFeedsPage() {
         const itemRef = doc(collection(db, 'companies', companyId, collectionName));
         const stockId = crypto.randomUUID();
         const stockDate = formData.stockDate;
+        const productLabel = itemType === 'additive' ? buildInventoryProductLabel({
+          manufacturer: formData.manufacturer,
+          ingredientsText: formData.ingredients,
+          sourceUrl: formData.labelSourceUrl,
+          recordedAt: getFarmDateKey(new Date(), company?.timeZone),
+        }) : undefined;
         const itemData: any = {
           companyId,
           [itemType === 'feed' ? 'feedName' : 'additiveName']: formData.itemName,
           brand: formData.brand || '',
           [itemType === 'feed' ? 'feedType' : 'category']: formData.category,
+          ...(productLabel ? { productLabel } : {}),
           unit: formData.unit,
           reorderLevel: isNaN(reorder) ? 0 : reorder,
           totalStock: qty,
@@ -439,6 +458,14 @@ export default function InventoryFeedsPage() {
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
         await updateDoc(ref, {
           reorderLevel: isNaN(reorder) ? 0 : reorder,
+          ...(itemType === 'additive' ? {
+            productLabel: buildInventoryProductLabel({
+              manufacturer: formData.manufacturer,
+              ingredientsText: formData.ingredients,
+              sourceUrl: formData.labelSourceUrl,
+              recordedAt: getFarmDateKey(new Date(), company?.timeZone),
+            }) || null,
+          } : {}),
           lastUpdated: serverTimestamp()
         });
       }
@@ -895,7 +922,7 @@ export default function InventoryFeedsPage() {
                             className={styles.inventoryCardSecondaryAction}
                             onClick={() => handleOpenModal('editReorder', item, activeTab)}
                           >
-                            Threshold
+                            {activeTab === 'additive' ? 'Product' : 'Threshold'}
                           </button>
                         </div>
                       )}
@@ -937,7 +964,7 @@ export default function InventoryFeedsPage() {
                     {modalType === 'add' ? `Add New ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
                      modalType === 'stockIn' ? t.inventory.stockIn :
                      modalType === 'usage' ? t.inventory.recordUsage :
-                     modalType === 'history' ? t.inventory.transactionHistory : 'Threshold Settings'}
+                     modalType === 'history' ? t.inventory.transactionHistory : itemType === 'additive' ? 'Product Label & Threshold' : 'Threshold Settings'}
                   </h2>
                   {selectedItem && (
                     <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '2px 0 0' }}>
@@ -1062,8 +1089,20 @@ export default function InventoryFeedsPage() {
                       </div>
                       <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Brand / Manufacturer</label>
-                        <input value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
+                        <input value={itemType === 'feed' ? formData.brand : formData.manufacturer} onChange={e => setFormData({...formData, [itemType === 'feed' ? 'brand' : 'manufacturer']: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
+                      {itemType === 'additive' && (
+                        <>
+                          <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Ingredients / Strains — One Per Line</label>
+                            <textarea rows={4} value={formData.ingredients} onChange={e => setFormData({...formData, ingredients: e.target.value})} placeholder="Bacillus subtilis 1×10⁹ CFU/g" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '15px', outline: 'none', resize: 'vertical' }} />
+                          </div>
+                          <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Official Label URL</label>
+                            <input type="url" value={formData.labelSourceUrl} onChange={e => setFormData({...formData, labelSourceUrl: e.target.value})} placeholder="https://manufacturer.com/product-label.pdf" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '15px', outline: 'none' }} />
+                          </div>
+                        </>
+                      )}
                       <div>
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Classification</label>
                         <select required aria-label="Inventory classification" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
@@ -1149,6 +1188,16 @@ export default function InventoryFeedsPage() {
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Stock Reorder Threshold</label>
                       <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Alert me when stock is below..." style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '24px', outline: 'none', color: '#e74c3c' }} />
                       <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>We will display a critical alert on the dashboard when stock falls below this amount.</p>
+                      {itemType === 'additive' && (
+                        <>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Manufacturer</label>
+                          <input value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})} placeholder="Company shown on the product label" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600 }} />
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ingredients / Strains — One Per Line</label>
+                          <textarea rows={4} value={formData.ingredients} onChange={e => setFormData({...formData, ingredients: e.target.value})} placeholder="Bacillus subtilis 1×10⁹ CFU/g" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, resize: 'vertical' }} />
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Official Label URL</label>
+                          <input type="url" value={formData.labelSourceUrl} onChange={e => setFormData({...formData, labelSourceUrl: e.target.value})} placeholder="https://manufacturer.com/product-label.pdf" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600 }} />
+                        </>
+                      )}
                     </div>
                   )}
 

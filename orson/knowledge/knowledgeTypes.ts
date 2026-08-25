@@ -1,6 +1,6 @@
 import type { OrsonRiskSeverity } from '../types';
 
-export type KnowledgeDomain = 'water_quality' | 'feed' | 'growth' | 'lab' | 'cross_parameter';
+export type KnowledgeDomain = 'water_quality' | 'feed' | 'growth' | 'lab' | 'additive' | 'cross_parameter';
 
 export type KnowledgeActionDirection = 'increase' | 'decrease' | 'stabilize' | 'investigate';
 

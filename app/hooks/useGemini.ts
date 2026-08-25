@@ -10,6 +10,7 @@ import {
 } from '../../orson/aiUsage';
 import {
   cleanOrsonResponse,
+  inferOrsonConversationRoute,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
   ORSON_RESPONSE_TIMEOUT_MS,
@@ -17,7 +18,7 @@ import {
 } from '../../orson/promptBuilder';
 import { normalizeOrsonCalibration } from '../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnapshot';
-import type { OrsonCalibrationProfile, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
+import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
 
 // Types for the chat history
 interface Message {
@@ -32,6 +33,7 @@ type SendMessageOptions = {
   timeZone?: string;
   aiFunction?: OrsonAiFunction;
   calibration?: OrsonCalibrationProfile | null;
+  conversationHistory?: OrsonConversationMessage[];
   projectionSnapshot?: {
     pond: Record<string, unknown>;
     projection: OrsonHarvestProjection;
@@ -141,9 +143,13 @@ export const useGemini = () => {
     setLoading(true);
     setError(null);
     let analysis: OrsonAnalysis | null = null;
+    const conversationHistory = options.conversationHistory ?? chatHistory.map((message) => ({
+      role: message.role,
+      text: message.parts.map((part) => part.text).join('\n'),
+    }));
 
     try {
-      if (!allPonds || allPonds.length === 0) {
+      if ((!allPonds || allPonds.length === 0) && inferOrsonConversationRoute(userMessage, conversationHistory) === 'farm_analysis') {
         setLoading(false);
         return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
@@ -159,7 +165,7 @@ export const useGemini = () => {
         }
       }
 
-      analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, undefined, options.timeZone);
+      analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, undefined, options.timeZone, conversationHistory);
       if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
         return analysis.diagnosticRequest.status === 'ambiguous'
@@ -184,7 +190,7 @@ export const useGemini = () => {
             ORSON_RESPONSE_TIMEOUT_MS,
             'Orson diagnostic context timed out.',
           );
-          analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, contextResult.data, options.timeZone);
+          analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, contextResult.data, options.timeZone, conversationHistory);
         } catch (contextError) {
           console.warn('Orson mortality context could not be loaded; using pond records only.', contextError);
           analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, {
@@ -193,10 +199,12 @@ export const useGemini = () => {
             treatments: [],
             harvests: [],
             unavailableSources: ['lab history', 'treatment history', 'harvest history'],
-          }, options.timeZone);
+          }, options.timeZone, conversationHistory);
         }
       }
-      void createRiskNotifications(options.companyId, analysis);
+      if (analysis.promptPackage.questionFocus.route === 'farm_analysis') {
+        void createRiskNotifications(options.companyId, analysis);
+      }
 
       const functions = getFunctions(app);
       if (options.companyId && options.projectionSnapshot) {
@@ -213,7 +221,7 @@ export const useGemini = () => {
         }
       }
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
+        { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
         { text?: string }
       >(functions, 'generateOrsonResponse');
 
@@ -224,6 +232,8 @@ export const useGemini = () => {
           // The hardened Function ignores it and builds its own server instruction.
           systemInstruction: analysis.promptPackage.systemInstruction,
           prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+          userMessage: analysis.promptPackage.userMessage,
+          questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
         }),

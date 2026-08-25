@@ -22,4 +22,24 @@ export const LAB_KNOWLEDGE: ParameterKnowledge[] = [
     cautions: ['Do not treat a single lab count as a species-level disease diagnosis without method, source, trend, and clinical signs.'],
     sourceIds: ['shrimply-vannamei-lab-plankton-v1'],
   },
+  {
+    id: 'white_feces_investigation',
+    domain: 'lab',
+    label: 'White feces or white-gut investigation',
+    aliases: ['white feces', 'white faeces', 'white gut', 'floating feces', 'floating faeces', 'ehp'],
+    evidenceBase: 'White feces is a field sign, not one confirmed disease. Possible contributors include gut and hepatopancreas disturbance, EHP or other pathogens, Vibrio pressure, feed quality, algal or environmental stress, and pond organic load.',
+    actions: {
+      investigate: [
+        'Check how many ponds and shrimp are affected, onset date, feed response, growth change, mortality, gut continuity, hepatopancreas appearance, and floating fecal strings.',
+        'Review recent feed batches, water-quality movement, plankton, sludge, and treatment history.',
+        'Use appropriate laboratory examination or PCR when EHP, AHPND, or another pathogen is suspected.',
+      ],
+      stabilize: [
+        'Protect DO, avoid feed increases while response is weak, remove accumulated organic waste where practical, and intensify observation while confirmation is pending.',
+      ],
+    },
+    monitor: ['affected prevalence', 'feed response', 'MBW/ADG', 'mortality', 'gut and hepatopancreas signs', 'DO', 'sludge', 'lab confirmation'],
+    cautions: ['Do not diagnose EHP, AHPND, or a bacterial disease from white feces alone.'],
+    sourceIds: ['shrimply-vannamei-lab-plankton-v1', 'fao-srac-anchor'],
+  },
 ];

@@ -18,9 +18,11 @@ import { normalizeOrsonCalibration } from '../../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../../orson/predictionSnapshot';
 import type {
   OrsonCalibrationProfile,
+  OrsonConversationMessage,
   OrsonHarvestProjection,
   OrsonMortalityDiagnosticContext,
 } from '../../../orson/types';
+import { inferOrsonConversationRoute } from '../../../orson/promptBuilder';
 
 // Types for the chat history
 interface Message {
@@ -33,6 +35,7 @@ type SendMessageOptions = {
   timeZone?: string;
   aiFunction?: OrsonAiFunction;
   calibration?: OrsonCalibrationProfile | null;
+  conversationHistory?: OrsonConversationMessage[];
   projectionSnapshot?: {
     pond: Record<string, unknown>;
     projection: OrsonHarvestProjection;
@@ -135,9 +138,13 @@ export const useGemini = () => {
     latestRequestId.current = requestId;
     setLoading(true);
     setError(null);
+    const conversationHistory = options.conversationHistory ?? chatHistory.map((message) => ({
+      role: message.role,
+      text: message.parts.map((part) => part.text).join('\n'),
+    }));
 
     try {
-      if (!allPonds || allPonds.length === 0) {
+      if ((!allPonds || allPonds.length === 0) && inferOrsonConversationRoute(userMessage, conversationHistory) === 'farm_analysis') {
         setLoading(false);
         return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
@@ -160,6 +167,7 @@ export const useGemini = () => {
         calibration,
         undefined,
         options.timeZone,
+        conversationHistory,
       );
       if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
@@ -192,6 +200,7 @@ export const useGemini = () => {
             calibration,
             contextResult.data,
             options.timeZone,
+            conversationHistory,
           );
         } catch (contextError) {
           console.warn('Orson mortality context could not be loaded; using pond records only.', contextError);
@@ -208,13 +217,21 @@ export const useGemini = () => {
               unavailableSources: ['lab history', 'treatment history', 'harvest history'],
             },
             options.timeZone,
+            conversationHistory,
           );
         }
       }
-      void createRiskNotifications(options.companyId, analysis);
+      if (analysis.promptPackage.questionFocus.route === 'farm_analysis') {
+        void createRiskNotifications(options.companyId, analysis);
+      }
 
       const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
       if (cachedText) {
+        setChatHistory(prev => [
+          ...prev,
+          { role: 'user', parts: [{ text: userMessage }] },
+          { role: 'model', parts: [{ text: cachedText }] },
+        ]);
         setLoading(false);
         return cachedText;
       }
@@ -234,7 +251,7 @@ export const useGemini = () => {
         }
       }
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
+        { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
         { text?: string }
       >(functions, 'generateOrsonResponse');
 
@@ -245,6 +262,8 @@ export const useGemini = () => {
           // The hardened Function ignores it and builds its own server instruction.
           systemInstruction: analysis.promptPackage.systemInstruction,
           prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+          userMessage: analysis.promptPackage.userMessage,
+          questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
         }),

@@ -83,12 +83,47 @@ export const runPromptBuilderSelfTest = () => {
     reports: [report],
     outlooks: [outlook],
   });
+  const additivePackage = buildOrsonPromptPackage({
+    userMessage: 'What ingredients are inside BioPlus probiotic?',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+  });
+  const additiveFollowUpPackage = buildOrsonPromptPackage({
+    userMessage: 'Could that affect low oxygen?',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+    conversationHistory: [
+      { role: 'user', text: 'What ingredients are inside BioPlus probiotic?' },
+      { role: 'model', text: 'I need the saved product label to confirm the strains.' },
+    ],
+  });
+  const outOfScopePackage = buildOrsonPromptPackage({
+    userMessage: 'Who will win the football match tonight?',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+  });
 
   assert(isFarmSpecificQuestion('Analyze my pond') === true, 'detects farm-specific questions');
   assert(isFarmSpecificQuestion('What is FCR?') === false, 'detects general questions');
+  assert(buildOrsonPromptPackage({ userMessage: 'What do biofloc systems do?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'does not mistake the word do for dissolved oxygen');
+  assert(buildOrsonPromptPackage({ userMessage: 'What do probiotics do?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'keeps general additive education separate from product lookup');
+  assert(buildOrsonPromptPackage({ userMessage: 'What causes white feces?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'keeps shrimp-health education in aquaculture scope');
   assert(isFarmSpecificQuestion('give me the last 7 days of mortality') === true, 'detects lookback question as farm-specific');
   assert(farmPackage.cacheKey === null, 'does not cache farm-specific answers by default');
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');
+  assert(generalPackage.questionFocus.route === 'aquaculture_knowledge', 'routes general aquaculture knowledge separately');
+  assert(!generalPackage.context.includes('ORSON RISK PAYLOAD'), 'does not attach pond risk data to general aquaculture questions');
+  assert(!generalPackage.context.includes('feed_pressure_ratio'), 'does not inject feed pressure into general aquaculture questions');
+  assert(additivePackage.questionFocus.route === 'inventory_product', 'routes additive ingredient questions to product context');
+  assert(!additivePackage.context.includes('ORSON RISK PAYLOAD'), 'does not attach pond risk data to product questions without a pond reference');
+  assert(additiveFollowUpPackage.questionFocus.route === 'inventory_product', 'keeps an ambiguous follow-up in the prior product route');
+  assert(additiveFollowUpPackage.context.includes('ORSON RECENT CONVERSATION'), 'includes bounded recent conversation context');
+  assert(additiveFollowUpPackage.cacheKey === null, 'does not cache context-dependent follow-up answers');
+  assert(outOfScopePackage.questionFocus.route === 'out_of_scope', 'routes unrelated questions out of scope');
+  assert(!outOfScopePackage.context.includes('ORSON RISK PAYLOAD'), 'does not expose pond data to unrelated questions');
   assert(farmPackage.systemInstruction.includes('Do not invent measurements'), 'guards against invented measurements');
   assert(farmPackage.systemInstruction.includes('Do not treat a change in logged daily feed as measured appetite'), 'prevents false appetite inference');
   assert(farmPackage.systemInstruction.includes('deterministic state'), 'keeps the deterministic plankton state authoritative');

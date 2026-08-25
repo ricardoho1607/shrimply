@@ -469,8 +469,20 @@ export type OrsonQuestionIntent =
   | 'summary'
   | 'general';
 
+export type OrsonConversationRoute =
+  | 'farm_analysis'
+  | 'aquaculture_knowledge'
+  | 'inventory_product'
+  | 'out_of_scope';
+
+export interface OrsonConversationMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
 export interface OrsonQuestionFocus {
   analysisMode: OrsonAnalysisMode;
+  route: OrsonConversationRoute;
   intent: OrsonQuestionIntent;
   focusedPondName: string | null;
   focusedPondId: string | null;
@@ -597,6 +609,7 @@ export interface OrsonPromptPackage {
   cacheKey: string | null;
   isFarmSpecific: boolean;
   questionFocus: OrsonQuestionFocus;
+  conversationHistory: OrsonConversationMessage[];
   mortalityTrace: OrsonMortalityTrace | null;
 }
 

@@ -12,6 +12,7 @@ import { useFeedAdditiveStore, type Additive, type Feed } from './../store/feedA
 import { isPondCycleActive, usePondStore } from './../store/pondStore';
 import TreatmentMixesScreen from './treatmentMixes';
 import { getFarmDateKey } from '../../shared/farmDate';
+import { buildInventoryProductLabel } from '../../shared/productLabel';
 
 type FormData = {
   itemName: string;
@@ -25,6 +26,9 @@ type FormData = {
   stockDate: string;
   expiry?: string;
   reorderLevel?: string;
+  manufacturer: string;
+  ingredients: string;
+  labelSourceUrl: string;
 };
 
 type ModalType = 'add' | 'stockIn' | 'usage' | 'history' | 'editReorder';
@@ -35,7 +39,7 @@ const FEED_CATEGORIES = ['Starter', 'Grower', 'Finisher', 'Other'];
 const ADDITIVE_CATEGORIES = ['Water Conditioner', 'Probiotic', 'Mineral', 'Vitamin', 'Other'];
 
 const getEmptyFormData = (type: ItemType, stockDate: string): FormData => ({
-  itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', stockDate, expiry: '', reorderLevel: '',
+  itemName: '', brand: '', category: type === 'feed' ? 'Grower' : 'Water Conditioner', quantity: '', unitPrice: '', pondId: '', notes: '', unit: 'kg', stockDate, expiry: '', reorderLevel: '', manufacturer: '', ingredients: '', labelSourceUrl: '',
 });
 
 const formatDate = (date: any): string => {
@@ -206,9 +210,20 @@ export default function FeedAdditivesScreen() {
     if (itemType === 'feed') {
       handleAction(() => store.addFeed({ feedName: formData.itemName, brand: formData.brand || '', feedType: (formData.category as any) || 'Grower', ...baseObj }), t.inventory.feedAddedSuccess);
     } else {
-      handleAction(() => store.addAdditive({ additiveName: formData.itemName, category: (formData.category as any) || 'Other', ...baseObj }), t.inventory.additiveAddedSuccess);
+      const productLabel = buildInventoryProductLabel({
+        manufacturer: formData.manufacturer,
+        ingredientsText: formData.ingredients,
+        sourceUrl: formData.labelSourceUrl,
+        recordedAt: getFarmDateKey(new Date(), company?.timeZone),
+      });
+      handleAction(() => store.addAdditive({
+        additiveName: formData.itemName,
+        category: (formData.category as any) || 'Other',
+        ...(productLabel ? { productLabel } : {}),
+        ...baseObj,
+      }), t.inventory.additiveAddedSuccess);
     }
-  }, [formData, itemType, store, handleAction, t]);
+  }, [formData, itemType, store, handleAction, t, company?.timeZone]);
 
   const handleStockIn = useCallback(() => {
     if (!selectedItem || !formData.quantity || !formData.unitPrice) return Alert.alert(t.inventory.error, t.inventory.quantityAndPriceRequired);
@@ -251,7 +266,8 @@ export default function FeedAdditivesScreen() {
     if (item && iType) {
       setSelectedItem(item);
       setItemType(iType);
-      setFormData(prev => ({ 
+      const productLabel = iType === 'additive' ? (item as Additive).productLabel : undefined;
+      setFormData(prev => ({
         ...prev, 
         unit: (item as any).unit || 'kg', 
         quantity: '', 
@@ -260,7 +276,10 @@ export default function FeedAdditivesScreen() {
         notes: '', 
         stockDate: getFarmDateKey(new Date(), company?.timeZone),
         expiry: '',
-        reorderLevel: String(item.reorderLevel ?? '')
+        reorderLevel: String(item.reorderLevel ?? ''),
+        manufacturer: productLabel?.manufacturer || '',
+        ingredients: productLabel?.ingredients?.join('\n') || '',
+        labelSourceUrl: productLabel?.sourceUrl || '',
       }));
     }
     setMenuModalVisible(false);
@@ -336,13 +355,10 @@ export default function FeedAdditivesScreen() {
             <Text style={[styles.actionText, styles.actionTextSec]}>{t.inventory.use}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E8F4F8' }]} onPress={() => { 
-            setSelectedItem(item as any); 
-            setItemType(type);
-            setModalType('editReorder'); 
-            setModalVisible(true); 
+            openModal('editReorder', item as any, type);
           }}>
             <Ionicons name="alert-circle" size={18} color="#f39c12" />
-            <Text style={[styles.actionTextSec, { color: '#f39c12', fontWeight: '700' }]}>{t.inventory.reorder}</Text>
+            <Text style={[styles.actionTextSec, { color: '#f39c12', fontWeight: '700' }]}>{type === 'additive' ? 'Product' : t.inventory.reorder}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -676,7 +692,7 @@ export default function FeedAdditivesScreen() {
                 {modalType === 'add' ? `${itemType === 'feed' ? t.inventory.addFeed : t.inventory.addAdditive}` :
                   modalType === 'stockIn' ? t.inventory.stockIn :
                     modalType === 'usage' ? t.inventory.recordUsage :
-                      modalType === 'history' ? t.inventory.transactionHistory : t.inventory.editReorderLevel}
+                      modalType === 'history' ? t.inventory.transactionHistory : itemType === 'additive' ? 'Product label and reorder level' : t.inventory.editReorderLevel}
               </Text>
               <TouchableOpacity onPress={closeModal}>
                 <Ionicons name="close-circle" size={28} color="#dce8f2" />
@@ -691,6 +707,13 @@ export default function FeedAdditivesScreen() {
                   <>
                     {renderFormInput(t.inventory.itemName, itemType === 'feed' ? t.inventory.itemNamePlaceholder : t.inventory.additivePlaceholder, formData.itemName, (v) => setFormData(prev => ({ ...prev, itemName: v })), { required: true })}
                     {itemType === 'feed' && renderFormInput(t.inventory.brandOptional, t.inventory.brandPlaceholder, formData.brand || '', (v) => setFormData(prev => ({ ...prev, brand: v })))}
+                    {itemType === 'additive' && (
+                      <>
+                        {renderFormInput('Manufacturer', 'Company shown on the product label', formData.manufacturer, (v) => setFormData(prev => ({ ...prev, manufacturer: v })))}
+                        {renderFormInput('Ingredients / strains (one per line)', 'Example: Bacillus subtilis 1×10⁹ CFU/g', formData.ingredients, (v) => setFormData(prev => ({ ...prev, ingredients: v })), { multiline: true })}
+                        {renderFormInput('Official label URL', 'https://manufacturer.com/product-label.pdf', formData.labelSourceUrl, (v) => setFormData(prev => ({ ...prev, labelSourceUrl: v })))}
+                      </>
+                    )}
                     {renderChipSelector(t.inventory.category, itemType === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES, formData.category, (v) => setFormData(prev => ({ ...prev, category: v })), true)}
                     {renderChipSelector(t.inventory.unit, UNITS, formData.unit || 'kg', (v) => setFormData(prev => ({ ...prev, unit: v })))}
                     {renderFormInput(`${t.inventory.initialQuantity} (${getUnitLabel(formData.unit || 'kg')})`, t.inventory.quantityPlaceholder, formData.quantity, (v) => setFormData(prev => ({ ...prev, quantity: v })), { keyboardType: 'numeric', required: true })}
@@ -749,6 +772,13 @@ export default function FeedAdditivesScreen() {
                     {modalType === 'editReorder' && (
                       <>
                         {renderFormInput(t.inventory.reorderLevel, t.inventory.reorderLevelPlaceholder, formData.reorderLevel || '', (v) => setFormData(prev => ({ ...prev, reorderLevel: v })), { keyboardType: 'numeric' })}
+                        {itemType === 'additive' && (
+                          <>
+                            {renderFormInput('Manufacturer', 'Company shown on the product label', formData.manufacturer, (v) => setFormData(prev => ({ ...prev, manufacturer: v })))}
+                            {renderFormInput('Ingredients / strains (one per line)', 'Example: Bacillus subtilis 1×10⁹ CFU/g', formData.ingredients, (v) => setFormData(prev => ({ ...prev, ingredients: v })), { multiline: true })}
+                            {renderFormInput('Official label URL', 'https://manufacturer.com/product-label.pdf', formData.labelSourceUrl, (v) => setFormData(prev => ({ ...prev, labelSourceUrl: v })))}
+                          </>
+                        )}
                         <View style={styles.buttons}>
                           <TouchableOpacity style={styles.btnCancel} onPress={closeModal}>
                             <Text style={styles.btnCancelText}>Cancel</Text>
@@ -759,7 +789,16 @@ export default function FeedAdditivesScreen() {
                             
                             try {
                               const fn = itemType === 'feed' ? store.updateFeed : store.updateAdditive;
-                              await fn(selectedItem.id, { reorderLevel: newLevel });
+                              const productLabel = itemType === 'additive' ? buildInventoryProductLabel({
+                                manufacturer: formData.manufacturer,
+                                ingredientsText: formData.ingredients,
+                                sourceUrl: formData.labelSourceUrl,
+                                recordedAt: getFarmDateKey(new Date(), company?.timeZone),
+                              }) : undefined;
+                              await fn(selectedItem.id, {
+                                reorderLevel: newLevel,
+                                ...(itemType === 'additive' ? { productLabel: productLabel || null } : {}),
+                              });
                               Alert.alert(t.inventory.success, t.inventory.reorderLevelSaved);
                               closeModal();
                             } catch (e) {

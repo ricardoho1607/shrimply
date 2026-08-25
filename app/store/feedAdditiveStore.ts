@@ -34,6 +34,7 @@ import {
   roundInventoryCost,
   roundInventoryQuantity,
 } from '../../shared/treatmentMix';
+import type { InventoryProductLabel } from '../../shared/productLabel';
 
 export interface TreatmentMixComponent {
   additiveId: string;
@@ -117,6 +118,7 @@ export interface Additive {
   category: 'Water Conditioner' | 'Probiotic' | 'Mineral' | 'Vitamin' | 'Other';
   inventoryKind?: 'additive' | 'treatmentMix';
   treatmentMixRecipe?: TreatmentMixRecipe;
+  productLabel?: InventoryProductLabel | null;
   unit?: string;
   reorderLevel?: number;
   stockInHistory: StockHistory[];
@@ -924,6 +926,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         additiveName: additive.additiveName || 'Unnamed Additive',
         category: (additive.category as any) || 'Other',
         inventoryKind: 'additive',
+        ...(additive.productLabel ? { productLabel: additive.productLabel } : {}),
         unit: additive.unit || 'kg',
         reorderLevel: typeof additive.reorderLevel === 'number' ? additive.reorderLevel : 0,
         stockInHistory: additive.stockInHistory || [],

@@ -4,7 +4,7 @@ import { build72HourOutlooks } from './outlook';
 import { buildOrsonPromptPackage } from './promptBuilder';
 import { buildMortalityTrace, selectMortalityDiagnosticPond } from './mortalityDiagnostic';
 import { analyzePondsRisks } from './riskEngine';
-import type { OrsonCalibrationProfile, OrsonMortalityDiagnosticContext } from './types';
+import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonMortalityDiagnosticContext } from './types';
 
 export const buildOrsonAnalysis = (
   ponds: Record<string, any>[],
@@ -13,6 +13,7 @@ export const buildOrsonAnalysis = (
   calibration?: OrsonCalibrationProfile | null,
   mortalityContext?: OrsonMortalityDiagnosticContext | null,
   timeZone?: string,
+  conversationHistory: OrsonConversationMessage[] = [],
 ) => {
   const normalizedPonds = normalizePondsData(ponds, { now, timeZone }).filter((pond) => pond.cycleStatus !== 'ended');
   const metrics = calculatePondsMetrics(normalizedPonds, calibration);
@@ -23,6 +24,7 @@ export const buildOrsonAnalysis = (
     metrics,
     reports,
     outlooks,
+    conversationHistory,
   };
   const initialPromptPackage = buildOrsonPromptPackage(promptParams);
   const diagnosticRequested = initialPromptPackage.questionFocus.analysisMode === 'mortality_diagnostic';

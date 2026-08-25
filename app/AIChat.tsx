@@ -137,7 +137,13 @@ export default function AIChat() {
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
     try {
-      const aiResponse = await sendMessage(userText, activePonds, { companyId: company?.id, timeZone: company?.timeZone });
+      const aiResponse = await sendMessage(userText, activePonds, {
+        companyId: company?.id,
+        timeZone: company?.timeZone,
+        conversationHistory: messages
+          .slice(-10)
+          .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
+      });
       const aiMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
