@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import app, { db } from '@/config/firebase';
 import NotificationService from '../services/notificationService';
 import { buildOrsonAnalysis } from '../../orson/pipeline';
@@ -19,6 +20,8 @@ import {
 import { normalizeOrsonCalibration } from '../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnapshot';
 import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
+import { consumeOrsonCallableStream, type OrsonTextStreamChunk } from '../../orson/callableStream';
+import { loadCachedOrsonCalibration } from '../../orson/calibrationCache';
 
 // Types for the chat history
 interface Message {
@@ -34,10 +37,37 @@ type SendMessageOptions = {
   aiFunction?: OrsonAiFunction;
   calibration?: OrsonCalibrationProfile | null;
   conversationHistory?: OrsonConversationMessage[];
+  onPartialResponse?: (text: string) => void;
   projectionSnapshot?: {
     pond: Record<string, unknown>;
     projection: OrsonHarvestProjection;
   };
+};
+
+const CACHE_PREFIX = 'orson_cache_';
+const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+const getCachedResponse = async (cacheKey: string | null): Promise<string | null> => {
+  if (!cacheKey) return null;
+  try {
+    const cached = await AsyncStorage.getItem(`${CACHE_PREFIX}${cacheKey}`);
+    if (!cached) return null;
+    const parsed = JSON.parse(cached) as { timestamp?: unknown; text?: unknown };
+    if (typeof parsed.timestamp !== 'number' || typeof parsed.text !== 'string') return null;
+    return Date.now() - parsed.timestamp < CACHE_EXPIRY_MS ? parsed.text : null;
+  } catch (error) {
+    console.warn('Orson cache could not be read.', error);
+    return null;
+  }
+};
+
+const saveCachedResponse = async (cacheKey: string | null, text: string): Promise<void> => {
+  if (!cacheKey) return;
+  try {
+    await AsyncStorage.setItem(`${CACHE_PREFIX}${cacheKey}`, JSON.stringify({ timestamp: Date.now(), text }));
+  } catch (error) {
+    console.warn('Orson cache could not be saved.', error);
+  }
 };
 
 const formatMetric = (value: number | null | undefined, unit: string, decimals = 1) => {
@@ -140,6 +170,7 @@ export const useGemini = () => {
     allPonds: any[],
     options: SendMessageOptions = {},
   ) => {
+    const requestStartedAt = Date.now();
     setLoading(true);
     setError(null);
     let analysis: OrsonAnalysis | null = null;
@@ -155,16 +186,22 @@ export const useGemini = () => {
       }
 
       let calibration = options.calibration;
+      let calibrationMs = 0;
       if (calibration === undefined && options.companyId) {
+        const calibrationStartedAt = Date.now();
         try {
-          const calibrationSnap = await getDoc(doc(db, 'companies', options.companyId, 'orsonCalibration', 'current'));
-          calibration = normalizeOrsonCalibration(calibrationSnap.exists() ? calibrationSnap.data() : null);
+          calibration = await loadCachedOrsonCalibration(options.companyId, async () => {
+            const calibrationSnap = await getDoc(doc(db, 'companies', options.companyId!, 'orsonCalibration', 'current'));
+            return normalizeOrsonCalibration(calibrationSnap.exists() ? calibrationSnap.data() : null);
+          });
         } catch (calibrationError) {
           console.warn('Orson calibration could not be loaded; using safe defaults.', calibrationError);
           calibration = null;
         }
+        calibrationMs = Date.now() - calibrationStartedAt;
       }
 
+      const analysisStartedAt = Date.now();
       analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, undefined, options.timeZone, conversationHistory);
       if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
@@ -205,6 +242,19 @@ export const useGemini = () => {
       if (analysis.promptPackage.questionFocus.route === 'farm_analysis') {
         void createRiskNotifications(options.companyId, analysis);
       }
+      const analysisMs = Date.now() - analysisStartedAt;
+
+      const cachedText = await getCachedResponse(analysis.promptPackage.cacheKey);
+      if (cachedText) {
+        options.onPartialResponse?.(cachedText);
+        setChatHistory((previous) => [
+          ...previous,
+          { role: 'user', parts: [{ text: userMessage }] },
+          { role: 'model', parts: [{ text: cachedText }] },
+        ]);
+        setLoading(false);
+        return cachedText;
+      }
 
       const functions = getFunctions(app);
       if (options.companyId && options.projectionSnapshot) {
@@ -222,11 +272,11 @@ export const useGemini = () => {
       }
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
-        { text?: string }
+        { text?: string },
+        OrsonTextStreamChunk
       >(functions, 'generateOrsonResponse');
 
-      const result = await withOrsonTimeout(
-        generateOrsonResponse({
+      const requestPayload = {
           companyId: options.companyId,
           // Retained until older deployed Functions no longer require this field.
           // The hardened Function ignores it and builds its own server instruction.
@@ -236,10 +286,27 @@ export const useGemini = () => {
           questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
-        }),
-        ORSON_MODEL_TIMEOUT_MS,
-      );
-      const text = cleanOrsonResponse(result.data.text || '');
+      };
+      let firstChunkMs: number | null = null;
+      const resultData = await consumeOrsonCallableStream({
+        callable: generateOrsonResponse,
+        request: requestPayload,
+        timeoutMs: ORSON_MODEL_TIMEOUT_MS,
+        onPartialResponse: (partialText) => {
+          if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
+          options.onPartialResponse?.(cleanOrsonResponse(partialText));
+        },
+      });
+      const text = cleanOrsonResponse(resultData.text || '');
+      void saveCachedResponse(analysis.promptPackage.cacheKey, text);
+      console.info('orson_client_latency', {
+        route: analysis.promptPackage.questionFocus.route,
+        promptChars: requestPayload.prompt.length,
+        calibrationMs,
+        analysisMs,
+        firstChunkMs,
+        totalMs: Date.now() - requestStartedAt,
+      });
 
       setChatHistory(prev => [
         ...prev,

@@ -3,6 +3,8 @@ import { normalizePondData } from './normalizePondData';
 import { build72HourOutlook } from './outlook';
 import { cleanOrsonResponse, ORSON_FALLBACK_RESPONSE, withOrsonTimeout, buildOrsonPromptPackage, isFarmSpecificQuestion } from './promptBuilder';
 import { analyzePondRisks } from './riskEngine';
+import { consumeOrsonCallableStream } from './callableStream';
+import { loadCachedOrsonCalibration } from './calibrationCache';
 
 const assert = (condition: unknown, message: string) => {
   if (!condition) throw new Error(message);
@@ -28,6 +30,14 @@ export const runPromptBuilderSelfTest = () => {
         metrics: { totalPlanktonCellPerMl: 1900000, cyanobacteriaPercent: 21, dawnDo: 4.1, feedingResponse: 'weak' },
       },
       samplings: [
+        ...Array.from({ length: 6 }, (_, index) => ({
+          id: `early-${index + 1}`,
+          date: `2026-01-${String(index + 4).padStart(2, '0')}`,
+          mbw: 0.8 + (index * 0.1),
+          mortality: index,
+          feed: 4 + index,
+          feedData: { totalDailyFeed: 4 + index },
+        })),
         {
           id: 's1',
           date: '2026-01-10',
@@ -105,6 +115,14 @@ export const runPromptBuilderSelfTest = () => {
     reports: [report],
     outlooks: [outlook],
   });
+  const historyPackage = buildOrsonPromptPackage({
+    userMessage: 'Show the last 14 days of mortality for Prompt Pond',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+  });
+  const farmRiskPayload = JSON.parse(farmPackage.context.split('ORSON RISK PAYLOAD:\n')[1]);
+  const historyRiskPayload = JSON.parse(historyPackage.context.split('ORSON RISK PAYLOAD:\n')[1]);
 
   assert(isFarmSpecificQuestion('Analyze my pond') === true, 'detects farm-specific questions');
   assert(isFarmSpecificQuestion('What is FCR?') === false, 'detects general questions');
@@ -136,6 +154,8 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
   assert(farmPackage.context.includes('daily_records_14d'), 'includes 14-day daily records in context payload');
+  assert(farmRiskPayload[0].daily_records_14d.length === 5, 'keeps routine farm prompts to five recent daily records');
+  assert(historyRiskPayload[0].daily_records_14d.length === 8, 'retains available 14-day records for explicit history questions');
   assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
   assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
   assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
@@ -216,4 +236,32 @@ export const runPromptTimeoutSelfTest = async () => {
     if (!(error instanceof Error)) throw error;
     assert(error.message === ORSON_FALLBACK_RESPONSE, 'uses fallback timeout message');
   }
+
+  const partialResponses: string[] = [];
+  const streamed = await consumeOrsonCallableStream({
+    callable: {
+      stream: async () => ({
+        stream: (async function* () {
+          yield { type: 'text_delta' as const, text: 'Fast ' };
+          yield { type: 'text_delta' as const, text: 'answer.' };
+        })(),
+        data: Promise.resolve({ text: 'Fast answer.' }),
+      }),
+    },
+    request: {},
+    timeoutMs: 100,
+    onPartialResponse: (text) => partialResponses.push(text),
+  });
+  assert(streamed.text === 'Fast answer.', 'returns the final streamed response');
+  assert(partialResponses.join('|') === 'Fast |Fast answer.', 'delivers accumulated partial responses');
+
+  let calibrationLoads = 0;
+  const companyId = `prompt-test-${Date.now()}`;
+  const loadCalibration = async () => {
+    calibrationLoads += 1;
+    return null;
+  };
+  await loadCachedOrsonCalibration(companyId, loadCalibration, 1000);
+  await loadCachedOrsonCalibration(companyId, loadCalibration, 1001);
+  assert(calibrationLoads === 1, 'reuses calibration within the cache window');
 };

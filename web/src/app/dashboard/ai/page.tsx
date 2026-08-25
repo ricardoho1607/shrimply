@@ -77,6 +77,7 @@ export default function OrsonAIPage() {
     return parseStoredMessages(sessionStorage.getItem('orson_messages')) ?? [createWelcomeMessage()];
   });
   const [inputText, setInputText] = useState('');
+  const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
 
   const { sendMessage, loading, clearChat, error } = useGemini();
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -119,9 +120,13 @@ export default function OrsonAIPage() {
   }, []);
 
   useEffect(() => {
-    if (messages.length > 0) {
-      sessionStorage.setItem('orson_messages', JSON.stringify(messages));
-    }
+    const persistenceTimer = window.setTimeout(() => {
+      if (messages.length > 0) sessionStorage.setItem('orson_messages', JSON.stringify(messages));
+    }, 250);
+    return () => window.clearTimeout(persistenceTimer);
+  }, [messages]);
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
@@ -138,6 +143,16 @@ export default function OrsonAIPage() {
 
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    const replyId = `orson-${Date.now()}`;
+    const replyTimestamp = new Date();
+    const upsertReply = (message: string) => {
+      setMessages((previous) => {
+        const existing = previous.findIndex((item) => item.id === replyId);
+        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp };
+        if (existing < 0) return [...previous, reply];
+        return previous.map((item, index) => index === existing ? reply : item);
+      });
+    };
 
     try {
       const aiResponse = await sendMessage(text.trim(), ponds, {
@@ -147,16 +162,16 @@ export default function OrsonAIPage() {
           .filter((message) => message.id !== 'welcome')
           .slice(-10)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
+        onPartialResponse: (partialResponse) => {
+          setStreamingReplyId(replyId);
+          upsertReply(partialResponse);
+        },
       });
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        message: aiResponse,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
+      upsertReply(aiResponse);
     } catch (err) {
       console.error(err);
+    } finally {
+      setStreamingReplyId(null);
     }
   };
 
@@ -222,7 +237,7 @@ export default function OrsonAIPage() {
                 </div>
               ))}
 
-              {loading && (
+              {loading && !streamingReplyId && (
                 <div className="orson-message-row is-ai">
                   <div className="orson-avatar is-loading">
                     <Loader2 className="animate-spin" size={18} />

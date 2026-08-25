@@ -10,8 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
-  ScrollView,
-  Dimensions
+  ScrollView
 } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
@@ -21,8 +20,6 @@ import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 import ShrimpIcon from './components/icons/ShrimpIcon';
 import { hasFarmPermission } from '../shared/permissions';
-
-const { width } = Dimensions.get('window');
 
 interface ChatMessage {
   id: string;
@@ -70,6 +67,7 @@ export default function AIChat() {
   const [inputText, setInputText] = useState('');
   const [conversationLanguage, setConversationLanguage] = useState('en');
   const [isInitialized, setIsInitialized] = useState(false);
+  const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
   
   const { sendMessage, loading } = useGemini();
   const { ponds } = usePondStore(); 
@@ -136,6 +134,16 @@ export default function AIChat() {
     };
     setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    const replyId = `orson-${Date.now()}`;
+    const replyTimestamp = new Date();
+    const upsertReply = (message: string) => {
+      setMessages((previous) => {
+        const existing = previous.findIndex((item) => item.id === replyId);
+        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp };
+        if (existing < 0) return [...previous, reply];
+        return previous.map((item, index) => index === existing ? reply : item);
+      });
+    };
     try {
       const aiResponse = await sendMessage(userText, activePonds, {
         companyId: company?.id,
@@ -143,16 +151,16 @@ export default function AIChat() {
         conversationHistory: messages
           .slice(-10)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
+        onPartialResponse: (partialResponse) => {
+          setStreamingReplyId(replyId);
+          upsertReply(partialResponse);
+        },
       });
-      const aiMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        message: aiResponse,
-        timestamp: new Date(),
-      };
-      setMessages(prev => [...prev, aiMessage]);
-    } catch (err) {
+      upsertReply(aiResponse);
+    } catch {
       Alert.alert('Orson Error', 'Failed to get a response. Please check your internet.');
+    } finally {
+      setStreamingReplyId(null);
     }
   };
 
@@ -221,7 +229,7 @@ export default function AIChat() {
                 </Text>
               </View>
           ))}
-          {loading && (
+          {loading && !streamingReplyId && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#315f57" />
               <Text style={styles.loadingText}>Orson is checking water data...</Text>

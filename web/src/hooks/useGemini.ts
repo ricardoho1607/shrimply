@@ -23,6 +23,8 @@ import type {
   OrsonMortalityDiagnosticContext,
 } from '../../../orson/types';
 import { inferOrsonConversationRoute } from '../../../orson/promptBuilder';
+import { consumeOrsonCallableStream, type OrsonTextStreamChunk } from '../../../orson/callableStream';
+import { loadCachedOrsonCalibration } from '../../../orson/calibrationCache';
 
 // Types for the chat history
 interface Message {
@@ -36,6 +38,7 @@ type SendMessageOptions = {
   aiFunction?: OrsonAiFunction;
   calibration?: OrsonCalibrationProfile | null;
   conversationHistory?: OrsonConversationMessage[];
+  onPartialResponse?: (text: string) => void;
   projectionSnapshot?: {
     pond: Record<string, unknown>;
     projection: OrsonHarvestProjection;
@@ -135,6 +138,7 @@ export const useGemini = () => {
     options: SendMessageOptions = {},
   ) => {
     const requestId = latestRequestId.current + 1;
+    const requestStartedAt = Date.now();
     latestRequestId.current = requestId;
     setLoading(true);
     setError(null);
@@ -150,16 +154,22 @@ export const useGemini = () => {
       }
 
       let calibration = options.calibration;
+      let calibrationMs = 0;
       if (calibration === undefined && options.companyId) {
+        const calibrationStartedAt = Date.now();
         try {
-          const calibrationSnap = await getDoc(doc(db, 'companies', options.companyId, 'orsonCalibration', 'current'));
-          calibration = normalizeOrsonCalibration(calibrationSnap.exists() ? calibrationSnap.data() : null);
+          calibration = await loadCachedOrsonCalibration(options.companyId, async () => {
+            const calibrationSnap = await getDoc(doc(db, 'companies', options.companyId!, 'orsonCalibration', 'current'));
+            return normalizeOrsonCalibration(calibrationSnap.exists() ? calibrationSnap.data() : null);
+          });
         } catch (calibrationError) {
           console.warn('Orson calibration could not be loaded; using safe defaults.', calibrationError);
           calibration = null;
         }
+        calibrationMs = Date.now() - calibrationStartedAt;
       }
 
+      const analysisStartedAt = Date.now();
       let analysis = buildOrsonAnalysis(
         allPonds as Parameters<typeof buildOrsonAnalysis>[0],
         userMessage,
@@ -224,6 +234,7 @@ export const useGemini = () => {
       if (analysis.promptPackage.questionFocus.route === 'farm_analysis') {
         void createRiskNotifications(options.companyId, analysis);
       }
+      const analysisMs = Date.now() - analysisStartedAt;
 
       const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
       if (cachedText) {
@@ -232,6 +243,7 @@ export const useGemini = () => {
           { role: 'user', parts: [{ text: userMessage }] },
           { role: 'model', parts: [{ text: cachedText }] },
         ]);
+        options.onPartialResponse?.(cachedText);
         setLoading(false);
         return cachedText;
       }
@@ -252,11 +264,11 @@ export const useGemini = () => {
       }
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
-        { text?: string }
+        { text?: string },
+        OrsonTextStreamChunk
       >(functions, 'generateOrsonResponse');
 
-      const result = await withTimeout(
-        generateOrsonResponse({
+      const requestPayload = {
           companyId: options.companyId,
           // Retained until older deployed Functions no longer require this field.
           // The hardened Function ignores it and builds its own server instruction.
@@ -266,13 +278,28 @@ export const useGemini = () => {
           questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
-        }),
-        ORSON_MODEL_TIMEOUT_MS,
-        'Orson is taking too long to respond. Please try again.'
-      );
+      };
+      let firstChunkMs: number | null = null;
+      const resultData = await consumeOrsonCallableStream({
+        callable: generateOrsonResponse,
+        request: requestPayload,
+        timeoutMs: ORSON_MODEL_TIMEOUT_MS,
+        onPartialResponse: (partialText) => {
+          if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
+          options.onPartialResponse?.(cleanOrsonResponse(partialText));
+        },
+      });
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
 
-      const text = cleanOrsonResponse(result.data.text || '');
+      const text = cleanOrsonResponse(resultData.text || '');
+      console.info('orson_client_latency', {
+        route: analysis.promptPackage.questionFocus.route,
+        promptChars: requestPayload.prompt.length,
+        calibrationMs,
+        analysisMs,
+        firstChunkMs,
+        totalMs: Date.now() - requestStartedAt,
+      });
 
       saveToCache(analysis.promptPackage.cacheKey, text);
 

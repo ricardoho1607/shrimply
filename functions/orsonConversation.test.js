@@ -66,3 +66,28 @@ test("web lookup is limited to product composition questions", () => {
   assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "How much BioPlus stock is left?"), false);
   assert.equal(__test.shouldUseOrsonProductWebLookup("aquaculture_knowledge", "What ingredients are in BioPlus?"), false);
 });
+
+test("streaming model output emits each delta and returns the complete response", async () => {
+  const emitted = [];
+  const response = { text: () => "Orson answers quickly." };
+  const getModel = () => ({
+    generateContentStream: async () => ({
+      stream: (async function* () {
+        yield { text: () => "Orson answers " };
+        yield { text: () => "quickly." };
+      })(),
+      response: Promise.resolve(response),
+    }),
+  });
+
+  const result = await __test.generateOrsonStreamingResponse({
+    getModel,
+    prompt: "question",
+    useWebLookup: false,
+    onTextDelta: async (text) => emitted.push(text),
+  });
+
+  assert.deepEqual(emitted, ["Orson answers ", "quickly."]);
+  assert.equal(result.text, "Orson answers quickly.");
+  assert.equal(result.response, response);
+});

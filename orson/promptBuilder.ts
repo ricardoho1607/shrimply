@@ -128,7 +128,16 @@ const CONVERSATIONAL_PATTERNS = [
 const FOLLOW_UP_PATTERNS = [
   /^\s*(what|how)\s+about\b/i,
   /^\s*(and|also|then)\b/i,
+  /^\s*(why(\s+is\s+that)?|how\s+so|tell\s+me\s+more|explain\s+more)[?.!]*\s*$/i,
   /\b(that|this|it|those|these|they|them)\b/i,
+];
+
+const DETAILED_HISTORY_PATTERNS = [
+  /\b(last|past|previous)\s+\d+\s+days?\b/i,
+  /\b(history|timeline|daily\s+records?)\b/i,
+  /\bwhat\s+was\b.*\b(on|during)\b/i,
+  /\b\d{4}-\d{2}-\d{2}\b/,
+  /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/i,
 ];
 
 const SUMMARY_PATTERNS = [
@@ -288,6 +297,10 @@ export const inferOrsonConversationRoute = (
   return inferStandaloneRoute(question);
 };
 
+const isConversationFollowUpQuestion = (question: string): boolean => (
+  question.trim().length <= 80 && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))
+);
+
 const detectRequestedParameter = (question: string): string | null => {
   const match = PARAMETER_PATTERNS.find((parameter) => parameter.patterns.some((pattern) => pattern.test(question)));
   return match?.key ?? null;
@@ -316,6 +329,7 @@ export const buildOrsonQuestionFocus = (
   const requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
+  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
   const route = mentionedPayloads.length > 0 && inferredRoute !== 'inventory_product'
     ? 'farm_analysis'
     : inferredRoute;
@@ -331,6 +345,8 @@ export const buildOrsonQuestionFocus = (
     isPondSpecific: focusedPayload !== null,
     isComparison,
     comparedPondNames: mentionedPayloads.map((p) => p.pondName),
+    requiresDetailedHistory: isMortalityDiagnosticQuestion(question) || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question)),
+    usesConversationHistory,
     shouldSummarize: intent === 'summary' || isComparison || /\banaly[sz]e\b/i.test(question),
   };
 };
@@ -351,7 +367,7 @@ const orderPayloadsForQuestion = (
   if (!focus.isPondSpecific) {
     return [...payloads]
       .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
-      .slice(0, 10);
+      .slice(0, 5);
   }
 
   const focused = payloads.find((payload) => {
@@ -359,12 +375,7 @@ const orderPayloadsForQuestion = (
   });
   if (!focused) return payloads;
 
-  const supporting = payloads
-    .filter((payload) => payload !== focused)
-    .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
-    .slice(0, 2);
-
-  return [focused, ...supporting];
+  return [focused];
 };
 
 export const isFarmSpecificQuestion = (question: string): boolean => {
@@ -473,7 +484,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
     '- Biological risk conclusions must come from the deterministic findings. You may explain or compare raw values, but do not create a new biological conclusion or threshold that is absent from the findings.',
-    '- You have access to a rolling 14-day daily record (daily_records_14d), recent lab reports (recent_lab_reports), and treatment applications (recent_treatments) for each pond.',
+    '- You have access to up to 14 days in daily_records_14d plus recent_lab_reports and recent_treatments. Routine questions may include only the latest 5 daily records; explicit history and mortality-diagnostic questions retain the available 14-day window.',
     '- For historical or timeline lookback questions (e.g. "show the last 7 days of mortality", "what was the feed given on August 15", "how did DO trend this week"), extract the exact dates and numbers from daily_records_14d and list them clearly.',
     '- Cross-reference daily timeline changes (feed, DO, pH, mortality, MBW) with lab report findings (nitrite, vibrio, plankton) to answer questions and explain causes.',
     '- If recent_treatments exist, cross-reference treatments (lime, probiotics, minerals) with water quality and lab pathogen trends to confirm whether treatments were effective.',
@@ -587,7 +598,9 @@ export const buildOrsonPromptContext = (
       latest_percent: payload.mortalityLatestPercent,
       latest_date: payload.mortalityLatestDate,
     },
-    daily_records_14d: (payload.dailyRecords14d || []).map((r) => ({
+    daily_records_14d: (payload.dailyRecords14d || [])
+      .slice(questionFocus.requiresDetailedHistory ? -14 : -5)
+      .map((r) => ({
       date: r.date,
       doc: r.doc,
       feed_kg: r.feedKg,
@@ -681,6 +694,7 @@ export const buildOrsonPromptContext = (
       requested_parameter: questionFocus.requestedParameter,
       requested_direction: questionFocus.requestedDirection,
       is_pond_specific: questionFocus.isPondSpecific,
+      detailed_history_included: questionFocus.requiresDetailedHistory,
       should_summarize: questionFocus.shouldSummarize,
       ...(questionFocus.analysisMode === 'mortality_diagnostic' ? { analysis_mode: questionFocus.analysisMode } : {}),
     }, null, 2),
@@ -757,6 +771,7 @@ export const buildOrsonPromptPackage = (params: {
     params.outlooks[index],
   ));
   const detectedFocus = buildOrsonQuestionFocus(params.userMessage, payloads, conversationHistory);
+  const relevantConversationHistory = detectedFocus.usesConversationHistory ? conversationHistory : [];
   const questionFocus = params.mortalityTrace
     ? {
         ...detectedFocus,
@@ -781,10 +796,10 @@ export const buildOrsonPromptPackage = (params: {
       selectedKnowledge,
       params.metrics.length,
       params.mortalityTrace ?? null,
-      conversationHistory,
+      relevantConversationHistory,
     ),
     userMessage: params.userMessage,
-    cacheKey: questionFocus.analysisMode === 'mortality_diagnostic' || questionFocus.route === 'inventory_product' || conversationHistory.length > 0
+    cacheKey: questionFocus.analysisMode === 'mortality_diagnostic' || questionFocus.route === 'inventory_product' || questionFocus.usesConversationHistory
       ? null
       : buildOrsonCacheKey(params.userMessage, orderedPayloads),
     isFarmSpecific: questionFocus.analysisMode === 'mortality_diagnostic'

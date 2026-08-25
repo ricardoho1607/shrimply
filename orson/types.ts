@@ -491,6 +491,8 @@ export interface OrsonQuestionFocus {
   isPondSpecific: boolean;
   isComparison?: boolean;
   comparedPondNames?: string[];
+  requiresDetailedHistory: boolean;
+  usesConversationHistory: boolean;
   shouldSummarize: boolean;
 }
 
