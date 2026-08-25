@@ -3,19 +3,25 @@ import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, S
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { addDoc, collection, doc, onSnapshot, orderBy, query, serverTimestamp, updateDoc } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { collection, doc, onSnapshot, orderBy, query, Timestamp } from 'firebase/firestore';
 import { hasWaterQualityData, usePondStore, isPondCycleActive, type Pond } from "../store/pondStore";
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
-import app, { db, storage } from '../../config/firebase';
+import { db } from '../../config/firebase';
 import { getFarmDateKey } from '../../shared/farmDate';
 import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import PlanktonOverwatchCard from '../components/PlanktonOverwatchCard';
 import { hasFarmPermission } from '../../shared/permissions';
+import {
+  createOfflineOperationId,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistOfflineCollection,
+  requestOfflineMutationFlush,
+  saveDurableMutation,
+} from '../services/offlineWorkspace';
 
 interface MobileLabReport {
   id: string;
@@ -34,6 +40,7 @@ interface MobileLabReport {
     confidence?: number;
     warnings?: string[];
     error?: string;
+    sourceHash?: string;
   };
 }
 
@@ -183,21 +190,47 @@ export default function WaterQualityScreen() {
   }, [isModalVisible]);
 
   React.useEffect(() => {
-    if (!company?.id) {
+    if (!company?.id || !user?.uid) {
       setLabReports([]);
       return undefined;
     }
+
+    let active = true;
+    let snapshotVersion = 0;
+    void loadOfflineCollectionWithMutations<MobileLabReport>(
+      user.uid,
+      company.id,
+      'lab-reports',
+      ['companies', company.id, 'labReports'],
+    ).then((cachedReports) => {
+      if (active && cachedReports.length > 0 && snapshotVersion === 0) setLabReports(cachedReports);
+    });
 
     const reportsQuery = query(
       collection(db, 'companies', company.id, 'labReports'),
       orderBy('sampleDate', 'desc'),
     );
-    return onSnapshot(reportsQuery, (snapshot) => {
-      setLabReports(snapshot.docs.map(reportDoc => ({ id: reportDoc.id, ...reportDoc.data() } as MobileLabReport)));
+    const unsubscribe = onSnapshot(reportsQuery, { includeMetadataChanges: true }, (snapshot) => {
+      const remoteReports = snapshot.docs.map(reportDoc => ({ id: reportDoc.id, ...reportDoc.data() } as MobileLabReport));
+      if (snapshot.metadata.fromCache && remoteReports.length === 0) return;
+      const version = ++snapshotVersion;
+      void overlayOfflineMutations(remoteReports, user.uid, company.id, ['companies', company.id, 'labReports'])
+        .then(async (reports) => {
+          if (!active || version !== snapshotVersion) return;
+          setLabReports(reports);
+          await persistOfflineCollection(user.uid, company.id, 'lab-reports', reports);
+        }).catch((cacheError) => {
+          console.error('Error applying pending lab reports:', cacheError);
+          if (active && version === snapshotVersion) setLabReports(remoteReports);
+        });
     }, (error) => {
       console.error('Error loading lab reports:', error);
     });
-  }, [company?.id]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [company?.id, user?.uid]);
 
   React.useEffect(() => {
     if (!company?.id) {
@@ -495,7 +528,11 @@ export default function WaterQualityScreen() {
 
       setIsLabUploading(true);
       const sourceFileHash = ('md5' in fileInfo && fileInfo.md5) ? fileInfo.md5 : `${asset.name}-${asset.size || Date.now()}`;
-      const reportRef = await addDoc(collection(db, 'companies', company.id, 'labReports'), {
+      const reportRef = doc(collection(db, 'companies', company.id, 'labReports'));
+      const now = Timestamp.now();
+      const sourcePdfPath = `companies/${company.id}/labReports/${reportRef.id}/source.pdf`;
+      const localReport: MobileLabReport & Record<string, unknown> = {
+        id: reportRef.id,
         companyId: company.id,
         reportType,
         entryMode: 'pdf_upload',
@@ -509,46 +546,35 @@ export default function WaterQualityScreen() {
         extraction: { status: 'pending', sourceHash: sourceFileHash },
         insights: { status: 'pending' },
         processing: { status: 'pending' },
-        createdAt: serverTimestamp(),
-        createdBy: user.uid,
-        updatedAt: serverTimestamp(),
-      });
-
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const sourcePdfPath = `companies/${company.id}/labReports/${reportRef.id}/source.pdf`;
-      const sourceRef = ref(storage, sourcePdfPath);
-      await uploadBytes(sourceRef, blob, {
-        contentType: 'application/pdf',
-        customMetadata: { companyId: company.id, labReportId: reportRef.id, sourceFileHash },
-      });
-      const sourcePdfUrl = await getDownloadURL(sourceRef);
-
-      await updateDoc(reportRef, {
         sourcePdfPath,
-        sourcePdfUrl,
-        updatedAt: serverTimestamp(),
-      });
-
-      const functions = getFunctions(app);
-      const extract = httpsCallable<{ companyId: string; labReportId: string }, { pondResults?: MobileLabReport['pondResults']; warnings?: string[] }>(functions, 'extractLabReportFromPdf');
-      const extractionResult = await extract({ companyId: company.id, labReportId: reportRef.id });
-      if (Array.isArray(extractionResult.data?.pondResults)) {
-        setSelectedLabReport({
-          id: reportRef.id,
-          companyId: company.id,
-          reportType,
-          entryMode: 'pdf_upload',
-          status: 'extracted',
-          sampleDate: getFarmDateKey(new Date(), company?.timeZone),
-          labName: reportType === 'plankton' ? t.waterQuality.uploadedPlanktonReport : t.waterQuality.uploadedMineralReport,
-          originalFileName: asset.name || 'lab-report.pdf',
-          sourcePdfPath,
-          sourcePdfUrl,
-          pondResults: extractionResult.data.pondResults,
-          extraction: { status: 'complete', warnings: extractionResult.data.warnings || [] },
-        });
-      }
+        sourcePdfUrl: asset.uri,
+        createdAt: now,
+        createdBy: user.uid,
+        updatedAt: now,
+      };
+      await saveDurableMutation({
+        id: createOfflineOperationId(`lab-upload-${reportRef.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', company.id, 'labReports', reportRef.id],
+        data: localReport,
+        merge: false,
+        createOnly: true,
+        serverTimestampFields: ['createdAt', 'updatedAt'],
+        uploadLocalFiles: true,
+        uploadPath: sourcePdfPath,
+        functionCall: {
+          name: 'extractLabReportFromPdf',
+          payload: { companyId: company.id, labReportId: reportRef.id },
+        },
+      }, { deferFlush: true });
+      const nextReports = [localReport, ...labReports.filter((report) => report.id !== reportRef.id)];
+      setLabReports(nextReports);
+      setSelectedLabReport(localReport);
+      await persistOfflineCollection(user.uid, company.id, 'lab-reports', nextReports);
+      requestOfflineMutationFlush(user.uid, company.id);
       Alert.alert(t.waterQuality.labUploadCompleteTitle, t.waterQuality.labUploadCompleteMessage);
     } catch (error) {
       console.error('Error uploading lab PDF:', error);
@@ -566,7 +592,7 @@ export default function WaterQualityScreen() {
       labPickerLockRef.current = false;
       setIsLabUploading(false);
     }
-  }, [canManageLabReports, user, company, isLabUploading, t, getPdfActionState, formatRemainingTime]);
+  }, [canManageLabReports, user, company, isLabUploading, t, getPdfActionState, formatRemainingTime, labReports]);
 
   const startLabPdfUpload = useCallback((reportType: 'water_quality' | 'plankton') => {
     if (labPickerLockRef.current || isLabUploading) return;
@@ -722,14 +748,30 @@ export default function WaterQualityScreen() {
 
     try {
       setIsConfirmingLab(true);
-      await updateDoc(doc(db, 'companies', company.id, 'labReports', reportToConfirm.id), {
+      const now = Timestamp.now();
+      const patch = {
         status: 'confirmed',
         insights: { status: 'pending' },
         processing: { status: 'pending' },
-        confirmedAt: serverTimestamp(),
+        confirmedAt: now,
         confirmedBy: user.uid,
-        updatedAt: serverTimestamp(),
-      });
+        updatedAt: now,
+      } as const;
+      await saveDurableMutation({
+        id: createOfflineOperationId(`lab-confirm-${reportToConfirm.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', company.id, 'labReports', reportToConfirm.id],
+        data: patch as unknown as Record<string, unknown>,
+        merge: true,
+        serverTimestampFields: ['confirmedAt', 'updatedAt'],
+      }, { deferFlush: true });
+      const nextReports = labReports.map((report) => report.id === reportToConfirm.id ? { ...report, ...patch } : report);
+      setLabReports(nextReports);
+      await persistOfflineCollection(user.uid, company.id, 'lab-reports', nextReports);
+      requestOfflineMutationFlush(user.uid, company.id);
       setSelectedLabReport(null);
       Alert.alert(t.waterQuality.labConfirmedTitle, t.waterQuality.labConfirmedMessage);
     } catch (error) {

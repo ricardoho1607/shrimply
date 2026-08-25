@@ -16,10 +16,15 @@ import {
   where, 
   onSnapshot, 
   orderBy,
-  updateDoc,
-  doc,
-  writeBatch,
 } from 'firebase/firestore';
+import {
+  createOfflineOperationId,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistOfflineCollection,
+  requestOfflineMutationFlush,
+  saveDurableMutation,
+} from './services/offlineWorkspace';
 
 interface Notification {
   id: string;
@@ -36,7 +41,7 @@ interface Notification {
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { company } = useAuth();
+  const { company, user } = useAuth();
   const { t } = useLanguage();
   
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -45,7 +50,7 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
   useEffect(() => {
-    if (!company?.id) {
+    if (!company?.id || !user?.uid) {
       setLoading(false);
       return;
     }
@@ -57,7 +62,21 @@ export default function NotificationsScreen() {
       orderBy('timestamp', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    let active = true;
+    let snapshotVersion = 0;
+    void loadOfflineCollectionWithMutations<Notification>(
+      user.uid,
+      company.id,
+      'notifications',
+      ['notifications'],
+    ).then((cached) => {
+      if (active && cached.length > 0 && snapshotVersion === 0) {
+        setNotifications(cached);
+        setLoading(false);
+      }
+    });
+
+    const unsubscribe = onSnapshot(q, { includeMetadataChanges: true }, (snapshot) => {
       const notificationsData: Notification[] = [];
       snapshot.forEach((doc) => {
         const data = doc.data();
@@ -74,13 +93,28 @@ export default function NotificationsScreen() {
           color: getColorForType(data.type, data.priority, data),
         });
       });
-      setNotifications(notificationsData);
-      setLoading(false);
-      setRefreshing(false);
+      if (snapshot.metadata.fromCache && notificationsData.length === 0) return;
+      const version = ++snapshotVersion;
+      void overlayOfflineMutations(notificationsData, user.uid, company.id, ['notifications']).then(async (next) => {
+        if (!active || version !== snapshotVersion) return;
+        setNotifications(next);
+        setLoading(false);
+        setRefreshing(false);
+        await persistOfflineCollection(user.uid, company.id, 'notifications', next);
+      }).catch((cacheError) => {
+        console.error('Error applying pending notifications:', cacheError);
+        if (active && version === snapshotVersion) {
+          setNotifications(notificationsData);
+          setLoading(false);
+        }
+      });
     });
 
-    return () => unsubscribe();
-  }, [company?.id]);
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [company?.id, user?.uid]);
 
   const getIconForType = (type: string, data?: any) => {
     if (data?.isOrson) return 'brain'; // Support for Orson AI icon
@@ -105,13 +139,23 @@ export default function NotificationsScreen() {
   };
 
   const markAllAsRead = async () => {
+    if (!company?.id || !user?.uid) return;
     try {
       const unreadNotifications = notifications.filter(n => !n.read);
-      const batch = writeBatch(db);
-      unreadNotifications.forEach(n => {
-        batch.update(doc(db, 'notifications', n.id), { read: true });
-      });
-      await batch.commit();
+      await Promise.all(unreadNotifications.map((notification) => saveDurableMutation({
+        id: createOfflineOperationId(`notification-read-${notification.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['notifications', notification.id],
+        data: { read: true },
+        merge: true,
+      }, { deferFlush: true })));
+      const next = notifications.map((notification) => ({ ...notification, read: true }));
+      setNotifications(next);
+      await persistOfflineCollection(user.uid, company.id, 'notifications', next);
+      requestOfflineMutationFlush(user.uid, company.id);
     } catch (error) {
       console.error('Error marking all as read:', error);
     }
@@ -119,8 +163,22 @@ export default function NotificationsScreen() {
 
   const markNotificationAsRead = async (notification: Notification) => {
     if (notification.read) return;
+    if (!company?.id || !user?.uid) return;
     try {
-      await updateDoc(doc(db, 'notifications', notification.id), { read: true });
+      await saveDurableMutation({
+        id: createOfflineOperationId(`notification-read-${notification.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['notifications', notification.id],
+        data: { read: true },
+        merge: true,
+      }, { deferFlush: true });
+      const next = notifications.map((item) => item.id === notification.id ? { ...item, read: true } : item);
+      setNotifications(next);
+      await persistOfflineCollection(user.uid, company.id, 'notifications', next);
+      requestOfflineMutationFlush(user.uid, company.id);
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
@@ -145,13 +203,20 @@ export default function NotificationsScreen() {
   };
 
   const deleteAllNotifications = async () => {
+    if (!company?.id || !user?.uid) return;
     try {
       setLoading(true);
-      const batch = writeBatch(db);
-      notifications.forEach(n => {
-        batch.delete(doc(db, 'notifications', n.id));
-      });
-      await batch.commit();
+      await Promise.all(notifications.map((notification) => saveDurableMutation({
+        id: createOfflineOperationId(`notification-delete-${notification.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'delete',
+        path: ['notifications', notification.id],
+      }, { deferFlush: true })));
+      setNotifications([]);
+      await persistOfflineCollection(user.uid, company.id, 'notifications', []);
+      requestOfflineMutationFlush(user.uid, company.id);
     } catch {
       Alert.alert("Error", "Could not delete notifications");
     } finally {

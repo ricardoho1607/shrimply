@@ -221,7 +221,7 @@ export type FarmCacheStatus = 'idle' | 'hydrating' | 'ready' | 'miss';
 
 interface PondStore {
   ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
+  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
@@ -660,7 +660,7 @@ export const usePondStore = create<PondStore>()(
         });
         const updatedPond = { ...pond, samplings: [...(pond.samplings || []), samplingWithId] };
         set((state) => ({ ponds: state.ponds.map((p) => p.id === pondId ? updatedPond : p) }));
-        get().firebaseSync?.syncPond('update', updatedPond);
+        get().firebaseSync?.syncSampling('create', pondId, samplingWithId);
       },
 
       updateSampling: (pondId, samplingId, updates) => {
@@ -675,7 +675,8 @@ export const usePondStore = create<PondStore>()(
         set((state) => ({
           ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond)
         }));
-        state.firebaseSync?.syncPond('update', updatedPond);
+        const updatedSampling = updatedPond.samplings.find((sampling) => sampling.id === samplingId);
+        if (updatedSampling) state.firebaseSync?.syncSampling('update', pondId, updatedSampling, samplingId);
       },
 
       deleteSampling: (pondId, samplingId) => {
@@ -688,7 +689,8 @@ export const usePondStore = create<PondStore>()(
           samplings: (pond.samplings || []).filter((s) => s.id !== samplingId),
         };
         set((state) => ({ ponds: state.ponds.map((pond) => pond.id === pondId ? updatedPond : pond) }));
-        state.firebaseSync?.syncPond('update', updatedPond);
+        const deletedSampling = (pond.samplings || []).find((sampling) => sampling.id === samplingId);
+        if (deletedSampling) state.firebaseSync?.syncSampling('delete', pondId, deletedSampling, samplingId);
       },
 
       addMortalityRecord: (pondId, record) => {
@@ -715,7 +717,7 @@ export const usePondStore = create<PondStore>()(
         set((current) => ({
           ponds: current.ponds.map((item) => item.id === pondId ? updatedPond : item),
         }));
-        state.firebaseSync?.syncPond('update', updatedPond);
+        state.firebaseSync?.syncMortality?.('create', pondId, normalizedRecord);
       },
 
       updateMortalityRecord: (pondId, recordId, updates) => {
@@ -741,7 +743,8 @@ export const usePondStore = create<PondStore>()(
         set((current) => ({
           ponds: current.ponds.map((item) => item.id === pondId ? updatedPond : item),
         }));
-        state.firebaseSync?.syncPond('update', updatedPond);
+        const updatedRecord = mortalityRecords.find((record) => record.id === recordId);
+        if (updatedRecord) state.firebaseSync?.syncMortality?.('update', pondId, updatedRecord, recordId);
       },
 
       deleteMortalityRecord: (pondId, recordId) => {
@@ -755,11 +758,15 @@ export const usePondStore = create<PondStore>()(
         set((current) => ({
           ponds: current.ponds.map((item) => item.id === pondId ? updatedPond : item),
         }));
-        state.firebaseSync?.syncPond('update', updatedPond);
+        const deletedRecord = (pond.mortalityRecords || []).find((record) => record.id === recordId);
+        if (deletedRecord) state.firebaseSync?.syncMortality?.('delete', pondId, deletedRecord, recordId);
       },
 
       addWaterQuality: (pondId, record) => {
         const today = getFarmDateKey(new Date(), get().currentTimeZone);
+        const existingSamplingId = get().ponds.find((pond) => pond.id === pondId)?.samplings.find((sampling) => (
+          !isBaselineSampling(sampling) && sampling.date === today && hasWaterQualityData(sampling)
+        ))?.id;
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -802,13 +809,18 @@ export const usePondStore = create<PondStore>()(
         
         const state = get();
         const updatedPond = state.ponds.find(p => p.id === pondId);
-        if (updatedPond) state.firebaseSync?.syncPond('update', updatedPond);
+        const updatedSampling = updatedPond?.samplings.find((sampling) => sampling.id === existingSamplingId)
+          || updatedPond?.samplings.find((sampling) => sampling.date === today && hasWaterQualityData(sampling));
+        if (updatedSampling) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
       },
 
       addFeedData: (pondId, record, date) => {
         const recordDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
           ? date
           : getFarmDateKey(new Date(), get().currentTimeZone);
+        const existingSamplingId = get().ponds.find((pond) => pond.id === pondId)?.samplings.find((sampling) => (
+          !isBaselineSampling(sampling) && Boolean(sampling.feedData) && sampling.date === recordDate
+        ))?.id;
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -835,11 +847,16 @@ export const usePondStore = create<PondStore>()(
         
         const state = get();
         const updatedPond = state.ponds.find(p => p.id === pondId);
-        if (updatedPond) state.firebaseSync?.syncPond('update', updatedPond);
+        const updatedSampling = updatedPond?.samplings.find((sampling) => sampling.id === existingSamplingId)
+          || updatedPond?.samplings.find((sampling) => sampling.date === recordDate && Boolean(sampling.feedData));
+        if (updatedSampling) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
       },
 
       addHarvestData: (pondId, record) => {
         const today = getFarmDateKey(new Date(), get().currentTimeZone);
+        const existingSamplingId = get().ponds.find((pond) => pond.id === pondId)?.samplings.find((sampling) => (
+          !isBaselineSampling(sampling) && Boolean(sampling.harvestData) && sampling.date === today
+        ))?.id;
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -862,7 +879,9 @@ export const usePondStore = create<PondStore>()(
         
         const state = get();
         const updatedPond = state.ponds.find(p => p.id === pondId);
-        if (updatedPond) state.firebaseSync?.syncPond('update', updatedPond);
+        const updatedSampling = updatedPond?.samplings.find((sampling) => sampling.id === existingSamplingId)
+          || updatedPond?.samplings.find((sampling) => sampling.date === today && Boolean(sampling.harvestData));
+        if (updatedSampling) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
       },
 
       getPondById: (pondId) => get().ponds.find((p) => p.id === pondId),

@@ -8,12 +8,11 @@ import {
   writeBatch,
   query,
   orderBy,
-  getDoc,
   runTransaction,
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import { useAuth } from '@/context/AuthContext';
-import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, normalizePondLifecycle } from './../store/pondStore';
+import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, MortalityRecord, normalizePondLifecycle } from './../store/pondStore';
 import { AppState, Platform } from 'react-native';
 import {
   applyHarvestImpactToPond,
@@ -24,6 +23,7 @@ import {
 import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
 import { readProtectedItem, removeProtectedItem, writeProtectedItem } from '../services/protectedStorage';
+import { requestOfflineMutationFlush } from '../services/offlineWorkspace';
 import { getPendingSyncKey } from '../../shared/farmCache';
 import {
   getOfflineRetryDelay,
@@ -65,12 +65,13 @@ export interface SyncStatus {
 
 interface PendingChange {
   id: string;
-  type: 'pond' | 'physicalPond' | 'sampling' | 'harvest' | 'cycle';
+  type: 'pond' | 'physicalPond' | 'sampling' | 'mortality' | 'harvest' | 'cycle';
   action: 'create' | 'update' | 'delete';
   data: any;
   timestamp: number;
   pondId?: string;
   samplingId?: string;
+  recordId?: string;
 }
 
 const removeUndefinedFields = (value: any): any => {
@@ -136,6 +137,137 @@ const applyPendingEntityChanges = <T extends { id: string }>(
   return Array.from(merged.values());
 };
 
+const applyPendingPondChanges = (serverPonds: Pond[], changes: PendingChange[]): Pond[] => {
+  let ponds = [...serverPonds];
+  changes.slice().sort((a, b) => a.timestamp - b.timestamp).forEach((change) => {
+    if (change.type === 'pond') {
+      const pond = change.data as Pond;
+      if (!pond?.id) return;
+      ponds = change.action === 'delete'
+        ? ponds.filter((item) => item.id !== pond.id)
+        : applyPendingEntityChanges(ponds, [change], 'pond');
+      return;
+    }
+    if (change.type === 'sampling' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let samplings = [...(pond.samplings || [])];
+        if (change.action === 'delete') {
+          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
+        } else {
+          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
+          if (index >= 0) samplings[index] = change.data as Sampling;
+          else samplings.push(change.data as Sampling);
+        }
+        return { ...pond, samplings };
+      });
+      return;
+    }
+    if (change.type === 'mortality' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let records = [...(pond.mortalityRecords || [])];
+        if (change.action === 'delete') records = records.filter((record) => record.id !== change.recordId);
+        else {
+          const index = records.findIndex((record) => record.id === change.recordId);
+          if (index >= 0) records[index] = change.data as MortalityRecord;
+          else records.push(change.data as MortalityRecord);
+        }
+        return { ...pond, mortalityRecords: records };
+      });
+    }
+  });
+  return ponds;
+};
+
+const replayPendingFarmChanges = (
+  userId: string,
+  companyId: string,
+  changes: PendingChange[],
+): void => {
+  const state = usePondStore.getState();
+  if (state.currentCompanyId !== companyId || state.farmCacheUserId !== userId) return;
+
+  let ponds = [...state.ponds];
+  let physicalPonds = [...state.physicalPonds];
+  let cycles = [...state.cycles];
+  let harvestRecords = [...state.harvestRecords];
+
+  changes.slice().sort((a, b) => a.timestamp - b.timestamp).forEach((change) => {
+    if (change.type === 'pond') {
+      const pond = change.data as Pond;
+      if (!pond?.id) return;
+      ponds = change.action === 'delete'
+        ? ponds.filter((item) => item.id !== pond.id)
+        : applyPendingEntityChanges(ponds, [change], 'pond').map(normalizePondLifecycle);
+      return;
+    }
+    if (change.type === 'physicalPond') {
+      physicalPonds = applyPendingPhysicalPondChanges(physicalPonds, [change]);
+      return;
+    }
+    if (change.type === 'cycle') {
+      cycles = applyPendingEntityChanges(cycles, [change], 'cycle');
+      return;
+    }
+    if (change.type === 'sampling' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let samplings = [...(pond.samplings || [])];
+        if (change.action === 'delete') {
+          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
+        } else {
+          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
+          if (index >= 0) samplings[index] = change.data as Sampling;
+          else samplings.push(change.data as Sampling);
+        }
+        return { ...pond, samplings };
+      });
+      return;
+    }
+    if (change.type === 'mortality' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let records = [...(pond.mortalityRecords || [])];
+        if (change.action === 'delete') {
+          records = records.filter((record) => record.id !== change.recordId);
+        } else {
+          const index = records.findIndex((record) => record.id === change.recordId);
+          if (index >= 0) records[index] = change.data as MortalityRecord;
+          else records.push(change.data as MortalityRecord);
+        }
+        return { ...pond, mortalityRecords: records };
+      });
+      return;
+    }
+    if (change.type === 'harvest') {
+      const record = change.data as HarvestRecord;
+      const existing = harvestRecords.find((item) => item.id === record.id);
+      if (change.action === 'create' && !existing) {
+        harvestRecords = [record, ...harvestRecords];
+        ponds = ponds.map((pond) => {
+          const harvestPond = record.ponds.find((item) => item.pondId === pond.id);
+          return harvestPond
+            ? applyHarvestImpactToPond(pond, harvestPond, record.date, harvestPond.partialHarvestNumber)
+            : pond;
+        });
+      } else if (change.action === 'delete' && existing) {
+        harvestRecords = harvestRecords.filter((item) => item.id !== record.id);
+        ponds = ponds.map((pond) => {
+          const harvestPond = existing.ponds.find((item) => item.pondId === pond.id);
+          return harvestPond ? reverseHarvestImpactOnPond(pond, harvestPond) : pond;
+        });
+      }
+    }
+  });
+
+  usePondStore.setState({ ponds, physicalPonds, cycles, harvestRecords });
+  scheduleFarmCachePersist(userId, companyId, usePondStore.getState(), state.lastFarmCacheUpdate);
+  void flushFarmCachePersist(userId, companyId).catch((error) => {
+    console.error('[FarmCache] pending replay persistence failed:', error);
+  });
+};
+
 const useFirebaseSyncController = () => {
   const { user, company, isBuyer } = useAuth();
   const activeCompanyId = user && !isBuyer ? company?.id : undefined;
@@ -159,6 +291,17 @@ const useFirebaseSyncController = () => {
   const retryAttemptRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const syncPendingChangesRef = useRef<() => void>(() => undefined);
+  const pendingQueueWriteRef = useRef<Promise<void>>(Promise.resolve());
+
+  const persistPendingQueue = useCallback((changes: PendingChange[]): Promise<void> => {
+    if (!activeUserId || !pendingStorageKey || !pendingStorageReady) return Promise.resolve();
+    const write = pendingQueueWriteRef.current.catch(() => undefined).then(async () => {
+      if (changes.length === 0) await removeProtectedItem(pendingStorageKey);
+      else await writeProtectedItem(activeUserId, pendingStorageKey, JSON.stringify(changes));
+    });
+    pendingQueueWriteRef.current = write;
+    return write;
+  }, [activeUserId, pendingStorageKey, pendingStorageReady]);
 
   useEffect(() => {
     pendingChangesRef.current = pendingChanges;
@@ -187,7 +330,12 @@ const useFirebaseSyncController = () => {
         if (cancelled) return;
         const parsed = raw ? JSON.parse(raw) : [];
         const restoredChanges = Array.isArray(parsed) ? parsed : [];
-        setPendingChanges(restoredChanges);
+        const mergedChanges = Array.from(new Map(
+          [...restoredChanges, ...pendingChangesRef.current].map((change) => [change.id, change]),
+        ).values()) as PendingChange[];
+        replayPendingFarmChanges(activeUserId, activeCompanyId!, mergedChanges);
+        pendingChangesRef.current = mergedChanges;
+        setPendingChanges(mergedChanges);
       } catch (error) {
         console.error('Error loading pending sync queue:', error);
         if (!cancelled) setPendingChanges([]);
@@ -201,7 +349,7 @@ const useFirebaseSyncController = () => {
     return () => {
       cancelled = true;
     };
-  }, [activeUserId, pendingStorageKey]);
+  }, [activeCompanyId, activeUserId, pendingStorageKey]);
 
   useEffect(() => {
     setSyncStatus((previous) => ({
@@ -216,21 +364,11 @@ const useFirebaseSyncController = () => {
   useEffect(() => {
     if (!activeUserId || !pendingStorageKey || !pendingStorageReady) return;
 
-    const persistPendingChanges = async () => {
-      try {
-        if (pendingChanges.length === 0) {
-          await removeProtectedItem(pendingStorageKey);
-        } else {
-          await writeProtectedItem(activeUserId, pendingStorageKey, JSON.stringify(pendingChanges));
-        }
-      } catch (error) {
+    void persistPendingQueue(pendingChanges).catch((error) => {
         console.error('Error saving pending sync queue:', error);
         setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
-      }
-    };
-
-    persistPendingChanges();
-  }, [activeUserId, pendingChanges, pendingStorageKey, pendingStorageReady]);
+    });
+  }, [activeUserId, pendingChanges, pendingStorageKey, pendingStorageReady, persistPendingQueue]);
 
   const setupRealtimeListeners = useCallback((userId: string, companyId: string) => {
     const newUnsubscribeCallbacks: (() => void)[] = [];
@@ -436,7 +574,7 @@ const useFirebaseSyncController = () => {
             });
 
             // Only update if this is the initial load or if we have actual changes
-            const mergedPonds = applyPendingEntityChanges(serverPonds, pendingChangesRef.current, 'pond')
+            const mergedPonds = applyPendingPondChanges(serverPonds, pendingChangesRef.current)
               .map(normalizePondLifecycle);
             const currentPonds = usePondStore.getState().ponds;
             if (!shouldApplyRemoteCollectionSnapshot({
@@ -568,8 +706,9 @@ const useFirebaseSyncController = () => {
             const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.data.id);
             
             if (change.action === 'create' || change.action === 'update') {
+              const { samplings: _samplings, mortalityRecords: _mortalityRecords, ...pondFields } = change.data;
               const pondData = {
-                ...removeUndefinedFields(change.data),
+                ...removeUndefinedFields(change.action === 'create' ? change.data : pondFields),
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid,
                 ...(change.action === 'create' && { 
@@ -714,31 +853,49 @@ const useFirebaseSyncController = () => {
           }
           else if (change.type === 'sampling' && change.pondId) {
             const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.pondId);
-            const pondDoc = await getDoc(pondRef);
-            
-            if (pondDoc.exists()) {
+            await runTransaction(db, async (transaction) => {
+              const pondDoc = await transaction.get(pondRef);
+              if (!pondDoc.exists()) throw new Error(`Pond ${change.pondId} was not found`);
               const pondData = pondDoc.data();
               let samplings = [...(pondData.samplings || [])];
               
               if (change.action === 'create') {
-                samplings.push(change.data);
+                if (!samplings.some((sampling) => sampling.id === change.samplingId)) samplings.push(change.data);
               } else if (change.action === 'update' && change.samplingId) {
                 const index = samplings.findIndex(s => s.id === change.samplingId);
-                if (index >= 0) {
-                  samplings[index] = { ...samplings[index], ...change.data };
-                }
+                if (index >= 0) samplings[index] = removeUndefinedFields(change.data);
+                else samplings.push(removeUndefinedFields(change.data));
               } else if (change.action === 'delete' && change.samplingId) {
                 samplings = samplings.filter(s => s.id !== change.samplingId);
               }
-              
-              batch.update(pondRef, {
+              transaction.update(pondRef, {
                 samplings,
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid
               });
-              hasBatchWrites = true;
-              didProcess = true;
-            }
+            });
+            didProcess = true;
+          }
+          else if (change.type === 'mortality' && change.pondId) {
+            const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.pondId);
+            await runTransaction(db, async (transaction) => {
+              const pondDoc = await transaction.get(pondRef);
+              if (!pondDoc.exists()) throw new Error(`Pond ${change.pondId} was not found`);
+              let records = [...(pondDoc.data().mortalityRecords || [])];
+              if (change.action === 'delete') {
+                records = records.filter((record) => record.id !== change.recordId);
+              } else {
+                const index = records.findIndex((record) => record.id === change.recordId);
+                if (index >= 0) records[index] = removeUndefinedFields(change.data);
+                else records.push(removeUndefinedFields(change.data));
+              }
+              transaction.update(pondRef, {
+                mortalityRecords: records,
+                updatedAt: serverTimestamp(),
+                updatedBy: user.uid,
+              });
+            });
+            didProcess = true;
           }
           
           if (didProcess) processedChanges.push(change.id);
@@ -763,15 +920,28 @@ const useFirebaseSyncController = () => {
       timestamp: Date.now()
     };
 
-    pendingChangesRef.current = [...pendingChangesRef.current, pendingChange];
-    setPendingChanges(pendingChangesRef.current);
+    const nextChanges = [...pendingChangesRef.current, pendingChange];
+    pendingChangesRef.current = nextChanges;
+    setPendingChanges(nextChanges);
+    const queuePersist = persistPendingQueue(nextChanges);
+    const cachePersist = activeUserId && activeCompanyId
+      ? (() => {
+          scheduleFarmCachePersist(activeUserId, activeCompanyId, usePondStore.getState(), Date.now());
+          return flushFarmCachePersist(activeUserId, activeCompanyId);
+        })()
+      : Promise.resolve();
 
     if (!isOnlineRef.current) {
       setSyncStatus(prev => ({ ...prev, error: undefined }));
       return;
     }
-    syncPendingChangesRef.current();
-  }, []);
+    void Promise.all([queuePersist, cachePersist]).then(() => {
+      syncPendingChangesRef.current();
+    }).catch((error) => {
+      console.error('Unable to protect pending farm change:', error);
+      setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
+    });
+  }, [activeCompanyId, activeUserId, persistPendingQueue]);
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -816,7 +986,9 @@ const useFirebaseSyncController = () => {
         console.log(`Synced ${processedChanges.length} changes to server`);
       }
       
-      setPendingChanges(prev => prev.filter(c => !processedChanges.includes(c.id)));
+      const remainingChanges = pendingChangesRef.current.filter(c => !processedChanges.includes(c.id));
+      pendingChangesRef.current = remainingChanges;
+      setPendingChanges(remainingChanges);
       setSyncStatus(prev => ({ 
         ...prev, 
         pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
@@ -854,13 +1026,16 @@ const useFirebaseSyncController = () => {
       } else if (!wasOnline && pendingChangesRef.current.length > 0) {
         syncPendingChangesRef.current();
       }
+      if (isOnline && activeUserId && activeCompanyId) {
+        requestOfflineMutationFlush(activeUserId, activeCompanyId);
+      }
     });
 
     return () => {
       clearRetryTimer();
       unsubscribe();
     };
-  }, [clearRetryTimer]);
+  }, [activeCompanyId, activeUserId, clearRetryTimer]);
 
   useEffect(() => {
     if (pendingStorageReady && syncStatus.isOnline && pendingChanges.length > 0) {
@@ -907,6 +1082,17 @@ const useFirebaseSyncController = () => {
     });
   }, [addPendingChange]);
 
+  const syncMortality = useCallback((action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => {
+    addPendingChange({
+      id: `mortality-${record.id}-${Date.now()}`,
+      type: 'mortality',
+      action,
+      data: record,
+      pondId,
+      recordId: recordId || record.id,
+    });
+  }, [addPendingChange]);
+
   const syncCycle = useCallback((action: 'create' | 'update' | 'delete', cycle: FarmCycle) => {
     addPendingChange({
       id: `cycle-${cycle.id}-${Date.now()}`,
@@ -927,6 +1113,7 @@ const useFirebaseSyncController = () => {
     syncPond,
     syncPhysicalPond,
     syncSampling,
+    syncMortality,
     syncHarvestRecord,
     syncCycle,
     triggerManualSync,
@@ -940,6 +1127,7 @@ const FirebaseSyncContext = createContext<FirebaseSyncContextValue | null>(null)
 
 export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
   const firebaseSync = useFirebaseSyncController();
+  const { triggerManualSync } = firebaseSync;
   const { user, company, isBuyer } = useAuth();
   const activeCompanyId = user && !isBuyer ? company?.id : undefined;
 
@@ -957,6 +1145,7 @@ export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
       syncPond: firebaseSync.syncPond,
       syncPhysicalPond: firebaseSync.syncPhysicalPond,
       syncSampling: firebaseSync.syncSampling,
+      syncMortality: firebaseSync.syncMortality,
       syncHarvestRecord: firebaseSync.syncHarvestRecord,
       syncCycle: firebaseSync.syncCycle,
     });
@@ -975,6 +1164,7 @@ export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
     firebaseSync.syncPhysicalPond,
     firebaseSync.syncPond,
     firebaseSync.syncSampling,
+    firebaseSync.syncMortality,
     user?.uid,
   ]);
 
@@ -987,14 +1177,19 @@ export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
       });
     };
     const subscription = AppState.addEventListener('change', (nextState) => {
-      if (nextState !== 'active') flushCache();
+      if (nextState !== 'active') {
+        flushCache();
+      } else {
+        triggerManualSync();
+        requestOfflineMutationFlush(user.uid, activeCompanyId);
+      }
     });
 
     return () => {
       subscription.remove();
       flushCache();
     };
-  }, [activeCompanyId, user?.uid]);
+  }, [activeCompanyId, triggerManualSync, user?.uid]);
 
   return createElement(FirebaseSyncContext.Provider, { value: firebaseSync }, children);
 };

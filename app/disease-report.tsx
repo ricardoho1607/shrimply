@@ -15,10 +15,18 @@ import * as Location from 'expo-location';
 import { calculateDistance } from './utils/locationUtils';
 import { db } from '../config/firebase';
 import { 
-  collection, addDoc, query, onSnapshot, orderBy,
-  Timestamp, updateDoc, doc,
+  collection, query, onSnapshot, orderBy,
+  Timestamp, doc,
 } from 'firebase/firestore';
 import { hasFarmPermission } from '../shared/permissions';
+import {
+  createOfflineOperationId,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistOfflineCollection,
+  requestOfflineMutationFlush,
+  saveDurableMutation,
+} from './services/offlineWorkspace';
 
 const { width, height } = Dimensions.get('window');
 const isSmallDevice = width < 375;
@@ -280,14 +288,29 @@ export default function DiseaseReportScreen() {
 
   const loadReports = (): (() => void) => {
     setLoading(true);
+    let snapshotVersion = 0;
     try {
+      if (user?.uid && company?.id) {
+        void loadOfflineCollectionWithMutations<DiseaseReport>(
+          user.uid,
+          company.id,
+          'disease-reports',
+          ['diseaseReports'],
+        ).then((cachedReports) => {
+          if (cachedReports.length > 0 && snapshotVersion === 0) {
+            setReports(cachedReports);
+            setLoading(false);
+          }
+        });
+      }
       const q = query(
         collection(db, 'diseaseReports'),
         orderBy('reportDate', 'desc')
       );
       
       const unsubscribe = onSnapshot(
-        q, 
+        q,
+        { includeMetadataChanges: true },
         (snapshot) => {
           try {
             const reportsData = snapshot.docs.map(doc => {
@@ -298,8 +321,26 @@ export default function DiseaseReportScreen() {
                 reportDate: data.reportDate?.toDate ? data.reportDate.toDate().toISOString() : data.reportDate,
               } as DiseaseReport;
             });
-            setReports(reportsData);
-            setLoading(false);
+            if (snapshot.metadata.fromCache && reportsData.length === 0) {
+              setLoading(false);
+              return;
+            }
+            const version = ++snapshotVersion;
+            if (user?.uid && company?.id) {
+              void overlayOfflineMutations(reportsData, user.uid, company.id, ['diseaseReports']).then(async (nextReports) => {
+                if (version !== snapshotVersion) return;
+                setReports(nextReports);
+                setLoading(false);
+                await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
+              }).catch((cacheError) => {
+                console.error('Error applying pending disease reports:', cacheError);
+                if (version === snapshotVersion) setReports(reportsData);
+                setLoading(false);
+              });
+            } else {
+              setReports(reportsData);
+              setLoading(false);
+            }
           } catch (err) {
             console.error('Error processing reports:', err);
             setReports([]);
@@ -397,7 +438,28 @@ export default function DiseaseReportScreen() {
         updatedAt: Timestamp.now(),
       };
       
-      await addDoc(collection(db, 'diseaseReports'), reportData);
+      if (!user?.uid || !company?.id) throw new Error('No active farm account');
+      const reportRef = doc(collection(db, 'diseaseReports'));
+      await saveDurableMutation({
+        id: createOfflineOperationId(`disease-create-${reportRef.id}`),
+        userId: user.uid,
+        companyId: company.id,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['diseaseReports', reportRef.id],
+        data: { id: reportRef.id, ...reportData } as unknown as Record<string, unknown>,
+        merge: false,
+        createOnly: true,
+        serverTimestampFields: ['createdAt', 'updatedAt', 'reportDate'],
+      }, { deferFlush: true });
+      const nextReports = [{
+        id: reportRef.id,
+        ...reportData,
+        reportDate: reportData.reportDate.toDate().toISOString(),
+      } as DiseaseReport, ...reports];
+      setReports(nextReports);
+      await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
+      requestOfflineMutationFlush(user.uid, company.id);
       Alert.alert(labels.reportSubmitted, labels.reportSubmitted);
       
       setShowReportModal(false);
@@ -486,10 +548,26 @@ export default function DiseaseReportScreen() {
           onPress: async () => {
             try {
               setLoading(true);
-              await updateDoc(doc(db, 'diseaseReports', selectedReport.id), {
+              if (!user?.uid || !company?.id) throw new Error('No active farm account');
+              const now = Timestamp.now();
+              await saveDurableMutation({
+                id: createOfflineOperationId(`disease-status-${selectedReport.id}`),
+                userId: user.uid,
+                companyId: company.id,
+                createdAt: Date.now(),
+                kind: 'set',
+                path: ['diseaseReports', selectedReport.id],
+                data: {
                 status: newStatus,
-                updatedAt: Timestamp.now(),
-              });
+                  updatedAt: now,
+                },
+                merge: true,
+                serverTimestampFields: ['updatedAt'],
+              }, { deferFlush: true });
+              const nextReports = reports.map((report) => report.id === selectedReport.id ? { ...report, status: newStatus } : report);
+              setReports(nextReports);
+              await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
+              requestOfflineMutationFlush(user.uid, company.id);
               Alert.alert('Success', `Disease outbreak marked as ${newStatus}.`);
               setShowDetailsModal(false);
             } catch (error) {

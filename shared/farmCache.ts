@@ -24,7 +24,9 @@ export const isUserScopedCacheKey = (key: string, userId: string): boolean => {
   return key.startsWith(`${FARM_CACHE_PREFIX}:v${FARM_CACHE_VERSION}:${encodedUserId}:`)
     || key.startsWith(`${AUTH_BOOTSTRAP_PREFIX}:v${FARM_CACHE_VERSION}:${encodedUserId}:`)
     || key === getAuthBindingKey(userId)
-    || key.startsWith(`${PENDING_SYNC_PREFIX}:${encodedUserId}:`);
+    || key.startsWith(`${PENDING_SYNC_PREFIX}:${encodedUserId}:`)
+    || key.startsWith(`shrimply:offline-collection:v1:${encodedUserId}:`)
+    || key.startsWith(`shrimply:offline-mutations:v1:${encodedUserId}:`);
 };
 
 export interface FarmCacheData {

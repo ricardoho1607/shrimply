@@ -2,20 +2,23 @@ import { create } from 'zustand';
 import { 
   collection, 
   doc, 
-  getDocs, 
-  addDoc, 
-  updateDoc, 
-  deleteDoc, 
   query, 
   where,
   Timestamp,
   onSnapshot,
-  enableIndexedDbPersistence
 } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { db, storage } from '../../config/firebase';
+import { auth, db, storage } from '../../config/firebase';
 import NotificationService from '../services/notificationService';
 import { getActiveFarmCycle, usePondStore } from './pondStore';
+import {
+  createOfflineOperationId,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistOfflineCollection,
+  requestOfflineMutationFlush,
+  saveDurableMutation,
+} from '../services/offlineWorkspace';
 
 export type AssetCategory = 'Equipment' | 'Infrastructure' | 'Vehicles' | 'Tools' | 'Technology';
 export type AssetCondition = 'Excellent' | 'Good' | 'Fair' | 'Poor' | 'Needs Repair';
@@ -176,6 +179,12 @@ const checkOverdueAssets = async (companyId: string, assets: Asset[]) => {
 
 let assetInitializationVersion = 0;
 
+const persistAssetCache = async (companyId: string, assets: Asset[]): Promise<void> => {
+  const userId = auth.currentUser?.uid;
+  if (!userId) return;
+  await persistOfflineCollection(userId, companyId, 'assets', assets);
+};
+
 // Helper function to convert Firestore data to Asset
 const firestoreToAsset = (id: string, data: any): Asset => {
   const convertDate = (field: any) => {
@@ -292,24 +301,6 @@ const assetToFirestore = (asset: Partial<Asset>) => {
   return data;
 };
 
-// Enable offline persistence (call once on app start)
-let persistenceEnabled = false;
-const enableOfflinePersistence = async () => {
-  if (!persistenceEnabled) {
-    try {
-      await enableIndexedDbPersistence(db);
-      persistenceEnabled = true;
-      console.log('✅ Offline persistence enabled - data will sync when back online');
-    } catch (err: any) {
-      if (err.code === 'failed-precondition') {
-        console.warn('⚠️ Multiple tabs open, persistence can only be enabled in one tab');
-      } else if (err.code === 'unimplemented') {
-        console.warn('⚠️ Browser does not support persistence');
-      }
-    }
-  }
-};
-
 export const useAssetStore = create<AssetStore>((set, get) => ({
   assets: [],
   currentCompanyId: null,
@@ -323,8 +314,23 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     const initializationVersion = ++assetInitializationVersion;
     set({ loading: true, error: null });
     
-    // Enable offline persistence
-    await enableOfflinePersistence();
+    const userId = auth.currentUser?.uid;
+    if (userId) {
+      const cachedAssets = await loadOfflineCollectionWithMutations<Record<string, unknown> & { id: string }>(
+        userId,
+        companyId,
+        'assets',
+        ['assets'],
+      );
+      if (initializationVersion !== assetInitializationVersion) return;
+      if (cachedAssets.length > 0) {
+        set({
+          assets: cachedAssets.map((asset) => firestoreToAsset(asset.id, asset)),
+          currentCompanyId: companyId,
+          loading: false,
+        });
+      }
+    }
 
     if (initializationVersion !== assetInitializationVersion) return;
     
@@ -341,14 +347,29 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       // Set up real-time listener
       const unsubscribeFn = onSnapshot(
         q,
+        { includeMetadataChanges: true },
         (querySnapshot) => {
-          const assets: Asset[] = [];
+          const remoteAssets: Asset[] = [];
           querySnapshot.forEach((doc) => {
-            assets.push(firestoreToAsset(doc.id, doc.data()));
+            remoteAssets.push(firestoreToAsset(doc.id, doc.data()));
           });
-          
-          set({ assets, currentCompanyId: companyId, loading: false });
-          console.log(`📦 Loaded ${assets.length} assets in real-time`);
+          if (querySnapshot.metadata.fromCache && remoteAssets.length === 0 && get().assets.length > 0) return;
+          void (async () => {
+            const assets = userId
+              ? (await overlayOfflineMutations(
+                remoteAssets.map((asset) => ({ ...asset }) as Asset & { id: string }),
+                userId,
+                companyId,
+                ['assets'],
+              )).map((asset) => firestoreToAsset(asset.id, asset as unknown as Record<string, unknown>))
+              : remoteAssets;
+            if (initializationVersion !== assetInitializationVersion) return;
+            set({ assets, currentCompanyId: companyId, loading: false });
+            if (userId) await persistAssetCache(companyId, assets);
+            console.log(`📦 Loaded ${assets.length} assets in real-time`);
+          })().catch((error) => {
+            console.error('Failed to apply pending asset changes:', error);
+          });
         },
         (error) => {
           console.error('❌ Error in real-time listener:', error);
@@ -401,48 +422,42 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
   },
 
   addAsset: async (assetData) => {
-    const { currentCompanyId, uploadPhoto } = get();
+    const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error('No company selected');
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('No authenticated user');
 
     try {
-      // Upload photos to Firebase Storage
-      const uploadedPhotoUrls: string[] = [];
-      if (assetData.photos && assetData.photos.length > 0) {
-        console.log(`📤 Uploading ${assetData.photos.length} photos...`);
-        for (const photoUri of assetData.photos) {
-          if (photoUri.startsWith('file://') || photoUri.startsWith('content://')) {
-            const url = await uploadPhoto(photoUri, 'temp', 'asset');
-            uploadedPhotoUrls.push(url);
-          } else {
-            uploadedPhotoUrls.push(photoUri);
-          }
-        }
-      }
-
-      const newAsset: Omit<Asset, 'id'> = {
+      const assetRef = doc(collection(db, 'assets'));
+      const qrCode = await get().generateQRCode(assetRef.id);
+      const newAsset: Asset = {
         ...assetData,
-        photos: uploadedPhotoUrls,
+        id: assetRef.id,
         companyId: currentCompanyId,
         transferHistory: [],
         maintenanceHistory: [],
         totalMaintenanceCost: 0,
         createdAt: new Date(),
         updatedAt: new Date(),
-        qrCode: '', // Will be updated after we get the ID
-      };
-
-      const assetsRef = collection(db, 'assets');
-      const docRef = await addDoc(assetsRef, assetToFirestore(newAsset));
-      
-      // Update with actual ID and regenerate QR code
-      const qrCode = await get().generateQRCode(docRef.id);
-      await updateDoc(docRef, { qrCode });
-      
-      const finalAsset: Asset = {
-        ...newAsset,
-        id: docRef.id,
         qrCode,
       };
+      const durableMutation = await saveDurableMutation({
+        id: createOfflineOperationId(`asset-create-${assetRef.id}`),
+        userId,
+        companyId: currentCompanyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['assets', assetRef.id],
+        data: assetToFirestore(newAsset),
+        merge: false,
+        createOnly: true,
+        uploadLocalFiles: true,
+      }, { deferFlush: true });
+      const finalAsset = firestoreToAsset(assetRef.id, durableMutation.data);
+      const assets = [...get().assets.filter((asset) => asset.id !== finalAsset.id), finalAsset];
+      set({ assets });
+      await persistAssetCache(currentCompanyId, assets);
+      requestOfflineMutationFlush(userId, currentCompanyId);
       
       console.log('✅ Asset added:', finalAsset.name);
       return finalAsset;
@@ -454,13 +469,37 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
   updateAsset: async (id, updates) => {
     try {
-      const assetRef = doc(db, 'assets', id);
-      const updateData = {
+      const currentCompanyId = get().currentCompanyId;
+      const userId = auth.currentUser?.uid;
+      if (!currentCompanyId || !userId) throw new Error('No active farm account');
+      const existing = get().getAsset(id);
+      if (!existing) throw new Error('Asset not found');
+      const updatedAsset: Asset = {
+        ...existing,
         ...updates,
+        id,
         updatedAt: new Date(),
       };
-      
-      await updateDoc(assetRef, assetToFirestore(updateData));
+      const updateData = assetToFirestore({ ...updates, updatedAt: updatedAsset.updatedAt });
+      const durableMutation = await saveDurableMutation({
+        id: createOfflineOperationId(`asset-update-${id}`),
+        userId,
+        companyId: currentCompanyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['assets', id],
+        data: updateData,
+        merge: true,
+        uploadLocalFiles: true,
+      }, { deferFlush: true });
+      const durableAsset = firestoreToAsset(id, {
+        ...assetToFirestore(updatedAsset),
+        ...durableMutation.data,
+      });
+      const assets = get().assets.map((asset) => asset.id === id ? durableAsset : asset);
+      set({ assets });
+      await persistAssetCache(currentCompanyId, assets);
+      requestOfflineMutationFlush(userId, currentCompanyId);
       console.log('✅ Asset updated:', id);
     } catch (error) {
       console.error('❌ Error updating asset:', error);
@@ -470,24 +509,29 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
 
   deleteAsset: async (id) => {
     try {
+      const currentCompanyId = get().currentCompanyId;
+      const userId = auth.currentUser?.uid;
+      if (!currentCompanyId || !userId) throw new Error('No active farm account');
       const asset = get().getAsset(id);
+      await saveDurableMutation({
+        id: createOfflineOperationId(`asset-delete-${id}`),
+        userId,
+        companyId: currentCompanyId,
+        createdAt: Date.now(),
+        kind: 'delete',
+        path: ['assets', id],
+      }, { deferFlush: true });
+      const assets = get().assets.filter((item) => item.id !== id);
+      set({ assets });
+      await persistAssetCache(currentCompanyId, assets);
+      requestOfflineMutationFlush(userId, currentCompanyId);
       if (asset) {
-        // Delete all photos from storage
-        console.log('🗑️ Deleting asset photos...');
-        for (const photoUrl of asset.photos) {
-          await get().deletePhoto(photoUrl);
-        }
-        
-        // Delete maintenance photos
-        for (const maintenance of asset.maintenanceHistory) {
-          for (const photoUrl of maintenance.photos) {
-            await get().deletePhoto(photoUrl);
-          }
-        }
+        const photoUrls = [
+          ...asset.photos,
+          ...asset.maintenanceHistory.flatMap((maintenance) => maintenance.photos),
+        ].filter((url) => url.startsWith('http'));
+        void Promise.all(photoUrls.map((photoUrl) => get().deletePhoto(photoUrl)));
       }
-      
-      const assetRef = doc(db, 'assets', id);
-      await deleteDoc(assetRef);
       console.log('✅ Asset deleted:', id);
     } catch (error) {
       console.error('❌ Error deleting asset:', error);
@@ -542,27 +586,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
     const asset = get().getAsset(id);
     if (!asset) throw new Error('Asset not found');
 
-    // Upload maintenance photos
-    const uploadedPhotoUrls: string[] = [];
-    if (maintenance.photos && maintenance.photos.length > 0) {
-      console.log(`📤 Uploading ${maintenance.photos.length} maintenance photos...`);
-      for (const photoUri of maintenance.photos) {
-        if (photoUri.startsWith('file://') || photoUri.startsWith('content://')) {
-          const url = await get().uploadPhoto(photoUri, id, 'maintenance');
-          uploadedPhotoUrls.push(url);
-        } else {
-          uploadedPhotoUrls.push(photoUri);
-        }
-      }
-    }
-
     const skipCycleLink = Boolean((maintenance as any).skipCycleLink);
     const { skipCycleLink: _skipCycleLink, ...maintenanceData } = maintenance as any;
     const newMaintenance: MaintenanceRecord = {
       ...maintenanceData,
       cycleId: maintenance.cycleId || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.id),
       cycleName: maintenance.cycleName || (skipCycleLink ? undefined : getActiveFarmCycle(usePondStore.getState().cycles)?.cycleName),
-      photos: uploadedPhotoUrls,
+      photos: maintenance.photos || [],
       id: `maint_${Date.now()}`,
       date: new Date(),
     };

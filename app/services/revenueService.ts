@@ -3,19 +3,20 @@ import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
   collection, 
   doc, 
-  addDoc, 
-  setDoc,
-  updateDoc, 
-  deleteDoc, 
   getDocs, 
   query, 
-  where, 
   orderBy, 
   Timestamp,
-  serverTimestamp,
-  DocumentData 
 } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
+import {
+  createOfflineOperationId,
+  isWorkspaceOnline,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistCollectionAfterMutation,
+  persistOfflineCollection,
+} from './offlineWorkspace';
 
 export interface Revenue {
   id: string;
@@ -57,6 +58,12 @@ class RevenueService {
     return collection(db, 'companies', companyId, 'revenues');
   }
 
+  private requireUserId(): string {
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('No authenticated user');
+    return userId;
+  }
+
   /**
    * Add a new revenue
    */
@@ -67,20 +74,30 @@ class RevenueService {
     userName: string
   ): Promise<string> {
     try {
-      const revenuesRef = this.getRevenuesCollection(companyId);
-      
-      const newRevenue: Record<string, any> = {
+      const revenueRef = doc(this.getRevenuesCollection(companyId));
+      const newRevenue: Revenue = {
+        id: revenueRef.id,
         ...revenueData,
         companyId,
         addedBy: userId,
         addedByName: userName,
         timestamp: Date.now(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
-
-      const docRef = await addDoc(revenuesRef, newRevenue);
-      return docRef.id;
+      await persistCollectionAfterMutation<Revenue>({
+        id: createOfflineOperationId(`revenue-create-${revenueRef.id}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', companyId, 'revenues', revenueRef.id],
+        data: newRevenue as unknown as Record<string, unknown>,
+        merge: false,
+        createOnly: true,
+        serverTimestampFields: ['createdAt', 'updatedAt'],
+      }, 'finance-revenues', ['companies', companyId, 'revenues']);
+      return revenueRef.id;
     } catch (error) {
       console.error('Error adding revenue:', error);
       throw new Error('Failed to add revenue');
@@ -94,17 +111,28 @@ class RevenueService {
     userId: string,
     userName: string
   ): Promise<string> {
-    const revenueRef = doc(db, 'companies', companyId, 'revenues', documentId);
-    await setDoc(revenueRef, {
+    const revenue: Revenue = {
+      id: documentId,
       ...revenueData,
       companyId,
       addedBy: userId,
       addedByName: userName,
       timestamp: Date.now(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    return revenueRef.id;
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    await persistCollectionAfterMutation<Revenue>({
+      id: createOfflineOperationId(`revenue-upsert-${documentId}`),
+      userId,
+      companyId,
+      createdAt: Date.now(),
+      kind: 'set',
+      path: ['companies', companyId, 'revenues', documentId],
+      data: revenue as unknown as Record<string, unknown>,
+      merge: true,
+      serverTimestampFields: ['createdAt', 'updatedAt'],
+    }, 'finance-revenues', ['companies', companyId, 'revenues']);
+    return documentId;
   }
 
   /**
@@ -116,14 +144,18 @@ class RevenueService {
     revenueData: Partial<RevenueInput>
   ): Promise<void> {
     try {
-      const revenueRef = doc(db, 'companies', companyId, 'revenues', revenueId);
-      
-      const updateData: Record<string, any> = {
-        ...revenueData,
-        updatedAt: serverTimestamp(),
-      };
-
-      await updateDoc(revenueRef, updateData);
+      const userId = this.requireUserId();
+      await persistCollectionAfterMutation<Revenue>({
+        id: createOfflineOperationId(`revenue-update-${revenueId}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', companyId, 'revenues', revenueId],
+        data: { ...revenueData, id: revenueId, updatedAt: Timestamp.now() },
+        merge: true,
+        serverTimestampFields: ['updatedAt'],
+      }, 'finance-revenues', ['companies', companyId, 'revenues']);
     } catch (error) {
       console.error('Error updating revenue:', error);
       throw new Error('Failed to update revenue');
@@ -135,8 +167,15 @@ class RevenueService {
    */
   async deleteRevenue(companyId: string, revenueId: string): Promise<void> {
     try {
-      const revenueRef = doc(db, 'companies', companyId, 'revenues', revenueId);
-      await deleteDoc(revenueRef);
+      const userId = this.requireUserId();
+      await persistCollectionAfterMutation<Revenue>({
+        id: createOfflineOperationId(`revenue-delete-${revenueId}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'delete',
+        path: ['companies', companyId, 'revenues', revenueId],
+      }, 'finance-revenues', ['companies', companyId, 'revenues']);
     } catch (error) {
       console.error('Error deleting revenue:', error);
       throw new Error('Failed to delete revenue');
@@ -147,19 +186,30 @@ class RevenueService {
    * Get all revenues for a company
    */
   async getRevenues(companyId: string): Promise<Revenue[]> {
+    const userId = this.requireUserId();
+    const cached = await loadOfflineCollectionWithMutations<Revenue>(
+      userId,
+      companyId,
+      'finance-revenues',
+      ['companies', companyId, 'revenues'],
+    );
+    if (!await isWorkspaceOnline()) return cached.sort((a, b) => b.timestamp - a.timestamp);
     try {
       const revenuesRef = this.getRevenuesCollection(companyId);
       const q = query(revenuesRef, orderBy('timestamp', 'desc'));
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(docSnapshot => ({
+      const remote = querySnapshot.docs.map(docSnapshot => ({
         id: docSnapshot.id,
         ...(docSnapshot.data() as Omit<Revenue, 'id'>),
       })) as Revenue[];
+      const merged = await overlayOfflineMutations(remote, userId, companyId, ['companies', companyId, 'revenues']);
+      await persistOfflineCollection(userId, companyId, 'finance-revenues', merged);
+      return merged;
     } catch (error) {
       console.error('Error getting revenues:', error);
-      throw new Error('Failed to load revenues');
+      return cached;
     }
   }
 
@@ -171,25 +221,9 @@ class RevenueService {
     startDate: string, 
     endDate: string
   ): Promise<Revenue[]> {
-    try {
-      const revenuesRef = this.getRevenuesCollection(companyId);
-      const q = query(
-        revenuesRef,
-        where('date', '>=', startDate),
-        where('date', '<=', endDate),
-        orderBy('date', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(docSnapshot => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<Revenue, 'id'>),
-      })) as Revenue[];
-    } catch (error) {
-      console.error('Error getting revenues by date range:', error);
-      throw new Error('Failed to load revenues');
-    }
+    return (await this.getRevenues(companyId))
+      .filter((revenue) => revenue.date >= startDate && revenue.date <= endDate)
+      .sort((a, b) => b.date.localeCompare(a.date));
   }
 
   /**
@@ -199,24 +233,7 @@ class RevenueService {
     companyId: string, 
     category: string
   ): Promise<Revenue[]> {
-    try {
-      const revenuesRef = this.getRevenuesCollection(companyId);
-      const q = query(
-        revenuesRef,
-        where('category', '==', category),
-        orderBy('timestamp', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(docSnapshot => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<Revenue, 'id'>),
-      })) as Revenue[];
-    } catch (error) {
-      console.error('Error getting revenues by category:', error);
-      throw new Error('Failed to load revenues');
-    }
+    return (await this.getRevenues(companyId)).filter((revenue) => revenue.category === category);
   }
 
   /**

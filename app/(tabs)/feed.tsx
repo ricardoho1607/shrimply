@@ -8,13 +8,6 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { usePondStore, isPondCycleActive, type FeedingResponse } from "../store/pondStore";
-import { 
-  collection, 
-  query, 
-  orderBy, 
-  onSnapshot 
-} from 'firebase/firestore';
-import { db } from '@/config/firebase';
 import { useFeedAdditiveStore } from "../store/feedAdditiveStore";
 import {
   DAILY_FEED_ERROR_CODES,
@@ -56,7 +49,7 @@ export default function FeedManagementScreen() {
   const { t } = useLanguage();
   const { user, company } = useAuth();
   const { ponds, addFeedData } = usePondStore();
-  const { setCurrentCompanyId, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
+  const { feeds: inventoryFeeds, initializeForCompany, reconcileDailyFeedAllocations } = useFeedAdditiveStore();
   const canEditPonds = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const enterpriseBlocks = useEnterpriseBlocks(
@@ -73,7 +66,6 @@ export default function FeedManagementScreen() {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [selectedPond, setSelectedPond] = useState<string | null>(null);
-  const [inventoryFeeds, setInventoryFeeds] = useState<any[]>([]);
   const [feedAllocations, setFeedAllocations] = useState<FeedAllocationInput[]>([]);
   const [feedingResponse, setFeedingResponse] = useState<FeedingResponse | null>(null);
   const farmToday = getFarmDateKey(new Date(), company?.timeZone);
@@ -89,15 +81,9 @@ export default function FeedManagementScreen() {
   }, [isModalVisible]);
 
   React.useEffect(() => {
-    if (user?.companyId) {
-      setCurrentCompanyId(user.companyId, company?.timeZone);
-      const q = query(collection(db, 'companies', user.companyId, 'feeds'), orderBy('feedName', 'asc'));
-      const unsub = onSnapshot(q, (snapshot) => {
-        setInventoryFeeds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-      return unsub;
-    }
-  }, [company?.timeZone, setCurrentCompanyId, user?.companyId]);
+    if (!user?.companyId) return undefined;
+    return initializeForCompany(user.companyId, company?.timeZone);
+  }, [company?.timeZone, initializeForCompany, user?.companyId]);
 
   const getFeedRecordForDate = React.useCallback((pond: any, date: string) => (
     Array.isArray(pond?.samplings)

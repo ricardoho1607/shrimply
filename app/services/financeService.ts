@@ -3,20 +3,21 @@ import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
   collection, 
   doc, 
-  addDoc, 
-  setDoc,
-  updateDoc, 
-  deleteDoc, 
   getDocs, 
   query, 
-  where, 
   orderBy, 
   Timestamp,
-  serverTimestamp,
-  DocumentData 
 } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 import type { PondCostAllocation } from '../../shared/financeCycleAllocation';
+import {
+  createOfflineOperationId,
+  isWorkspaceOnline,
+  loadOfflineCollectionWithMutations,
+  overlayOfflineMutations,
+  persistCollectionAfterMutation,
+  persistOfflineCollection,
+} from './offlineWorkspace';
 
 export interface Expense {
   id: string;
@@ -64,6 +65,12 @@ class FinanceService {
     return collection(db, 'companies', companyId, 'expenses');
   }
 
+  private requireUserId(): string {
+    const userId = auth.currentUser?.uid;
+    if (!userId) throw new Error('No authenticated user');
+    return userId;
+  }
+
   /**
    * Add a new expense
    */
@@ -74,20 +81,30 @@ class FinanceService {
     userName: string
   ): Promise<string> {
     try {
-      const expensesRef = this.getExpensesCollection(companyId);
-      
-      const newExpense: Record<string, any> = {
+      const expenseRef = doc(this.getExpensesCollection(companyId));
+      const newExpense: Expense = {
+        id: expenseRef.id,
         ...expenseData,
         companyId,
         addedBy: userId,
         addedByName: userName,
         timestamp: Date.now(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
       };
-
-      const docRef = await addDoc(expensesRef, newExpense);
-      return docRef.id;
+      await persistCollectionAfterMutation<Expense>({
+        id: createOfflineOperationId(`expense-create-${expenseRef.id}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', companyId, 'expenses', expenseRef.id],
+        data: newExpense as unknown as Record<string, unknown>,
+        merge: false,
+        createOnly: true,
+        serverTimestampFields: ['createdAt', 'updatedAt'],
+      }, 'finance-expenses', ['companies', companyId, 'expenses']);
+      return expenseRef.id;
     } catch (error) {
       console.error('Error adding expense:', error);
       throw new Error('Failed to add expense');
@@ -101,17 +118,28 @@ class FinanceService {
     userId: string,
     userName: string
   ): Promise<string> {
-    const expenseRef = doc(db, 'companies', companyId, 'expenses', documentId);
-    await setDoc(expenseRef, {
+    const expense: Expense = {
+      id: documentId,
       ...expenseData,
       companyId,
       addedBy: userId,
       addedByName: userName,
       timestamp: Date.now(),
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-    return expenseRef.id;
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
+    };
+    await persistCollectionAfterMutation<Expense>({
+      id: createOfflineOperationId(`expense-upsert-${documentId}`),
+      userId,
+      companyId,
+      createdAt: Date.now(),
+      kind: 'set',
+      path: ['companies', companyId, 'expenses', documentId],
+      data: expense as unknown as Record<string, unknown>,
+      merge: true,
+      serverTimestampFields: ['createdAt', 'updatedAt'],
+    }, 'finance-expenses', ['companies', companyId, 'expenses']);
+    return documentId;
   }
 
   /**
@@ -123,14 +151,18 @@ class FinanceService {
     expenseData: Partial<ExpenseInput>
   ): Promise<void> {
     try {
-      const expenseRef = doc(db, 'companies', companyId, 'expenses', expenseId);
-      
-      const updateData: Record<string, any> = {
-        ...expenseData,
-        updatedAt: serverTimestamp(),
-      };
-
-      await updateDoc(expenseRef, updateData);
+      const userId = this.requireUserId();
+      await persistCollectionAfterMutation<Expense>({
+        id: createOfflineOperationId(`expense-update-${expenseId}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'set',
+        path: ['companies', companyId, 'expenses', expenseId],
+        data: { ...expenseData, id: expenseId, updatedAt: Timestamp.now() },
+        merge: true,
+        serverTimestampFields: ['updatedAt'],
+      }, 'finance-expenses', ['companies', companyId, 'expenses']);
     } catch (error) {
       console.error('Error updating expense:', error);
       throw new Error('Failed to update expense');
@@ -142,8 +174,15 @@ class FinanceService {
    */
   async deleteExpense(companyId: string, expenseId: string): Promise<void> {
     try {
-      const expenseRef = doc(db, 'companies', companyId, 'expenses', expenseId);
-      await deleteDoc(expenseRef);
+      const userId = this.requireUserId();
+      await persistCollectionAfterMutation<Expense>({
+        id: createOfflineOperationId(`expense-delete-${expenseId}`),
+        userId,
+        companyId,
+        createdAt: Date.now(),
+        kind: 'delete',
+        path: ['companies', companyId, 'expenses', expenseId],
+      }, 'finance-expenses', ['companies', companyId, 'expenses']);
     } catch (error) {
       console.error('Error deleting expense:', error);
       throw new Error('Failed to delete expense');
@@ -154,19 +193,30 @@ class FinanceService {
    * Get all expenses for a company
    */
   async getExpenses(companyId: string): Promise<Expense[]> {
+    const userId = this.requireUserId();
+    const cached = await loadOfflineCollectionWithMutations<Expense>(
+      userId,
+      companyId,
+      'finance-expenses',
+      ['companies', companyId, 'expenses'],
+    );
+    if (!await isWorkspaceOnline()) return cached.sort((a, b) => b.timestamp - a.timestamp);
     try {
       const expensesRef = this.getExpensesCollection(companyId);
       const q = query(expensesRef, orderBy('timestamp', 'desc'));
       
       const querySnapshot = await getDocs(q);
       
-      return querySnapshot.docs.map(docSnapshot => ({
+      const remote = querySnapshot.docs.map(docSnapshot => ({
         id: docSnapshot.id,
         ...(docSnapshot.data() as Omit<Expense, 'id'>),
       })) as Expense[];
+      const merged = await overlayOfflineMutations(remote, userId, companyId, ['companies', companyId, 'expenses']);
+      await persistOfflineCollection(userId, companyId, 'finance-expenses', merged);
+      return merged;
     } catch (error) {
       console.error('Error getting expenses:', error);
-      throw new Error('Failed to load expenses');
+      return cached;
     }
   }
 
@@ -178,25 +228,9 @@ class FinanceService {
     startDate: string, 
     endDate: string
   ): Promise<Expense[]> {
-    try {
-      const expensesRef = this.getExpensesCollection(companyId);
-      const q = query(
-        expensesRef,
-        where('date', '>=', startDate),
-        where('date', '<=', endDate),
-        orderBy('date', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(docSnapshot => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<Expense, 'id'>),
-      })) as Expense[];
-    } catch (error) {
-      console.error('Error getting expenses by date range:', error);
-      throw new Error('Failed to load expenses');
-    }
+    return (await this.getExpenses(companyId))
+      .filter((expense) => expense.date >= startDate && expense.date <= endDate)
+      .sort((a, b) => b.date.localeCompare(a.date));
   }
 
   /**
@@ -206,24 +240,7 @@ class FinanceService {
     companyId: string, 
     category: string
   ): Promise<Expense[]> {
-    try {
-      const expensesRef = this.getExpensesCollection(companyId);
-      const q = query(
-        expensesRef,
-        where('category', '==', category),
-        orderBy('timestamp', 'desc')
-      );
-      
-      const querySnapshot = await getDocs(q);
-      
-      return querySnapshot.docs.map(docSnapshot => ({
-        id: docSnapshot.id,
-        ...(docSnapshot.data() as Omit<Expense, 'id'>),
-      })) as Expense[];
-    } catch (error) {
-      console.error('Error getting expenses by category:', error);
-      throw new Error('Failed to load expenses');
-    }
+    return (await this.getExpenses(companyId)).filter((expense) => expense.category === category);
   }
 
   /**

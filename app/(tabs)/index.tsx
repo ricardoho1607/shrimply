@@ -1,7 +1,6 @@
 // app/(tabs)/index.tsx - Fully translated version with keyboard handling
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import { deleteDoc, doc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { 
   FlatList, Modal, Platform, ScrollView, StatusBar, StyleSheet, 
@@ -9,7 +8,6 @@ import {
   Keyboard, TouchableWithoutFeedback
 } from 'react-native';
 import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleEndReason, type PhysicalPond, type MortalityObservationType, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from '.././store/pondStore';
-import { db } from '../../config/firebase';
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
@@ -974,7 +972,6 @@ export default function PondManagementScreen() {
     const persistDeletePhysicalPond = async () => {
       try {
         deletePhysicalPond(pond.id);
-        await deleteDoc(doc(db, 'companies', company.id, 'physicalPonds', pond.id));
         Alert.alert(t.messages.success, t.home.pondDeletedSuccess);
       } catch (error) {
         console.error('Failed to delete physical pond:', error);
@@ -1009,68 +1006,6 @@ export default function PondManagementScreen() {
     updateFarmCycle(activeFarmCycle.id, { cycleName: nextName });
     Alert.alert(t.messages.success, t.farmCycle.cycleNameUpdated);
   }, [activeFarmCycle, canManageFarmCycle, cycleNameDraft, t, updateFarmCycle]);
-
-  const persistFarmCycleClose = useCallback(async (cycle: FarmCycle, cyclePonds: Pond[], closedAt: string) => {
-    if (!company?.id || !user?.uid) {
-      throw new Error('Missing company or user context.');
-    }
-
-    const cycleRef = doc(db, 'companies', company.id, 'cycles', cycle.id);
-    const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
-    const cyclePondNames = new Set(cyclePonds.map((pond) => getPhysicalPondKey(pond.pondName)));
-    const lifecycleUpdates: {
-      ref: ReturnType<typeof doc>;
-      data: Record<string, unknown>;
-    }[] = [];
-    cyclePonds.forEach((pond) => {
-      const pondRef = doc(db, 'companies', company.id, 'ponds', pond.id);
-      lifecycleUpdates.push({ ref: pondRef, data: {
-        cycleId: pond.cycleId || cycle.id,
-        cycleName: pond.cycleName || cycle.cycleName,
-        pondCycleId: pond.pondCycleId || pond.id,
-        cycleStatus: 'ended',
-        cycleEndedAt: closedAt,
-        cycleEndedBy: user.uid,
-        cycleEndReason: pond.cycleEndReason || 'harvested',
-        updatedAt: serverTimestamp(),
-        updatedBy: user.uid,
-      } });
-    });
-    physicalPonds
-      .filter((physicalPond) =>
-        (physicalPond.activePondId && cyclePondIds.has(physicalPond.activePondId)) ||
-        (physicalPond.status === 'active' && cyclePondNames.has(getPhysicalPondKey(physicalPond.pondName)))
-      )
-      .forEach((physicalPond) => {
-        lifecycleUpdates.push({ ref: doc(db, 'companies', company.id, 'physicalPonds', physicalPond.id), data: {
-          status: 'idle',
-          activePondId: null,
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid,
-        } });
-      });
-
-    for (let index = 0; index < lifecycleUpdates.length; index += 400) {
-      const batch = writeBatch(db);
-      lifecycleUpdates.slice(index, index + 400).forEach((update) => {
-        batch.set(update.ref, update.data, { merge: true });
-      });
-      await batch.commit();
-    }
-
-    const cycleBatch = writeBatch(db);
-    cycleBatch.set(cycleRef, {
-      ...cycle,
-      status: 'closed',
-      closedAt,
-      stockingEndDate: cycle.stockingEndDate || closedAt,
-      updatedAt: serverTimestamp(),
-      updatedBy: user.uid,
-      createdAt: cycle.createdAt || serverTimestamp(),
-      createdBy: cycle.createdBy || user.uid,
-    }, { merge: true });
-    await cycleBatch.commit();
-  }, [company?.id, physicalPonds, user?.uid]);
 
   const handleCloseFarmCycle = useCallback(() => {
     if (!activeFarmCycle || !canManageFarmCycle) return;
@@ -1108,8 +1043,7 @@ export default function PondManagementScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await persistFarmCycleClose(activeFarmCycle, currentCyclePonds, today);
-              closeFarmCycle(activeFarmCycle.id, today, { sync: false, endedBy: user?.uid });
+              closeFarmCycle(activeFarmCycle.id, today, { endedBy: user?.uid });
               setCycleFilter('ended');
               setCycleManagerExpanded(false);
               Alert.alert(
@@ -1133,7 +1067,7 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, persistFarmCycleClose, router, t, user?.role, user?.uid]);
+  }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, router, t, user?.role, user?.uid]);
 
   const handleSaveEnterpriseProductionCycle = useCallback((input: {
     cycle?: FarmCycle;
