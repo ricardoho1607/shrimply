@@ -107,6 +107,7 @@ function CycleReportsContent() {
   const selectedCycle = cycles.find((cycle) => cycle.id === selectedCycleId);
   const report = useMemo(() => selectedCycle ? buildWebCycleReport({
     cycle: selectedCycle,
+    cycles,
     ponds,
     harvestRecords,
     feeds,
@@ -122,6 +123,7 @@ function CycleReportsContent() {
     feeds,
     harvestRecords,
     ponds,
+    cycles,
     selectedCycle,
   ]);
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;

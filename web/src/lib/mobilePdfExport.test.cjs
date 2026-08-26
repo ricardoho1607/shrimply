@@ -22,3 +22,7 @@ test('web PDF rendering preserves source colours without JPEG conversion', () =>
   assert.match(source, /image: \{ type: 'png' \}/);
   assert.doesNotMatch(source, /image: \{ type: 'jpeg'/);
 });
+
+test('web PDF rendering uses high resolution for sharp small text', () => {
+  assert.match(source, /scale: 3/);
+});

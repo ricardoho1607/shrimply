@@ -43,6 +43,46 @@ test('Cycle PDF explicitly separates every fixed page', () => {
   assert.match(source, /reportStyles\.replace\(\/\(-\?\\d\+\(\?:\\\.\\d\+\)\?\)pt\\b\/g, '\$1px'\)/);
 });
 
+test('Cycle PDF shows average harvest MBW separately from final MBW', () => {
+  const mobileSource = read('app/services/cycleReportExportService.ts');
+  const webSource = read('web/src/lib/generated/mobileCycleReport.ts');
+  [mobileSource, webSource].forEach((source) => {
+    assert.match(source, /<th>Final MBW<\/th><th>Average MBW<\/th>/);
+    assert.match(source, /pond\.averageHarvestMbw/);
+  });
+});
+
+test('Cycle PDF uses neutral overview cards and omits the closed header badge', () => {
+  const source = read('app/services/cycleReportExportService.ts');
+  assert.doesNotMatch(source, /<span class="closed">/);
+  assert.doesNotMatch(source, /class="metric (?:blue|green)"/);
+  assert.match(source, /\.metric\{border-left-width:1pt\}/);
+  assert.match(source, /\.metric\{border-left-color:#D7E7F2\}/);
+});
+
+test('Cycle PDF includes executive comparisons, MBW movement, and actions', () => {
+  const mobileSource = read('app/services/cycleReportExportService.ts');
+  const webSource = read('web/src/lib/generated/mobileCycleReport.ts');
+  [mobileSource, webSource].forEach((source) => {
+    assert.match(source, /Executive performance snapshot/);
+    assert.match(source, /Previous cycle comparison/);
+    assert.match(source, /Priority review and next action/);
+    assert.match(source, /Recent MBW movement/);
+    assert.match(source, /renderSparkline\(pond\.mbwTrend\)/);
+  });
+});
+
+test('Cycle PDF reports yield in tonnes per hectare and keeps supporting text legible', () => {
+  const mobileSource = read('app/services/cycleReportExportService.ts');
+  const webSource = read('web/src/lib/generated/mobileCycleReport.ts');
+  [mobileSource, webSource].forEach((source) => {
+    assert.match(source, /t\/ha/);
+    assert.doesNotMatch(source, /kg\/m2/);
+    assert.doesNotMatch(source, /Data quality and assumptions/);
+    assert.doesNotMatch(source, /font-size:[56](?:\.\d+)?pt/);
+  });
+});
+
 test('Sampling PDF keeps its compact pond column aligned and contained', () => {
   const source = read('app/services/samplingReportExportService.ts');
   assert.match(source, /<table class="sampling-table">/);

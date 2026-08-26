@@ -43,6 +43,34 @@ test('Indonesian PDF terminology distinguishes ponds from farms', () => {
   assert.equal(localizePdfText('Farm', 'id'), 'Tambak');
 });
 
+test('cycle report average MBW copy is localized', () => {
+  assert.equal(localizePdfText('Average MBW', 'id'), 'MBW Rata-rata');
+  assert.equal(
+    localizePdfText('Biomass-weighted average across all Partial and Final Harvest records.', 'id'),
+    'Rata-rata tertimbang biomassa dari seluruh catatan Panen Parsial dan Final.',
+  );
+  for (const language of ['th', 'vi', 'zh']) {
+    assert.notEqual(localizePdfText('Average MBW', language), 'Average MBW');
+    assert.doesNotMatch(
+      localizePdfText('Biomass-weighted average across all Partial and Final Harvest records.', language),
+      /Biomass-weighted|Partial|Final Harvest/,
+    );
+  }
+});
+
+test('cycle report executive dashboard headings are localized', () => {
+  const phrases = [
+    'Executive performance snapshot',
+    'Previous cycle comparison',
+    'Priority review and next action',
+    'Recent MBW movement',
+    'Data quality and assumptions',
+  ];
+  for (const language of ['id', 'th', 'vi', 'zh'] as const) {
+    phrases.forEach((phrase) => assert.notEqual(localizePdfText(phrase, language), phrase));
+  }
+});
+
 test('saved Overwatch statuses and summary are localized together', () => {
   assert.equal(
     localizePdfText(savedOverwatchResult, 'id'),

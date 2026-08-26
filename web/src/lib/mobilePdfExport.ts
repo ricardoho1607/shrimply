@@ -95,7 +95,7 @@ export const downloadMobilePdf = async ({
       filename,
       image: { type: 'png' },
       html2canvas: {
-        scale: 2,
+        scale: 3,
         useCORS: true,
         backgroundColor: null,
         width: pageWidth,

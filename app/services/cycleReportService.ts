@@ -5,6 +5,7 @@ import {
   type HarvestRecord,
   type Pond,
   getPondPlSupplier,
+  hasWaterQualityData,
   isBaselineSampling,
   isPondCycleActive,
 } from '../store/pondStore';
@@ -34,7 +35,10 @@ export type CycleReportPond = {
   area: number;
   density: number;
   initialPopulation: number;
+  initialWeight: number;
   latestMbw: number;
+  previousMbw: number;
+  mbwTrend: number[];
   finalHarvestMbw: number;
   averageHarvestMbw: number;
   productivityKgPerHa: number;
@@ -53,6 +57,15 @@ export type CycleReportPond = {
   samplingCount: number;
 };
 
+export type CycleReportBenchmark = {
+  cycleName: string;
+  yieldTonPerHa: number;
+  overallActualSurvivalRate: number;
+  actualFcr: number;
+  averageHarvestMbw: number;
+  grossMargin: number;
+};
+
 export type CycleCostBreakdown = {
   feed: number;
   additives: number;
@@ -66,15 +79,18 @@ export type CycleReport = {
   ponds: CycleReportPond[];
   harvestRecords: HarvestRecord[];
   notes: CycleReportNote[];
+  comparison?: CycleReportBenchmark;
   totals: {
     pondCount: number;
     activePondCount: number;
     endedPondCount: number;
     totalArea: number;
     initialPopulation: number;
+    harvestedPopulation: number;
     harvestedBiomass: number;
     harvestRevenue: number;
     averageHarvestSize: number;
+    averageHarvestMbw: number;
     feedUsageQty: number;
     additiveUsageQty: number;
     costs: CycleCostBreakdown;
@@ -82,6 +98,13 @@ export type CycleReport = {
     costPerKg: number;
     revenuePerKg: number;
     profitPerKg: number;
+    yieldTonPerHa: number;
+    overallActualSurvivalRate: number;
+    actualFcr: number;
+    sampledPondCount: number;
+    samplingCoverage: number;
+    waterQualityPondCount: number;
+    waterQualityRecordCount: number;
   };
 };
 
@@ -101,6 +124,7 @@ type BuildCycleReportInput = {
     totalFeedConsumed: number;
     adjustedFCR: number;
   };
+  includeComparison?: boolean;
 };
 
 const LEGACY_CYCLE_ID = 'legacy-active-cycle';
@@ -126,6 +150,17 @@ const getLatestMbw = (pond: Pond): number => {
   return toNumber(validSamplings[0]?.mbw || pond.baselineMbw || pond.initialWeight || 0);
 };
 
+const getMbwMovement = (pond: Pond): { previousMbw: number; mbwTrend: number[] } => {
+  const validSamplings = [...(pond.samplings || [])]
+    .filter((sampling) => !isBaselineSampling(sampling) && toNumber(sampling.mbw) > 0)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const trend = validSamplings.slice(-5).map((sampling) => toNumber(sampling.mbw));
+  return {
+    previousMbw: trend.length > 1 ? trend[trend.length - 2] : 0,
+    mbwTrend: trend,
+  };
+};
+
 const getPondMortality = (pond: Pond): number =>
   (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling)).reduce((sum, sampling) => sum + toNumber(sampling.mortality), 0);
 
@@ -140,22 +175,28 @@ const usageCost = (usage: UsageHistory): number => {
   return toNumber(usage.quantity) * toNumber(usage.unitPrice);
 };
 
-const harvestMatchesCycle = (harvest: HarvestRecord, cycleId: string, cyclePondIds: Set<string>): boolean =>
-  harvest.cycleId === cycleId ||
-  harvest.ponds.some((pond) =>
-    pond.cycleId === cycleId ||
-    (cycleId === LEGACY_CYCLE_ID && !pond.cycleId && cyclePondIds.has(pond.pondId)) ||
-    cyclePondIds.has(pond.pondId)
-  );
+const harvestPondMatchesCycle = (
+  harvest: HarvestRecord,
+  pond: HarvestRecord['ponds'][number],
+  cycleId: string,
+  cyclePondIds: Set<string>,
+): boolean => {
+  if (pond.cycleId) return pond.cycleId === cycleId;
+  if (harvest.cycleId) return harvest.cycleId === cycleId;
+  return cyclePondIds.has(pond.pondId);
+};
 
-const calculateHarvestTotals = (records: HarvestRecord[]) => {
+const harvestMatchesCycle = (harvest: HarvestRecord, cycleId: string, cyclePondIds: Set<string>): boolean =>
+  harvest.ponds.some((pond) => harvestPondMatchesCycle(harvest, pond, cycleId, cyclePondIds));
+
+const calculateHarvestTotals = (records: HarvestRecord[], cycleId: string, cyclePondIds: Set<string>) => {
   let biomass = 0;
   let revenue = 0;
   let weightedSize = 0;
   let weightedSizeBiomass = 0;
 
   records.forEach((record) => {
-    record.ponds.forEach((pond) => {
+    record.ponds.filter((pond) => harvestPondMatchesCycle(record, pond, cycleId, cyclePondIds)).forEach((pond) => {
       const mainBiomass = toNumber(pond.biomass);
       const mainSize = toNumber(pond.size);
       const mainPrice = toNumber(pond.price);
@@ -297,6 +338,7 @@ export const buildCycleReport = ({
   assets,
   expenses,
   calculatePondMetricsWithHarvest,
+  includeComparison = true,
 }: BuildCycleReportInput): CycleReport | null => {
   const cycle = inferCycle(cycleId, cycles, ponds);
   if (!cycle) return null;
@@ -307,7 +349,7 @@ export const buildCycleReport = ({
   );
   const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
   const matchedHarvestRecords = harvestRecords.filter((harvest) => harvestMatchesCycle(harvest, cycleId, cyclePondIds));
-  const harvestTotals = calculateHarvestTotals(matchedHarvestRecords);
+  const harvestTotals = calculateHarvestTotals(matchedHarvestRecords, cycleId, cyclePondIds);
 
   const feedUsages = feeds.flatMap((feed) =>
     (feed.usageHistory || [])
@@ -346,9 +388,11 @@ export const buildCycleReport = ({
     const harvestedPopulation = pondHarvest.population || toNumber(pond.totalHarvestedPopulation);
     const initialPopulation = toNumber(pond.initialPopulation);
     const area = toNumber(pond.pondArea);
+    const initialWeight = toNumber(pond.initialWeight || 0.5);
+    const mbwMovement = getMbwMovement(pond);
     const actualPerformance = calculateActualPondPerformance({
       initialPopulation,
-      initialWeight: toNumber(pond.initialWeight || 0.5),
+      initialWeight,
       harvestedBiomass,
       harvestedPopulation,
       totalFeedUsed: metrics.totalFeedConsumed,
@@ -365,7 +409,10 @@ export const buildCycleReport = ({
       area,
       density: toNumber(pond.density),
       initialPopulation: toNumber(pond.initialPopulation),
+      initialWeight,
       latestMbw: getLatestMbw(pond),
+      previousMbw: mbwMovement.previousMbw,
+      mbwTrend: mbwMovement.mbwTrend,
       finalHarvestMbw: pondHarvest.finalHarvestMbw,
       averageHarvestMbw: pondHarvest.averageHarvestMbw,
       productivityKgPerHa: calculateProductivityKgPerHa(harvestedBiomass, area),
@@ -403,8 +450,24 @@ export const buildCycleReport = ({
     total: feedCost + additiveCost + maintenanceCost + manualExpenses,
   };
   const grossProfit = harvestTotals.revenue - costs.total;
+  const harvestedPopulation = reportPonds.reduce((sum, pond) => sum + pond.harvestedPopulation, 0);
+  const initialPopulation = reportPonds.reduce((sum, pond) => sum + pond.initialPopulation, 0);
+  const totalArea = reportPonds.reduce((sum, pond) => sum + pond.area, 0);
+  const harvestedBiomass = harvestTotals.biomass || reportPonds.reduce((sum, pond) => sum + pond.harvestedBiomass, 0);
+  const fcrPonds = reportPonds.filter((pond) => pond.hasFinalHarvest && pond.actualFcr > 0);
+  const fcrBiomassGain = fcrPonds.reduce((sum, pond) => (
+    sum + pond.harvestedBiomass - ((pond.initialPopulation * pond.initialWeight) / 1000)
+  ), 0);
+  const sampledPondCount = reportPonds.filter((pond) => pond.samplingCount > 0).length;
+  const averageHarvestMbw = harvestedBiomass > 0
+    ? reportPonds.reduce((sum, pond) => sum + (pond.averageHarvestMbw * pond.harvestedBiomass), 0) / harvestedBiomass
+    : 0;
+  const waterQualityPonds = cyclePonds.filter((pond) => (pond.samplings || []).some(hasWaterQualityData));
+  const waterQualityRecordCount = cyclePonds.reduce((sum, pond) => (
+    sum + (pond.samplings || []).filter(hasWaterQualityData).length
+  ), 0);
 
-  return {
+  const result: CycleReport = {
     cycle,
     ponds: reportPonds,
     harvestRecords: matchedHarvestRecords,
@@ -413,18 +476,61 @@ export const buildCycleReport = ({
       pondCount: reportPonds.length,
       activePondCount: reportPonds.filter((pond) => pond.status === 'active').length,
       endedPondCount: reportPonds.filter((pond) => pond.status === 'ended').length,
-      totalArea: reportPonds.reduce((sum, pond) => sum + pond.area, 0),
-      initialPopulation: reportPonds.reduce((sum, pond) => sum + pond.initialPopulation, 0),
-      harvestedBiomass: harvestTotals.biomass || reportPonds.reduce((sum, pond) => sum + pond.harvestedBiomass, 0),
+      totalArea,
+      initialPopulation,
+      harvestedPopulation,
+      harvestedBiomass,
       harvestRevenue: harvestTotals.revenue,
       averageHarvestSize: harvestTotals.averageSize,
+      averageHarvestMbw,
       feedUsageQty,
       additiveUsageQty,
       costs,
       grossProfit,
-      costPerKg: harvestTotals.biomass > 0 ? costs.total / harvestTotals.biomass : 0,
-      revenuePerKg: harvestTotals.biomass > 0 ? harvestTotals.revenue / harvestTotals.biomass : 0,
-      profitPerKg: harvestTotals.biomass > 0 ? grossProfit / harvestTotals.biomass : 0,
+      costPerKg: harvestedBiomass > 0 ? costs.total / harvestedBiomass : 0,
+      revenuePerKg: harvestedBiomass > 0 ? harvestTotals.revenue / harvestedBiomass : 0,
+      profitPerKg: harvestedBiomass > 0 ? grossProfit / harvestedBiomass : 0,
+      yieldTonPerHa: totalArea > 0 ? (harvestedBiomass * 10) / totalArea : 0,
+      overallActualSurvivalRate: initialPopulation > 0 ? (harvestedPopulation / initialPopulation) * 100 : 0,
+      actualFcr: fcrBiomassGain > 0 ? fcrPonds.reduce((sum, pond) => sum + pond.totalFeedUsed, 0) / fcrBiomassGain : 0,
+      sampledPondCount,
+      samplingCoverage: reportPonds.length > 0 ? (sampledPondCount / reportPonds.length) * 100 : 0,
+      waterQualityPondCount: waterQualityPonds.length,
+      waterQualityRecordCount,
     },
   };
+
+  if (includeComparison) {
+    const selectedEnd = new Date(cycle.closedAt || cycle.stockingEndDate || Date.now()).getTime();
+    const previousCycle = [...cycles]
+      .filter((candidate) => candidate.id !== cycle.id && candidate.status === 'closed')
+      .filter((candidate) => new Date(candidate.closedAt || candidate.stockingEndDate || 0).getTime() < selectedEnd)
+      .sort((a, b) => new Date(b.closedAt || b.stockingEndDate || 0).getTime() - new Date(a.closedAt || a.stockingEndDate || 0).getTime())[0];
+    const previousReport = previousCycle ? buildCycleReport({
+      cycleId: previousCycle.id,
+      cycles,
+      ponds,
+      harvestRecords,
+      feeds,
+      additives,
+      assets,
+      expenses,
+      calculatePondMetricsWithHarvest,
+      includeComparison: false,
+    }) : null;
+    if (previousReport) {
+      result.comparison = {
+        cycleName: previousReport.cycle.cycleName,
+        yieldTonPerHa: previousReport.totals.yieldTonPerHa,
+        overallActualSurvivalRate: previousReport.totals.overallActualSurvivalRate,
+        actualFcr: previousReport.totals.actualFcr,
+        averageHarvestMbw: previousReport.totals.averageHarvestMbw,
+        grossMargin: previousReport.totals.harvestRevenue > 0
+          ? (previousReport.totals.grossProfit / previousReport.totals.harvestRevenue) * 100
+          : 0,
+      };
+    }
+  }
+
+  return result;
 };

@@ -108,8 +108,13 @@ let cycleGenerator = `${generatedHeader}${cyclePdfI18nImport}\n\nexport interfac
   doc: number;
   area: number;
   initialPopulation: number;
+  initialWeight: number;
   latestMbw: number;
+  previousMbw: number;
+  mbwTrend: number[];
   finalHarvestMbw: number;
+  averageHarvestMbw: number;
+  productivityKgPerHa: number;
   totalFeedUsed: number;
   hasFinalHarvest: boolean;
   closureReason?: string;
@@ -129,16 +134,41 @@ export interface MobileCycleReport {
     closedAt?: string;
   };
   ponds: MobileCycleReportPond[];
+  harvestRecords: { id: string }[];
+  notes: {
+    severity: 'info' | 'warning';
+    key: 'noPonds' | 'noHarvestRecords' | 'missingFeedCost' | 'missingAdditiveCost' | 'noMbwSampling' | 'cycleNotClosed';
+    pondName?: string;
+    message: string;
+  }[];
+  comparison?: {
+    cycleName: string;
+    yieldTonPerHa: number;
+    overallActualSurvivalRate: number;
+    actualFcr: number;
+    averageHarvestMbw: number;
+    grossMargin: number;
+  };
   totals: {
     pondCount: number;
     totalArea: number;
+    initialPopulation: number;
+    harvestedPopulation: number;
     harvestedBiomass: number;
     harvestRevenue: number;
+    averageHarvestMbw: number;
     costs: { feed: number; additives: number; maintenance: number; manualExpenses: number; total: number };
     grossProfit: number;
     costPerKg: number;
     revenuePerKg: number;
     profitPerKg: number;
+    yieldTonPerHa: number;
+    overallActualSurvivalRate: number;
+    actualFcr: number;
+    sampledPondCount: number;
+    samplingCoverage: number;
+    waterQualityPondCount: number;
+    waterQualityRecordCount: number;
   };
 }
 
