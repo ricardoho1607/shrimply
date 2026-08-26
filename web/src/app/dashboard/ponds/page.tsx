@@ -160,12 +160,13 @@ export default function PondsPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const { company } = useAuth();
-  const { data: ponds, loading, companyId, user } = useCompanyPonds<Pond>('desc');
+  const { data: ponds, loading: pondsLoading, companyId, user } = useCompanyPonds<Pond>('desc');
   const { data: physicalPonds, loading: physicalPondsLoading } = useCompanyPhysicalPonds<PhysicalPond>('asc');
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
-  const { data: cycles } = useCompanyCycles<FarmCycle>();
+  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FarmCycle>();
   const { data: harvestRecords } = useCompanyHarvestRecords<HarvestRecord>();
   const today = useFarmDateKey(company?.timeZone);
+  const isPondsPageLoading = pondsLoading || physicalPondsLoading || cyclesLoading;
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [cycleFilter, setCycleFilter] = useState<'active' | 'inactive' | 'ended'>('active');
@@ -547,8 +548,7 @@ export default function PondsPage() {
   useEffect(() => {
     if (
       startRequestHandledRef.current
-      || loading
-      || physicalPondsLoading
+      || isPondsPageLoading
       || !canEditPonds
       || typeof window === 'undefined'
     ) return;
@@ -578,9 +578,8 @@ export default function PondsPage() {
     accessiblePhysicalPonds,
     accessiblePonds,
     canEditPonds,
-    loading,
+    isPondsPageLoading,
     openStartCycle,
-    physicalPondsLoading,
     t.startPondCycle.invalidRequest,
   ]);
 
@@ -854,6 +853,21 @@ export default function PondsPage() {
     ]),
   ), [company?.timeZone, filteredPonds, today]);
 
+  if (isPondsPageLoading) {
+    return (
+      <div
+        className="dashboard-page ponds-page"
+        style={{ maxWidth: '1200px', margin: '0 auto' }}
+        aria-busy="true"
+        aria-label="Loading ponds"
+      >
+        <div className="ponds-loading-state">
+          <Loader2 className="animate-spin" size={30} color="var(--primary)" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="dashboard-page ponds-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
       <section className="glass-card animate-fade-up ponds-cycle-panel" aria-label="Current farm cycle">
@@ -970,11 +984,7 @@ export default function PondsPage() {
         )}
       </section>
 
-      {loading || physicalPondsLoading ? (
-        <div className="ponds-loading-state">
-          <Loader2 className="animate-spin" size={30} color="var(--primary)" />
-        </div>
-      ) : visiblePondItems.length === 0 ? (
+      {visiblePondItems.length === 0 ? (
         <div className="glass-card animate-fade-up animate-delay-2 ponds-empty-state">
           <div className="ponds-empty-icon"><Waves size={26} /></div>
           <h2>{t.ponds.noPondsFound || 'No ponds found'}</h2>

@@ -33,3 +33,19 @@ test('pond cards and list show estimated living population', () => {
   assert.match(pondsPage, /calculatePondMetricsWithHarvest/);
   assert.doesNotMatch(pondsPage, /cyclePond\.initialPopulation\.toLocaleString\(\)/);
 });
+
+test('cycle summary and pond counts wait for every required subscription', () => {
+  assert.match(pondsPage, /loading:\s*pondsLoading/);
+  assert.match(pondsPage, /loading:\s*physicalPondsLoading/);
+  assert.match(pondsPage, /loading:\s*cyclesLoading/);
+  assert.match(
+    pondsPage,
+    /const isPondsPageLoading = pondsLoading \|\| physicalPondsLoading \|\| cyclesLoading;/,
+  );
+
+  const loadingGuard = pondsPage.indexOf('if (isPondsPageLoading)');
+  const cyclePanel = pondsPage.indexOf('aria-label="Current farm cycle"');
+  assert.ok(loadingGuard >= 0, 'the page should render a loading guard');
+  assert.ok(loadingGuard < cyclePanel, 'the loading guard should hide cycle and pond empty states');
+  assert.match(pondsPage, /aria-label="Loading ponds"/);
+});
