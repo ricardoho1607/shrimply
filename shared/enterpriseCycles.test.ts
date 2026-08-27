@@ -5,6 +5,7 @@ import {
   getEnterpriseCycleAvailableBlocks,
   getEnterpriseCycleBlockIds,
   getEnterpriseCyclePlannedPonds,
+  getPreviousEnterpriseCycleForSameBlocks,
   getEnterpriseUnassignedInactivePonds,
   summarizeEnterpriseCycle,
   type EnterpriseCycleRecord,
@@ -37,6 +38,56 @@ test('assigns one whole block to each enterprise cycle', () => {
     getEnterpriseBlockCycles('block-b', cycles, []).map((cycle) => cycle.id),
     ['cycle-b'],
   );
+});
+
+test('compares a cycle only with the latest earlier cycle for the same block', () => {
+  const selected = {
+    id: 'cycle-a-current',
+    cycleName: 'Block A current',
+    status: 'closed' as const,
+    blockIds: ['block-a'],
+    closedAt: '2026-08-20',
+  };
+  const previous = getPreviousEnterpriseCycleForSameBlocks(selected, [
+    selected,
+    {
+      id: 'cycle-b-newer',
+      cycleName: 'Block B newer',
+      status: 'closed',
+      blockIds: ['block-b'],
+      closedAt: '2026-08-10',
+    },
+    {
+      id: 'cycle-a-previous',
+      cycleName: 'Block A previous',
+      status: 'closed',
+      blockIds: ['block-a'],
+      closedAt: '2026-08-01',
+    },
+  ]);
+
+  assert.equal(previous?.id, 'cycle-a-previous');
+});
+
+test('does not compare cycles when no same-block history exists', () => {
+  const selected = {
+    id: 'cycle-a-current',
+    cycleName: 'Block A current',
+    status: 'closed' as const,
+    blockIds: ['block-a'],
+    closedAt: '2026-08-20',
+  };
+
+  assert.equal(getPreviousEnterpriseCycleForSameBlocks(selected, [
+    selected,
+    {
+      id: 'cycle-b-previous',
+      cycleName: 'Block B previous',
+      status: 'closed',
+      blockIds: ['block-b'],
+      closedAt: '2026-08-01',
+    },
+  ]), undefined);
 });
 
 test('does not offer blocks reserved by another open cycle', () => {

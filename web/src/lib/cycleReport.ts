@@ -5,11 +5,14 @@ import {
   type SharedPond,
   type SharedSampling,
 } from '../../../shared/pondCalculations';
+import { getPreviousEnterpriseCycleForSameBlocks } from '../../../shared/enterpriseCycles';
 
 export interface CycleReportCycle {
   id: string;
   cycleName: string;
   status: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
+  blockIds?: string[] | null;
+  blockId?: string | null;
   plannedStartDate?: string;
   stockingStartDate?: string;
   stockingEndDate?: string;
@@ -19,6 +22,7 @@ export interface CycleReportCycle {
 export interface CycleReportPondSource extends SharedPond {
   id: string;
   pondName: string;
+  blockId?: string;
   pondArea?: number;
   area?: number;
   density?: number;
@@ -431,14 +435,7 @@ export function buildWebCycleReport({
   };
 
   if (includeComparison) {
-    const selectedEnd = new Date(cycle.closedAt || cycle.stockingEndDate || Date.now()).getTime();
-    const previousCycle = [...cycles]
-      .filter((candidate) => candidate.id !== cycle.id && candidate.status === 'closed')
-      .filter((candidate) => new Date(candidate.closedAt || candidate.stockingEndDate || 0).getTime() < selectedEnd)
-      .sort((first, second) => (
-        new Date(second.closedAt || second.stockingEndDate || 0).getTime()
-        - new Date(first.closedAt || first.stockingEndDate || 0).getTime()
-      ))[0];
+    const previousCycle = getPreviousEnterpriseCycleForSameBlocks(cycle, cycles, ponds);
     const previousReport = previousCycle ? buildWebCycleReport({
       cycle: previousCycle,
       cycles,

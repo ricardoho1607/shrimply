@@ -71,6 +71,44 @@ test('cycle report executive dashboard headings are localized', () => {
   }
 });
 
+test('cycle report comparison and action copy has no English leaks', () => {
+  const cases = [
+    ['Metric', /\bMetric\b/],
+    ['Current', /\bCurrent\b/],
+    ['Previous', /\bPrevious\b/],
+    ['Change', /\bChange\b/],
+    ['Yield', /\bYield\b/],
+    ['Current vs Cycle 2', /\bCurrent vs\b/],
+    ['Closure review', /\bClosure review\b/],
+    ['1 non-harvest closure recorded.', /\bnon-harvest closure\b/],
+    ['2 non-harvest closures recorded.', /\bnon-harvest closures\b/],
+    ['Review the recorded cause and prevention steps before the next stocking.', /\brecorded cause|prevention steps|next stocking\b/],
+    ['Feed efficiency', /\bFeed efficiency\b/],
+    ['2 ponds exceeded the 1.80 FCR review level.', /\bponds exceeded|review level\b/],
+    ['Check feed logs, biomass estimates, and harvest linkage.', /\bfeed logs|biomass estimates|harvest linkage\b/],
+    ['Survival review', /\bSurvival review\b/],
+    ['1 pond finished below 75% actual survival.', /\bpond finished below|actual survival\b/],
+    ['85% of ponds have valid MBW sampling.', /\bof ponds have valid\b/],
+    ['Complete missing MBW records before comparing growth performance.', /\bmissing MBW records|growth performance\b/],
+    ['Profitability review', /\bProfitability review\b/],
+    ['Recorded cycle costs exceeded recorded harvest revenue.', /\bcycle costs exceeded|harvest revenue\b/],
+    ['Reconcile selling prices and every cycle-linked expense.', /\bReconcile selling prices|cycle-linked expense\b/],
+    ['No major review flags', /\bNo major review flags\b/],
+    ['The available records did not trigger the cycle screening checks.', /\bavailable records|cycle screening checks\b/],
+    ['Confirm results against farm targets before the next stocking decision.', /\bConfirm results|farm targets|stocking decision\b/],
+    ['21.00 g to 24.00 g', /\bg to\b/],
+    ['40.54 t/ha yield', /\byield\b/],
+    ['No valid MBW trend', /\bNo valid MBW trend\b/],
+    ['Pond Performance - Continued', /\bPond Performance|Continued\b/],
+  ] as const;
+
+  for (const language of ['id', 'th', 'vi', 'zh'] as const) {
+    cases.forEach(([text, englishLeak]) => {
+      assert.doesNotMatch(localizePdfText(text, language), englishLeak, `${language}: ${text}`);
+    });
+  }
+});
+
 test('saved Overwatch statuses and summary are localized together', () => {
   assert.equal(
     localizePdfText(savedOverwatchResult, 'id'),

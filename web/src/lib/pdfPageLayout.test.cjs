@@ -72,6 +72,14 @@ test('Cycle PDF includes executive comparisons, MBW movement, and actions', () =
   });
 });
 
+test('Cycle PDF keeps translated signal labels clear of status badges', () => {
+  const mobileSource = read('app/services/cycleReportExportService.ts');
+  const webSource = read('web/src/lib/generated/mobileCycleReport.ts');
+  [mobileSource, webSource].forEach((source) => {
+    assert.match(source, /\.signals label\{[^}]*padding-right:45pt[^}]*min-height:18pt/);
+  });
+});
+
 test('Cycle PDF reports yield in tonnes per hectare and keeps supporting text legible', () => {
   const mobileSource = read('app/services/cycleReportExportService.ts');
   const webSource = read('web/src/lib/generated/mobileCycleReport.ts');

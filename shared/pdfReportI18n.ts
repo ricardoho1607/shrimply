@@ -195,8 +195,28 @@ const PDF_PHRASES: PdfPhrase[] = [
   { en: 'Average harvest MBW', id: 'MBW panen rata-rata', th: 'MBW เก็บเกี่ยวเฉลี่ย', vi: 'MBW thu hoạch trung bình', zh: '平均收获 MBW' },
   { en: 'Sampling coverage', id: 'Cakupan sampling', th: 'ความครอบคลุมการสุ่มตัวอย่าง', vi: 'Mức độ bao phủ lấy mẫu', zh: '采样覆盖率' },
   { en: 'Previous cycle comparison', id: 'Perbandingan siklus sebelumnya', th: 'เปรียบเทียบกับรอบก่อนหน้า', vi: 'So sánh vụ trước', zh: '上一周期比较' },
+  { en: 'Metric', id: 'Metrik', th: 'ตัวชี้วัด', vi: 'Chỉ số', zh: '指标' },
+  { en: 'Current', id: 'Saat ini', th: 'ปัจจุบัน', vi: 'Hiện tại', zh: '当前' },
+  { en: 'Previous', id: 'Sebelumnya', th: 'ก่อนหน้า', vi: 'Trước', zh: '上一周期' },
+  { en: 'Change', id: 'Perubahan', th: 'การเปลี่ยนแปลง', vi: 'Thay đổi', zh: '变化' },
+  { en: 'Yield', id: 'Hasil panen', th: 'ผลผลิต', vi: 'Năng suất', zh: '产量' },
   { en: 'Priority review and next action', id: 'Tinjauan prioritas dan tindakan berikutnya', th: 'ประเด็นสำคัญและการดำเนินการถัดไป', vi: 'Ưu tiên xem xét và hành động tiếp theo', zh: '优先审查和下一步行动' },
+  { en: 'Closure review', id: 'Tinjauan penutupan', th: 'ทบทวนการปิดรอบ', vi: 'Xem xét việc đóng ao', zh: '关闭审查' },
+  { en: 'Review the recorded cause and prevention steps before the next stocking.', id: 'Tinjau penyebab yang tercatat dan langkah pencegahan sebelum penebaran berikutnya.', th: 'ทบทวนสาเหตุที่บันทึกและขั้นตอนป้องกันก่อนปล่อยกุ้งรอบถัดไป', vi: 'Xem lại nguyên nhân đã ghi nhận và các bước phòng ngừa trước lần thả nuôi tiếp theo.', zh: '下次投苗前，请审查已记录的原因和预防措施。' },
+  { en: 'Feed efficiency', id: 'Efisiensi pakan', th: 'ประสิทธิภาพอาหาร', vi: 'Hiệu quả thức ăn', zh: '饲料效率' },
+  { en: 'Check feed logs, biomass estimates, and harvest linkage.', id: 'Periksa catatan pakan, estimasi biomassa, dan keterkaitan panen.', th: 'ตรวจสอบบันทึกอาหาร ประมาณการชีวมวล และการเชื่อมโยงข้อมูลเก็บเกี่ยว', vi: 'Kiểm tra nhật ký thức ăn, ước tính sinh khối và liên kết thu hoạch.', zh: '检查饲料日志、生物量估算和收获关联。' },
+  { en: 'Survival review', id: 'Tinjauan kelangsungan hidup', th: 'ทบทวนอัตรารอด', vi: 'Xem xét tỷ lệ sống', zh: '成活率审查' },
+  { en: 'Review mortality, water records, and stocking quality.', id: 'Tinjau mortalitas, catatan air, dan kualitas penebaran.', th: 'ทบทวนการตาย บันทึกคุณภาพน้ำ และคุณภาพการปล่อยกุ้ง', vi: 'Xem lại tỷ lệ chết, hồ sơ nước và chất lượng thả nuôi.', zh: '审查死亡、水质记录和投苗质量。' },
+  { en: 'Complete missing MBW records before comparing growth performance.', id: 'Lengkapi catatan MBW yang hilang sebelum membandingkan kinerja pertumbuhan.', th: 'กรอกบันทึก MBW ที่ขาดก่อนเปรียบเทียบผลการเติบโต', vi: 'Hoàn thiện hồ sơ MBW còn thiếu trước khi so sánh hiệu quả tăng trưởng.', zh: '比较生长表现前，请补全缺失的 MBW 记录。' },
+  { en: 'Profitability review', id: 'Tinjauan profitabilitas', th: 'ทบทวนความสามารถในการทำกำไร', vi: 'Xem xét khả năng sinh lời', zh: '盈利能力审查' },
+  { en: 'Recorded cycle costs exceeded recorded harvest revenue.', id: 'Biaya siklus tercatat melebihi pendapatan panen tercatat.', th: 'ต้นทุนรอบการเลี้ยงที่บันทึกสูงกว่ารายได้เก็บเกี่ยวที่บันทึก', vi: 'Chi phí vụ nuôi đã ghi nhận vượt doanh thu thu hoạch đã ghi nhận.', zh: '已记录的周期成本超过已记录的收获收入。' },
+  { en: 'Reconcile selling prices and every cycle-linked expense.', id: 'Rekonsiliasi harga jual dan setiap beban yang terkait dengan siklus.', th: 'กระทบยอดราคาขายและค่าใช้จ่ายทั้งหมดที่เชื่อมกับรอบการเลี้ยง', vi: 'Đối chiếu giá bán và mọi chi phí liên kết với vụ nuôi.', zh: '核对售价和每项与周期关联的费用。' },
+  { en: 'No major review flags', id: 'Tidak ada tanda tinjauan utama', th: 'ไม่มีประเด็นสำคัญที่ต้องทบทวน', vi: 'Không có cảnh báo lớn cần xem xét', zh: '无重大审查标记' },
+  { en: 'The available records did not trigger the cycle screening checks.', id: 'Catatan yang tersedia tidak memicu pemeriksaan siklus.', th: 'บันทึกที่มีไม่เข้าเกณฑ์การตรวจคัดกรองรอบการเลี้ยง', vi: 'Các hồ sơ hiện có không kích hoạt kiểm tra sàng lọc vụ nuôi.', zh: '现有记录未触发周期筛查检查。' },
+  { en: 'Confirm results against farm targets before the next stocking decision.', id: 'Konfirmasikan hasil terhadap target tambak sebelum keputusan penebaran berikutnya.', th: 'ยืนยันผลเทียบกับเป้าหมายฟาร์มก่อนตัดสินใจปล่อยกุ้งครั้งถัดไป', vi: 'Xác nhận kết quả theo mục tiêu trang trại trước quyết định thả nuôi tiếp theo.', zh: '下次投苗决策前，请根据养殖场目标确认结果。' },
   { en: 'Recent MBW movement', id: 'Pergerakan MBW terbaru', th: 'การเปลี่ยนแปลง MBW ล่าสุด', vi: 'Biến động MBW gần đây', zh: '近期 MBW 变化' },
+  { en: 'No valid MBW trend', id: 'Tidak ada tren MBW valid', th: 'ไม่มีแนวโน้ม MBW ที่ใช้ได้', vi: 'Không có xu hướng MBW hợp lệ', zh: '没有有效的 MBW 趋势' },
+  { en: 'Pond Performance - Continued', id: 'Kinerja Kolam - Lanjutan', th: 'ประสิทธิภาพบ่อ - ต่อ', vi: 'Hiệu quả ao - Tiếp', zh: '池塘表现 - 续' },
   { en: 'Data quality and assumptions', id: 'Kualitas data dan asumsi', th: 'คุณภาพข้อมูลและสมมติฐาน', vi: 'Chất lượng dữ liệu và giả định', zh: '数据质量和假设' },
   { en: 'MBW sampling', id: 'Sampling MBW', th: 'การสุ่มตัวอย่าง MBW', vi: 'Lấy mẫu MBW', zh: 'MBW 采样' },
   { en: 'Water quality', id: 'Kualitas air', th: 'คุณภาพน้ำ', vi: 'Chất lượng nước', zh: '水质' },
@@ -653,6 +673,53 @@ const PDF_OVERWATCH_RISK_COPY: Record<Exclude<PdfLanguage, 'en'>, {
   },
 };
 
+const PDF_CYCLE_REPORT_DYNAMIC_COPY: Record<Exclude<PdfLanguage, 'en'>, {
+  currentVs: (cycleName: string) => string;
+  closureCount: (count: string) => string;
+  highFcrCount: (count: string) => string;
+  lowSurvivalCount: (count: string) => string;
+  samplingCoverage: (coverage: string) => string;
+  mbwMovement: (previous: string, current: string) => string;
+  yield: (value: string) => string;
+}> = {
+  id: {
+    currentVs: (cycleName) => `Saat ini dibandingkan dengan ${cycleName}`,
+    closureCount: (count) => `${count} penutupan tanpa panen tercatat.`,
+    highFcrCount: (count) => `${count} kolam melampaui tingkat tinjauan FCR 1,80.`,
+    lowSurvivalCount: (count) => `${count} kolam berakhir dengan kelangsungan hidup aktual di bawah 75%.`,
+    samplingCoverage: (coverage) => `${coverage}% kolam memiliki sampling MBW yang valid.`,
+    mbwMovement: (previous, current) => `${previous} g ke ${current} g`,
+    yield: (value) => `Hasil panen ${value} t/ha`,
+  },
+  th: {
+    currentVs: (cycleName) => `ปัจจุบันเทียบกับ ${cycleName}`,
+    closureCount: (count) => `${count} บ่อถูกบันทึกว่าปิดรอบโดยไม่เก็บเกี่ยว`,
+    highFcrCount: (count) => `${count} บ่อมี FCR เกินระดับทบทวน 1.80`,
+    lowSurvivalCount: (count) => `${count} บ่อจบรอบด้วยอัตรารอดจริงต่ำกว่า 75%`,
+    samplingCoverage: (coverage) => `${coverage}% ของบ่อมีข้อมูลสุ่ม MBW ที่ใช้ได้`,
+    mbwMovement: (previous, current) => `${previous} กรัม ถึง ${current} กรัม`,
+    yield: (value) => `ผลผลิต ${value} t/ha`,
+  },
+  vi: {
+    currentVs: (cycleName) => `Hiện tại so với ${cycleName}`,
+    closureCount: (count) => `${count} ao được ghi nhận đóng mà không thu hoạch.`,
+    highFcrCount: (count) => `${count} ao vượt mức FCR cần xem xét là 1,80.`,
+    lowSurvivalCount: (count) => `${count} ao kết thúc với tỷ lệ sống thực tế dưới 75%.`,
+    samplingCoverage: (coverage) => `${coverage}% ao có dữ liệu lấy mẫu MBW hợp lệ.`,
+    mbwMovement: (previous, current) => `${previous} g đến ${current} g`,
+    yield: (value) => `Năng suất ${value} t/ha`,
+  },
+  zh: {
+    currentVs: (cycleName) => `当前与 ${cycleName} 对比`,
+    closureCount: (count) => `${count} 个池塘记录为非收获关闭。`,
+    highFcrCount: (count) => `${count} 个池塘超过 1.80 的 FCR 审查水平。`,
+    lowSurvivalCount: (count) => `${count} 个池塘结束时的实际成活率低于 75%。`,
+    samplingCoverage: (coverage) => `${coverage}% 的池塘具有有效的 MBW 采样。`,
+    mbwMovement: (previous, current) => `${previous} g 至 ${current} g`,
+    yield: (value) => `产量 ${value} t/ha`,
+  },
+};
+
 export const normalizePdfLanguage = (language?: string | null): PdfLanguage =>
   PDF_LANGUAGES.includes(language as PdfLanguage) ? language as PdfLanguage : 'en';
 
@@ -675,6 +742,49 @@ export const localizePdfText = (value: string, language?: string | null): string
     );
     const localizedConclusion = conclusion.startsWith('Review') ? copy.elevated : copy.normal;
     return `${leading}${copy.title}: ${localizedStatuses}. ${localizedConclusion}${trailing}`;
+  }
+
+  const cycleCopy = PDF_CYCLE_REPORT_DYNAMIC_COPY[normalized];
+  const currentVsMatch = value.match(/^(\s*)Current vs (.+?)(\s*)$/);
+  if (currentVsMatch) {
+    const [, leading, cycleName, trailing] = currentVsMatch;
+    return `${leading}${cycleCopy.currentVs(cycleName)}${trailing}`;
+  }
+
+  const closureCountMatch = value.match(/^(\s*)(\d+) non-harvest closures? recorded\.(\s*)$/);
+  if (closureCountMatch) {
+    const [, leading, count, trailing] = closureCountMatch;
+    return `${leading}${cycleCopy.closureCount(count)}${trailing}`;
+  }
+
+  const highFcrCountMatch = value.match(/^(\s*)(\d+) ponds? exceeded the 1\.80 FCR review level\.(\s*)$/);
+  if (highFcrCountMatch) {
+    const [, leading, count, trailing] = highFcrCountMatch;
+    return `${leading}${cycleCopy.highFcrCount(count)}${trailing}`;
+  }
+
+  const lowSurvivalCountMatch = value.match(/^(\s*)(\d+) ponds? finished below 75% actual survival\.(\s*)$/);
+  if (lowSurvivalCountMatch) {
+    const [, leading, count, trailing] = lowSurvivalCountMatch;
+    return `${leading}${cycleCopy.lowSurvivalCount(count)}${trailing}`;
+  }
+
+  const samplingCoverageMatch = value.match(/^(\s*)(.+?)% of ponds have valid MBW sampling\.(\s*)$/);
+  if (samplingCoverageMatch) {
+    const [, leading, coverage, trailing] = samplingCoverageMatch;
+    return `${leading}${cycleCopy.samplingCoverage(coverage)}${trailing}`;
+  }
+
+  const mbwMovementMatch = value.match(/^(\s*)(.+?) g to (.+?) g(\s*)$/);
+  if (mbwMovementMatch) {
+    const [, leading, previous, current, trailing] = mbwMovementMatch;
+    return `${leading}${cycleCopy.mbwMovement(previous, current)}${trailing}`;
+  }
+
+  const yieldMatch = value.match(/^(\s*)(.+?) t\/ha yield(\s*)$/);
+  if (yieldMatch) {
+    const [, leading, amount, trailing] = yieldMatch;
+    return `${leading}${cycleCopy.yield(amount)}${trailing}`;
   }
 
   const pageMatch = value.match(/^(\s*)Page\s+(\d+)\s+of\s+(\d+)(\s*)$/);

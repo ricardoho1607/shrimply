@@ -10,6 +10,7 @@ import {
   isPondCycleActive,
 } from '../store/pondStore';
 import type { Expense } from './financeService';
+import { getPreviousEnterpriseCycleForSameBlocks } from '../../shared/enterpriseCycles';
 
 export type CycleReportNote = {
   severity: 'info' | 'warning';
@@ -501,11 +502,7 @@ export const buildCycleReport = ({
   };
 
   if (includeComparison) {
-    const selectedEnd = new Date(cycle.closedAt || cycle.stockingEndDate || Date.now()).getTime();
-    const previousCycle = [...cycles]
-      .filter((candidate) => candidate.id !== cycle.id && candidate.status === 'closed')
-      .filter((candidate) => new Date(candidate.closedAt || candidate.stockingEndDate || 0).getTime() < selectedEnd)
-      .sort((a, b) => new Date(b.closedAt || b.stockingEndDate || 0).getTime() - new Date(a.closedAt || a.stockingEndDate || 0).getTime())[0];
+    const previousCycle = getPreviousEnterpriseCycleForSameBlocks(cycle, cycles, ponds);
     const previousReport = previousCycle ? buildCycleReport({
       cycleId: previousCycle.id,
       cycles,

@@ -104,15 +104,18 @@ export const runCycleReportServiceSelfTest = () => {
   const comparisonReport = buildCycleReport({
     cycleId: 'cycle-current',
     cycles: [
-      { id: 'cycle-current', cycleName: 'Current Cycle', status: 'closed', closedAt: '2026-07-20' } as FarmCycle,
-      { id: 'cycle-previous', cycleName: 'Previous Cycle', status: 'closed', closedAt: '2026-06-01' } as FarmCycle,
+      { id: 'cycle-current', cycleName: 'Current Cycle', status: 'closed', blockIds: ['block-a'], closedAt: '2026-07-20' } as FarmCycle,
+      { id: 'cycle-other-block', cycleName: 'Other Block Cycle', status: 'closed', blockIds: ['block-b'], closedAt: '2026-06-15' } as FarmCycle,
+      { id: 'cycle-previous', cycleName: 'Previous Cycle', status: 'closed', blockIds: ['block-a'], closedAt: '2026-06-01' } as FarmCycle,
     ],
     ponds: [
-      { id: 'pond-current', pondName: 'Current Pond', cycleId: 'cycle-current', cycleStatus: 'ended', pondArea: 1_000, initialPopulation: 10_000, initialWeight: 0.5, samplings: [] } as unknown as Pond,
-      { id: 'pond-previous', pondName: 'Previous Pond', cycleId: 'cycle-previous', cycleStatus: 'ended', pondArea: 1_000, initialPopulation: 10_000, initialWeight: 0.5, samplings: [] } as unknown as Pond,
+      { id: 'pond-current', pondName: 'Current Pond', blockId: 'block-a', cycleId: 'cycle-current', cycleStatus: 'ended', pondArea: 1_000, initialPopulation: 10_000, initialWeight: 0.5, samplings: [] } as unknown as Pond,
+      { id: 'pond-other-block', pondName: 'Other Block Pond', blockId: 'block-b', cycleId: 'cycle-other-block', cycleStatus: 'ended', pondArea: 1_000, initialPopulation: 10_000, initialWeight: 0.5, samplings: [] } as unknown as Pond,
+      { id: 'pond-previous', pondName: 'Previous Pond', blockId: 'block-a', cycleId: 'cycle-previous', cycleStatus: 'ended', pondArea: 1_000, initialPopulation: 10_000, initialWeight: 0.5, samplings: [] } as unknown as Pond,
     ],
     harvestRecords: [
       { id: 'current-harvest', date: '2026-07-20', cycleId: 'cycle-current', ponds: [{ pondId: 'pond-current', pondName: 'Current Pond', cycleId: 'cycle-current', harvestType: 'final', biomass: '100', size: '100', price: '10', subBiomass: '', subSize: '', subPrice: '' }] },
+      { id: 'other-block-harvest', date: '2026-06-15', cycleId: 'cycle-other-block', ponds: [{ pondId: 'pond-other-block', pondName: 'Other Block Pond', cycleId: 'cycle-other-block', harvestType: 'final', biomass: '900', size: '100', price: '8', subBiomass: '', subSize: '', subPrice: '' }] },
       { id: 'previous-harvest', date: '2026-06-01', cycleId: 'cycle-previous', ponds: [{ pondId: 'pond-previous', pondName: 'Previous Pond', cycleId: 'cycle-previous', harvestType: 'final', biomass: '80', size: '100', price: '8', subBiomass: '', subSize: '', subPrice: '' }] },
     ],
     feeds: [],

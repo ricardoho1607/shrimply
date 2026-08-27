@@ -84,6 +84,34 @@ export const getEnterpriseBlockCycles = <T extends EnterpriseCycleRecord>(
     return secondDate.localeCompare(firstDate);
   });
 
+export const getPreviousEnterpriseCycleForSameBlocks = <T extends EnterpriseCycleRecord>(
+  selectedCycle: T,
+  cycles: T[],
+  ponds: EnterpriseCyclePondRecord[] = [],
+): T | undefined => {
+  const selectedBlockIds = getEnterpriseCycleBlockIds(selectedCycle, ponds).sort();
+  if (selectedBlockIds.length === 0) return undefined;
+
+  const selectedEnd = new Date(
+    selectedCycle.closedAt || selectedCycle.stockingEndDate || Date.now(),
+  ).getTime();
+
+  return [...cycles]
+    .filter((candidate) => candidate.id !== selectedCycle.id && candidate.status === 'closed')
+    .filter((candidate) => {
+      const candidateEnd = new Date(candidate.closedAt || candidate.stockingEndDate || 0).getTime();
+      if (candidateEnd >= selectedEnd) return false;
+
+      const candidateBlockIds = getEnterpriseCycleBlockIds(candidate, ponds).sort();
+      return candidateBlockIds.length === selectedBlockIds.length
+        && candidateBlockIds.every((blockId, index) => blockId === selectedBlockIds[index]);
+    })
+    .sort((first, second) => (
+      new Date(second.closedAt || second.stockingEndDate || 0).getTime()
+      - new Date(first.closedAt || first.stockingEndDate || 0).getTime()
+    ))[0];
+};
+
 export const getEnterpriseCyclePlannedPonds = <T extends EnterprisePhysicalPondRecord>(
   cycle: Pick<EnterpriseCycleRecord, 'id' | 'plannedPondIds' | 'blockIds' | 'blockId'>,
   physicalPonds: T[],
