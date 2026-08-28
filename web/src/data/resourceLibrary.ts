@@ -71,6 +71,16 @@ const sources = {
     publisher: "Food and Agriculture Organization of the United Nations",
     url: "https://www.fao.org/fishery/docs/CDrom/T583/root/18.pdf",
   },
+  faoDailyFeedGuidance: {
+    title: "How Much Feed Will They Need? How Do I Feed and How Often?",
+    publisher: "Food and Agriculture Organization of the United Nations",
+    url: "https://www.fao.org/4/s4314e/s4314e09.htm",
+  },
+  feedIndexStudy: {
+    title: "Monte Carlo Algorithm Applications in Shrimp Farming: Monitoring Systems and Feed Optimization",
+    publisher: "International Journal of New Media Technology",
+    url: "https://ejournals.umn.ac.id/index.php/IJNMT/article/download/4301/1780/19422",
+  },
   seafdecBmp: {
     title: "Best Management Practices for a Mangrove-Friendly Shrimp Farming",
     publisher: "SEAFDEC Aquaculture Department",
@@ -865,6 +875,130 @@ export const resourceArticles: ResourceArticle[] = [
       "Investigate sudden FCR changes instead of celebrating or blaming too quickly.",
     ],
     sources: [sources.faoVannamei, sources.faoFeedManagement, sources.profitabilityReview],
+  },
+  {
+    slug: "shrimp-feed-index-calculation",
+    section: "Feed and Inventory",
+    label: "Feed and Inventory",
+    title: "Shrimp Feed Index: How to Calculate Daily Feed Without Guessing",
+    description: "Learn how the shrimp feed index method estimates daily feed from DOC, population, and target ADG—and how to adjust it using real pond data.",
+    readTime: "8 min read",
+    tags: ["shrimp feed index", "feed index formula", "daily shrimp feed", "DOC", "ADG", "feed rate"],
+    publishedAt: "2026-08-28",
+    updatedAt: "2026-08-28",
+    image: {
+      src: "/resources/images/shrimp-feed-index-calculation-infographic.png",
+      alt: "Shrimply infographic showing how DOC, shrimp population, target ADG, feed trays, sampling, water quality, and mortality guide a daily feed-index calculation",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
+    takeaways: [
+      "Feed index provides a starting daily ration from DOC, population, and target ADG.",
+      "Feed trays, sampling, survival, mortality, partial harvests, and water quality must guide the final amount.",
+      "Feed index plans forward, while FCR reviews how efficiently past feed produced biomass.",
+    ],
+    faqs: [
+      {
+        question: "How do I calculate the shrimp feed index ration?",
+        answer: "A commonly used formula is: daily feed in kg = DOC × shrimp population × (feed index ÷ 100) ÷ 1,000. Treat the answer as a starting ration and adjust it using real pond observations.",
+      },
+      {
+        question: "Is feed index the same as FCR?",
+        answer: "No. Feed index plans a daily ration before feeding, while FCR compares feed already used with biomass already gained.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Quick answer",
+        body: [
+          "Feed index is a planning method used to estimate how much feed a shrimp pond should receive each day. It uses the shrimp's days of culture (DOC), population, and a chosen index linked to target average daily growth (ADG).",
+          "The result is only a starting ration. Feed trays, sampling, survival, mortality, partial harvests, and water quality must still guide the final amount.",
+        ],
+      },
+      {
+        heading: "Feed index formula",
+        body: [
+          "A commonly used formula is: daily feed (kg) = DOC × shrimp population × (feed index ÷ 100) ÷ 1,000.",
+          "For example, a pond at DOC 30 with 100,000 stocked shrimp and a feed index of 0.40 gives: 30 × 100,000 × 0.004 ÷ 1,000 = 12 kg/day.",
+          "The starting feed allocation is therefore 12 kg per day, divided across the farm's feeding schedule.",
+        ],
+      },
+      {
+        heading: "How to choose the feed index",
+        body: [
+          "Some farms begin with an index around 1.5 to 2 times the target ADG. For example, a target ADG of 0.20 g/day may lead to a starting index between 0.30 and 0.40.",
+          "This is a farm-planning convention, not a universal biological rule. The correct index depends on shrimp size, feed quality, stocking density, survival, pond conditions, feeding method, and past farm performance.",
+        ],
+      },
+      {
+        heading: "Feed index, feed rate, and FCR are different",
+        body: [
+          "Feed index looks forward. FCR looks backward. Neither number should be judged alone.",
+        ],
+        table: {
+          columns: ["Measure", "Main purpose", "When it is used"],
+          rows: [
+            ["Feed index", "Plans daily feed from DOC, population, and target growth", "Before feeding"],
+            ["Feed rate", "Calculates feed as a percentage of estimated biomass", "After reliable sampling"],
+            ["FCR", "Compares feed used with biomass gained", "During review or after harvest"],
+          ],
+        },
+      },
+      {
+        heading: "Why the calculation can become wrong",
+        body: [
+          "The formula may overestimate feed when it continues using the original stocking number after mortality or partial harvest. It may underestimate feed when growth is stronger than expected or when the selected index is too low.",
+          "Sampling error can also distort the decision. A sample containing mostly large, active shrimp may overstate mean body weight and biomass.",
+          "FAO guidance stresses that feeding plans should respond to shrimp size, estimated survival, water conditions, and observed feeding behaviour—not remain fixed throughout the cycle.",
+        ],
+      },
+      {
+        heading: "How to adjust the ration safely",
+        body: [
+          "Feed management must keep changing as shrimp grow and pond conditions move.",
+        ],
+        ordered: true,
+        items: [
+          "Check several feed trays: One empty or full tray is not enough to judge the whole pond.",
+          "Review recent sampling: Compare MBW and ADG with the target used to choose the index.",
+          "Correct the population estimate: Include recorded mortality and every partial harvest.",
+          "Check water quality: Review dissolved oxygen, temperature, pH, ammonia, and nitrite before increasing feed.",
+          "Make gradual changes: Avoid a large ration increase based on one good tray check.",
+          "Confirm the result: Watch the next tray checks, water readings, mortality pattern, and sampling result.",
+        ],
+        note: "Do not automatically increase feed every day because the formula says so. A calculator cannot see weak appetite, molting, low oxygen, disease risk, or an incorrect survival estimate.",
+      },
+      {
+        heading: "Warning signs that the feed index needs review",
+        body: [
+          "Possible over-allocation signs include feed remaining repeatedly across several trays, FCR rising while ADG stays flat, feed use increasing faster than biomass, weakening early-morning dissolved oxygen, or rising ammonia, nitrite, sludge, or organic waste.",
+          "Possible under-allocation signs include trays clearing unusually quickly across repeated checks, ADG remaining below target without clear water-quality or health stress, poor feed distribution, or a higher actual population or biomass than the working estimate.",
+          "These are warning signs, not proof. Check the full pond record before changing the ration.",
+        ],
+      },
+      {
+        heading: "Use Shrimply to review the feed index",
+        body: [
+          "Record actual feeding in Feed History. Use Sampling to compare MBW and ADG with the growth target. Record mortality and partial harvests so the population estimate stays realistic.",
+          "Compare feeding changes with Water Quality trends, and reconcile feed use with Inventory before trusting FCR. Sampling records should track growth but must not deduct feed inventory; only actual feeding should reduce feed stock.",
+        ],
+      },
+      {
+        heading: "When to get specialist help",
+        body: [
+          "Escalate when feed response remains weak, mortality continues, shrimp show abnormal behaviour, water conditions remain unstable, or growth falls despite reliable feed and sampling records. Do not diagnose disease from tray results or slow growth alone.",
+        ],
+      },
+    ],
+    checklist: [
+      "Calculate the index ration from DOC, population, and the farm's chosen index.",
+      "Treat the answer as a starting amount, not an automatic feeding instruction.",
+      "Check several trays and review recent MBW, ADG, mortality, harvest, and water-quality records.",
+      "Adjust the population estimate after reliable evidence of mortality or partial harvest.",
+      "Change the ration gradually and confirm the response before changing it again.",
+    ],
+    sources: [sources.feedIndexStudy, sources.faoDailyFeedGuidance, sources.faoFeedManagement],
   },
   {
     slug: "feed-inventory-control",
