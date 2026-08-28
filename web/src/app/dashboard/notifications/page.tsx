@@ -347,7 +347,7 @@ export default function NotificationsPage() {
               style={{ 
                 padding: '20px', 
                 background: notification.read ? '#FFFFFF' : 'rgba(15, 76, 117, 0.02)',
-                border: '1px solid var(--border)',
+                border: notification.read ? '1px solid var(--border)' : '2px solid #BBE1FA',
                 display: 'flex',
                 gap: '20px',
                 alignItems: 'flex-start',

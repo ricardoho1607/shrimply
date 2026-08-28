@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const root = path.resolve(__dirname, '..');
+const root = path.dirname(require.resolve('../package.json'));
 const outputDirectory = path.join(root, 'web/src/lib/generated');
 const publicAssetDirectory = path.join(root, 'web/public/pdf');
 const checkOnly = process.argv.includes('--check');
@@ -76,6 +76,16 @@ const outputs = {
     replacements: [
       ['interface PdfBrandAssets', 'export interface PdfBrandAssets'],
       ['const generateCOGSHTML =', 'export const generateCOGSHTML ='],
+    ],
+  }),
+  'mobileTransactionHistoryReport.ts': buildGenerator({
+    sourcePath: 'app/services/transactionHistoryExportService.ts',
+    definitionsStart: 'interface PdfBrandAssets',
+    logicStart: 'const formatCurrency',
+    exportStart: 'export const exportTransactionHistoryPDF',
+    replacements: [
+      ['interface PdfBrandAssets', 'export interface PdfBrandAssets'],
+      ['const generateTransactionHistoryHTML =', 'export const generateTransactionHistoryHTML ='],
     ],
   }),
   'mobileSamplingReport.ts': buildGenerator({

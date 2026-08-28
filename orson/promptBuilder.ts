@@ -14,6 +14,7 @@ import type {
   Orson72HourOutlook,
   OrsonPondMetrics,
   OrsonPromptPackage,
+  OrsonPromptDailyRecord,
   OrsonPromptPondPayload,
   OrsonQuestionFocus,
   OrsonQuestionIntent,
@@ -190,8 +191,52 @@ const STABILIZE_PATTERNS = [/\bstabili[sz]e\b/i, /\bbalance\b/i, /\bcontrol\b/i,
 
 export const ORSON_MODEL_TIMEOUT_MS = 25000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
+export const ORSON_PROMPT_TOKEN_BUDGET = 9000;
+const ORSON_CONTEXT_NOTE_MAX_CHARS = 180;
+const ORSON_CONVERSATION_MESSAGE_MAX_CHARS = 400;
+const ORSON_USER_MESSAGE_MAX_CHARS = 2000;
 export const ORSON_FALLBACK_RESPONSE =
   'Orson is having trouble completing the analysis right now. The calculated risk report is still available, but the conversational summary could not be generated.';
+
+const trimPromptText = (value: string | null | undefined, maxChars: number): string | null => {
+  const normalized = String(value ?? '').replace(/\s+/g, ' ').trim();
+  if (!normalized) return null;
+  return normalized.length <= maxChars
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
+};
+
+export const estimateOrsonPromptTokens = (value: string): number => {
+  let weightedCharacters = 0;
+  for (const character of value) {
+    weightedCharacters += (character.codePointAt(0) ?? 0) > 127 ? 2 : 1;
+  }
+  return Math.ceil(weightedCharacters / 3);
+};
+
+const truncateToOrsonTokenBudget = (value: string, maxTokens: number): string => {
+  if (estimateOrsonPromptTokens(value) <= maxTokens) return value;
+  const suffix = '\n[Older or lower-priority context trimmed to stay within the Orson token budget.]';
+  const suffixTokens = estimateOrsonPromptTokens(suffix);
+  let weightedCharacters = 0;
+  let endIndex = 0;
+  const maxWeightedCharacters = Math.max(0, (maxTokens - suffixTokens) * 3);
+  for (const character of value) {
+    const weight = (character.codePointAt(0) ?? 0) > 127 ? 2 : 1;
+    if (weightedCharacters + weight > maxWeightedCharacters) break;
+    weightedCharacters += weight;
+    endIndex += character.length;
+  }
+  return `${value.slice(0, endIndex).trimEnd()}${suffix}`;
+};
+
+export const buildOrsonRequestPrompt = (context: string, userMessage: string): string => {
+  const boundedQuestion = trimPromptText(userMessage, ORSON_USER_MESSAGE_MAX_CHARS) || '';
+  return truncateToOrsonTokenBudget(
+    `${context}\n\nUSER QUESTION:\n${boundedQuestion}`,
+    ORSON_PROMPT_TOKEN_BUDGET,
+  );
+};
 
 const round = (value: number, decimals = 2) => {
   const factor = 10 ** decimals;
@@ -265,10 +310,10 @@ const normalizeConversationHistory = (
       typeof message.text === 'string' &&
       Boolean(message.text.trim())
     ))
-    .slice(-10)
+    .slice(-6)
     .map((message) => ({
       role: message.role,
-      text: message.text.trim().slice(0, 1200),
+      text: trimPromptText(message.text, ORSON_CONVERSATION_MESSAGE_MAX_CHARS) || '',
     }));
 };
 
@@ -484,7 +529,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
     '- Biological risk conclusions must come from the deterministic findings. You may explain or compare raw values, but do not create a new biological conclusion or threshold that is absent from the findings.',
-    '- You have access to up to 14 days in daily_records_14d plus recent_lab_reports and recent_treatments. Routine questions may include only the latest 5 daily records; explicit history and mortality-diagnostic questions retain the available 14-day window.',
+    '- Use only the latest 3-5 question-relevant records for the selected pond in daily_records_14d, recent_lab_reports, and recent_treatments. Mortality diagnostics may separately include the bounded 14-day ORSON MORTALITY TRACE.',
     '- For historical or timeline lookback questions (e.g. "show the last 7 days of mortality", "what was the feed given on August 15", "how did DO trend this week"), extract the exact dates and numbers from daily_records_14d and list them clearly.',
     '- Cross-reference daily timeline changes (feed, DO, pH, mortality, MBW) with lab report findings (nitrite, vibrio, plankton) to answer questions and explain causes.',
     '- If recent_treatments exist, cross-reference treatments (lime, probiotics, minerals) with water quality and lab pathogen trends to confirm whether treatments were effective.',
@@ -507,7 +552,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- If the question asks about feed adjustments or feeding recommendations, compare actual_feed_kg with expected_feed_kg and water status to give exact numerical adjustments (e.g. cut feed by 15-20% if DO < 4.0 mg/L; cut by 30-50% if DO < 3.0 mg/L; increase by +5% to +10% or up to expected_feed_kg if DO > 5.0 mg/L and shrimp are converting well).',
     '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
     '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
-    '- If the question asks for past daily numbers or history, provide the exact dated list from daily_records_14d.',
+    '- If the question asks for past daily numbers or history, provide the exact dated list available in daily_records_14d and state that it is the latest bounded record set.',
     '- If ORSON SELECTED KNOWLEDGE is present, use it to give practical farm actions, not generic definitions.',
     '- For parameter-control questions, structure the answer as: immediate action, why it works, what to monitor next, and safety caution.',
     '- Do not repeat the pond summary unless the user asks for overview, status, summary, report, or analysis.',
@@ -548,6 +593,37 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
   ].join('\n');
 };
 
+const isPromptRecordRelevant = (
+  record: OrsonPromptDailyRecord,
+  questionFocus: OrsonQuestionFocus,
+): boolean => {
+  if (questionFocus.intent === 'feed') {
+    return record.feedKg !== null || record.feedingResponse !== null;
+  }
+  if (questionFocus.intent === 'growth' || questionFocus.intent === 'biomass' || questionFocus.intent === 'harvest') {
+    return record.mbwG !== null || record.feedKg !== null;
+  }
+  if (questionFocus.intent === 'survival') {
+    return record.mortalityCount !== null;
+  }
+  if (questionFocus.intent === 'water_quality' || questionFocus.intent === 'risk') {
+    return record.doMinimumMgL !== null || record.phMorning !== null || record.phEvening !== null ||
+      record.salinityPpt !== null || record.temperatureC !== null || record.ammoniaMgL !== null ||
+      record.transparencyCm !== null || record.weatherEvent !== null || record.waterExchangePercent !== null ||
+      record.sludgeLoad !== null || record.surfaceScum !== null || record.shrimpBehaviour !== null;
+  }
+  return true;
+};
+
+const selectRecentPromptRecords = (
+  records: OrsonPromptDailyRecord[],
+  questionFocus: OrsonQuestionFocus,
+): OrsonPromptDailyRecord[] => {
+  const chronological = [...records].sort((first, second) => first.date.localeCompare(second.date));
+  const relevant = chronological.filter((record) => isPromptRecordRelevant(record, questionFocus));
+  return (relevant.length >= 3 ? relevant : chronological).slice(-5);
+};
+
 export const buildOrsonPromptContext = (
   payloads: OrsonPromptPondPayload[],
   questionFocus: OrsonQuestionFocus,
@@ -565,7 +641,7 @@ export const buildOrsonPromptContext = (
     smoothed_adg_g_per_day: payload.smoothedAdgGPerDay,
     growth_confidence: payload.growthConfidence,
     fcr: payload.fcr,
-    mbw_outlier_dates: payload.mbwOutlierDates,
+    mbw_outlier_dates: payload.mbwOutlierDates.slice(-5),
     biomass_kg: payload.biomassKg,
     biomass_range_kg: payload.biomassRangeKg,
     survival_pct: payload.survivalPercent,
@@ -581,7 +657,9 @@ export const buildOrsonPromptContext = (
     },
     baseline_feed_kg: payload.baselineFeedKg,
     operational_feed_kg: payload.operationalFeedKg,
-    data_assumptions: payload.dataAssumptions,
+    data_assumptions: payload.dataAssumptions
+      .slice(0, 3)
+      .map((assumption) => trimPromptText(assumption, ORSON_CONTEXT_NOTE_MAX_CHARS)),
     data_completeness_pct: round(payload.dataCompletenessScore * 100, 0),
     calibration: payload.calibration,
     water_metrics: {
@@ -598,8 +676,7 @@ export const buildOrsonPromptContext = (
       latest_percent: payload.mortalityLatestPercent,
       latest_date: payload.mortalityLatestDate,
     },
-    daily_records_14d: (payload.dailyRecords14d || [])
-      .slice(questionFocus.requiresDetailedHistory ? -14 : -5)
+    daily_records_14d: selectRecentPromptRecords(payload.dailyRecords14d || [], questionFocus)
       .map((r) => ({
       date: r.date,
       doc: r.doc,
@@ -615,7 +692,7 @@ export const buildOrsonPromptContext = (
       salinity_ppt: r.salinityPpt,
       temperature_c: r.temperatureC,
       ammonia_mg_l: r.ammoniaMgL,
-      operational_notes: r.operationalNotes,
+      operational_notes: trimPromptText(r.operationalNotes, ORSON_CONTEXT_NOTE_MAX_CHARS),
       transparency_cm: r.transparencyCm,
       feeding_response: r.feedingResponse,
       weather_event: r.weatherEvent,
@@ -624,22 +701,25 @@ export const buildOrsonPromptContext = (
       surface_scum: r.surfaceScum,
       shrimp_behaviour: r.shrimpBehaviour,
     })),
-    recent_lab_reports: (payload.recentLabReports || []).map((l) => ({
+    recent_lab_reports: (payload.recentLabReports || []).slice(0, 5).map((l) => ({
       sample_date: l.sampleDate,
       report_type: l.reportType,
       status: l.status,
-      main_issue: l.mainIssue,
-      key_risks: l.keyRisks,
-      recommendations: l.recommendations,
+      main_issue: trimPromptText(l.mainIssue, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      key_risks: l.keyRisks.slice(0, 3).map((risk) => trimPromptText(risk, 140)),
+      recommendations: l.recommendations.slice(0, 3).map((recommendation) => trimPromptText(recommendation, 140)),
     })),
-    recent_treatments: (payload.recentTreatments || []).map((t) => ({
+    recent_treatments: [...(payload.recentTreatments || [])]
+      .sort((first, second) => first.date.localeCompare(second.date))
+      .slice(-5)
+      .map((t) => ({
       date: t.date,
-      additive_name: t.additiveName,
-      category: t.category,
+      additive_name: trimPromptText(t.additiveName, 100),
+      category: trimPromptText(t.category, 60),
       quantity: t.quantity,
-      unit: t.unit,
+      unit: trimPromptText(t.unit, 24),
       ppm: t.ppm,
-      notes: t.notes,
+      notes: trimPromptText(t.notes, ORSON_CONTEXT_NOTE_MAX_CHARS),
     })),
     historical_benchmark: payload.historicalBenchmark ? {
       completed_cycle_count: payload.historicalBenchmark.completedCycleCount,
@@ -649,24 +729,44 @@ export const buildOrsonPromptContext = (
       average_survival_pct: payload.historicalBenchmark.averageSurvivalPercent,
     } : null,
     lab_context: {
-      latest: payload.labContext.latest,
-      by_type: payload.labContext.byType,
-      unresolved_risks: payload.labContext.unresolvedRisks,
-      recommendations: payload.labContext.recommendations,
+      latest: payload.labContext.latest ? {
+        sample_date: payload.labContext.latest.sampleDate,
+        report_type: payload.labContext.latest.reportType,
+        status: payload.labContext.latest.status,
+        main_issue: trimPromptText(payload.labContext.latest.mainIssue, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      } : null,
+      by_type: payload.labContext.byType.slice(0, 3).map((report) => ({
+        sample_date: report.sampleDate,
+        report_type: report.reportType,
+        status: report.status,
+        main_issue: trimPromptText(report.mainIssue, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      })),
+      unresolved_risks: payload.labContext.unresolvedRisks.slice(0, 4).map((risk) => trimPromptText(risk, 140)),
+      recommendations: payload.labContext.recommendations.slice(0, 4).map((recommendation) => trimPromptText(recommendation, 140)),
       worst_status: payload.labContext.worstStatus,
       latest_metrics: payload.labContext.latest?.metrics ?? null,
     },
     plankton_overwatch: payload.planktonOverwatch ? {
       state: payload.planktonOverwatch.state,
-      message: payload.planktonOverwatch.message,
+      message: trimPromptText(payload.planktonOverwatch.message, ORSON_CONTEXT_NOTE_MAX_CHARS),
       metrics: payload.planktonOverwatch.metrics,
-      evidence: payload.planktonOverwatch.signals.map((signal) => signal.evidence),
-      recommendations: payload.planktonOverwatch.recommendations,
-      missing_data: payload.planktonOverwatch.missingData,
+      evidence: payload.planktonOverwatch.signals.slice(0, 4).map((signal) => trimPromptText(signal.evidence, 140)),
+      recommendations: payload.planktonOverwatch.recommendations.slice(0, 4).map((recommendation) => trimPromptText(recommendation, 140)),
+      missing_data: payload.planktonOverwatch.missingData.slice(0, 6),
       source_date: payload.planktonOverwatch.sourceDate,
     } : null,
-    outlook: payload.outlook,
-    findings: payload.findings,
+    outlook: {
+      ...payload.outlook,
+      summary: trimPromptText(payload.outlook.summary, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      topReason: trimPromptText(payload.outlook.topReason, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      nextAction: trimPromptText(payload.outlook.nextAction, ORSON_CONTEXT_NOTE_MAX_CHARS),
+    },
+    findings: payload.findings.map((finding) => ({
+      ...finding,
+      summary: trimPromptText(finding.summary, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      evidence: finding.evidence.slice(0, 2).map((evidence) => trimPromptText(evidence, 140)),
+      recommendation: trimPromptText(finding.recommendation, ORSON_CONTEXT_NOTE_MAX_CHARS),
+    })),
   }));
 
   return [
@@ -701,28 +801,31 @@ export const buildOrsonPromptContext = (
     '',
     'ORSON SELECTED KNOWLEDGE:',
     JSON.stringify({
-      parameter_guidance: selectedKnowledge.parameterGuidance.map((guidance) => ({
+      parameter_guidance: selectedKnowledge.parameterGuidance.slice(0, 4).map((guidance) => ({
         id: guidance.id,
         label: guidance.label,
         target: guidance.target,
         warning: guidance.warning,
         critical: guidance.critical,
-        evidence_base: guidance.evidenceBase,
-        actions: guidance.actions,
-        monitor: guidance.monitor,
-        cautions: guidance.cautions,
+        evidence_base: trimPromptText(guidance.evidenceBase, 180),
+        actions: Object.fromEntries(Object.entries(guidance.actions).map(([direction, actions]) => [
+          direction,
+          actions?.slice(0, 4).map((action) => trimPromptText(action, 140)) ?? [],
+        ])),
+        monitor: guidance.monitor.slice(0, 4).map((item) => trimPromptText(item, 140)),
+        cautions: guidance.cautions.slice(0, 4).map((caution) => trimPromptText(caution, 140)),
       })),
-      cross_parameter_rules: selectedKnowledge.crossParameterRules.map((rule) => ({
+      cross_parameter_rules: selectedKnowledge.crossParameterRules.slice(0, 4).map((rule) => ({
         id: rule.id,
         label: rule.label,
         severity: rule.severity,
-        conditions: rule.conditions,
-        could_lead_to: rule.couldLeadTo,
-        actions: rule.actions,
-        cautions: rule.cautions,
+        conditions: rule.conditions.slice(0, 4).map((condition) => trimPromptText(condition, 140)),
+        could_lead_to: rule.couldLeadTo.slice(0, 4).map((outcome) => trimPromptText(outcome, 140)),
+        actions: rule.actions.slice(0, 4).map((action) => trimPromptText(action, 140)),
+        cautions: rule.cautions.slice(0, 4).map((caution) => trimPromptText(caution, 140)),
       })),
-      missing_data_questions: selectedKnowledge.missingDataQuestions,
-      source_labels: selectedKnowledge.sourceLabels,
+      missing_data_questions: selectedKnowledge.missingDataQuestions.slice(0, 6).map((question) => trimPromptText(question, 140)),
+      source_labels: selectedKnowledge.sourceLabels.slice(0, 8),
     }),
     '',
     ...(mortalityTrace ? [
@@ -764,13 +867,14 @@ export const buildOrsonPromptPackage = (params: {
   mortalityTrace?: OrsonMortalityTrace | null;
   conversationHistory?: OrsonConversationMessage[];
 }): OrsonPromptPackage => {
+  const userMessage = trimPromptText(params.userMessage, ORSON_USER_MESSAGE_MAX_CHARS) || '';
   const conversationHistory = normalizeConversationHistory(params.conversationHistory);
   const payloads = params.metrics.map((metrics, index) => buildOrsonPromptPayload(
     metrics,
     params.reports[index],
     params.outlooks[index],
   ));
-  const detectedFocus = buildOrsonQuestionFocus(params.userMessage, payloads, conversationHistory);
+  const detectedFocus = buildOrsonQuestionFocus(userMessage, payloads, conversationHistory);
   const relevantConversationHistory = detectedFocus.usesConversationHistory ? conversationHistory : [];
   const questionFocus = params.mortalityTrace
     ? {
@@ -783,7 +887,7 @@ export const buildOrsonPromptPackage = (params: {
     : detectedFocus;
   const orderedPayloads = orderPayloadsForQuestion(payloads, questionFocus);
   const selectedKnowledge = selectOrsonKnowledge({
-    userMessage: params.userMessage,
+    userMessage,
     questionFocus,
     metrics: params.metrics,
   });
@@ -798,13 +902,13 @@ export const buildOrsonPromptPackage = (params: {
       params.mortalityTrace ?? null,
       relevantConversationHistory,
     ),
-    userMessage: params.userMessage,
+    userMessage,
     cacheKey: questionFocus.analysisMode === 'mortality_diagnostic' || questionFocus.route === 'inventory_product' || questionFocus.usesConversationHistory
       ? null
-      : buildOrsonCacheKey(params.userMessage, orderedPayloads),
+      : buildOrsonCacheKey(userMessage, orderedPayloads),
     isFarmSpecific: questionFocus.analysisMode === 'mortality_diagnostic'
       ? true
-      : isFarmSpecificQuestion(params.userMessage),
+      : isFarmSpecificQuestion(userMessage),
     questionFocus,
     conversationHistory,
     mortalityTrace: params.mortalityTrace ?? null,

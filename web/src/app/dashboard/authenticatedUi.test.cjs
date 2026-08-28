@@ -115,3 +115,10 @@ test('dashboard date waits for the client so server and browser markup match', (
   assert.match(layout, /setTodayLabel\(formatDashboardDate\(new Date\(\)\)\)/);
   assert.doesNotMatch(layout, /const todayLabel = new Intl\.DateTimeFormat/);
 });
+
+test('harvest projections live beside Orson instead of inside PDF reports', () => {
+  const appServices = layout.slice(layout.indexOf('appServices: ['), layout.indexOf('business: ['));
+  const reports = layout.slice(layout.indexOf("id: 'reports'"), layout.indexOf("id: 'inventory'"));
+  assert.match(appServices, /\/dashboard\/ai[\s\S]*?\/dashboard\/projections/);
+  assert.doesNotMatch(reports, /\/dashboard\/projections/);
+});

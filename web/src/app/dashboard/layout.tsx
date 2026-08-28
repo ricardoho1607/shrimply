@@ -28,6 +28,7 @@ import {
   ChevronDown,
   CalendarDays,
   PanelLeft,
+  TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
 import { hasFarmPermission } from '../../../../shared/permissions';
@@ -74,6 +75,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
     { label: getString(t.nav.marketplace, 'Marketplace'), icon: Store, href: '/dashboard/marketplace' },
     { label: getString(t.nav.diseaseReport, 'Disease Report'), icon: Map, href: '/dashboard/disease' },
     { label: getString(t.sidebar.aiAssistant, 'Orson AI'), icon: BrainCircuit, href: '/dashboard/ai' },
+    { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), icon: TrendingUp, href: '/dashboard/projections' },
     { label: getString(t.nav.notifications, 'Notifications'), icon: Bell, href: '/dashboard/notifications' },
   ],
   business: [
@@ -86,7 +88,6 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
         { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
         { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp' },
         { label: getString(t.cycleReport.archiveTitle, 'Cycle Reports'), href: '/dashboard/reports/cycles' },
-        { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), href: '/dashboard/projections' },
       ]
     },
     {
@@ -129,7 +130,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const isNavGroup = (item: NavItem): item is NavGroupItem => Array.isArray((item as { children?: NavChild[] }).children);
   const visibleNavigation: NavigationGroups = {
     management: navigation.management.filter((item) => isNavLink(item) && (item.href === '/dashboard' || canViewFarm)),
-    appServices: navigation.appServices.filter((item) => !isNavLink(item) || item.href !== '/dashboard/ai' || canUseOrson),
+    appServices: navigation.appServices.filter((item) => {
+      if (!isNavLink(item)) return true;
+      if (item.href === '/dashboard/ai') return canUseOrson;
+      if (item.href === '/dashboard/projections') return canUseOrson && canViewFinance;
+      return true;
+    }),
     business: navigation.business.flatMap<NavItem>((item) => {
       if (isNavLink(item)) return item.href === '/dashboard/finance' && !canViewFinance ? [] : [item];
       if (item.id === 'reports') {
@@ -205,7 +211,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const toggleSidebar = () => setSidebarOpen(open => !open);
 
   useEffect(() => {
-    setTodayLabel(formatDashboardDate(new Date()));
+    const frame = window.requestAnimationFrame(() => {
+      setTodayLabel(formatDashboardDate(new Date()));
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   useEffect(() => {

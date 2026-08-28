@@ -2,13 +2,12 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  AlertCircle,
   Calculator,
-  CheckCircle2,
   CircleDollarSign,
   Download,
   FileText,
   Loader2,
+  ReceiptText,
   TrendingUp,
   X,
 } from 'lucide-react';
@@ -24,6 +23,7 @@ import {
 import { generateCashFlowHTML, type CashFlowData } from '@/lib/generated/mobileCashFlowReport';
 import { generateCOGSHTML, prepareCOGSData } from '@/lib/generated/mobileCogsReport';
 import { generateProfitLossHTML, type FinancialData } from '@/lib/generated/mobileProfitLossReport';
+import { generateTransactionHistoryHTML, prepareTransactionHistoryData } from '@/lib/generated/mobileTransactionHistoryReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import { normalizeCategory } from '@/utils/categoryNormalizer';
 import { getOpenFinanceCycles } from '../../../../../../shared/financeCycleAllocation';
@@ -40,9 +40,13 @@ interface Expense {
   amount: number;
   category: string;
   date: string;
-  description: string;
+  description?: string;
+  item?: string;
   cycleId?: string;
+  cycleName?: string;
+  paymentType?: string;
   reference?: string;
+  timestamp?: number;
 }
 
 interface Revenue {
@@ -50,8 +54,13 @@ interface Revenue {
   amount: number;
   category: string;
   date: string;
-  description: string;
+  description?: string;
+  item?: string;
   cycleId?: string;
+  cycleName?: string;
+  paymentType?: string;
+  reference?: string;
+  timestamp?: number;
 }
 
 interface FinanceCycle { id: string; cycleName: string; status?: string }
@@ -64,6 +73,7 @@ const REPORT_TYPES = [
   { id: 'profit-loss', name: 'Profit & Loss', icon: TrendingUp, color: '#3498DB', desc: 'Income Statement' },
   { id: 'cogs', name: 'COGS Report', icon: Calculator, color: '#27AE60', desc: 'Cost of Production' },
   { id: 'cash-flow', name: 'Cash Flow', icon: CircleDollarSign, color: '#9B59B6', desc: 'Liquidity Analysis' },
+  { id: 'transaction-history', name: 'Transaction History', icon: ReceiptText, color: '#0F4C75', desc: 'Money In and Money Out' },
 ];
 const NON_OPEX_CATEGORIES = ['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend'];
 const INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
@@ -96,6 +106,21 @@ export default function FinancialReportsPage() {
   const { data: additives, loading: additivesLoading } = useCompanyAdditives<InventoryItem>();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading;
+  const reportTypes = REPORT_TYPES.map((report) => ({
+    ...report,
+    name: report.id === 'profit-loss'
+      ? t.financialReports.profitLoss
+      : report.id === 'cogs'
+        ? t.financialReports.cogs
+        : report.id === 'cash-flow'
+          ? t.financialReports.cashFlow
+          : t.financialReports.transactionHistory,
+    desc: report.id === 'transaction-history'
+      ? t.financialReports.transactionHistoryDescription
+      : report.desc,
+  }));
+  const selectedReportMeta = reportTypes.find((report) => report.id === selectedReport) || reportTypes[0];
+  const SelectedReportIcon = selectedReportMeta.icon;
 
   const openCustomRange = () => {
     const now = new Date();
@@ -187,6 +212,28 @@ export default function FinancialReportsPage() {
   const totalRevenue = filteredRevenues.reduce((sum, revenue) => sum + revenue.amount, 0);
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const previewProfit = totalRevenue - totalExpenses;
+  const openingBalance = revenues
+    .filter((revenue) => {
+      const key = normalizeFarmDateKey(revenue.date, company?.timeZone);
+      return Boolean(
+        (cycleScope === 'all' || revenue.cycleId === cycleScope)
+        && dateRange.startDateKey
+        && key
+        && key < dateRange.startDateKey,
+      );
+    })
+    .reduce((sum, revenue) => sum + revenue.amount, 0)
+    - expenses
+      .filter((expense) => {
+        const key = normalizeFarmDateKey(expense.date, company?.timeZone);
+        return Boolean(
+          (cycleScope === 'all' || expense.cycleId === cycleScope)
+          && dateRange.startDateKey
+          && key
+          && key < dateRange.startDateKey,
+        );
+      })
+      .reduce((sum, expense) => sum + expense.amount, 0);
 
   const handleExport = async () => {
     if (!canExportReports) return;
@@ -270,24 +317,12 @@ export default function FinancialReportsPage() {
           } else if (category === 'Feed' || category === 'Pond Additives') operatingActivities.paymentToSuppliers += expense.amount;
           else operatingActivities.paymentForExpenses += expense.amount;
         });
-        const previousRevenue = revenues
-          .filter((revenue) => {
-            const key = normalizeFarmDateKey(revenue.date, company?.timeZone);
-            return Boolean(dateRange.startDateKey && key && key < dateRange.startDateKey);
-          })
-          .reduce((sum, revenue) => sum + revenue.amount, 0);
-        const previousExpenses = expenses
-          .filter((expense) => {
-            const key = normalizeFarmDateKey(expense.date, company?.timeZone);
-            return Boolean(dateRange.startDateKey && key && key < dateRange.startDateKey);
-          })
-          .reduce((sum, expense) => sum + expense.amount, 0);
         const data: CashFlowData = {
           period: selectedPeriod,
           startDate,
           endDate,
           companyName,
-          openingBalance: previousRevenue - previousExpenses,
+          openingBalance,
           operatingActivities,
           investingActivities,
           financingActivities,
@@ -296,7 +331,7 @@ export default function FinancialReportsPage() {
         };
         html = generateCashFlowHTML(data, brandAssets, currentLanguage);
         filename = `Cash_Flow_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
-      } else {
+      } else if (selectedReport === 'cogs') {
         const purchases = feedUsageCost + cycleProductionExpenses
           .filter((expense) => normalizeCategory(expense.category) === 'Feed')
           .reduce((sum, expense) => sum + expense.amount, 0);
@@ -327,6 +362,20 @@ export default function FinancialReportsPage() {
         );
         html = generateCOGSHTML(data, brandAssets, currentLanguage);
         filename = `COGS_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
+      } else {
+        const data = prepareTransactionHistoryData(
+          selectedPeriod,
+          startDate,
+          endDate,
+          companyName,
+          openingBalance,
+          filteredExpenses,
+          filteredRevenues,
+          currencyConfig.code,
+          currencyConfig.symbol,
+        );
+        html = generateTransactionHistoryHTML(data, brandAssets, currentLanguage);
+        filename = `Transaction_Register_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       }
 
       await downloadMobilePdf({ html, filename, orientation: 'portrait' });
@@ -347,16 +396,16 @@ export default function FinancialReportsPage() {
       <div className="dashboard-report-grid">
         <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           <div>
-            <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>Select Report Type</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '14px' }}>
-              {REPORT_TYPES.map((type) => (
-                <button key={type.id} type="button" onClick={() => setSelectedReport(type.id)} className={`glass-card financial-report-type-card ${selectedReport === type.id ? 'active' : ''}`} style={{ padding: '18px', cursor: 'pointer', textAlign: 'left', border: selectedReport === type.id ? `1px solid ${type.color}` : '1px solid var(--border)', background: selectedReport === type.id ? `${type.color}10` : '#FFF', position: 'relative' }}>
-                  <span style={{ width: '38px', height: '38px', borderRadius: '11px', background: `${type.color}15`, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '12px' }}><type.icon size={20} color={type.color} /></span>
-                  <span style={{ display: 'block', fontWeight: 600, fontSize: '15px' }}>{type.name}</span>
-                  <span style={{ display: 'block', fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px', lineHeight: 1.45 }}>{type.desc}</span>
-                  {selectedReport === type.id ? <CheckCircle2 size={18} color={type.color} style={{ position: 'absolute', top: '14px', right: '14px' }} /> : null}
-                </button>
-              ))}
+            <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>{t.financialReports.reportType}</h2>
+            <div className="glass-card financial-report-selector">
+              <span className="financial-report-selector-icon" style={{ background: `${selectedReportMeta.color}15` }}><SelectedReportIcon size={21} color={selectedReportMeta.color} /></span>
+              <div className="financial-report-selector-copy">
+                <label htmlFor="financial-report-type">{t.financialReports.selectReport}</label>
+                <select id="financial-report-type" value={selectedReport} onChange={(event) => setSelectedReport(event.target.value)}>
+                  {reportTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
+                </select>
+                <span>{selectedReportMeta.desc}</span>
+              </div>
             </div>
           </div>
 
@@ -385,12 +434,22 @@ export default function FinancialReportsPage() {
           <div className="glass-card" style={{ background: '#FFF', padding: '22px', position: 'sticky', top: '24px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 600 }}>Report Preview</h2></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Revenue</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Expenses</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
+              {selectedReport === 'transaction-history' ? (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.transactions}</span><span style={{ fontWeight: 600 }}>{filteredExpenses.length + filteredRevenues.length}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.moneyIn}</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.moneyOut}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{t.financialReports.netMovement}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(previewProfit)}</span></div>
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Revenue</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Expenses</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
+                </>
+              )}
             </div>
-            <div style={{ marginTop: '24px', padding: '14px', background: 'var(--bg-mid)', borderRadius: '14px', display: 'flex', gap: '12px', marginBottom: '24px' }}><AlertCircle size={20} color="var(--primary)" style={{ flexShrink: 0 }} /><p style={{ fontSize: '12px', color: 'var(--text-muted)', lineHeight: 1.5 }}>Your PDF uses the same report template as the mobile application.</p></div>
-            <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading || !canExportReports} style={{ width: '100%', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
+            <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading || !canExportReports} style={{ width: '100%', marginTop: '24px', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
               <span style={{ fontWeight: 600 }}>{exportLoading ? 'Generating PDF...' : 'Download Statement'}</span>
             </button>
@@ -445,12 +504,64 @@ export default function FinancialReportsPage() {
           box-shadow: 0 4px 12px rgba(15, 76, 117, 0.1);
         }
 
-        .financial-report-type-card:hover:not(.active),
-        .financial-report-type-card:focus-visible:not(.active) {
-          border-color: #3282b8 !important;
-          background: rgba(50, 130, 184, 0.06) !important;
-          box-shadow: 0 10px 28px rgba(15, 76, 117, 0.1);
-          transform: translateY(-1px);
+        .financial-report-selector {
+          min-height: 74px;
+          padding: 12px 14px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          background: #fff;
+          border: 1px solid var(--border);
+          border-radius: 14px;
+        }
+
+        .financial-report-selector-icon {
+          width: 44px;
+          height: 44px;
+          flex: 0 0 auto;
+          border-radius: 12px;
+          display: grid;
+          place-items: center;
+        }
+
+        .financial-report-selector-copy {
+          min-width: 0;
+          flex: 1;
+          display: grid;
+          gap: 3px;
+        }
+
+        .financial-report-selector-copy label {
+          color: var(--text-muted);
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+        }
+
+        .financial-report-selector-copy select {
+          width: 100%;
+          min-height: 34px;
+          padding: 4px 34px 4px 0;
+          border: 0;
+          outline: 0;
+          background: #fff;
+          color: var(--text-primary);
+          font: inherit;
+          font-size: 15px;
+          font-weight: 600;
+          cursor: pointer;
+        }
+
+        .financial-report-selector-copy select:focus-visible {
+          outline: 2px solid #3282b8;
+          outline-offset: 3px;
+          border-radius: 4px;
+        }
+
+        .financial-report-selector-copy > span {
+          color: var(--text-muted);
+          font-size: 11px;
         }
 
         .custom-range-overlay {

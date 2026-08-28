@@ -11,6 +11,7 @@ import {
 } from '@/lib/orsonAiUsage';
 import {
   cleanOrsonResponse,
+  buildOrsonRequestPrompt,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
 } from '../../../orson/promptBuilder';
@@ -273,7 +274,7 @@ export const useGemini = () => {
           // Retained until older deployed Functions no longer require this field.
           // The hardened Function ignores it and builds its own server instruction.
           systemInstruction: analysis.promptPackage.systemInstruction,
-          prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+          prompt: buildOrsonRequestPrompt(analysis.promptPackage.context, analysis.promptPackage.userMessage),
           userMessage: analysis.promptPackage.userMessage,
           questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,

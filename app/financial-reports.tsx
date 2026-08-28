@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator, TextInput, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TouchableWithoutFeedback, Modal, Alert, ActivityIndicator, TextInput, Platform, StatusBar } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
@@ -11,6 +11,7 @@ import revenueService, { Revenue } from './services/revenueService';
 import { exportFinancialPDF, prepareFinancialData } from './services/pdfExportService';
 import { exportCashFlowPDF, prepareCashFlowData } from './services/cashFlowExportService';
 import { exportCOGSPDF, prepareCOGSData } from './services/cogsExportService';
+import { exportTransactionHistoryPDF, prepareTransactionHistoryData } from './services/transactionHistoryExportService';
 import { normalizeCategory } from './utils/categoryNormalizer';
 import { usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
@@ -25,7 +26,8 @@ import CycleSelector from './components/forms/CycleSelector';
 import { getOpenFinanceCycles } from '../shared/financeCycleAllocation';
 import { hasFarmPermission } from '../shared/permissions';
 
-type ReportType = { id: string; name: string; icon: string; color: string; disabled?: boolean };
+type ReportTypeId = 'profit-loss' | 'cogs' | 'cash-flow' | 'transaction-history';
+type ReportType = { id: ReportTypeId; name: string; icon: string; color: string; description: string };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
 
 export default function FinancialReportsPage() {
@@ -39,10 +41,10 @@ export default function FinancialReportsPage() {
   const feedAdditiveStore = useFeedAdditiveStore();
 
   const REPORT_TYPES: ReportType[] = [
-    { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB' },
-    { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', icon: 'calculator', color: '#27AE60' },
-    { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', icon: 'cash', color: '#9B59B6' },
-    { id: 'harvest-projections', name: t.financialReports?.harvestProjection || 'Harvest Projections', icon: 'analytics', color: '#E74C3C' },
+    { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB', description: t.financialReports?.profitLossStatement || 'Income statement' },
+    { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', icon: 'calculator', color: '#27AE60', description: t.financialReports?.cogsStatement || 'Cost of production' },
+    { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', icon: 'cash', color: '#9B59B6', description: t.financialReports?.cashFlowStatement || 'Liquidity analysis' },
+    { id: 'transaction-history', name: t.financialReports?.transactionHistory || 'Transaction History', icon: 'receipt', color: '#0F4C75', description: t.financialReports?.transactionHistoryDescription || 'Money in and money out' },
   ];
 
   const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
@@ -57,7 +59,8 @@ export default function FinancialReportsPage() {
     return translations[period] || period;
   };
 
-  const [selectedReportType, setSelectedReportType] = useState<string>('profit-loss');
+  const [selectedReportType, setSelectedReportType] = useState<ReportTypeId>('profit-loss');
+  const [reportSelectorOpen, setReportSelectorOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<typeof PERIOD_OPTIONS[number]>('This Month');
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
@@ -68,6 +71,7 @@ export default function FinancialReportsPage() {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [openingInventory, setOpeningInventory] = useState(0);
   const [closingInventory, setClosingInventory] = useState(0);
+  const selectedReport = REPORT_TYPES.find((report) => report.id === selectedReportType) || REPORT_TYPES[0];
 
   const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
   const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
@@ -235,11 +239,21 @@ export default function FinancialReportsPage() {
     const { startDateKey } = getDateRange();
     const previousRevenues = revenues.filter(r => {
       const dateKey = normalizeFarmDateKey(r.date, company?.timeZone);
-      return Boolean(startDateKey && dateKey && dateKey < startDateKey);
+      return Boolean(
+        (cycleScope === 'all' || r.cycleId === cycleScope)
+        && startDateKey
+        && dateKey
+        && dateKey < startDateKey,
+      );
     });
     const previousExpenses = expenses.filter(e => {
       const dateKey = normalizeFarmDateKey(e.date, company?.timeZone);
-      return Boolean(startDateKey && dateKey && dateKey < startDateKey);
+      return Boolean(
+        (cycleScope === 'all' || e.cycleId === cycleScope)
+        && startDateKey
+        && dateKey
+        && dateKey < startDateKey,
+      );
     });
     return revenueService.calculateTotal(previousRevenues) - financeService.calculateTotal(previousExpenses);
   };
@@ -315,6 +329,18 @@ export default function FinancialReportsPage() {
           company?.companyName || company?.id || 'Company', openingInventory, purchases, directLabor,
           directMaterials, closingInventory, revenueTotals.total, cogsCategoryBreakdown,
           currencyConfig.code, currencyConfig.symbol), currentLanguage);
+      } else if (selectedReportType === 'transaction-history') {
+        await exportTransactionHistoryPDF(prepareTransactionHistoryData(
+          selectedPeriod,
+          startDate.toISOString(),
+          endDate.toISOString(),
+          company?.companyName || company?.id || 'Company',
+          openingBalance,
+          filteredExpenses,
+          filteredRevenues,
+          currencyConfig.code,
+          currencyConfig.symbol,
+        ), currentLanguage);
       }
       Alert.alert('Success', t.financialReports?.reportGenerated || 'Financial report generated and ready to share!');
     } catch (error) {
@@ -352,38 +378,71 @@ export default function FinancialReportsPage() {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 24) }}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t.financialReports?.reportType || 'Report Type'}</Text>
-          <View style={styles.reportTypeGrid}>
-            {REPORT_TYPES.map((type) => (
-              <TouchableOpacity key={type.id}
-                style={[styles.reportTypeCard, selectedReportType === type.id && styles.reportTypeCardActive, type.disabled && styles.reportTypeCardDisabled]}
-                onPress={() => {
-                  if (type.id === 'harvest-projections') {
-                    router.push('/harvest-projection');
-                  } else if (!type.disabled) {
-                    setSelectedReportType(type.id);
-                  }
-                }} disabled={type.disabled}>
-                <View style={[styles.reportTypeIcon, { backgroundColor: type.color + '20' }]}>
-                  <Ionicons name={type.icon as any} size={28} color={type.color} />
-                </View>
-                <Text style={[styles.reportTypeName, type.disabled && styles.reportTypeNameDisabled]}>{type.name}</Text>
-                {type.disabled && (
-                  <View style={styles.comingSoonBadge}>
-                    <Text style={styles.comingSoonText}>{t.financialReports?.comingSoon || 'Soon'}</Text>
-                  </View>
-                )}
-                {selectedReportType === type.id && !type.disabled && (
-                  <View style={styles.selectedCheck}>
-                    <Ionicons name="checkmark-circle" size={24} color={type.color} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <TouchableOpacity
+            style={styles.reportSelectorTrigger}
+            onPress={() => setReportSelectorOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.financialReports?.reportType || 'Report Type'}: ${selectedReport.name}`}
+          >
+            <View style={[styles.reportSelectorIcon, { backgroundColor: `${selectedReport.color}18` }]}>
+              <Ionicons name={selectedReport.icon as any} size={22} color={selectedReport.color} />
+            </View>
+            <View style={styles.reportSelectorCopy}>
+              <Text style={styles.reportSelectorValue}>{selectedReport.name}</Text>
+              <Text style={styles.reportSelectorDescription}>{selectedReport.description}</Text>
+            </View>
+            <Ionicons name="chevron-down" size={20} color="#0F4C75" />
+          </TouchableOpacity>
         </View>
+
+        <Modal visible={reportSelectorOpen} transparent animationType="fade" onRequestClose={() => setReportSelectorOpen(false)}>
+          <TouchableWithoutFeedback onPress={() => setReportSelectorOpen(false)}>
+            <View style={styles.reportSelectorBackdrop}>
+              <TouchableWithoutFeedback>
+                <View style={styles.reportSelectorSheet}>
+                  <View style={styles.reportSelectorHeader}>
+                    <View>
+                      <Text style={styles.reportSelectorEyebrow}>{t.financialReports?.reportType || 'Report Type'}</Text>
+                      <Text style={styles.reportSelectorTitle}>{t.financialReports?.selectReport || 'Choose a report'}</Text>
+                    </View>
+                    <TouchableOpacity style={styles.reportSelectorClose} onPress={() => setReportSelectorOpen(false)} accessibilityLabel={t.actions.cancel}>
+                      <Ionicons name="close" size={21} color="#334B5C" />
+                    </TouchableOpacity>
+                  </View>
+                  {REPORT_TYPES.map((type) => {
+                    const selected = type.id === selectedReportType;
+                    return (
+                      <TouchableOpacity
+                        key={type.id}
+                        style={[styles.reportSelectorOption, selected && styles.reportSelectorOptionActive]}
+                        onPress={() => {
+                          setSelectedReportType(type.id);
+                          setReportSelectorOpen(false);
+                        }}
+                      >
+                        <View style={[styles.reportSelectorIcon, { backgroundColor: `${type.color}18` }]}>
+                          <Ionicons name={type.icon as any} size={21} color={type.color} />
+                        </View>
+                        <View style={styles.reportSelectorCopy}>
+                          <Text style={styles.reportSelectorValue}>{type.name}</Text>
+                          <Text style={styles.reportSelectorDescription}>{type.description}</Text>
+                        </View>
+                        {selected ? <Ionicons name="checkmark-circle" size={21} color="#0F4C75" /> : null}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{t.financialReports?.reportPeriod || 'Report Period'}</Text>
@@ -567,6 +626,35 @@ export default function FinancialReportsPage() {
                 </View>
               )}
             </View>
+          ) : selectedReportType === 'transaction-history' ? (
+            <View style={styles.previewCard}>
+              <View style={styles.previewHeader}>
+                <Ionicons name="receipt" size={24} color="#0F4C75" />
+                <View style={styles.previewHeaderText}>
+                  <Text style={styles.previewTitle}>{t.financialReports?.transactionRegister || 'Transaction Register'}</Text>
+                  <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
+                </View>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.transactions || 'Transactions'}</Text>
+                <Text style={styles.summaryValue}>{filteredExpenses.length + filteredRevenues.length}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.moneyIn || 'Money In'}</Text>
+                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatCurrency(revenueTotals.total)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>{t.financialReports?.moneyOut || 'Money Out'}</Text>
+                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatCurrency(expenseTotals.total)}</Text>
+              </View>
+              <View style={styles.previewDivider} />
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>{t.financialReports?.netMovement || 'Net Movement'}</Text>
+                <Text style={[styles.summaryValueBold, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(profit)}</Text>
+              </View>
+              <Text style={styles.transactionPreviewNote}>{t.financialReports?.transactionPdfNote || 'The PDF lists every recorded income and expense with a running net position.'}</Text>
+            </View>
           ) : (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
@@ -669,12 +757,6 @@ export default function FinancialReportsPage() {
           )}
         </TouchableOpacity>
 
-        <View style={styles.infoCard}>
-          <Ionicons name="information-circle" size={20} color="#3498DB" />
-          <Text style={styles.infoText}>
-            {t.financialReports?.pdfInfoText || 'The PDF report will include detailed breakdowns, transaction history, and can be shared or saved for your records.'}
-          </Text>
-        </View>
       </ScrollView>
     </View>
   );
@@ -690,16 +772,19 @@ const styles = StyleSheet.create({
   content: { flex: 1 },
   section: { marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: 8 },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
-  reportTypeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12 },
-  reportTypeCard: { width: '48%', backgroundColor: '#FFFFFF', borderRadius: 16, padding: Platform.OS === 'android' ? 16 : 20, alignItems: 'center', shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2, borderWidth: 2, borderColor: 'transparent' },
-  reportTypeCardActive: { borderColor: '#3498DB', backgroundColor: '#EBF5FB' },
-  reportTypeCardDisabled: { opacity: 0.5 },
-  reportTypeIcon: { width: Platform.OS === 'android' ? 52 : 56, height: Platform.OS === 'android' ? 52 : 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  reportTypeName: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#2C3E50', textAlign: 'center' },
-  reportTypeNameDisabled: { color: '#95A5A6' },
-  comingSoonBadge: { position: 'absolute', top: 8, right: 8, backgroundColor: '#F39C12', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: 8 },
-  comingSoonText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFFFFF', textTransform: 'uppercase' },
-  selectedCheck: { position: 'absolute', top: 8, right: 8 },
+  reportSelectorTrigger: { minHeight: 68, borderRadius: 14, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#FFFFFF', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  reportSelectorIcon: { width: 42, height: 42, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  reportSelectorCopy: { flex: 1, minWidth: 0 },
+  reportSelectorValue: { color: '#102F46', fontSize: 14, fontWeight: '800' },
+  reportSelectorDescription: { marginTop: 2, color: '#78909C', fontSize: 11, fontWeight: '600' },
+  reportSelectorBackdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(13, 33, 55, 0.48)' },
+  reportSelectorSheet: { borderTopLeftRadius: 22, borderTopRightRadius: 22, backgroundColor: '#FFFFFF', paddingHorizontal: 18, paddingTop: 18, paddingBottom: 28 },
+  reportSelectorHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  reportSelectorEyebrow: { color: '#60798A', fontSize: 10, fontWeight: '800', letterSpacing: 0.6, textTransform: 'uppercase' },
+  reportSelectorTitle: { marginTop: 3, color: '#102F46', fontSize: 20, fontWeight: '900' },
+  reportSelectorClose: { width: 40, height: 40, borderRadius: 12, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#F4F8FC', alignItems: 'center', justifyContent: 'center' },
+  reportSelectorOption: { minHeight: 62, marginBottom: 8, borderRadius: 13, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#FFFFFF', paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  reportSelectorOptionActive: { borderColor: '#3282B8', backgroundColor: '#EAF6FD' },
   periodContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 8, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   cycleSelectorContainer: { marginTop: Platform.OS === 'android' ? 8 : 10 },
   periodTab: { flex: 1, minWidth: '30%', paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', borderRadius: 8, backgroundColor: '#F8FAFB' },
@@ -729,9 +814,8 @@ const styles = StyleSheet.create({
   breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Platform.OS === 'android' ? 5 : 6 },
   breakdownLabel: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#7F8C8D' },
   breakdownValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#2C3E50' },
+  transactionPreviewNote: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#ECF0F1', color: '#60798A', fontSize: 12, lineHeight: 18 },
   generateButton: { flexDirection: 'row', backgroundColor: '#3498DB', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 20 : 24, padding: Platform.OS === 'android' ? 16 : 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#3498DB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   generateButtonDisabled: { opacity: 0.6 },
   generateButtonText: { color: '#FFFFFF', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700' },
-  infoCard: { flexDirection: 'row', backgroundColor: '#EBF5FB', marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 28 : 32, padding: Platform.OS === 'android' ? 14 : 16, borderRadius: 12, gap: Platform.OS === 'android' ? 10 : 12, borderLeftWidth: 4, borderLeftColor: '#3498DB' },
-  infoText: { flex: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#34495E', lineHeight: Platform.OS === 'android' ? 18 : 20 },
 });

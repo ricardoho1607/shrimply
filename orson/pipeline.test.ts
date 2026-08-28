@@ -76,7 +76,8 @@ export const runPipelineSelfTest = () => {
 
   assert(focused.promptPackage.questionFocus.focusedPondName === 'A1', 'detects focused pond');
   assert(focused.promptPackage.questionFocus.shouldSummarize === false, 'narrow question does not request summary');
-  assert(focused.promptPackage.context.indexOf('"pond": "A1"') < focused.promptPackage.context.indexOf('"pond": "B2"'), 'focused pond comes first');
+  assert(focused.promptPackage.context.includes('"pond": "A1"'), 'includes the focused pond');
+  assert(!focused.promptPackage.context.includes('"pond": "B2"'), 'excludes unselected ponds from focused prompts');
 
   const parameterControl = buildOrsonAnalysis([
     {
@@ -150,7 +151,7 @@ export const runPipelineSelfTest = () => {
     new Date('2026-01-16T00:00:00Z'),
   );
   assert(largeFarm.promptPackage.context.includes('"active_pond_count": 100'), 'preserves the full large-farm pond count');
-  assert(largeFarm.promptPackage.context.includes('"included_pond_count": 10'), 'bounds large-farm Gemini context to ten highest-risk ponds');
+  assert(largeFarm.promptPackage.context.includes('"included_pond_count": 5'), 'bounds large-farm Gemini context to five highest-risk ponds');
 
   return analysis;
 };

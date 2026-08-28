@@ -15,13 +15,26 @@ test('financial reports replaces all-time with an applied custom date range', ()
   assert.doesNotMatch(source, /selectedPeriod === 'All Time'/);
 });
 
-test('financial report filters use equal hoverable selector options', () => {
+test('financial reports use a compact report dropdown with transaction history', () => {
   assert.match(source, /financial-report-filter-tabs/);
   assert.match(source, /financial-cycle-tabs/);
   assert.match(source, /flex: '1 1 0'/);
   assert.match(source, /\.financial-report-filter-tabs[\s\S]*?\.dashboard-segmented-tab:hover/);
-  assert.match(source, /financial-report-type-card/);
-  assert.match(source, /\.financial-report-type-card:hover:not\(\.active\)/);
+  assert.match(source, /id="financial-report-type"/);
+  assert.match(source, /<select[\s\S]*?reportTypes\.map/);
+  assert.match(source, /transaction-history/);
+  assert.doesNotMatch(source, /financial-report-type-card/);
+});
+
+test('transaction history exports through the shared branded PDF generator', () => {
+  assert.match(source, /prepareTransactionHistoryData/);
+  assert.match(source, /generateTransactionHistoryHTML/);
+  assert.match(source, /Transaction_Register_/);
+});
+
+test('financial reports omit the bottom PDF information notice', () => {
+  assert.doesNotMatch(source, /Your PDF uses the same report template/);
+  assert.doesNotMatch(source, /AlertCircle/);
 });
 
 test('COGS inventory adjustment stacks without mobile overflow', () => {

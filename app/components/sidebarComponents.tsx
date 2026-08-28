@@ -339,6 +339,7 @@ export const RegularSidebar: React.FC = () => {
                 <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
+                {canUseOrson && hasFinanceAccess && <MenuButton icon="analytics-outline" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateAndClose('/harvest-projection')} color="#0F4C75" />}
                 <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 {hasFinanceAccess && (
@@ -604,6 +605,7 @@ export const StaticSidebar: React.FC = () => {
           <MenuButton icon="home" text={t.nav.home} onPress={() => navigateTo('/')} active />
           <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
           {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
+          {canUseOrson && hasFinanceAccess && <MenuButton icon="analytics-outline" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} color="#0F4C75" />}
           {hasFinanceAccess && (
             <>
               <View style={styles.separator} />

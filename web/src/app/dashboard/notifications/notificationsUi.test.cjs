@@ -16,9 +16,9 @@ test('notifications use one dashboard summary panel for filter metrics', () => {
   assert.match(styles, /@media \(max-width: 1023px\)[\s\S]*?\.metricGrid\s*{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/);
 });
 
-test('notification rows use a standard border without a side accent', () => {
+test('unread notification rows use a light blue outline without a side accent', () => {
   assert.doesNotMatch(source, /borderLeft:/);
-  assert.match(source, /border: '1px solid var\(--border\)'/);
+  assert.match(source, /border: notification\.read \? '1px solid var\(--border\)' : '2px solid #BBE1FA'/);
 });
 
 test('notification controls use contained hover and active highlights', () => {

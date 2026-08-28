@@ -891,6 +891,15 @@ companySetup: {
     cashFlow: '现金流量表',
     harvestProjection: '收获预测',
     expenseReport: '支出报告',
+    transactionHistory: '交易记录',
+    transactionHistoryDescription: '资金流入和流出',
+    transactionRegister: '交易登记表',
+    selectReport: '选择报告',
+    transactions: '交易',
+    moneyIn: '资金流入',
+    moneyOut: '资金流出',
+    netMovement: '净变动',
+    transactionPdfNote: 'PDF 会列出所有已记录的收入和支出，并显示累计净额。',
     comingSoon: '即将推出',
     
     // Period Options

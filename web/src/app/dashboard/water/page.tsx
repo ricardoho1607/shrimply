@@ -200,6 +200,24 @@ interface DashboardUser {
 
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
+
+const hasSavedValue = (value: unknown): boolean => value !== null && value !== undefined && value !== '';
+
+const hasWaterQualityHistory = (sampling: Sampling): boolean => Boolean(
+  hasSavedValue(sampling.phMorning) || hasSavedValue(sampling.phEvening) ||
+  hasSavedValue(sampling.doMorning) || hasSavedValue(sampling.doEvening) ||
+  hasSavedValue(sampling.transparency) || hasSavedValue(sampling.salinity) ||
+  hasSavedValue(sampling.temperature) || hasSavedValue(sampling.ammonia) ||
+  hasSavedValue(sampling.weatherEvent) || hasSavedValue(sampling.operationalNotes) ||
+  hasSavedValue(sampling.waterExchangePercent) || hasSavedValue(sampling.sludgeLoad) ||
+  sampling.surfaceScum !== null && sampling.surfaceScum !== undefined ||
+  hasSavedValue(sampling.shrimpBehaviour)
+);
+
+const formatConditionLabel = (value: string | null | undefined): string => value
+  ? value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+  : '-';
+
 export default function WaterQualityPage() {
   const { company } = useAuth();
   const today = useFarmDateKey(company?.timeZone);
@@ -996,7 +1014,7 @@ export default function WaterQualityPage() {
 
   const getLatestWQ = (pond: Pond) => {
     const logs = (pond.samplings || [])
-      .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity || s.temperature || s.ammonia || s.weatherEvent || s.operationalNotes)
+      .filter(hasWaterQualityHistory)
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     return logs[0] || null;
   };
@@ -1457,7 +1475,7 @@ export default function WaterQualityPage() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {selectedPondForHistory.samplings
-                  .filter(s => s.phMorning || s.phEvening || s.doMorning || s.doEvening || s.transparency || s.salinity || s.temperature || s.ammonia || s.weatherEvent || s.operationalNotes)
+                  .filter(hasWaterQualityHistory)
                   .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                   .map((log, i) => (
                     <div key={i} className="glass-card" style={{ padding: '18px', background: '#FFF' }}>
@@ -1491,11 +1509,33 @@ export default function WaterQualityPage() {
                           <span className="wq-val-small">{log.ammonia || '-'} mg/L</span>
                         </div>
                       </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '14px' }}>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Weather</span>
+                          <span className="wq-val-small">{formatConditionLabel(log.weatherEvent)}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Water Exchange</span>
+                          <span className="wq-val-small">{hasSavedValue(log.waterExchangePercent) ? `${log.waterExchangePercent}%` : '-'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Sludge Load</span>
+                          <span className="wq-val-small">{formatConditionLabel(log.sludgeLoad)}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Surface Scum</span>
+                          <span className="wq-val-small">{log.surfaceScum === null || log.surfaceScum === undefined ? '-' : log.surfaceScum ? 'Present' : 'Not observed'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">Shrimp Behavior</span>
+                          <span className="wq-val-small">{formatConditionLabel(log.shrimpBehaviour)}</span>
+                        </div>
+                      </div>
                       {log.operationalNotes && <p style={{ margin: '14px 0 0', color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{log.operationalNotes}</p>}
                     </div>
                   ))
                 }
-                {selectedPondForHistory.samplings.length === 0 && (
+                {!selectedPondForHistory.samplings.some(hasWaterQualityHistory) && (
                    <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                      <Info size={40} style={{ marginBottom: '16px', opacity: 0.3 }} />
                      <p style={{ fontWeight: 600 }}>No environmental records found for this pond.</p>

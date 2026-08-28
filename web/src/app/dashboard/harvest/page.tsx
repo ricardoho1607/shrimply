@@ -129,9 +129,12 @@ export default function HarvestPage() {
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [harvestRecords, setHarvestRecords] = useState<HarvestRecord[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pondsResolved, setPondsResolved] = useState(false);
+  const [cyclesResolved, setCyclesResolved] = useState(false);
+  const [harvestRecordsResolved, setHarvestRecordsResolved] = useState(false);
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
+  const loading = !pondsResolved || !cyclesResolved || !harvestRecordsResolved;
 
   const [isModalOpen, setModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -213,6 +216,9 @@ export default function HarvestPage() {
           const cid = userData?.companyId || null;
           setCompanyId(cid);
           if (cid) {
+            setPondsResolved(false);
+            setCyclesResolved(false);
+            setHarvestRecordsResolved(false);
             // Load Ponds
             onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
               setPonds(snapshot.docs
@@ -238,18 +244,39 @@ export default function HarvestPage() {
                   pondCycleId: doc.data().pondCycleId || doc.id,
                   cycleStatus: doc.data().cycleStatus
                 } as Pond)));
+              setPondsResolved(true);
+            }, (error) => {
+              console.error('Error loading harvest ponds:', error);
+              setPondsResolved(true);
             });
             // Load Harvest Records
             const q = query(collection(db, 'companies', cid, 'harvestRecords'), orderBy('date', 'desc'));
             const unsubHarvest = onSnapshot(q, (snapshot) => {
               setHarvestRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HarvestRecord)));
-              setLoading(false);
+              setHarvestRecordsResolved(true);
+            }, (error) => {
+              console.error('Error loading harvest records:', error);
+              setHarvestRecordsResolved(true);
             });
             return () => unsubHarvest();
           } else {
-            setLoading(false);
+            setPonds([]);
+            setCycles([]);
+            setHarvestRecords([]);
+            setPondsResolved(true);
+            setCyclesResolved(true);
+            setHarvestRecordsResolved(true);
           }
         });
+      } else {
+        setUser(null);
+        setCompanyId(null);
+        setPonds([]);
+        setCycles([]);
+        setHarvestRecords([]);
+        setPondsResolved(true);
+        setCyclesResolved(true);
+        setHarvestRecordsResolved(true);
       }
     });
     return () => unsubAuth();
@@ -275,6 +302,10 @@ export default function HarvestPage() {
           stockingStartDate: data.stockingStartDate,
         } as FarmCycle;
       }));
+      setCyclesResolved(true);
+    }, (error) => {
+      console.error('Error loading harvest cycles:', error);
+      setCyclesResolved(true);
     });
   }, [companyId, t.harvestCycle.productionCycle]);
 
@@ -503,6 +534,14 @@ export default function HarvestPage() {
     if (pond.harvestType === 'final') return t.harvest.finalHarvest;
     return t.harvest.harvest;
   };
+
+  if (loading) {
+    return (
+      <div className="dashboard-page-relaxed authenticated-compact-page" aria-label="Loading harvest data" style={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}>
+        <Loader2 className="animate-spin" size={34} color="#0F4C75" />
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>

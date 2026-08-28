@@ -1,7 +1,16 @@
 import { calculatePondMetrics } from './metrics';
 import { normalizePondData } from './normalizePondData';
 import { build72HourOutlook } from './outlook';
-import { cleanOrsonResponse, ORSON_FALLBACK_RESPONSE, withOrsonTimeout, buildOrsonPromptPackage, isFarmSpecificQuestion } from './promptBuilder';
+import {
+  buildOrsonPromptPackage,
+  buildOrsonRequestPrompt,
+  cleanOrsonResponse,
+  estimateOrsonPromptTokens,
+  isFarmSpecificQuestion,
+  ORSON_FALLBACK_RESPONSE,
+  ORSON_PROMPT_TOKEN_BUDGET,
+  withOrsonTimeout,
+} from './promptBuilder';
 import { analyzePondRisks } from './riskEngine';
 import { consumeOrsonCallableStream } from './callableStream';
 import { loadCachedOrsonCalibration } from './calibrationCache';
@@ -155,7 +164,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
   assert(farmPackage.context.includes('daily_records_14d'), 'includes 14-day daily records in context payload');
   assert(farmRiskPayload[0].daily_records_14d.length === 5, 'keeps routine farm prompts to five recent daily records');
-  assert(historyRiskPayload[0].daily_records_14d.length === 8, 'retains available 14-day records for explicit history questions');
+  assert(historyRiskPayload[0].daily_records_14d.length === 5, 'keeps explicit history questions to the latest five relevant records');
   assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
   assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
   assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
@@ -217,6 +226,45 @@ export const runPromptBuilderSelfTest = () => {
   assert(comparisonPackage.questionFocus.isComparison === true, 'sets isComparison flag');
   assert(comparisonPackage.context.includes('ORSON COMPARATIVE MATRIX'), 'includes comparative matrix in context');
   assert(comparisonPackage.context.includes('recent_treatments'), 'includes recent treatments');
+
+  const oversizedMetrics = {
+    ...metrics,
+    dailyRecords14d: Array.from({ length: 30 }, (_, index) => ({
+      ...metrics.dailyRecords14d[metrics.dailyRecords14d.length - 1],
+      date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+      operationalNotes: `Long simulated-day note ${index + 1}: ${'x'.repeat(5000)}`,
+    })),
+    recentTreatments: Array.from({ length: 20 }, (_, index) => ({
+      id: `treatment-${index + 1}`,
+      date: `2026-01-${String(index + 1).padStart(2, '0')}`,
+      additiveId: `additive-${index + 1}`,
+      additiveName: 'Pond treatment',
+      category: 'probiotic',
+      quantity: 10,
+      unit: 'kg',
+      ppm: null,
+      pondVolumeLiters: null,
+      notes: `Treatment note ${'y'.repeat(5000)}`,
+    })),
+  };
+  const focusedPackage = buildOrsonPromptPackage({
+    userMessage: 'Analyze Prompt Pond water quality',
+    metrics: [oversizedMetrics, metrics2],
+    reports: [report, report2],
+    outlooks: [outlook, outlook2],
+    conversationHistory: Array.from({ length: 20 }, (_, index) => ({
+      role: index % 2 === 0 ? 'user' as const : 'model' as const,
+      text: `Conversation ${index}: ${'z'.repeat(5000)}`,
+    })),
+  });
+  const focusedRiskPayload = JSON.parse(focusedPackage.context.split('ORSON RISK PAYLOAD:\n')[1]);
+  const focusedRecords = focusedRiskPayload[0].daily_records_14d;
+  const requestPrompt = buildOrsonRequestPrompt(focusedPackage.context, focusedPackage.userMessage);
+  assert(focusedRiskPayload.length === 1, 'sends only the explicitly selected pond');
+  assert(focusedRecords.length >= 3 && focusedRecords.length <= 5, 'sends only the latest three to five relevant records');
+  assert(focusedRecords.at(-1).date === '2026-01-30', 'keeps the latest selected-pond record');
+  assert(focusedRecords.every((record: { operational_notes?: string | null }) => !record.operational_notes || record.operational_notes.length <= 180), 'trims long operational notes');
+  assert(estimateOrsonPromptTokens(requestPrompt) <= ORSON_PROMPT_TOKEN_BUDGET, 'enforces the Orson request token budget');
 
   return {
     farmPackage,

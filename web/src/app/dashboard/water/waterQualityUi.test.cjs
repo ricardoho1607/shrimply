@@ -62,3 +62,18 @@ test('daily water quality preserves optional farm context and legacy records', (
   assert.match(pondStore, /sampling\.ammonia/);
   assert.match(pondStore, /sampling\.operationalNotes/);
 });
+
+test('water quality history displays every saved pond-condition field', () => {
+  assert.match(pageSource, /waterExchangePercent/);
+  assert.match(pageSource, />Weather</);
+  assert.match(pageSource, />Water Exchange</);
+  assert.match(pageSource, />Sludge Load</);
+  assert.match(pageSource, />Surface Scum</);
+  assert.match(pageSource, />Shrimp Behavior</);
+  assert.match(pageSource, /log\.weatherEvent/);
+  assert.match(pageSource, /log\.waterExchangePercent/);
+  assert.match(pageSource, /hasSavedValue\(log\.waterExchangePercent\)/);
+  assert.match(pageSource, /log\.sludgeLoad/);
+  assert.match(pageSource, /log\.surfaceScum/);
+  assert.match(pageSource, /log\.shrimpBehaviour/);
+});

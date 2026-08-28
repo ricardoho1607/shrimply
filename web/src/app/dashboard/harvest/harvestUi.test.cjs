@@ -38,3 +38,11 @@ test('close control is square and highlights only on hover', () => {
   assert.match(styles, /\.closeButton\s*{[\s\S]*?border-radius:\s*8px;[\s\S]*?background:\s*transparent;/);
   assert.match(styles, /\.closeButton:hover\s*{[\s\S]*?background:\s*var\(--bg-mid\);/);
 });
+
+test('harvest waits for ponds, cycles, and records before showing counts', () => {
+  assert.match(source, /const \[pondsResolved, setPondsResolved\] = useState\(false\)/);
+  assert.match(source, /const \[cyclesResolved, setCyclesResolved\] = useState\(false\)/);
+  assert.match(source, /const \[harvestRecordsResolved, setHarvestRecordsResolved\] = useState\(false\)/);
+  assert.match(source, /const loading = !pondsResolved \|\| !cyclesResolved \|\| !harvestRecordsResolved/);
+  assert.match(source, /if \(loading\) \{[\s\S]*?return \([\s\S]*?aria-label="Loading harvest data"/);
+});

@@ -1110,6 +1110,15 @@ companySetup: {
     cashFlow: 'Arus Kas',
     harvestProjection: 'Proyeksi Panen',
     expenseReport: 'Laporan Pengeluaran',
+    transactionHistory: 'Riwayat Transaksi',
+    transactionHistoryDescription: 'Uang masuk dan uang keluar',
+    transactionRegister: 'Daftar Transaksi',
+    selectReport: 'Pilih laporan',
+    transactions: 'Transaksi',
+    moneyIn: 'Uang Masuk',
+    moneyOut: 'Uang Keluar',
+    netMovement: 'Pergerakan Bersih',
+    transactionPdfNote: 'PDF mencantumkan setiap pendapatan dan pengeluaran yang tercatat beserta posisi bersih berjalan.',
     comingSoon: 'Segera',
     
     // Period Options

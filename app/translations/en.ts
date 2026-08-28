@@ -1114,6 +1114,15 @@ financialReports: {
   cashFlow: 'Cash Flow',
   harvestProjection: 'Harvest Projections',
   expenseReport: 'Expense Report',
+  transactionHistory: 'Transaction History',
+  transactionHistoryDescription: 'Money in and money out',
+  transactionRegister: 'Transaction Register',
+  selectReport: 'Choose a report',
+  transactions: 'Transactions',
+  moneyIn: 'Money In',
+  moneyOut: 'Money Out',
+  netMovement: 'Net Movement',
+  transactionPdfNote: 'The PDF lists every recorded income and expense with a running net position.',
   comingSoon: 'Soon',
   
   // Period Options
