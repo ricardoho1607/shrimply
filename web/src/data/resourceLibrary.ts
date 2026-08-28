@@ -28,6 +28,13 @@ export type ResourceArticle = {
   sections: {
     heading: string;
     body: string[];
+    items?: string[];
+    ordered?: boolean;
+    note?: string;
+    table?: {
+      columns: string[];
+      rows: string[][];
+    };
   }[];
   checklist: string[];
   faqs?: {
@@ -184,9 +191,345 @@ const sources = {
     publisher: "Responsible Seafood Advocate",
     url: "https://www.globalseafood.org/advocate/partial-harvesting-a-smart-strategy-for-shrimp-farmers/",
   },
+  australianPrawnManual: {
+    title: "Australian Prawn Farming Manual",
+    publisher: "Australian Centre for International Agricultural Research",
+    url: "https://www.aciar.gov.au/sites/default/files/legacy/node/737/Australian%20prawnfarming%20manual%20final.pdf",
+  },
+  faoPondProblemGuide: {
+    title: "Manual on Pond Culture of Penaeid Shrimp: Indicators of Problems in a Pond",
+    publisher: "Food and Agriculture Organization of the United Nations",
+    url: "https://www.fao.org/4/ac006e/AC006E11.htm",
+  },
+  faoShrimpWaterQuality: {
+    title: "Shrimp Culture: Pond Design, Operation and Management — Water Quality",
+    publisher: "Food and Agriculture Organization of the United Nations",
+    url: "https://www.fao.org/4/AC210E/AC210E09.htm",
+  },
+  australianCyanobacteria: {
+    title: "Cyanobacteria (Blue-Green Algae) and Water Quality",
+    publisher: "Australian Government",
+    url: "https://www.waterquality.gov.au/issues/blue-green-algae",
+  },
+  queenslandHarmfulAlgae: {
+    title: "Characterising and Managing Harmful Algal Blooms That Cause Production Loss on Australian Prawn Farms",
+    publisher: "Queensland Department of Agriculture and Fisheries",
+    url: "https://era.dpi.qld.gov.au/id/eprint/6101/",
+  },
+  shrimpMicrocystin: {
+    title: "Co-Occurrence of White Shrimp Mortalities and Microcystin Toxin in a Shrimp Facility",
+    publisher: "Aquaculture",
+    url: "https://doi.org/10.1016/j.aquaculture.2006.08.037",
+  },
+  shrimpPhytoplanktonSuccession: {
+    title: "Phytoplankton Succession in Intensive Marine Shrimp Culture Ponds",
+    publisher: "Aquaculture Research",
+    url: "https://doi.org/10.1046/j.1355-557x.2002.00671.x",
+  },
 } satisfies Record<string, ResourceSource>;
 
 export const resourceArticles: ResourceArticle[] = [
+  {
+    slug: "shrimp-pond-water-colour-algae",
+    section: "Water, Health, and Risk",
+    label: "Water Quality",
+    title: "Shrimp Pond Water Colour: Algae Types, Risks and Solutions",
+    description: "Learn what green, brown, blue-green, red, clear, or dark shrimp-pond water may indicate and how to monitor and manage algae safely.",
+    readTime: "13 min read",
+    tags: [
+      "shrimp pond water colour",
+      "phytoplankton in shrimp pond",
+      "algae in shrimp ponds",
+      "cyanobacteria",
+      "algae crash",
+      "dissolved oxygen",
+    ],
+    publishedAt: "2026-08-28",
+    updatedAt: "2026-08-28",
+    image: {
+      src: "/resources/images/shrimp-pond-water-colour-algae-infographic.jpg",
+      alt: "Shrimply infographic comparing green, yellow-brown, blue-green, and dark-green shrimp pond water with monitoring guidance",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Water Quality Monitoring", href: "/features/water-quality-monitoring" },
+    takeaways: [
+      "Water colour is an early clue, not an algae identification or pond diagnosis.",
+      "A rapid colour change should trigger checks of dissolved oxygen, pH, Secchi depth, ammonia, and nitrite.",
+      "Confirm the dominant plankton before applying any chemical treatment.",
+    ],
+    sections: [
+      {
+        heading: "Quick answer",
+        body: [
+          "Shrimp pond water colour can give you an early clue about plankton density and changing pond conditions. However, colour alone cannot identify an algae species or confirm whether a bloom is harmful.",
+          "When the colour changes quickly, first measure dissolved oxygen, pH, water transparency, ammonia, and nitrite. If shrimp are gathering near aerators, swimming at the surface, or dying, treat the situation as urgent.",
+        ],
+      },
+      {
+        heading: "Why pond water colour matters",
+        body: [
+          "A stable phytoplankton community can help produce oxygen during daylight, absorb nutrients, and provide natural food for young shrimp. Brown diatom-rich blooms are often useful, but their presence cannot be confirmed by colour alone.",
+          "Dense or unstable blooms can produce high afternoon pH, consume oxygen at night, and increase the risk of an oxygen crash before sunrise. When algae die, bacteria decompose the dead cells and consume more oxygen. The water may become clear or milky while ammonia and organic waste increase.",
+        ],
+      },
+      {
+        heading: "Quick shrimp pond water-colour guide",
+        body: [
+          "Use colour as a prompt for measurement, not as a diagnosis. Cyanobacteria, for example, may appear brown, yellow, or red as well as blue-green.",
+        ],
+        table: {
+          columns: ["Water colour", "What it may indicate", "Possible benefit or risk", "What to check next"],
+          rows: [
+            ["Green", "Green algae or a mixed phytoplankton community", "A stable bloom can be useful; dense growth can reduce night-time oxygen", "Pre-dawn oxygen, afternoon pH, and Secchi depth"],
+            ["Yellow-green", "Mixed green algae, cyanobacteria, or suspended material", "May be normal or may signal a changing bloom", "Compare colour over several days and examine under a microscope"],
+            ["Yellow-brown", "Possible diatoms or suspended soil", "Diatoms can support pond productivity, but colour is not proof", "Secchi depth, microscopy, and intake-water condition"],
+            ["Brown", "Possible diatoms, dinoflagellates, or mixed plankton", "Can be useful or harmful depending on species and density", "Microscopic identification, oxygen, and pH"],
+            ["Blue-green", "Possible cyanobacteria", "Some species produce odours, poor water quality, or toxins", "Look for surface scum and arrange microscopic or laboratory testing"],
+            ["Dark green", "Very dense phytoplankton bloom", "Greater risk of high afternoon pH, low pre-dawn oxygen, and bloom collapse", "Oxygen before sunrise, pH at sunrise and sunset, and Secchi depth"],
+            ["Red or reddish-brown", "Pigmented algae, including possible dinoflagellates", "Some species may irritate or harm shrimp", "Identify the organism before choosing any treatment"],
+            ["Clear", "Low plankton, an algae crash, or heavy settling", "Less natural productivity; a sudden change may precede oxygen or ammonia problems", "Oxygen, ammonia, nitrite, and recent colour history"],
+            ["Milky or cloudy", "Algae die-off, bacteria, clay, or suspended organic matter", "Possible decomposition and oxygen demand", "Oxygen, ammonia, smell, sludge, and microscopy"],
+          ],
+        },
+      },
+      {
+        heading: "Is algae good or bad for shrimp ponds?",
+        body: [
+          "Algae are not automatically harmful. The important question is whether the bloom is stable, appropriately dense, and supported by safe oxygen and pH trends.",
+          "A stable bloom may produce oxygen during daylight, absorb nutrients, shade the pond bottom, reduce filamentous algae growth, and provide natural food for post-larvae and zooplankton. A problematic bloom may consume too much oxygen at night, push afternoon pH too high, collapse after cloudy weather, or contain potentially harmful organisms.",
+        ],
+      },
+      {
+        heading: "Practical water-quality reference points",
+        body: [
+          "These figures are general pond-management references, not universal limits. Species, biomass, temperature, salinity, pond design, and local farm procedures all affect the safe working range.",
+        ],
+        table: {
+          columns: ["Measurement", "Practical reference", "Warning sign", "Important context"],
+          rows: [
+            ["Dissolved oxygen", "Aim to keep it above 4 mg/L", "Falling pre-dawn readings or shrimp showing stress", "Requirements vary with species, biomass, temperature, and salinity"],
+            ["pH", "Approximately 7.5–9.0 is commonly suitable", "Afternoon pH approaching or exceeding 9.5", "Compare sunrise and late-afternoon readings rather than relying on one result"],
+            ["Secchi depth", "Approximately 25–40 cm in many plankton-managed ponds", "Less than 25 cm may indicate a very dense bloom", "Only useful for algae density when clay or other particles are not causing turbidity"],
+            ["Water colour", "Stable from day to day", "Rapid change, clearing, scum, or unusual colour", "Use the same viewing place, depth, and time each day"],
+          ],
+        },
+      },
+      {
+        heading: "Green water",
+        body: [
+          "Green water commonly suggests green algae or a mixed phytoplankton community. A stable green bloom can support pond productivity, especially early in the production cycle.",
+          "Very dark green water may indicate excessive density. During the day the bloom can produce high oxygen and pH, but every organism continues using oxygen after sunset. The lowest oxygen level normally occurs shortly before sunrise.",
+        ],
+        items: [
+          "Measure dissolved oxygen before sunrise and late afternoon.",
+          "Measure pH at sunrise and late afternoon.",
+          "Track Secchi depth, feed-tray response, and shrimp behaviour.",
+        ],
+      },
+      {
+        heading: "Brown or yellow-brown water",
+        body: [
+          "Brown water may contain diatoms, which are often considered useful natural food organisms. However, brown colour can also come from dinoflagellates, suspended soil, or mixed plankton.",
+          "Do not label a brown pond as good diatoms without microscopic confirmation. Visually similar brown blooms can contain very different organisms.",
+        ],
+      },
+      {
+        heading: "Blue-green water",
+        body: [
+          "Blue-green colour, floating mats, surface scum, and earthy or unusual odours may suggest cyanobacteria. Warm water, sunlight, weak circulation, and available nitrogen or phosphorus can encourage these blooms.",
+          "Some cyanobacteria can produce toxins, but visible colour does not prove that toxins are present. Arrange microscopic or laboratory confirmation when mortality or severe stress occurs.",
+        ],
+      },
+      {
+        heading: "Red or reddish-brown water",
+        body: [
+          "Red water may be caused by dinoflagellates or other pigmented plankton. Some species are harmless, while others may produce toxins, mucus, or oxygen problems.",
+          "Check how quickly the colour appeared, whether streaks or surface patches form, shrimp behaviour, mortality, pre-dawn oxygen, and microscopic plankton identification. Avoid choosing a treatment based only on colour.",
+        ],
+      },
+      {
+        heading: "Clear or milky water and algae crashes",
+        body: [
+          "Gradual clearing may simply mean low plankton density. Sudden clearing after a dense bloom may mean the bloom has collapsed.",
+          "After a crash, photosynthetic oxygen production falls while bacteria use oxygen to decompose dead algae. Ammonia and organic waste may increase, and another algae or bacterial community may replace the original bloom.",
+        ],
+      },
+      {
+        heading: "Warning signs of a dangerous bloom",
+        body: [
+          "Shrimp movement can also be caused by temperature, disease, or other water-quality problems. Measure the pond before deciding on the cause.",
+        ],
+        items: [
+          "Water colour changes rapidly, clears suddenly, or forms thick surface scum.",
+          "The pond develops a strong or unusual smell.",
+          "Secchi depth falls quickly or the difference between morning and afternoon pH grows.",
+          "Pre-dawn dissolved oxygen keeps falling.",
+          "Feed-tray response weakens or shrimp gather near aerators and pond edges.",
+          "Shrimp swim near the surface during daylight or mortality increases.",
+          "The bloom begins clearing after several cloudy days.",
+        ],
+      },
+      {
+        heading: "Likely causes and how to check them",
+        body: [
+          "Rank the possibilities using measurements and pond history instead of assuming that the colour reveals the cause.",
+        ],
+        ordered: true,
+        items: [
+          "Excess feed and organic waste: check feed trays, biomass estimates, sludge depth, and uneaten feed.",
+          "High nutrient availability: test ammonia, nitrite, and other nutrients while reviewing recent feeding and fertilisation.",
+          "Nutrient imbalance: use microscopic identification and qualified technical advice rather than one universal nutrient ratio.",
+          "Sludge accumulation: inspect collection areas and smell disturbed bottom material. Black sediment or a rotten-egg smell may indicate poor bottom conditions.",
+          "Weak circulation: check for still corners, floating scum, and uneven pond colour.",
+          "Warm, bright weather: compare colour, pH, and oxygen trends across several days.",
+          "Unsafe intake water: examine source water for algae, suspended material, and disease risk before exchange.",
+          "Rainfall or salinity change: measure salinity and oxygen at different depths because fresh rainwater can form a separate surface layer.",
+        ],
+      },
+      {
+        heading: "What to do immediately",
+        body: [
+          "Prioritise oxygen and shrimp safety, then confirm what changed before choosing a corrective treatment.",
+        ],
+        ordered: true,
+        items: [
+          "Measure dissolved oxygen before sunrise. Increase aeration when oxygen is falling or shrimp show stress, and continue checking until readings and behaviour stabilise.",
+          "Measure morning and afternoon pH. A high afternoon result with dense water suggests strong photosynthetic activity; a widening daily swing warns that the pond is becoming unstable.",
+          "Check feed trays and biomass. Adjust the next feed from observed tray response, shrimp condition, and current biomass—not simply from the amount previously logged.",
+          "Inspect sludge and dead algae. Safely remove concentrated dead material where the pond design allows, without spreading poor bottom sediment through the pond.",
+          "Confirm the dominant plankton through microscopy or a qualified laboratory when colour changes quickly, scum appears, or shrimp are affected.",
+          "Assess replacement water. Exchange only when the source is safe, screened, and biosecure, and avoid sudden temperature, salinity, or pH changes.",
+          "Seek aquatic-animal-health help when mortality continues, shrimp remain stressed, or infectious disease is possible.",
+        ],
+        note: "Avoid applying an algicide, disinfectant, pesticide, probiotic, mineral, or other chemical simply because of the pond's colour. Killing a dense bloom quickly can make oxygen conditions worse, and permitted products vary by location.",
+      },
+      {
+        heading: "Long-term algae management",
+        body: [
+          "Stable ponds come from consistent control of feed, waste, circulation, intake water, and monitoring—not one universal algae treatment.",
+        ],
+        items: [
+          "Match feeding to biomass and verified feed-tray response.",
+          "Keep aeration and circulation suitable for the growing biomass.",
+          "Remove accumulated sludge between crops and during production where the pond system permits.",
+          "Monitor nutrient and organic-waste trends.",
+          "Protect intake water through screening, settling, and biosecurity.",
+          "Maintain stable alkalinity and pH using farm-specific professional guidance.",
+          "Compare current measurements with earlier successful production cycles.",
+          "Use microscopy when the plankton community changes.",
+          "Record weather, rainfall, water exchanges, and bloom changes.",
+        ],
+      },
+      {
+        heading: "Practical monitoring schedule",
+        body: [
+          "Frequency should increase when the bloom becomes dense, weather changes, feeding rises, or shrimp show stress.",
+        ],
+        table: {
+          columns: ["What to monitor", "Suggested timing", "When to check more often"],
+          rows: [
+            ["Dissolved oxygen", "Before sunrise and late afternoon, daily", "Dense bloom, cloudy weather, feed increase, or stressed shrimp"],
+            ["pH", "Sunrise and late afternoon, daily", "Rapid colour change or a large daily movement"],
+            ["Water colour", "Same place and time each day", "Any sudden colour change"],
+            ["Secchi depth", "Daily under similar light conditions", "Darkening water or falling oxygen"],
+            ["Feed-tray response", "At every scheduled tray check", "Reduced response or unstable water"],
+            ["Mortality and behaviour", "At least daily", "Any stress or suspected disease"],
+            ["Alkalinity", "Under the farm's routine water-quality plan", "Heavy rainfall or unstable pH"],
+            ["Ammonia and nitrite", "Under the farm's routine plan", "Algae crash, excess feed, or rising mortality"],
+            ["Plankton identification", "Routinely where available", "Scum, odour, sudden colour change, or persistent instability"],
+          ],
+        },
+      },
+      {
+        heading: "Use Shrimply to monitor the pond",
+        body: [
+          "Shrimply helps organise and compare pond records. It does not identify algae or diagnose disease.",
+        ],
+        items: [
+          "Record dissolved oxygen, pH, alkalinity, ammonia, nitrite, salinity, and temperature in Water Quality.",
+          "Compare morning and afternoon pH and oxygen trends.",
+          "Review Feed History alongside current biomass and Sampling results.",
+          "Record deaths in Mortality History so the start and speed of the pattern are clear.",
+          "Compare current conditions with earlier Pond Production Cycles.",
+          "Export relevant records when sharing the case with a manager, technician, or laboratory.",
+        ],
+      },
+      {
+        heading: "When to get specialist help",
+        body: [
+          "Provide the laboratory with recent water-quality results, feed records, mortality history, weather changes, and representative water samples collected according to its instructions.",
+        ],
+        items: [
+          "Mortality continues or rises.",
+          "Shrimp remain near the surface despite aeration.",
+          "A blue-green, red, or unusual bloom persists.",
+          "Surface scum or a strong odour develops.",
+          "The pond repeatedly crashes or water quality fails to improve.",
+          "You suspect toxins or infectious disease.",
+        ],
+      },
+    ],
+    checklist: [
+      "Measure dissolved oxygen before sunrise and increase aeration if readings fall or shrimp show stress.",
+      "Compare sunrise and late-afternoon pH instead of relying on one reading.",
+      "Check Secchi depth, ammonia, nitrite, feed trays, sludge, and recent weather.",
+      "Confirm the dominant plankton before applying any chemical treatment.",
+      "Use only safe, screened, biosecure replacement water for controlled exchange.",
+      "Seek specialist help when mortality continues or disease is suspected.",
+    ],
+    faqs: [
+      {
+        question: "What is the best water colour for a shrimp pond?",
+        answer: "There is no single best colour. A stable green or brown bloom may be useful, but measurements and microscopic identification matter more than colour alone.",
+      },
+      {
+        question: "Is green water good for vannamei shrimp?",
+        answer: "A moderate, stable green bloom can support pond productivity. Very dark or rapidly changing green water can signal excessive plankton and increased oxygen risk.",
+      },
+      {
+        question: "Why does shrimp pond water turn dark green?",
+        answer: "Common possibilities include dense phytoplankton, increased nutrient availability, excess organic matter, and strong sunlight. Confirm this with Secchi depth, pH, oxygen, and microscopy.",
+      },
+      {
+        question: "What causes blue-green algae in shrimp ponds?",
+        answer: "Warm water, sunlight, nutrients, and weak mixing can favour cyanobacteria. Species composition and pond conditions determine the real risk.",
+      },
+      {
+        question: "How can farmers control an algae bloom safely?",
+        answer: "Start with oxygen, aeration, pH, feed, sludge, and organism identification. Only consider water exchange or another treatment after checking biosecurity, shrimp condition, and local professional guidance.",
+      },
+      {
+        question: "What happens when pond algae suddenly die?",
+        answer: "The water may clear or become milky. Decomposition consumes oxygen and may increase ammonia and organic loading.",
+      },
+      {
+        question: "How does an algae crash affect dissolved oxygen?",
+        answer: "The pond loses daytime oxygen production while bacteria use oxygen to decompose dead cells. The lowest and most dangerous reading often occurs before sunrise.",
+      },
+      {
+        question: "Are diatoms beneficial for shrimp ponds?",
+        answer: "Diatoms can provide useful natural food and support zooplankton. Brown colour alone cannot confirm that diatoms dominate the pond.",
+      },
+      {
+        question: "How can harmful algae be identified?",
+        answer: "Use microscopic identification and, when toxins are possible, laboratory testing. Colour and smell are warning signs, not proof.",
+      },
+      {
+        question: "How often should pond water colour and plankton be checked?",
+        answer: "Observe colour every day under similar conditions. Check the plankton community whenever colour, transparency, smell, shrimp behaviour, or the water-quality trend changes.",
+      },
+    ],
+    sources: [
+      sources.australianPrawnManual,
+      sources.faoPondProblemGuide,
+      sources.faoShrimpWaterQuality,
+      sources.australianCyanobacteria,
+      sources.queenslandHarmfulAlgae,
+      sources.shrimpMicrocystin,
+      sources.shrimpPhytoplanktonSuccession,
+    ],
+  },
   {
     slug: "pond-performance",
     section: "Farm Management",

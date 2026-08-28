@@ -276,7 +276,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
 
         <section className="section" style={{ paddingTop: "72px", background: "var(--white)" }}>
           <div className="container" style={{ maxWidth: "1120px" }}>
-            <div className="mobile-stack-grid" style={{ display: "grid", gridTemplateColumns: "0.34fr 0.66fr", gap: "72px", alignItems: "start" }}>
+            <div className="mobile-stack-grid resource-article-layout" style={{ display: "grid", gridTemplateColumns: "0.34fr 0.66fr", gap: "72px", alignItems: "start" }}>
               <aside className="resource-article-takeaways" style={{ position: "sticky", top: "110px" }}>
                 <div style={{ background: "var(--off-white)", border: "1px solid var(--slate)", borderRadius: "16px", padding: "28px" }}>
                   <div className="eyebrow" style={{ marginBottom: "18px" }}>Key Takeaways</div>
@@ -290,7 +290,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                 </div>
               </aside>
 
-              <div>
+              <div className="resource-article-content">
                 <div style={{ display: "grid", gap: "54px" }}>
                   {article.sections.map(section => (
                     <section key={section.heading}>
@@ -303,6 +303,67 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                             {paragraph}
                           </p>
                         ))}
+                        {section.items ? (
+                          section.ordered ? (
+                            <ol style={{ display: "grid", gap: "14px", paddingLeft: "24px" }}>
+                              {section.items.map(item => (
+                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{item}</li>
+                              ))}
+                            </ol>
+                          ) : (
+                            <ul style={{ display: "grid", gap: "14px", paddingLeft: "22px" }}>
+                              {section.items.map(item => (
+                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{item}</li>
+                              ))}
+                            </ul>
+                          )
+                        ) : null}
+                        {section.table ? (
+                          <div className="resource-table-frame">
+                            <p className="resource-table-scroll-hint">Scroll sideways to see all columns.</p>
+                            <div
+                              className="resource-table-scroll"
+                              role="region"
+                              tabIndex={0}
+                              aria-label={`${section.heading} table, scroll horizontally to see all columns`}
+                            >
+                              <table style={{ width: "100%", minWidth: "720px", borderCollapse: "collapse", background: "var(--white)" }}>
+                                <thead>
+                                  <tr style={{ background: "var(--off-white)" }}>
+                                    {section.table.columns.map(column => (
+                                      <th
+                                        key={column}
+                                        scope="col"
+                                        style={{ padding: "15px", textAlign: "left", color: "var(--ink)", fontSize: "0.78rem", letterSpacing: "0.05em", borderBottom: "1px solid var(--slate)" }}
+                                      >
+                                        {column}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {section.table.rows.map((row, rowIndex) => (
+                                    <tr key={`${section.heading}-${row[0]}-${rowIndex}`}>
+                                      {row.map((cell, cellIndex) => (
+                                        <td
+                                          key={`${cell}-${cellIndex}`}
+                                          style={{ padding: "15px", verticalAlign: "top", color: "var(--ocean)", fontSize: "0.9rem", fontWeight: cellIndex === 0 ? 700 : 500, borderBottom: rowIndex === section.table!.rows.length - 1 ? undefined : "1px solid var(--slate)" }}
+                                        >
+                                          {cell}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ) : null}
+                        {section.note ? (
+                          <aside style={{ borderLeft: "4px solid var(--sky)", background: "var(--off-white)", borderRadius: "0 12px 12px 0", padding: "18px 20px", color: "var(--ocean)", fontWeight: 600 }}>
+                            <strong style={{ color: "var(--ink)" }}>Avoid: </strong>{section.note}
+                          </aside>
+                        ) : null}
                       </div>
                     </section>
                   ))}
