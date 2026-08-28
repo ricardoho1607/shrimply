@@ -1,5 +1,5 @@
 // app/notifications.tsx - Updated with Clear All Button
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   ActivityIndicator, FlatList, RefreshControl, Alert
@@ -16,6 +16,11 @@ import {
   where, 
   onSnapshot, 
   orderBy,
+  getDocs,
+  limit,
+  startAfter,
+  type DocumentData,
+  type QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import {
   createOfflineOperationId,
@@ -39,6 +44,8 @@ interface Notification {
   color: string;
 }
 
+const NOTIFICATION_PAGE_SIZE = 50;
+
 export default function NotificationsScreen() {
   const router = useRouter();
   const { company, user } = useAuth();
@@ -48,6 +55,10 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const olderNotificationsRef = useRef<Notification[]>([]);
 
   useEffect(() => {
     if (!company?.id || !user?.uid) {
@@ -59,11 +70,15 @@ export default function NotificationsScreen() {
     const q = query(
       notificationsRef,
       where('companyId', '==', company.id),
-      orderBy('timestamp', 'desc')
+      orderBy('timestamp', 'desc'),
+      limit(NOTIFICATION_PAGE_SIZE),
     );
 
     let active = true;
     let snapshotVersion = 0;
+    cursorRef.current = null;
+    olderNotificationsRef.current = [];
+    setHasMore(false);
     void loadOfflineCollectionWithMutations<Notification>(
       user.uid,
       company.id,
@@ -94,8 +109,16 @@ export default function NotificationsScreen() {
         });
       });
       if (snapshot.metadata.fromCache && notificationsData.length === 0) return;
+      if (olderNotificationsRef.current.length === 0) {
+        cursorRef.current = snapshot.docs.at(-1) || null;
+        setHasMore(snapshot.size === NOTIFICATION_PAGE_SIZE);
+      }
+      const combinedNotifications = [
+        ...notificationsData,
+        ...olderNotificationsRef.current.filter((item) => !notificationsData.some((firstPageItem) => firstPageItem.id === item.id)),
+      ];
       const version = ++snapshotVersion;
-      void overlayOfflineMutations(notificationsData, user.uid, company.id, ['notifications']).then(async (next) => {
+      void overlayOfflineMutations(combinedNotifications, user.uid, company.id, ['notifications']).then(async (next) => {
         if (!active || version !== snapshotVersion) return;
         setNotifications(next);
         setLoading(false);
@@ -115,6 +138,49 @@ export default function NotificationsScreen() {
       unsubscribe();
     };
   }, [company?.id, user?.uid]);
+
+  const loadMore = useCallback(async () => {
+    if (!company?.id || !user?.uid || !cursorRef.current || !hasMore || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const pageQuery = query(
+        collection(db, 'notifications'),
+        where('companyId', '==', company.id),
+        orderBy('timestamp', 'desc'),
+        startAfter(cursorRef.current),
+        limit(NOTIFICATION_PAGE_SIZE),
+      );
+      const snapshot = await getDocs(pageQuery);
+      const page = snapshot.docs.map((document) => {
+        const data = document.data();
+        return {
+          id: document.id,
+          type: data.type || 'system',
+          title: data.title || '',
+          message: data.message || '',
+          timestamp: data.timestamp,
+          read: data.read || false,
+          priority: data.priority || 'medium',
+          data: data.data || {},
+          icon: getIconForType(data.type, data),
+          color: getColorForType(data.type, data.priority, data),
+        } as Notification;
+      });
+      const nextPage = await overlayOfflineMutations(page, user.uid, company.id, ['notifications']);
+      const existingIds = new Set(notifications.map((item) => item.id));
+      const uniquePage = nextPage.filter((item) => !existingIds.has(item.id));
+      olderNotificationsRef.current = [...olderNotificationsRef.current, ...uniquePage];
+      const next = [...notifications, ...uniquePage];
+      setNotifications(next);
+      cursorRef.current = snapshot.docs.at(-1) || cursorRef.current;
+      setHasMore(snapshot.size === NOTIFICATION_PAGE_SIZE);
+      await persistOfflineCollection(user.uid, company.id, 'notifications', next);
+    } catch (error) {
+      console.error('Error loading older notifications:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [company?.id, hasMore, loadingMore, notifications, user?.uid]);
 
   const getIconForType = (type: string, data?: any) => {
     if (data?.isOrson) return 'brain'; // Support for Orson AI icon
@@ -141,7 +207,17 @@ export default function NotificationsScreen() {
   const markAllAsRead = async () => {
     if (!company?.id || !user?.uid) return;
     try {
-      const unreadNotifications = notifications.filter(n => !n.read);
+      let unreadNotifications = notifications.filter((notification) => !notification.read).map(({ id }) => ({ id }));
+      try {
+        const unreadSnapshot = await getDocs(query(
+          collection(db, 'notifications'),
+          where('companyId', '==', company.id),
+          where('read', '==', false),
+        ));
+        unreadNotifications = unreadSnapshot.docs.map((document) => ({ id: document.id }));
+      } catch (lookupError) {
+        console.log('Using loaded notifications while offline:', lookupError);
+      }
       await Promise.all(unreadNotifications.map((notification) => saveDurableMutation({
         id: createOfflineOperationId(`notification-read-${notification.id}`),
         userId: user.uid,
@@ -153,6 +229,7 @@ export default function NotificationsScreen() {
         merge: true,
       }, { deferFlush: true })));
       const next = notifications.map((notification) => ({ ...notification, read: true }));
+      olderNotificationsRef.current = olderNotificationsRef.current.map((notification) => ({ ...notification, read: true }));
       setNotifications(next);
       await persistOfflineCollection(user.uid, company.id, 'notifications', next);
       requestOfflineMutationFlush(user.uid, company.id);
@@ -176,6 +253,7 @@ export default function NotificationsScreen() {
         merge: true,
       }, { deferFlush: true });
       const next = notifications.map((item) => item.id === notification.id ? { ...item, read: true } : item);
+      olderNotificationsRef.current = olderNotificationsRef.current.map((item) => item.id === notification.id ? { ...item, read: true } : item);
       setNotifications(next);
       await persistOfflineCollection(user.uid, company.id, 'notifications', next);
       requestOfflineMutationFlush(user.uid, company.id);
@@ -206,15 +284,27 @@ export default function NotificationsScreen() {
     if (!company?.id || !user?.uid) return;
     try {
       setLoading(true);
-      await Promise.all(notifications.map((notification) => saveDurableMutation({
-        id: createOfflineOperationId(`notification-delete-${notification.id}`),
+      let notificationIds = notifications.map(({ id }) => id);
+      try {
+        const snapshot = await getDocs(query(
+          collection(db, 'notifications'),
+          where('companyId', '==', company.id),
+        ));
+        notificationIds = snapshot.docs.map((notification) => notification.id);
+      } catch (lookupError) {
+        console.log('Clearing loaded notifications while offline:', lookupError);
+      }
+      await Promise.all(notificationIds.map((notificationId) => saveDurableMutation({
+        id: createOfflineOperationId(`notification-delete-${notificationId}`),
         userId: user.uid,
         companyId: company.id,
         createdAt: Date.now(),
         kind: 'delete',
-        path: ['notifications', notification.id],
+        path: ['notifications', notificationId],
       }, { deferFlush: true })));
       setNotifications([]);
+      olderNotificationsRef.current = [];
+      setHasMore(false);
       await persistOfflineCollection(user.uid, company.id, 'notifications', []);
       requestOfflineMutationFlush(user.uid, company.id);
     } catch {
@@ -323,6 +413,11 @@ export default function NotificationsScreen() {
         )}
         contentContainerStyle={styles.scrollContent}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => setRefreshing(true)} />}
+        onEndReached={() => void loadMore()}
+        onEndReachedThreshold={0.4}
+        ListFooterComponent={loadingMore ? (
+          <ActivityIndicator size="small" color="#0d2137" style={{ marginVertical: 20 }} />
+        ) : null}
         ListHeaderComponent={loading ? (
            <ActivityIndicator size="large" color="#0d2137" style={{ marginTop: 50 }} />
         ) : null}

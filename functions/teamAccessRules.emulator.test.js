@@ -58,6 +58,18 @@ test("a reciprocal company member retains company access", async () => {
   await assertSucceeds(getDoc(doc(db, "companies/company-a")));
 });
 
+test("farm members can read but cannot write the server dashboard summary", async () => {
+  await seed([
+    ["users/member-a", { email: "member@example.com", companyId: "company-a", role: "manager" }],
+    ["companies/company-a", { ownerId: "owner-a", teamMembers: ["owner-a", "member-a"] }],
+    ["companies/company-a/summaries/dashboard", { operationalSummaryVersion: 1, unreadNotificationCount: 3 }],
+  ]);
+  const db = testEnvironment.authenticatedContext("member-a", { email: "member@example.com" }).firestore();
+  const summaryRef = doc(db, "companies/company-a/summaries/dashboard");
+  await assertSucceeds(getDoc(summaryRef));
+  await assertFails(updateDoc(summaryRef, { unreadNotificationCount: 0 }));
+});
+
 test("clients cannot create invites, rate-limit records, or join requests", async () => {
   await seed([
     ["users/user-a", { email: "user@example.com", companyId: null, role: "technician" }],

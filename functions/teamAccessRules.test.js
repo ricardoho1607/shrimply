@@ -22,6 +22,11 @@ test("company membership requires reciprocal company and user records", () => {
   assert.match(rules, /resource\.data\.companyId == null \|\| resource\.data\.companyId == request\.resource\.data\.companyId/);
 });
 
+test("server-managed summaries are readable by farm members but never writable by clients", () => {
+  const rules = read("firestore.rules");
+  assert.match(rules, /match \/summaries\/\{summaryId\}[\s\S]*?allow read: if isFounderAdmin\(\) \|\| hasCompanyPermission\(companyId, 'viewFarm'\);[\s\S]*?allow write: if false;/);
+});
+
 test("join requests use one transactional record per user", () => {
   const source = read("functions/teamAccess.js");
   assert.match(source, /collection\("joinRequests"\)\.doc\(uid\)/);

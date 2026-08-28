@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   collection,
+  type DocumentData,
   doc,
   getDocs,
+  limit as limitQuery,
   onSnapshot,
   orderBy,
   query,
+  type QueryDocumentSnapshot,
   QueryConstraint,
+  startAfter,
   where,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { isOperationalSummaryFresh } from '../../../shared/operationalSummary';
 
 type SnapshotState<T> = {
   data: T[];
@@ -21,6 +26,7 @@ type SnapshotState<T> = {
 };
 
 const EMPTY_CONSTRAINTS: QueryConstraint[] = [];
+const HISTORY_PAGE_SIZE = 50;
 
 const deferStateUpdate = (callback: () => void) => {
   queueMicrotask(callback);
@@ -292,6 +298,11 @@ export function useCompanyNotifications<T>() {
     loading: true,
     error: null,
   });
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const loadedBeyondFirstPageRef = useRef(false);
+  const olderNotificationsRef = useRef<T[]>([]);
 
   useEffect(() => {
     let isActive = true;
@@ -303,26 +314,46 @@ export function useCompanyNotifications<T>() {
 
     if (!companyId) {
       deferIfActive(() => setState({ data: [], loading: false, error: null }));
+      cursorRef.current = null;
+      loadedBeyondFirstPageRef.current = false;
+      olderNotificationsRef.current = [];
+      setHasMore(false);
       return () => {
         isActive = false;
       };
     }
 
-    deferIfActive(() => setState((previous) => ({ ...previous, loading: true, error: null })));
+    cursorRef.current = null;
+    loadedBeyondFirstPageRef.current = false;
+    olderNotificationsRef.current = [];
+    deferIfActive(() => {
+      setState({ data: [], loading: true, error: null });
+      setHasMore(false);
+    });
 
     const notificationsQuery = query(
       collection(db, 'notifications'),
       where('companyId', '==', companyId),
-      orderBy('timestamp', 'desc')
+      orderBy('timestamp', 'desc'),
+      limitQuery(HISTORY_PAGE_SIZE),
     );
     const unsubscribe = onSnapshot(
       notificationsQuery,
       (snapshot) => {
+        const firstPage = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
+        const firstPageIds = new Set(snapshot.docs.map((item) => item.id));
         setState({
-          data: snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T)),
+          data: [
+            ...firstPage,
+            ...olderNotificationsRef.current.filter((item) => !firstPageIds.has((item as { id?: string }).id || '')),
+          ],
           loading: false,
           error: null,
         });
+        if (!loadedBeyondFirstPageRef.current) {
+          cursorRef.current = snapshot.docs.at(-1) || null;
+          setHasMore(snapshot.size === HISTORY_PAGE_SIZE);
+        }
       },
       (error) => {
         console.error('Error loading notifications:', error);
@@ -336,11 +367,80 @@ export function useCompanyNotifications<T>() {
     };
   }, [companyId]);
 
-  return { ...state, companyId };
+  const loadMore = useCallback(async () => {
+    if (!companyId || !cursorRef.current || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPageQuery = query(
+        collection(db, 'notifications'),
+        where('companyId', '==', companyId),
+        orderBy('timestamp', 'desc'),
+        startAfter(cursorRef.current),
+        limitQuery(HISTORY_PAGE_SIZE),
+      );
+      const snapshot = await getDocs(nextPageQuery);
+      const nextPage = snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as T));
+      setState((previous) => {
+        const existingIds = new Set(previous.data.map((item) => (item as { id?: string }).id));
+        const uniqueNextPage = nextPage.filter((item) => !existingIds.has((item as { id?: string }).id));
+        olderNotificationsRef.current = [...olderNotificationsRef.current, ...uniqueNextPage];
+        return {
+          ...previous,
+          data: [...previous.data, ...uniqueNextPage],
+        };
+      });
+      loadedBeyondFirstPageRef.current = true;
+      cursorRef.current = snapshot.docs.at(-1) || cursorRef.current;
+      setHasMore(snapshot.size === HISTORY_PAGE_SIZE);
+    } catch (error) {
+      setState((previous) => ({ ...previous, error: error as Error }));
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [companyId, hasMore, loadingMore]);
+
+  const updateLocalItem = useCallback((id: string, updates: Partial<T>) => {
+    olderNotificationsRef.current = olderNotificationsRef.current.map((item) => (
+      (item as { id?: string }).id === id ? { ...item, ...updates } : item
+    ));
+    setState((previous) => ({
+      ...previous,
+      data: previous.data.map((item) => (item as { id?: string }).id === id ? { ...item, ...updates } : item),
+    }));
+  }, []);
+  const removeLocalItem = useCallback((id: string) => {
+    olderNotificationsRef.current = olderNotificationsRef.current.filter(
+      (item) => (item as { id?: string }).id !== id,
+    );
+    setState((previous) => ({
+      ...previous,
+      data: previous.data.filter((item) => (item as { id?: string }).id !== id),
+    }));
+  }, []);
+  const clearLocalItems = useCallback(() => {
+    olderNotificationsRef.current = [];
+    setHasMore(false);
+    setState((previous) => ({ ...previous, data: [] }));
+  }, []);
+
+  return {
+    ...state,
+    companyId,
+    hasMore,
+    loadingMore,
+    loadMore,
+    updateLocalItem,
+    removeLocalItem,
+    clearLocalItems,
+  };
 }
 
 export function useMarketplaceListings<T>() {
-  return useTopLevelCollection<T>('marketplace_listings');
+  const activeListingConstraints = useMemo(
+    () => [where('status', '==', 'active')],
+    [],
+  );
+  return useTopLevelCollection<T>('marketplace_listings', activeListingConstraints);
 }
 
 function useTopLevelCollection<T>(
@@ -572,23 +672,46 @@ export function useUnreadNotificationsCount(options: { enabled?: boolean } = {})
       };
     }
 
-    const unreadQuery = query(
-      collection(db, 'notifications'),
-      where('companyId', '==', company.id),
-      where('read', '==', false)
-    );
-    const unsubscribe = onSnapshot(
-      unreadQuery,
-      (snapshot) => setCount(snapshot.size),
-      (error) => {
-        console.error('Error loading unread notification count:', error);
-        setCount(0);
-      }
+    let legacyUnsubscribe: (() => void) | undefined;
+    const startLegacyListener = () => {
+      if (legacyUnsubscribe) return;
+      const unreadQuery = query(
+        collection(db, 'notifications'),
+        where('companyId', '==', company.id),
+        where('read', '==', false)
+      );
+      legacyUnsubscribe = onSnapshot(
+        unreadQuery,
+        (snapshot) => setCount(snapshot.size),
+        (error) => {
+          console.error('Error loading unread notification count:', error);
+          setCount(0);
+        }
+      );
+    };
+    const stopLegacyListener = () => {
+      legacyUnsubscribe?.();
+      legacyUnsubscribe = undefined;
+    };
+    const unsubscribeSummary = onSnapshot(
+      doc(db, 'companies', company.id, 'summaries', 'dashboard'),
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        const data = snapshot.data() || {};
+        if (snapshot.exists() && isOperationalSummaryFresh(data)) {
+          stopLegacyListener();
+          setCount(Math.max(0, Number(data.unreadNotificationCount) || 0));
+          return;
+        }
+        if (!snapshot.metadata.fromCache) startLegacyListener();
+      },
+      () => startLegacyListener(),
     );
 
     return () => {
       isActive = false;
-      unsubscribe();
+      unsubscribeSummary();
+      stopLegacyListener();
     };
   }, [enabled, company?.id]);
 

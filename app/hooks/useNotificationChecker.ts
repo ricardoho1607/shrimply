@@ -3,22 +3,19 @@
 
 import { useEffect } from 'react';
 import { InteractionManager } from 'react-native';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '../../context/AuthContext';
+import firebaseApp, { db } from '../../config/firebase';
 import { useAssetStore } from '../store/assetStore';
 import { useFeedAdditiveStore } from '../store/feedAdditiveStore';
 import { NotificationService } from '../services/notificationService';
+import { isOperationalSummaryFresh } from '../../shared/operationalSummary';
 
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const STORE_UPDATE_DEBOUNCE_MS = 500;
 
-export const useNotificationChecker = () => {
-  const { company, isBuyer } = useAuth();
-  const companyId = company?.id;
-  const companyTimeZone = company?.timeZone;
-
-  useEffect(() => {
-    if (!companyId || isBuyer) return;
-
+const setupLegacyNotificationChecker = (companyId: string, companyTimeZone?: string) => {
     let cancelled = false;
     let assetsReady = false;
     let feedsReady = false;
@@ -130,6 +127,62 @@ export const useNotificationChecker = () => {
       }
       useAssetStore.getState().cleanup();
       if (__DEV__) console.log('[NotificationChecker] cleanup');
+    };
+};
+
+export const useNotificationChecker = () => {
+  const { company, isBuyer } = useAuth();
+  const companyId = company?.id;
+  const companyTimeZone = company?.timeZone;
+
+  useEffect(() => {
+    if (!companyId || isBuyer) return;
+
+    let legacyCleanup: (() => void) | undefined;
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+    let refreshRequested = false;
+    const startLegacyChecker = () => {
+      if (!legacyCleanup) legacyCleanup = setupLegacyNotificationChecker(companyId, companyTimeZone);
+    };
+    const stopLegacyChecker = () => {
+      legacyCleanup?.();
+      legacyCleanup = undefined;
+    };
+    const requestSummaryRefresh = () => {
+      if (refreshRequested) return;
+      refreshRequested = true;
+      fallbackTimer = setTimeout(startLegacyChecker, 15_000);
+      const ensureSummary = httpsCallable<{ companyId: string }, { refreshed: boolean }>(
+        getFunctions(firebaseApp),
+        'ensureOperationalSummary',
+      );
+      void ensureSummary({ companyId }).catch(() => {
+        if (fallbackTimer) clearTimeout(fallbackTimer);
+        fallbackTimer = undefined;
+        startLegacyChecker();
+      });
+    };
+
+    const summaryRef = doc(db, 'companies', companyId, 'summaries', 'dashboard');
+    const unsubscribeSummary = onSnapshot(
+      summaryRef,
+      { includeMetadataChanges: true },
+      (snapshot) => {
+        if (snapshot.exists() && isOperationalSummaryFresh(snapshot.data())) {
+          if (fallbackTimer) clearTimeout(fallbackTimer);
+          fallbackTimer = undefined;
+          stopLegacyChecker();
+          return;
+        }
+        if (!snapshot.metadata.fromCache) requestSummaryRefresh();
+      },
+      () => requestSummaryRefresh(),
+    );
+
+    return () => {
+      unsubscribeSummary();
+      if (fallbackTimer) clearTimeout(fallbackTimer);
+      stopLegacyChecker();
     };
   }, [companyId, companyTimeZone, isBuyer]);
 };

@@ -46,7 +46,17 @@ const isFirestoreTimestamp = (value: Notification['timestamp']): value is { toDa
 
 export default function NotificationsPage() {
   const { t } = useLanguage();
-  const { data: notifications, loading, companyId } = useCompanyNotifications<Notification>();
+  const {
+    data: notifications,
+    loading,
+    companyId,
+    hasMore,
+    loadingMore,
+    loadMore,
+    updateLocalItem,
+    removeLocalItem,
+    clearLocalItems,
+  } = useCompanyNotifications<Notification>();
   const [filter, setFilter] = useState<'all' | 'unread' | 'orson' | 'high'>('all');
   const [, startTransition] = useTransition();
 
@@ -71,6 +81,7 @@ export default function NotificationsPage() {
   const markAsRead = async (id: string) => {
     try {
       await updateDoc(doc(db, 'notifications', id), { read: true });
+      updateLocalItem(id, { read: true });
     } catch (error) {
       console.error("Error marking notification as read:", error);
     }
@@ -85,11 +96,12 @@ export default function NotificationsPage() {
         where('read', '==', false)
       );
       const snapshot = await getDocs(unreadQuery);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach(d => {
-        batch.update(d.ref, { read: true });
-      });
-      await batch.commit();
+      for (let index = 0; index < snapshot.docs.length; index += 400) {
+        const batch = writeBatch(db);
+        snapshot.docs.slice(index, index + 400).forEach(d => batch.update(d.ref, { read: true }));
+        await batch.commit();
+      }
+      notifications.forEach((notification) => updateLocalItem(notification.id, { read: true }));
     } catch (error) {
       console.error("Error marking all as read:", error);
     }
@@ -103,11 +115,12 @@ export default function NotificationsPage() {
         where('companyId', '==', companyId)
       );
       const snapshot = await getDocs(q);
-      const batch = writeBatch(db);
-      snapshot.docs.forEach(d => {
-        batch.delete(d.ref);
-      });
-      await batch.commit();
+      for (let index = 0; index < snapshot.docs.length; index += 400) {
+        const batch = writeBatch(db);
+        snapshot.docs.slice(index, index + 400).forEach(d => batch.delete(d.ref));
+        await batch.commit();
+      }
+      clearLocalItems();
     } catch (error) {
       console.error("Error clearing notifications:", error);
     }
@@ -116,6 +129,7 @@ export default function NotificationsPage() {
   const deleteNotification = async (id: string) => {
     try {
       await deleteDoc(doc(db, 'notifications', id));
+      removeLocalItem(id);
     } catch (error) {
       console.error("Error deleting notification:", error);
     }
@@ -340,7 +354,8 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : (
-          filteredNotifications.map((notification) => (
+          <>
+          {filteredNotifications.map((notification) => (
             <div 
               key={notification.id}
               className={`glass-card notification-item ${styles.notificationItem}`}
@@ -442,7 +457,19 @@ export default function NotificationsPage() {
                 </button>
               </div>
             </div>
-          ))
+          ))}
+          {hasMore && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => void loadMore()}
+              disabled={loadingMore}
+              style={{ alignSelf: 'center', marginTop: '8px', minWidth: '160px' }}
+            >
+              {loadingMore ? 'Loading…' : 'Load older notifications'}
+            </button>
+          )}
+          </>
         )}
       </div>
 

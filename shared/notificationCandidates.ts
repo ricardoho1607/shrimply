@@ -12,6 +12,7 @@ export interface InventoryCandidateSource {
 
 interface TransferSource {
   toUserName?: string;
+  to?: string;
   expectedReturn?: DateLike;
   returned?: boolean;
   actualReturnDate?: DateLike;
@@ -70,7 +71,7 @@ export const getNotificationCandidates = ({
     return [{
       assetId: asset.id,
       assetName: asset.assetName || asset.name || 'Asset',
-      holderName: activeTransfer.toUserName || 'Team member',
+      holderName: activeTransfer.toUserName || activeTransfer.to || asset.currentHolder || 'Team member',
       expectedReturn,
     }];
   });

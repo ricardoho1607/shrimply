@@ -12,10 +12,11 @@ test('web generates the same low-stock and overdue-return candidates as mobile',
     ],
     assets: [{
       id: 'asset1', assetName: 'Pump', currentHolder: 'u2',
-      transferHistory: [{ toUserName: 'Tech', expectedReturn: '2026-08-14T12:00:00Z', returned: false }],
+      transferHistory: [{ to: 'Tech', expectedReturn: '2026-08-14T12:00:00Z', returned: false }],
     }],
   });
 
   assert.deepEqual(result.lowStock.map((item) => item.itemId), ['f1', 'a1']);
   assert.deepEqual(result.overdue.map((item) => item.assetId), ['asset1']);
+  assert.equal(result.overdue[0].holderName, 'Tech');
 });

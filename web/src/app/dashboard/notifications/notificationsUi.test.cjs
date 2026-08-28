@@ -44,3 +44,16 @@ test('notification filters scroll and row actions remain available on phones', (
   assert.match(styles, /\.filterTabs\s*{[\s\S]*?overflow-x:\s*auto;/);
   assert.match(styles, /@media \(max-width: 640px\)[\s\S]*?\.notificationActions\s*{[\s\S]*?opacity:\s*1 !important;/);
 });
+
+test('notification history is paginated and bulk actions still cover the full query', () => {
+  const hook = fs.readFileSync(path.join(__dirname, '../../../hooks/useDashboardData.ts'), 'utf8');
+  assert.match(hook, /HISTORY_PAGE_SIZE = 50/);
+  assert.match(hook, /startAfter\(cursorRef\.current\)/);
+  assert.match(source, /Load older notifications/);
+  assert.match(source, /snapshot\.docs\.length; index \+= 400/);
+});
+
+test('buyer dashboard requests only active marketplace listings', () => {
+  const hook = fs.readFileSync(path.join(__dirname, '../../../hooks/useDashboardData.ts'), 'utf8');
+  assert.match(hook, /useMarketplaceListings[\s\S]*?where\('status', '==', 'active'\)/);
+});
