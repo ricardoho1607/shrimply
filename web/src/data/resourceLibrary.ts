@@ -246,6 +246,11 @@ const sources = {
     publisher: "Boyd & Fast",
     url: "https://www.was.org",
   },
+  faoStockingStudy: {
+    title: "Growth and Survival of Litopenaeus vannamei at Different Stocking Densities",
+    publisher: "FAO AGRIS",
+    url: "https://agris.fao.org/search/en/providers/124569/records/66743ee7eb5a381a3380f4b1",
+  },
 } satisfies Record<string, ResourceSource>;
 
 export const resourceArticles: ResourceArticle[] = [
@@ -602,6 +607,182 @@ export const resourceArticles: ResourceArticle[] = [
     sources: [sources.faoVannamei, sources.seafdecBmp, sources.faoRecords],
   },
   {
+    slug: "vannamei-stocking-density",
+    section: "Farm Management",
+    label: "Farm Management",
+    title: "Vannamei Stocking Density per m²: Complete Guide & Calculator",
+    description: "Calculate Pacific white shrimp stocking density per m², post-larvae (PL) count, required aeration horsepower, and carrying capacity with our interactive calculator and farm guide.",
+    readTime: "8 min read",
+    tags: [
+      "vannamei stocking density per m2",
+      "vannamei stocking density",
+      "shrimp stocking density",
+      "shrimp per square meter",
+      "PL per m2",
+      "intensive shrimp stocking density",
+      "semi intensive shrimp stocking density",
+      "super intensive shrimp stocking density",
+      "how many shrimp per m2",
+      "vannamei stocking calculator",
+    ],
+    publishedAt: "2026-08-29",
+    image: {
+      src: "/resources/images/vannamei-stocking-density-infographic.jpg",
+      alt: "Vannamei stocking density per m2 infographic showing extensive, semi-intensive, intensive, and super-intensive systems, survival, ABW, biomass, and aeration capacity",
+      width: 1376,
+      height: 768,
+    },
+    relatedFeature: { label: "Vannamei App", href: "/vannamei-shrimp-farming-app" },
+    takeaways: [
+      "Stocking density alone does not dictate farm safety—peak harvest biomass and aerator horsepower do.",
+      "Commercial baseline stocking ranges: Extensive (5–15 PL/m²), Semi-Intensive (20–50 PL/m²), Intensive (60–150 PL/m²), and Super-Intensive (150–300+ PL/m²).",
+      "Maintain a strict minimum of 1 HP mechanical aeration for every 400 to 500 kg of standing shrimp biomass.",
+      "Calculate backward from harvest: Pond Carrying Capacity → Available Aeration → Target Harvest ABW → Expected Survival → Required Stocking Density.",
+    ],
+    faqs: [
+      {
+        question: "What is the recommended stocking density for Vannamei shrimp per m²?",
+        answer: "Recommended stocking densities for Pacific white shrimp (Litopenaeus vannamei) depend on pond aeration and infrastructure: 5–15 PL/m² for extensive earth ponds, 20–50 PL/m² for semi-intensive ponds, 60–150 PL/m² for intensive HDPE-lined ponds with mechanical aeration, and 150–300+ PL/m² for super-intensive circular tanks or raceways with continuous pure oxygen injection.",
+      },
+      {
+        question: "How many shrimp post-larvae (PL) should I stock per square meter?",
+        answer: "Stocking numbers per square meter depend on your pond's peak aeration and waste removal capacity. A standard intensive earthen or lined pond with 8–10 HP aeration per hectare typically stocks 60 to 100 PL/m². If pond aeration is below 1 HP per 500 kg expected biomass, reduce stocking density to prevent pre-dawn dissolved oxygen crashes.",
+      },
+      {
+        question: "How do you calculate shrimp stocking density and total PL order?",
+        answer: "Multiply pond surface area (in square meters) by your target stocking density (PL/m²). For example, a 2,500 m² pond stocked at 100 PL/m² requires 250,000 PL. Add a 5% to 10% acclimation buffer (total 262,500 to 275,000 PL) to compensate for transport stress and acclimation mortality.",
+      },
+      {
+        question: "What is pond carrying capacity and how does it limit stocking density?",
+        answer: "Carrying capacity is the maximum total weight of shrimp biomass that a pond can sustain without water quality deteriorating or growth collapsing. Stocking density alone does not dictate carrying capacity—available mechanical aeration (1 HP per 400–500 kg biomass) and bottom sludge disposal determine the safe limit.",
+      },
+      {
+        question: "How much aeration horsepower (HP) is needed per kg of shrimp biomass?",
+        answer: "Commercial shrimp farms require at least 1 horsepower (HP) of paddlewheel or diffused aeration for every 400 to 500 kg of standing biomass. For example, a pond with 4,000 kg of harvest-ready shrimp requires 8 to 10 HP of continuous mechanical aeration running overnight.",
+      },
+      {
+        question: "Does higher stocking density reduce individual shrimp growth rate and final size?",
+        answer: "Yes. Research and farm trials confirm that stocking densities above 100–120 PL/m² increase competition for space and natural minerals, generally reducing Average Daily Gain (ADG) by 15% to 25% and requiring longer culture cycles to reach large market sizes (30 pcs/kg).",
+      },
+      {
+        question: "What is the safe stocking density for earthen ponds vs. HDPE lined ponds?",
+        answer: "Unlined earthen ponds should not exceed 30–50 PL/m² because excessive shrimp waste accumulates as toxic black anaerobic sludge in the dirt bottom. HDPE plastic-lined ponds equipped with central sludge drains can safely support 80–150 PL/m² with adequate paddlewheel aeration.",
+      },
+      {
+        question: "When should farmers conduct a partial harvest to manage high stocking density?",
+        answer: "Conduct a partial harvest (thinning 20% to 35% of biomass) when standing pond weight reaches 85% of your aeration capacity or when pre-dawn DO drops below 4.0 mg/L past DOC 65. Thinning immediately relieves oxygen demand and allows remaining shrimp to resume fast growth.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Quick answer: Target stocking densities by culture system",
+        body: [
+          "Pacific white shrimp (Litopenaeus vannamei) are renowned for their schooling behavior and tolerance of crowded environments compared to black tiger shrimp (Penaeus monodon). However, safe stocking density is strictly limited by pond infrastructure, water exchange capacity, and mechanical aeration.",
+          "Before ordering post-larvae (PL), align your target density with your culture tier:",
+        ],
+        table: {
+          columns: ["Culture System", "Stocking Density (PL/m²)", "Pond Infrastructure & Aeration", "Target Biomass (kg/m²)", "Typical Harvest Yield"],
+          rows: [
+            ["Extensive", "5 – 15 PL/m²", "Large earthen/mangrove ponds; tidal water exchange; 0 – 2 HP aeration", "0.1 – 0.4 kg/m²", "1.0 – 3.5 MT / ha"],
+            ["Semi-Intensive", "20 – 50 PL/m²", "Compacted earthen ponds; mechanical paddlewheels (4 – 8 HP/ha); commercial pellet feed", "0.5 – 1.2 kg/m²", "5.0 – 11.0 MT / ha"],
+            ["Intensive", "60 – 150 PL/m²", "Full HDPE plastic lining; central sludge drain; dedicated aeration (16 – 28 HP/ha)", "1.2 – 2.5 kg/m²", "12.0 – 25.0 MT / ha"],
+            ["Super-Intensive", "150 – 300+ PL/m²", "Circular concrete/HDPE tanks; pure O2 injection + micro-pore diffusers; central toilet flushed daily", "3.0 – 8.0+ kg/m²", "30.0 – 80.0+ MT / ha"],
+          ],
+        },
+        note: "Never choose a stocking density based solely on seed price or revenue hopes. If your pond lacks HDPE lining or continuous mechanical aeration, stocking above 50 PL/m² creates severe bottom black-sludge accumulation and inevitable dissolved oxygen crashes after Day of Culture (DOC) 60.",
+      },
+      {
+        heading: "The critical link: Why density alone does not determine safe production",
+        body: [
+          "A dangerous mistake made across the industry is viewing stocking density as an isolated number. Farmers often ask, 'Can I stock 100 PL/m²?' The correct biological response is: 'What will your pond biomass be at harvest, and how many horsepower of aeration do you have?'",
+          "Stocking density is simply the starting input. Safe, profitable shrimp production depends on the complete biological chain: Stocking Density → Survival → Average Body Weight (ABW) → Total Standing Biomass → Aeration Capacity → Pond Carrying Capacity.",
+          "Consider this real-world comparison between two adjacent ponds:",
+          "Pond A stocks 100 PL/m² into an unlined earth pond. Because water conditions are strained, survival drops to 50%, and shrimp stall at an ABW of 15 grams. Standing harvest biomass is 0.75 kg/m² (7.5 MT/ha). The crop survived, but feed conversion ratio (FCR) inflated and profits vanished.",
+          "Pond B stocks only 80 PL/m² in a properly aerated pond. Excellent bottom conditions maintain 85% survival, and shrimp thrive to a premium 25-gram jumbo harvest size (Size 40). Standing harvest biomass reaches 1.70 kg/m² (17.0 MT/ha)—more than double the waste output, feed demand, and oxygen consumption of Pond A, despite starting with 20% fewer seed!",
+          "Therefore, successful farm managers calculate backward: determine your pond's maximum safe carrying capacity and aeration limit first, then deduce your target stocking density.",
+        ],
+      },
+      {
+        heading: "Free Vannamei Stocking Density Calculator",
+        body: [
+          "Use the interactive calculator below to model your pond cycle before placing your hatchery seed order. Adjust pond surface area, target density, expected survival rate, and target harvest weight (ABW) to simulate total post-larvae needed, required aeration horsepower, and overall biological load.",
+          "Standard benchmark example: A 2,500 m² pond stocked at 100 PL/m² requires 250,000 post-larvae. At 75% survival and a 20-gram target harvest size (Count 50), the pond will produce 3,750 kg (3.75 metric tons) of shrimp. Supporting this standing crop safely requires 8 to 10 HP of operational aeration at peak harvest.",
+        ],
+        note: "Always include a 5% to 10% acclimation buffer when ordering seed. For example, if your pond calculation calls for 250,000 PL, order 262,500 to 275,000 PL to account for packing count variances and post-transport acclimation stress.",
+      },
+      {
+        heading: "Biological carrying capacity and aeration rules",
+        body: [
+          "Biological carrying capacity is the maximum total weight of shrimp that a pond ecosystem can sustain without water quality deteriorating or growth collapsing. In modern vannamei farming, carrying capacity is almost entirely dictated by oxygen supply and bottom waste disposal.",
+          "The golden rule of commercial shrimp aeration (established by Dr. Claude Boyd and reinforced by FAO guidelines) is: 1 Horsepower (HP) of mechanical aeration supports 400 to 500 kg of standing shrimp biomass.",
+          "Early in the cycle (DOC 1–30), natural algal photosynthesis and minimal paddlewheel operation easily meet the oxygen demand of small postlarvae. But after DOC 60, oxygen demand rises exponentially due to the combined respiration of high shrimp biomass, nitrifying bacteria, and organic sludge decomposition.",
+          "If pre-dawn dissolved oxygen (DO) drops below 4.0 mg/L, shrimp stop feeding efficiently, Average Daily Gain (ADG) flattens, and susceptibility to Vibrio and White Feces Syndrome multiplies.",
+        ],
+        table: {
+          columns: ["Standing Biomass (kg)", "Biomass Density (2,500 m² Pond)", "Minimum Aeration (1 HP / 500 kg)", "Recommended Aeration (1 HP / 400 kg)", "Pond Bottom & Sludge Management"],
+          rows: [
+            ["1,000 kg", "0.40 kg/m²", "2.0 HP", "2.5 HP", "Clean pond bottom; natural soil mineralization active; light aerator operation."],
+            ["2,000 kg", "0.80 kg/m²", "4.0 HP", "5.0 HP", "Early sludge accumulation in center; paddlewheels running throughout night."],
+            ["3,500 kg", "1.40 kg/m²", "7.0 HP", "8.8 HP", "Heavy organic load; central drain flushing mandatory; continuous aeration from midnight."],
+            ["5,000 kg", "2.00 kg/m²", "10.0 HP", "12.5 HP", "Near intensive carrying capacity limit; requires HDPE lining and daily siphon extraction."],
+            ["7,500 kg+", "3.00+ kg/m²", "15.0 HP", "18.8 HP+", "Super-intensive load; pure oxygen/venturi diffusers and automatic generator backup mandatory."],
+          ],
+        },
+      },
+      {
+        heading: "Warning signs of an overstocked shrimp pond",
+        body: [
+          "Overstocking beyond pond carrying capacity does not always result in sudden catastrophic mortality. More often, it causes chronic sub-lethal stress that ruins cycle profitability. Watch for these distinct signs during daily inspections and sampling:",
+        ],
+        items: [
+          "Crowding near aerators during daylight: Shrimp clustering in aerator wash streams during the day are starved for dissolved oxygen or fleeing toxic hydrogen sulfide on the pond bottom.",
+          "Wide size variation in weekly sampling: A cast net containing both large 18g shrimp and stunted 9g shrimp indicates severe feeding competition caused by excessive stocking numbers.",
+          "Pre-dawn Dissolved Oxygen < 3.8 mg/L: Bottom DO between 4:00 AM and 5:30 AM dropping below 3.8 mg/L confirms that pond biomass has outgrown existing aerator horsepower.",
+          "Persistent brown surface foam: Thick, stable brownish scum accumulating downwind indicates high dissolved organic compounds from excess fecal waste and dying phytoplankton blooms.",
+          "Growth plateau past DOC 50: Average Daily Gain (ADG) dropping below 0.15 g/day despite clean feed trays signals that the pond has reached its density threshold.",
+          "Soft shells and dirty gills: High stocking density elevates toxic ammonia (TAN > 1.0 mg/L) and nitrite (NO2-N > 0.5 mg/L), impairing post-molt calcification.",
+        ],
+      },
+      {
+        heading: "Likely causes of stocking failures and how to check them",
+        body: [
+          "1. Aeration undersized for peak biomass: Farmers often install aeration based on Day 30 conditions rather than Day 80 harvest biomass. Verification clue: DO is 6.5 mg/L at 2:00 PM but collapses to 2.8 mg/L at 4:30 AM.",
+          "2. Misjudged initial survival causing overfeeding: Assuming 85% survival when real survival is 60% leads to massive daily feed over-allocation, poisoning pond soil. Verification clue: Cast net sample counts show far fewer shrimp than feed tables expect, accompanied by blackened pond mud.",
+          "3. Sludge cone expanding beyond the central pit: At densities above 100 PL/m², organic waste accumulation outpaces water current velocity, burying feeding areas in toxic anaerobic silt. Verification clue: Cast net retrieved with foul, black sulfide-smelling mud on weights.",
+          "4. Stocking uncertified postlarvae with low vigor: Weak seed without SPF (Specific Pathogen Free) certification suffers high mortality in the first 14 days, forcing surviving shrimp into an uneven cycle. Verification clue: Seed failing a 100-PL thermal or formalin stress test prior to pond release.",
+        ],
+      },
+      {
+        heading: "What to do immediately when biomass threatens carrying capacity",
+        body: [
+          "If your weekly sampling indicates that standing biomass is nearing or exceeding your aeration support capacity (more than 500 kg biomass per horsepower), act immediately to prevent an irreversible crop crash:",
+          "1. Execute a partial harvest (crop thinning): Drain 20% to 35% of the largest shrimp using a cast net or trap harvest. Thinning instantly reduces oxygen consumption, cuts daily feed demand, and gives remaining shrimp space to resume rapid growth.",
+          "2. Re-align and reposition aerators: Direct paddlewheel flow to create a strong circular current that sweeps bottom detritus tightly into the central drain pit, leaving clean feeding zones along the perimeter dikes.",
+          "3. Trim daily feed rations by 15% to 25%: If pre-dawn DO is below 4.0 mg/L or nitrite exceeds 0.5 mg/L, cut feed immediately. Overstocked shrimp cannot digest feed efficiently in hypoxic water, and uneaten pellets will accelerate water degradation.",
+        ],
+        note: "Never increase feed or add raw nitrogen fertilizers in an attempt to force slow-growing shrimp to 'catch up' in an overstocked pond. Excess protein rots into toxic un-ionized ammonia (NH3) and lethal hydrogen sulfide (H2S), triggering mass mortality.",
+      },
+      {
+        heading: "Long-term stocking strategy and cycle management",
+        body: [
+          "Sustainable shrimp farming requires matching stocking density to seasonal environmental conditions and infrastructure upgrades:",
+          "Implement a dedicated nursery phase: Nursing post-larvae (PL10 to PL12) in small, high-aeration nursery tanks for 18 to 25 days until they reach 0.5 to 1.0 gram juvenile size improves overall survival by 15% to 20%. It also shortens grow-out pond residency by nearly a month, significantly lowering disease risk.",
+          "Adjust density by season: Lower stocking density by 20% to 30% during the rainy season or cold months when photosynthetic oxygen generation is weak and sudden storms cause pond stratification.",
+          "Track cycle metrics in real time: Use Shrimply to log weekly cast net sample weights, monitor MBW trends, and check standing biomass against your installed aerator horsepower before stocking each cycle.",
+        ],
+      },
+    ],
+    checklist: [
+      "Calculate target stocking density backward from your aerator capacity (1 HP per 400–500 kg peak biomass).",
+      "Order post-larvae with a 5% to 10% acclimation buffer to absorb transport stress.",
+      "Audit pre-dawn dissolved oxygen (4:00 AM – 5:30 AM) daily, maintaining bottom DO strictly above 4.0 mg/L.",
+      "Conduct weekly cast net sampling to track ABW, verify ADG, and monitor real standing biomass.",
+      "Schedule a partial harvest if biomass approaches 85% of your pond's aeration limit before target market size.",
+      "Log stocking records, sampling weights, and daily feed directly in Shrimply to avoid carrying capacity surprises.",
+    ],
+    sources: [sources.faoStockingStudy, sources.faoVannamei, sources.boydAeration, sources.seafdecBmp],
+  },
+  {
     slug: "shrimp-cycle-planning",
     section: "Farm Management",
     label: "Farm Management",
@@ -625,7 +806,7 @@ export const resourceArticles: ResourceArticle[] = [
     faqs: [
       {
         question: "What stocking density should I use for vannamei shrimp?",
-        answer: "There is no single safe density for every farm. Set density from the pond system, aeration, water source, expected survival, management capacity, biosecurity plan, and target harvest size. Review the plan before stocking and reduce assumptions that the farm cannot monitor or support consistently.",
+        answer: "There is no single safe density for every farm. Baseline commercial densities range from 5–15 PL/m² for extensive ponds up to 60–150 PL/m² for intensive lined ponds with dedicated aeration. Use our Vannamei Stocking Density Calculator to simulate seed requirements, aeration demand, and pond carrying capacity.",
       },
       {
         question: "How do I plan a shrimp crop from stocking to harvest?",
@@ -771,7 +952,7 @@ export const resourceArticles: ResourceArticle[] = [
       },
       {
         question: "Does high stocking density slow down individual shrimp growth?",
-        answer: "Yes. In ponds stocked above 120–150 shrimp/m², higher competition for space and dissolved minerals generally slows individual growth rates by 15% to 25% compared to lower-density ponds.",
+        answer: "Yes. In ponds stocked above 120–150 shrimp/m², higher competition for space and dissolved minerals generally slows individual growth rates by 15% to 25% compared to lower-density ponds. Farmers can model safe density and aeration limits using our Vannamei Stocking Density Calculator.",
       },
     ],
     sections: [

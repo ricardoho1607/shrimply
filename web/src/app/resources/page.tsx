@@ -12,12 +12,12 @@ const page = coreSeoPages.find(item => item.path === "/resources");
 export const metadata = seoMetadata(page!);
 
 const priorityGuideSlugs = [
+  "vannamei-stocking-density",
   "vannamei-growth-chart",
   "fcr-shrimp-farming",
   "white-spot-syndrome-virus-shrimp",
   "white-feces-disease-shrimp",
   "feed-tray-observations",
-  "ehp-shrimp-disease",
 ] as const;
 
 const priorityGuides = priorityGuideSlugs

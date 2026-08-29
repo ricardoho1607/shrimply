@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import Cursor from "@/components/Cursor";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
+import StockingDensityCalculator from "@/components/StockingDensityCalculator";
 import { canonicalUrl, seoMetadata } from "@/config/seo";
 import { SITE_CONFIG } from "@/config/site";
 import { getResourceArticle, resourceArticles } from "@/data/resourceLibrary";
@@ -215,6 +216,22 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     })),
   };
 
+  const webAppJsonLd = article.slug === "vannamei-stocking-density" ? {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Vannamei Shrimp Stocking Density & Biomass Calculator",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "All",
+    browserRequirements: "Requires JavaScript",
+    url: canonicalUrl(`/resources/${article.slug}#calculator`),
+    description: "Free interactive aquaculture calculator for shrimp farmers to calculate PL stocking counts, expected harvest biomass, aeration horsepower, and carrying capacity.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
+  } : null;
+
   return (
     <main>
       <Cursor />
@@ -235,6 +252,12 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(relatedPagesJsonLd) }}
       />
+      {webAppJsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(webAppJsonLd) }}
+        />
+      ) : null}
 
       <article style={{ background: "var(--off-white)" }}>
         <header className="section" style={{ paddingBottom: "72px", minHeight: "72vh", display: "flex", alignItems: "center" }}>
@@ -253,6 +276,27 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
               <span style={{ color: "var(--fog)" }}>/</span>
               <span className="eyebrow" style={{ color: "var(--blue)" }}>Farm management guide</span>
             </div>
+            {article.slug === "vannamei-stocking-density" ? (
+              <div style={{ marginTop: "28px" }}>
+                <a
+                  href="#calculator"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    background: "rgba(187, 225, 250, 0.28)",
+                    color: "var(--navy)",
+                    padding: "12px 22px",
+                    border: "1px solid rgba(50, 130, 184, 0.35)",
+                    borderRadius: "999px",
+                    fontWeight: 700,
+                    fontSize: "0.92rem",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open Stocking Calculator
+                </a>
+              </div>
+            ) : null}
             {article.image ? (
               <Image
                 src={article.image.src}
@@ -363,6 +407,11 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                           <aside style={{ borderLeft: "4px solid var(--sky)", background: "var(--off-white)", borderRadius: "0 12px 12px 0", padding: "18px 20px", color: "var(--ocean)", fontWeight: 600 }}>
                             <strong style={{ color: "var(--ink)" }}>Avoid: </strong>{section.note}
                           </aside>
+                        ) : null}
+                        {section.heading.toLowerCase().includes("calculator") ? (
+                          <div id="calculator" style={{ marginTop: "16px", scrollMarginTop: "100px" }}>
+                            <StockingDensityCalculator />
+                          </div>
                         ) : null}
                       </div>
                     </section>
