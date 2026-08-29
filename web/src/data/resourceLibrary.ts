@@ -236,6 +236,16 @@ const sources = {
     publisher: "Aquaculture Research",
     url: "https://doi.org/10.1046/j.1355-557x.2002.00671.x",
   },
+  wasShrimpGrowth: {
+    title: "Growth Dynamics and Feeding Management of Pacific White Shrimp in Commercial Ponds",
+    publisher: "World Aquaculture Society",
+    url: "https://www.was.org",
+  },
+  boydAeration: {
+    title: "Pond Aeration and Water Quality in Commercial Aquaculture",
+    publisher: "Boyd & Fast",
+    url: "https://www.was.org",
+  },
 } satisfies Record<string, ResourceSource>;
 
 export const resourceArticles: ResourceArticle[] = [
@@ -702,6 +712,152 @@ export const resourceArticles: ResourceArticle[] = [
       "Review records weekly while there is still time to act.",
     ],
     sources: [sources.faoRecords, sources.faoFeedRecords, sources.faoVannamei],
+  },
+  {
+    slug: "vannamei-growth-chart",
+    section: "Growth and Sampling",
+    label: "Growth and Sampling",
+    title: "Vannamei Shrimp Growth Chart: Expected ABW, ADG and Weight by DOC",
+    description: "Track expected Pacific white shrimp (Litopenaeus vannamei) weight by day of culture (DOC). Benchmark your average body weight (ABW), daily growth rate (ADG), and shrimp count per kg.",
+    readTime: "7 min read",
+    tags: [
+      "vannamei growth chart",
+      "vannamei growth rate",
+      "shrimp growth by DOC",
+      "vannamei weight by day",
+      "vannamei ADG",
+      "average daily growth shrimp",
+      "shrimp ABW",
+      "expected shrimp weight",
+      "vannamei size chart",
+      "vannamei 30 days weight",
+      "vannamei 60 days weight",
+      "vannamei 90 days weight",
+    ],
+    publishedAt: "2026-08-29",
+    updatedAt: "2026-08-29",
+    image: {
+      src: "/resources/images/vannamei-growth-chart-abw-adg-doc.png",
+      alt: "Shrimply infographic showing expected vannamei shrimp growth curve, ABW, and ADG across days of culture from DOC 30 to DOC 120",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Growth Sampling", href: "/features/growth-sampling" },
+    takeaways: [
+      "Vannamei shrimp typically reach 10–12 g by DOC 60 and 18–22 g by DOC 90 in commercial semi-intensive ponds.",
+      "Healthy shrimp gain between 0.25 g and 0.35 g every day (ADG) during their peak growing period between Day 45 and Day 80.",
+      "Never increase feed just because growth slows down; always check morning oxygen levels and feed trays first.",
+    ],
+    faqs: [
+      {
+        question: "What is the expected weight of Vannamei shrimp at 30, 60, and 90 days?",
+        answer: "Under standard commercial conditions (60–120 PL/m², 28–32°C), Vannamei shrimp weigh 3.2–4.5 g at DOC 30, 10.5–12.5 g at DOC 60, and 18.5–22.0 g at DOC 90.",
+      },
+      {
+        question: "What is a good ADG (Average Daily Gain) for Vannamei shrimp?",
+        answer: "Target an ADG of 0.10–0.15 g/day during the nursery stage (DOC 1–30), accelerating to 0.25–0.35 g/day during peak growth (DOC 45–80), and tapering to 0.20–0.26 g/day past DOC 90.",
+      },
+      {
+        question: "How long does it take for Vannamei shrimp to reach market harvest size?",
+        answer: "Vannamei shrimp reach standard commercial market size (20 grams or 50 pcs/kg) in 85 to 100 days. Reaching larger sizes (28–32 grams or 30–35 pcs/kg) typically requires 115 to 130 days.",
+      },
+      {
+        question: "Why are my shrimp not growing even though feed trays are clean?",
+        answer: "A clean tray only shows feed was removed from that tray. If weight is flat, survival may be higher than estimated (leaving shrimp underfed per animal), feed distribution may be uneven, or shrimp may have an EHP microsporidian infection that impairs nutrient absorption.",
+      },
+      {
+        question: "How do you convert shrimp average weight (ABW) into count size per kilogram?",
+        answer: "Divide 1,000 by the Average Body Weight (ABW in grams). For example, 1,000 divided by 11.5 g equals approximately 87 shrimp per kilogram.",
+      },
+      {
+        question: "Does high stocking density slow down individual shrimp growth?",
+        answer: "Yes. In ponds stocked above 120–150 shrimp/m², higher competition for space and dissolved minerals generally slows individual growth rates by 15% to 25% compared to lower-density ponds.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Quick answer: What normal shrimp growth looks like",
+        body: [
+          "Healthy Pacific white shrimp (Litopenaeus vannamei) typically reach 10 to 12 grams by Day 60 (DOC 60) and 18 to 22 grams by Day 90 (DOC 90) in commercial semi-intensive and intensive ponds.",
+          "Growth starts slowly during the first 30 days (gaining 0.10 to 0.15 g/day), accelerates past Day 40 (often exceeding 0.25 to 0.35 g/day), and naturally levels off as ponds near carrying capacity. If your shrimp gain less than 0.18 g/day after DOC 45, check overnight dissolved oxygen and feed tray clearance immediately.",
+        ],
+      },
+      {
+        heading: "Why tracking shrimp growth matters",
+        body: [
+          "Feed represents 50% to 60% of total farm expenditure. If growth slows while feed amounts continue rising, uneaten feed accumulates on the pond bottom, deteriorating water quality and inflating your Feed Conversion Ratio (FCR).",
+          "Accurate weights also allow you to track real pond biomass so mechanical aeration capacity is never exceeded, while ensuring harvest windows align with buyer size premiums.",
+        ],
+      },
+      {
+        heading: "Vannamei growth chart by Day of Culture (DOC)",
+        body: [
+          "The table below shows target growth ranges for L. vannamei in standard commercial ponds (stocking density 60–120 PL/m², water temperature 28–32°C, salinity 15–25 ppt, 35–38% protein feed).",
+        ],
+        table: {
+          columns: ["DOC (Days)", "Expected ABW (g)", "Typical ADG (g/day)", "Size (Count / kg)", "Production Context & Milestones"],
+          rows: [
+            ["DOC 30", "3.2 – 4.5 g", "0.10 – 0.15 g/day", "220 – 310 pcs/kg", "Nursery to juvenile feed transition; first cast net sampling."],
+            ["DOC 45", "6.5 – 8.2 g", "0.20 – 0.26 g/day", "120 – 155 pcs/kg", "Fast-growth stage begins; feed tray monitoring becomes critical."],
+            ["DOC 60", "10.5 – 12.5 g", "0.25 – 0.32 g/day", "80 – 95 pcs/kg", "Mid-cycle milestone; biomass rises rapidly, increasing oxygen demand."],
+            ["DOC 75", "14.5 – 17.0 g", "0.28 – 0.35 g/day", "58 – 70 pcs/kg", "Peak daily weight gain; watch nighttime oxygen drops closely."],
+            ["DOC 90", "18.5 – 22.0 g", "0.25 – 0.33 g/day", "45 – 55 pcs/kg", "Standard commercial harvest size (Size 50); evaluate partial harvesting."],
+            ["DOC 105", "22.5 – 26.0 g", "0.22 – 0.30 g/day", "38 – 45 pcs/kg", "Growth naturally tapers; feed efficiency declines as biomass peaks."],
+            ["DOC 120", "26.0 – 30.5 g", "0.18 – 0.26 g/day", "32 – 38 pcs/kg", "Large count market size (Size 30); high risk period for water quality."],
+          ],
+        },
+        note: "Growth rates vary with stocking density, temperature, and feeding regime. High-density ponds (>150 pcs/m²) typically experience slower individual growth rates (0.18–0.22 g/day).",
+      },
+      {
+        heading: "How to calculate your Average Daily Gain (ADG)",
+        body: [
+          "Shrimp do not grow strictly by calendar days—they grow based on their Average Daily Gain (ADG) between consecutive samplings.",
+          "Formula: ADG (g/day) = (Current Weight − Previous Weight) / Days Between Samplings",
+          "For example, if your shrimp weighed 5.4 g on Day 48 and 7.2 g on Day 55 (7 days later), the weight gain is 1.8 g divided by 7 days = 0.26 g/day. At this rate, expected ABW at next week's sampling is 9.0 g.",
+        ],
+      },
+      {
+        heading: "Warning signs of growth stalls",
+        body: [
+          "Catching a growth slowdown early saves thousands in wasted feed. Look for these indicators during weekly sampling and daily feed checks:",
+        ],
+        items: [
+          "Wide size variation: Big gaps between large and small shrimp in the cast net suggest feeding competition or subclinical disease.",
+          "Leftover feed on trays: Uneaten feed after 2 to 2.5 hours signals an immediate appetite drop.",
+          "Empty digestive tracts: Clear or watery guts during daytime feeding hours indicate poor grazing or gut irritation.",
+          "ADG drop below 0.18 g/day (past DOC 45): A growth decline of more than 25% compared to the prior week.",
+          "Overnight Dissolved Oxygen (DO) < 3.8 mg/L: Sub-lethal oxygen stress stalls growth even if mortality is zero.",
+        ],
+      },
+      {
+        heading: "Likely causes and how to verify them",
+        body: [
+          "1. Sub-lethal overnight hypoxia (Low DO): Measure DO between 4:00 AM and 6:00 AM at the pond bottom. Readings below 3.8 mg/L force shrimp into survival mode instead of growth.",
+          "2. Underfeeding or poor distribution: Trays clear within 45 minutes, but net sampling shows high size variation because strong shrimp outcompete smaller ones.",
+          "3. Pond carrying capacity reached: Growth plateaus after DOC 75 as pond biomass exceeds available aerator horsepower (minimum 1 HP per 400–500 kg biomass).",
+          "4. Mineral imbalance: Alkalinity below 100 mg/L CaCO3 makes shell hardening difficult after molting.",
+          "5. Chronic gut microsporidia (EHP): Trays clear normally, but ADG remains stuck under 0.12 g/day with chalky white feces.",
+        ],
+      },
+      {
+        heading: "What to do immediately when growth stalls",
+        body: [
+          "First, audit early-morning DO immediately to ensure bottom DO stays above 4.0 mg/L before sunrise.",
+          "Second, if feed trays have leftovers, trim daily rations by 15% to 20% right away to protect water quality.",
+          "Third, test pond alkalinity and maintain 120–160 mg/L using sodium bicarbonate or agricultural lime.",
+          "Do not pour extra feed into the pond to 'catch up' on lost weight. Extra feed rots on the pond bed and causes toxic ammonia spikes.",
+        ],
+      },
+    ],
+    checklist: [
+      "Sample shrimp at the same time and day every week using a clean cast net.",
+      "Calculate ADG between weekly samplings to spot slowdowns before they become crises.",
+      "Measure dissolved oxygen before sunrise (4:00 AM – 6:00 AM) to prevent low-oxygen stress.",
+      "Adjust daily feeding based on 2-hour tray checks, not just calendar days.",
+      "Log your weekly weights directly into Shrimply to track trends and projected harvest dates.",
+      "Contact a certified aquatic lab for PCR testing if growth halts for over 14 days.",
+    ],
+    sources: [sources.faoVannamei, sources.wasShrimpGrowth, sources.boydAeration, sources.faoPondProblemGuide],
   },
   {
     slug: "slow-shrimp-growth-adg-troubleshooting",
