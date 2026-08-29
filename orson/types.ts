@@ -488,6 +488,9 @@ export interface OrsonQuestionFocus {
   focusedPondId: string | null;
   requestedParameter: string | null;
   requestedDirection: 'increase' | 'decrease' | 'stabilize' | null;
+  requestedDates: string[];
+  requestedFields: string[];
+  suppressAdvice: boolean;
   isPondSpecific: boolean;
   isComparison?: boolean;
   comparedPondNames?: string[];

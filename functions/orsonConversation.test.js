@@ -60,6 +60,14 @@ test("server instructions keep general knowledge and unrelated questions away fr
   assert.match(unrelated, /Do not mention or reveal farm data/);
 });
 
+test("server instructions preserve exact-record and no-advice constraints", () => {
+  const instructions = __test.buildServerOrsonSystemInstruction("standard", "chat", "farm_analysis");
+
+  assert.match(instructions, /If ORSON EXACT RECORDS is present/);
+  assert.match(instructions, /suppress_advice to true/);
+  assert.match(instructions, /Do not interpret the word compare as a request for a multi-pond ranking/);
+});
+
 test("web lookup is limited to product composition questions", () => {
   assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "What ingredients are in BioPlus?"), true);
   assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "What does this probiotic do?"), true);

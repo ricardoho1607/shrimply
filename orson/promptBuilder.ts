@@ -188,6 +188,7 @@ const PARAMETER_PATTERNS: { key: string; patterns: RegExp[] }[] = [
 const DECREASE_PATTERNS = [/\bdecrease\b/i, /\blower\b/i, /\breduce\b/i, /\bbring\s+down\b/i, /\btoo\s+high\b/i, /\bhigh\b/i];
 const INCREASE_PATTERNS = [/\bincrease\b/i, /\braise\b/i, /\bbring\s+up\b/i, /\btoo\s+low\b/i, /\blow\b/i];
 const STABILIZE_PATTERNS = [/\bstabili[sz]e\b/i, /\bbalance\b/i, /\bcontrol\b/i, /\bfix\b/i, /\bmanage\b/i, /\badjust\b/i];
+const NO_ADVICE_PATTERN = /\b(?:do not|don't|without|no)\b[^.!?\n]{0,100}\b(?:advice|recommendations?|treatments?|actions?)\b/i;
 
 export const ORSON_MODEL_TIMEOUT_MS = 25000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
@@ -358,6 +359,36 @@ const detectRequestedDirection = (question: string): OrsonQuestionFocus['request
   return null;
 };
 
+const detectRequestedDates = (question: string): string[] => {
+  const dates = Array.from(question.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g), (match) => match[1]);
+  return [...new Set(dates)];
+};
+
+const detectRequestedRecordFields = (question: string): string[] => {
+  const fields: string[] = [];
+  const add = (...values: string[]) => values.forEach((value) => {
+    if (!fields.includes(value)) fields.push(value);
+  });
+
+  if (/\bD\.?O\.?\b|\bdissolved\s+oxygen\b|\boxygen\b/i.test(question)) {
+    add('do_morning_mg_l', 'do_evening_mg_l');
+  }
+  if (/\bammonia\b|\bnh3\b|\bnh4\b|\btan\b/i.test(question)) add('ammonia_mg_l');
+  if (/\bfeed(?:ing)?\s+response\b|\bappetite\b|\btray\b/i.test(question)) {
+    add('feed_kg', 'feeding_response');
+  } else if (/\bfeed(?:ing)?\b/i.test(question)) {
+    add('feed_kg');
+  }
+  if (/\bph\b/i.test(question)) add('ph_morning', 'ph_evening');
+  if (/\bsalinity\b/i.test(question)) add('salinity_ppt');
+  if (/\btemperature\b|\btemp\b/i.test(question)) add('temperature_c');
+  if (/\btransparency\b|\bsecchi\b/i.test(question)) add('transparency_cm');
+  if (/\bmortality\b|\bdead\b|\bdeaths?\b/i.test(question)) add('mortality');
+  if (/\bmbw\b|\babw\b|\bweight\b/i.test(question)) add('mbw_g');
+
+  return fields;
+};
+
 export const buildOrsonQuestionFocus = (
   question: string,
   payloads: OrsonPromptPondPayload[],
@@ -373,6 +404,8 @@ export const buildOrsonQuestionFocus = (
   const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : null;
   const requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
+  const requestedDates = detectRequestedDates(question);
+  const requestedFields = detectRequestedRecordFields(question);
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
   const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
   const route = mentionedPayloads.length > 0 && inferredRoute !== 'inventory_product'
@@ -387,6 +420,9 @@ export const buildOrsonQuestionFocus = (
     focusedPondId: focusedPayload?.pondId ?? null,
     requestedParameter,
     requestedDirection,
+    requestedDates,
+    requestedFields,
+    suppressAdvice: NO_ADVICE_PATTERN.test(question),
     isPondSpecific: focusedPayload !== null,
     isComparison,
     comparedPondNames: mentionedPayloads.map((p) => p.pondName),
@@ -403,8 +439,16 @@ const orderPayloadsForQuestion = (
   if (focus.route === 'aquaculture_knowledge' || focus.route === 'out_of_scope') return [];
   if (focus.route === 'inventory_product' && !focus.isPondSpecific) return [];
 
+  if (focus.isPondSpecific) {
+    const focused = payloads.find((payload) => {
+      return payload.pondName === focus.focusedPondName || payload.pondId === focus.focusedPondId;
+    });
+    return focused ? [focused] : [];
+  }
+
   if (focus.isComparison) {
     const compared = payloads.filter((p) => focus.comparedPondNames?.includes(p.pondName));
+    if (compared.length > 0) return compared.slice(0, 10);
     const others = payloads.filter((p) => !focus.comparedPondNames?.includes(p.pondName));
     return [...compared, ...others].slice(0, 10);
   }
@@ -415,12 +459,7 @@ const orderPayloadsForQuestion = (
       .slice(0, 5);
   }
 
-  const focused = payloads.find((payload) => {
-    return payload.pondName === focus.focusedPondName || payload.pondId === focus.focusedPondId;
-  });
-  if (!focused) return payloads;
-
-  return [focused];
+  return payloads;
 };
 
 export const isFarmSpecificQuestion = (question: string): boolean => {
@@ -528,6 +567,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     'SOURCE OF TRUTH:',
     '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
+    '- If ORSON EXACT RECORDS is present, use it instead of ORSON RISK PAYLOAD. Report only its pond, requested dates, and requested fields; do not add other pond metrics, biological conclusions, or unrequested context.',
     '- Biological risk conclusions must come from the deterministic findings. You may explain or compare raw values, but do not create a new biological conclusion or threshold that is absent from the findings.',
     '- Use only the latest 3-5 question-relevant records for the selected pond in daily_records_14d, recent_lab_reports, and recent_treatments. Mortality diagnostics may separately include the bounded 14-day ORSON MORTALITY TRACE.',
     '- For historical or timeline lookback questions (e.g. "show the last 7 days of mortality", "what was the feed given on August 15", "how did DO trend this week"), extract the exact dates and numbers from daily_records_14d and list them clearly.',
@@ -547,6 +587,8 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '',
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
+    '- If ORSON QUESTION FOCUS sets suppress_advice to true, do not provide advice, recommendations, treatments, actions, warnings, or next steps.',
+    '- If ORSON QUESTION FOCUS sets exact_record_lookup to true, compare only the requested dated records. Do not interpret the word compare as a request for a multi-pond ranking.',
     '- Follow route from ORSON QUESTION FOCUS: farm_analysis may use pond evidence; aquaculture_knowledge must not introduce pond status; inventory_product must focus on saved product data and verified sources; out_of_scope must redirect briefly.',
     '- If the question asks to compare ponds (or asks which pond is best/worst), rank and compare the ponds side-by-side using growth (MBW/ADG), FCR, survival rate, and DO stability, and explain the key reasons behind performance differences.',
     '- If the question asks about feed adjustments or feeding recommendations, compare actual_feed_kg with expected_feed_kg and water status to give exact numerical adjustments (e.g. cut feed by 15-20% if DO < 4.0 mg/L; cut by 30-50% if DO < 3.0 mg/L; increase by +5% to +10% or up to expected_feed_kg if DO > 5.0 mg/L and shrimp are converting well).',
@@ -633,6 +675,65 @@ export const buildOrsonPromptContext = (
   conversationHistory: OrsonConversationMessage[] = [],
 ): string => {
   const recentConversation = normalizeConversationHistory(conversationHistory);
+  const isExactRecordLookup = questionFocus.isPondSpecific
+    && questionFocus.requestedDates.length > 0
+    && questionFocus.requestedFields.length > 0;
+
+  if (isExactRecordLookup) {
+    const payload = payloads[0];
+    const recordsByDate = new Map((payload?.dailyRecords14d || []).map((record) => [record.date, record]));
+    const exactRecords = questionFocus.requestedDates.map((date) => {
+      const record = recordsByDate.get(date);
+      const fieldValues: Record<string, unknown> = { date };
+      if (!record) return fieldValues;
+
+      questionFocus.requestedFields.forEach((field) => {
+        const values: Record<string, unknown> = {
+          do_morning_mg_l: record.doMorning,
+          do_evening_mg_l: record.doEvening,
+          ammonia_mg_l: record.ammoniaMgL,
+          feed_kg: record.feedKg,
+          feeding_response: record.feedingResponse,
+          ph_morning: record.phMorning,
+          ph_evening: record.phEvening,
+          salinity_ppt: record.salinityPpt,
+          temperature_c: record.temperatureC,
+          transparency_cm: record.transparencyCm,
+          mortality: record.mortalityCount,
+          mbw_g: record.mbwG,
+        };
+        fieldValues[field] = values[field] ?? null;
+      });
+      return fieldValues;
+    });
+
+    return [
+      'ORSON FARM SCOPE:',
+      JSON.stringify({
+        active_pond_count: totalPondCount,
+        included_pond_count: payload ? 1 : 0,
+        selection: 'Only the explicitly requested pond is included.',
+      }, null, 2),
+      '',
+      'ORSON QUESTION FOCUS:',
+      JSON.stringify({
+        route: questionFocus.route,
+        intent: questionFocus.intent,
+        focused_pond: questionFocus.focusedPondName,
+        requested_dates: questionFocus.requestedDates,
+        requested_fields: questionFocus.requestedFields,
+        suppress_advice: questionFocus.suppressAdvice,
+        exact_record_lookup: true,
+      }, null, 2),
+      '',
+      'ORSON EXACT RECORDS:',
+      JSON.stringify({
+        pond: payload?.pondName ?? questionFocus.focusedPondName,
+        records: exactRecords,
+      }, null, 2),
+    ].join('\n');
+  }
+
   const compactPayloads = payloads.map((payload) => ({
     pond: payload.pondName,
     doc: payload.currentDoc,
@@ -793,6 +894,9 @@ export const buildOrsonPromptContext = (
       focused_pond: questionFocus.focusedPondName,
       requested_parameter: questionFocus.requestedParameter,
       requested_direction: questionFocus.requestedDirection,
+      requested_dates: questionFocus.requestedDates,
+      requested_fields: questionFocus.requestedFields,
+      suppress_advice: questionFocus.suppressAdvice,
       is_pond_specific: questionFocus.isPondSpecific,
       detailed_history_included: questionFocus.requiresDetailedHistory,
       should_summarize: questionFocus.shouldSummarize,

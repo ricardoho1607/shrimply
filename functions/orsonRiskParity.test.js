@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fixtures = require('../orson/fixtures/riskParity.json');
 
 process.env.NODE_ENV = 'test';
-const { calculateRiskReport, getCurrentLabWaterMetrics } = require('./orson').__test;
+const { calculateRiskReport, getCurrentLabWaterMetrics, getNewOperationalEventFindings } = require('./orson').__test;
 
 for (const fixture of fixtures) {
   test(`backend risk parity: ${fixture.id}`, () => {
@@ -25,4 +25,19 @@ test('backend keeps NH4 separate from TAN and NH3', () => {
 test('backend ignores old-cycle lab metrics', () => {
   const fixture = fixtures.find((item) => item.id === 'old-cycle-lab-is-ignored');
   assert.equal(getCurrentLabWaterMetrics(fixture.pond, fixture.pond.id), null);
+});
+
+test('backend detects a newly synced weak feed response even when a later record is normal', () => {
+  const after = [
+    { id: 'sim-27-water', date: '2026-08-27', doMorning: 5.2, doEvening: 6, ammonia: 0.06 },
+    { id: 'sim-27-feed', date: '2026-08-27', feedData: { totalDailyFeed: 7.2, feedingResponse: 'weak' } },
+    { id: 'sim-29-water', date: '2026-08-29', doMorning: 6, doEvening: 6.6, ammonia: 0.03 },
+    { id: 'sim-29-feed', date: '2026-08-29', feedData: { totalDailyFeed: 8.2, feedingResponse: 'normal' } },
+  ];
+  const findings = getNewOperationalEventFindings([], after);
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].id, 'weak_feeding_response');
+  assert.equal(findings[0].severity, 'warning');
+  assert.match(findings[0].summary, /2026-08-27/);
 });
