@@ -6,6 +6,7 @@ import Cursor from "@/components/Cursor";
 import Footer from "@/components/Footer";
 import Navbar from "@/components/Navbar";
 import StockingDensityCalculator from "@/components/StockingDensityCalculator";
+import ShrimpFeedCalculator from "@/components/ShrimpFeedCalculator";
 import { canonicalUrl, seoMetadata } from "@/config/seo";
 import { SITE_CONFIG } from "@/config/site";
 import { getResourceArticle, resourceArticles } from "@/data/resourceLibrary";
@@ -230,6 +231,20 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
       price: "0",
       priceCurrency: "USD",
     },
+  } : article.slug === "vannamei-feeding-rate" ? {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    name: "Vannamei Shrimp Feed Calculator & Feeding Rate Table",
+    applicationCategory: "BusinessApplication",
+    operatingSystem: "All",
+    browserRequirements: "Requires JavaScript",
+    url: canonicalUrl(`/resources/${article.slug}#calculator`),
+    description: "Free interactive aquaculture calculator to estimate Pacific white shrimp daily feed rations, per-meal distribution, and feed tray allocations from biomass and body weight.",
+    offers: {
+      "@type": "Offer",
+      price: "0",
+      priceCurrency: "USD",
+    },
   } : null;
 
   return (
@@ -294,6 +309,26 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                   }}
                 >
                   Open Stocking Calculator
+                </a>
+              </div>
+            ) : article.slug === "vannamei-feeding-rate" ? (
+              <div style={{ marginTop: "28px" }}>
+                <a
+                  href="#calculator"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    background: "rgba(187, 225, 250, 0.28)",
+                    color: "var(--navy)",
+                    padding: "12px 22px",
+                    border: "1px solid rgba(50, 130, 184, 0.35)",
+                    borderRadius: "999px",
+                    fontWeight: 700,
+                    fontSize: "0.92rem",
+                    textDecoration: "none",
+                  }}
+                >
+                  Open Shrimp Feed Calculator
                 </a>
               </div>
             ) : null}
@@ -410,7 +445,11 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                         ) : null}
                         {section.heading.toLowerCase().includes("calculator") ? (
                           <div id="calculator" style={{ marginTop: "16px", scrollMarginTop: "100px" }}>
-                            <StockingDensityCalculator />
+                            {article.slug === "vannamei-feeding-rate" ? (
+                              <ShrimpFeedCalculator />
+                            ) : (
+                              <StockingDensityCalculator />
+                            )}
                           </div>
                         ) : null}
                       </div>

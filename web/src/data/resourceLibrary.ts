@@ -251,6 +251,21 @@ const sources = {
     publisher: "FAO AGRIS",
     url: "https://agris.fao.org/search/en/providers/124569/records/66743ee7eb5a381a3380f4b1",
   },
+  taylorFrancisFeeding: {
+    title: "Modelling and simulation of feeding rate for Litopenaeus vannamei based on body weight and environmental parameters",
+    publisher: "Automatika",
+    url: "https://www.tandfonline.com/doi/abs/10.1080/00051144.2022.2031540",
+  },
+  faoVannameiFeedingSchedule: {
+    title: "Study and Analysis of Feeds and Fertilizers for Sustainable Aquaculture Development: Indonesia",
+    publisher: "Food and Agriculture Organization of the United Nations",
+    url: "https://www.fao.org/4/a1444e/a1444e09.pdf",
+  },
+  vannameiTemperatureFeedingStudy: {
+    title: "Temperature Effects on Growth, Feeding Rate and Feed Conversion of the Pacific White Shrimp",
+    publisher: "Aquaculture",
+    url: "https://doi.org/10.1016/0044-8486(95)00032-1",
+  },
 } satisfies Record<string, ResourceSource>;
 
 export const resourceArticles: ResourceArticle[] = [
@@ -1202,6 +1217,7 @@ export const resourceArticles: ResourceArticle[] = [
         heading: "How to use FCR every week",
         body: [
           "Use FCR as a question generator. If FCR is rising, check appetite, tray returns, DO, ammonia, nitrite, mortality, and recent sampling accuracy. Improving FCR in shrimp farming usually comes from tighter feed records, better biomass estimates, cleaner tray interpretation, and earlier response to water-quality stress. If FCR improves sharply, check whether biomass or harvest records are complete before assuming performance improved.",
+          "Use the Vannamei Feeding Rate Chart & Calculator to set a biomass-based starting ration, then confirm it with trays, water quality, and recent pond records.",
         ],
       },
     ],
@@ -1319,6 +1335,7 @@ export const resourceArticles: ResourceArticle[] = [
         body: [
           "Record actual feeding in Feed History. Use Sampling to compare MBW and ADG with the growth target. Record mortality and partial harvests so the population estimate stays realistic.",
           "Compare feeding changes with Water Quality trends, and reconcile feed use with Inventory before trusting FCR. Sampling records should track growth but must not deduct feed inventory; only actual feeding should reduce feed stock.",
+          "For a biomass-percentage method rather than a DOC index curve, use the Vannamei Feeding Rate Chart & Calculator as a starting baseline.",
         ],
       },
       {
@@ -1336,6 +1353,190 @@ export const resourceArticles: ResourceArticle[] = [
       "Change the ration gradually and confirm the response before changing it again.",
     ],
     sources: [sources.feedIndexStudy, sources.faoDailyFeedGuidance, sources.faoFeedManagement],
+  },
+  {
+    slug: "vannamei-feeding-rate",
+    section: "Feed and Inventory",
+    label: "Feed Management",
+    title: "Vannamei Feeding Rate Chart & Calculator: Daily Feed by Body Weight",
+    description: "Estimate a baseline daily ration for Pacific white shrimp from standing biomass and average body weight, then adjust it using feed trays, recent sampling, harvests, and water quality.",
+    readTime: "9 min read",
+    tags: [
+      "vannamei feeding rate",
+      "vannamei feeding chart",
+      "shrimp feeding table",
+      "shrimp feed per day",
+      "shrimp feeding rate by body weight",
+      "shrimp feed percentage",
+      "how much feed for vannamei",
+      "feed calculation shrimp",
+      "shrimp feed calculator",
+      "feed tray shrimp",
+    ],
+    publishedAt: "2026-08-31",
+    updatedAt: "2026-08-31",
+    image: {
+      src: "/resources/images/vannamei-feeding-rate-calculator-infographic.png",
+      alt: "Vannamei feeding rate infographic showing how to estimate biomass, apply a feeding rate, divide the daily ration into meals, and verify the baseline with trays, sampling, and water quality",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Feed Inventory & Tracking", href: "/features/feed-inventory" },
+    takeaways: [
+      "The calculator uses Shrimply's shared grow-out curve from 1.65 g ABW; it is a baseline, not a prescription.",
+      "Daily feed (kg) = standing biomass (kg) × feeding rate (%) ÷ 100.",
+      "If biomass is estimated from stocking, subtract cumulative partial harvests after applying the survival estimate.",
+      "Confirm every calculated ration with several trays, recent MBW and mortality records, water quality, and the feed manufacturer's label.",
+    ],
+    faqs: [
+      {
+        question: "What is the recommended feeding rate for Vannamei shrimp?",
+        answer: "There is no single safe rate for every pond. Shrimply's calculator uses a grow-out baseline that falls from 6.5% of biomass per day at 1.65–3 g ABW to 2.1% above 33 g, but the final ration still depends on biomass accuracy, feed, natural food, temperature, dissolved oxygen, and observed feed response.",
+      },
+      {
+        question: "How do you calculate daily feed for shrimp?",
+        answer: "Multiply standing biomass by the feeding-rate percentage and divide by 100: Daily feed (kg) = biomass (kg) × rate (%) ÷ 100. A 3,000 kg biomass at a 3.3% baseline gives 99 kg/day before tray and water-quality adjustments.",
+      },
+      {
+        question: "How many times per day should Vannamei shrimp be fed?",
+        answer: "Commercial schedules commonly split feed into several meals, with frequency depending on shrimp size, feed stability, feeding method, labour, and pond conditions. Use the feed label and farm procedure as the starting schedule, then compare several trays and growth records before changing it.",
+      },
+      {
+        question: "How much feed should be placed on shrimp feed trays (anco)?",
+        answer: "The calculator defaults to 1.2% of each meal spread across all trays, but the control can be changed to match the farm procedure. Published commercial schedules use different tray percentages by shrimp size, so keep the method consistent and interpret the trend rather than treating one percentage as universal.",
+      },
+      {
+        question: "How long should you wait before checking shrimp feed trays?",
+        answer: "A practical starting window is about 2.5 hours for small juveniles, 1.5–2.0 hours through mid-grow-out, and 1.0–1.5 hours for larger shrimp. Match the timing to pellet water stability, shrimp size, feeding method, and the farm's established tray procedure.",
+      },
+      {
+        question: "How does water temperature and dissolved oxygen affect shrimp feeding rates?",
+        answer: "Both affect feeding, but the response changes with shrimp size and the speed of the water-quality change. If dissolved oxygen is below the farm target or falling, delay or reduce the meal, restore aeration, and recheck before feeding; do not rely on one universal percentage cut.",
+      },
+      {
+        question: "Does Shrimply automatically calculate feed rates and biomass?",
+        answer: "Shrimply calculates pond metrics from stocking, mortality, harvest, MBW, and feed records, and uses the same feeding-rate curve as this calculator. When enough records exist, it can show a feed-to-biomass mismatch for the team to investigate; it does not prove appetite or diagnose a cause.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Quick answer: calculate a baseline, then check the pond",
+        body: [
+          "Estimate standing biomass, apply the feeding-rate percentage for the latest valid average body weight (ABW), then divide the result into the farm's planned meals.",
+          "The answer is only a starting ration. Biomass error, partial harvests, natural food, feed quality, temperature, dissolved oxygen, and shrimp health can all change the amount the pond can use.",
+          "Check several trays and review recent sampling, mortality, harvest, and water-quality records before increasing or maintaining the calculated amount.",
+        ],
+      },
+      {
+        heading: "Baseline feeding-rate curve",
+        body: [
+          "These are the reference points in Shrimply's shared grow-out curve. The calculator uses linear interpolation between points so the rate changes smoothly as ABW rises.",
+          "Published schedules differ because feed formulation, stocking density, natural productivity, water stability, and target FCR differ. Treat this curve as a consistent management baseline and compare it with the feed manufacturer's table and pond response.",
+        ],
+        table: {
+          columns: [
+            "ABW reference point",
+            "Baseline rate (% biomass/day)",
+          ],
+          rows: [
+            ["1.65–3.0 g", "6.5%"],
+            ["5.0 g", "5.5%"],
+            ["7.5 g", "4.2%"],
+            ["10.5 g", "3.6%"],
+            ["14.0 g", "3.3%"],
+            ["17.5 g", "3.1%"],
+            ["21.0 g", "2.9%"],
+            ["25.0 g", "2.7%"],
+            ["29.0 g", "2.5%"],
+            ["33.0 g", "2.3%"],
+            ["> 33.0 g", "2.1%"],
+          ],
+        },
+        note: "Do not use this grow-out calculator below 1.65 g ABW. Nursery feeding commonly follows hatchery or feed-manufacturer schedules based on post-larvae count and culture stage.",
+      },
+      {
+        heading: "Interactive Vannamei Shrimp Feed Calculator",
+        body: [
+          "Use the calculator for shrimp at or above 1.65 g ABW. Enter known standing biomass, or estimate it from initial stocking, survival, cumulative partial harvest count, and ABW.",
+          "The tool uses the same linear interpolation curve as Shrimply's shared pond calculations. It then divides the baseline daily ration by your selected meal count and calculates the amount placed on each monitoring tray.",
+        ],
+        note: "A calculated ration is not a ceiling or a command. If trays, water quality, weather, behaviour, or recent growth disagree with the number, follow the farm's safe feeding procedure and investigate before the next meal.",
+      },
+      {
+        heading: "How to calculate daily feed for shrimp: The biomass formula",
+        body: [
+          "To calculate a baseline daily allocation, use current standing biomass and the feeding-rate percentage for the latest valid ABW.",
+          "The primary calculation formula is: Daily Feed (kg) = Standing Biomass (kg) × [Feeding Rate (%) ÷ 100]",
+          "If biomass is unknown: Current Population = (Initial Stock × Survival %) − Cumulative Partial Harvest Count. Standing Biomass (kg) = Current Population × ABW (g) ÷ 1,000.",
+          "Worked example 1: At 12.0 g ABW, the shared curve interpolates a 3.47% baseline. A 3,500 kg standing biomass gives 3,500 × 0.0347 = 121.5 kg/day, or about 30.4 kg per meal across four meals.",
+          "Worked example 2: From 200,000 stocked shrimp at 80% survival with 20,000 already harvested, current population is 140,000. At 8.0 g ABW, biomass is 1,120 kg and the interpolated rate is 4.10%, giving 45.9 kg/day before pond-response adjustments.",
+        ],
+      },
+      {
+        heading: "Feed tray management: keep the method consistent",
+        body: [
+          "Feed trays (also called check trays, lift nets, or anco) help the team compare feed response over time. They do not measure the appetite of every shrimp in the pond.",
+          "Published commercial schedules use different tray percentages and check times by shrimp size. The calculator defaults to 1.2% of each meal across all selected trays; change it to match the farm's written procedure and keep placement, timing, and tray loading consistent.",
+          "Use several representative trays. Avoid placing every tray in one current pattern, a stagnant corner, or heavy sludge, because location can distort the result.",
+        ],
+        items: [
+          "All trays clean once: Record the result, but do not increase feed from one observation alone. Confirm the pattern, recent growth, and water quality.",
+          "More than 10% remains on several trays: Reduce the next ration according to the farm procedure and check dissolved oxygen, temperature, pH trend, weather, and shrimp behaviour.",
+          "Trays disagree: Check feed distribution, tray position, current, sludge, and whether every tray was loaded and lifted at the same time.",
+          "Feed response stays weak or mortality rises: Hold further increases and seek technical or aquatic-animal-health support; tray results alone cannot diagnose disease.",
+        ],
+      },
+      {
+        heading: "Water and weather checks before feeding",
+        body: [
+          "Dissolved oxygen: Check the current reading and recent trend before feeding, especially around pre-dawn and after unstable weather. If DO is below the farm target or still falling, prioritise aeration, delay or reduce the meal, and recheck before resuming.",
+          "Temperature: Feeding response changes with temperature and shrimp size. Research shows that the temperature for fastest growth is size-specific, so a single temperature multiplier is not reliable for every pond.",
+          "Rain, plankton change, pH movement, and salinity change: Compare conditions with the pond's normal range and recent tray response. Use smaller, reversible feed changes and confirm the next observation rather than applying an automatic fixed cut.",
+          "Natural food and feed quality: Pond productivity, pellet stability, palatability, and nutrient density can change compound-feed intake. Follow the feed label and investigate storage or feed-quality problems when tray response changes suddenly.",
+        ],
+      },
+      {
+        heading: "How Shrimply automates feeding rate and biomass tracking",
+        body: [
+          "Shrimply combines initial stocking, recorded mortality, cumulative harvests, and the latest valid MBW to estimate current population and biomass. Missing or outdated records still make the estimate less reliable, so the app does not remove the need for field checks.",
+          "The feeding-rate curve in this page is shared with Shrimply's pond calculations. When enough suitable records exist, the pond view can compare feed-based biomass with recorded biomass and flag a repeated mismatch for investigation.",
+          "Actual feeding records can deduct feed inventory. Sampling records store biological observations such as MBW and feed context but do not deduct inventory, preventing a sample from being counted as a warehouse movement.",
+        ],
+      },
+      {
+        heading: "Warning signs of feeding allocation errors",
+        body: [
+          "Treat these as observations that require checking, not as proof of one cause:",
+        ],
+        items: [
+          "Possible over-allocation: Repeated feed left on several trays, worsening FCR, rising feed-to-biomass mismatch, deteriorating bottom condition, or a downward pre-dawn DO trend.",
+          "Possible under-allocation: Repeatedly clean trays together with weak growth, aggressive edge feeding, or a daily ration consistently below the biomass baseline.",
+          "Possible distribution problem: Tray results differ sharply by location or size variation widens. Check broadcast coverage, current, tray placement, sampling method, and population estimates before blaming feed amount alone.",
+          "Possible data problem: A sudden improvement or decline appears after missing mortality, harvest, feed, or MBW records. Correct the records before making a large ration change.",
+        ],
+      },
+      {
+        heading: "When to stop and get specialist help",
+        body: [
+          "Escalate when mortality continues, shrimp show abnormal swimming or appearance, feed response remains weak across several meals, water quality cannot be stabilised, or the pond does not improve after cautious corrections. Feed trays and calculator results cannot confirm an infectious disease.",
+        ],
+      },
+    ],
+    checklist: [
+      "Use the latest valid MBW and a population estimate that includes mortality and cumulative harvests.",
+      "Calculate the baseline ration and divide it using the farm's meal schedule.",
+      "Load, place, and check several trays with the same method each time.",
+      "Review dissolved oxygen, temperature, pH trend, weather, and shrimp behaviour before increasing feed.",
+      "Make small, reversible changes and confirm the next tray and growth response.",
+      "Record actual feeding separately from biological sampling so inventory and FCR remain trustworthy.",
+    ],
+    sources: [
+      sources.taylorFrancisFeeding,
+      sources.faoVannameiFeedingSchedule,
+      sources.faoFeedManagement,
+      sources.vannameiTemperatureFeedingStudy,
+      sources.faoVannamei,
+    ],
   },
   {
     slug: "feed-inventory-control",
@@ -1440,6 +1641,7 @@ export const resourceArticles: ResourceArticle[] = [
         heading: "Avoid overreacting to one tray",
         body: [
           "One tray result should not drive the whole feeding strategy. Look for patterns across multiple trays, recent water-quality movement, and recent sampling. This protects the farm from cutting feed too aggressively or continuing waste for too long.",
+          "To establish your pond's target baseline ration before reading check trays, consult our practical Vannamei Feeding Rate Chart & Calculator, which calculates biomass-based quotas by average body weight.",
         ],
       },
     ],
