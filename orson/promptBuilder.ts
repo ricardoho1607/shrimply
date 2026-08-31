@@ -189,6 +189,18 @@ const DECREASE_PATTERNS = [/\bdecrease\b/i, /\blower\b/i, /\breduce\b/i, /\bbrin
 const INCREASE_PATTERNS = [/\bincrease\b/i, /\braise\b/i, /\bbring\s+up\b/i, /\btoo\s+low\b/i, /\blow\b/i];
 const STABILIZE_PATTERNS = [/\bstabili[sz]e\b/i, /\bbalance\b/i, /\bcontrol\b/i, /\bfix\b/i, /\bmanage\b/i, /\badjust\b/i];
 const NO_ADVICE_PATTERN = /\b(?:do not|don't|without|no)\b[^.!?\n]{0,100}\b(?:advice|recommendations?|treatments?|actions?)\b/i;
+const RECORD_COUNT_WORDS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
 
 export const ORSON_MODEL_TIMEOUT_MS = 25000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
@@ -364,6 +376,14 @@ const detectRequestedDates = (question: string): string[] => {
   return [...new Set(dates)];
 };
 
+const detectRequestedRecordCount = (question: string): number | null => {
+  if (!/\b(?:daily\s+)?feed\s+(?:totals?|records?|history)\b|\bdaily\s+totals?\b/i.test(question)) return null;
+  const match = question.match(/\b(?:last|past|previous)\s+(one|two|three|four|five|six|seven|eight|nine|ten|\d{1,2})\b/i);
+  if (!match) return null;
+  const count = RECORD_COUNT_WORDS[match[1].toLowerCase()] ?? Number(match[1]);
+  return Number.isInteger(count) && count > 0 ? Math.min(count, 14) : null;
+};
+
 const detectRequestedRecordFields = (question: string): string[] => {
   const fields: string[] = [];
   const add = (...values: string[]) => values.forEach((value) => {
@@ -376,7 +396,7 @@ const detectRequestedRecordFields = (question: string): string[] => {
   if (/\bammonia\b|\bnh3\b|\bnh4\b|\btan\b/i.test(question)) add('ammonia_mg_l');
   if (/\bfeed(?:ing)?\s+response\b|\bappetite\b|\btray\b/i.test(question)) {
     add('feed_kg', 'feeding_response');
-  } else if (/\bfeed(?:ing)?\b/i.test(question)) {
+  } else if (/\bfeed(?:ing)?\b|\bdaily\s+totals?\b/i.test(question)) {
     add('feed_kg');
   }
   if (/\bph\b/i.test(question)) add('ph_morning', 'ph_evening');
@@ -406,6 +426,7 @@ export const buildOrsonQuestionFocus = (
   const requestedDirection = detectRequestedDirection(question);
   const requestedDates = detectRequestedDates(question);
   const requestedFields = detectRequestedRecordFields(question);
+  const requestedRecordCount = detectRequestedRecordCount(question);
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
   const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
   const route = mentionedPayloads.length > 0 && inferredRoute !== 'inventory_product'
@@ -422,6 +443,7 @@ export const buildOrsonQuestionFocus = (
     requestedDirection,
     requestedDates,
     requestedFields,
+    requestedRecordCount,
     suppressAdvice: NO_ADVICE_PATTERN.test(question),
     isPondSpecific: focusedPayload !== null,
     isComparison,
@@ -666,6 +688,71 @@ const selectRecentPromptRecords = (
   return (relevant.length >= 3 ? relevant : chronological).slice(-5);
 };
 
+const formatRecordedDecimal = (value: number): string => {
+  const rounded = round(value, 2);
+  return rounded.toFixed(Number.isInteger(rounded * 10) ? 1 : 2);
+};
+
+const getRequestedRecordValues = (
+  record: OrsonPromptDailyRecord,
+  requestedFields: string[],
+  includeDisplayValues = false,
+): Record<string, unknown> => {
+  const values: Record<string, unknown> = {
+    do_morning_mg_l: record.doMorning,
+    do_evening_mg_l: record.doEvening,
+    ammonia_mg_l: record.ammoniaMgL,
+    feed_kg: record.feedKg,
+    feeding_response: record.feedingResponse,
+    ph_morning: record.phMorning,
+    ph_evening: record.phEvening,
+    salinity_ppt: record.salinityPpt,
+    temperature_c: record.temperatureC,
+    transparency_cm: record.transparencyCm,
+    mortality: record.mortalityCount,
+    mbw_g: record.mbwG,
+  };
+  const requestedValues: Record<string, unknown> = {};
+  requestedFields.forEach((field) => {
+    requestedValues[field] = values[field] ?? null;
+    if (includeDisplayValues && field === 'feed_kg' && typeof record.feedKg === 'number') {
+      requestedValues.feed_kg_display = formatRecordedDecimal(record.feedKg);
+    }
+  });
+  return requestedValues;
+};
+
+const selectExactPromptRecords = (
+  payload: OrsonPromptPondPayload | undefined,
+  questionFocus: OrsonQuestionFocus,
+): OrsonPromptDailyRecord[] => {
+  const records = [...(payload?.dailyRecords14d || [])].sort((first, second) => first.date.localeCompare(second.date));
+  if (questionFocus.requestedDates.length > 0) {
+    const recordsByDate = new Map(records.map((record) => [record.date, record]));
+    return questionFocus.requestedDates
+      .map((date) => recordsByDate.get(date))
+      .filter((record): record is OrsonPromptDailyRecord => Boolean(record));
+  }
+  if (!questionFocus.requestedRecordCount) return [];
+  return records
+    .filter((record) => Object.values(getRequestedRecordValues(record, questionFocus.requestedFields)).some((value) => value !== null))
+    .slice(-questionFocus.requestedRecordCount);
+};
+
+const buildExactRecordAnswer = (
+  payload: OrsonPromptPondPayload | undefined,
+  questionFocus: OrsonQuestionFocus,
+): string | null => {
+  if (!payload || !questionFocus.isPondSpecific || !questionFocus.requestedRecordCount) return null;
+  if (questionFocus.requestedFields.length !== 1 || questionFocus.requestedFields[0] !== 'feed_kg') return null;
+  const records = selectExactPromptRecords(payload, questionFocus);
+  if (records.length === 0) return `${payload.pondName} has no recorded daily feed totals for that request.`;
+  return [
+    `${payload.pondName} daily feed totals:`,
+    ...records.map((record) => `- ${record.date}: ${typeof record.feedKg === 'number' ? formatRecordedDecimal(record.feedKg) : 'N/A'} kg`),
+  ].join('\n');
+};
+
 export const buildOrsonPromptContext = (
   payloads: OrsonPromptPondPayload[],
   questionFocus: OrsonQuestionFocus,
@@ -675,37 +762,28 @@ export const buildOrsonPromptContext = (
   conversationHistory: OrsonConversationMessage[] = [],
 ): string => {
   const recentConversation = normalizeConversationHistory(conversationHistory);
+  const isRelativeFeedLookup = questionFocus.requestedRecordCount !== null
+    && questionFocus.requestedFields.length === 1
+    && questionFocus.requestedFields[0] === 'feed_kg';
   const isExactRecordLookup = questionFocus.isPondSpecific
-    && questionFocus.requestedDates.length > 0
+    && (questionFocus.requestedDates.length > 0 || isRelativeFeedLookup)
     && questionFocus.requestedFields.length > 0;
 
   if (isExactRecordLookup) {
     const payload = payloads[0];
-    const recordsByDate = new Map((payload?.dailyRecords14d || []).map((record) => [record.date, record]));
+    const selectedRecords = selectExactPromptRecords(payload, questionFocus);
     const exactRecords = questionFocus.requestedDates.map((date) => {
-      const record = recordsByDate.get(date);
-      const fieldValues: Record<string, unknown> = { date };
-      if (!record) return fieldValues;
-
-      questionFocus.requestedFields.forEach((field) => {
-        const values: Record<string, unknown> = {
-          do_morning_mg_l: record.doMorning,
-          do_evening_mg_l: record.doEvening,
-          ammonia_mg_l: record.ammoniaMgL,
-          feed_kg: record.feedKg,
-          feeding_response: record.feedingResponse,
-          ph_morning: record.phMorning,
-          ph_evening: record.phEvening,
-          salinity_ppt: record.salinityPpt,
-          temperature_c: record.temperatureC,
-          transparency_cm: record.transparencyCm,
-          mortality: record.mortalityCount,
-          mbw_g: record.mbwG,
-        };
-        fieldValues[field] = values[field] ?? null;
-      });
-      return fieldValues;
+      const record = selectedRecords.find((item) => item.date === date);
+      return record
+        ? { date, ...getRequestedRecordValues(record, questionFocus.requestedFields, questionFocus.requestedRecordCount !== null) }
+        : { date };
     });
+    if (questionFocus.requestedDates.length === 0) {
+      exactRecords.push(...selectedRecords.map((record) => ({
+        date: record.date,
+        ...getRequestedRecordValues(record, questionFocus.requestedFields, true),
+      })));
+    }
 
     return [
       'ORSON FARM SCOPE:',
@@ -721,6 +799,7 @@ export const buildOrsonPromptContext = (
         intent: questionFocus.intent,
         focused_pond: questionFocus.focusedPondName,
         requested_dates: questionFocus.requestedDates,
+        requested_record_count: questionFocus.requestedRecordCount,
         requested_fields: questionFocus.requestedFields,
         suppress_advice: questionFocus.suppressAdvice,
         exact_record_lookup: true,
@@ -782,6 +861,7 @@ export const buildOrsonPromptContext = (
       date: r.date,
       doc: r.doc,
       feed_kg: r.feedKg,
+      feed_kg_display: typeof r.feedKg === 'number' ? formatRecordedDecimal(r.feedKg) : null,
       mbw_g: r.mbwG,
       mortality: r.mortalityCount,
       do_min_mg_l: r.doMinimumMgL,
@@ -1016,6 +1096,7 @@ export const buildOrsonPromptPackage = (params: {
     questionFocus,
     conversationHistory,
     mortalityTrace: params.mortalityTrace ?? null,
+    exactRecordAnswer: buildExactRecordAnswer(orderedPayloads[0], questionFocus),
   };
 };
 

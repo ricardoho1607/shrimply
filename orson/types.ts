@@ -490,6 +490,7 @@ export interface OrsonQuestionFocus {
   requestedDirection: 'increase' | 'decrease' | 'stabilize' | null;
   requestedDates: string[];
   requestedFields: string[];
+  requestedRecordCount: number | null;
   suppressAdvice: boolean;
   isPondSpecific: boolean;
   isComparison?: boolean;
@@ -616,6 +617,7 @@ export interface OrsonPromptPackage {
   questionFocus: OrsonQuestionFocus;
   conversationHistory: OrsonConversationMessage[];
   mortalityTrace: OrsonMortalityTrace | null;
+  exactRecordAnswer: string | null;
 }
 
 export interface OrsonHarvestProjectionInput {

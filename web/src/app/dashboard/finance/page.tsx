@@ -39,6 +39,7 @@ import {
   getOpenFinanceCycles,
 } from '../../../../../shared/financeCycleAllocation';
 import { hasFarmPermission } from '../../../../../shared/permissions';
+import { getOperatingMarginDisplay } from '../../../../../shared/financeMetrics';
 
 /* --- Types --------------------------------------------------- */
 interface Transaction {
@@ -143,6 +144,7 @@ export default function FinancePage() {
     
     return { totalExpense, totalIncome, profit, count: scopedExpenses.length + scopedIncome.length };
   }, [scopedExpenses, scopedIncome]);
+  const operatingMarginDisplay = getOperatingMarginDisplay(stats.totalIncome, stats.profit);
 
   const filteredTransactions = useMemo(() => {
     const target = activeTab === 'expenses' ? scopedExpenses : scopedIncome;
@@ -380,7 +382,7 @@ export default function FinancePage() {
                 <div>
                   <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Operating Margin</div>
                   <div style={{ fontSize: '28px', fontWeight: 600, color: 'var(--primary)' }}>
-                    {stats.totalIncome > 0 ? ((stats.profit / stats.totalIncome) * 100).toFixed(1) : 0}%
+                    {operatingMarginDisplay}
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
@@ -417,7 +419,9 @@ export default function FinancePage() {
               <div>
                 <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px', color: 'var(--primary)' }}>Orson AI Optimization Tip</h4>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
-                  Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is <strong style={{color: 'var(--primary)'}}>{stats.totalIncome > 0 ? ((stats.profit / stats.totalIncome) * 100).toFixed(1) : 0}%</strong>.
+                  {stats.totalIncome > 0
+                    ? <>Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is <strong style={{color: 'var(--primary)'}}>{operatingMarginDisplay}</strong>.</>
+                    : 'Revenue is zero, so there is insufficient revenue data to calculate a margin.'}
                 </p>
               </div>
             </div>

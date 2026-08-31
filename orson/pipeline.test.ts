@@ -124,6 +124,34 @@ export const runPipelineSelfTest = () => {
   assert(exactRecords.records[1].feed_kg === 8.2 && exactRecords.records[1].feeding_response === 'normal', 'keeps recorded feed and response for August 29');
   assert(Object.keys(exactRecords.records[0]).every((key) => ['date', 'do_morning_mg_l', 'do_evening_mg_l', 'ammonia_mg_l', 'feed_kg', 'feeding_response'].includes(key)), 'exposes only the requested record fields');
 
+  const decimalFeedHistory = buildOrsonAnalysis([
+    {
+      id: 'sim-c1',
+      pondName: 'SIM-C1',
+      pondArea: 1000,
+      density: 100,
+      initialPopulation: 100000,
+      initialWeight: 0.5,
+      docStart: '2026-08-01',
+      samplings: [7.2, 7.4, 7.6, 7.8, 8].map((totalDailyFeed, index) => ({
+        id: `sim-c1-feed-${index}`,
+        date: `2026-08-${String(25 + index).padStart(2, '0')}`,
+        feedData: { totalDailyFeed: totalDailyFeed.toFixed(2) },
+      })),
+    },
+  ], "What were SIM-C1's last five daily feed totals?", new Date('2026-08-30T00:00:00Z'));
+
+  assert(decimalFeedHistory.promptPackage.questionFocus.requestedRecordCount === 5, 'detects a relative five-record lookup');
+  assert(decimalFeedHistory.promptPackage.exactRecordAnswer === [
+    'SIM-C1 daily feed totals:',
+    '- 2026-08-25: 7.2 kg',
+    '- 2026-08-26: 7.4 kg',
+    '- 2026-08-27: 7.6 kg',
+    '- 2026-08-28: 7.8 kg',
+    '- 2026-08-29: 8.0 kg',
+  ].join('\n'), 'preserves decimal feed totals in the exact Orson answer');
+  assert(decimalFeedHistory.promptPackage.context.includes('"feed_kg_display": "8.0"'), 'preserves feed precision in prompt context');
+
   const parameterControl = buildOrsonAnalysis([
     {
       id: 'a1',

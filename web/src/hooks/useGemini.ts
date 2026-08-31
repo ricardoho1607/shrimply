@@ -237,6 +237,18 @@ export const useGemini = () => {
       }
       const analysisMs = Date.now() - analysisStartedAt;
 
+      if (analysis.promptPackage.exactRecordAnswer) {
+        const exactText = analysis.promptPackage.exactRecordAnswer;
+        options.onPartialResponse?.(exactText);
+        setChatHistory((previous) => [
+          ...previous,
+          { role: 'user', parts: [{ text: userMessage }] },
+          { role: 'model', parts: [{ text: exactText }] },
+        ]);
+        setLoading(false);
+        return exactText;
+      }
+
       const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
       if (cachedText) {
         setChatHistory(prev => [
