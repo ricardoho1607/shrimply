@@ -59,6 +59,7 @@ export default function WaterQualityMonitoringPage() {
         { href: "/shrimp-farm-management-software", label: "Shrimp farm management software", description: "See how water quality fits into pond performance, reports, and operational review." },
         { href: "/features/disease-alerts", label: "Shrimp disease alerts", description: "Connect abnormal pond conditions with disease-risk and biosecurity visibility." },
         { href: "/features/growth-sampling", label: "Growth sampling and MBW tracking", description: "Use water quality history to explain growth variation between sampling records." },
+        { href: "/resources/vannamei-water-quality-parameters", label: "Vannamei water quality parameters", description: "Practical target ranges, warning signs, and the pond context that changes risk." },
         { href: "/resources/water-quality-trends", label: "Water quality trends guide", description: "Read the resource on reviewing DO, pH, salinity, ammonia, and trend direction." },
         { href: "/resources/shrimp-disease-alerts", label: "Disease alert guide", description: "Learn how alerts become more useful when connected to pond records." },
         { href: "/orson", label: "Orson AI for pond intelligence", description: "See how recent water quality history improves AI context for pond analysis." },

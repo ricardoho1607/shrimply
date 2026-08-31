@@ -266,9 +266,295 @@ const sources = {
     publisher: "Aquaculture",
     url: "https://doi.org/10.1016/0044-8486(95)00032-1",
   },
+  vannameiSalinityGrowth: {
+    title: "The Effect of Salinity on Growth and Survival of Penaeus vannamei",
+    publisher: "Aquaculture",
+    url: "https://doi.org/10.1016/0044-8486(94)90505-3",
+  },
+  vannameiSalinityMineralisation: {
+    title: "Growth and Carcass Mineralisation of Pacific Whiteleg Shrimp in Response to Water Salinity",
+    publisher: "Indian Journal of Fisheries",
+    url: "https://doi.org/10.21077/ijf.2017.64.2.59404-04",
+  },
+  vannameiAmmoniaToxicity: {
+    title: "Acute Toxicity of Ammonia on Litopenaeus vannamei Juveniles at Different Salinity Levels",
+    publisher: "Journal of Experimental Marine Biology and Ecology",
+    url: "https://doi.org/10.1016/S0022-0981(01)00227-1",
+  },
+  vannameiNitriteToxicity: {
+    title: "Nitrite Toxicity to Litopenaeus vannamei in Low-Salt Water",
+    publisher: "Journal of the World Aquaculture Society",
+    url: "https://doi.org/10.1111/j.1749-7345.2004.tb00109.x",
+  },
+  aqueousAmmoniaEquilibrium: {
+    title: "Aqueous Ammonia Equilibrium Calculations: Effect of pH and Temperature",
+    publisher: "Journal of the Fisheries Research Board of Canada",
+    url: "https://doi.org/10.1139/f75-274",
+  },
 } satisfies Record<string, ResourceSource>;
 
 export const resourceArticles: ResourceArticle[] = [
+  {
+    slug: "vannamei-water-quality-parameters",
+    section: "Water, Health, and Risk",
+    label: "Water Quality",
+    title: "Vannamei Water Quality Parameters: Target Ranges & Warning Signs",
+    description: "Practical water quality reference for Pacific white shrimp (Litopenaeus vannamei), with contextual ranges for dissolved oxygen, temperature, pH, salinity, alkalinity, ammonia, nitrite, and nitrate.",
+    readTime: "11 min read",
+    tags: [
+      "vannamei water quality parameters",
+      "shrimp water quality parameters",
+      "vannamei water parameters",
+      "ideal water quality for shrimp",
+      "shrimp pond water quality",
+      "vannamei water quality chart",
+      "safe ammonia shrimp",
+      "ideal alkalinity shrimp",
+      "ideal salinity vannamei",
+      "ideal DO vannamei",
+      "ideal pH vannamei",
+      "nitrite in shrimp ponds",
+      "water quality monitoring",
+    ],
+    publishedAt: "2026-08-31",
+    updatedAt: "2026-08-31",
+    image: {
+      src: "/resources/images/vannamei-water-quality-parameters-infographic.png",
+      alt: "Shrimply infographic showing a 10 to 20 ppt Vannamei growth reference, a broader conditional culture range, and reminders to monitor oxygen, pH, temperature, ammonia, nitrite, acclimation, and mineral balance",
+      width: 1672,
+      height: 941,
+    },
+    relatedFeature: { label: "Water Quality Monitoring", href: "/features/water-quality-monitoring" },
+    takeaways: [
+      "Use the ranges as practical references, not universal pass-or-fail limits; life stage, salinity, temperature, stocking, acclimation, and pond system change the risk.",
+      "For salinity, 10–20 ppt is a useful growth-favourable reference supported by juvenile studies, while properly acclimated Vannamei can be cultured across a broader range.",
+      "Interpret TAN with pH and temperature, and interpret nitrite with salinity and chloride; nitrate is a separate, generally longer-term accumulation concern.",
+    ],
+    faqs: [
+      {
+        question: "What are the ideal water quality parameters for Vannamei shrimp?",
+        answer: "A practical grow-out reference is dissolved oxygen above 5 mg/L, temperature around 28–32°C, pH near 7.8–8.3 with limited daily movement, salinity around 10–20 ppt when it suits the stock and water source, alkalinity around 100–160 mg/L as CaCO₃, and low, stable nitrogen compounds. These are starting references, not universal safety limits; compare them with the pond baseline, shrimp behaviour, life stage, salinity, temperature, and test method.",
+      },
+      {
+        question: "What is the safe ammonia level for shrimp ponds?",
+        answer: "Keep TAN low and stable, but do not judge it alone. The un-ionized ammonia fraction (NH₃) increases as pH and temperature rise and also varies with salinity, so record TAN, pH, temperature, salinity, units, and sampling time together. A rising trend or abnormal feeding, swimming, or mortality needs prompt investigation even when one number appears acceptable.",
+      },
+      {
+        question: "What is the ideal alkalinity for Vannamei shrimp?",
+        answer: "Many grow-out farms use roughly 100–160 mg/L as CaCO₃ as an operating reference, but the useful target depends on salinity, hardness, production system, and daily pH movement. Confirm the measurement and calculate any amendment from pond volume, product purity, water chemistry, and the farm SOP rather than applying a fixed dose per hectare.",
+      },
+      {
+        question: "What is the ideal salinity for Vannamei shrimp farming?",
+        answer: "Several controlled studies reported strong juvenile growth in lower-brackish water, including 5–15 ppt and 10–30 ppt. Shrimply therefore uses 10–20 ppt as a practical growth-favourable reference, not a universal optimum or an isosmotic range. Performance still depends on life stage, temperature, acclimation, and the balance of potassium, magnesium, calcium, hardness, and alkalinity.",
+      },
+      {
+        question: "What is the minimum safe dissolved oxygen (DO) level for shrimp?",
+        answer: "Aim to keep pre-dawn dissolved oxygen above 4–5 mg/L and treat a falling trend seriously. Risk depends on temperature, salinity, biomass, exposure time, bottom conditions, and measurement depth. If DO is low or shrimp crowd pond edges or aerators, maximise safe aeration, hold feed increases, recheck at multiple depths, and follow the farm emergency SOP.",
+      },
+      {
+        question: "What is the ideal pH for Vannamei ponds and how much daily fluctuation is safe?",
+        answer: "A practical target is about pH 7.8–8.3 with a small, repeatable morning-to-afternoon change. A larger or rapidly changing swing is a warning to inspect alkalinity, algae, respiration, weather, and test accuracy; it does not by itself confirm an algal problem or disease.",
+      },
+    ],
+    sections: [
+      {
+        heading: "Quick answer: Use ranges with pond context",
+        body: [
+          "Water quality ranges are useful starting points, but one reading cannot prove that a pond is safe or dangerous. Compare the value with recent readings, measurement time and depth, shrimp behaviour, feed response, biomass, weather, and the farm's normal operating range.",
+          "Act first on immediate hazards such as falling dissolved oxygen or continuing mortality. For chemistry corrections, confirm the test and use the farm SOP or qualified local advice before dosing minerals, carbon sources, probiotics, lime, oxidisers, or other products.",
+        ],
+      },
+      {
+        heading: "Vannamei water quality reference table",
+        body: [
+          "These grow-out references help decide what to recheck and investigate. They are not treatment prescriptions, and laboratory methods may report ammonia or nitrite as nitrogen (N) or as the full ion; do not compare values until the units match.",
+        ],
+        table: {
+          columns: [
+            "Parameter",
+            "Practical reference",
+            "Watch closely",
+            "Higher concern",
+            "Context that changes risk",
+            "When to test",
+            "First safe response",
+          ],
+          rows: [
+            [
+              "Dissolved Oxygen (DO)",
+              "> 5.0 mg/L",
+              "4.0–5.0 mg/L or a falling trend",
+              "Persistent < 4.0 mg/L, especially near 3.0 mg/L or with abnormal behaviour",
+              "Temperature, salinity, biomass, exposure time, depth, and bottom oxygen demand",
+              "Pre-dawn and late afternoon; more often during high biomass, cloudy weather, or weak feeding",
+              "Maximise safe aeration, hold feed increases, recheck at several depths, and follow the farm emergency SOP. See [Water Quality Trends](/resources/water-quality-trends).",
+            ],
+            [
+              "Water Temperature",
+              "About 28–32°C",
+              "Movement outside the farm baseline or a rapid daily change",
+              "Sustained cold or heat with weak feeding, low DO, or abnormal behaviour",
+              "Shrimp size, acclimation, salinity, DO, weather, and exposure time",
+              "Morning and afternoon; after weather or water-exchange events",
+              "Check DO and feed response before changing the ration. See [Vannamei Feeding Rate](/resources/vannamei-feeding-rate).",
+            ],
+            [
+              "pH",
+              "About 7.8–8.3 with limited daily movement",
+              "A widening morning-to-afternoon swing or movement outside the pond baseline",
+              "Rapid change, repeated values near < 7.0 or > 9.0, or abnormal shrimp behaviour",
+              "Alkalinity, algae, respiration, rain, salinity, temperature, and test calibration",
+              "Near sunrise and mid-afternoon at consistent locations",
+              "Confirm the test, check alkalinity and algae, and use a pond-specific correction plan. See [Pond Algae & Water Colour](/resources/shrimp-pond-water-colour-algae).",
+            ],
+            [
+              "Salinity",
+              "10–20 ppt growth-favourable reference",
+              "About 5–35 ppt may support culture when stock is acclimated and water chemistry is suitable",
+              "Rapid change, movement outside the stock's acclimation range, or feeding and survival decline",
+              "Life stage, temperature, acclimation, potassium, magnesium, calcium, hardness, and alkalinity",
+              "Weekly and after heavy rain, evaporation, or water exchange",
+              "Stabilise the change, confirm mineral balance, and use a calculated farm plan before adding salts. Compare with [Growth Sampling](/features/growth-sampling).",
+            ],
+            [
+              "Total Alkalinity (as CaCO₃)",
+              "About 100–160 mg/L",
+              "Below the farm target or a falling trend with wider pH movement",
+              "Persistent instability, poor post-moult shell condition, or failure to improve",
+              "Salinity, hardness, system type, pH, product purity, and pond volume",
+              "Weekly and after heavy rain or major water exchange",
+              "Confirm the result and calculate any amendment from water volume and chemistry. See [Slow Growth Troubleshooting](/resources/slow-shrimp-growth-adg-troubleshooting).",
+            ],
+            [
+              "Total Ammonia Nitrogen (TAN)",
+              "Keep low and stable; < 0.5 mg/L is a conservative operating reference",
+              "A rising trend or ≥ 0.5 mg/L",
+              "Elevated calculated NH₃-N, continuing rise, weak feeding, abnormal behaviour, or mortality",
+              "pH, temperature, salinity, units, exposure time, biomass, and organic load",
+              "At least twice weekly in intensive grow-out; more often when rising",
+              "Hold feed increases, confirm pH and temperature, inspect trays and sludge, and follow the farm response plan.",
+            ],
+            [
+              "Toxic Un-ionized Ammonia (NH₃-N)",
+              "Keep as low as practical; < 0.05 mg/L is a conservative reference",
+              "0.05–0.10 mg/L or a rising trend",
+              "≥ 0.10 mg/L, especially with high pH, high temperature, or abnormal shrimp",
+              "TAN, pH, temperature, salinity, calculation method, units, and exposure time",
+              "Calculate with a matched TAN, pH, temperature, and salinity sample",
+              "Protect oxygen, hold feed increases, verify the calculation, and use the farm SOP for water or sludge management. See [FCR & Feed Waste Reduction](/resources/fcr-shrimp-farming).",
+            ],
+            [
+              "Nitrite (NO₂⁻-N)",
+              "Keep low and stable; < 0.2 mg/L NO₂-N is a conservative reference",
+              "A rising trend or ≥ 0.2 mg/L NO₂-N",
+              "Continuing rise with low salinity or chloride, weak feeding, abnormal colour or behaviour, or mortality",
+              "Salinity, chloride, units, shrimp size, exposure time, and biofilter or pond biology",
+              "At least twice weekly later in grow-out; more often when rising",
+              "Confirm units and chloride, protect oxygen, review feed and organic load, and obtain a calculated correction plan before adding salt.",
+            ],
+            [
+              "Nitrate (NO₃⁻-N)",
+              "Keep stable and within the farm or system target",
+              "A persistent upward trend",
+              "High or rising nitrate with poor growth, weak feeding, or other water-quality problems",
+              "Salinity, system type, exposure duration, units, water exchange, and other nitrogen compounds",
+              "Every 1–2 weeks, or more often in low-exchange systems",
+              "Confirm the trend and review solids, biofiltration, feed input, and permitted water management. See [Pond Performance Scorecard](/resources/pond-performance).",
+            ],
+          ],
+        },
+      },
+      {
+        heading: "Why the same number can mean different risk",
+        body: [
+          "Research thresholds come from different shrimp sizes, salinities, temperatures, exposure times, and systems. Use them to guide investigation, not to replace pond observations or the farm SOP.",
+        ],
+        items: [
+          "Dissolved oxygen: Bottom readings may be lower than surface readings because shrimp and decomposing organic matter consume oxygen near the sediment. Measure at representative depths and locations instead of assuming one surface value represents the pond.",
+          "Temperature: Temperature changes shrimp metabolism, oxygen demand, appetite, and the proportion of TAN present as NH₃. Adjust feeding only after checking shrimp response, trays, DO, and the recent temperature trend.",
+          "pH and alkalinity: Photosynthesis commonly raises pH during daylight and respiration lowers it overnight. Alkalinity helps resist rapid pH change, but hardness and mineral balance also matter for shell condition; one low reading does not identify the cause of a moulting problem.",
+          "Nitrogen compounds: TAN includes ammonium and un-ionized ammonia. Nitrite can reduce oxygenation and disrupt hemocyanin and energy metabolism, while nitrate is usually assessed as a longer-term accumulation issue. Confirm whether the laboratory reports each value as nitrogen or as the complete ion.",
+        ],
+      },
+      {
+        heading: "Salinity: growth reference is not the same as tolerance or toxicity",
+        body: [
+          "Controlled juvenile studies support the farmer observation that lower-brackish salinity can perform well for growth. [Bray et al.](https://doi.org/10.1016/0044-8486(94)90505-3) found the highest final weights at 5 and 15 ppt compared with 25, 35, and 49 ppt, while an [Indian Journal of Fisheries study](https://doi.org/10.21077/ijf.2017.64.2.59404-04) reported similarly strong growth from 10 to 30 ppt.",
+          "That evidence supports 10–20 ppt as a useful growth-favourable reference, but it does not make 10–20 ppt a universal optimum or an isosmotic range. Vannamei may tolerate and grow across a broader range when acclimation, temperature, and ionic balance are suitable.",
+          "Salinity also changes chemical risk. Lower salinity and chloride can increase nitrite uptake, and salinity affects ammonia toxicity calculations. Those relationships should be assessed separately from the salinity range used as a growth reference.",
+        ],
+      },
+      {
+        heading: "How the main parameters interact",
+        body: [
+          "Review interacting measurements before deciding whether a result is urgent or choosing a correction:",
+        ],
+        items: [
+          "1. TAN + pH + temperature + salinity: Higher pH and temperature increase the un-ionized NH₃ fraction. Use a recognised calculation with matched measurements and make the salinity and units explicit.",
+          "2. Nitrite + salinity + chloride: Chloride can reduce nitrite uptake at the gills, but research shows that simply adding more salt may not be a practical universal correction. Measure chloride and nitrite, confirm the units, and calculate any amendment for the actual pond.",
+          "3. pH + alkalinity + algae + weather: A wider daily pH swing can follow changes in photosynthesis, respiration, alkalinity, rain, or water exchange. Confirm the pattern before treating the pond.",
+          "4. Afternoon DO + pre-dawn DO + biomass: A high afternoon value does not guarantee safe oxygen before sunrise. Compare both times and increase monitoring when biomass, cloud cover, or organic load rises.",
+        ],
+        note: "Do not compare TAN, NH₃, nitrite, or nitrate results until the reported chemical form and units are clear.",
+      },
+      {
+        heading: "Water testing protocol by Day of Culture (DOC) stage",
+        body: [
+          "Monitoring priorities evolve as shrimp grow and organic load accumulates across the culture cycle:",
+        ],
+        items: [
+          "Nursery and early culture: Prioritise stability, acclimation, morning and afternoon pH, DO, temperature, salinity, alkalinity, and careful observation after water changes.",
+          "Mid grow-out: As feed and biomass increase, monitor pre-dawn DO, afternoon DO and pH, TAN, nitrite, trays, and organic load more closely.",
+          "Finishing: Set monitoring frequency from biomass, aeration reserve, feeding, recent trends, and the farm risk plan. Increase checks when DO falls, nitrogen compounds rise, weather changes, or feed response weakens.",
+        ],
+      },
+      {
+        heading: "Practical response when a reading moves out of range",
+        body: [
+          "Confirm the reading, protect shrimp from the immediate hazard, and monitor the response. Chemical or biological products require a pond-specific calculation and must follow product approval, local rules, environmental safeguards, and the farm SOP.",
+        ],
+        items: [
+          "Low DO: Start available safe aeration, stop feed increases, inspect shrimp distribution, and recheck at several depths and locations. Escalate immediately if shrimp crowd edges, surface, or aerators, or if DO does not recover.",
+          "Unexpected pH or alkalinity: Repeat the test with calibrated equipment, compare morning and afternoon values, and inspect rain, algae, water exchange, and alkalinity. Do not reduce needed aeration or apply lime, carbon, or probiotics from a generic dose.",
+          "Rising TAN or NH₃: Match TAN with pH, temperature, and salinity; review feed response, sludge, solids, and water movement. Hold feed increases and use the farm SOP for any feed, exchange, or solids-management change.",
+          "Rising nitrite: Confirm NO₂-N versus NO₂ units and measure salinity and chloride. Review biofilter or pond biology, feed input, and organic load; obtain a calculated plan before adding salt or microbial products.",
+          "Continuing mortality or weak feeding: Record the timeline and water results, preserve suitable samples, and contact the farm veterinarian, aquatic-health professional, laboratory, or experienced local adviser.",
+        ],
+      },
+      {
+        heading: "How to use Shrimply for water quality records",
+        body: [
+          "Record water-quality readings by pond and time so managers can compare recent movement instead of relying on memory or one result.",
+          "Log pH, temperature, salinity, and ammonia together when they come from the same sampling event. Shrimply stores the records; use a recognised method outside the current water module to calculate NH₃ and record the calculation method and units in the pond notes.",
+          "Compare the water-quality history with feed, sampling, biomass, and mortality records. The records provide context for investigation; they do not diagnose the cause of poor growth or disease.",
+        ],
+      },
+      {
+        heading: "When to seek laboratory or specialist help",
+        body: [
+          "Escalate when mortality continues, shrimp show abnormal swimming or appearance, feed response remains weak across several meals, water quality changes rapidly, a correction fails, or the farm cannot identify whether the problem is measurement, water chemistry, pond biology, or disease.",
+          "Share the pond ID, DOC, stocking and biomass estimate, recent feed history, mortality timeline, weather and water-exchange events, calibrated water results with units and times, photos, and any laboratory reports.",
+        ],
+      },
+    ],
+    checklist: [
+      "Calibrate and maintain DO and pH meters according to the manufacturer and farm quality-control schedule.",
+      "Measure pre-dawn and afternoon DO at consistent depths and locations, then compare the trend.",
+      "Record TAN, pH, temperature, salinity, time, test method, chemical form, and units together.",
+      "Track morning and afternoon pH with alkalinity, weather, and water-exchange events.",
+      "Confirm nitrite units and measure chloride before considering a salinity-based correction.",
+      "Connect water-quality movement with trays, feed history, sampling, biomass, and mortality.",
+    ],
+    sources: [
+      sources.faoShrimpWaterQuality,
+      sources.boydAeration,
+      sources.vannameiSalinityGrowth,
+      sources.vannameiSalinityMineralisation,
+      sources.vannameiAmmoniaToxicity,
+      sources.vannameiNitriteToxicity,
+      sources.aqueousAmmoniaEquilibrium,
+    ],
+  },
   {
     slug: "shrimp-pond-water-colour-algae",
     section: "Water, Health, and Risk",
@@ -1707,6 +1993,7 @@ export const resourceArticles: ResourceArticle[] = [
         heading: "What to review daily",
         body: [
           "At minimum, track the farm's key operational parameters consistently and record time of measurement. Compare today with the previous several readings, not just the target range. Sudden movement deserves attention even if the number has not crossed an alarm threshold.",
+          "For practical grow-out reference ranges and the pond context that changes risk, use the [Vannamei Water Quality Parameters guide](/resources/vannamei-water-quality-parameters).",
         ],
       },
     ],

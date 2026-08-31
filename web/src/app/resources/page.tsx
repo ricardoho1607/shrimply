@@ -12,6 +12,7 @@ const page = coreSeoPages.find(item => item.path === "/resources");
 export const metadata = seoMetadata(page!);
 
 const priorityGuideSlugs = [
+  "vannamei-water-quality-parameters",
   "vannamei-feeding-rate",
   "vannamei-stocking-density",
   "vannamei-growth-chart",

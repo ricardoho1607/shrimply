@@ -19,6 +19,59 @@ type ResourcePageProps = {
 
 const stripSubtitle = (title: string) => title.split(":")[0];
 
+const renderInlineLinks = (text: string): React.ReactNode => {
+  if (!text.includes("[") || !text.includes("](") || !text.includes(")")) {
+    return text;
+  }
+
+  const linkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = linkRegex.exec(text)) !== null) {
+    const [fullMatch, linkText, href] = match;
+    const matchIndex = match.index;
+
+    if (matchIndex > lastIndex) {
+      parts.push(text.substring(lastIndex, matchIndex));
+    }
+
+    const isExternal = href.startsWith("http://") || href.startsWith("https://");
+    if (isExternal) {
+      parts.push(
+        <a
+          key={`${href}-${matchIndex}`}
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ color: "var(--navy)", fontWeight: 600, textDecoration: "underline" }}
+        >
+          {linkText}
+        </a>
+      );
+    } else {
+      parts.push(
+        <Link
+          key={`${href}-${matchIndex}`}
+          href={href}
+          style={{ color: "var(--navy)", fontWeight: 600, textDecoration: "underline" }}
+        >
+          {linkText}
+        </Link>
+      );
+    }
+
+    lastIndex = matchIndex + fullMatch.length;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex));
+  }
+
+  return parts;
+};
+
 const relatedFeatureLabels: Record<string, string> = {
   "/shrimp-farm-management-software": "Shrimp farm management software",
   "/vannamei-shrimp-farming-app": "Vannamei shrimp farming app",
@@ -379,20 +432,20 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                       <div style={{ display: "grid", gap: "20px" }}>
                         {section.body.map(paragraph => (
                           <p key={paragraph} style={{ fontSize: "1.04rem", color: "var(--ocean)", fontWeight: 500 }}>
-                            {paragraph}
+                            {renderInlineLinks(paragraph)}
                           </p>
                         ))}
                         {section.items ? (
                           section.ordered ? (
                             <ol style={{ display: "grid", gap: "14px", paddingLeft: "24px" }}>
                               {section.items.map(item => (
-                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{item}</li>
+                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{renderInlineLinks(item)}</li>
                               ))}
                             </ol>
                           ) : (
                             <ul style={{ display: "grid", gap: "14px", paddingLeft: "22px" }}>
                               {section.items.map(item => (
-                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{item}</li>
+                                <li key={item} style={{ color: "var(--ocean)", fontWeight: 500, paddingLeft: "6px" }}>{renderInlineLinks(item)}</li>
                               ))}
                             </ul>
                           )
@@ -428,7 +481,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                                           key={`${cell}-${cellIndex}`}
                                           style={{ padding: "15px", verticalAlign: "top", color: "var(--ocean)", fontSize: "0.9rem", fontWeight: cellIndex === 0 ? 700 : 500, borderBottom: rowIndex === section.table!.rows.length - 1 ? undefined : "1px solid var(--slate)" }}
                                         >
-                                          {cell}
+                                          {renderInlineLinks(cell)}
                                         </td>
                                       ))}
                                     </tr>
@@ -440,7 +493,7 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                         ) : null}
                         {section.note ? (
                           <aside style={{ borderLeft: "4px solid var(--sky)", background: "var(--off-white)", borderRadius: "0 12px 12px 0", padding: "18px 20px", color: "var(--ocean)", fontWeight: 600 }}>
-                            <strong style={{ color: "var(--ink)" }}>Avoid: </strong>{section.note}
+                            <strong style={{ color: "var(--ink)" }}>Avoid: </strong>{renderInlineLinks(section.note)}
                           </aside>
                         ) : null}
                         {section.heading.toLowerCase().includes("calculator") ? (
