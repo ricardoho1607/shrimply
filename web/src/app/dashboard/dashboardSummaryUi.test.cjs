@@ -37,3 +37,10 @@ test('pond cards show the latest feed response for today instead of a blank comp
   assert.match(source, /getLatestFeedResponseForDate/);
   assert.match(source, /todayFeedResponse \? todayFeedResponse\.toUpperCase\(\) : 'COMPLETED'/);
 });
+
+test('pond cards show deterministic pond risk beside posted status', () => {
+  assert.match(source, /getEnterprisePondStatus/);
+  assert.match(source, /pondStatus\.risk === 'high-risk'/);
+  assert.match(source, /HIGH RISK/);
+  assert.match(source, /WARNING/);
+});

@@ -287,6 +287,11 @@ export type OrsonRiskSeverity = 'info' | 'watch' | 'warning' | 'critical';
 
 export type OrsonRiskId =
   | 'low_do'
+  | 'ammonia_elevated'
+  | 'abnormal_shrimp_behaviour'
+  | 'heavy_rain_low_do'
+  | 'high_sludge_load'
+  | 'surface_scum_observed'
   | 'unsafe_ph'
   | 'ph_instability'
   | 'do_decline'
@@ -319,6 +324,7 @@ export interface OrsonRiskFinding {
   evidence: string[];
   recommendation: string;
   metricRefs: string[];
+  eventDate?: string;
 }
 
 export interface OrsonRiskReport {

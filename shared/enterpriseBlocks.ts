@@ -55,6 +55,12 @@ export interface EnterpriseSampling extends SharedSampling {
   salinity?: number | string | null;
   transparency?: number | string | null;
   temperature?: number | string | null;
+  ammonia?: number | string | null;
+  weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent?: number | string | null;
+  sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+  surfaceScum?: boolean | null;
+  shrimpBehaviour?: 'normal' | 'abnormal' | null;
 }
 
 export interface EnterprisePond extends SharedPond {
@@ -167,6 +173,11 @@ const getMbwAtDate = (pond: EnterprisePond, date?: string | null, explicitMbw?: 
 
 const WATER_RISK_IDS = new Set<OrsonRiskId>([
   'low_do',
+  'ammonia_elevated',
+  'abnormal_shrimp_behaviour',
+  'heavy_rain_low_do',
+  'high_sludge_load',
+  'surface_scum_observed',
   'unsafe_ph',
   'low_do_high_temperature',
   'low_do_high_tan',

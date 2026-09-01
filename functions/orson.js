@@ -908,6 +908,11 @@ const calculateRiskReport = (pond, pondId) => {
   const latestTemperatureRecord = [...records].reverse().find((record) => record.temperatureC !== null) || null;
   const latestTransparencyRecord = [...records].reverse().find((record) => record.transparencyCm !== null) || null;
   const latestMortalityRecord = [...records].reverse().find((record) => record.mortalityCount !== null) || null;
+  const latestAmmoniaRecord = [...records].reverse().find((record) => record.ammoniaMgL !== null) || null;
+  const latestWeatherRecord = [...records].reverse().find((record) => record.weatherEvent !== null) || null;
+  const latestSludgeRecord = [...records].reverse().find((record) => record.sludgeLoad !== null) || null;
+  const latestScumRecord = [...records].reverse().find((record) => record.surfaceScum !== null) || null;
+  const latestBehaviourRecord = [...records].reverse().find((record) => record.shrimpBehaviour !== null) || null;
   const latestDo = latestDoRecord ? minKnown(latestDoRecord.doMorning, latestDoRecord.doEvening) : null;
   const latestPhMorning = latestPhRecord?.phMorning ?? null;
   const latestPhEvening = latestPhRecord?.phEvening ?? null;
@@ -947,15 +952,91 @@ const calculateRiskReport = (pond, pondId) => {
     });
   }
 
-  if (latestDo !== null && latestDo < 4) {
+  if (latestDo !== null && latestDo < 5) {
     pushFinding({
       id: "low_do",
-      severity: latestDo < 3 ? "critical" : "warning",
+      severity: latestDo < 3.5 ? "critical" : "warning",
       title: "Low dissolved oxygen risk",
       summary: `Latest DO minimum is ${round(latestDo, 2)} mg/L.`,
       evidence: [`Latest DO minimum is ${round(latestDo, 2)} mg/L.`],
       recommendation: "Increase aeration, check sludge load, and avoid aggressive feeding until DO stabilizes.",
       metricRefs: ["doMinimumLatest"],
+      eventDate: latestDoRecord?.date || undefined,
+    });
+  }
+
+  if (latestAmmoniaRecord && latestAmmoniaRecord.ammoniaMgL !== null && latestAmmoniaRecord.ammoniaMgL >= 0.01) {
+    pushFinding({
+      id: "ammonia_elevated",
+      severity: "warning",
+      confidence: 0.86,
+      title: "Field ammonia reading needs verification",
+      summary: `Latest field ammonia is ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L; its TAN or NH3 basis is not recorded.`,
+      evidence: [`Field ammonia ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L.`, `Record date ${latestAmmoniaRecord.date || "missing"}.`],
+      recommendation: "Protect DO, hold feed increases, and confirm whether the field result is TAN or NH3 with pH and temperature before choosing a correction.",
+      metricRefs: ["dailyRecords.ammoniaMgL"],
+      eventDate: latestAmmoniaRecord.date || undefined,
+    });
+  }
+
+  if (latestBehaviourRecord?.shrimpBehaviour === "abnormal") {
+    pushFinding({
+      id: "abnormal_shrimp_behaviour",
+      severity: "warning",
+      confidence: 0.92,
+      title: "Abnormal shrimp behaviour recorded",
+      summary: `Abnormal shrimp behaviour was recorded on ${latestBehaviourRecord.date || "an unknown date"}.`,
+      evidence: ["Shrimp behaviour: abnormal.", `Record date ${latestBehaviourRecord.date || "missing"}.`],
+      recommendation: "Check DO, feed response, mortality, and pond-edge observations promptly; escalate under the farm health SOP if the behaviour continues.",
+      metricRefs: ["dailyRecords.shrimpBehaviour"],
+      eventDate: latestBehaviourRecord.date || undefined,
+    });
+  }
+
+  const weatherDo = latestWeatherRecord ? minKnown(latestWeatherRecord.doMorning, latestWeatherRecord.doEvening) : null;
+  if (latestWeatherRecord?.weatherEvent === "heavy_rain" && weatherDo !== null && weatherDo < 5) {
+    pushFinding({
+      id: "heavy_rain_low_do",
+      severity: weatherDo < 3.5 ? "critical" : "warning",
+      confidence: 0.88,
+      title: "Heavy rain combined with low DO",
+      summary: `Heavy rain and DO of ${round(weatherDo, 2)} mg/L were recorded on ${latestWeatherRecord.date || "an unknown date"}.`,
+      evidence: [
+        "Weather event: heavy rain.",
+        `DO minimum ${round(weatherDo, 2)} mg/L.`,
+        `Water exchange ${latestWeatherRecord.waterExchangePercent !== null ? `${latestWeatherRecord.waterExchangePercent}%.` : "not recorded."}`,
+      ],
+      recommendation: "Protect aeration, recheck DO and pH after the rain, and avoid feed increases until the pond is stable.",
+      metricRefs: ["dailyRecords.weatherEvent", "dailyRecords.doMinimum", "dailyRecords.waterExchangePercent"],
+      eventDate: latestWeatherRecord.date || undefined,
+    });
+  }
+
+  if (latestSludgeRecord?.sludgeLoad === "high") {
+    pushFinding({
+      id: "high_sludge_load",
+      severity: "warning",
+      confidence: 0.9,
+      title: "High sludge load recorded",
+      summary: `High sludge load was recorded on ${latestSludgeRecord.date || "an unknown date"}.`,
+      evidence: ["Sludge load: high.", `Record date ${latestSludgeRecord.date || "missing"}.`],
+      recommendation: "Protect aeration, review feed waste, and follow the farm sludge-management procedure.",
+      metricRefs: ["dailyRecords.sludgeLoad"],
+      eventDate: latestSludgeRecord.date || undefined,
+    });
+  }
+
+  if (latestScumRecord?.surfaceScum === true) {
+    pushFinding({
+      id: "surface_scum_observed",
+      severity: "warning",
+      confidence: 0.88,
+      title: "Surface scum observed",
+      summary: `Surface scum was recorded on ${latestScumRecord.date || "an unknown date"}.`,
+      evidence: ["Surface scum: observed.", `Record date ${latestScumRecord.date || "missing"}.`],
+      recommendation: "Inspect pond colour and plankton condition, protect DO, and avoid abrupt bloom-control changes.",
+      metricRefs: ["dailyRecords.surfaceScum"],
+      eventDate: latestScumRecord.date || undefined,
     });
   }
 
@@ -1136,6 +1217,8 @@ const calculateRiskReport = (pond, pondId) => {
   const overallSeverity = findings.reduce((highest, finding) => (
     SEVERITY_RANK[finding.severity] > SEVERITY_RANK[highest] ? finding.severity : highest
   ), "info");
+
+  findings.sort((a, b) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.confidence - a.confidence);
 
   return {
     pondId,
@@ -2719,6 +2802,7 @@ if (process.env.NODE_ENV === "test") {
   exports.__test = {
     buildServerOrsonSystemInstruction,
     calculateRiskReport,
+    getRiskSignature,
     getNewOperationalEventFindings,
     getCurrentLabWaterMetrics,
     normalizeOrsonProductDocuments,

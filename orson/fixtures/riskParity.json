@@ -207,5 +207,50 @@
         { "id": "mortality-zero", "date": "2026-08-19", "observationType": "none_observed", "count": 0 }
       ]
     }
+  },
+  {
+    "id": "sim-b1-operational-water-risk",
+    "expectedRiskIds": [
+      "low_do",
+      "ammonia_elevated",
+      "abnormal_shrimp_behaviour",
+      "heavy_rain_low_do"
+    ],
+    "excludedRiskIds": [],
+    "pond": {
+      "id": "sim-b1",
+      "pondName": "SIM-B1",
+      "pondArea": 1000,
+      "density": 100,
+      "initialPopulation": 100000,
+      "initialWeight": 0.5,
+      "docStart": "2026-08-01",
+      "cycleId": "cycle-current",
+      "pondCycleId": "pond-cycle-current",
+      "samplings": [
+        {
+          "id": "sim-b1-water",
+          "date": "2026-09-01",
+          "mbw": 4,
+          "feed": 0,
+          "doMorning": 4.7,
+          "doEvening": 5.8,
+          "ammonia": 0.06,
+          "weatherEvent": "heavy_rain",
+          "waterExchangePercent": 8,
+          "sludgeLoad": "moderate",
+          "surfaceScum": false,
+          "shrimpBehaviour": "abnormal"
+        },
+        {
+          "id": "sim-b1-feed",
+          "date": "2026-09-01",
+          "feedData": {
+            "totalDailyFeed": 6.6,
+            "feedingResponse": "normal"
+          }
+        }
+      ]
+    }
   }
 ]

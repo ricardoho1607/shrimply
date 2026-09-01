@@ -19,7 +19,7 @@ const round = (value: number, decimals = 2) => {
   return Math.round(value * factor) / factor;
 };
 
-const hasNumber = (value: number | null): value is number => value !== null && Number.isFinite(value);
+const hasNumber = (value: number | null | undefined): value is number => value !== null && value !== undefined && Number.isFinite(value);
 
 const highestSeverity = (findings: OrsonRiskFinding[]): OrsonRiskSeverity => {
   return findings.reduce<OrsonRiskSeverity>((highest, finding) => {
@@ -54,6 +54,12 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
   const latestPhValues = [metrics.latestPhMorning, metrics.latestPhEvening].filter(hasNumber);
   const latestPhMinimum = latestPhValues.length > 0 ? Math.min(...latestPhValues) : null;
   const latestPhMaximum = latestPhValues.length > 0 ? Math.max(...latestPhValues) : null;
+  const latestDoRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.doMinimumMgL)) ?? null;
+  const latestAmmoniaRecord = [...metrics.dailyRecords14d].reverse().find((record) => hasNumber(record.ammoniaMgL)) ?? null;
+  const latestWeatherRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.weatherEvent !== null) ?? null;
+  const latestSludgeRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.sludgeLoad !== null) ?? null;
+  const latestScumRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.surfaceScum !== null) ?? null;
+  const latestBehaviourRecord = [...metrics.dailyRecords14d].reverse().find((record) => record.shrimpBehaviour !== null) ?? null;
 
   if (labSeverity) {
     const latestLab = metrics.labContext.latest ?? metrics.labContext.byType[0] ?? null;
@@ -78,7 +84,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }));
   }
 
-  if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 4) {
+  if (hasNumber(metrics.doMinimumLatest) && metrics.doMinimumLatest < 5) {
     findings.push(createFinding({
       id: 'low_do',
       severity: metrics.doMinimumLatest < 3.5 ? 'critical' : 'warning',
@@ -91,6 +97,85 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
       ],
       recommendation: 'Increase aeration and recheck DO before the next feeding window, especially before sunrise.',
       metricRefs: ['doMinimumLatest', 'doMinimumTrend'],
+      eventDate: latestDoRecord?.date,
+    }));
+  }
+
+  if (latestAmmoniaRecord && hasNumber(latestAmmoniaRecord.ammoniaMgL) && latestAmmoniaRecord.ammoniaMgL >= 0.01) {
+    findings.push(createFinding({
+      id: 'ammonia_elevated',
+      severity: 'warning',
+      confidence: confidenceFromCompleteness(0.86, dataScore),
+      title: 'Field ammonia reading needs verification',
+      summary: `Latest field ammonia is ${latestAmmoniaRecord.ammoniaMgL} mg/L; its TAN or NH3 basis is not recorded.`,
+      evidence: [`Field ammonia: ${latestAmmoniaRecord.ammoniaMgL} mg/L`, `Record date: ${latestAmmoniaRecord.date}`],
+      recommendation: 'Protect DO, hold feed increases, and confirm whether the field result is TAN or NH3 with pH and temperature before choosing a correction.',
+      metricRefs: ['dailyRecords14d.ammoniaMgL'],
+      eventDate: latestAmmoniaRecord.date,
+    }));
+  }
+
+  if (latestBehaviourRecord?.shrimpBehaviour === 'abnormal') {
+    findings.push(createFinding({
+      id: 'abnormal_shrimp_behaviour',
+      severity: 'warning',
+      confidence: 0.92,
+      title: 'Abnormal shrimp behaviour recorded',
+      summary: `Abnormal shrimp behaviour was recorded on ${latestBehaviourRecord.date}.`,
+      evidence: [`Shrimp behaviour: abnormal`, `Record date: ${latestBehaviourRecord.date}`],
+      recommendation: 'Check DO, feed response, mortality, and pond-edge observations promptly; escalate under the farm health SOP if the behaviour continues.',
+      metricRefs: ['dailyRecords14d.shrimpBehaviour'],
+      eventDate: latestBehaviourRecord.date,
+    }));
+  }
+
+  if (
+    latestWeatherRecord?.weatherEvent === 'heavy_rain'
+    && hasNumber(latestWeatherRecord.doMinimumMgL)
+    && latestWeatherRecord.doMinimumMgL < 5
+  ) {
+    findings.push(createFinding({
+      id: 'heavy_rain_low_do',
+      severity: latestWeatherRecord.doMinimumMgL < 3.5 ? 'critical' : 'warning',
+      confidence: 0.88,
+      title: 'Heavy rain combined with low DO',
+      summary: `Heavy rain and DO of ${latestWeatherRecord.doMinimumMgL} mg/L were recorded on ${latestWeatherRecord.date}.`,
+      evidence: [
+        `Weather event: heavy rain`,
+        `DO minimum: ${latestWeatherRecord.doMinimumMgL} mg/L`,
+        `Water exchange: ${latestWeatherRecord.waterExchangePercent !== null && latestWeatherRecord.waterExchangePercent !== undefined ? `${latestWeatherRecord.waterExchangePercent}%` : 'not recorded'}`,
+      ],
+      recommendation: 'Protect aeration, recheck DO and pH after the rain, and avoid feed increases until the pond is stable.',
+      metricRefs: ['dailyRecords14d.weatherEvent', 'dailyRecords14d.doMinimumMgL', 'dailyRecords14d.waterExchangePercent'],
+      eventDate: latestWeatherRecord.date,
+    }));
+  }
+
+  if (latestSludgeRecord?.sludgeLoad === 'high') {
+    findings.push(createFinding({
+      id: 'high_sludge_load',
+      severity: 'warning',
+      confidence: 0.9,
+      title: 'High sludge load recorded',
+      summary: `High sludge load was recorded on ${latestSludgeRecord.date}.`,
+      evidence: [`Sludge load: high`, `Record date: ${latestSludgeRecord.date}`],
+      recommendation: 'Protect aeration, review feed waste, and follow the farm sludge-management procedure.',
+      metricRefs: ['dailyRecords14d.sludgeLoad'],
+      eventDate: latestSludgeRecord.date,
+    }));
+  }
+
+  if (latestScumRecord?.surfaceScum === true) {
+    findings.push(createFinding({
+      id: 'surface_scum_observed',
+      severity: 'warning',
+      confidence: 0.88,
+      title: 'Surface scum observed',
+      summary: `Surface scum was recorded on ${latestScumRecord.date}.`,
+      evidence: [`Surface scum: observed`, `Record date: ${latestScumRecord.date}`],
+      recommendation: 'Inspect pond colour and plankton condition, protect DO, and avoid abrupt bloom-control changes.',
+      metricRefs: ['dailyRecords14d.surfaceScum'],
+      eventDate: latestScumRecord.date,
     }));
   }
 

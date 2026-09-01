@@ -47,6 +47,34 @@ test('shows Orson warning findings as orange Enterprise status', () => {
   assert.equal(warning?.severity, 'warning');
 });
 
+test('shows the SIM-B1 water-quality record as a warning', () => {
+  const pond = basePond({
+    id: 'sim-b1',
+    pondName: 'SIM-B1',
+    samplings: [{
+      id: 'sim-b1-water',
+      date: '2026-09-01',
+      mbw: 4,
+      feed: 0,
+      mortality: 0,
+      doMorning: 4.7,
+      doEvening: 5.8,
+      ammonia: 0.06,
+      weatherEvent: 'heavy_rain',
+      waterExchangePercent: 8,
+      sludgeLoad: 'moderate',
+      surfaceScum: false,
+      shrimpBehaviour: 'abnormal',
+    }],
+  });
+  const status = getEnterprisePondStatus(pond);
+
+  assert.equal(status.risk, 'warning');
+  assert.equal(status.warnings.some((item) => item.code === 'low_do'), true);
+  assert.equal(status.warnings.some((item) => item.code === 'ammonia_elevated'), true);
+  assert.equal(status.warnings.some((item) => item.code === 'abnormal_shrimp_behaviour'), true);
+});
+
 test('shows Orson critical findings as red Enterprise status', () => {
   const pond = basePond({
     samplings: [{

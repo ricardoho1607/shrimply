@@ -48,6 +48,7 @@ import DashboardOnboardingCard from './DashboardOnboardingCard';
 import styles from './DashboardHome.module.css';
 import {
   filterEnterpriseRecordsForUser,
+  getEnterprisePondStatus,
   isEnterpriseOwner,
   type FarmBlock,
 } from '../../../../shared/enterpriseBlocks';
@@ -73,6 +74,13 @@ interface Sampling {
   transparency?: string;
   salinity?: string;
   temp?: string;
+  temperature?: string;
+  ammonia?: string;
+  weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
+  waterExchangePercent?: string;
+  sludgeLoad?: 'low' | 'moderate' | 'high' | null;
+  surfaceScum?: boolean | null;
+  shrimpBehaviour?: 'normal' | 'abnormal' | null;
   feedData?: FeedData;
   isBaselineEstimate?: boolean;
   source?: string;
@@ -211,6 +219,10 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
 
 function PondCard({ pond, calculateMetrics, timeZone }: any) {
   const m = calculateMetrics(pond, timeZone);
+  const pondStatus = getEnterprisePondStatus(
+    pond as Parameters<typeof getEnterprisePondStatus>[0],
+    timeZone,
+  );
   const today = useFarmDateKey(timeZone);
   const isHarvested = (pond.totalHarvestedPopulation || 0) >= (pond.initialPopulation * 0.9);
     const todaySampling = pond.samplings?.find((s: any) => s.date === today);
@@ -249,8 +261,27 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
               </div>
             </div>
           </div>
-          <div style={{ padding: '5px', borderRadius: '8px', background: 'var(--bg-mid)', color: 'var(--text-faint)', flex: '0 0 auto' }}>
-            <ChevronRight size={16} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
+            {!isHarvested && pondStatus.risk !== 'stable' && (
+              <span
+                title={pondStatus.warnings[0]?.label}
+                style={{
+                  padding: '4px 7px',
+                  borderRadius: '999px',
+                  background: pondStatus.risk === 'high-risk' ? '#FEE2E2' : '#FEF3C7',
+                  color: pondStatus.risk === 'high-risk' ? '#991B1B' : '#92400E',
+                  fontSize: '0.52rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.04em',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {pondStatus.risk === 'high-risk' ? 'HIGH RISK' : 'WARNING'}
+              </span>
+            )}
+            <div style={{ padding: '5px', borderRadius: '8px', background: 'var(--bg-mid)', color: 'var(--text-faint)' }}>
+              <ChevronRight size={16} />
+            </div>
           </div>
         </div>
 

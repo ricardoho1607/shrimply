@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fixtures = require('../orson/fixtures/riskParity.json');
 
 process.env.NODE_ENV = 'test';
-const { calculateRiskReport, getCurrentLabWaterMetrics, getNewOperationalEventFindings } = require('./orson').__test;
+const { calculateRiskReport, getCurrentLabWaterMetrics, getNewOperationalEventFindings, getRiskSignature } = require('./orson').__test;
 
 for (const fixture of fixtures) {
   test(`backend risk parity: ${fixture.id}`, () => {
@@ -40,4 +40,13 @@ test('backend detects a newly synced weak feed response even when a later record
   assert.equal(findings[0].id, 'weak_feeding_response');
   assert.equal(findings[0].severity, 'warning');
   assert.match(findings[0].summary, /2026-08-27/);
+});
+
+test('SIM-B1 produces a warning-level dated notification signature', () => {
+  const fixture = fixtures.find((item) => item.id === 'sim-b1-operational-water-risk');
+  const report = calculateRiskReport(fixture.pond, fixture.pond.id);
+
+  assert.equal(report.overallSeverity, 'warning');
+  assert.equal(report.findings[0].id, 'abnormal_shrimp_behaviour');
+  assert.match(getRiskSignature(report), /2026-09-01/);
 });

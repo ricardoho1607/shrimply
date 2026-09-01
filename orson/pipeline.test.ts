@@ -124,6 +124,42 @@ export const runPipelineSelfTest = () => {
   assert(exactRecords.records[1].feed_kg === 8.2 && exactRecords.records[1].feeding_response === 'normal', 'keeps recorded feed and response for August 29');
   assert(Object.keys(exactRecords.records[0]).every((key) => ['date', 'do_morning_mg_l', 'do_evening_mg_l', 'ammonia_mg_l', 'feed_kg', 'feeding_response'].includes(key)), 'exposes only the requested record fields');
 
+  const exactOperationalHistory = buildOrsonAnalysis([
+    {
+      id: 'sim-b1',
+      pondName: 'SIM-B1',
+      pondArea: 1000,
+      density: 100,
+      initialPopulation: 100000,
+      initialWeight: 0.5,
+      docStart: '2026-08-01',
+      samplings: [
+        {
+          id: 'sim-b1-water',
+          date: '2026-09-01',
+          doMorning: 4.7,
+          doEvening: 5.8,
+          ammonia: 0.06,
+          weatherEvent: 'heavy_rain',
+          waterExchangePercent: 8,
+          sludgeLoad: 'moderate',
+          surfaceScum: false,
+          shrimpBehaviour: 'abnormal',
+        },
+        { id: 'sim-b1-feed', date: '2026-09-01', feedData: { totalDailyFeed: 6.6, feedingResponse: 'normal' } },
+      ],
+    },
+  ], 'For SIM-B1 on 2026-09-01, state the DO, ammonia, feed, weather, water exchange, sludge, scum, and shrimp behavior.', new Date('2026-09-02T00:00:00Z'));
+  const exactOperationalRecords = JSON.parse(exactOperationalHistory.promptPackage.context.split('ORSON EXACT RECORDS:\n')[1]);
+  const simB1 = exactOperationalRecords.records[0];
+
+  assert(simB1.feed_kg === 6.6, 'keeps the exact daily feed total');
+  assert(simB1.weather_event === 'heavy_rain', 'keeps the exact weather event');
+  assert(simB1.water_exchange_pct === 8, 'keeps the exact water exchange');
+  assert(simB1.sludge_load === 'moderate', 'keeps the exact sludge observation');
+  assert(simB1.surface_scum === false, 'keeps an explicit no-scum observation');
+  assert(simB1.shrimp_behaviour === 'abnormal', 'keeps the exact shrimp behaviour');
+
   const decimalFeedHistory = buildOrsonAnalysis([
     {
       id: 'sim-c1',

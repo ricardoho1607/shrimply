@@ -403,6 +403,11 @@ const detectRequestedRecordFields = (question: string): string[] => {
   if (/\bsalinity\b/i.test(question)) add('salinity_ppt');
   if (/\btemperature\b|\btemp\b/i.test(question)) add('temperature_c');
   if (/\btransparency\b|\bsecchi\b/i.test(question)) add('transparency_cm');
+  if (/\bweather\b|\brain\b|\bcloud/i.test(question)) add('weather_event');
+  if (/\bwater\s+exchange\b|\bexchange\s+(?:rate|percent|percentage)\b/i.test(question)) add('water_exchange_pct');
+  if (/\bsludge\b/i.test(question)) add('sludge_load');
+  if (/\bscum\b|\bsurface\s+(?:film|mat)\b/i.test(question)) add('surface_scum');
+  if (/\bbehaviou?r\b|\bshrimp\s+activity\b/i.test(question)) add('shrimp_behaviour');
   if (/\bmortality\b|\bdead\b|\bdeaths?\b/i.test(question)) add('mortality');
   if (/\bmbw\b|\babw\b|\bweight\b/i.test(question)) add('mbw_g');
 
@@ -709,6 +714,11 @@ const getRequestedRecordValues = (
     salinity_ppt: record.salinityPpt,
     temperature_c: record.temperatureC,
     transparency_cm: record.transparencyCm,
+    weather_event: record.weatherEvent,
+    water_exchange_pct: record.waterExchangePercent,
+    sludge_load: record.sludgeLoad,
+    surface_scum: record.surfaceScum,
+    shrimp_behaviour: record.shrimpBehaviour,
     mortality: record.mortalityCount,
     mbw_g: record.mbwG,
   };
