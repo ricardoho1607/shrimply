@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   Layers3,
+  ListPlus,
   Maximize2,
   Pencil,
   Play,
@@ -83,6 +84,13 @@ interface CompanyMember {
   role?: string;
 }
 
+interface UnassignedPondOption {
+  key: string;
+  pondName: string;
+  physicalPondId?: string;
+  pondId?: string;
+}
+
 const riskClass: Record<EnterprisePondRisk, string> = {
   stable: styles.stable,
   warning: styles.warning,
@@ -108,6 +116,9 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   const [newPondName, setNewPondName] = useState('');
   const [newPondArea, setNewPondArea] = useState('');
   const [newPondBlockId, setNewPondBlockId] = useState('');
+  const [pondAssignmentOpen, setPondAssignmentOpen] = useState(false);
+  const [pondAssignmentKey, setPondAssignmentKey] = useState('');
+  const [pondAssignmentBlockId, setPondAssignmentBlockId] = useState('');
   const [cycleFormOpen, setCycleFormOpen] = useState(false);
   const [editingCycle, setEditingCycle] = useState<EnterpriseCycleRecord | null>(null);
   const [cycleName, setCycleName] = useState('');
@@ -135,6 +146,40 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   }), [cycles]);
   const openCycles = useMemo(() => cycles.filter(isEnterpriseCycleOpen), [cycles]);
   const activePonds = useMemo(() => ponds.filter((pond) => pond.cycleStatus !== 'ended'), [ponds]);
+  const unassignedPondOptions = useMemo<UnassignedPondOption[]>(() => {
+    const options: UnassignedPondOption[] = physicalPonds
+      .filter((pond) => !pond.blockId)
+      .map((pond) => ({
+        key: `physical:${pond.id}`,
+        pondName: pond.pondName,
+        physicalPondId: pond.id,
+        pondId: pond.activePondId || undefined,
+      }));
+
+    activePonds.filter((pond) => !pond.blockId).forEach((pond) => {
+      const linkedPhysicalPond = physicalPonds.find((physicalPond) => (
+        physicalPond.activePondId === pond.id
+        || physicalPond.id === pond.physicalPondId
+        || physicalPond.id === pond.previousCyclePondId
+      ));
+      const existingOption = linkedPhysicalPond
+        ? options.find((option) => option.physicalPondId === linkedPhysicalPond.id)
+        : undefined;
+
+      if (existingOption) {
+        existingOption.pondId = pond.id;
+      } else {
+        options.push({
+          key: `pond:${pond.id}`,
+          pondName: pond.pondName,
+          physicalPondId: linkedPhysicalPond?.id,
+          pondId: pond.id,
+        });
+      }
+    });
+
+    return options.sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true }));
+  }, [activePonds, physicalPonds]);
   const statusByPond = useMemo(() => new Map(ponds.map((pond) => [
     pond.id,
     getEnterprisePondStatus(pond, timeZone),
@@ -445,6 +490,63 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     }
   };
 
+  const savePondAssignment = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const block = sortedBlocks.find((candidate) => candidate.id === pondAssignmentBlockId);
+    const assignment = unassignedPondOptions.find((candidate) => candidate.key === pondAssignmentKey);
+    if (!company?.id || !user?.uid || !block || !assignment || saving) return;
+
+    setSaving(true);
+    try {
+      const assignmentData = {
+        blockId: block.id,
+        blockName: block.name,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+      };
+      const batch = writeBatch(db);
+      const physicalPondIds = new Set<string>();
+      const pondIds = new Set<string>();
+      const selectedPondRecord = assignment.pondId
+        ? activePonds.find((pond) => pond.id === assignment.pondId)
+        : undefined;
+
+      if (assignment.physicalPondId) physicalPondIds.add(assignment.physicalPondId);
+      if (assignment.pondId) pondIds.add(assignment.pondId);
+
+      activePonds.forEach((pond) => {
+        if (assignment.physicalPondId && (
+          pond.physicalPondId === assignment.physicalPondId
+          || pond.previousCyclePondId === assignment.physicalPondId
+        )) pondIds.add(pond.id);
+      });
+      physicalPonds.forEach((physicalPond) => {
+        if (assignment.pondId && (
+          physicalPond.activePondId === assignment.pondId
+          || physicalPond.id === selectedPondRecord?.physicalPondId
+          || physicalPond.id === selectedPondRecord?.previousCyclePondId
+        )) physicalPondIds.add(physicalPond.id);
+      });
+
+      physicalPondIds.forEach((physicalPondId) => {
+        batch.update(doc(db, 'companies', company.id, 'physicalPonds', physicalPondId), assignmentData);
+      });
+      pondIds.forEach((pondId) => {
+        batch.update(doc(db, 'companies', company.id, 'ponds', pondId), assignmentData);
+      });
+      await batch.commit();
+      setPondAssignmentOpen(false);
+      setPondAssignmentKey('');
+      setPondAssignmentBlockId('');
+      setPondFilter('inactive');
+    } catch (assignmentError) {
+      console.error('Failed to assign enterprise pond to block:', assignmentError);
+      window.alert(t.enterprise.pondAssignmentFailed);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const closeCycle = async (cycle: EnterpriseCycleRecord) => {
     if (!company?.id || !user?.uid) return;
     const cyclePonds = getEnterpriseCyclePonds(cycle.id, ponds);
@@ -487,6 +589,11 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
       <header className={styles.enterpriseTitleBar}>
         <div className={styles.enterpriseTitleCopy}><h1>{copy.dashboardTitle}</h1><p>{company?.companyName || copy.companyFallback}</p></div>
         <div className={styles.enterpriseTitleActions}>
+          {(user?.role === 'owner' || user?.role === 'co-owner') && sortedBlocks.length > 0 && unassignedPondOptions.length > 0 ? (
+            <button type="button" className={styles.displayButton} onClick={() => setPondAssignmentOpen(true)}>
+              <ListPlus size={18} /> {t.enterprise.assignPond}
+            </button>
+          ) : null}
           <button type="button" className={styles.displayButton} onClick={enterOfficeDisplay}>
             <Maximize2 size={18} /> {copy.officeDisplay}
           </button>
@@ -578,6 +685,32 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
           })}
         </div>
       )}
+
+      {pondAssignmentOpen ? (
+        <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && setPondAssignmentOpen(false)}>
+          <form className={styles.modal} onSubmit={savePondAssignment} onPointerDown={dismissKeyboardOnContainerPress}>
+            <div className={styles.modalHeader}>
+              <div><h2>{t.enterprise.assignPond}</h2><p>{t.enterprise.assignPondDescription}</p></div>
+              <button type="button" className={styles.iconButton} onClick={() => setPondAssignmentOpen(false)} aria-label={copy.close} disabled={saving}><X size={20} /></button>
+            </div>
+            <label>{t.enterprise.selectPond}
+              <select required value={pondAssignmentKey} onChange={(event) => setPondAssignmentKey(event.target.value)}>
+                <option value="">{t.enterprise.selectPond}</option>
+                {unassignedPondOptions.map((pond) => <option key={pond.key} value={pond.key}>{pond.pondName}</option>)}
+              </select>
+            </label>
+            <label>{t.enterprise.selectBlock}
+              <select required value={pondAssignmentBlockId} onChange={(event) => setPondAssignmentBlockId(event.target.value)}>
+                <option value="">{t.enterprise.selectBlock}</option>
+                {sortedBlocks.map((block) => <option key={block.id} value={block.id}>{block.name}</option>)}
+              </select>
+            </label>
+            <button className={styles.saveButton} disabled={saving || !pondAssignmentKey || !pondAssignmentBlockId}>
+              {saving ? t.enterprise.loadingBlocks : t.enterprise.savePondAssignment}
+            </button>
+          </form>
+        </div>
+      ) : null}
 
       {cycleFormOpen ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && resetCycleForm()}>
