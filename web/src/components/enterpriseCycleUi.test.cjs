@@ -29,6 +29,8 @@ test('enterprise owners can assign unallocated ponds to a block', () => {
 
   assert.match(dashboard, /t\.enterprise\.assignPond/);
   assert.match(dashboard, /unassignedPondOptions/);
+  assert.match(dashboard, /new Set\(sortedBlocks\.map\(\(block\) => block\.id\)\)/);
+  assert.match(dashboard, /!pond\.blockId \|\| !assignedBlockIds\.has\(pond\.blockId\)/);
   assert.match(assignmentFlow, /companies', company\.id, 'physicalPonds'/);
   assert.match(assignmentFlow, /companies', company\.id, 'ponds'/);
   assert.match(assignmentFlow, /blockId: block\.id/);

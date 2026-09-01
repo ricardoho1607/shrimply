@@ -146,9 +146,10 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   }), [cycles]);
   const openCycles = useMemo(() => cycles.filter(isEnterpriseCycleOpen), [cycles]);
   const activePonds = useMemo(() => ponds.filter((pond) => pond.cycleStatus !== 'ended'), [ponds]);
+  const assignedBlockIds = useMemo(() => new Set(sortedBlocks.map((block) => block.id)), [sortedBlocks]);
   const unassignedPondOptions = useMemo<UnassignedPondOption[]>(() => {
     const options: UnassignedPondOption[] = physicalPonds
-      .filter((pond) => !pond.blockId)
+      .filter((pond) => !pond.blockId || !assignedBlockIds.has(pond.blockId))
       .map((pond) => ({
         key: `physical:${pond.id}`,
         pondName: pond.pondName,
@@ -156,7 +157,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         pondId: pond.activePondId || undefined,
       }));
 
-    activePonds.filter((pond) => !pond.blockId).forEach((pond) => {
+    activePonds.filter((pond) => !pond.blockId || !assignedBlockIds.has(pond.blockId)).forEach((pond) => {
       const linkedPhysicalPond = physicalPonds.find((physicalPond) => (
         physicalPond.activePondId === pond.id
         || physicalPond.id === pond.physicalPondId
@@ -179,7 +180,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
     });
 
     return options.sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true }));
-  }, [activePonds, physicalPonds]);
+  }, [activePonds, assignedBlockIds, physicalPonds]);
   const statusByPond = useMemo(() => new Map(ponds.map((pond) => [
     pond.id,
     getEnterprisePondStatus(pond, timeZone),
