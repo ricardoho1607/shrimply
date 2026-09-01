@@ -4,6 +4,7 @@ const path = require('node:path');
 const test = require('node:test');
 
 const dashboard = fs.readFileSync(path.join(__dirname, 'EnterpriseCycleDashboard.tsx'), 'utf8');
+const enterpriseDashboard = fs.readFileSync(path.join(__dirname, 'EnterpriseDashboard.tsx'), 'utf8');
 const styles = fs.readFileSync(path.join(__dirname, 'EnterpriseDashboard.module.css'), 'utf8');
 const cycleCopy = fs.readFileSync(path.join(__dirname, '../../../shared/cycleFeatureTranslations.ts'), 'utf8');
 
@@ -22,4 +23,15 @@ test('mid-cycle population and feed labels do not say optional', () => {
   [...populationLabels, ...feedLabels].forEach((label) => {
     assert.doesNotMatch(label, /optional|opsional|ไม่บังคับ|tùy chọn|可选/i);
   });
+});
+
+test('enterprise owners can assign unallocated ponds to a block', () => {
+  const assignmentFlow = enterpriseDashboard.match(/const savePondAssignment = async[\s\S]*?\n  const enterOfficeDisplay/)?.[0] || '';
+
+  assert.match(enterpriseDashboard, /t\.enterprise\.assignPond/);
+  assert.match(enterpriseDashboard, /unassignedPondOptions/);
+  assert.match(assignmentFlow, /companies', company\.id, 'physicalPonds'/);
+  assert.match(assignmentFlow, /companies', company\.id, 'ponds'/);
+  assert.match(assignmentFlow, /blockId: block\.id/);
+  assert.match(assignmentFlow, /batch\.commit\(\)/);
 });

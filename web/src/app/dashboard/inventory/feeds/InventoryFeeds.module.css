@@ -40,17 +40,20 @@
 }
 
 .inventoryCardIdentity h3 {
+  overflow: hidden;
   margin: 0;
   color: var(--text-primary);
   font-size: 17px;
   font-weight: 600;
   line-height: 1.35;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .inventoryCardMeta {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
+  display: grid;
+  align-items: start;
+  justify-items: start;
   gap: 6px;
   margin-top: 4px;
   color: var(--text-muted);
@@ -58,12 +61,24 @@
   font-weight: 600;
 }
 
+.inventoryCardMeta > span:first-child {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .inventoryCardCategory {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--primary-dim);
   color: var(--primary);
   font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   text-transform: uppercase;
 }
 

@@ -276,6 +276,7 @@ enterprise: {
   commandCenter: 'ศูนย์ควบคุมฟาร์มองค์กร', title: 'บล็อกฟาร์ม', summary: '{{blockCount}} บล็อก • {{pondCount}} บ่อที่ใช้งาน',
   addBlock: 'เพิ่มบล็อก', officeDisplay: 'จอแสดงผลสำนักงาน', livePondHealth: 'สถานะสุขภาพบ่อแบบเรียลไทม์', exitOfficeDisplay: 'ออกจากจอแสดงผล',
   stable: 'ปกติ', warning: 'เฝ้าระวัง', highRisk: 'วิกฤต', unassignedPonds: 'บ่อที่ยังไม่จัดบล็อก',
+  assignPond: 'จัดบ่อเข้าบล็อก', assignPondDescription: 'เลือกบ่อที่ยังไม่ได้จัดสรรและบล็อกที่จะดูแลบ่อนั้น', selectPond: 'บ่อที่ยังไม่ได้จัดสรร', savePondAssignment: 'จัดเข้าบล็อก', pondAssignmentFailed: 'ไม่สามารถจัดบ่อเข้าบล็อกนี้ได้',
   blockNameRequired: 'กรุณาใส่ชื่อบล็อกที่ไม่ซ้ำ', blockCreateFailed: 'สร้างบล็อกไม่สำเร็จ', blockAssignmentFailed: 'มอบหมายช่างเทคนิคให้บล็อกนี้ไม่สำเร็จ', loadingBlocks: 'กำลังโหลดบล็อกฟาร์ม...',
   noBlocks: 'ยังไม่มีบล็อกฟาร์ม', noBlocksDescription: 'สร้างบล็อกแรกและมอบหมายช่างเทคนิคเพื่อจัดการบ่อระดับองค์กร',
   createFirstBlock: 'สร้างบล็อกแรก', pondCount: '{{count}} บ่อ', noPondsInBlock: 'ยังไม่มีบ่อที่ใช้งานอยู่ในบล็อกนี้', noPondsForFilter: 'ไม่มีบ่อที่ตรงกับสถานะรอบการเลี้ยงนี้ในบล็อก',

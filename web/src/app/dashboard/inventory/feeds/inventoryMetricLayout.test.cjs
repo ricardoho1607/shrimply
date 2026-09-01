@@ -27,6 +27,13 @@ test('inventory cards keep header and actions compact without decorative icons',
   assert.match(stylesheet, /\.inventoryCardActions\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
 });
 
+test('inventory card details use consistent rows without pushing metrics out of alignment', () => {
+  assert.match(stylesheet, /\.inventoryCardIdentity h3\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s);
+  assert.match(stylesheet, /\.inventoryCardMeta\s*\{[^}]*display:\s*grid;[^}]*align-items:\s*start;/s);
+  assert.match(stylesheet, /\.inventoryCardMeta > span:first-child\s*\{[^}]*white-space:\s*nowrap;[^}]*text-overflow:\s*ellipsis;/s);
+  assert.match(stylesheet, /\.inventoryCardCategory\s*\{[^}]*width:\s*max-content;[^}]*max-width:\s*100%;/s);
+});
+
 test('inventory dashboard uses one input popover for all create actions', () => {
   assert.match(source, /aria-label="Add inventory input"/);
   assert.match(source, /role="menu"[^>]*className="pond-detail-record-popover inventory-input-popover"/);

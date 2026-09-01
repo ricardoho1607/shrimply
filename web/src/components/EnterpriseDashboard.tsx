@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, Lock, Maximize2, Pencil, Play, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ListPlus, Lock, Maximize2, Pencil, Play, Plus, Save, Trash2, X } from 'lucide-react';
 import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -92,6 +92,13 @@ interface CompanyMember {
   role?: string;
 }
 
+interface UnassignedPondOption {
+  key: string;
+  pondName: string;
+  physicalPondId?: string;
+  pondId?: string;
+}
+
 const riskClass: Record<EnterprisePondRisk, string> = {
   stable: styles.stable,
   warning: styles.warning,
@@ -112,8 +119,9 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
   const [selectedPond, setSelectedPond] = useState<EnterprisePond | null>(null);
   const [blockName, setBlockName] = useState('');
   const [technicianId, setTechnicianId] = useState('');
-  const [assignmentBlock, setAssignmentBlock] = useState<FarmBlock | null>(null);
-  const [assignmentTechnicianId, setAssignmentTechnicianId] = useState('');
+  const [pondAssignmentOpen, setPondAssignmentOpen] = useState(false);
+  const [pondAssignmentKey, setPondAssignmentKey] = useState('');
+  const [pondAssignmentBlockId, setPondAssignmentBlockId] = useState('');
   const [editingBlock, setEditingBlock] = useState<FarmBlock | null>(null);
   const [editingBlockName, setEditingBlockName] = useState('');
   const [editingBlockTechnicianId, setEditingBlockTechnicianId] = useState('');
@@ -178,6 +186,39 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     () => ponds.filter((pond) => pond.cycleStatus !== 'ended'),
     [ponds],
   );
+  const unassignedPondOptions = useMemo<UnassignedPondOption[]>(() => {
+    const options: UnassignedPondOption[] = physicalPonds
+      .filter((pond) => !pond.blockId)
+      .map((pond) => ({
+        key: `physical:${pond.id}`,
+        pondName: pond.pondName,
+        physicalPondId: pond.id,
+        pondId: pond.activePondId || undefined,
+      }));
+
+    activePonds.filter((pond) => !pond.blockId).forEach((pond) => {
+      const linkedPhysicalPond = physicalPonds.find((physicalPond) => (
+        physicalPond.activePondId === pond.id
+        || physicalPond.id === pond.physicalPondId
+        || physicalPond.id === pond.previousCyclePondId
+      ));
+      const existingOption = linkedPhysicalPond
+        ? options.find((option) => option.physicalPondId === linkedPhysicalPond.id)
+        : undefined;
+      if (existingOption) {
+        existingOption.pondId = pond.id;
+        return;
+      }
+      options.push({
+        key: `pond:${pond.id}`,
+        pondName: pond.pondName,
+        physicalPondId: linkedPhysicalPond?.id,
+        pondId: pond.id,
+      });
+    });
+
+    return options.sort((first, second) => first.pondName.localeCompare(second.pondName));
+  }, [activePonds, physicalPonds]);
   const endedPonds = useMemo(() => ponds.filter((pond) => pond.cycleStatus === 'ended'), [ponds]);
   const inactivePonds = useMemo<EnterpriseDashboardRecord[]>(() => {
     const normalizePondName = (pondName: string) => pondName.trim().toLowerCase();
@@ -480,26 +521,58 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
     }
   };
 
-  const saveAssignment = async (event: React.FormEvent) => {
+  const savePondAssignment = async (event: React.FormEvent) => {
     event.preventDefault();
-    const block = blocks.find((candidate) => candidate.id === assignmentBlock?.id);
-    const technician = technicians.find((candidate) => candidate.uid === assignmentTechnicianId);
-    if (!company?.id || !user?.uid || !block || !technician || saving) return;
+    const block = blocks.find((candidate) => candidate.id === pondAssignmentBlockId);
+    const assignment = unassignedPondOptions.find((candidate) => candidate.key === pondAssignmentKey);
+    if (!company?.id || !user?.uid || !block || !assignment || saving) return;
 
     setSaving(true);
     try {
-      await updateDoc(doc(db, 'companies', company.id, 'blocks', block.id), {
-        assignedTechnicianId: technician.uid,
-        assignedTechnicianName: technician.name.trim() || null,
-        assignedTechnicianEmail: technician.email,
+      const assignmentData = {
+        blockId: block.id,
+        blockName: block.name,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
+      };
+      const batch = writeBatch(db);
+      const physicalPondIds = new Set<string>();
+      const pondIds = new Set<string>();
+      const selectedPondRecord = assignment.pondId
+        ? activePonds.find((pond) => pond.id === assignment.pondId)
+        : undefined;
+
+      if (assignment.physicalPondId) physicalPondIds.add(assignment.physicalPondId);
+      if (assignment.pondId) pondIds.add(assignment.pondId);
+
+      activePonds.forEach((pond) => {
+        if (assignment.physicalPondId && (
+          pond.physicalPondId === assignment.physicalPondId
+          || pond.previousCyclePondId === assignment.physicalPondId
+        )) pondIds.add(pond.id);
       });
-      setAssignmentBlock(null);
-      setAssignmentTechnicianId('');
+      physicalPonds.forEach((physicalPond) => {
+        if (assignment.pondId && (
+          physicalPond.activePondId === assignment.pondId
+          || physicalPond.id === selectedPondRecord?.physicalPondId
+          || physicalPond.id === selectedPondRecord?.previousCyclePondId
+        )) physicalPondIds.add(physicalPond.id);
+      });
+
+      physicalPondIds.forEach((physicalPondId) => {
+        batch.update(doc(db, 'companies', company.id, 'physicalPonds', physicalPondId), assignmentData);
+      });
+      pondIds.forEach((pondId) => {
+        batch.update(doc(db, 'companies', company.id, 'ponds', pondId), assignmentData);
+      });
+      await batch.commit();
+      setPondAssignmentOpen(false);
+      setPondAssignmentKey('');
+      setPondAssignmentBlockId('');
+      setExpanded((current) => ({ ...current, [block.id]: true }));
     } catch (assignmentError) {
-      console.error('Failed to assign enterprise block technician:', assignmentError);
-      alert(t.enterprise.blockAssignmentFailed);
+      console.error('Failed to assign enterprise pond to block:', assignmentError);
+      alert(t.enterprise.pondAssignmentFailed);
     } finally {
       setSaving(false);
     }
@@ -628,6 +701,11 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
             .replace('{{pondCount}}', String(activePonds.length))}</p>
         </div>
         <div className={styles.blockHeaderActions}>
+          {(user?.role === 'owner' || user?.role === 'co-owner') && blocks.length > 0 && unassignedPondOptions.length > 0 ? (
+            <button type="button" className={styles.displayButton} onClick={() => setPondAssignmentOpen(true)}>
+              <ListPlus size={19} /> {t.enterprise.assignPond}
+            </button>
+          ) : null}
           <button type="button" className={styles.displayButton} onClick={enterOfficeDisplay}>
             <Maximize2 size={19} /> {t.enterprise.officeDisplay}
           </button>
@@ -881,45 +959,47 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
         </div>
       ) : null}
 
-      {assignmentBlock ? (
+      {pondAssignmentOpen ? (
         <div
           className={styles.overlay}
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setAssignmentBlock(null);
-              setAssignmentTechnicianId('');
+            if (event.target === event.currentTarget && !saving) {
+              setPondAssignmentOpen(false);
             }
           }}
         >
-          <form className={styles.modal} onSubmit={saveAssignment}>
+          <form className={styles.modal} onSubmit={savePondAssignment}>
             <div className={styles.modalHeader}>
-              <div><h2>{t.enterprise.saveAssignment}</h2><p>{assignmentBlock.name}</p></div>
+              <div><h2>{t.enterprise.assignPond}</h2><p>{t.enterprise.assignPondDescription}</p></div>
               <button
                 type="button"
                 className={styles.iconButton}
-                onClick={() => {
-                  setAssignmentBlock(null);
-                  setAssignmentTechnicianId('');
-                }}
+                onClick={() => setPondAssignmentOpen(false)}
                 aria-label="Close"
+                disabled={saving}
               >
                 <X size={20} />
               </button>
             </div>
-            <label>{t.enterprise.assignTechnician}
-              <select required value={assignmentTechnicianId} onChange={(event) => setAssignmentTechnicianId(event.target.value)}>
-                <option value="" disabled>{t.enterprise.unassigned}</option>
-                {technicians.map((technician) => (
-                  <option key={technician.uid} value={technician.uid}>
-                    {getEnterpriseTechnicianLabel(technician.name, technician.email)}
-                  </option>
+            <label>{t.enterprise.selectPond}
+              <select required value={pondAssignmentKey} onChange={(event) => setPondAssignmentKey(event.target.value)}>
+                <option value="" disabled>{t.enterprise.selectPond}</option>
+                {unassignedPondOptions.map((pond) => (
+                  <option key={pond.key} value={pond.key}>{pond.pondName}</option>
                 ))}
               </select>
             </label>
-            {technicians.length === 0 ? <small>{t.enterprise.noTechnicians}</small> : null}
-            <button className={styles.saveButton} disabled={saving || !assignmentTechnicianId}>
-              {saving ? t.enterprise.loadingBlocks : t.enterprise.saveAssignment}
+            <label>{t.enterprise.selectBlock}
+              <select required value={pondAssignmentBlockId} onChange={(event) => setPondAssignmentBlockId(event.target.value)}>
+                <option value="" disabled>{t.enterprise.selectBlock}</option>
+                {sortFarmBlocks(blocks).map((block) => (
+                  <option key={block.id} value={block.id}>{block.name}</option>
+                ))}
+              </select>
+            </label>
+            <button className={styles.saveButton} disabled={saving || !pondAssignmentKey || !pondAssignmentBlockId}>
+              {saving ? t.enterprise.loadingBlocks : t.enterprise.savePondAssignment}
             </button>
           </form>
         </div>

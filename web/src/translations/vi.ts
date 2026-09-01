@@ -276,6 +276,7 @@ enterprise: {
   commandCenter: 'Trung tâm điều hành doanh nghiệp', title: 'Khu ao nuôi', summary: '{{blockCount}} khu • {{pondCount}} ao đang hoạt động',
   addBlock: 'Thêm khu', officeDisplay: 'Màn hình văn phòng', livePondHealth: 'Sức khỏe ao theo thời gian thực', exitOfficeDisplay: 'Thoát màn hình',
   stable: 'Ổn định', warning: 'Cảnh báo', highRisk: 'Nguy cấp', unassignedPonds: 'Ao chưa xếp khu',
+  assignPond: 'Xếp ao vào khu', assignPondDescription: 'Chọn ao chưa được xếp và khu sẽ quản lý ao đó.', selectPond: 'Ao chưa xếp khu', savePondAssignment: 'Xếp vào khu', pondAssignmentFailed: 'Không thể xếp ao vào khu này.',
   blockNameRequired: 'Nhập tên khu không trùng.', blockCreateFailed: 'Không thể tạo khu.', blockAssignmentFailed: 'Không thể phân công kỹ thuật viên cho khu này.', loadingBlocks: 'Đang tải các khu ao...',
   noBlocks: 'Chưa có khu ao', noBlocksDescription: 'Tạo khu đầu tiên và phân công kỹ thuật viên để tổ chức vận hành ao quy mô doanh nghiệp.',
   createFirstBlock: 'Tạo khu đầu tiên', pondCount: '{{count}} ao', noPondsInBlock: 'Chưa có ao đang hoạt động được xếp vào khu này.', noPondsForFilter: 'Không có ao nào trong khu này phù hợp với trạng thái vụ nuôi.',
