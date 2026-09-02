@@ -373,6 +373,12 @@ export const RegularSidebar: React.FC = () => {
                           onPress={() => navigateAndClose('/shrimp-reports')}
                           color="#9B59B6"
                         />
+                        <MenuButton
+                          icon="clipboard-outline"
+                          text="Daily Operations"
+                          onPress={() => navigateAndClose('/daily-operations-report')}
+                          color="#9B59B6"
+                        />
                         {hasFinanceAccess && <MenuButton
                           icon="file-tray-full-outline"
                           text={t.sidebar.cycleReports}
@@ -619,6 +625,7 @@ export const StaticSidebar: React.FC = () => {
                 <View style={styles.submenuContainer}>
                   {hasFinanceAccess && <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />}
                   <MenuButton icon="bar-chart-outline" text={t.sidebar.shrimpReports} onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
+                  <MenuButton icon="clipboard-outline" text="Daily Operations" onPress={() => navigateTo('/daily-operations-report')} color="#9B59B6" />
                   {hasFinanceAccess && <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />}
                 </View>
               )}

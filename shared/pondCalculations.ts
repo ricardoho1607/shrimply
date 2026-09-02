@@ -40,6 +40,9 @@ export interface SharedMortalityRecord {
   date?: string;
   observationType?: MortalityObservationType;
   count?: number | string | null;
+  siphonedCount?: number | string | null;
+  mortalCount?: number | string | null;
+  siponShift?: 'morning' | 'evening' | null;
   mbwAtRecord?: number | string | null;
   notes?: string | null;
   recordedAt?: string | null;

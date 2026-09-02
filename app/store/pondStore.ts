@@ -92,6 +92,10 @@ export interface Sampling {
   estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
   temperature?: string;
+  waterAppearance?: string;
+  waterDepthCm?: string;
+  alkalinity?: string;
+  waterQualityRecordedByName?: string;
   ammonia?: string;
   operationalNotes?: string;
   weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
@@ -103,7 +107,7 @@ export interface Sampling {
 }
 
 export const hasWaterQualityData = (
-  sampling: Pick<Sampling, 'phMorning' | 'phEvening' | 'doMorning' | 'doEvening' | 'transparency' | 'salinity' | 'temperature' | 'ammonia' | 'operationalNotes' | 'weatherEvent' | 'waterExchangePercent' | 'sludgeLoad' | 'surfaceScum' | 'shrimpBehaviour'>,
+  sampling: Pick<Sampling, 'phMorning' | 'phEvening' | 'doMorning' | 'doEvening' | 'transparency' | 'salinity' | 'temperature' | 'waterAppearance' | 'waterDepthCm' | 'alkalinity' | 'operationalNotes' | 'ammonia' | 'weatherEvent' | 'waterExchangePercent' | 'sludgeLoad' | 'surfaceScum' | 'shrimpBehaviour'>,
 ): boolean => [
   sampling.phMorning,
   sampling.phEvening,
@@ -112,6 +116,9 @@ export const hasWaterQualityData = (
   sampling.transparency,
   sampling.salinity,
   sampling.temperature,
+  sampling.waterAppearance,
+  sampling.waterDepthCm,
+  sampling.alkalinity,
   sampling.ammonia,
   sampling.operationalNotes,
   sampling.weatherEvent,
@@ -126,6 +133,9 @@ export interface MortalityRecord {
   date: string;
   observationType: MortalityObservationType;
   count: number;
+  siphonedCount?: number;
+  mortalCount?: number;
+  siponShift?: 'morning' | 'evening';
   mbwAtRecord?: number;
   notes?: string;
   recordedAt: string;
@@ -232,7 +242,7 @@ interface PondStore {
   addPond: (pond: Pond) => void; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
-  addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
+  addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
   addFeedData: (pondId: string, record: FeedData, date: string) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
@@ -791,6 +801,10 @@ export const usePondStore = create<PondStore>()(
                 transparency: record.transparency || s.transparency,
                 salinity: record.salinity || s.salinity,
                 temperature: record.temperature || s.temperature,
+                waterAppearance: record.waterAppearance || s.waterAppearance,
+                waterDepthCm: record.waterDepthCm || s.waterDepthCm,
+                alkalinity: record.alkalinity || s.alkalinity,
+                waterQualityRecordedByName: record.waterQualityRecordedByName || s.waterQualityRecordedByName,
                 ammonia: record.ammonia || s.ammonia,
                 operationalNotes: record.operationalNotes ?? s.operationalNotes,
                 weatherEvent: record.weatherEvent ?? null,

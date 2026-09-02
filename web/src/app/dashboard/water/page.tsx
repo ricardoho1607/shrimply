@@ -50,6 +50,10 @@ interface Sampling {
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
   transparency?: string; salinity?: string;
   temperature?: string;
+  waterAppearance?: string;
+  waterDepthCm?: string;
+  alkalinity?: string;
+  waterQualityRecordedByName?: string;
   ammonia?: string;
   operationalNotes?: string;
   weatherEvent?: 'rain' | 'heavy_rain' | 'sudden_cloud' | null;
@@ -207,7 +211,9 @@ const hasWaterQualityHistory = (sampling: Sampling): boolean => Boolean(
   hasSavedValue(sampling.phMorning) || hasSavedValue(sampling.phEvening) ||
   hasSavedValue(sampling.doMorning) || hasSavedValue(sampling.doEvening) ||
   hasSavedValue(sampling.transparency) || hasSavedValue(sampling.salinity) ||
-  hasSavedValue(sampling.temperature) || hasSavedValue(sampling.ammonia) ||
+  hasSavedValue(sampling.temperature) || hasSavedValue(sampling.waterAppearance) ||
+  hasSavedValue(sampling.waterDepthCm) || hasSavedValue(sampling.alkalinity) ||
+  hasSavedValue(sampling.ammonia) ||
   hasSavedValue(sampling.weatherEvent) || hasSavedValue(sampling.operationalNotes) ||
   hasSavedValue(sampling.waterExchangePercent) || hasSavedValue(sampling.sludgeLoad) ||
   sampling.surfaceScum !== null && sampling.surfaceScum !== undefined ||
@@ -261,6 +267,9 @@ export default function WaterQualityPage() {
     transparency: '',
     salinity: '',
     temperature: '',
+    waterAppearance: '',
+    waterDepthCm: '',
+    alkalinity: '',
     ammonia: '',
     operationalNotes: '',
     weatherEvent: null as Sampling['weatherEvent'],
@@ -358,6 +367,9 @@ export default function WaterQualityPage() {
           prev.transparency === (existing.transparency || '') &&
           prev.salinity === (existing.salinity || '') &&
           prev.temperature === (existing.temperature || '') &&
+          prev.waterAppearance === (existing.waterAppearance || '') &&
+          prev.waterDepthCm === (existing.waterDepthCm || '') &&
+          prev.alkalinity === (existing.alkalinity || '') &&
           prev.ammonia === (existing.ammonia || '') &&
           prev.operationalNotes === (existing.operationalNotes || '') &&
           prev.weatherEvent === (existing.weatherEvent || null) &&
@@ -376,6 +388,9 @@ export default function WaterQualityPage() {
           transparency: existing.transparency || '',
           salinity: existing.salinity || '',
           temperature: existing.temperature || '',
+          waterAppearance: existing.waterAppearance || '',
+          waterDepthCm: existing.waterDepthCm || '',
+          alkalinity: existing.alkalinity || '',
           ammonia: existing.ammonia || '',
           operationalNotes: existing.operationalNotes || '',
           weatherEvent: existing.weatherEvent || null,
@@ -391,6 +406,7 @@ export default function WaterQualityPage() {
         if (
           !prev.phMorning && !prev.phEvening && !prev.doMorning &&
           !prev.doEvening && !prev.transparency && !prev.salinity && !prev.temperature &&
+          !prev.waterAppearance && !prev.waterDepthCm && !prev.alkalinity &&
           !prev.ammonia && !prev.operationalNotes &&
           !prev.weatherEvent && !prev.waterExchangePercent && !prev.sludgeLoad &&
           prev.surfaceScum === null && !prev.shrimpBehaviour
@@ -405,6 +421,9 @@ export default function WaterQualityPage() {
           transparency: '',
           salinity: '',
           temperature: '',
+          waterAppearance: '',
+          waterDepthCm: '',
+          alkalinity: '',
           ammonia: '',
           operationalNotes: '',
           weatherEvent: null,
@@ -451,6 +470,10 @@ export default function WaterQualityPage() {
           transparency: formData.transparency,
           salinity: formData.salinity,
           temperature: formData.temperature,
+          waterAppearance: formData.waterAppearance,
+          waterDepthCm: formData.waterDepthCm,
+          alkalinity: formData.alkalinity,
+          waterQualityRecordedByName: user.name || (typeof user.email === 'string' ? user.email.split('@')[0] : '') || '',
           ammonia: formData.ammonia,
           operationalNotes: formData.operationalNotes.trim(),
           weatherEvent: formData.weatherEvent,
@@ -473,6 +496,10 @@ export default function WaterQualityPage() {
             transparency: formData.transparency || samplings[existingIndex].transparency || '',
             salinity: formData.salinity || samplings[existingIndex].salinity || '',
             temperature: formData.temperature || samplings[existingIndex].temperature || '',
+            waterAppearance: formData.waterAppearance || samplings[existingIndex].waterAppearance || '',
+            waterDepthCm: formData.waterDepthCm || samplings[existingIndex].waterDepthCm || '',
+            alkalinity: formData.alkalinity || samplings[existingIndex].alkalinity || '',
+            waterQualityRecordedByName: user.name || (typeof user.email === 'string' ? user.email.split('@')[0] : '') || samplings[existingIndex].waterQualityRecordedByName || '',
             ammonia: formData.ammonia || samplings[existingIndex].ammonia || '',
             operationalNotes: formData.operationalNotes.trim(),
             weatherEvent: formData.weatherEvent,
@@ -507,6 +534,9 @@ export default function WaterQualityPage() {
           transparency: '',
           salinity: '',
           temperature: '',
+          waterAppearance: '',
+          waterDepthCm: '',
+          alkalinity: '',
           ammonia: '',
           operationalNotes: '',
           weatherEvent: null,
@@ -1857,6 +1887,21 @@ export default function WaterQualityPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">Transparency (CM)</label>
                   <input type="number" placeholder="0" value={formData.transparency} onChange={e => setFormData({...formData, transparency: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">Water Appearance</label>
+                  <input type="text" maxLength={40} placeholder="e.g., CH" value={formData.waterAppearance} onChange={e => setFormData({...formData, waterAppearance: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">Water Depth (CM)</label>
+                  <input type="number" min="0" step="0.1" placeholder="150" value={formData.waterDepthCm} onChange={e => setFormData({...formData, waterDepthCm: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
+                  <label className="form-label">Alkalinity (PPM)</label>
+                  <input type="number" min="0" step="0.1" placeholder="204" value={formData.alkalinity} onChange={e => setFormData({...formData, alkalinity: e.target.value})} className="form-input" />
                 </div>
 
                 <div className="water-optional-heading">

@@ -47,6 +47,9 @@ interface FormData {
   samplingDate: Date;
   mortalityObservationType: MortalityObservationType;
   mortalityCount: string;
+  siponShift: 'morning' | 'evening';
+  siphonedCount: string;
+  mortalCount: string;
   mortalityDate: Date;
   mortalityNotes: string;
 }
@@ -204,8 +207,11 @@ export default function PondManagementScreen() {
     mbw: '', 
     feed: '', 
     samplingDate: new Date(),
-    mortalityObservationType: 'estimated_total',
+    mortalityObservationType: 'observed_recovered',
     mortalityCount: '',
+    siponShift: 'morning',
+    siphonedCount: '',
+    mortalCount: '',
     mortalityDate: new Date(),
     mortalityNotes: '',
   });
@@ -243,8 +249,11 @@ export default function PondManagementScreen() {
     mbw: '', 
     feed: '', 
     samplingDate: new Date(),
-    mortalityObservationType: 'estimated_total',
+    mortalityObservationType: 'observed_recovered',
     mortalityCount: '',
+    siponShift: 'morning',
+    siphonedCount: '',
+    mortalCount: '',
     mortalityDate: new Date(),
     mortalityNotes: '',
   }), []);
@@ -796,6 +805,9 @@ export default function PondManagementScreen() {
       selectedPond,
       mortalityObservationType,
       mortalityCount,
+      siponShift,
+      siphonedCount,
+      mortalCount,
       mortalityDate,
       mortalityNotes,
     } = formData;
@@ -807,9 +819,13 @@ export default function PondManagementScreen() {
       return;
     }
 
+    const siphoned = Number(String(siphonedCount).trim().replace(',', '.')) || 0;
+    const mortal = Number(String(mortalCount).trim().replace(',', '.')) || 0;
     const count = mortalityObservationType === 'none_observed'
       ? 0
-      : Number(String(mortalityCount).trim().replace(',', '.'));
+      : mortalityObservationType === 'observed_recovered'
+        ? siphoned + mortal
+        : Number(String(mortalityCount).trim().replace(',', '.'));
     if (mortalityObservationType !== 'none_observed' && (!Number.isInteger(count) || count <= 0)) {
       Alert.alert(t.messages.error, t.home.mortalityPositiveCountRequired);
       submitLockRef.current = false;
@@ -841,6 +857,11 @@ export default function PondManagementScreen() {
       date: dateKey,
       observationType: mortalityObservationType,
       count,
+      ...(mortalityObservationType === 'observed_recovered' ? {
+        siponShift,
+        siphonedCount: siphoned,
+        mortalCount: mortal,
+      } : {}),
       mbwAtRecord: Number(mbwAtRecord) > 0 ? Number(mbwAtRecord) : undefined,
       notes: mortalityNotes.trim() || undefined,
       recordedAt: new Date().toISOString(),
@@ -1672,7 +1693,7 @@ export default function PondManagementScreen() {
           <Text style={styles.inputHint}>{observationHint}</Text>
         </View>
 
-        {formData.mortalityObservationType !== 'none_observed' && (
+        {formData.mortalityObservationType === 'estimated_total' && (
           <InputField
             label={t.home.mortalityCount}
             value={formData.mortalityCount}
@@ -1682,6 +1703,35 @@ export default function PondManagementScreen() {
             hint={t.home.mortalityCountHint}
             maxLength={12}
           />
+        )}
+
+        {formData.mortalityObservationType === 'observed_recovered' && (
+          <>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Sipon shift</Text>
+              <View style={styles.segmentRow}>
+                {(['morning', 'evening'] as const).map((shift) => (
+                  <TouchableOpacity
+                    key={shift}
+                    style={[styles.segmentOption, formData.siponShift === shift && styles.segmentOptionSelected]}
+                    onPress={() => updateForm('siponShift', shift)}
+                  >
+                    <Text style={[styles.segmentOptionText, formData.siponShift === shift && styles.segmentOptionTextSelected]}>
+                      {shift === 'morning' ? 'Morning / Pagi' : 'Evening / Sore'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.inputGroup}>
+                <InputField label="Siphoned / Kesedot" value={formData.siphonedCount} onChangeText={(value) => updateForm('siphonedCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
+              </View>
+              <View style={styles.inputGroup}>
+                <InputField label="Mortal" value={formData.mortalCount} onChangeText={(value) => updateForm('mortalCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
+              </View>
+            </View>
+          </>
         )}
 
         <View style={styles.inputContainer}>
@@ -1703,7 +1753,7 @@ export default function PondManagementScreen() {
         />
       </>
     );
-  }, [activePonds, formData.mortalityCount, formData.mortalityDate, formData.mortalityNotes, formData.mortalityObservationType, formData.selectedPond, t, updateForm]);
+  }, [activePonds, formData.mortalCount, formData.mortalityCount, formData.mortalityDate, formData.mortalityNotes, formData.mortalityObservationType, formData.selectedPond, formData.siphonedCount, formData.siponShift, t, updateForm]);
 
   const renderCycleForm = useMemo(() => (
     <>
@@ -2973,6 +3023,15 @@ const styles = StyleSheet.create({
   
   inputContainer: { 
     marginBottom: Platform.OS === 'android' ? 16 : 20 
+  },
+
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+
+  inputGroup: {
+    flex: 1,
   },
   
   inputLabel: { 

@@ -67,6 +67,9 @@ interface WaterQualityValues {
   transparency: string;
   salinity: string;
   temperature: string;
+  waterAppearance: string;
+  waterDepthCm: string;
+  alkalinity: string;
   ammonia: string;
   operationalNotes: string;
   weatherEvent: WeatherEvent | null;
@@ -84,6 +87,9 @@ const createEmptyWaterQualityValues = (): WaterQualityValues => ({
   transparency: '',
   salinity: '',
   temperature: '',
+  waterAppearance: '',
+  waterDepthCm: '',
+  alkalinity: '',
   ammonia: '',
   operationalNotes: '',
   weatherEvent: null,
@@ -377,7 +383,10 @@ export default function WaterQualityScreen() {
       phMorning: values.phMorning.trim(), phEvening: values.phEvening.trim(),
       doMorning: values.doMorning.trim(), doEvening: values.doEvening.trim(),
       transparency: values.transparency.trim(), salinity: values.salinity.trim(),
-      temperature: values.temperature.trim(), weatherEvent: values.weatherEvent,
+      temperature: values.temperature.trim(), waterAppearance: values.waterAppearance.trim(),
+      waterDepthCm: values.waterDepthCm.trim(), alkalinity: values.alkalinity.trim(),
+      waterQualityRecordedByName: user?.name || user?.email?.split('@')[0] || undefined,
+      weatherEvent: values.weatherEvent,
       ammonia: values.ammonia.trim(), operationalNotes: values.operationalNotes.trim(),
       waterExchangePercent: values.waterExchangePercent.trim(), sludgeLoad: values.sludgeLoad,
       surfaceScum: values.surfaceScum, shrimpBehaviour: values.shrimpBehaviour,
@@ -385,7 +394,7 @@ export default function WaterQualityScreen() {
     setValues(createEmptyWaterQualityValues());
     setSelectedPond(null);
     setIsModalVisible(false);
-  }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t]);
+  }, [canEditPonds, selectedPond, activePonds, values, addWaterQuality, t, user?.email, user?.name]);
 
   const handlePondSelection = useCallback((pondName: string) => {
     setSelectedPond(pondName);
@@ -396,7 +405,9 @@ export default function WaterQualityScreen() {
       phMorning: todayWQRecord.phMorning || "", phEvening: todayWQRecord.phEvening || "",
       doMorning: todayWQRecord.doMorning || "", doEvening: todayWQRecord.doEvening || "",
       transparency: todayWQRecord.transparency || "", salinity: todayWQRecord.salinity || "",
-      temperature: todayWQRecord.temperature || '', weatherEvent: todayWQRecord.weatherEvent || null,
+      temperature: todayWQRecord.temperature || '', waterAppearance: todayWQRecord.waterAppearance || '',
+      waterDepthCm: todayWQRecord.waterDepthCm || '', alkalinity: todayWQRecord.alkalinity || '',
+      weatherEvent: todayWQRecord.weatherEvent || null,
       ammonia: todayWQRecord.ammonia || '', operationalNotes: todayWQRecord.operationalNotes || '',
       waterExchangePercent: todayWQRecord.waterExchangePercent || '', sludgeLoad: todayWQRecord.sludgeLoad || null,
       surfaceScum: todayWQRecord.surfaceScum ?? null, shrimpBehaviour: todayWQRecord.shrimpBehaviour || null,
@@ -1171,6 +1182,17 @@ export default function WaterQualityScreen() {
                     <Input label={`${t.waterQuality.transparency} (cm)`} value={values.transparency} onChange={updateValue('transparency')} placeholder={t.waterQuality.transparencyPlaceholder} />
                   </View>
                 </View>
+
+                <View style={styles.row}>
+                  <View style={styles.inputGroup}>
+                    <Input label="Water appearance" value={values.waterAppearance} onChange={updateValue('waterAppearance')} placeholder="e.g., CH" />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Input label="Water depth (cm)" value={values.waterDepthCm} onChange={updateValue('waterDepthCm')} placeholder="e.g., 150" />
+                  </View>
+                </View>
+
+                <Input label="Alkalinity (ppm)" value={values.alkalinity} onChange={updateValue('alkalinity')} placeholder="e.g., 204" />
 
                 <View style={styles.row}>
                   <View style={styles.inputGroup}>

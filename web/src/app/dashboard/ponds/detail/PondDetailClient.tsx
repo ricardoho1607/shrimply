@@ -166,6 +166,9 @@ interface MortalityFormState {
   date: string;
   observationType: MortalityObservationType;
   count: string;
+  siponShift: 'morning' | 'evening';
+  siphonedCount: string;
+  mortalCount: string;
   notes: string;
 }
 
@@ -344,8 +347,11 @@ export default function PondDetailClient() {
   const [editingMortalityId, setEditingMortalityId] = useState<string | null>(null);
   const [mortalityForm, setMortalityForm] = useState<MortalityFormState>({
     date: today,
-    observationType: 'estimated_total' as MortalityObservationType,
+    observationType: 'observed_recovered' as MortalityObservationType,
     count: '',
+    siponShift: 'morning',
+    siphonedCount: '',
+    mortalCount: '',
     notes: '',
   });
   const { data: farmBlocks, loading: blocksLoading } = useCompanyBlocks<FarmBlock>('asc');
@@ -520,9 +526,13 @@ export default function PondDetailClient() {
     const recordedBy = auth.currentUser?.uid;
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
 
+    const siphonedCount = Math.round(Number(mortalityForm.siphonedCount) || 0);
+    const mortalCount = Math.round(Number(mortalityForm.mortalCount) || 0);
     const count = mortalityForm.observationType === 'none_observed'
       ? 0
-      : Math.round(Number(mortalityForm.count));
+      : mortalityForm.observationType === 'observed_recovered'
+        ? siphonedCount + mortalCount
+        : Math.round(Number(mortalityForm.count));
     if (mortalityForm.observationType !== 'none_observed' && (isNaN(count) || count <= 0)) {
       alert('Enter a mortality count greater than zero using a whole number.');
       return;
@@ -551,6 +561,11 @@ export default function PondDetailClient() {
           date: mortalityForm.date,
           observationType: mortalityForm.observationType,
           count,
+          ...(mortalityForm.observationType === 'observed_recovered' ? {
+            siponShift: mortalityForm.siponShift,
+            siphonedCount,
+            mortalCount,
+          } : {}),
           recordedAt: existing?.recordedAt || new Date().toISOString(),
           recordedBy: existing?.recordedBy || recordedBy,
           pondCycleId: existing?.pondCycleId || pond.pondCycleId || pond.id,
@@ -572,6 +587,11 @@ export default function PondDetailClient() {
           date: mortalityForm.date,
           observationType: mortalityForm.observationType,
           count,
+          ...(mortalityForm.observationType === 'observed_recovered' ? {
+            siponShift: mortalityForm.siponShift,
+            siphonedCount,
+            mortalCount,
+          } : {}),
           recordedAt: new Date().toISOString(),
           recordedBy,
           pondCycleId: pond.pondCycleId || pond.id,
@@ -591,8 +611,11 @@ export default function PondDetailClient() {
       setEditingMortalityId(null);
       setMortalityForm({
         date: today,
-        observationType: 'estimated_total',
+        observationType: 'observed_recovered',
         count: '',
+        siponShift: 'morning',
+        siphonedCount: '',
+        mortalCount: '',
         notes: '',
       });
     } catch (error) {
@@ -1203,8 +1226,11 @@ export default function PondDetailClient() {
                       setEditingMortalityId(null);
                       setMortalityForm({
                         date: today,
-                        observationType: 'estimated_total',
+                        observationType: 'observed_recovered',
                         count: '',
+                        siponShift: 'morning',
+                        siphonedCount: '',
+                        mortalCount: '',
                         notes: '',
                       });
                       setMortalityModalOpen(true);
@@ -1318,6 +1344,9 @@ export default function PondDetailClient() {
                                         date: record.date || today,
                                         observationType: record.observationType || 'estimated_total',
                                         count: record.observationType === 'none_observed' ? '0' : String(record.count || '0'),
+                                        siponShift: record.siponShift || 'morning',
+                                        siphonedCount: String(record.siphonedCount || ''),
+                                        mortalCount: String(record.mortalCount || ''),
                                         notes: record.notes || '',
                                       });
                                       setMortalityModalOpen(true);
@@ -1812,12 +1841,32 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
             </select>
           </label>
 
-          {form.observationType !== 'none_observed' ? (
+          {form.observationType === 'estimated_total' ? (
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Mortality Count
               <input required type="number" min="1" step="1" value={form.count} onChange={(event) => setForm({ ...form, count: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
             </label>
           ) : null}
+
+          {form.observationType === 'observed_recovered' ? <>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Sipon Shift
+              <select value={form.siponShift} onChange={(event) => setForm({ ...form, siponShift: event.target.value as 'morning' | 'evening' })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
+                <option value="morning">Morning / Pagi</option>
+                <option value="evening">Evening / Sore</option>
+              </select>
+            </label>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Siphoned / Kesedot
+                <input required type="number" min="0" step="1" value={form.siphonedCount} onChange={(event) => setForm({ ...form, siphonedCount: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Mortal
+                <input required type="number" min="0" step="1" value={form.mortalCount} onChange={(event) => setForm({ ...form, mortalCount: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
+              </label>
+            </div>
+          </> : null}
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             Mortality Date

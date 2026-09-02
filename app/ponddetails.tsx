@@ -254,18 +254,27 @@ const EditMortalityModal = ({
   onSave: (id: string, data: {
     count: number;
     observationType: MortalityObservationType;
+    siponShift?: 'morning' | 'evening';
+    siphonedCount?: number;
+    mortalCount?: number;
     notes?: string;
   }) => void;
 }) => {
   const { t } = useLanguage();
   const [count, setCount] = useState('');
   const [observationType, setObservationType] = useState<MortalityObservationType>('estimated_total');
+  const [siponShift, setSiponShift] = useState<'morning' | 'evening'>('morning');
+  const [siphonedCount, setSiphonedCount] = useState('');
+  const [mortalCount, setMortalCount] = useState('');
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
     if (record && visible) {
       setCount(record.observationType === 'none_observed' ? '0' : (record.count !== undefined ? String(record.count) : '0'));
       setObservationType(record.observationType || 'estimated_total');
+      setSiponShift(record.siponShift || 'morning');
+      setSiphonedCount(record.siphonedCount !== undefined ? String(record.siphonedCount) : '');
+      setMortalCount(record.mortalCount !== undefined ? String(record.mortalCount) : '');
       setNotes(record.notes || '');
     }
   }, [record, visible]);
@@ -274,6 +283,9 @@ const EditMortalityModal = ({
     if (!visible) {
       setCount('');
       setObservationType('estimated_total');
+      setSiponShift('morning');
+      setSiphonedCount('');
+      setMortalCount('');
       setNotes('');
     }
   }, [visible]);
@@ -281,12 +293,18 @@ const EditMortalityModal = ({
   const handleSave = () => {
     if (!record) return;
     const isNone = observationType === 'none_observed';
-    const countNum = isNone ? 0 : Number(count);
+    const componentTotal = Number(siphonedCount || 0) + Number(mortalCount || 0);
+    const countNum = isNone ? 0 : observationType === 'observed_recovered' && componentTotal > 0 ? componentTotal : Number(count);
     if (!isNone && (isNaN(countNum) || countNum < 0)) return;
 
     onSave(record.id, {
       count: countNum,
       observationType,
+      ...(observationType === 'observed_recovered' && componentTotal > 0 ? {
+        siponShift,
+        siphonedCount: Number(siphonedCount || 0),
+        mortalCount: Number(mortalCount || 0),
+      } : {}),
       notes: notes.trim(),
     });
     onClose();
@@ -382,13 +400,36 @@ const EditMortalityModal = ({
                   </View>
                 </View>
 
-                {observationType !== 'none_observed' && (
+                {observationType === 'estimated_total' && (
                   <EditInputField
                     label={`${t.home.mortalityCount} (pcs)`}
                     value={count}
                     onChangeText={setCount}
                     keyboardType="numeric"
                   />
+                )}
+
+                {observationType === 'observed_recovered' && (
+                  <>
+                    <View style={styles.editInputContainer}>
+                      <Text style={styles.editInputLabel}>Sipon shift</Text>
+                      <View style={styles.obsTypeSelector}>
+                        {(['morning', 'evening'] as const).map((shift) => (
+                          <TouchableOpacity
+                            key={shift}
+                            style={[styles.obsTypePill, siponShift === shift && styles.obsTypePillActive]}
+                            onPress={() => setSiponShift(shift)}
+                          >
+                            <Text style={[styles.obsTypePillText, siponShift === shift && styles.obsTypePillTextActive]}>
+                              {shift === 'morning' ? 'Morning / Pagi' : 'Evening / Sore'}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                    <EditInputField label="Siphoned / Kesedot" value={siphonedCount} onChangeText={setSiphonedCount} keyboardType="numeric" />
+                    <EditInputField label="Mortal" value={mortalCount} onChangeText={setMortalCount} keyboardType="numeric" />
+                  </>
                 )}
 
                 <View style={styles.editInputContainer}>
@@ -794,7 +835,7 @@ export default function PondDetails() {
 
   const handleSaveMortalityEdit = useCallback((
     recordId: string,
-    data: { count: number; observationType: MortalityObservationType; notes?: string }
+    data: { count: number; observationType: MortalityObservationType; siponShift?: 'morning' | 'evening'; siphonedCount?: number; mortalCount?: number; notes?: string }
   ) => {
     if (!pond) return;
 
