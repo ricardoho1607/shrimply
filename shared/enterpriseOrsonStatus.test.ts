@@ -71,8 +71,54 @@ test('shows the SIM-B1 water-quality record as a warning', () => {
 
   assert.equal(status.risk, 'warning');
   assert.equal(status.warnings.some((item) => item.code === 'low_do'), true);
-  assert.equal(status.warnings.some((item) => item.code === 'ammonia_elevated'), true);
+  assert.equal(status.warnings.some((item) => item.code === 'ammonia_elevated'), false);
   assert.equal(status.warnings.some((item) => item.code === 'abnormal_shrimp_behaviour'), true);
+});
+
+test('keeps healthy September 2 TAN readings normal', () => {
+  for (const ammonia of [0.03, 0.04]) {
+    const pond = basePond({
+      samplings: [{
+        id: `healthy-tan-${ammonia}`,
+        date: '2026-09-02',
+        mbw: 4,
+        feed: 20,
+        mortality: 0,
+        doMorning: 5.2,
+        doEvening: 6,
+        phMorning: 7.8,
+        phEvening: 8.2,
+        salinity: 20,
+        ammonia,
+      }],
+    });
+    const status = getEnterprisePondStatus(pond);
+
+    assert.equal(status.risk, 'stable');
+    assert.equal(status.warnings.some((item) => item.code === 'ammonia_elevated'), false);
+  }
+});
+
+test('uses actionable field TAN warning and critical thresholds', () => {
+  const statusForTan = (ammonia: number) => getEnterprisePondStatus(basePond({
+    samplings: [{
+      id: `elevated-tan-${ammonia}`,
+      date: '2026-09-02',
+      mbw: 4,
+      feed: 20,
+      mortality: 0,
+      doMorning: 5.2,
+      doEvening: 6,
+      phMorning: 7.8,
+      phEvening: 8.2,
+      salinity: 20,
+      ammonia,
+    }],
+  }));
+
+  assert.equal(statusForTan(1).risk, 'warning');
+  assert.equal(statusForTan(2).risk, 'warning');
+  assert.equal(statusForTan(2.01).risk, 'high-risk');
 });
 
 test('shows Orson critical findings as red Enterprise status', () => {

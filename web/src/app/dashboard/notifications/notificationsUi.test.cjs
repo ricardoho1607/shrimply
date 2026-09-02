@@ -53,6 +53,10 @@ test('notification history is paginated and bulk actions still cover the full qu
   assert.match(source, /snapshot\.docs\.length; index \+= 400/);
 });
 
+test('high-priority totals include compound Orson weather and low-DO alerts', () => {
+  assert.match(source, /getEffectiveNotificationPriority\(n\) === 'high'/);
+});
+
 test('buyer dashboard requests only active marketplace listings', () => {
   const hook = fs.readFileSync(path.join(__dirname, '../../../hooks/useDashboardData.ts'), 'utf8');
   assert.match(hook, /useMarketplaceListings[\s\S]*?where\('status', '==', 'active'\)/);

@@ -698,6 +698,15 @@ const formatRecordedDecimal = (value: number): string => {
   return rounded.toFixed(Number.isInteger(rounded * 10) ? 1 : 2);
 };
 
+const ORSON_ENUM_LABELS: Record<string, string> = {
+  heavy_rain: 'Heavy Rain',
+  sudden_cloud: 'Sudden Cloud',
+};
+
+const formatOrsonEnumLabel = (value: string | null | undefined): string | null => (
+  value ? ORSON_ENUM_LABELS[value] ?? value : null
+);
+
 const getRequestedRecordValues = (
   record: OrsonPromptDailyRecord,
   requestedFields: string[],
@@ -714,7 +723,7 @@ const getRequestedRecordValues = (
     salinity_ppt: record.salinityPpt,
     temperature_c: record.temperatureC,
     transparency_cm: record.transparencyCm,
-    weather_event: record.weatherEvent,
+    weather_event: formatOrsonEnumLabel(record.weatherEvent),
     water_exchange_pct: record.waterExchangePercent,
     sludge_load: record.sludgeLoad,
     surface_scum: record.surfaceScum,
@@ -886,7 +895,7 @@ export const buildOrsonPromptContext = (
       operational_notes: trimPromptText(r.operationalNotes, ORSON_CONTEXT_NOTE_MAX_CHARS),
       transparency_cm: r.transparencyCm,
       feeding_response: r.feedingResponse,
-      weather_event: r.weatherEvent,
+      weather_event: formatOrsonEnumLabel(r.weatherEvent),
       water_exchange_pct: r.waterExchangePercent,
       sludge_load: r.sludgeLoad,
       surface_scum: r.surfaceScum,
@@ -1114,6 +1123,8 @@ export const cleanOrsonResponse = (text: string): string => {
   return text
     .replace(/\*\*/g, '')
     .replace(/^#{1,6}\s+/gm, '')
+    .replace(/\bheavy_rain\b/gi, 'Heavy Rain')
+    .replace(/\bsudden_cloud\b/gi, 'Sudden Cloud')
     .replace(/[ \t]+\n/g, '\n')
     .trim();
 };

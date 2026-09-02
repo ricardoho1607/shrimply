@@ -69,6 +69,12 @@ export const runIntelligenceCompletionSelfTest = () => {
   assert(finding(basePond({ doMorning: 5, temperature: 31 }), 'low_do_high_temperature') === null, 'DO 5 is outside rule');
   assert(finding(basePond({ doMorning: 4.9, temperature: 30 }), 'low_do_high_temperature') === null, 'temperature 30 is outside rule');
 
+  assert(finding(basePond({ ammonia: 0.04 }), 'ammonia_elevated') === null, 'healthy field TAN does not trigger');
+  assert(finding(basePond({ ammonia: 0.99 }), 'ammonia_elevated') === null, 'field TAN below 1 mg/L does not trigger');
+  assert(finding(basePond({ ammonia: 1 }), 'ammonia_elevated')?.severity === 'warning', 'field TAN at 1 mg/L is warning');
+  assert(finding(basePond({ ammonia: 2 }), 'ammonia_elevated')?.severity === 'warning', 'field TAN at 2 mg/L is warning');
+  assert(finding(basePond({ ammonia: 2.01 }), 'ammonia_elevated')?.severity === 'critical', 'field TAN above 2 mg/L is critical');
+
   assert(finding(basePond({ doMorning: 3.99 }, { tanMgL: 1.01 }), 'low_do_high_tan') !== null, 'TAN/DO crosses rule');
   assert(finding(basePond({ doMorning: 3.99 }, { tanMgL: 1 }), 'low_do_high_tan') === null, 'TAN 1 is outside rule');
   assert(finding(basePond({ doMorning: 4 }, { tanMgL: 1.01 }), 'low_do_high_tan') === null, 'DO 4 is outside TAN rule');

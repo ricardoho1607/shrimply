@@ -101,15 +101,15 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }));
   }
 
-  if (latestAmmoniaRecord && hasNumber(latestAmmoniaRecord.ammoniaMgL) && latestAmmoniaRecord.ammoniaMgL >= 0.01) {
+  if (latestAmmoniaRecord && hasNumber(latestAmmoniaRecord.ammoniaMgL) && latestAmmoniaRecord.ammoniaMgL >= 1) {
     findings.push(createFinding({
       id: 'ammonia_elevated',
-      severity: 'warning',
+      severity: latestAmmoniaRecord.ammoniaMgL > 2 ? 'critical' : 'warning',
       confidence: confidenceFromCompleteness(0.86, dataScore),
-      title: 'Field ammonia reading needs verification',
-      summary: `Latest field ammonia is ${latestAmmoniaRecord.ammoniaMgL} mg/L; its TAN or NH3 basis is not recorded.`,
-      evidence: [`Field ammonia: ${latestAmmoniaRecord.ammoniaMgL} mg/L`, `Record date: ${latestAmmoniaRecord.date}`],
-      recommendation: 'Protect DO, hold feed increases, and confirm whether the field result is TAN or NH3 with pH and temperature before choosing a correction.',
+      title: 'Field TAN is elevated',
+      summary: `Latest field TAN is ${latestAmmoniaRecord.ammoniaMgL} mg/L.`,
+      evidence: [`Field TAN: ${latestAmmoniaRecord.ammoniaMgL} mg/L`, `Record date: ${latestAmmoniaRecord.date}`],
+      recommendation: 'Protect DO, hold feed increases, and recheck TAN with pH and temperature before choosing a correction.',
       metricRefs: ['dailyRecords14d.ammoniaMgL'],
       eventDate: latestAmmoniaRecord.date,
     }));

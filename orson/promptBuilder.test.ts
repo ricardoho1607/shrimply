@@ -179,6 +179,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
   assert(farmPackage.context.length < 15000, 'keeps prompt context compact');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
+  assert(cleanOrsonResponse('Weather: heavy_rain') === 'Weather: Heavy Rain', 'formats raw enum values for display');
 
   const pond2 = normalizePondData(
     {

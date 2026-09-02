@@ -9,6 +9,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { calculateDistance } from '../../app/utils/locationUtils';
+import { getOrsonNotificationPriority } from '../../shared/orsonNotification';
 
 interface DiseaseReportData {
   companyId: string;
@@ -265,7 +266,7 @@ export class NotificationService {
         message: risk.message,
         timestamp: Timestamp.now(),
         read: false,
-        priority: risk.severity === 'critical' ? 'high' : 'medium',
+        priority: getOrsonNotificationPriority(risk.severity, risk.riskId),
         isOrson: true,
         icon: 'brain-circuit',
         data: {

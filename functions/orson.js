@@ -965,15 +965,15 @@ const calculateRiskReport = (pond, pondId) => {
     });
   }
 
-  if (latestAmmoniaRecord && latestAmmoniaRecord.ammoniaMgL !== null && latestAmmoniaRecord.ammoniaMgL >= 0.01) {
+  if (latestAmmoniaRecord && latestAmmoniaRecord.ammoniaMgL !== null && latestAmmoniaRecord.ammoniaMgL >= 1) {
     pushFinding({
       id: "ammonia_elevated",
-      severity: "warning",
+      severity: latestAmmoniaRecord.ammoniaMgL > 2 ? "critical" : "warning",
       confidence: 0.86,
-      title: "Field ammonia reading needs verification",
-      summary: `Latest field ammonia is ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L; its TAN or NH3 basis is not recorded.`,
-      evidence: [`Field ammonia ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L.`, `Record date ${latestAmmoniaRecord.date || "missing"}.`],
-      recommendation: "Protect DO, hold feed increases, and confirm whether the field result is TAN or NH3 with pH and temperature before choosing a correction.",
+      title: "Field TAN is elevated",
+      summary: `Latest field TAN is ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L.`,
+      evidence: [`Field TAN ${round(latestAmmoniaRecord.ammoniaMgL, 3)} mg/L.`, `Record date ${latestAmmoniaRecord.date || "missing"}.`],
+      recommendation: "Protect DO, hold feed increases, and recheck TAN with pH and temperature before choosing a correction.",
       metricRefs: ["dailyRecords.ammoniaMgL"],
       eventDate: latestAmmoniaRecord.date || undefined,
     });
@@ -1236,6 +1236,11 @@ const getRiskSignature = (report) => {
     .map((finding) => `${finding.id}:${finding.severity}${finding.eventDate ? `:${finding.eventDate}` : ""}`)
     .sort();
   return `${report.pondId}:${highFindings.join("|")}`;
+};
+
+const getOrsonNotificationPriority = (severity, riskIds) => {
+  const ids = Array.isArray(riskIds) ? riskIds : [riskIds];
+  return severity === "critical" || ids.includes("heavy_rain_low_do") ? "high" : "medium";
 };
 
 const stableStringify = (value) => {
@@ -2654,7 +2659,7 @@ exports.orsonProactiveConsultant = onDocumentUpdated("companies/{companyId}/pond
       title: `Orson: ${report.pondName} ${topFinding.title}`,
       message: `${topFinding.summary} ${topFinding.recommendation}`,
       type: "orson_risk",
-      priority: topFinding.severity === "critical" ? "high" : "medium",
+      priority: getOrsonNotificationPriority(topFinding.severity, notifiableFindings.map((finding) => finding.id)),
       pondId,
       pondName: report.pondName,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -2804,6 +2809,7 @@ if (process.env.NODE_ENV === "test") {
     calculateRiskReport,
     getRiskSignature,
     getNewOperationalEventFindings,
+    getOrsonNotificationPriority,
     getCurrentLabWaterMetrics,
     normalizeOrsonProductDocuments,
     shouldUseOrsonProductWebLookup,

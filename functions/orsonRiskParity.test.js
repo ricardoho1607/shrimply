@@ -3,7 +3,13 @@ const assert = require('node:assert/strict');
 const fixtures = require('../orson/fixtures/riskParity.json');
 
 process.env.NODE_ENV = 'test';
-const { calculateRiskReport, getCurrentLabWaterMetrics, getNewOperationalEventFindings, getRiskSignature } = require('./orson').__test;
+const {
+  calculateRiskReport,
+  getCurrentLabWaterMetrics,
+  getNewOperationalEventFindings,
+  getOrsonNotificationPriority,
+  getRiskSignature,
+} = require('./orson').__test;
 
 for (const fixture of fixtures) {
   test(`backend risk parity: ${fixture.id}`, () => {
@@ -48,5 +54,10 @@ test('SIM-B1 produces a warning-level dated notification signature', () => {
 
   assert.equal(report.overallSeverity, 'warning');
   assert.equal(report.findings[0].id, 'abnormal_shrimp_behaviour');
+  assert.equal(report.findings.some((finding) => finding.id === 'ammonia_elevated'), false);
   assert.match(getRiskSignature(report), /2026-09-01/);
+  assert.equal(
+    getOrsonNotificationPriority(report.findings[0].severity, report.findings.map((finding) => finding.id)),
+    'high',
+  );
 });

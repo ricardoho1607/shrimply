@@ -212,11 +212,10 @@
     "id": "sim-b1-operational-water-risk",
     "expectedRiskIds": [
       "low_do",
-      "ammonia_elevated",
       "abnormal_shrimp_behaviour",
       "heavy_rain_low_do"
     ],
-    "excludedRiskIds": [],
+    "excludedRiskIds": ["ammonia_elevated"],
     "pond": {
       "id": "sim-b1",
       "pondName": "SIM-B1",

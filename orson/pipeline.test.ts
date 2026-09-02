@@ -154,7 +154,7 @@ export const runPipelineSelfTest = () => {
   const simB1 = exactOperationalRecords.records[0];
 
   assert(simB1.feed_kg === 6.6, 'keeps the exact daily feed total');
-  assert(simB1.weather_event === 'heavy_rain', 'keeps the exact weather event');
+  assert(simB1.weather_event === 'Heavy Rain', 'formats the exact weather event for display');
   assert(simB1.water_exchange_pct === 8, 'keeps the exact water exchange');
   assert(simB1.sludge_load === 'moderate', 'keeps the exact sludge observation');
   assert(simB1.surface_scum === false, 'keeps an explicit no-scum observation');

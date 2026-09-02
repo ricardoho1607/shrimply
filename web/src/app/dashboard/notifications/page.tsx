@@ -22,6 +22,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyNotifications } from '@/hooks/useDashboardData';
+import { getEffectiveNotificationPriority } from '../../../../../shared/orsonNotification';
 import styles from './NotificationsPage.module.css';
 
 /* --- Types --------------------------------------------------- */
@@ -36,7 +37,12 @@ interface Notification {
   priority: 'high' | 'medium' | 'low';
   data?: {
     isOrson?: boolean;
+    riskId?: unknown;
+    severity?: unknown;
     [key: string]: unknown;
+  };
+  orsonRiskReport?: {
+    findings?: Array<{ id?: unknown; severity?: unknown }>;
   };
 }
 
@@ -68,14 +74,17 @@ export default function NotificationsPage() {
       return notifications.filter(n => n.data?.isOrson);
     }
     if (filter === 'high') {
-      return notifications.filter(n => n.priority === 'high');
+      return notifications.filter(n => getEffectiveNotificationPriority(n) === 'high');
     }
     return notifications;
   }, [notifications, filter]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
   const orsonCount = useMemo(() => notifications.filter(n => n.data?.isOrson).length, [notifications]);
-  const highPriorityCount = useMemo(() => notifications.filter(n => n.priority === 'high').length, [notifications]);
+  const highPriorityCount = useMemo(
+    () => notifications.filter(n => getEffectiveNotificationPriority(n) === 'high').length,
+    [notifications],
+  );
   const setNotificationFilter = (nextFilter: typeof filter) => startTransition(() => setFilter(nextFilter));
 
   const markAsRead = async (id: string) => {
