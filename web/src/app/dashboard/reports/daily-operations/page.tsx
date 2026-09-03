@@ -114,9 +114,9 @@ export default function DailyOperationsReportsPage() {
       </div>
 
       <div className="glass-card" style={{ marginTop: '16px', background: '#fff', border: '1px solid var(--border)', borderRadius: '18px', padding: '16px', display: 'flex', alignItems: 'end', gap: '18px', flexWrap: 'wrap' }}>
-        <label style={{ display: 'flex', flexDirection: 'column', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
-          {copy.reportDate}
-          <input type="date" max={today} value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="form-input" style={{ minWidth: '190px' }} />
+        <label className="daily-operations-date-field">
+          <span>{copy.reportDate}</span>
+          <input type="date" max={today} value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="daily-operations-date-input" />
         </label>
         {blocks.length > 0 && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {['all', ...blocks].map((block) => {
@@ -157,6 +157,51 @@ export default function DailyOperationsReportsPage() {
         </table>}
         {activeTab === 'water' && report.waterQualityRows.length === 0 && <div style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)' }}>{copy.noWaterRecords}</div>}
       </div>
+
+      <style jsx>{`
+        .daily-operations-date-field {
+          width: min(100%, 220px);
+          display: flex;
+          flex-direction: column;
+          gap: 7px;
+        }
+
+        .daily-operations-date-field span {
+          color: var(--text-muted);
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .daily-operations-date-input {
+          width: 100%;
+          height: 44px;
+          padding: 0 12px;
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          outline: 0;
+          background: #fff;
+          color: var(--text-primary);
+          font: inherit;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: border-color 160ms ease, box-shadow 160ms ease;
+        }
+
+        .daily-operations-date-input:hover {
+          border-color: #9fb8ca;
+        }
+
+        .daily-operations-date-input:focus {
+          border-color: #3282b8;
+          box-shadow: 0 0 0 3px rgba(50, 130, 184, 0.12);
+        }
+
+        .daily-operations-date-input::-webkit-calendar-picker-indicator {
+          cursor: pointer;
+          opacity: 0.65;
+        }
+      `}</style>
     </div>
   );
 }
