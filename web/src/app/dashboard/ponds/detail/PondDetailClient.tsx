@@ -67,6 +67,7 @@ import {
 import { hasFarmPermission } from '../../../../../../shared/permissions';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
+import type { PondDetailCopy } from '../../../../../../shared/pondDetailI18n';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -177,11 +178,11 @@ const isActiveCycle = (pond: Pond) => getCycleStatus(pond) === 'active';
 const getPlSupplier = (pond: Pond) => pond.plSupplier || pond.supplier || 'N/A';
 const isOpenFarmCycle = (cycle: FarmCycle) => ['planning', 'stocking', 'active'].includes(cycle.status);
 const getPhysicalPondKey = (pondName: string) => pondName.trim().toLowerCase();
-const getLabStatusStyle = (status?: LabReportStatus['status']) => {
-  if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
-  if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
-  if (status === 'watch') return { label: 'Watch', color: '#0F4C75', bg: '#E0F2FE' };
-  return { label: 'Good', color: '#166534', bg: '#DCFCE7' };
+const getLabStatusStyle = (status: LabReportStatus['status'] | undefined, copy: PondDetailCopy) => {
+  if (status === 'critical') return { label: copy.critical, color: '#991b1b', bg: '#fee2e2' };
+  if (status === 'warning') return { label: copy.warning, color: '#92400e', bg: '#fef3c7' };
+  if (status === 'watch') return { label: copy.watch, color: '#0F4C75', bg: '#E0F2FE' };
+  return { label: copy.good, color: '#166534', bg: '#DCFCE7' };
 };
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -194,13 +195,13 @@ const calculateDocFromDates = (startDate: string, baselineDate: string): number 
   Math.floor((getDateOnlyUtcTime(baselineDate) - getDateOnlyUtcTime(startDate)) / DAY_MS);
 
 /* --- Custom SVG Chart --------------------------------------- */
-const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
+const GrowthChart = ({ data, emptyMessage }: { data: { x: number, y: number }[]; emptyMessage: string }) => {
   const [hoveredPoint, setHoveredPoint] = useState<any>(null);
 
   if (!data || data.length < 2) {
     return (
       <div style={{ height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-faint)', fontSize: '13px', background: 'var(--bg-mid)', borderRadius: '16px' }}>
-        Not enough sampling data to generate growth trends.
+        {emptyMessage}
       </div>
     );
   }
@@ -300,6 +301,7 @@ const GrowthChart = ({ data }: { data: { x: number, y: number }[] }) => {
 export default function PondDetailClient() {
   const { company, user } = useAuth();
   const { t } = useLanguage();
+  const copy = t.pondDetail;
   const searchParams = useSearchParams();
   const id = searchParams.get('id');
   const requestedAction = searchParams.get('action');
@@ -446,7 +448,7 @@ export default function PondDetailClient() {
 
   const handleDeleteSampling = async (samplingId: string) => {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
-    if (!window.confirm('Delete this sampling record?')) return;
+    if (!window.confirm(copy.deleteSamplingConfirm)) return;
     try {
       const updatedSamplings = (pond.samplings || []).filter((s) => s.id !== samplingId);
       await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
@@ -455,13 +457,13 @@ export default function PondDetailClient() {
       });
     } catch (error) {
       console.error('Error deleting sampling record:', error);
-      alert('Failed to delete sampling record.');
+      alert(copy.deleteSamplingFailed);
     }
   };
 
   const handleDeleteMortality = async (recordId: string) => {
     if (!companyId || !pond || !canRecordPondData || !isActiveCycle(pond)) return;
-    if (!window.confirm('Delete this mortality record?')) return;
+    if (!window.confirm(copy.deleteMortalityConfirm)) return;
     try {
       const updatedRecords = (pond.mortalityRecords || []).filter((r) => r.id !== recordId);
       await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
@@ -470,7 +472,7 @@ export default function PondDetailClient() {
       });
     } catch (error) {
       console.error('Error deleting mortality record:', error);
-      alert('Failed to delete mortality record.');
+      alert(copy.deleteMortalityFailed);
     }
   };
 
@@ -534,16 +536,16 @@ export default function PondDetailClient() {
         ? siphonedCount + mortalCount
         : Math.round(Number(mortalityForm.count));
     if (mortalityForm.observationType !== 'none_observed' && (isNaN(count) || count <= 0)) {
-      alert('Enter a mortality count greater than zero using a whole number.');
+      alert(copy.mortalityCountInvalid);
       return;
     }
     if (mortalityForm.date > today) {
-      alert('Mortality cannot be recorded for a future date.');
+      alert(copy.mortalityFuture);
       return;
     }
     const cycleStartKey = String(pond.cycleStartedAt || pond.docStart || '').slice(0, 10);
     if (cycleStartKey && mortalityForm.date < cycleStartKey) {
-      alert('Mortality cannot be recorded before this pond cycle started.');
+      alert(copy.mortalityBeforeCycle);
       return;
     }
 
@@ -620,7 +622,7 @@ export default function PondDetailClient() {
       });
     } catch (error) {
       console.error('Error saving mortality:', error);
-      alert('Failed to save mortality record.');
+      alert(copy.mortalitySaveFailed);
     } finally {
       setIsSubmitting(false);
     }
@@ -682,13 +684,13 @@ export default function PondDetailClient() {
       setEndCycleOpen(false);
     } catch (error) {
       console.error('Error ending cycle:', error);
-      alert('Failed to end cycle.');
+      alert(copy.endCycleFailed);
     }
   };
 
   const handleDeletePond = async () => {
     if (!companyId || !pond || !canManagePond || isDeletingPond) return;
-    const confirmed = window.confirm(`Delete ${pond.pondName}? This permanently removes this pond cycle and its sampling history.`);
+    const confirmed = window.confirm(copy.deletePondConfirm.replace('{{pond}}', pond.pondName));
     if (!confirmed) return;
 
     setIsDeletingPond(true);
@@ -697,7 +699,7 @@ export default function PondDetailClient() {
       router.push('/dashboard/ponds');
     } catch (error) {
       console.error('Error deleting pond:', error);
-      alert('Failed to delete pond.');
+      alert(copy.deletePondFailed);
     } finally {
       setIsDeletingPond(false);
     }
@@ -721,7 +723,7 @@ export default function PondDetailClient() {
       );
 
       if (hasActiveCycleForPond) {
-        alert(`${pond.pondName} already has an active cycle. End that pond first before starting another cycle for it.`);
+        alert(copy.activeCycleExists.replace('{{pond}}', pond.pondName));
         return;
       }
 
@@ -804,7 +806,7 @@ export default function PondDetailClient() {
       router.push(`/dashboard/ponds/detail?id=${newCyclePondRef.id}`);
     } catch (error) {
       console.error('Error starting cycle:', error);
-      alert('Failed to start new cycle.');
+      alert(copy.startCycleFailed);
     }
   };
 
@@ -837,11 +839,11 @@ export default function PondDetailClient() {
     const baselineFeedValue = parseFloat(baselineForm.baselineCumulativeFeed);
 
     if (!baselineForm.baselineMbw || Number.isNaN(baselineMbwValue) || baselineMbwValue <= 0) {
-      alert('Current MBW is required for an existing cycle.');
+      alert(copy.currentMbwRequired);
       return;
     }
     if (!baselineForm.baselineDate || !Number.isFinite(baselineDocValue) || baselineDocValue < 0) {
-      alert('Current DOC is required for an existing cycle.');
+      alert(copy.currentDocRequired);
       return;
     }
 
@@ -885,7 +887,7 @@ export default function PondDetailClient() {
       setBaselineModalOpen(false);
     } catch (error) {
       console.error('Error updating baseline:', error);
-      alert('Failed to update baseline.');
+      alert(copy.baselineUpdateFailed);
     }
   };
 
@@ -946,15 +948,15 @@ export default function PondDetailClient() {
   };
 
   if (loading || (isEnterpriseTechnician && blocksLoading)) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
-  if (!pond || !hasPondAccess) return <div style={{ padding: '40px', textAlign: 'center' }}>Pond not found.</div>;
+  if (!pond || !hasPondAccess) return <div style={{ padding: '40px', textAlign: 'center' }}>{copy.notFound}</div>;
   const latestLabStatus = pond.latestLabStatus;
   const waterQualityLabStatus = latestLabStatus?.byType?.water_quality
     ?? (latestLabStatus?.reportType === 'water_quality' || (!latestLabStatus?.reportType && !latestLabStatus?.byType) ? latestLabStatus : undefined);
   const planktonLabStatus = latestLabStatus?.byType?.plankton
     ?? (latestLabStatus?.reportType === 'plankton' ? latestLabStatus : undefined);
   const labStatusCards = [
-    { key: 'water_quality', title: 'Mineral Quality', Icon: Droplets, status: waterQualityLabStatus },
-    { key: 'plankton', title: 'Plankton Quality', Icon: Leaf, status: planktonLabStatus },
+    { key: 'water_quality', title: copy.mineralQuality, Icon: Droplets, status: waterQualityLabStatus },
+    { key: 'plankton', title: copy.planktonQuality, Icon: Leaf, status: planktonLabStatus },
   ].filter((item) => item.status);
 
   return (
@@ -963,7 +965,7 @@ export default function PondDetailClient() {
       {/* Breadcrumbs & Actions */}
       <div className="glass-card animate-fade-up pond-detail-toolbar">
         <div className="pond-detail-identity">
-          <Link href="/dashboard/ponds" className="pond-detail-back" aria-label="Back to ponds">
+          <Link href="/dashboard/ponds" className="pond-detail-back" aria-label={copy.backToPonds}>
             <ArrowLeft size={17} />
           </Link>
           <div className="pond-detail-title">
@@ -975,11 +977,11 @@ export default function PondDetailClient() {
                   DOC {metrics?.doc ?? 0}
                 </span>
                 <span className={`pond-detail-status is-${getCycleStatus(pond)}`}>
-                  {getCycleStatus(pond) === 'ended' ? 'ENDED' : 'ACTIVE'}
+                  {getCycleStatus(pond) === 'ended' ? copy.ended : copy.active}
                 </span>
                 {pond.cycleStartMode === 'midcycle' && (
                   <span className="pond-detail-baseline-badge">
-                    MID-CYCLE BASELINE
+                    {copy.midCycleBaseline}
                   </span>
                 )}
               </div>
@@ -993,11 +995,11 @@ export default function PondDetailClient() {
                 setStartCycleOpen(true);
               }} className="dashboard-action dashboard-action-primary">
                 <RotateCcw size={18} strokeWidth={2.5} />
-                <span>Start New Cycle</span>
+                <span>{copy.startNewCycle}</span>
               </button>
             )}
             {pond.cycleStartMode === 'midcycle' && isActiveCycle(pond) && canRecordPondData && (
-              <button onClick={openBaselineModal} className="pond-detail-icon-action" title="Edit baseline estimates" aria-label="Edit baseline estimates">
+              <button onClick={openBaselineModal} className="pond-detail-icon-action" title={copy.editBaselineEstimates} aria-label={copy.editBaselineEstimates}>
                 <Settings size={16} />
               </button>
             )}
@@ -1011,7 +1013,7 @@ export default function PondDetailClient() {
                 onClick={() => setRecordMenuOpen((open) => !open)}
               >
                 <Plus size={15} />
-                <span>Record</span>
+                <span>{copy.record}</span>
               </button>
               {isRecordMenuOpen && (
                 <div className="pond-detail-record-popover" role="menu">
@@ -1025,7 +1027,7 @@ export default function PondDetailClient() {
                       setSamplingModalOpen(true);
                     }}
                   >
-                    <Plus size={16} /><span><strong>Sampling</strong><small>Record MBW and observations</small></span>
+                    <Plus size={16} /><span><strong>{copy.sampling}</strong><small>{copy.samplingDescription}</small></span>
                   </button>
                   <button
                     type="button"
@@ -1036,14 +1038,14 @@ export default function PondDetailClient() {
                       setMortalityModalOpen(true);
                     }}
                   >
-                    <Activity size={16} /><span><strong>Mortality</strong><small>Record daily mortality</small></span>
+                    <Activity size={16} /><span><strong>{copy.mortality}</strong><small>{copy.mortalityDescription}</small></span>
                   </button>
                   {canManageFeed && <Link
                     role="menuitem"
                     href={`/dashboard/feed?action=new&pondId=${encodeURIComponent(pond.id)}`}
                     onClick={() => setRecordMenuOpen(false)}
                   >
-                    <ShoppingBag size={16} /><span><strong>Feed</strong><small>Deduct feed inventory</small></span>
+                    <ShoppingBag size={16} /><span><strong>{copy.feed}</strong><small>{copy.feedDescription}</small></span>
                   </Link>}
                 </div>
               )}
@@ -1055,10 +1057,10 @@ export default function PondDetailClient() {
       {/* Hero Stats */}
       <div className="glass-card animate-fade-up animate-delay-1 dashboard-summary-panel pond-detail-summary">
         {[
-          { label: 'Age (DOC)', value: `${metrics?.doc ?? 0}`, unit: 'days' },
-          { label: 'Est. Biomass', value: metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0', unit: 'kg' },
-          { label: 'Avg Daily Growth', value: metrics?.adg.toFixed(2) || '0.00', unit: 'g/day' },
-          { label: 'Survival Rate', value: `${metrics?.sr.toFixed(1) || '0.0'}%`, unit: '' },
+          { label: copy.ageDoc, value: `${metrics?.doc ?? 0}`, unit: copy.days },
+          { label: copy.estimatedBiomass, value: metrics?.biomass.toLocaleString(undefined, { maximumFractionDigits: 1 }) || '0', unit: 'kg' },
+          { label: copy.averageDailyGrowth, value: metrics?.adg.toFixed(2) || '0.00', unit: `g/${copy.days}` },
+          { label: copy.survivalRate, value: `${metrics?.sr.toFixed(1) || '0.0'}%`, unit: '' },
         ].map(({ label, value, unit }) => (
           <div className="dashboard-summary-item pond-detail-summary-item" key={label}>
             <div className="dashboard-summary-content">
@@ -1084,14 +1086,14 @@ export default function PondDetailClient() {
             <LineChartIcon size={18} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', minWidth: 0 }}>
-            <div style={{ fontSize: '0.88rem', fontWeight: 600 }}>Feed response needs review</div>
+            <div style={{ fontSize: '0.88rem', fontWeight: 600 }}>{copy.feedReview}</div>
             <div style={{ color: '#92400E', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.45 }}>
-              Feed-based biomass differs from records across {metrics.feedBiomassInsight.requiredRecords} recent records.
+              {copy.feedDifference.replace('{{count}}', String(metrics.feedBiomassInsight.requiredRecords))}
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Records {metrics.feedBiomassInsight.latest.recordBiomassKg.toFixed(1)} kg</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>Feed est. {metrics.feedBiomassInsight.latest.feedBasedBiomassKg.toFixed(1)} kg</span>
-              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{metrics.feedBiomassInsight.latest.differencePercent.toFixed(0)}% diff</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{copy.records} {metrics.feedBiomassInsight.latest.recordBiomassKg.toFixed(1)} kg</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{copy.feedEstimate} {metrics.feedBiomassInsight.latest.feedBasedBiomassKg.toFixed(1)} kg</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 600, background: '#FEF3C7', borderRadius: '999px', padding: '4px 8px' }}>{metrics.feedBiomassInsight.latest.differencePercent.toFixed(0)}% {copy.difference}</span>
             </div>
           </div>
         </div>
@@ -1106,8 +1108,8 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
               <div>
-                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '4px' }}>Biological Growth Curve</h3>
-                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Mean Body Weight (MBW) trajectory over production cycle.</p>
+                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '4px' }}>{copy.growthCurve}</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{copy.growthCurveDescription}</p>
               </div>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px',
@@ -1115,29 +1117,29 @@ export default function PondDetailClient() {
                 fontWeight: 600, color: 'var(--primary)', border: '1px solid var(--border)'
               }}>
                 <LineChartIcon size={16} />
-                LIVE TRACKING
+                {copy.liveTracking}
               </div>
             </div>
-            <GrowthChart data={metrics?.chartData || []} />
+            <GrowthChart data={metrics?.chartData || []} emptyMessage={copy.insufficientSampling} />
           </div>
 
           {/* Sampling History Table */}
           <div className="glass-card pond-detail-sampling-history" style={{ padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '18px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>Sampling History</h3>
-              <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>View Audit Log</button>
+              <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600 }}>{copy.samplingHistory}</h3>
+              <button style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', background: 'transparent', border: 'none', cursor: 'pointer' }}>{copy.viewAuditLog}</button>
             </div>
             <div className="pond-detail-sampling-table-wrap">
               <table className="pond-detail-sampling-table">
                 <thead>
                   <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
-                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.date}</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>MBW (g)</th>
                     <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>ADG</th>
-                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Size (pcs/kg)</th>
-                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Feed (kg)</th>
-                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Mortality</th>
-                    {canRecordPondData && isActiveCycle(pond) && <th style={{ height: '44px', padding: '0 24px' }}>Action</th>}
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.size}</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.feedKg}</th>
+                    <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.mortality}</th>
+                    {canRecordPondData && isActiveCycle(pond) && <th style={{ height: '44px', padding: '0 24px' }}>{copy.action}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -1172,12 +1174,12 @@ export default function PondDetailClient() {
                         {canRecordPondData && isActiveCycle(pond) && (
                           <td style={{ padding: '16px 24px', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <button type="button" aria-label="Edit sampling" onClick={() => {
+                              <button type="button" aria-label={copy.editSampling} onClick={() => {
                                 setEditingSamplingId(s.id);
                                 setSamplingForm({ date: s.date, mbw: String(s.mbw || ''), feed: String(s.feed || ''), mortality: String(s.mortality || 0) });
                                 setSamplingModalOpen(true);
                               }} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: 'var(--primary)' }}><Pencil size={14} /></button>
-                              <button type="button" aria-label="Delete sampling" onClick={() => handleDeleteSampling(s.id)} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
+                              <button type="button" aria-label={copy.deleteSampling} onClick={() => handleDeleteSampling(s.id)} style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}><Trash2 size={14} /></button>
                             </div>
                           </td>
                         )}
@@ -1204,7 +1206,7 @@ export default function PondDetailClient() {
               onClick={() => setMortalityHistoryOpen((prev) => !prev)}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, margin: 0 }}>Mortality History</h3>
+                <h3 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, margin: 0 }}>{copy.mortalityHistory}</h3>
                 <span style={{
                   fontSize: '0.75rem',
                   fontWeight: 700,
@@ -1250,12 +1252,12 @@ export default function PondDetailClient() {
                     }}
                   >
                     <Plus size={14} />
-                    <span>Record Mortality</span>
+                    <span>{copy.recordMortality}</span>
                   </button>
                 )}
                 <button
                   type="button"
-                  aria-label={isMortalityHistoryOpen ? "Collapse mortality history" : "Expand mortality history"}
+                  aria-label={isMortalityHistoryOpen ? copy.collapseMortalityHistory : copy.expandMortalityHistory}
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -1274,20 +1276,20 @@ export default function PondDetailClient() {
             {isMortalityHistoryOpen && (
               currentCycleMortalityRecords.length === 0 ? (
                 <div style={{ padding: '32px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.88rem', fontWeight: 500 }}>
-                  No mortality records logged for this cycle.
+                  {copy.noMortalityRecords}
                 </div>
               ) : (
                 <div className="pond-detail-sampling-table-wrap">
                   <table className="pond-detail-sampling-table">
                     <thead>
                       <tr style={{ textAlign: 'left', background: 'var(--bg-mid)' }}>
-                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Date</th>
-                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Record Type</th>
-                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Count (pcs)</th>
-                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Est. Weight</th>
-                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Notes</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.date}</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.recordType}</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.countPieces}</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.estimatedWeight}</th>
+                        <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.notes}</th>
                         {canRecordPondData && isActiveCycle(pond) && (
-                          <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Actions</th>
+                          <th style={{ height: '44px', padding: '0 24px', fontSize: '12px', lineHeight: '16px', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{copy.actions}</th>
                         )}
                       </tr>
                     </thead>
@@ -1300,10 +1302,10 @@ export default function PondDetailClient() {
                         const weightKg = mbw > 0 && countNum > 0 ? (countNum * mbw) / 1000 : null;
 
                         const badgeStyle = isNone
-                          ? { bg: '#DCFCE7', color: '#166534', label: 'None Observed' }
+                          ? { bg: '#DCFCE7', color: '#166534', label: copy.noneObserved }
                           : isObserved
-                          ? { bg: '#E0F2FE', color: '#0F4C75', label: 'Observed / Recovered' }
-                          : { bg: '#FEE2E2', color: '#991B1B', label: 'Estimated Total' };
+                          ? { bg: '#E0F2FE', color: '#0F4C75', label: copy.observedRecovered }
+                          : { bg: '#FEE2E2', color: '#991B1B', label: copy.estimatedTotal };
 
                         return (
                           <tr key={record.id || i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">
@@ -1324,7 +1326,7 @@ export default function PondDetailClient() {
                               </span>
                             </td>
                             <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: countNum > 0 ? '#ef4444' : 'var(--text-muted)' }}>
-                              {isNone ? '0 pcs' : `${countNum.toLocaleString()} pcs`}
+                              {isNone ? `0 ${copy.pieces}` : `${countNum.toLocaleString()} ${copy.pieces}`}
                             </td>
                             <td style={{ padding: '16px 24px', fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                               {weightKg !== null && !isNone ? `${weightKg.toFixed(2)} kg` : '—'}
@@ -1337,7 +1339,7 @@ export default function PondDetailClient() {
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                                   <button
                                     type="button"
-                                    aria-label="Edit mortality"
+                                    aria-label={copy.editMortality}
                                     onClick={() => {
                                       setEditingMortalityId(record.id || null);
                                       setMortalityForm({
@@ -1357,7 +1359,7 @@ export default function PondDetailClient() {
                                   </button>
                                   <button
                                     type="button"
-                                    aria-label="Delete mortality"
+                                    aria-label={copy.deleteMortality}
                                     onClick={() => handleDeleteMortality(record.id || '')}
                                     style={{ border: '1px solid var(--border)', background: '#FFF', borderRadius: '8px', padding: '7px', cursor: 'pointer', color: '#ef4444' }}
                                   >
@@ -1388,17 +1390,17 @@ export default function PondDetailClient() {
                 <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                   <FlaskConical size={18} />
                 </div>
-                <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Latest Lab Status</h4>
+                <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>{copy.latestLabStatus}</h4>
               </div>
             </div>
             {labStatusCards.length === 0 ? (
               <p style={{ color: 'var(--text-primary)', fontSize: '0.9rem', fontWeight: 600, lineHeight: 1.45 }}>
-                No confirmed lab warning for this pond.
+                {copy.noLabWarning}
               </p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {labStatusCards.map((item) => {
-                  const statusStyle = getLabStatusStyle(item.status?.status);
+                  const statusStyle = getLabStatusStyle(item.status?.status, copy);
                   const Icon = item.Icon;
                   return (
                     <div key={item.key} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
@@ -1412,11 +1414,11 @@ export default function PondDetailClient() {
                         </span>
                       </div>
                       <p style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, lineHeight: 1.45 }}>
-                        {item.status?.mainIssue || 'No confirmed lab warning for this pond.'}
+                        {item.status?.mainIssue || copy.noLabWarning}
                       </p>
                       {item.status?.sampleDate && (
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 600, marginTop: '6px' }}>
-                          Last lab: {new Date(item.status.sampleDate).toLocaleDateString()}
+                          {copy.lastLab}: {new Date(item.status.sampleDate).toLocaleDateString()}
                         </p>
                       )}
                       {item.status?.keyRisks && item.status.keyRisks.length > 0 && (
@@ -1428,7 +1430,7 @@ export default function PondDetailClient() {
                       )}
                       {item.status?.recommendations?.[0] && (
                         <div style={{ marginTop: '12px', padding: '10px', borderRadius: '10px', background: '#ffffff', border: '1px solid var(--border)' }}>
-                          <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>Recommended Action</div>
+                          <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '5px' }}>{copy.recommendedAction}</div>
                           <div style={{ color: 'var(--text-primary)', fontSize: '0.78rem', fontWeight: 600, lineHeight: 1.45 }}>{item.status.recommendations[0]}</div>
                         </div>
                       )}
@@ -1444,23 +1446,23 @@ export default function PondDetailClient() {
               <div style={{ width: '34px', height: '34px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                 <Info size={18} />
               </div>
-              <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>Detailed Metrics</h4>
+              <h4 style={{ fontSize: '1rem', fontWeight: 600 }}>{copy.detailedMetrics}</h4>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
               {/* Biological Specs */}
               <div>
-                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Biological & Feed</h5>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>{copy.biologicalAndFeed}</h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
-                    { label: 'Current Population', value: `${metrics?.population.toLocaleString()} pcs`, icon: Users },
-                    { label: "Today's Mortality", value: `${metrics?.todayMortality.toLocaleString()} pcs`, icon: Activity },
-                    { label: 'Total Mortality', value: `${metrics?.totalMortality.toLocaleString()} pcs`, icon: Activity },
-                    { label: 'Total Mort. Weight', value: `${metrics?.totalMortalityWeight.toFixed(2)} kg`, icon: Wind },
-                    { label: 'Total Feed Used', value: `${metrics?.totalFeed.toFixed(1)} kg`, icon: ShoppingBag },
-                    { label: 'FCR (Est.)', value: metrics?.fcr.toFixed(2), icon: Target },
-                    { label: 'Current Size', value: `${metrics?.size} pcs/kg`, icon: Scale },
+                    { label: copy.currentPopulation, value: `${metrics?.population.toLocaleString()} ${copy.pieces}`, icon: Users },
+                    { label: copy.todaysMortality, value: `${metrics?.todayMortality.toLocaleString()} ${copy.pieces}`, icon: Activity },
+                    { label: copy.totalMortality, value: `${metrics?.totalMortality.toLocaleString()} ${copy.pieces}`, icon: Activity },
+                    { label: copy.totalMortalityWeight, value: `${metrics?.totalMortalityWeight.toFixed(2)} kg`, icon: Wind },
+                    { label: copy.totalFeedUsed, value: `${metrics?.totalFeed.toFixed(1)} kg`, icon: ShoppingBag },
+                    { label: copy.fcrEstimated, value: metrics?.fcr.toFixed(2), icon: Target },
+                    { label: copy.currentSize, value: `${metrics?.size} ${copy.pieces}/kg`, icon: Scale },
                   ].map((spec, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1474,13 +1476,13 @@ export default function PondDetailClient() {
 
               {/* Pond Specifications */}
               <div>
-                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>Pond Specifications</h5>
+                <h5 style={{ fontSize: '0.72rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', marginBottom: '12px', borderBottom: '1px solid var(--border)', paddingBottom: '8px' }}>{copy.pondSpecifications}</h5>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                   {[
-                    { label: 'Total Area', value: `${pond.pondArea} m²`, icon: Layers },
-                    { label: 'Target Density', value: `${pond.density} PL/m²`, icon: Database },
-                    { label: 'PL Supplier', value: getPlSupplier(pond), icon: Target },
-                    { label: 'Initial Weight', value: `${pond.initialWeight} g`, icon: Wind },
+                    { label: copy.totalArea, value: `${pond.pondArea} m²`, icon: Layers },
+                    { label: copy.targetDensity, value: `${pond.density} PL/m²`, icon: Database },
+                    { label: copy.plSupplier, value: getPlSupplier(pond), icon: Target },
+                    { label: copy.initialWeight, value: `${pond.initialWeight} g`, icon: Wind },
                   ].map((spec, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1496,13 +1498,13 @@ export default function PondDetailClient() {
           </div>
 
           <div className="pond-detail-delete-action">
-            <p>Permanently deletes this cycle and its sampling history.</p>
+            <p>{copy.deleteDescription}</p>
             <button
               type="button"
               onClick={handleDeletePond}
               disabled={!canManagePond || isDeletingPond}
             >
-              {isDeletingPond ? 'Deleting...' : 'Delete Pond'}
+              {isDeletingPond ? copy.deleting : copy.deletePond}
             </button>
           </div>
         </div>
@@ -1514,8 +1516,8 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>End Cycle</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} history will remain available.</p>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.endCycle}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.historyRemains.replace('{{pond}}', pond.pondName)}</p>
               </div>
               <button onClick={() => setEndCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -1523,21 +1525,21 @@ export default function PondDetailClient() {
             </div>
             <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                End Date
+                {copy.endDate}
                 <input type="date" value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Reason
+                {copy.reason}
                 <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
-                  <option value="harvested">Harvested</option>
-                  <option value="disease">Disease</option>
-                  <option value="reset">Reset</option>
-                  <option value="other">Other</option>
+                  <option value="harvested">{copy.harvested}</option>
+                  <option value="disease">{copy.disease}</option>
+                  <option value="reset">{copy.reset}</option>
+                  <option value="other">{copy.other}</option>
                 </select>
               </label>
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>End Cycle</button>
+                <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
+                <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.endCycle}</button>
               </div>
             </div>
           </div>
@@ -1549,8 +1551,8 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Edit Baseline</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.</p>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.editBaseline}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.baselineDescription}</p>
               </div>
               <button onClick={() => setBaselineModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -1558,28 +1560,28 @@ export default function PondDetailClient() {
             </div>
             <form onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Baseline Date
+                {copy.baselineDate}
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Current MBW (g)
+                {copy.currentMbw}
                 <input required type="number" step="0.01" value={baselineForm.baselineMbw} onChange={e => setBaselineForm(prev => ({ ...prev, baselineMbw: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Current Population
+                {copy.currentPopulation}
                 <input type="number" value={baselineForm.baselineEstimatedPopulation} onChange={e => setBaselineForm(prev => ({ ...prev, baselineEstimatedPopulation: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Current SR %
+                {copy.currentSr}
                 <input type="number" step="0.1" value={baselineForm.baselineSurvivalRate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineSurvivalRate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Feed Used So Far (kg)
+                {copy.feedUsedSoFar}
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Save Baseline</button>
+                <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.saveBaseline}</button>
               </div>
             </form>
           </div>
@@ -1591,8 +1593,8 @@ export default function PondDetailClient() {
           <div className="glass-card" style={{ width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Start New Cycle</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{pond.pondName} and {pond.pondArea} m² will be reused. Supplier is cycle-specific.</p>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.startNewCycle}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.startCycleDescription.replace('{{pond}}', pond.pondName).replace('{{area}}', String(pond.pondArea))}</p>
               </div>
               <button onClick={() => setStartCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -1600,24 +1602,24 @@ export default function PondDetailClient() {
             </div>
             <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Density (PL/m²)
+                {copy.density}
                 <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Stocking Date
+                {copy.stockingDate}
                 <input required type="date" value={startCycleForm.docStart} onChange={e => setStartCycleForm(prev => ({ ...prev, docStart: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                PL Value (g)
+                {copy.plValue}
                 <input required type="number" step="0.1" value={startCycleForm.plValue} onChange={e => setStartCycleForm(prev => ({ ...prev, plValue: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                PL Supplier
+                {copy.plSupplier}
                 <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>Start Cycle</button>
+                <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
+                <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.startCycle}</button>
               </div>
             </form>
           </div>
@@ -1703,6 +1705,9 @@ export default function PondDetailClient() {
 }
 
 function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: any) {
+  const { t } = useLanguage();
+  const copy = t.pondDetail;
+
   if (!isOpen) return null;
 
   return (
@@ -1714,8 +1719,8 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? 'Edit Sampling' : 'New Sampling'}</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Log biological and feeding data.</p>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? copy.editSamplingTitle : copy.newSampling}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.samplingModalDescription}</p>
           </div>
           <button
             onClick={onClose}
@@ -1727,7 +1732,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
 
         <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sampling Date</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.samplingDate}</label>
             <input
               type="date"
               required
@@ -1742,7 +1747,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>MBW (grams)</label>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.mbwGrams}</label>
               <input
                 type="number"
                 step="0.01"
@@ -1757,7 +1762,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
               />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Feed (kg)</label>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.feedKg}</label>
               <input
                 type="number"
                 step="0.1"
@@ -1773,7 +1778,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Mortality (pcs)</label>
+            <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.mortalityPieces}</label>
             <input
               type="number"
               placeholder="0"
@@ -1790,9 +1795,9 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
             <button type="button" onClick={onClose} style={{
               flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
               background: 'transparent', fontWeight: 600, cursor: 'pointer'
-            }}>Cancel</button>
+            }}>{copy.cancel}</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? 'Update Record' : 'Save Record'}
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? copy.updateRecord : copy.saveRecord}
             </button>
           </div>
         </form>
@@ -1813,6 +1818,7 @@ interface MortalityModalProps {
 
 function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: MortalityModalProps) {
   const { t } = useLanguage();
+  const copy = t.pondDetail;
 
   if (!isOpen) return null;
 
@@ -1825,8 +1831,8 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
       <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
         <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? 'Edit Mortality' : 'Daily Mortality'}</h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Record mortality observations for this pond.</p>
+            <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? copy.editMortalityTitle : copy.dailyMortality}</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.mortalityModalDescription}</p>
           </div>
           <button onClick={onClose} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
             <X size={24} />
@@ -1835,17 +1841,17 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
 
         <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Record Type
+            {copy.recordType}
             <select value={form.observationType} onChange={(event) => setForm({ ...form, observationType: event.target.value as MortalityObservationType })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
-              <option value="estimated_total">Estimated total pond mortality</option>
-              <option value="observed_recovered">Observed or recovered dead shrimp</option>
-              <option value="none_observed">No mortality observed</option>
+              <option value="estimated_total">{copy.estimatedTotalOption}</option>
+              <option value="observed_recovered">{copy.observedRecoveredOption}</option>
+              <option value="none_observed">{copy.noneObservedOption}</option>
             </select>
           </label>
 
           {form.observationType === 'estimated_total' ? (
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Mortality Count
+              {copy.mortalityCount}
               <input required type="number" min="1" step="1" value={form.count} onChange={(event) => setForm({ ...form, count: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
             </label>
           ) : null}
@@ -1871,19 +1877,19 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
           </> : null}
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Mortality Date
+            {copy.mortalityDate}
             <input required type="date" value={form.date} onChange={(event) => setForm({ ...form, date: event.target.value })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
           </label>
 
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Notes (optional)
-            <textarea maxLength={500} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder="Cause, pond condition, or observation details" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600, resize: 'vertical' }} />
+            {copy.notesOptional}
+            <textarea maxLength={500} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder={copy.notesPlaceholder} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600, resize: 'vertical' }} />
           </label>
 
           <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
-            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+            <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? 'Update Record' : 'Save Mortality'}
+              {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? copy.updateRecord : copy.saveMortality}
             </button>
           </div>
         </form>

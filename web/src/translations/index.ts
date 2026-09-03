@@ -7,13 +7,14 @@ import { vi } from './vi';
 import { cycleFeatureTranslations } from '../../../shared/cycleFeatureTranslations';
 import { planktonOverwatchLocalizedCopy } from '../../../shared/planktonOverwatchI18n';
 import { dailyOperationsTranslations } from '../../../shared/dailyOperationsI18n';
+import { pondDetailTranslations } from '../../../shared/pondDetailI18n';
 
 export const translations = {
-  en: { ...en, ...cycleFeatureTranslations.en, dailyOperationsReports: dailyOperationsTranslations.en, waterQuality: { ...en.waterQuality, ...planktonOverwatchLocalizedCopy.en } },
-  id: { ...id, ...cycleFeatureTranslations.id, dailyOperationsReports: dailyOperationsTranslations.id, waterQuality: { ...id.waterQuality, ...planktonOverwatchLocalizedCopy.id } },
-  th: { ...th, ...cycleFeatureTranslations.th, dailyOperationsReports: dailyOperationsTranslations.th, waterQuality: { ...th.waterQuality, ...planktonOverwatchLocalizedCopy.th } },
-  zh: { ...zh, ...cycleFeatureTranslations.zh, dailyOperationsReports: dailyOperationsTranslations.zh, waterQuality: { ...zh.waterQuality, ...planktonOverwatchLocalizedCopy.zh } },
-  vi: { ...vi, ...cycleFeatureTranslations.vi, dailyOperationsReports: dailyOperationsTranslations.vi, waterQuality: { ...vi.waterQuality, ...planktonOverwatchLocalizedCopy.vi } },
+  en: { ...en, ...cycleFeatureTranslations.en, dailyOperationsReports: dailyOperationsTranslations.en, pondDetail: pondDetailTranslations.en, waterQuality: { ...en.waterQuality, ...planktonOverwatchLocalizedCopy.en } },
+  id: { ...id, ...cycleFeatureTranslations.id, dailyOperationsReports: dailyOperationsTranslations.id, pondDetail: pondDetailTranslations.id, waterQuality: { ...id.waterQuality, ...planktonOverwatchLocalizedCopy.id } },
+  th: { ...th, ...cycleFeatureTranslations.th, dailyOperationsReports: dailyOperationsTranslations.th, pondDetail: pondDetailTranslations.th, waterQuality: { ...th.waterQuality, ...planktonOverwatchLocalizedCopy.th } },
+  zh: { ...zh, ...cycleFeatureTranslations.zh, dailyOperationsReports: dailyOperationsTranslations.zh, pondDetail: pondDetailTranslations.zh, waterQuality: { ...zh.waterQuality, ...planktonOverwatchLocalizedCopy.zh } },
+  vi: { ...vi, ...cycleFeatureTranslations.vi, dailyOperationsReports: dailyOperationsTranslations.vi, pondDetail: pondDetailTranslations.vi, waterQuality: { ...vi.waterQuality, ...planktonOverwatchLocalizedCopy.vi } },
 };
 
 export type Language = keyof typeof translations;

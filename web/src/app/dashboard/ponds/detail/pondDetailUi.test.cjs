@@ -5,6 +5,7 @@ const test = require('node:test');
 
 const component = fs.readFileSync(path.join(__dirname, 'PondDetailClient.tsx'), 'utf8');
 const stylesheet = fs.readFileSync(path.join(__dirname, '../../../globals.css'), 'utf8');
+const translationsIndex = fs.readFileSync(path.join(__dirname, '../../../../translations/index.ts'), 'utf8');
 
 test('mobile sampling table centers every heading without horizontal overflow', () => {
   assert.match(stylesheet, /\.pond-detail-sampling-table-wrap\s*\{[^}]*overflow-x:\s*hidden;/s);
@@ -13,10 +14,10 @@ test('mobile sampling table centers every heading without horizontal overflow', 
 });
 
 test('record trigger exposes sampling, mortality, and pond-aware feed flows', () => {
-  assert.match(component, />\s*Record\s*</);
-  assert.match(component, /<strong>Sampling<\/strong>/);
-  assert.match(component, /<strong>Mortality<\/strong>/);
-  assert.match(component, /<strong>Feed<\/strong>/);
+  assert.match(component, /copy\.record/);
+  assert.match(component, /<strong>\{copy\.sampling\}<\/strong>/);
+  assert.match(component, /<strong>\{copy\.mortality\}<\/strong>/);
+  assert.match(component, /<strong>\{copy\.feed\}<\/strong>/);
   assert.match(component, /\/dashboard\/feed\?action=new&pondId=\$\{encodeURIComponent\(pond\.id\)\}/);
 });
 
@@ -41,11 +42,11 @@ test('sampling history includes ADG and the record trigger has no container', ()
 });
 
 test('pond detail renders collapsible mortality history section scoped to current cycle', () => {
-  assert.match(component, /Mortality History/);
+  assert.match(component, /copy\.mortalityHistory/);
   assert.match(component, /currentCycleMortalityRecords/);
   assert.match(component, /isMortalityHistoryOpen/);
-  assert.match(component, /No mortality records logged for this cycle\./);
-  assert.match(component, /Record Mortality/);
+  assert.match(component, /copy\.noMortalityRecords/);
+  assert.match(component, /copy\.recordMortality/);
 });
 
 test('pond detail shows the latest deterministic Plankton Overwatch result', () => {
@@ -60,4 +61,14 @@ test('sampling writes biological data without touching feed inventory', () => {
   );
   assert.match(handler, /samplings:/);
   assert.doesNotMatch(handler, /runTransaction|inventoryFeedId|companies.*feeds/);
+});
+
+test('pond details use the localized copy instead of hardcoded English labels', () => {
+  assert.match(translationsIndex, /pondDetailTranslations/);
+  assert.match(component, /const copy = t\.pondDetail;/);
+  assert.doesNotMatch(component, />Biological Growth Curve</);
+  assert.doesNotMatch(component, />Sampling History</);
+  assert.doesNotMatch(component, />Mortality History</);
+  assert.doesNotMatch(component, />Latest Lab Status</);
+  assert.doesNotMatch(component, />Detailed Metrics</);
 });
