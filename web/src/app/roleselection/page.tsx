@@ -64,6 +64,12 @@ export default function RoleSelectionPage() {
       title: t.roleSelection.shrimpBuyer || 'Shrimp Buyer',
       description: t.roleSelection.buyerDesc || 'Find high-quality shrimp harvests and manage procurement.',
       requiresCompany: false
+    },
+    {
+      id: 'admin',
+      title: t.roleSelection.administrator || 'Administrator',
+      description: t.roleSelection.adminDesc || 'Manage farm systems, users, and operational access.',
+      requiresCompany: true
     }
   ];
 
@@ -152,7 +158,7 @@ export default function RoleSelectionPage() {
           <span>Need help choosing?</span>
         </div>
         <p>
-          Farm Owners typically create the digital profile for the entire operation. Technicians and Managers join existing farms using a search or invitation link. Buyers operate independently to source products.
+          Farm Owners typically create the digital profile for the entire operation. Farm staff, including Administrators, join existing farms using a search or invitation link. Buyers operate independently to source products.
         </p>
       </div>
 
