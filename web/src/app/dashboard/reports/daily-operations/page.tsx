@@ -97,7 +97,7 @@ export default function DailyOperationsReportsPage() {
   if (!canViewReports) return <div style={{ textAlign: 'center', padding: '100px' }}>{copy.noPermission}</div>;
   if (loading) return <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}><Loader2 className="animate-spin" size={40} /></div>;
 
-  const headerCell = { ...cellStyle, background: '#fff4a8', fontWeight: 700, color: '#102a43' } as React.CSSProperties;
+  const headerCell = { ...cellStyle, background: '#0F4C75', fontWeight: 700, color: '#fff' } as React.CSSProperties;
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '40px' }}>
