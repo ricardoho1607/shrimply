@@ -10,6 +10,7 @@ import {
   User as FirebaseUser,
   sendPasswordResetEmail,
   sendEmailVerification,
+  reload,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
@@ -63,6 +64,19 @@ const waitForAuthNetworkRecovery = async () => {
   await new Promise<void>((resolve) => {
     window.setTimeout(resolve, AUTH_NETWORK_RETRY_DELAY_MS);
   });
+};
+
+const ensureVerifiedEmail = async (message: string) => {
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('You must be signed in.');
+
+  await reload(currentUser);
+  if (!currentUser.emailVerified) {
+    await sendEmailVerification(currentUser);
+    throw new Error(message);
+  }
+
+  await currentUser.getIdToken(true);
 };
 
 const getEffectiveUserRole = (user: User | null, company: Company | null): User['role'] | undefined => {
@@ -366,17 +380,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const acceptInviteAfterAuth = async (inviteToken?: string) => {
     if (!inviteToken) return;
-    if (!auth.currentUser?.emailVerified) {
-      if (auth.currentUser) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('You must be signed in.');
+    await reload(currentUser);
+    if (!currentUser.emailVerified) {
+      if (currentUser) {
         try {
-          await sendEmailVerification(auth.currentUser);
+          await sendEmailVerification(currentUser);
         } finally {
           await firebaseSignOut(auth);
         }
       }
       throw new Error('Verification email sent. Verify your email, then reopen the invitation link to join the company.');
     }
-    await auth.currentUser.getIdToken(true);
+    await currentUser.getIdToken(true);
     const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await acceptCompanyInvite({ inviteToken });
   };
@@ -415,7 +432,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-      await acceptInviteAfterAuth(inviteToken);
+      if (inviteToken) {
+        await acceptInviteAfterAuth(inviteToken);
+      } else {
+        await sendEmailVerification(userCredential.user);
+      }
       if (inviteToken) {
         const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
         setUser(userDoc.exists() ? userDoc.data() as User : newUser);
@@ -537,11 +558,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
     if (!user) throw new Error('User must be authenticated to request joining a company');
     if (user.companyId) throw new Error('You are already part of a company');
-    if (!auth.currentUser?.emailVerified) {
-      if (auth.currentUser) await sendEmailVerification(auth.currentUser);
-      throw new Error('Verification email sent. Verify your email before requesting company access.');
-    }
-    await auth.currentUser.getIdToken(true);
+    await ensureVerifiedEmail('Verification email sent. Verify your email before requesting company access.');
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'createCompanyJoinRequest', ...request });
   }, [user]);
@@ -594,6 +611,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before approving team access.');
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'approve' });
     await refreshCompanyData();
@@ -601,6 +619,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before managing team access.');
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
   }, [company, user]);
