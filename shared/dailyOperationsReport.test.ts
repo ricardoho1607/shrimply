@@ -78,7 +78,7 @@ test('builds shift totals, cumulative Sipon, population, and water-quality rows'
   assert.equal(report.waterQualityRows[0].feedIndex, '0.37');
   assert.equal(report.waterQualityRows[0].dailyFeedKg, '50');
   assert.equal(report.waterQualityRows[0].cumulativeFeedKg, '90');
-  assert.equal(report.waterQualityRows[0].adg, '0.20');
+  assert.equal(report.waterQualityRows[0].targetAdg, '0.19');
   assert.equal(report.waterQualityRows[0].estimatedPopulation, 499976);
 });
 
@@ -189,7 +189,7 @@ test('renders the feed section in the PDF', () => {
   assert.match(html, /Feed Index/);
   assert.match(html, /Daily Feed/);
   assert.match(html, /Cumulative Feed/);
-  assert.match(html, /Actual ADG/);
+  assert.match(html, /Target ADG/);
   assert.match(html, /Estimated Population/);
 });
 

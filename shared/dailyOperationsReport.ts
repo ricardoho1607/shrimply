@@ -90,7 +90,7 @@ export interface WaterQualityReportRow {
   feedIndex: string;
   dailyFeedKg: string;
   cumulativeFeedKg: string;
-  adg: string;
+  targetAdg: string;
   estimatedPopulation: number | null;
 }
 
@@ -129,41 +129,6 @@ const isBaselineRecord = (record: DailyOperationsWaterRecord): boolean =>
 
 const formatDecimal = (value: number, digits = 2): string =>
   value.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
-
-const recordMbw = (record: DailyOperationsWaterRecord): number =>
-  numberValue(record.mbw ?? record.abw);
-
-const daysBetween = (startDate: unknown, endDate: unknown): number | null => {
-  const startKey = dateKey(startDate);
-  const endKey = dateKey(endDate);
-  if (!startKey || !endKey) return null;
-  const difference = (Date.parse(`${endKey}T00:00:00Z`) - Date.parse(`${startKey}T00:00:00Z`)) / 86_400_000;
-  return Number.isFinite(difference) && difference > 0 ? difference : null;
-};
-
-const calculateReportAdg = (
-  pond: DailyOperationsPondSource,
-  recordsToDate: DailyOperationsWaterRecord[],
-): number | null => {
-  const sorted = [...recordsToDate].sort((left, right) => dateKey(left.date).localeCompare(dateKey(right.date)));
-  const operational = sorted.filter((record) => !isBaselineRecord(record) && recordMbw(record) > 0);
-  if (operational.length === 0) return null;
-
-  const latest = operational[operational.length - 1];
-  const previousOperational = operational.length >= 2 ? operational[operational.length - 2] : undefined;
-  const previousBaseline = [...sorted]
-    .reverse()
-    .find((record) => isBaselineRecord(record) && recordMbw(record) > 0 && dateKey(record.date) < dateKey(latest.date));
-  const previous = previousOperational || previousBaseline;
-  const hasPondBaseline = numberValue(pond.baselineMbw) > 0 &&
-    Boolean(dateKey(pond.baselineDate)) && dateKey(pond.baselineDate) < dateKey(latest.date);
-  const previousWeight = previous
-    ? recordMbw(previous)
-    : hasPondBaseline ? numberValue(pond.baselineMbw) : (numberValue(pond.initialWeight) || 0.5);
-  const previousDate = previous?.date || (hasPondBaseline ? pond.baselineDate : pond.docStart);
-  const days = daysBetween(previousDate, latest.date);
-  return days === null ? null : (recordMbw(latest) - previousWeight) / days;
-};
 
 const getDoc = (stockingDate: unknown, reportDate: string): number => {
   const startKey = dateKey(stockingDate);
@@ -281,7 +246,7 @@ const buildWaterQualityRow = (
   const feedIndex = dailyFeed > 0 && doc > 0 && estimatedPopulation && estimatedPopulation > 0
     ? (dailyFeed * 100_000) / (doc * estimatedPopulation)
     : null;
-  const adg = calculateReportAdg(pond, recordsToDate);
+  const targetAdg = feedIndex === null ? null : feedIndex * 0.5;
 
   return {
     pondName: pond.pondName,
@@ -301,7 +266,7 @@ const buildWaterQualityRow = (
     feedIndex: feedIndex === null ? '-' : feedIndex.toFixed(2),
     dailyFeedKg: dailyFeedRecords.length === 0 ? '-' : formatDecimal(dailyFeed),
     cumulativeFeedKg: hasCumulativeFeed ? formatDecimal(cumulativeFeed) : '-',
-    adg: adg === null ? '-' : adg.toFixed(2),
+    targetAdg: targetAdg === null ? '-' : targetAdg.toFixed(2),
     estimatedPopulation,
   };
 };
@@ -374,7 +339,7 @@ export const generateDailyOperationsReportHTML = (
       <td>${escapeHtml(row.recordedBy)}</td><td>${escapeHtml(row.phMorning)}</td><td>${escapeHtml(row.phEvening)}</td><td>${escapeHtml(row.phRange)}</td><td>${escapeHtml(row.temperature)}</td>
       <td>${escapeHtml(row.waterAppearance)}</td><td>${escapeHtml(row.waterDepthCm)}</td><td>${escapeHtml(row.transparency)}</td>
       <td>${escapeHtml(row.salinity)}</td><td>${escapeHtml(row.alkalinity)}</td><td>${escapeHtml(row.feedIndex)}</td>
-      <td>${escapeHtml(row.dailyFeedKg)}</td><td>${escapeHtml(row.cumulativeFeedKg)}</td><td>${escapeHtml(row.adg)}</td>
+      <td>${escapeHtml(row.dailyFeedKg)}</td><td>${escapeHtml(row.cumulativeFeedKg)}</td><td>${escapeHtml(row.targetAdg)}</td>
       <td>${row.estimatedPopulation === null ? '-' : formatInteger(row.estimatedPopulation)}</td></tr>`).join('');
   const hasLegacy = data.siponRows.some((row) => row.hasUnclassifiedData);
   const renderHeader = (title: string, subtitle: string) => `
@@ -452,7 +417,7 @@ export const generateDailyOperationsReportHTML = (
       <div class="report-shell">
         ${renderHeader(copy.dailyWaterQualityReport, copy.waterDescription)}
         <div class="table-container">
-          ${data.waterQualityRows.length ? `<table class="water-table"><colgroup><col style="width:8%"><col style="width:5.5%"><col style="width:3.5%"><col style="width:7.5%"><col span="3" style="width:4.5%"><col style="width:5%"><col style="width:7%"><col span="4" style="width:6%"><col style="width:4.5%"><col style="width:5%"><col style="width:6%"><col style="width:4.5%"><col style="width:6%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.stockingDate)}</th><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th rowspan="2">${escapeHtml(copy.recordedBy)}</th><th class="group" colspan="3">pH</th><th rowspan="2">${escapeHtml(copy.temperature)}<br>°C</th><th rowspan="2">${escapeHtml(copy.waterAppearance)}</th><th rowspan="2">${escapeHtml(copy.waterDepth)}<br>cm</th><th rowspan="2">${escapeHtml(copy.transparency)}<br>cm</th><th rowspan="2">${escapeHtml(copy.salinity)}<br>ppt</th><th rowspan="2">${escapeHtml(copy.alkalinity)}<br>ppm</th><th class="feed-group" colspan="5">${escapeHtml(copy.feedSection)}</th></tr><tr><th>${escapeHtml(copy.phMorning)}</th><th>${escapeHtml(copy.phEvening)}</th><th>${escapeHtml(copy.phRange)}</th><th class="feed-group">${escapeHtml(copy.feedIndex)}</th><th class="feed-group">${escapeHtml(copy.dailyFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.cumulativeFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.actualAdg)}</th><th class="feed-group">${escapeHtml(copy.estimatedPopulation)}</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
+          ${data.waterQualityRows.length ? `<table class="water-table"><colgroup><col style="width:8%"><col style="width:5.5%"><col style="width:3.5%"><col style="width:7.5%"><col span="3" style="width:4.5%"><col style="width:5%"><col style="width:7%"><col span="4" style="width:6%"><col style="width:4.5%"><col style="width:5%"><col style="width:6%"><col style="width:4.5%"><col style="width:6%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.stockingDate)}</th><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th rowspan="2">${escapeHtml(copy.recordedBy)}</th><th class="group" colspan="3">pH</th><th rowspan="2">${escapeHtml(copy.temperature)}<br>°C</th><th rowspan="2">${escapeHtml(copy.waterAppearance)}</th><th rowspan="2">${escapeHtml(copy.waterDepth)}<br>cm</th><th rowspan="2">${escapeHtml(copy.transparency)}<br>cm</th><th rowspan="2">${escapeHtml(copy.salinity)}<br>ppt</th><th rowspan="2">${escapeHtml(copy.alkalinity)}<br>ppm</th><th class="feed-group" colspan="5">${escapeHtml(copy.feedSection)}</th></tr><tr><th>${escapeHtml(copy.phMorning)}</th><th>${escapeHtml(copy.phEvening)}</th><th>${escapeHtml(copy.phRange)}</th><th class="feed-group">${escapeHtml(copy.feedIndex)}</th><th class="feed-group">${escapeHtml(copy.dailyFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.cumulativeFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.targetAdg)}</th><th class="feed-group">${escapeHtml(copy.estimatedPopulation)}</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
         </div>
         ${renderFooter(2)}
       </div>

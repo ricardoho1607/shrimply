@@ -148,12 +148,12 @@ export default function DailyOperationsReportsPage() {
             <td style={cellStyle}>{Math.round(row.estimatedPopulation).toLocaleString()}</td><td style={cellStyle}>{Math.round(row.density).toLocaleString()}</td>
           </tr>)}</tbody>
         </table> : <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1500px' }}>
-          <thead><tr>{[copy.stockingDate, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, copy.phEvening, copy.phRange, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, `${copy.salinity} ppt`, `${copy.alkalinity} ppm`, copy.feedIndex, `${copy.dailyFeed} kg`, `${copy.cumulativeFeed} kg`, copy.actualAdg, copy.estimatedPopulation].map((label, index) => <th key={label} style={index >= 13 ? { ...headerCell, background: '#BBE1FA', color: '#0F4C75' } : headerCell}>{label}</th>)}</tr></thead>
+          <thead><tr>{[copy.stockingDate, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, copy.phEvening, copy.phRange, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, `${copy.salinity} ppt`, `${copy.alkalinity} ppm`, copy.feedIndex, `${copy.dailyFeed} kg`, `${copy.cumulativeFeed} kg`, copy.targetAdg, copy.estimatedPopulation].map((label, index) => <th key={label} style={index >= 13 ? { ...headerCell, background: '#BBE1FA', color: '#0F4C75' } : headerCell}>{label}</th>)}</tr></thead>
           <tbody>{report.waterQualityRows.map((row) => <tr key={row.pondName}>
             <td style={cellStyle}>{row.stockingDate || '-'}</td><td style={{ ...cellStyle, fontWeight: 700 }}>{row.pondName}</td><td style={cellStyle}>{row.doc}</td><td style={cellStyle}>{row.recordedBy}</td>
             <td style={cellStyle}>{row.phMorning}</td><td style={cellStyle}>{row.phEvening}</td><td style={cellStyle}>{row.phRange}</td><td style={cellStyle}>{row.temperature}</td><td style={cellStyle}>{row.waterAppearance}</td><td style={cellStyle}>{row.waterDepthCm}</td>
             <td style={cellStyle}>{row.transparency}</td><td style={cellStyle}>{row.salinity}</td><td style={cellStyle}>{row.alkalinity}</td>
-            <td style={cellStyle}>{row.feedIndex}</td><td style={cellStyle}>{row.dailyFeedKg}</td><td style={cellStyle}>{row.cumulativeFeedKg}</td><td style={cellStyle}>{row.adg}</td>
+            <td style={cellStyle}>{row.feedIndex}</td><td style={cellStyle}>{row.dailyFeedKg}</td><td style={cellStyle}>{row.cumulativeFeedKg}</td><td style={cellStyle}>{row.targetAdg}</td>
             <td style={cellStyle}>{row.estimatedPopulation === null ? '-' : Math.round(row.estimatedPopulation).toLocaleString()}</td>
           </tr>)}</tbody>
         </table>}

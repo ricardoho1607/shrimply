@@ -42,7 +42,7 @@ test('daily operations water tables show the feed section', () => {
     assert.match(reportSource, /copy\.feedIndex/);
     assert.match(reportSource, /copy\.dailyFeed/);
     assert.match(reportSource, /copy\.cumulativeFeed/);
-    assert.match(reportSource, /copy\.actualAdg/);
+    assert.match(reportSource, /copy\.targetAdg/);
     assert.match(reportSource, /row\.estimatedPopulation/);
   }
 });

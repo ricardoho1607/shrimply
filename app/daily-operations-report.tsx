@@ -164,13 +164,13 @@ export default function DailyOperationsReportScreen() {
             ) : (
               <View>
                 <View style={styles.row}>
-                  {[copy.stocked, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, copy.phEvening, copy.phRange, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, copy.salinity, copy.alkalinity, copy.feedIndex, `${copy.dailyFeed} kg`, `${copy.cumulativeFeed} kg`, copy.actualAdg, copy.estimatedPopulation].map((label) => <Cell key={label} value={label} header />)}
+                  {[copy.stocked, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, copy.phEvening, copy.phRange, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, copy.salinity, copy.alkalinity, copy.feedIndex, `${copy.dailyFeed} kg`, `${copy.cumulativeFeed} kg`, copy.targetAdg, copy.estimatedPopulation].map((label) => <Cell key={label} value={label} header />)}
                 </View>
                 {report.waterQualityRows.map((row) => <View key={row.pondName} style={styles.row}>
                   <Cell value={row.stockingDate || '-'} /><Cell value={row.pondName} /><Cell value={row.doc} /><Cell value={row.recordedBy} />
                   <Cell value={row.phMorning} /><Cell value={row.phEvening} /><Cell value={row.phRange} /><Cell value={row.temperature} /><Cell value={row.waterAppearance} /><Cell value={row.waterDepthCm} />
                   <Cell value={row.transparency} /><Cell value={row.salinity} /><Cell value={row.alkalinity} />
-                  <Cell value={row.feedIndex} /><Cell value={row.dailyFeedKg} /><Cell value={row.cumulativeFeedKg} /><Cell value={row.adg} />
+                  <Cell value={row.feedIndex} /><Cell value={row.dailyFeedKg} /><Cell value={row.cumulativeFeedKg} /><Cell value={row.targetAdg} />
                   <Cell value={row.estimatedPopulation === null ? '-' : Math.round(row.estimatedPopulation).toLocaleString()} />
                 </View>)}
                 {report.waterQualityRows.length === 0 && <View style={styles.emptyRow}><Text style={styles.emptyText}>{copy.noWaterRecords}</Text></View>}
