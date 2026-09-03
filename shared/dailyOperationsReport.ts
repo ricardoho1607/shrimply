@@ -234,6 +234,7 @@ export const generateDailyOperationsReportHTML = (
   data: DailyOperationsReportData,
   assets: { backgroundBase64: string; logoBase64: string },
   language: DailyOperationsLanguage = 'en',
+  useIosPrintLayout = false,
 ): string => {
   const copy = dailyOperationsTranslations[language];
   const localeByLanguage: Record<DailyOperationsLanguage, string> = {
@@ -246,6 +247,10 @@ export const generateDailyOperationsReportHTML = (
   const reportDate = new Date(`${data.reportDate}T00:00:00`).toLocaleDateString(localeByLanguage[language], {
     day: '2-digit', month: 'long', year: 'numeric',
   });
+  const printViewportWidth = useIosPrintLayout ? 1000 : 1056;
+  const printPageSize = useIosPrintLayout ? '792px 612px' : '11in 8.5in';
+  const printPageWidth = useIosPrintLayout ? '100%' : '11in';
+  const printPageHeight = useIosPrintLayout ? '100%' : '8.5in';
   const siponRows = data.siponRows.map((row) => `
     <tr>
       <td>${escapeHtml(row.pondName)}</td><td>${row.doc}</td>
@@ -260,41 +265,84 @@ export const generateDailyOperationsReportHTML = (
       <td>${escapeHtml(row.waterAppearance)}</td><td>${escapeHtml(row.waterDepthCm)}</td><td>${escapeHtml(row.transparency)}</td>
       <td>${escapeHtml(row.salinity)}</td><td>${escapeHtml(row.alkalinity)}</td></tr>`).join('');
   const hasLegacy = data.siponRows.some((row) => row.hasUnclassifiedData);
+  const renderHeader = (title: string, subtitle: string) => `
+    <div class="header">
+      <div class="header-main">
+        <div class="title">${escapeHtml(title)}</div>
+        <div class="farm-info"><strong>${escapeHtml(copy.farm)}:</strong> ${escapeHtml(data.companyName)}</div>
+        <div class="farm-info"><strong>${escapeHtml(copy.reportDate)}:</strong> ${escapeHtml(reportDate)}</div>
+        <div class="farm-info"><strong>${escapeHtml(copy.generatedBy)}:</strong> ${escapeHtml(data.generatedBy)}</div>
+        <div class="subtitle">${escapeHtml(subtitle)}</div>
+      </div>
+      <img class="header-logo" src="data:image/png;base64,${assets.logoBase64}" alt="Shrimply" />
+    </div>
+    <div class="divider"></div>
+  `;
+  const renderFooter = (pageNumber: number) => `
+    <div class="footer">
+      <span>Shrimply Aquaculture Management | ${escapeHtml(data.companyName)}</span>
+      <span>${escapeHtml(copy.page)} ${pageNumber} ${escapeHtml(copy.of)} 2</span>
+    </div>
+  `;
 
-  return `<!doctype html><html><head><meta charset="utf-8"><style>
-    @page { size: 11in 8.5in; margin: 0; }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; padding: 0; font-family: Arial, sans-serif; color: #102a43; }
-    .pdf-page { width: 792px; height: 612px; padding: 34px 38px 30px; position: relative; overflow: hidden; background: #f8fbfd url(data:image/png;base64,${assets.backgroundBase64}) center/cover no-repeat; page-break-after: always; }
-    .pdf-page:last-child { page-break-after: auto; }
-    .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; }
-    .brand { display: flex; align-items: center; gap: 10px; }
-    .brand img { width: 38px; height: 38px; object-fit: contain; }
-    .brand-name { color: #0F4C75; font-size: 18px; font-weight: 700; }
-    .meta { text-align: right; font-size: 10px; color: #486581; line-height: 1.45; }
-    h1 { margin: 0 0 4px; font-size: 22px; color: #0d2137; }
-    .subtitle { margin: 0 0 15px; color: #486581; font-size: 11px; }
-    table { width: 100%; border-collapse: collapse; background: rgba(255,255,255,.94); font-size: 8px; }
-    th, td { border: 1px solid #9fb3c8; padding: 5px 3px; text-align: center; }
-    thead th { background: #fff4a8; color: #243b53; font-weight: 700; }
-    thead th.group { background: #ffe66d; }
-    tfoot td { background: #fff4a8; font-weight: 700; }
-    .note { margin-top: 10px; padding: 7px 9px; border-radius: 6px; background: #fff7ed; color: #9a3412; font-size: 8px; }
-    .empty { padding: 24px; text-align: center; color: #627d98; border: 1px solid #bcccdc; background: #fff; }
-    .footer { position: absolute; left: 38px; right: 38px; bottom: 18px; display: flex; justify-content: space-between; color: #829ab1; font-size: 8px; }
-  </style></head><body>
-    <section class="pdf-page">
-      <div class="header"><div class="brand"><img src="data:image/png;base64,${assets.logoBase64}"/><div class="brand-name">Shrimply</div></div><div class="meta">${escapeHtml(data.companyName)}<br>${escapeHtml(reportDate)}</div></div>
-      <h1>${escapeHtml(copy.dailySiponReport)}</h1><p class="subtitle">${escapeHtml(copy.siponDescription)}</p>
-      ${data.siponRows.length ? `<table><thead><tr><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th class="group" colspan="3">${escapeHtml(copy.morning)}</th><th class="group" colspan="3">${escapeHtml(copy.evening)}</th><th rowspan="2">${escapeHtml(copy.dailyTotal)}</th><th rowspan="2">${escapeHtml(copy.cumulative)}</th><th rowspan="2">${escapeHtml(copy.estimatedPopulation)}</th><th rowspan="2">${escapeHtml(copy.density)}</th></tr><tr><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th></tr></thead><tbody>${siponRows}</tbody><tfoot><tr><td colspan="2">${escapeHtml(copy.total)}</td><td>${formatInteger(sum(data.siponRows, 'morningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'morningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'morningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'dailyTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'cumulativeTotal'))}</td><td colspan="2"></td></tr></tfoot></table>` : `<div class="empty">${escapeHtml(copy.noPonds)}</div>`}
-      ${hasLegacy ? `<div class="note">${escapeHtml(copy.legacySiponNote)}</div>` : ''}
-      <div class="footer"><span>${escapeHtml(copy.generatedBy)} ${escapeHtml(data.generatedBy)}</span><span>${escapeHtml(copy.menuLabel)} • Shrimply</span></div>
-    </section>
-    <section class="pdf-page">
-      <div class="header"><div class="brand"><img src="data:image/png;base64,${assets.logoBase64}"/><div class="brand-name">Shrimply</div></div><div class="meta">${escapeHtml(data.companyName)}<br>${escapeHtml(reportDate)}</div></div>
-      <h1>${escapeHtml(copy.dailyWaterQualityReport)}</h1><p class="subtitle">${escapeHtml(copy.waterDescription)}</p>
-      ${data.waterQualityRows.length ? `<table><thead><tr><th>${escapeHtml(copy.stockingDate)}</th><th>${escapeHtml(copy.pond)}</th><th>${escapeHtml(copy.doc)}</th><th>${escapeHtml(copy.recordedBy)}</th><th>pH</th><th>${escapeHtml(copy.temperature)}<br>°C</th><th>${escapeHtml(copy.waterAppearance)}</th><th>${escapeHtml(copy.waterDepth)}<br>cm</th><th>${escapeHtml(copy.transparency)}<br>cm</th><th>${escapeHtml(copy.salinity)}<br>ppt</th><th>${escapeHtml(copy.alkalinity)}<br>ppm</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
-      <div class="footer"><span>${escapeHtml(copy.generatedBy)} ${escapeHtml(data.generatedBy)}</span><span>${escapeHtml(copy.menuLabel)} • Shrimply</span></div>
-    </section>
-  </body></html>`;
+  return `<!DOCTYPE html>
+  <html lang="${language}">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=${printViewportWidth}, initial-scale=1.0, maximum-scale=1.0">
+    <title>${escapeHtml(copy.title)}</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      @page { size: ${printPageSize}; margin: 0; }
+      html { width: 100%; height: 100%; }
+      body { width: 100%; height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1B262C; background: #0F4C75; font-size: 8px; line-height: 1.2; }
+      .pdf-page { width: ${printPageWidth}; height: ${printPageHeight}; padding: 26px 36px 26px 26px; position: relative; overflow: hidden; background: #0F4C75; page-break-after: always; ${useIosPrintLayout ? '' : 'break-inside: avoid; page-break-inside: avoid;'} }
+      .pdf-page:last-child { page-break-after: auto; }
+      .page-bg { position: absolute; left: -18px; top: -18px; width: calc(100% + 36px); height: calc(100% + 36px); object-fit: cover; z-index: 0; }
+      .report-shell { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; }
+      .header { position: relative; min-height: 62px; margin-bottom: 8px; break-inside: avoid; page-break-inside: avoid; }
+      .header-main { padding-right: 76px; }
+      .header-logo { position: absolute; top: 0; right: 0; width: 62px; height: 62px; object-fit: contain; }
+      .title { font-size: 20px; font-weight: 800; color: #0F4C75; margin-bottom: 3px; }
+      .farm-info { font-size: 9px; color: #1B262C; margin-bottom: 1px; }
+      .farm-info strong { color: #0F4C75; }
+      .subtitle { font-size: 8px; color: #4A5568; margin-top: 2px; }
+      .divider { height: 2px; background: linear-gradient(to right, #0F4C75, #3282B8); margin: 7px 0 12px; border-radius: 2px; }
+      .table-container { width: 100%; overflow: hidden; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; background: transparent; }
+      th { background: rgba(15, 76, 117, 0.90); color: #fff; padding: 6px 3px; text-align: center; vertical-align: middle; font-size: 6.4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1px; border-right: 1px solid rgba(255,255,255,0.22); line-height: 1.1; overflow-wrap: anywhere; }
+      th.group { background: rgba(50, 130, 184, 0.92); }
+      td { padding: 6px 3px; text-align: center; vertical-align: middle; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); line-height: 1.15; font-variant-numeric: tabular-nums; background: rgba(255,255,255,0.50); overflow-wrap: anywhere; }
+      tbody tr:nth-child(even) td { background: rgba(255,255,255,0.64); }
+      tfoot td { background: rgba(232,244,248,0.78); font-weight: 800; border-top: 2px solid #0F4C75; border-bottom: 1px solid #0F4C75; }
+      .strong { font-weight: 800; color: #0F4C75; }
+      .note { margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.52); color: #92400E; font-size: 7px; line-height: 1.3; }
+      .empty { padding: 28px; text-align: center; color: #4A5568; background: rgba(255,255,255,0.55); border-top: 1px solid rgba(15,76,117,0.18); border-bottom: 1px solid rgba(15,76,117,0.18); }
+      .footer { margin-top: auto; padding-top: 7px; border-top: 1px solid rgba(15,76,117,0.18); display: flex; justify-content: space-between; gap: 10px; color: #4A5568; font-size: 7px; }
+    </style>
+  </head>
+  <body>
+    <div class="pdf-page">
+      <img class="page-bg" src="data:image/png;base64,${assets.backgroundBase64}" alt="" />
+      <div class="report-shell">
+        ${renderHeader(copy.dailySiponReport, copy.siponDescription)}
+        <div class="table-container">
+          ${data.siponRows.length ? `<table><colgroup><col style="width:7%"><col style="width:4%"><col span="6" style="width:7%"><col style="width:8%"><col style="width:9%"><col style="width:18%"><col style="width:12%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th class="group" colspan="3">${escapeHtml(copy.morning)}</th><th class="group" colspan="3">${escapeHtml(copy.evening)}</th><th rowspan="2">${escapeHtml(copy.dailyTotal)}</th><th rowspan="2">${escapeHtml(copy.cumulative)}</th><th rowspan="2">${escapeHtml(copy.estimatedPopulation)}</th><th rowspan="2">${escapeHtml(copy.density)}</th></tr><tr><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th></tr></thead><tbody>${siponRows}</tbody><tfoot><tr><td colspan="2">${escapeHtml(copy.total)}</td><td>${formatInteger(sum(data.siponRows, 'morningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'morningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'morningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'dailyTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'cumulativeTotal'))}</td><td colspan="2"></td></tr></tfoot></table>` : `<div class="empty">${escapeHtml(copy.noPonds)}</div>`}
+        </div>
+        ${hasLegacy ? `<div class="note">${escapeHtml(copy.legacySiponNote)}</div>` : ''}
+        ${renderFooter(1)}
+      </div>
+    </div>
+    <div class="pdf-page">
+      <img class="page-bg" src="data:image/png;base64,${assets.backgroundBase64}" alt="" />
+      <div class="report-shell">
+        ${renderHeader(copy.dailyWaterQualityReport, copy.waterDescription)}
+        <div class="table-container">
+          ${data.waterQualityRows.length ? `<table><colgroup><col style="width:11%"><col style="width:7%"><col style="width:5%"><col style="width:12%"><col style="width:7%"><col style="width:8%"><col style="width:12%"><col style="width:9.5%"><col style="width:9.5%"><col style="width:9.5%"><col style="width:9%"></colgroup><thead><tr><th>${escapeHtml(copy.stockingDate)}</th><th>${escapeHtml(copy.pond)}</th><th>${escapeHtml(copy.doc)}</th><th>${escapeHtml(copy.recordedBy)}</th><th>pH</th><th>${escapeHtml(copy.temperature)}<br>°C</th><th>${escapeHtml(copy.waterAppearance)}</th><th>${escapeHtml(copy.waterDepth)}<br>cm</th><th>${escapeHtml(copy.transparency)}<br>cm</th><th>${escapeHtml(copy.salinity)}<br>ppt</th><th>${escapeHtml(copy.alkalinity)}<br>ppm</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
+        </div>
+        ${renderFooter(2)}
+      </div>
+    </div>
+  </body>
+  </html>`;
 };

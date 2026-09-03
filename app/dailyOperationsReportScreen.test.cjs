@@ -23,3 +23,13 @@ test('daily operations labels are wired into every app and web locale', () => {
     assert.match(webIndex, new RegExp(`dailyOperationsReports: dailyOperationsTranslations\\.${locale}`));
   }
 });
+
+test('daily operations PDF uses the standard mobile landscape print settings', () => {
+  const service = fs.readFileSync(path.join(root, 'app/services/dailyOperationsReportExportService.ts'), 'utf8');
+
+  assert.match(service, /Platform\.OS === 'ios'/);
+  assert.match(service, /textZoom: 100/);
+  assert.match(service, /width: 792/);
+  assert.match(service, /height: 612/);
+  assert.match(service, /margins: \{ top: 0, right: 0, bottom: 0, left: 0 \}/);
+});

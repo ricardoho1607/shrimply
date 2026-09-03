@@ -90,3 +90,20 @@ test('renders the exported report in the selected language', () => {
   assert.match(html, /Laporan Kualitas Air Harian/);
   assert.match(html, /Tidak ada kolam yang tersedia/);
 });
+
+test('uses the standard Shrimply landscape PDF shell', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'Test Farm',
+    reportDate: '2026-09-02',
+    generatedBy: 'Operator',
+    ponds: [],
+  });
+  const html = generateDailyOperationsReportHTML(report, { backgroundBase64: 'background', logoBase64: 'logo' });
+
+  assert.match(html, /class="page-bg"/);
+  assert.match(html, /class="report-shell"/);
+  assert.match(html, /class="header-logo"/);
+  assert.match(html, /class="divider"/);
+  assert.match(html, /Page 1 of 2/);
+  assert.match(html, /Page 2 of 2/);
+});
