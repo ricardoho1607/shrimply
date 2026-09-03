@@ -68,11 +68,12 @@ test("server instructions preserve exact-record and no-advice constraints", () =
   assert.match(instructions, /Do not interpret the word compare as a request for a multi-pond ranking/);
 });
 
-test("web lookup is limited to product composition questions", () => {
-  assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "What ingredients are in BioPlus?"), true);
-  assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "What does this probiotic do?"), true);
-  assert.equal(__test.shouldUseOrsonProductWebLookup("inventory_product", "How much BioPlus stock is left?"), false);
-  assert.equal(__test.shouldUseOrsonProductWebLookup("aquaculture_knowledge", "What ingredients are in BioPlus?"), false);
+test("web lookup covers aquaculture knowledge and product composition questions", () => {
+  assert.equal(__test.shouldUseOrsonWebLookup("inventory_product", "What ingredients are in BioPlus?"), true);
+  assert.equal(__test.shouldUseOrsonWebLookup("inventory_product", "What does this probiotic do?"), true);
+  assert.equal(__test.shouldUseOrsonWebLookup("inventory_product", "How much BioPlus stock is left?"), false);
+  assert.equal(__test.shouldUseOrsonWebLookup("aquaculture_knowledge", "What is the best nitrate level for shrimp?"), true);
+  assert.equal(__test.shouldUseOrsonWebLookup("farm_analysis", "What is my nitrate today?"), false);
 });
 
 test("streaming model output emits each delta and returns the complete response", async () => {

@@ -10,6 +10,7 @@ import {
   isOrsonDailyLimitError,
 } from '../../orson/aiUsage';
 import {
+  buildOrsonRequestPrompt,
   cleanOrsonResponse,
   inferOrsonConversationRoute,
   ORSON_FALLBACK_RESPONSE,
@@ -20,7 +21,6 @@ import {
 import { normalizeOrsonCalibration } from '../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnapshot';
 import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
-import { consumeOrsonCallableStream, type OrsonTextStreamChunk } from '../../orson/callableStream';
 import { loadCachedOrsonCalibration } from '../../orson/calibrationCache';
 
 // Types for the chat history
@@ -284,8 +284,7 @@ export const useGemini = () => {
       }
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
-        { text?: string },
-        OrsonTextStreamChunk
+        { text?: string }
       >(functions, 'generateOrsonResponse');
 
       const requestPayload = {
@@ -293,30 +292,25 @@ export const useGemini = () => {
           // Retained until older deployed Functions no longer require this field.
           // The hardened Function ignores it and builds its own server instruction.
           systemInstruction: analysis.promptPackage.systemInstruction,
-          prompt: `${analysis.promptPackage.context}\n\nUSER QUESTION:\n${analysis.promptPackage.userMessage}`,
+          prompt: buildOrsonRequestPrompt(analysis.promptPackage.context, analysis.promptPackage.userMessage),
           userMessage: analysis.promptPackage.userMessage,
           questionRoute: analysis.promptPackage.questionFocus.route,
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
       };
-      let firstChunkMs: number | null = null;
-      const resultData = await consumeOrsonCallableStream({
-        callable: generateOrsonResponse,
-        request: requestPayload,
-        timeoutMs: ORSON_MODEL_TIMEOUT_MS,
-        onPartialResponse: (partialText) => {
-          if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
-          options.onPartialResponse?.(cleanOrsonResponse(partialText));
-        },
-      });
-      const text = cleanOrsonResponse(resultData.text || '');
+      const result = await withOrsonTimeout(
+        generateOrsonResponse(requestPayload),
+        ORSON_MODEL_TIMEOUT_MS,
+        'Orson is taking too long to respond. Please try again.',
+      );
+      const text = cleanOrsonResponse(result.data.text || '');
+      options.onPartialResponse?.(text);
       void saveCachedResponse(analysis.promptPackage.cacheKey, text);
       console.info('orson_client_latency', {
         route: analysis.promptPackage.questionFocus.route,
         promptChars: requestPayload.prompt.length,
         calibrationMs,
         analysisMs,
-        firstChunkMs,
         totalMs: Date.now() - requestStartedAt,
       });
 

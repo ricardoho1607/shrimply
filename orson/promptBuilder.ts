@@ -88,6 +88,7 @@ const AQUACULTURE_SCOPE_PATTERNS = [
   /\bgill(s)?\b/i,
   /\bammonia\b/i,
   /\bnitrite\b/i,
+  /\bnitrate\b/i,
   /\bsalinity\b/i,
   /\balkalinity\b/i,
   /\bdissolved\s+oxygen\b/i,
@@ -168,7 +169,7 @@ const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
   { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
   { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i, /\bincrease\s+feed\b/i, /\bdecrease\s+feed\b/i, /\bcut\s+feed\b/i] },
   { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
-  { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
+  { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bammonia\b/i, /\bnitrite\b/i, /\bnitrate\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
   { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
   { intent: 'biomass', patterns: [/\bbiomass\b/i, /\bpopulation\b/i, /\bstock(ing)?\b/i] },
   { intent: 'survival', patterns: [/\bsurvival\b/i, /\bmortality\b/i, /\bdead\b/i] },
@@ -180,6 +181,7 @@ const PARAMETER_PATTERNS: { key: string; patterns: RegExp[] }[] = [
   { key: 'ph', patterns: [/\bph\b/i] },
   { key: 'ammonia', patterns: [/\bammonia\b/i, /\bnh3\b/i, /\bnh4\b/i, /\btan\b/i] },
   { key: 'nitrite', patterns: [/\bnitrite\b/i, /\bno2\b/i] },
+  { key: 'nitrate', patterns: [/\bnitrate\b/i, /\bno3\b/i] },
   { key: 'salinity', patterns: [/\bsalinity\b/i, /\bsalt\b/i] },
   { key: 'alkalinity', patterns: [/\balkalinity\b/i, /\bkh\b/i, /\bbuffer(ing)?\b/i] },
   { key: 'plankton_transparency', patterns: [/\bplankton\b/i, /\btransparency\b/i, /\bwater\s+color\b/i, /\bbloom\b/i, /\balgae\b/i] },
@@ -511,7 +513,7 @@ export const buildOrsonCacheKey = (
     findings: payload.findings.map((finding) => finding.id),
     outlook: payload.outlook.direction,
   }))));
-  return `orson_general_${hashString(normalizedQuestion)}_${contextHash}`;
+  return `orson_general_v2_${hashString(normalizedQuestion)}_${contextHash}`;
 };
 
 export const buildOrsonPromptPayload = (

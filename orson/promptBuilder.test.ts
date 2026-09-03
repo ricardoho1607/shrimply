@@ -138,6 +138,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(buildOrsonPromptPackage({ userMessage: 'What do biofloc systems do?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'does not mistake the word do for dissolved oxygen');
   assert(buildOrsonPromptPackage({ userMessage: 'What do probiotics do?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'keeps general additive education separate from product lookup');
   assert(buildOrsonPromptPackage({ userMessage: 'What causes white feces?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'keeps shrimp-health education in aquaculture scope');
+  assert(buildOrsonPromptPackage({ userMessage: 'What is the best nitrate level?', metrics: [metrics], reports: [report], outlooks: [outlook] }).questionFocus.route === 'aquaculture_knowledge', 'keeps nitrate guidance in aquaculture scope');
   assert(isFarmSpecificQuestion('give me the last 7 days of mortality') === true, 'detects lookback question as farm-specific');
   assert(farmPackage.cacheKey === null, 'does not cache farm-specific answers by default');
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');

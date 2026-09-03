@@ -260,8 +260,9 @@ const ORSON_MAX_PROMPT_CHARS = 60000;
 const ORSON_QUESTION_ROUTES = new Set(["farm_analysis", "aquaculture_knowledge", "inventory_product", "out_of_scope"]);
 const ORSON_PRODUCT_WEB_LOOKUP_PATTERN = /\b(ingredient|ingredients|composition|contain|contains|label|manufacturer|strain|cfu|purpose|function|what\s+do(?:es)?\b.*\bdo)\b/i;
 
-const shouldUseOrsonProductWebLookup = (questionRoute, userMessage) => (
-  questionRoute === "inventory_product" && ORSON_PRODUCT_WEB_LOOKUP_PATTERN.test(userMessage)
+const shouldUseOrsonWebLookup = (questionRoute, userMessage) => (
+  questionRoute === "aquaculture_knowledge" ||
+  (questionRoute === "inventory_product" && ORSON_PRODUCT_WEB_LOOKUP_PATTERN.test(userMessage))
 );
 
 const safeHttpUrl = (value) => {
@@ -351,6 +352,7 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   `- This request route is ${questionRoute}.`,
   ...(questionRoute === "aquaculture_knowledge" ? [
     "- Answer the aquaculture concept directly. Do not introduce pond status, feed pressure, or farm measurements unless the user explicitly asks to apply the answer to their farm.",
+    "- Use web grounding to verify recommended ranges and other factual guidance. Prefer regulators, FAO, university extension, and peer-reviewed sources, and make clear when ranges depend on species, life stage, salinity, or production system.",
   ] : []),
   ...(questionRoute === "inventory_product" ? [
     "- Use ORSON SAVED PRODUCT CONTEXT as the source of truth for owned products, labels, ingredients, recipes, stock, and usage.",
@@ -585,7 +587,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 60, secrets: [geminiApi
       ? `${prompt}\n\nORSON SAVED PRODUCT CONTEXT:\n${JSON.stringify(productContext)}`
       : prompt;
     const genAI = getGeminiClient(apiKey);
-    const useWebLookup = shouldUseOrsonProductWebLookup(questionRoute, userMessage);
+    const useWebLookup = shouldUseOrsonWebLookup(questionRoute, userMessage);
     const getModel = (withWebLookup) => genAI.getGenerativeModel({
       model: LAB_INSIGHT_MODEL,
       systemInstruction: buildServerOrsonSystemInstruction(mode, aiFunction, questionRoute),
@@ -2812,7 +2814,7 @@ if (process.env.NODE_ENV === "test") {
     getOrsonNotificationPriority,
     getCurrentLabWaterMetrics,
     normalizeOrsonProductDocuments,
-    shouldUseOrsonProductWebLookup,
+    shouldUseOrsonWebLookup,
     generateOrsonStreamingResponse,
   };
 }
