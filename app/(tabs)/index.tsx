@@ -14,6 +14,7 @@ import ShrimpIcon from '../components/icons/ShrimpIcon';
 import { differenceInFarmCalendarDays, getFarmDateKey } from '../../shared/farmDate';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 import { hasFarmPermission } from '../../shared/permissions';
+import { getEnterpriseStockingDateRange } from '../../shared/enterpriseCycleSetup';
 import {
   filterEnterpriseRecordsForUser,
   type FarmBlock,
@@ -1094,10 +1095,11 @@ export default function PondManagementScreen() {
     cycle?: FarmCycle;
     cycleName: string;
     block: FarmBlock;
-    stockingDate: string;
+    plannedStartDate: string;
     cycleStartMode: 'new' | 'midcycle';
     ponds: {
       pond: PhysicalPond;
+      stockingDate: string;
       density: number;
       supplier: string;
       baselineMbw?: number;
@@ -1106,27 +1108,32 @@ export default function PondManagementScreen() {
       baselineCumulativeFeed?: number;
     }[];
   }) => {
+    const stockingRange = getEnterpriseStockingDateRange([
+      input.cycle?.stockingStartDate,
+      input.cycle?.stockingEndDate,
+      ...input.ponds.map((pond) => pond.stockingDate),
+    ]);
     const cycle = input.cycle || addFarmCycle({
       cycleName: input.cycleName,
       status: 'active',
       blockIds: [input.block.id],
       blockNames: [input.block.name],
-      plannedStartDate: input.stockingDate,
-      stockingStartDate: input.stockingDate,
-      stockingEndDate: input.stockingDate,
+      plannedStartDate: input.plannedStartDate,
+      stockingStartDate: stockingRange.stockingStartDate,
+      stockingEndDate: stockingRange.stockingEndDate,
     });
     if (input.cycle) {
       updateFarmCycle(cycle.id, {
         status: 'active',
-        stockingStartDate: cycle.stockingStartDate || input.stockingDate,
-        stockingEndDate: input.stockingDate,
+        stockingStartDate: stockingRange.stockingStartDate,
+        stockingEndDate: stockingRange.stockingEndDate,
       });
     }
     const startedAt = Date.now();
     const baselineDate = getFarmDateKey(new Date(), company?.timeZone);
-    const baselineDoc = differenceInFarmCalendarDays(baselineDate, input.stockingDate);
-    input.ponds.forEach(({ pond, density, supplier, baselineMbw, baselineEstimatedPopulation, baselineSurvivalRate, baselineCumulativeFeed }, index) => {
+    input.ponds.forEach(({ pond, stockingDate, density, supplier, baselineMbw, baselineEstimatedPopulation, baselineSurvivalRate, baselineCumulativeFeed }, index) => {
       const pondCycleId = `${startedAt}-${index}`;
+      const baselineDoc = differenceInFarmCalendarDays(baselineDate, stockingDate);
       const baselineSampling = input.cycleStartMode === 'midcycle' && baselineMbw ? [{
         id: `baseline-${startedAt}-${index}`,
         date: baselineDate,
@@ -1150,7 +1157,7 @@ export default function PondManagementScreen() {
         blockName: input.block.name,
         density,
         initialPopulation: pond.pondArea * density,
-        docStart: input.stockingDate,
+        docStart: stockingDate,
         supplier,
         plSupplier: supplier,
         initialWeight: 0.5,
@@ -1165,7 +1172,7 @@ export default function PondManagementScreen() {
         cycleName: cycle.cycleName,
         pondCycleId,
         cycleStatus: 'active',
-        cycleStartedAt: input.stockingDate,
+        cycleStartedAt: stockingDate,
         cycleStartMode: input.cycleStartMode,
         ...(input.cycleStartMode === 'midcycle' && baselineMbw ? {
           baselineDate,

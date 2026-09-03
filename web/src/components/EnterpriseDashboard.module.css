@@ -155,6 +155,7 @@
 .setupPondHeader b { color: var(--text-primary); font-size: .88rem; }
 .setupPondHeader small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); font-size: .7rem; }
 .setupPondForm { border-top: 1px solid var(--border); background: var(--bg-mid); padding: 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.setupPondForm .setupDateField { grid-column: 1 / -1; }
 .setupPondForm .setupHint { grid-column: 1 / -1; color: var(--text-muted); font-size: .7rem; line-height: 1.45; }
 .setupActions { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; }
 .setupActions .saveButton { width: 100%; }

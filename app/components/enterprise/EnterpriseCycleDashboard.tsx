@@ -64,10 +64,11 @@ interface EnterpriseCycleDashboardProps {
     cycle?: FarmCycle;
     cycleName: string;
     block: FarmBlock;
-    stockingDate: string;
+    plannedStartDate: string;
     cycleStartMode: EnterpriseCycleStartMode;
     ponds: {
       pond: PhysicalPond;
+      stockingDate: string;
       density: number;
       supplier: string;
       baselineMbw?: number;
@@ -255,6 +256,7 @@ export default function EnterpriseCycleDashboard({
       return;
     }
     const existingCycle = openCycleByBlockId.get(blockId) || null;
+    const defaultStockingDate = getFarmDateKey(new Date(), timeZone);
     const blockPonds = physicalPonds
       .filter((pond) => pond.blockId === blockId && pond.status !== 'active' && !pond.activePondId && !activePhysicalPondIds.has(pond.id) && !activePondNames.has(pond.pondName.trim().toLowerCase()))
       .sort((first, second) => first.pondName.localeCompare(second.pondName, undefined, { numeric: true }));
@@ -262,10 +264,10 @@ export default function EnterpriseCycleDashboard({
     setStockingCycle(existingCycle);
     setCycleFormOpen(true);
     setCycleName(existingCycle?.cycleName || copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
-    setPlannedStartDate(existingCycle?.plannedStartDate || getFarmDateKey(new Date(), timeZone));
+    setPlannedStartDate(existingCycle?.plannedStartDate || defaultStockingDate);
     setCycleStartMode('new');
     setSelectedBlockIds([blockId]);
-    setPondSetupValues(createEnterprisePondSetupValues(blockPonds.map((pond) => pond.id)));
+    setPondSetupValues(createEnterprisePondSetupValues(blockPonds.map((pond) => pond.id), defaultStockingDate));
     setExpandedSetupPondId(blockPonds[0]?.id || null);
     setCycleFormStep(existingCycle ? 'ponds' : 'details');
   };
@@ -282,21 +284,24 @@ export default function EnterpriseCycleDashboard({
 
   const continueCycleForm = () => {
     if (!cycleName.trim() || !selectedSetupBlock || setupPonds.length === 0) return;
-    setPondSetupValues(createEnterprisePondSetupValues(setupPonds.map((pond) => pond.id)));
+    setPondSetupValues(createEnterprisePondSetupValues(setupPonds.map((pond) => pond.id), plannedStartDate));
     setExpandedSetupPondId(setupPonds[0]?.id || null);
     setCycleFormStep('ponds');
   };
 
   const updatePondSetup = (pondId: string, field: keyof EnterprisePondSetupValue, value: string) => {
     setPondSetupValues((current) => {
-      const previous = current[pondId] || { density: '', supplier: '' };
+      const previous = current[pondId] || { stockingDate: plannedStartDate, density: '', supplier: '' };
       return { ...current, [pondId]: { ...previous, [field]: value } };
     });
   };
 
   const submitCycle = async () => {
     if (!cycleName.trim() || selectedBlockIds.length !== 1) return;
-    if (cycleStartMode === 'midcycle' && differenceInFarmCalendarDays(getFarmDateKey(new Date(), timeZone), plannedStartDate) < 0) {
+    const baselineDate = getFarmDateKey(new Date(), timeZone);
+    if (!editingCycle && cycleStartMode === 'midcycle' && setupPonds.some((pond) => (
+      differenceInFarmCalendarDays(baselineDate, pondSetupValues[pond.id]?.stockingDate || '') < 0
+    ))) {
       Alert.alert(t.messages.error, copy.baselineDateInvalid);
       return;
     }
@@ -311,10 +316,11 @@ export default function EnterpriseCycleDashboard({
           cycle: stockingCycle || undefined,
           cycleName: cycleName.trim(),
           block: selectedSetupBlock,
-          stockingDate: plannedStartDate,
+          plannedStartDate,
           cycleStartMode,
           ponds: setupPonds.map((pond) => ({
             pond,
+            stockingDate: pondSetupValues[pond.id].stockingDate,
             density: parseEnterprisePondDensity(pondSetupValues[pond.id].density),
             supplier: pondSetupValues[pond.id].supplier.trim(),
             baselineMbw: parseOptionalEnterprisePondNumber(pondSetupValues[pond.id].baselineMbw),
@@ -608,15 +614,16 @@ export default function EnterpriseCycleDashboard({
                 </View>
                 <View style={styles.setupProgress}><Text style={styles.setupProgressTitle}>{copy.pondsReady.replace('{{completed}}', String(completedSetupCount)).replace('{{total}}', String(setupPonds.length))}</Text><Text style={styles.setupProgressText}>{cycleStartMode === 'midcycle' ? copy.baselineMbwRequired : copy.densitySupplierRequired}</Text></View>
                 {setupPonds.map((pond) => {
-                  const value = pondSetupValues[pond.id] || { density: '', supplier: '' };
+                  const value = pondSetupValues[pond.id] || { stockingDate: plannedStartDate, density: '', supplier: '' };
                   const expanded = expandedSetupPondId === pond.id;
                   const complete = isEnterprisePondSetupComplete(value, cycleStartMode);
                   return <View key={pond.id} style={[styles.setupPondCard, expanded && styles.setupPondCardExpanded]}>
                     <TouchableOpacity style={styles.setupPondHeader} onPress={() => setExpandedSetupPondId(expanded ? null : pond.id)} accessibilityRole="button" accessibilityState={{ expanded }}>
-                      <View style={styles.setupPondCopy}><View style={styles.setupPondTitleRow}><Text style={styles.setupPondTitle}>{pond.pondName}</Text>{complete ? <Ionicons name="checkmark-circle" size={18} color="#2E7D63" /> : null}</View><Text style={styles.setupPondStatus}>{complete ? `${value.density} PL/m² · ${value.supplier}` : copy.stockingMissing}</Text></View>
+                      <View style={styles.setupPondCopy}><View style={styles.setupPondTitleRow}><Text style={styles.setupPondTitle}>{pond.pondName}</Text>{complete ? <Ionicons name="checkmark-circle" size={18} color="#2E7D63" /> : null}</View><Text style={styles.setupPondStatus}>{complete ? `${value.stockingDate} · ${value.density} PL/m² · ${value.supplier}` : copy.stockingMissing}</Text></View>
                       <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={20} color="#315F57" />
                     </TouchableOpacity>
                     {expanded ? <View style={styles.setupPondForm}>
+                      <View style={styles.setupPondDateField}><AppDatePicker label={copy.stockingDate} value={value.stockingDate} onChange={(date) => updatePondSetup(pond.id, 'stockingDate', getFarmDateKey(date, timeZone))} maximumDate={cycleStartMode === 'midcycle' ? new Date() : undefined} cancelLabel={t.actions.cancel} confirmLabel={t.actions.confirm} /></View>
                       <Text style={styles.inputLabel}>{copy.density}</Text><TextInput style={styles.input} value={value.density} onChangeText={(text) => updatePondSetup(pond.id, 'density', text)} keyboardType="numeric" placeholder="120" placeholderTextColor="#8A9BA8" />
                       <Text style={styles.inputLabel}>{copy.supplier}</Text><TextInput style={styles.input} value={value.supplier} onChangeText={(text) => updatePondSetup(pond.id, 'supplier', text)} placeholder={copy.hatcheryName} placeholderTextColor="#8A9BA8" />
                       {cycleStartMode === 'midcycle' ? <>
@@ -870,6 +877,7 @@ const styles = StyleSheet.create({
   setupPondTitle: { color: '#102F46', fontSize: 13, fontWeight: '900' },
   setupPondStatus: { marginTop: 3, color: '#6A8191', fontSize: 10, fontWeight: '600' },
   setupPondForm: { borderTopWidth: 1, borderTopColor: '#E3EDF3', backgroundColor: '#F8FBFD', paddingHorizontal: 13, paddingBottom: 14 },
+  setupPondDateField: { marginTop: 12 },
   setupActions: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   setupSubmitButton: { flex: 1, marginTop: 0 },
   dateRow: { flexDirection: 'row', gap: 10 },

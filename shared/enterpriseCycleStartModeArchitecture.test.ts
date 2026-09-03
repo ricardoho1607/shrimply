@@ -25,11 +25,25 @@ test('enterprise cycle creation exposes and persists the cycle start mode on web
   assert.match(dashboard, /source: 'midcycle_onboarding'/);
 });
 
+test('enterprise cycle creation persists a separate stocking date for every pond', () => {
+  const mobileDashboard = readSource('app/components/enterprise/EnterpriseCycleDashboard.tsx');
+  const mobilePersistence = readSource('app/(tabs)/index.tsx');
+  const webDashboard = readSource('web/src/components/EnterpriseCycleDashboard.tsx');
+
+  assert.match(mobileDashboard, /stockingDate: pondSetupValues\[pond\.id\]\.stockingDate/);
+  assert.match(mobilePersistence, /docStart: stockingDate/);
+  assert.match(mobilePersistence, /cycleStartedAt: stockingDate/);
+  assert.match(webDashboard, /docStart: stockingDate/);
+  assert.match(webDashboard, /cycleStartedAt: stockingDate/);
+  assert.match(webDashboard, /getEnterpriseStockingDateRange/);
+});
+
 test('enterprise cycle start menu has complete translations for every supported language', () => {
   Object.entries(cycleFeatureTranslations).forEach(([language, translation]) => {
     const copy = translation.enterpriseCycle;
     [
       copy.cycleStartQuestion,
+      copy.stockingDate,
       copy.newCycle,
       copy.existingCycle,
       copy.newCycleHint,
