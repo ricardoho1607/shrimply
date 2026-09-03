@@ -18,6 +18,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 type PublicSupplierProfile = {
   id: string;
@@ -40,6 +41,7 @@ type PublicSupplierProfile = {
 };
 
 export default function SuppliersPage() {
+  const copy = useDashboardCopy();
   const { user } = useAuth();
   const { t } = useLanguage();
   const [searchTerm, setSearchTerm] = useState('');
@@ -211,7 +213,7 @@ export default function SuppliersPage() {
                   {t.buyer.farmType}
                 </div>
                 <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {company.farmType || t.buyer.defaultFarmType || 'Shrimp Farm'}
+                  {copy(company.farmType || t.buyer.defaultFarmType || 'Shrimp Farm')}
                 </div>
               </div>
               <div style={{ padding: '12px', borderRadius: '12px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>

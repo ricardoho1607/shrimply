@@ -36,14 +36,14 @@ test('water quality modals use compact options and the authenticated primary act
   assert.match(globalStyles, /\.water-confirm-lab-button:disabled\s*\{[\s\S]*background:\s*var\(--bg-mid\)/);
   assert.match(pageSource, /className="glass-card responsive-modal animate-fade-up water-log-modal"/);
   assert.match(globalStyles, /@media \(max-width: 640px\)[\s\S]*\.water-log-form-grid/);
-  assert.match(pageSource, /<label className="form-label">Date<\/label>/);
+  assert.match(pageSource, /<label className="form-label">\{copy\('Date'\)\}<\/label>/);
   assert.match(pageSource, /disabled=\{!formData\.pondId\} className="water-save-log-button"/);
   assert.match(globalStyles, /\.water-save-log-button:disabled\s*\{[\s\S]*background:\s*var\(--bg-mid\)/);
 });
 
 test('water quality shows Plankton Overwatch and keeps pond-condition evidence optional', () => {
   assert.match(pageSource, /<PlanktonOverwatchCard snapshot=\{pond\.latestPlanktonOverwatch\} compact \/>/);
-  assert.match(pageSource, />Optional Pond Conditions</);
+  assert.match(pageSource, /copy\('Optional Pond Conditions'\)/);
   assert.match(pageSource, /weatherEvent: null as Sampling\['weatherEvent'\]/);
   assert.match(pageSource, /surfaceScum: null as boolean \| null/);
   assert.match(pageSource, /shrimpBehaviour: formData\.shrimpBehaviour/);
@@ -53,8 +53,8 @@ test('water quality shows Plankton Overwatch and keeps pond-condition evidence o
 test('daily water quality preserves optional farm context and legacy records', () => {
   assert.match(pageSource, /ammonia: existing\.ammonia \|\| ''/);
   assert.match(pageSource, /operationalNotes: existing\.operationalNotes \|\| ''/);
-  assert.match(pageSource, />Ammonia \(TAN\) \(mg\/L\)</);
-  assert.match(pageSource, />Operational Notes</);
+  assert.match(pageSource, /copy\('Ammonia \(TAN\) \(mg\/L\)'\)/);
+  assert.match(pageSource, /copy\('Operational Notes'\)/);
   assert.match(pageSource, /temperature: formData\.temperature/);
   assert.match(pageSource, /weatherEvent: formData\.weatherEvent/);
   assert.match(mobileSource, /ammonia: values\.ammonia\.trim\(\)/);
@@ -65,11 +65,11 @@ test('daily water quality preserves optional farm context and legacy records', (
 
 test('water quality history displays every saved pond-condition field', () => {
   assert.match(pageSource, /waterExchangePercent/);
-  assert.match(pageSource, />Weather</);
-  assert.match(pageSource, />Water Exchange</);
-  assert.match(pageSource, />Sludge Load</);
-  assert.match(pageSource, />Surface Scum</);
-  assert.match(pageSource, />Shrimp Behavior</);
+  assert.match(pageSource, /copy\('Weather'\)/);
+  assert.match(pageSource, /copy\('Water Exchange'\)/);
+  assert.match(pageSource, /copy\('Sludge Load'\)/);
+  assert.match(pageSource, /copy\('Surface Scum'\)/);
+  assert.match(pageSource, /copy\('Shrimp Behavior'\)/);
   assert.match(pageSource, /log\.weatherEvent/);
   assert.match(pageSource, /log\.waterExchangePercent/);
   assert.match(pageSource, /hasSavedValue\(log\.waterExchangePercent\)/);

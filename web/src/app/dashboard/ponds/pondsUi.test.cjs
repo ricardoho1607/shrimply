@@ -44,8 +44,8 @@ test('cycle summary and pond counts wait for every required subscription', () =>
   );
 
   const loadingGuard = pondsPage.indexOf('if (isPondsPageLoading)');
-  const cyclePanel = pondsPage.indexOf('aria-label="Current farm cycle"');
+  const cyclePanel = pondsPage.indexOf("aria-label={copy('Current farm cycle')}");
   assert.ok(loadingGuard >= 0, 'the page should render a loading guard');
   assert.ok(loadingGuard < cyclePanel, 'the loading guard should hide cycle and pond empty states');
-  assert.match(pondsPage, /aria-label="Loading ponds"/);
+  assert.match(pondsPage, /aria-label=\{copy\('Loading ponds'\)\}/);
 });

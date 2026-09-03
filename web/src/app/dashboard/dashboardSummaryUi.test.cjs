@@ -35,7 +35,7 @@ test('mobile pond list constrains long pond names to their grid column', () => {
 
 test('pond cards show the latest feed response for today instead of a blank completion label', () => {
   assert.match(source, /getLatestFeedResponseForDate/);
-  assert.match(source, /todayFeedResponse \? todayFeedResponse\.toUpperCase\(\) : 'COMPLETED'/);
+  assert.match(source, /todayFeedResponse \? copy\(todayFeedResponse\)\.toUpperCase\(\) : copy\('COMPLETED'\)/);
 });
 
 test('pond cards show deterministic pond risk beside posted status', () => {

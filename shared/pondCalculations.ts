@@ -390,8 +390,19 @@ export const getPondBaselineFeed = (pond: Pick<SharedPond, 'baselineCumulativeFe
     );
 };
 
-export const getPondOperationalFeed = (pond: Pick<SharedPond, 'samplings'>): number => {
-  const operationalSamplings = (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling));
+export const getPondOperationalFeed = (
+  pond: Pick<SharedPond, 'baselineCumulativeFeed' | 'baselineDate' | 'samplings'>,
+): number => {
+  const baselineDate = getPondBaselineFeed(pond) > 0
+    ? normalizeFarmDateKey(pond.baselineDate)
+    : null;
+  const operationalSamplings = (pond.samplings || []).filter((sampling) => {
+    if (isBaselineSampling(sampling)) return false;
+    if (!baselineDate) return true;
+
+    const samplingDate = normalizeFarmDateKey(sampling.date);
+    return samplingDate === null || samplingDate > baselineDate;
+  });
   const feedManagementFeed = operationalSamplings
     .filter((sampling) => sampling.feedData)
     .reduce((total, sampling) => total + getSamplingFeedAmount(sampling), 0);
@@ -402,7 +413,9 @@ export const getPondOperationalFeed = (pond: Pick<SharedPond, 'samplings'>): num
   return feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
 };
 
-export const getPondTotalFeedConsumed = (pond: Pick<SharedPond, 'baselineCumulativeFeed' | 'samplings'>): number =>
+export const getPondTotalFeedConsumed = (
+  pond: Pick<SharedPond, 'baselineCumulativeFeed' | 'baselineDate' | 'samplings'>,
+): number =>
   getPondBaselineFeed(pond) + getPondOperationalFeed(pond);
 
 export const getPondBaselinePopulation = (

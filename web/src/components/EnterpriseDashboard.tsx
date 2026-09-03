@@ -8,6 +8,7 @@ import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, writeBa
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import {
   useCompanyBlocks,
   useCompanyCycles,
@@ -106,6 +107,7 @@ const riskClass: Record<EnterprisePondRisk, string> = {
 };
 
 export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashboardProps) {
+  const copy = useDashboardCopy();
   const router = useRouter();
   const { user, company } = useAuth();
   const { t } = useLanguage();
@@ -680,7 +682,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                   {pond.pondName}
                 </span>
               ))}
-              {currentCyclePonds.length > 4 ? <span>+{currentCyclePonds.length - 4} more</span> : null}
+              {currentCyclePonds.length > 4 ? <span>+{currentCyclePonds.length - 4} {copy('more')}</span> : null}
             </div>
             <button type="button" className={styles.endCycleButton} onClick={closeFarmCycle} disabled={cycleSaving}>
               <Lock size={15} /> {t.farmCycle.endCycleAction}
@@ -863,7 +865,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
           <form className={styles.modal} onSubmit={saveBlock}>
             <div className={styles.modalHeader}>
               <div><h2>{t.enterprise.addBlock}</h2><p>{t.enterprise.addBlockDescription}</p></div>
-              <button type="button" className={styles.iconButton} onClick={() => setCreateOpen(false)} aria-label="Close"><X size={20} /></button>
+              <button type="button" className={styles.iconButton} onClick={() => setCreateOpen(false)} aria-label={copy('Close')}><X size={20} /></button>
             </div>
             <label>{t.enterprise.blockName}
               <input required maxLength={80} value={blockName} onChange={(event) => setBlockName(event.target.value)} placeholder={t.enterprise.blockNamePlaceholder} />
@@ -901,7 +903,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                 type="button"
                 className={styles.iconButton}
                 onClick={() => setEditingBlock(null)}
-                aria-label="Close"
+                aria-label={copy('Close')}
                 disabled={saving}
               >
                 <X size={20} />
@@ -976,7 +978,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
                 type="button"
                 className={styles.iconButton}
                 onClick={() => setPondAssignmentOpen(false)}
-                aria-label="Close"
+                aria-label={copy('Close')}
                 disabled={saving}
               >
                 <X size={20} />
@@ -1010,7 +1012,7 @@ export default function EnterpriseDashboard({ ponds, timeZone }: EnterpriseDashb
           <div className={styles.modal} role="dialog" aria-modal="true" aria-label={selectedPond.pondName}>
             <div className={styles.modalHeader}>
               <div><h2>{selectedPond.pondName}</h2><p>DOC {selectedStatus.doc}</p></div>
-              <button className={styles.iconButton} onClick={() => setSelectedPond(null)} aria-label="Close"><X size={20} /></button>
+              <button className={styles.iconButton} onClick={() => setSelectedPond(null)} aria-label={copy('Close')}><X size={20} /></button>
             </div>
             {selectedStatus.risk === 'stable' ? (
               <div className={styles.stablePanel}><CheckCircle2 size={21} />{t.enterprise.pondStable}</div>

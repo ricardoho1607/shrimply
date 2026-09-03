@@ -21,6 +21,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 type RoleKey = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'buyer' | 'mechanic';
 
@@ -79,15 +80,15 @@ const labelStyle: React.CSSProperties = {
   fontFamily: 'var(--jakarta)',
 };
 
-const formatLocation = (company: CompanyProfile) => {
+const formatLocation = (company: CompanyProfile, copy: (text: string) => string) => {
   const primaryLocation = company?.primaryLocation;
   if (typeof primaryLocation === 'string') return primaryLocation;
-  return company?.location || primaryLocation?.address || 'Not set';
+  return company?.location || primaryLocation?.address || copy('Not set');
 };
 
-const formatBusinessSize = (size?: string) => {
-  if (!size) return 'Not set';
-  return `${size.charAt(0).toUpperCase()}${size.slice(1)} operation`;
+const formatBusinessSize = (size: string | undefined, copy: (text: string) => string) => {
+  if (!size) return copy('Not set');
+  return `${size.charAt(0).toUpperCase()}${size.slice(1)} ${copy('operation')}`;
 };
 
 const statusColor = (status?: string) => {
@@ -97,6 +98,7 @@ const statusColor = (status?: string) => {
 };
 
 export default function CompanyPage() {
+  const copy = useDashboardCopy();
   const { company, user } = useAuth();
   const { t } = useLanguage();
   const companyProfile = company as CompanyProfile | null;
@@ -176,13 +178,13 @@ export default function CompanyPage() {
       maxCount: 2,
     },
     buyer: {
-      title: 'Buyer',
-      description: 'Purchasing and procurement access.',
-      permissions: ['View harvests', 'Monitor farm profiles'],
+      title: copy('Buyer'),
+      description: copy('Purchasing and procurement access.'),
+      permissions: [copy('View harvests'), copy('Monitor farm profiles')],
       icon: UserRound,
       maxCount: 5,
     },
-  }), [t]);
+  }), [copy, t]);
 
   const membersByRole = useMemo(() => {
     return members.reduce((acc, member) => {
@@ -197,14 +199,14 @@ export default function CompanyPage() {
       <div style={pageStyle}>
         <Link href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px' }}>
           <ArrowLeft size={16} />
-          Back to settings
+          {copy('Back to settings')}
         </Link>
         <div style={{ ...panelStyle, padding: '40px', textAlign: 'center' }}>
           <Building2 size={44} color="var(--primary)" style={{ marginBottom: '16px' }} />
-          <h1 style={{ fontSize: '28px', fontWeight: 600, marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>No company profile found</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>Set up your company profile before using this page.</p>
+          <h1 style={{ fontSize: '28px', fontWeight: 600, marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>{copy('No company profile found')}</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginBottom: '20px' }}>{copy('Set up your company profile before using this page.')}</p>
           <Link href="/dashboard/settings" className="btn-primary" style={{ borderRadius: '12px', padding: '12px 18px' }}>
-            Open settings
+            {copy('Open settings')}
           </Link>
         </div>
       </div>
@@ -217,18 +219,18 @@ export default function CompanyPage() {
         <div className="company-page-heading">
           <Link href="/dashboard" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', fontWeight: 600, fontSize: '13px', marginBottom: '18px' }}>
             <ArrowLeft size={16} />
-            Dashboard
+            {copy('Dashboard')}
           </Link>
           <h1 className="company-page-title" style={{ fontSize: '34px', fontWeight: 600, letterSpacing: '-0.03em', marginBottom: '8px', fontFamily: 'var(--jakarta)', color: 'var(--text-primary)' }}>
             {companyProfile.companyName || t.companyDetails?.title || 'Company Details'}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '15px', maxWidth: '680px', lineHeight: 1.6 }}>
-            {companyProfile.description || 'Company information, organization structure, and public profile details for your aquaculture operation.'}
+            {companyProfile.description || copy('Company information, organization structure, and public profile details for your aquaculture operation.')}
           </p>
         </div>
         <Link className="company-edit-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 600 }}>
           <Edit3 size={16} />
-          Edit details
+          {copy('Edit details')}
         </Link>
       </div>
 
@@ -245,15 +247,15 @@ export default function CompanyPage() {
           </div>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '8px 12px', borderRadius: '999px', background: companyProfile.isPublicProfile ? '#dcfce7' : 'var(--bg-mid)', color: companyProfile.isPublicProfile ? '#166534' : 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
             <CheckCircle2 size={15} />
-            {companyProfile.isPublicProfile ? 'Public profile' : 'Private profile'}
+            {companyProfile.isPublicProfile ? copy('Public profile') : copy('Private profile')}
           </div>
         </div>
 
         <div className="company-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1px', background: 'var(--shell-border)' }}>
           {[
-            { label: t.companyDetails?.location || 'Location', value: formatLocation(companyProfile), icon: MapPin },
-            { label: t.companyDetails?.farmType || 'Farm Type', value: companyProfile.farmType || 'Not specified', icon: Activity },
-            { label: t.companyDetails?.businessSize || 'Business Size', value: formatBusinessSize(companyProfile.businessSize), icon: Building2 },
+            { label: t.companyDetails?.location || 'Location', value: formatLocation(companyProfile, copy), icon: MapPin },
+            { label: t.companyDetails?.farmType || 'Farm Type', value: companyProfile.farmType || copy('Not specified'), icon: Activity },
+            { label: t.companyDetails?.businessSize || 'Business Size', value: formatBusinessSize(companyProfile.businessSize, copy), icon: Building2 },
             { label: t.companyDetails?.members || 'Members', value: `${members.length || companyProfile.teamMembers?.length || 0}`, icon: Users },
           ].map((item) => (
             <div key={item.label} style={{ background: '#fff', padding: '22px', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '14px' }}>
@@ -293,16 +295,16 @@ export default function CompanyPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
               <div>
                 <h2 style={{ fontSize: '17px', fontWeight: 600, fontFamily: 'var(--jakarta)', color: 'var(--text-primary)', marginBottom: '4px' }}>
-                  Manage join requests in Settings
+                  {copy('Manage join requests in Settings')}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-                  Approve or reject pending staff from the Organization tab.
+                  {copy('Approve or reject pending staff from the Organization tab.')}
                 </p>
               </div>
             </div>
           </div>
           <Link className="company-settings-link" href="/dashboard/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '11px 16px', borderRadius: '12px', border: '1px solid var(--border)', background: '#fff', color: 'var(--primary)', fontSize: '13px', fontWeight: 600 }}>
-            Open Settings &gt; Organization
+            {copy('Open Settings > Organization')}
           </Link>
         </section>
       )}
@@ -314,7 +316,7 @@ export default function CompanyPage() {
               {t.companyDetails?.organizationStructure || 'Organization Structure'}
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>
-              {loadingMembers ? 'Loading team members...' : `${members.length} ${t.companyDetails?.members || 'members'}`}
+              {loadingMembers ? copy('Loading team members...') : `${members.length} ${t.companyDetails?.members || copy('members')}`}
             </p>
           </div>
         </div>
@@ -344,12 +346,12 @@ export default function CompanyPage() {
                       <div className="company-member-row" key={member.id} style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
                         <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: statusColor(member.status) }} />
                         <div className="company-member-copy" style={{ minWidth: 0 }}>
-                          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name || member.email || 'Team member'}</div>
+                          <div style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.name || member.email || copy('Team member')}</div>
                           <div style={{ color: 'var(--text-muted)', fontSize: '12px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{member.email}</div>
                         </div>
                       </div>
                     )) : (
-                      <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>No members assigned yet.</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>{copy('No members assigned yet.')}</div>
                     )}
                   </div>
 

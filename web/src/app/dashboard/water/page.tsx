@@ -41,6 +41,7 @@ import { toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -82,10 +83,10 @@ type LabSeverity = 'good' | 'watch' | 'warning' | 'critical';
 type LabEntryMode = 'manual' | 'pdf_upload';
 type LabPdfUsageType = 'water_quality' | 'plankton';
 
-const getLabReportTypeLabel = (reportType?: LabReportType) => {
-  if (reportType === 'plankton') return 'Plankton Quality';
-  if (reportType === 'combined') return 'Combined Lab Report';
-  return 'Mineral Quality';
+const getLabReportTypeLabel = (reportType: LabReportType | undefined, copy: (text: string) => string) => {
+  if (reportType === 'plankton') return copy('Plankton Quality');
+  if (reportType === 'combined') return copy('Combined Lab Report');
+  return copy('Mineral Quality');
 };
 
 interface LabStatus {
@@ -226,6 +227,7 @@ const formatConditionLabel = (value: string | null | undefined): string => value
   : '-';
 
 export default function WaterQualityPage() {
+  const copy = useDashboardCopy();
   const { company } = useAuth();
   const { t } = useLanguage();
   const today = useFarmDateKey(company?.timeZone);
@@ -550,7 +552,7 @@ export default function WaterQualityPage() {
       }
     } catch (error) {
       console.error('Error adding water quality:', error);
-      alert('Failed to update water quality.');
+      alert(copy('Failed to update water quality.'));
     }
   };
 
@@ -787,7 +789,7 @@ export default function WaterQualityPage() {
     if (resetAtMs && resetAtMs > labUsageNowMs) {
       return {
         disabled: true,
-        message: `Available in ${formatRemainingTime(resetAtMs - labUsageNowMs)}`,
+        message: copy('Available in {time}', { time: formatRemainingTime(resetAtMs - labUsageNowMs) }),
       };
     }
     const startedAtMs = toUsageMillis(usage.startedAt);
@@ -795,10 +797,10 @@ export default function WaterQualityPage() {
     if (pendingResetAtMs && pendingResetAtMs > labUsageNowMs) {
       return {
         disabled: true,
-        message: `Extraction running (${formatRemainingTime(pendingResetAtMs - labUsageNowMs)})`,
+        message: copy('Extraction running ({time})', { time: formatRemainingTime(pendingResetAtMs - labUsageNowMs) }),
       };
     }
-    return { disabled: false, message: getLabReportTypeLabel(reportType) };
+    return { disabled: false, message: getLabReportTypeLabel(reportType, copy) };
   };
 
   const resetLabModal = () => {
@@ -876,7 +878,7 @@ export default function WaterQualityPage() {
       return;
     }
     if (labPdfFile.type !== 'application/pdf') {
-      alert('Please upload a PDF lab report.');
+      alert(copy('Please upload a PDF lab report.'));
       return;
     }
 
@@ -922,15 +924,15 @@ export default function WaterQualityPage() {
       setSelectedLabPondIds(rows.map(row => row.pondId));
       setLabRows(rows);
       setLabEntryMode('pdf_upload');
-      alert('PDF extraction finished. Review the table, correct any values, then confirm the report.');
+      alert(copy('PDF extraction finished. Review the table, correct any values, then confirm the report.'));
     } catch (error) {
       console.error('Error uploading lab PDF:', error);
       const details = typeof error === 'object' && error && 'details' in error ? error.details as { resetAt?: string } : null;
       if (details?.resetAt) {
         const resetAtMs = new Date(details.resetAt).getTime();
-        alert(Number.isNaN(resetAtMs) ? 'Failed to upload or extract the lab report.' : `This PDF extraction is available in ${formatRemainingTime(resetAtMs - Date.now())}.`);
+        alert(Number.isNaN(resetAtMs) ? copy('Failed to upload or extract the lab report.') : copy('This PDF extraction is available in {time}.', { time: formatRemainingTime(resetAtMs - Date.now()) }));
       } else {
-        alert('Failed to upload or extract the lab report.');
+        alert(copy('Failed to upload or extract the lab report.'));
       }
     } finally {
       setLabSubmitting(false);
@@ -978,7 +980,7 @@ export default function WaterQualityPage() {
       resetLabModal();
     } catch (error) {
       console.error('Error creating lab report:', error);
-      alert('Failed to create lab report.');
+      alert(copy('Failed to create lab report.'));
     } finally {
       setLabSubmitting(false);
     }
@@ -1013,7 +1015,7 @@ export default function WaterQualityPage() {
         key,
         label: hasValidDate
           ? parsedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'long', day: 'numeric', year: 'numeric' })
-          : 'No sample date',
+          : copy('No sample date'),
         timestamp: hasValidDate ? parsedDate.getTime() : 0,
         reports: [],
       };
@@ -1022,7 +1024,7 @@ export default function WaterQualityPage() {
     });
 
     return Array.from(groups.values()).sort((a, b) => b.timestamp - a.timestamp);
-  }, [company?.timeZone, filteredLabReports]);
+  }, [company?.timeZone, copy, filteredLabReports]);
 
   const toggleLabDateGroup = (dateKey: string) => {
     setExpandedLabDateKeys((current) =>
@@ -1033,10 +1035,10 @@ export default function WaterQualityPage() {
   };
 
   const getSeverityStyle = (status?: LabSeverity) => {
-    if (status === 'critical') return { label: 'Critical', color: '#991b1b', bg: '#fee2e2' };
-    if (status === 'warning') return { label: 'Warning', color: '#92400e', bg: '#fef3c7' };
-    if (status === 'watch') return { label: 'Watch', color: '#0F4C75', bg: '#E0F2FE' };
-    return { label: 'Good', color: '#166534', bg: '#DCFCE7' };
+    if (status === 'critical') return { label: copy('Critical'), color: '#991b1b', bg: '#fee2e2' };
+    if (status === 'warning') return { label: copy('Warning'), color: '#92400e', bg: '#fef3c7' };
+    if (status === 'watch') return { label: copy('Watch'), color: '#0F4C75', bg: '#E0F2FE' };
+    return { label: copy('Good'), color: '#166534', bg: '#DCFCE7' };
   };
 
   const formatLabValue = (value?: string | number | null, suffix = '') => {
@@ -1106,7 +1108,7 @@ export default function WaterQualityPage() {
 
   return (
     <div className="dashboard-page water-quality-page">
-      <div className="water-view-tabs animate-fade-up" role="tablist" aria-label="Water quality view">
+      <div className="water-view-tabs animate-fade-up" role="tablist" aria-label={copy('Water quality view')}>
         {([
           { id: 'daily', label: 'Daily Log', icon: Droplets },
           { id: 'lab', label: 'Lab Reports', icon: FileText },
@@ -1123,7 +1125,7 @@ export default function WaterQualityPage() {
               className={active ? 'is-active' : ''}
             >
               <Icon size={15} />
-              {item.label}
+              {copy(item.label)}
             </button>
           );
         })}
@@ -1134,7 +1136,7 @@ export default function WaterQualityPage() {
         <div className="water-search-field">
           <Search size={17} aria-hidden="true" />
           <input
-            placeholder="Search ponds or parameters..."
+            placeholder={copy('Search ponds or parameters...')}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -1148,7 +1150,7 @@ export default function WaterQualityPage() {
             className="dashboard-action dashboard-action-primary"
           >
             <Plus size={18} />
-            <span>New Parameter Log</span>
+            <span>{copy('New Parameter Log')}</span>
           </button>
         )}
         {canManageLabReports && activeView === 'lab' && (
@@ -1158,7 +1160,7 @@ export default function WaterQualityPage() {
             className="dashboard-action dashboard-action-primary"
           >
             <Plus size={18} />
-            <span>Add Lab Report</span>
+            <span>{copy('Add Lab Report')}</span>
           </button>
         )}
       </div>
@@ -1170,7 +1172,7 @@ export default function WaterQualityPage() {
         enterpriseOwnerView ? (
           <EnterpriseGroupedPondGrid
             ponds={filteredPonds}
-            emptyMessage="No water quality data"
+            emptyMessage={copy('No water quality data')}
             getTone={(pond) => getEnterprisePondStatus(pond, company?.timeZone).risk}
             onSelect={(pond) => setSelectedPondForHistory(pond as Pond)}
           />
@@ -1186,15 +1188,15 @@ export default function WaterQualityPage() {
                     <div>
                       <h3>{pond.pondName}</h3>
                       <p>
-                        {latest ? `UPDATED ${new Date(latest.date).toLocaleDateString()}` : 'NO DATA LOGGED'}
+                        {latest ? `${copy('UPDATED')} ${new Date(latest.date).toLocaleDateString()}` : copy('NO DATA LOGGED')}
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSelectedPondForHistory(pond)}
                     className="water-history-button"
-                    aria-label={`View ${pond.pondName} water quality history`}
-                    title="View history"
+                    aria-label={copy('View {pond} water quality history', { pond: pond.pondName })}
+                    title={copy('View history')}
                   >
                     <History size={17} />
                   </button>
@@ -1204,8 +1206,8 @@ export default function WaterQualityPage() {
                   <div className="water-lab-status">
                     <div>
                       <div>
-                        <span>Latest lab</span>
-                        <strong>{pond.latestLabStatus.mainIssue || 'Lab report reviewed'}</strong>
+                        <span>{copy('Latest lab')}</span>
+                        <strong>{pond.latestLabStatus.mainIssue || copy('Lab report reviewed')}</strong>
                       </div>
                       <span className="water-lab-status-pill" style={{ background: labStyle.bg, color: labStyle.color }}>
                         {labStyle.label}
@@ -1218,7 +1220,7 @@ export default function WaterQualityPage() {
 
                 <div className="water-metric-grid">
                   <div className="wq-metric">
-                    <span className="wq-label">pH Level</span>
+                    <span className="wq-label">{copy('pH Level')}</span>
                     <div className="wq-value">
                       <Activity size={16} color="var(--accent)" />
                       <span>{latest ? `${latest.phMorning || '-'} / ${latest.phEvening || '-'}` : '--'}</span>
@@ -1232,14 +1234,14 @@ export default function WaterQualityPage() {
                     </div>
                   </div>
                   <div className="wq-metric">
-                    <span className="wq-label">Salinity</span>
+                    <span className="wq-label">{copy('Salinity')}</span>
                     <div className="wq-value">
                       <Droplets size={16} color="#10b981" />
                       <span>{latest ? `${latest.salinity || '--'} PPT` : '--'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
-                    <span className="wq-label">Transparency</span>
+                    <span className="wq-label">{copy('Transparency')}</span>
                     <div className="wq-value">
                       <Thermometer size={16} color="#f59e0b" />
                       <span>{latest ? `${latest.transparency || '--'} CM` : '--'}</span>
@@ -1253,7 +1255,7 @@ export default function WaterQualityPage() {
                       onClick={() => { setFormData({ ...formData, pondId: pond.id, date: today }); setModalOpen(true); }}
                       className="water-quick-log"
                     >
-                      <Plus size={15} /> Log
+                      <Plus size={15} /> {copy('Log')}
                     </button>
                   </div>
                 )}
@@ -1286,7 +1288,7 @@ export default function WaterQualityPage() {
                 <div>
                   <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{group.label}</h3>
                   <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: '2px' }}>
-                    {group.reports.length} confirmed report{group.reports.length === 1 ? '' : 's'}
+                    {group.reports.length} {copy(group.reports.length === 1 ? 'confirmed report' : 'confirmed reports')}
                   </p>
                 </div>
                 <ChevronDown
@@ -1314,10 +1316,10 @@ export default function WaterQualityPage() {
                       </div>
                       <div>
                         <h3 style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                          {report.labName || 'Lab Report'}
+                          {report.labName || copy('Lab Report')}
                         </h3>
                         <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600 }}>
-                          {report.sampleDate ? new Date(report.sampleDate).toLocaleDateString() : 'No sample date'} · {pondCount} pond{pondCount === 1 ? '' : 's'}
+                          {report.sampleDate ? new Date(report.sampleDate).toLocaleDateString() : copy('No sample date')} · {pondCount} {copy(pondCount === 1 ? 'pond' : 'ponds')}
                         </p>
                       </div>
                     </div>
@@ -1343,17 +1345,17 @@ export default function WaterQualityPage() {
                               fontWeight: 600,
                             }}
                           >
-                            {row.pondCode || `Pond ${rowIndex + 1}`} · {rowStyle.label}
+                            {row.pondCode || `${copy('Pond')} ${rowIndex + 1}`} · {rowStyle.label}
                           </span>
                         );
                       })}
                       {(report.pondResults || []).length > 8 && (
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, padding: '5px 0' }}>
-                          +{(report.pondResults || []).length - 8} more
+                          +{(report.pondResults || []).length - 8} {copy('more')}
                         </span>
                       )}
                       {(report.pondResults || []).length === 0 && (
-                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600 }}>No pond rows</span>
+                        <span style={{ color: 'var(--text-muted)', fontSize: '0.82rem', fontWeight: 600 }}>{copy('No pond rows')}</span>
                       )}
                     </div>
                     {report.insights?.ownerSummary && (
@@ -1363,19 +1365,19 @@ export default function WaterQualityPage() {
                     )}
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Report Type</div>
-                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)' }}>{getLabReportTypeLabel(report.reportType)}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{copy('Report Type')}</div>
+                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)' }}>{getLabReportTypeLabel(report.reportType, copy)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Processing</div>
-                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{report.processing?.status || report.status || 'pending'}</div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-faint)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{copy('Processing')}</div>
+                    <div style={{ marginTop: 6, fontWeight: 600, color: 'var(--text-primary)', textTransform: 'capitalize' }}>{copy(report.processing?.status || report.status || 'pending')}</div>
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px' }}>
                     <span style={{ borderRadius: 999, padding: '7px 12px', background: style.bg, color: style.color, fontSize: '0.74rem', fontWeight: 600 }}>
                       {style.label}
                     </span>
                     <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600 }}>
-                      {(report.summary?.warningCount || 0) + (report.summary?.criticalCount || 0)} alert row(s)
+                      {(report.summary?.warningCount || 0) + (report.summary?.criticalCount || 0)} {copy('alert row(s)')}
                     </span>
                     <button
                       type="button"
@@ -1383,7 +1385,7 @@ export default function WaterQualityPage() {
                       className="btn-secondary"
                       style={{ padding: '8px 12px', fontSize: '0.76rem' }}
                     >
-                      {isExpanded ? 'Hide Details' : 'Details'}
+                      {copy(isExpanded ? 'Hide Details' : 'Details')}
                     </button>
                     {canManageLabReports && report.status !== 'confirmed' && (
                       <button
@@ -1392,7 +1394,7 @@ export default function WaterQualityPage() {
                         className="btn-secondary"
                         style={{ padding: '8px 12px', fontSize: '0.76rem' }}
                       >
-                        Review & Confirm
+                        {copy('Review & Confirm')}
                       </button>
                     )}
                     {report.sourcePdfUrl && (
@@ -1414,7 +1416,7 @@ export default function WaterQualityPage() {
                         }}
                       >
                         <ExternalLink size={13} />
-                        View PDF
+                        {copy('View PDF')}
                       </a>
                     )}
                   </div>
@@ -1429,8 +1431,8 @@ export default function WaterQualityPage() {
                         <div key={`${row.pondId || row.pondCode || rowIndex}-${rowIndex}`} style={{ border: '1px solid var(--border)', borderRadius: '14px', background: 'var(--bg-mid)', padding: '14px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                             <div>
-                              <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{row.pondCode || `Pond ${rowIndex + 1}`}</div>
-                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 600 }}>{getLabReportTypeLabel(report.reportType)}</div>
+                              <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{row.pondCode || `${copy('Pond')} ${rowIndex + 1}`}</div>
+                              <div style={{ color: 'var(--text-muted)', fontSize: '0.74rem', fontWeight: 600 }}>{getLabReportTypeLabel(report.reportType, copy)}</div>
                             </div>
                             {report.sourcePdfUrl && (
                               <a href={report.sourcePdfUrl} target="_blank" rel="noreferrer" style={{ borderRadius: '10px', padding: '7px 10px', background: 'var(--primary)', color: '#fff', fontSize: '0.72rem', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
@@ -1462,7 +1464,7 @@ export default function WaterQualityPage() {
                               <div style={{ color: 'var(--text-faint)', fontSize: '0.62rem', fontWeight: 600, textTransform: 'uppercase' }}>Plankton</div>
                               <div style={{ color: 'var(--text-primary)', fontSize: '0.86rem', fontWeight: 600, marginTop: '4px' }}>{formatLabValue(plankton.totalCellPerMl)} cells/ml</div>
                               <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, marginTop: '6px', lineHeight: 1.45 }}>
-                                Green {formatLabValue(plankton.chlorophytaPercent, '%')} · Blue-green {formatLabValue(plankton.cyanophytaPercent, '%')} · Golden {formatLabValue(plankton.chrysophytaPercent, '%')}
+                                {copy('Green')} {formatLabValue(plankton.chlorophytaPercent, '%')} · {copy('Blue-green')} {formatLabValue(plankton.cyanophytaPercent, '%')} · {copy('Golden')} {formatLabValue(plankton.chrysophytaPercent, '%')}
                               </div>
                             </div>
                           )}
@@ -1479,8 +1481,8 @@ export default function WaterQualityPage() {
           {filteredLabReports.length === 0 && (
             <div className="glass-card" style={{ textAlign: 'center', padding: '70px 24px' }}>
               <FileText size={44} color="var(--text-faint)" style={{ marginBottom: '16px' }} />
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>No lab reports yet</h3>
-              <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Add a manual report or upload a lab PDF for assisted extraction and review.</p>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '8px' }}>{copy('No lab reports yet')}</h3>
+              <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{copy('Add a manual report or upload a lab PDF for assisted extraction and review.')}</p>
             </div>
           )}
         </div>
@@ -1493,10 +1495,10 @@ export default function WaterQualityPage() {
             <div className="responsive-modal-header" style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
                 <h2 style={{ fontSize: '20px', fontWeight: 600, fontFamily: "var(--jakarta)", color: 'var(--text-primary)' }}>
-                  {selectedPondForHistory.pondName} Water Quality History
+                  {selectedPondForHistory.pondName} {copy('Water Quality History')}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600, marginTop: '2px' }}>
-                  Historical environmental logs and parameter readings
+                  {copy('Historical environmental logs and parameter readings')}
                 </p>
               </div>
               <button onClick={() => setSelectedPondForHistory(null)} className="icon-btn-modern">
@@ -1513,54 +1515,54 @@ export default function WaterQualityPage() {
                     <div key={i} className="glass-card" style={{ padding: '18px', background: '#FFF' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
                         <span style={{ fontWeight: 600, fontSize: '14px', letterSpacing: '-0.01em' }}>{new Date(log.date).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-                        <div style={{ fontSize: '0.6rem', padding: '4px 10px', borderRadius: '100px', background: 'var(--primary-dim)', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Record Entry</div>
+                        <div style={{ fontSize: '0.6rem', padding: '4px 10px', borderRadius: '100px', background: 'var(--primary-dim)', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{copy('Record Entry')}</div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">pH Levels</span>
+                          <span className="wq-label-small">{copy('pH Levels')}</span>
                           <span className="wq-val-small">{log.phMorning || '-'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.phEvening || '-'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Dissolved Oxygen</span>
+                          <span className="wq-label-small">{copy('Dissolved Oxygen')}</span>
                           <span className="wq-val-small">{log.doMorning || '-'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.doEvening || '-'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Salinity</span>
+                          <span className="wq-label-small">{copy('Salinity')}</span>
                           <span className="wq-val-small">{log.salinity || '-'} PPT</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Transparency</span>
+                          <span className="wq-label-small">{copy('Transparency')}</span>
                           <span className="wq-val-small">{log.transparency || '-'} CM</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Temperature</span>
+                          <span className="wq-label-small">{copy('Temperature')}</span>
                           <span className="wq-val-small">{log.temperature || '-'} °C</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Ammonia (TAN)</span>
+                          <span className="wq-label-small">{copy('Ammonia (TAN)')}</span>
                           <span className="wq-val-small">{log.ammonia || '-'} mg/L</span>
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '14px' }}>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Weather</span>
-                          <span className="wq-val-small">{formatConditionLabel(log.weatherEvent)}</span>
+                          <span className="wq-label-small">{copy('Weather')}</span>
+                          <span className="wq-val-small">{copy(formatConditionLabel(log.weatherEvent))}</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Water Exchange</span>
+                          <span className="wq-label-small">{copy('Water Exchange')}</span>
                           <span className="wq-val-small">{hasSavedValue(log.waterExchangePercent) ? `${log.waterExchangePercent}%` : '-'}</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Sludge Load</span>
-                          <span className="wq-val-small">{formatConditionLabel(log.sludgeLoad)}</span>
+                          <span className="wq-label-small">{copy('Sludge Load')}</span>
+                          <span className="wq-val-small">{copy(formatConditionLabel(log.sludgeLoad))}</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Surface Scum</span>
-                          <span className="wq-val-small">{log.surfaceScum === null || log.surfaceScum === undefined ? '-' : log.surfaceScum ? 'Present' : 'Not observed'}</span>
+                          <span className="wq-label-small">{copy('Surface Scum')}</span>
+                          <span className="wq-val-small">{log.surfaceScum === null || log.surfaceScum === undefined ? '-' : copy(log.surfaceScum ? 'Present' : 'Not observed')}</span>
                         </div>
                         <div className="wq-metric-small">
-                          <span className="wq-label-small">Shrimp Behavior</span>
-                          <span className="wq-val-small">{formatConditionLabel(log.shrimpBehaviour)}</span>
+                          <span className="wq-label-small">{copy('Shrimp Behavior')}</span>
+                          <span className="wq-val-small">{copy(formatConditionLabel(log.shrimpBehaviour))}</span>
                         </div>
                       </div>
                       {log.operationalNotes && <p style={{ margin: '14px 0 0', color: 'var(--text-muted)', fontSize: '13px', whiteSpace: 'pre-wrap' }}>{log.operationalNotes}</p>}
@@ -1570,7 +1572,7 @@ export default function WaterQualityPage() {
                 {!selectedPondForHistory.samplings.some(hasWaterQualityHistory) && (
                    <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                      <Info size={40} style={{ marginBottom: '16px', opacity: 0.3 }} />
-                     <p style={{ fontWeight: 600 }}>No environmental records found for this pond.</p>
+                     <p style={{ fontWeight: 600 }}>{copy('No environmental records found for this pond.')}</p>
                    </div>
                 )}
               </div>
@@ -1585,16 +1587,16 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up water-lab-action-modal">
             <div className="responsive-modal-header water-lab-action-header">
               <div>
-                <h2>Add Lab Report</h2>
-                <p>Upload a PDF or enter results manually.</p>
+                <h2>{copy('Add Lab Report')}</h2>
+                <p>{copy('Upload a PDF or enter results manually.')}</p>
               </div>
-              <button onClick={() => setLabActionModalOpen(false)} className="water-modal-close" aria-label="Close lab report options">
+              <button onClick={() => setLabActionModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report options')}>
                 <X size={18} />
               </button>
             </div>
             <div className="responsive-modal-body water-lab-action-body">
               <section>
-                <div className="water-lab-action-label">Upload PDF</div>
+                <div className="water-lab-action-label">{copy('Upload PDF')}</div>
                 <div className="water-lab-action-grid">
                   <button
                     type="button"
@@ -1608,7 +1610,7 @@ export default function WaterQualityPage() {
                   >
                     <FileText size={16} />
                     <span>
-                      <span>Mineral PDF</span>
+                      <span>{copy('Mineral PDF')}</span>
                       <small>{mineralPdfActionState.message}</small>
                     </span>
                   </button>
@@ -1624,14 +1626,14 @@ export default function WaterQualityPage() {
                   >
                     <FileText size={16} />
                     <span>
-                      <span>Plankton PDF</span>
+                      <span>{copy('Plankton PDF')}</span>
                       <small>{planktonPdfActionState.message}</small>
                     </span>
                   </button>
                 </div>
               </section>
               <section>
-                <div className="water-lab-action-label">Manual Entry</div>
+                <div className="water-lab-action-label">{copy('Manual Entry')}</div>
                 <div className="water-lab-action-grid">
                   <button
                     type="button"
@@ -1642,7 +1644,7 @@ export default function WaterQualityPage() {
                     className="water-lab-action-option"
                   >
                     <Plus size={16} />
-                    <span>Manual Mineral</span>
+                    <span>{copy('Manual Mineral')}</span>
                   </button>
                   <button
                     type="button"
@@ -1653,7 +1655,7 @@ export default function WaterQualityPage() {
                     className="water-lab-action-option"
                   >
                     <Plus size={16} />
-                    <span>Manual Plankton</span>
+                    <span>{copy('Manual Plankton')}</span>
                   </button>
                 </div>
               </section>
@@ -1668,10 +1670,10 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up water-lab-form-modal">
             <div className="responsive-modal-header water-lab-form-header">
               <div>
-                <h2>{editingLabReportId ? 'Review Lab Report' : 'Add Lab Report'}</h2>
-                <p>Enter results manually or upload a lab PDF, then review before confirmation.</p>
+                <h2>{copy(editingLabReportId ? 'Review Lab Report' : 'Add Lab Report')}</h2>
+                <p>{copy('Enter results manually or upload a lab PDF, then review before confirmation.')}</p>
               </div>
-              <button onClick={() => setLabModalOpen(false)} className="water-modal-close" aria-label="Close lab report form">
+              <button onClick={() => setLabModalOpen(false)} className="water-modal-close" aria-label={copy('Close lab report form')}>
                 <X size={18} />
               </button>
             </div>
@@ -1679,7 +1681,7 @@ export default function WaterQualityPage() {
             <form className="responsive-modal-body water-lab-form-body" onSubmit={handleCreateManualLabReport}>
               <div className="water-lab-form-fields">
                 <div className="water-lab-form-field">
-                  <label className="form-label">Entry Mode</label>
+                  <label className="form-label">{copy('Entry Mode')}</label>
                   <div className="water-entry-mode-tabs">
                     {([
                       ['manual', 'Manual'],
@@ -1693,33 +1695,33 @@ export default function WaterQualityPage() {
                         className={labEntryMode === mode ? 'is-active' : ''}
                         style={{ cursor: editingLabReportId ? 'default' : 'pointer' }}
                       >
-                        {label}
+                        {copy(label)}
                       </button>
                     ))}
                   </div>
                 </div>
                 <div className="water-lab-form-field">
-                  <label className="form-label">Report Type</label>
+                  <label className="form-label">{copy('Report Type')}</label>
                   <select value={labForm.reportType} onChange={e => setLabForm({ ...labForm, reportType: e.target.value as LabReportType })} className="form-input">
-                    {labForm.reportType === 'combined' && <option value="combined">Combined Lab Report</option>}
-                    <option value="water_quality">Mineral Quality</option>
+                    {labForm.reportType === 'combined' && <option value="combined">{copy('Combined Lab Report')}</option>}
+                    <option value="water_quality">{copy('Mineral Quality')}</option>
                     <option value="plankton">Plankton</option>
                   </select>
                 </div>
                 <div className="water-lab-form-field">
-                  <label className="form-label">Sample Date</label>
+                  <label className="form-label">{copy('Sample Date')}</label>
                   <input type="date" required value={labForm.sampleDate} onChange={e => setLabForm({ ...labForm, sampleDate: e.target.value })} className="form-input" />
                 </div>
                 <div className="water-lab-form-field">
-                  <label className="form-label">Lab Name</label>
-                  <input value={labForm.labName} onChange={e => setLabForm({ ...labForm, labName: e.target.value })} placeholder="Farm kit / lab name" className="form-input" />
+                  <label className="form-label">{copy('Lab Name')}</label>
+                  <input value={labForm.labName} onChange={e => setLabForm({ ...labForm, labName: e.target.value })} placeholder={copy('Farm kit / lab name')} className="form-input" />
                 </div>
               </div>
 
               {labEntryMode === 'pdf_upload' && !editingLabReportId && (
                 <div className="water-pdf-upload-row">
                   <div className="water-pdf-upload-copy">
-                    <label className="form-label">Upload Lab PDF</label>
+                    <label className="form-label">{copy('Upload Lab PDF')}</label>
                     <div className="water-pdf-file-control">
                       <input
                         className="water-pdf-file-input"
@@ -1728,12 +1730,12 @@ export default function WaterQualityPage() {
                         onChange={e => setLabPdfFile(e.target.files?.[0] || null)}
                       />
                       {labPdfFile && (
-                        <span className="water-pdf-file-success" role="status" aria-label={`${labPdfFile.name} selected`}>
+                        <span className="water-pdf-file-success" role="status" aria-label={`${labPdfFile.name} ${copy('selected')}`}>
                           <CheckCircle2 size={17} />
                         </span>
                       )}
                     </div>
-                    <p>Creates a draft for review. The report is not confirmed automatically.</p>
+                    <p>{copy('Creates a draft for review. The report is not confirmed automatically.')}</p>
                   </div>
                   <button
                     type="button"
@@ -1741,7 +1743,7 @@ export default function WaterQualityPage() {
                     onClick={handleUploadLabPdf}
                     className="water-lab-primary-button water-upload-extract-button"
                   >
-                    {labSubmitting ? 'Extracting...' : activePdfActionState.disabled ? activePdfActionState.message : 'Upload & Extract'}
+                    {labSubmitting ? copy('Extracting...') : activePdfActionState.disabled ? activePdfActionState.message : copy('Upload & Extract')}
                   </button>
                 </div>
               )}
@@ -1749,10 +1751,10 @@ export default function WaterQualityPage() {
               <section className="water-included-ponds">
                 <div className="water-included-ponds-heading">
                   <div>
-                    <h3>Included Ponds</h3>
-                    <p>Select every pond covered by this lab report.</p>
+                    <h3>{copy('Included Ponds')}</h3>
+                    <p>{copy('Select every pond covered by this lab report.')}</p>
                   </div>
-                  <span>{selectedLabPondIds.length} selected</span>
+                  <span>{selectedLabPondIds.length} {copy('selected')}</span>
                 </div>
                 <div className="water-pond-selector-grid">
                   {accessiblePonds.map(pond => {
@@ -1776,14 +1778,14 @@ export default function WaterQualityPage() {
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
                     <AlertTriangle size={18} color="var(--primary)" />
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>Bulk Result Grid</h3>
+                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{copy('Bulk Result Grid')}</h3>
                   </div>
                   <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: labForm.reportType === 'plankton' ? '2200px' : labForm.reportType === 'combined' ? '2800px' : '1280px' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-mid)' }}>
                           {['Pond', ...labGridColumns.map(column => column.label)].map(label => (
-                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{label}</th>
+                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{copy(label)}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1817,9 +1819,9 @@ export default function WaterQualityPage() {
               )}
 
               <div className="water-lab-form-footer">
-                <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">Cancel</button>
+                <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">{copy('Cancel')}</button>
                 <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="water-lab-primary-button water-confirm-lab-button">
-                  {labSubmitting ? 'Saving...' : 'Confirm Lab Report'}
+                  {copy(labSubmitting ? 'Saving...' : 'Confirm Lab Report')}
                 </button>
               </div>
             </form>
@@ -1833,10 +1835,10 @@ export default function WaterQualityPage() {
           <div className="glass-card responsive-modal animate-fade-up water-log-modal">
             <div className="responsive-modal-header water-log-header">
               <div>
-                <h2>Log Parameters</h2>
-                <p>Sync environmental readings with Orson AI.</p>
+                <h2>{copy('Log Parameters')}</h2>
+                <p>{copy('Sync environmental readings with Orson AI.')}</p>
               </div>
-              <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label="Close parameter log">
+              <button onClick={() => setModalOpen(false)} className="water-modal-close" aria-label={copy('Close parameter log')}>
                 <X size={18} />
               </button>
             </div>
@@ -1844,50 +1846,50 @@ export default function WaterQualityPage() {
             <form onSubmit={handleAddWQ} className="water-log-form">
               <div className="responsive-modal-body water-log-form-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
-                  <label className="form-label">Target Pond</label>
+                  <label className="form-label">{copy('Target Pond')}</label>
                   <select
                     required
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     className="form-input"
                   >
-                    <option value="">Select a pond asset...</option>
+                    <option value="">{copy('Select a pond asset...')}</option>
                     {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Date</label>
+                  <label className="form-label">{copy('Date')}</label>
                   <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Salinity (PPT)</label>
+                  <label className="form-label">{copy('Salinity (PPT)')}</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.salinity} onChange={e => setFormData({...formData, salinity: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">pH (Morning)</label>
+                  <label className="form-label">{copy('pH (Morning)')}</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.phMorning} onChange={e => setFormData({...formData, phMorning: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">pH (Evening)</label>
+                  <label className="form-label">{copy('pH (Evening)')}</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.phEvening} onChange={e => setFormData({...formData, phEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">DO (Morning) mg/L</label>
+                  <label className="form-label">{copy('DO (Morning) mg/L')}</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.doMorning} onChange={e => setFormData({...formData, doMorning: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">DO (Evening) mg/L</label>
+                  <label className="form-label">{copy('DO (Evening) mg/L')}</label>
                   <input type="number" step="0.1" placeholder="0.0" value={formData.doEvening} onChange={e => setFormData({...formData, doEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
-                  <label className="form-label">Transparency (CM)</label>
+                  <label className="form-label">{copy('Transparency (CM)')}</label>
                   <input type="number" placeholder="0" value={formData.transparency} onChange={e => setFormData({...formData, transparency: e.target.value})} className="form-input" />
                 </div>
 
@@ -1907,27 +1909,27 @@ export default function WaterQualityPage() {
                 </div>
 
                 <div className="water-optional-heading">
-                  <strong>Optional Pond Conditions</strong>
-                  <span>Add only what was directly observed today.</span>
+                  <strong>{copy('Optional Pond Conditions')}</strong>
+                  <span>{copy('Add only what was directly observed today.')}</span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Temperature (°C)</label>
+                  <label className="form-label">{copy('Temperature (°C)')}</label>
                   <input type="number" step="0.1" placeholder="29" value={formData.temperature} onChange={e => setFormData({...formData, temperature: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Ammonia (TAN) (mg/L)</label>
+                  <label className="form-label">{copy('Ammonia (TAN) (mg/L)')}</label>
                   <input type="number" min="0" step="0.01" placeholder="0.00" value={formData.ammonia} onChange={e => setFormData({...formData, ammonia: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Water Exchange (%)</label>
+                  <label className="form-label">{copy('Water Exchange (%)')}</label>
                   <input type="number" step="0.1" placeholder="10" value={formData.waterExchangePercent} onChange={e => setFormData({...formData, waterExchangePercent: e.target.value})} className="form-input" />
                 </div>
 
                 <div className="water-condition-group">
-                  <label className="form-label">Weather Event</label>
+                  <label className="form-label">{copy('Weather Event')}</label>
                   <div className="water-condition-options">
                     {([['rain', 'Rain'], ['heavy_rain', 'Heavy Rain'], ['sudden_cloud', 'Sudden Cloud']] as const).map(([value, label]) => (
                       <button
@@ -1935,13 +1937,13 @@ export default function WaterQualityPage() {
                         key={value}
                         className={`water-condition-option ${formData.weatherEvent === value ? 'selected' : ''}`}
                         onClick={() => setFormData(prev => ({ ...prev, weatherEvent: prev.weatherEvent === value ? null : value }))}
-                      >{label}</button>
+                      >{copy(label)}</button>
                     ))}
                   </div>
                 </div>
 
                 <div className="water-condition-group">
-                  <label className="form-label">Sludge Load</label>
+                  <label className="form-label">{copy('Sludge Load')}</label>
                   <div className="water-condition-options">
                     {([['low', 'Low'], ['moderate', 'Moderate'], ['high', 'High']] as const).map(([value, label]) => (
                       <button
@@ -1949,13 +1951,13 @@ export default function WaterQualityPage() {
                         key={value}
                         className={`water-condition-option ${formData.sludgeLoad === value ? 'selected' : ''}`}
                         onClick={() => setFormData(prev => ({ ...prev, sludgeLoad: prev.sludgeLoad === value ? null : value }))}
-                      >{label}</button>
+                      >{copy(label)}</button>
                     ))}
                   </div>
                 </div>
 
                 <div className="water-condition-group">
-                  <label className="form-label">Surface Scum</label>
+                  <label className="form-label">{copy('Surface Scum')}</label>
                   <div className="water-condition-options">
                     {([[true, 'Observed'], [false, 'Not observed']] as const).map(([value, label]) => (
                       <button
@@ -1963,13 +1965,13 @@ export default function WaterQualityPage() {
                         key={String(value)}
                         className={`water-condition-option ${formData.surfaceScum === value ? 'selected' : ''}`}
                         onClick={() => setFormData(prev => ({ ...prev, surfaceScum: prev.surfaceScum === value ? null : value }))}
-                      >{label}</button>
+                      >{copy(label)}</button>
                     ))}
                   </div>
                 </div>
 
                 <div className="water-condition-group">
-                  <label className="form-label">Shrimp Behaviour</label>
+                  <label className="form-label">{copy('Shrimp Behaviour')}</label>
                   <div className="water-condition-options">
                     {([['normal', 'Normal'], ['abnormal', 'Abnormal']] as const).map(([value, label]) => (
                       <button
@@ -1977,17 +1979,17 @@ export default function WaterQualityPage() {
                         key={value}
                         className={`water-condition-option ${formData.shrimpBehaviour === value ? 'selected' : ''}`}
                         onClick={() => setFormData(prev => ({ ...prev, shrimpBehaviour: prev.shrimpBehaviour === value ? null : value }))}
-                      >{label}</button>
+                      >{copy(label)}</button>
                     ))}
                   </div>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
-                  <label className="form-label">Operational Notes</label>
+                  <label className="form-label">{copy('Operational Notes')}</label>
                   <textarea
                     rows={3}
                     maxLength={1000}
-                    placeholder="Aeration, rain impact, water exchange, treatments, or other observed work"
+                    placeholder={copy('Aeration, rain impact, water exchange, treatments, or other observed work')}
                     value={formData.operationalNotes}
                     onChange={e => setFormData({...formData, operationalNotes: e.target.value})}
                     className="form-input"
@@ -1999,8 +2001,8 @@ export default function WaterQualityPage() {
                 <button type="button" onClick={() => setModalOpen(false)} style={{
                   flex: 1, borderRadius: '10px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 600, cursor: 'pointer'
-                }}>Cancel</button>
-                <button type="submit" disabled={!formData.pondId} className="water-save-log-button">Save Log Entry</button>
+                }}>{copy('Cancel')}</button>
+                <button type="submit" disabled={!formData.pondId} className="water-save-log-button">{copy('Save Log Entry')}</button>
               </div>
             </form>
           </div>

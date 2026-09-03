@@ -24,6 +24,29 @@ test('daily operations labels are wired into every app and web locale', () => {
   }
 });
 
+test('daily operations water tables show morning pH, evening pH, and pH range', () => {
+  const webSource = fs.readFileSync(path.join(root, 'web/src/app/dashboard/reports/daily-operations/page.tsx'), 'utf8');
+
+  for (const reportSource of [source, webSource]) {
+    assert.match(reportSource, /copy\.phMorning, copy\.phEvening, copy\.phRange/);
+    assert.match(reportSource, /row\.phMorning/);
+    assert.match(reportSource, /row\.phEvening/);
+    assert.match(reportSource, /row\.phRange/);
+  }
+});
+
+test('daily operations water tables show the feed section', () => {
+  const webSource = fs.readFileSync(path.join(root, 'web/src/app/dashboard/reports/daily-operations/page.tsx'), 'utf8');
+
+  for (const reportSource of [source, webSource]) {
+    assert.match(reportSource, /copy\.feedIndex/);
+    assert.match(reportSource, /copy\.dailyFeed/);
+    assert.match(reportSource, /copy\.cumulativeFeed/);
+    assert.match(reportSource, /copy\.actualAdg/);
+    assert.match(reportSource, /row\.estimatedPopulation/);
+  }
+});
+
 test('daily operations PDF uses the standard mobile landscape print settings', () => {
   const service = fs.readFileSync(path.join(root, 'app/services/dailyOperationsReportExportService.ts'), 'utf8');
 

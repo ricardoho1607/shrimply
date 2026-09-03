@@ -27,6 +27,7 @@ import {
 import type { DocumentData, DocumentSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   DAILY_FEED_USAGE_SOURCE,
@@ -120,6 +121,7 @@ interface InventoryFeed {
 const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 export default function FeedRecordsPage() {
+  const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { company } = useAuth();
   const searchParams = useSearchParams();
@@ -318,7 +320,7 @@ export default function FeedRecordsPage() {
     if (!canEditFeed) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
     if (!formData.feedingResponse) {
-      alert('Choose a feeding response before saving.');
+      alert(copy('Choose a feeding response before saving.'));
       return;
     }
     const allocationInputs = formData.feedAllocations.map((allocation) => ({
@@ -830,14 +832,14 @@ export default function FeedRecordsPage() {
                   <div className="feed-pond-identity">
                     <div>
                       <h3>{pond.pondName}</h3>
-                      <p>{latest ? new Date(latest.date).toLocaleDateString() : 'No recent logs'}</p>
+                      <p>{latest ? new Date(latest.date).toLocaleDateString() : copy('No recent logs')}</p>
                     </div>
                   </div>
                   <button
                     onClick={() => openHistoryDrawer(pond.id)}
                     className="feed-history-button"
-                    aria-label={`View ${pond.pondName} feed history`}
-                    title="View history"
+                    aria-label={copy('View {pond} feed history', { pond: pond.pondName })}
+                    title={copy('View history')}
                   >
                     <History size={17} />
                   </button>
@@ -845,7 +847,7 @@ export default function FeedRecordsPage() {
 
                 <div className="feed-pond-metric">
                   <div>
-                    <span>Daily Total</span>
+                    <span>{copy('Daily Total')}</span>
                     <div>
                       {latest ? latest.totalDailyFeed : '--'} <small>kg</small>
                     </div>
@@ -859,7 +861,7 @@ export default function FeedRecordsPage() {
                 </div>
 
                 <div className="feed-pond-actions">
-                  <span>Daily feed record</span>
+                  <span>{copy('Daily feed record')}</span>
                   {canEditFeed && (
                     <button
                       onClick={() => {
@@ -875,7 +877,7 @@ export default function FeedRecordsPage() {
                       }}
                       className="feed-quick-entry"
                     >
-                      <Plus size={15} /> Log
+                      <Plus size={15} /> {copy('Log')}
                     </button>
                   )}
                 </div>
@@ -896,7 +898,7 @@ export default function FeedRecordsPage() {
                   <p>{t.feedHistory.title}</p>
                 </div>
               </div>
-              <button aria-label="Close feed history" onClick={closeHistoryDrawer} className="feed-modal-close">
+              <button aria-label={copy('Close feed history')} onClick={closeHistoryDrawer} className="feed-modal-close">
                 <X size={18} />
               </button>
             </div>
@@ -1046,13 +1048,13 @@ export default function FeedRecordsPage() {
                   </p>
                 </div>
               </div>
-              <button onClick={closeFeedModal} className="feed-modal-close" aria-label="Close feed entry"><X size={18} /></button>
+              <button onClick={closeFeedModal} className="feed-modal-close" aria-label={copy('Close feed entry')}><X size={18} /></button>
             </div>
 
             <form className="responsive-modal-body feed-log-form" onSubmit={handleAddFeed}>
               <div className="responsive-form-grid feed-log-grid">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>Select Pond</label>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>{copy('Select Pond')}</label>
                   <select
                     required
                     disabled={Boolean(editingFeedRecord)}
@@ -1072,7 +1074,7 @@ export default function FeedRecordsPage() {
                     }}
                     style={{ padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: editingFeedRecord ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', fontWeight: 600, color: 'var(--text-primary)' }}
                   >
-                    <option value="">Choose a pond...</option>
+                    <option value="">{copy('Choose a pond...')}</option>
                     {accessiblePonds.map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
                 </div>

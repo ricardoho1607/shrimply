@@ -54,6 +54,7 @@ import {
   type HarvestMarketPriceInputs,
 } from '../../../../../shared/harvestProjectionSettings';
 import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import styles from './ProjectionsPage.module.css';
 
 /* --- Types --------------------------------------------------- */
@@ -158,6 +159,7 @@ const totalScenarioCosts = (costs: { feed: number; additives: number; generalExp
   costs.feed + costs.additives + costs.generalExpenses + costs.other;
 
 export default function HarvestProjectionsPage() {
+  const copy = useDashboardCopy();
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   
@@ -842,9 +844,9 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <Sparkles size={24} color="#0EA5E9" />
-                <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#0369A1' }}>{t.sidebar.aiAssistant} Risk Analysis</h3>
+                <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#0369A1' }}>{t.sidebar.aiAssistant} {copy('Risk Analysis')}</h3>
               </div>
-              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>Recalculate</button>}
+              {insight && <button onClick={() => setInsight(null)} style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)', background: 'none', border: 'none', cursor: 'pointer' }}>{copy('Recalculate')}</button>}
             </div>
 
             {insight ? (
@@ -873,12 +875,12 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                 }}
               >
                 {aiLoading ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
-                {aiLoading ? 'Analyzing Trends...' : 'Analyze Financial Risk'}
+                {copy(aiLoading ? 'Analyzing Trends...' : 'Analyze Financial Risk')}
               </button>
             )}
             {!insight && !aiLoading && (
               <p style={{ fontSize: '12px', color: 'var(--text-muted)', textAlign: 'center', marginTop: '16px' }}>
-                Orson will evaluate your growth rates, market pricing, and biological risks.
+                {copy('Orson will evaluate your growth rates, market pricing, and biological risks.')}
               </p>
             )}
           </div>}

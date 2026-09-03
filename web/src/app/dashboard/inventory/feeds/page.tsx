@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Plus,
@@ -36,6 +36,7 @@ import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../
 import styles from './InventoryFeeds.module.css';
 import { hasFarmPermission } from '../../../../../../shared/permissions';
 import { buildInventoryProductLabel, type InventoryProductLabel } from '../../../../../../shared/productLabel';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 /* --- Types --------------------------------------------------- */
 
@@ -89,7 +90,8 @@ const formatQuantity = (value: number) => new Intl.NumberFormat(undefined, {
 }).format(Number.isFinite(value) ? value : 0);
 
 export default function InventoryFeedsPage() {
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
+  const copy = useDashboardCopy();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
 
@@ -134,18 +136,18 @@ export default function InventoryFeedsPage() {
     };
   }, [isInputMenuOpen, isTransactionFilterOpen]);
 
-  const formatDate = (date: any) => {
+  const formatDate = useCallback((date: any) => {
     if (!date) return '';
     if (typeof date === 'string') return date;
     if (date && typeof date === 'object' && 'seconds' in date) {
-      return new Date(date.seconds * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+      return new Date(date.seconds * 1000).toLocaleDateString(currentLanguage === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     }
     try {
       const d = new Date(date);
-      if (!isNaN(d.getTime())) return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch (e) {}
+      if (!isNaN(d.getTime())) return d.toLocaleDateString(currentLanguage === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    } catch {}
     return '';
-  };
+  }, [currentLanguage]);
 
   // Modal States
   const [isModalOpen, setModalOpen] = useState(false);
@@ -193,7 +195,7 @@ export default function InventoryFeedsPage() {
       lowStockCount: lowStockItems.length,
       lowStockItems
     };
-  }, [feeds, additives]);
+  }, [additives, feeds, formatDate]);
 
   const recentTransactions = useMemo(() => {
     const txs: any[] = [];
@@ -294,11 +296,11 @@ export default function InventoryFeedsPage() {
       const price = Number(formData.unitPrice);
       const reorder = Number(formData.reorderLevel);
       if (['add', 'stockIn', 'usage'].includes(modalType) && (!Number.isFinite(qty) || qty <= 0)) {
-        alert('Quantity must be greater than 0.');
+        alert(copy('Quantity must be greater than 0.'));
         return;
       }
       if (['add', 'stockIn'].includes(modalType) && (!Number.isFinite(price) || price <= 0)) {
-        alert('Unit price must be greater than 0.');
+        alert(copy('Unit price must be greater than 0.'));
         return;
       }
 
@@ -413,7 +415,7 @@ export default function InventoryFeedsPage() {
       }
       else if (modalType === 'usage' && selectedItem) {
         if (qty > selectedItem.totalStock) {
-          alert('Insufficient stock!');
+          alert(copy('Insufficient stock!'));
           return;
         }
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
@@ -473,12 +475,12 @@ export default function InventoryFeedsPage() {
       setModalOpen(false);
     } catch (err) {
       console.error('Inventory action failed:', err);
-      alert('Operation failed. Please try again.');
+      alert(copy('Operation failed. Please try again.'));
     }
   };
 
   const handleDeleteItem = async (item: InventoryItem, type: 'feed' | 'additive') => {
-    if (!companyId || !window.confirm(`Are you sure you want to delete ${item.itemName}?`)) return;
+    if (!companyId || !window.confirm(copy('Are you sure you want to delete {item}?', { item: item.itemName }))) return;
     if (!canEditInventory) return;
     try {
       const collectionName = type === 'feed' ? 'feeds' : 'additives';
@@ -501,8 +503,8 @@ export default function InventoryFeedsPage() {
 
   const dashboardMetrics = [
     { label: t.inventory.feedStock, value: `${formatQuantity(metrics.totalFeedStock)} kg` },
-    { label: 'Feed Used', value: `${formatQuantity(metrics.totalFeedUsed)} kg` },
-    { label: 'Feed Value', value: formatCurrency(metrics.feedStockValue) },
+    { label: copy('Feed Used'), value: `${formatQuantity(metrics.totalFeedUsed)} kg` },
+    { label: copy('Feed Value'), value: formatCurrency(metrics.feedStockValue) },
     { label: t.inventory.additiveValue, value: formatCurrency(metrics.totalAdditiveValue) },
   ];
 
@@ -539,7 +541,7 @@ export default function InventoryFeedsPage() {
             <button
               type="button"
               className="pond-detail-record-trigger inventory-input-trigger"
-              aria-label="Add inventory input"
+              aria-label={copy('Add inventory input')}
               aria-expanded={isInputMenuOpen}
               aria-haspopup="menu"
               onClick={() => {
@@ -548,7 +550,7 @@ export default function InventoryFeedsPage() {
               }}
             >
               <Plus size={15} />
-              <span>Input</span>
+              <span>{copy('Input')}</span>
             </button>
             {isInputMenuOpen && (
               <div
@@ -558,21 +560,21 @@ export default function InventoryFeedsPage() {
               >
                 <Link role="menuitem" href="/dashboard/inventory/treatment-mixes" onClick={() => setInputMenuOpen(false)}>
                   <FlaskConical size={16} />
-                  <span><strong>Treatment Mixes</strong><small>Create or manage treatment recipes</small></span>
+                  <span><strong>{copy('Treatment Mixes')}</strong><small>{copy('Create or manage treatment recipes')}</small></span>
                 </Link>
                 <button type="button" role="menuitem" onClick={() => {
                   setInputMenuOpen(false);
                   handleOpenModal('add', undefined, 'feed');
                 }}>
                   <Box size={16} />
-                  <span><strong>{t.inventory.addFeed}</strong><small>Add feed stock to inventory</small></span>
+                  <span><strong>{t.inventory.addFeed}</strong><small>{copy('Add feed stock to inventory')}</small></span>
                 </button>
                 <button type="button" role="menuitem" onClick={() => {
                   setInputMenuOpen(false);
                   handleOpenModal('add', undefined, 'additive');
                 }}>
                   <FlaskConical size={16} />
-                  <span><strong>{t.inventory.addAdditive}</strong><small>Add an inventory additive</small></span>
+                  <span><strong>{t.inventory.addAdditive}</strong><small>{copy('Add an inventory additive')}</small></span>
                 </button>
               </div>
             )}
@@ -600,9 +602,9 @@ export default function InventoryFeedsPage() {
               {/* Critical Alerts Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 className="inventory-section-heading">Stock Status Alerts</h2>
+                  <h2 className="inventory-section-heading">{copy('Stock Status Alerts')}</h2>
                   <span className="inventory-alert-count">
-                    {metrics.lowStockCount} {metrics.lowStockCount === 1 ? 'Alert' : 'Alerts'}
+                    {metrics.lowStockCount} {copy(metrics.lowStockCount === 1 ? 'Alert' : 'Alerts')}
                   </span>
                 </div>
 
@@ -630,7 +632,7 @@ export default function InventoryFeedsPage() {
                           <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
                           <div style={{ fontSize: '13px', fontWeight: 600, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
                             <Box size={14} />
-                            Critical: {formatQuantity(item.totalStock)} {item.unit} remaining
+                            {copy('Critical:')} {formatQuantity(item.totalStock)} {item.unit} {copy('remaining')}
                           </div>
                         </div>
                       </div>
@@ -648,7 +650,7 @@ export default function InventoryFeedsPage() {
                           }}
                           onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
                         >
-                          Restock now
+                          {copy('Restock now')}
                         </button>
                       )}
                     </div>
@@ -659,12 +661,12 @@ export default function InventoryFeedsPage() {
               {/* Transaction Ledger */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h2 className="inventory-section-heading">Recent Transactions</h2>
+                  <h2 className="inventory-section-heading">{copy('Recent Transactions')}</h2>
                   <div className="pond-detail-record-menu inventory-filter-menu" ref={transactionFilterRef}>
                     <button
                       type="button"
                       className="inventory-filter-trigger"
-                      aria-label="Filter transactions"
+                      aria-label={copy('Filter transactions')}
                       aria-expanded={isTransactionFilterOpen}
                       aria-haspopup="menu"
                       onClick={() => {
@@ -695,7 +697,7 @@ export default function InventoryFeedsPage() {
                               setTransactionFilterOpen(false);
                             }}
                           >
-                            <span><strong>{filter.label}</strong><small>{filter.description}</small></span>
+                            <span><strong>{copy(filter.label)}</strong><small>{copy(filter.description)}</small></span>
                           </button>
                         ))}
                       </div>
@@ -723,7 +725,7 @@ export default function InventoryFeedsPage() {
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
                         <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>{tx.type}</span>
+                          <span>{copy(tx.type)}</span>
                           <span style={{ opacity: 0.3 }}>•</span>
                           <span>{tx.date}</span>
                         </div>
@@ -776,7 +778,7 @@ export default function InventoryFeedsPage() {
                     boxShadow: !categoryFilter ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
                     border: 'none', cursor: 'pointer', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                   }}
-                >All Categories</button>
+                >{copy('All Categories')}</button>
                 {(activeTab === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(cat => (
                   <button
                     key={cat}
@@ -788,7 +790,7 @@ export default function InventoryFeedsPage() {
                       boxShadow: categoryFilter === cat ? '0 4px 12px rgba(0,0,0,0.05)' : 'none',
                       border: 'none', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
                     }}
-                  >{cat}</button>
+                  >{copy(cat)}</button>
                 ))}
               </div>
             </div>
@@ -812,7 +814,7 @@ export default function InventoryFeedsPage() {
                     style={{ height: '44px', padding: '0 20px', borderRadius: '10px', fontWeight: 500, fontSize: '14px', letterSpacing: 0, textTransform: 'none', boxShadow: 'var(--shadow-glow)' }}
                   >
                     <Plus size={22} />
-                    Add Your First {activeTab === 'feed' ? 'Feed' : 'Additive'}
+                    {copy('Add Your First')} {copy(activeTab === 'feed' ? 'Feed' : 'Additive')}
                   </button>
                 )}
               </div>
@@ -841,9 +843,9 @@ export default function InventoryFeedsPage() {
                         <div className={styles.inventoryCardIdentity}>
                           <h3>{item.itemName}</h3>
                           <div className={styles.inventoryCardMeta}>
-                            <span>{item.brand || 'No Brand'}</span>
+                            <span>{item.brand || copy('No Brand')}</span>
                             <span className={styles.inventoryCardCategory}>
-                              {item.feedType || item.category}
+                              {copy(item.feedType || item.category)}
                             </span>
                           </div>
                         </div>
@@ -853,7 +855,7 @@ export default function InventoryFeedsPage() {
                             className={styles.inventoryCardHeaderAction}
                             onClick={() => handleOpenModal('history', item, activeTab)}
                           >
-                            History
+                            {copy('History')}
                           </button>
                           {canEditInventory && (
                             <button
@@ -861,7 +863,7 @@ export default function InventoryFeedsPage() {
                               className={`${styles.inventoryCardHeaderAction} ${styles.inventoryCardDeleteAction}`}
                               onClick={() => handleDeleteItem(item, activeTab)}
                             >
-                              Delete
+                              {copy('Delete')}
                             </button>
                           )}
                         </div>
@@ -876,19 +878,19 @@ export default function InventoryFeedsPage() {
                           </div>
                           {isLow && (
                             <div style={{ fontSize: '11px', fontWeight: 600, color: '#e74c3c', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                              <AlertCircle size={12} /> Low Stock Alert
+                              <AlertCircle size={12} /> {copy('Low Stock Alert')}
                             </div>
                           )}
                         </div>
                         <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
                           <span className={styles.inventoryMetricValue}>{formatCurrency(averagePrice)}</span>
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>per {item.unit}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('per')} {item.unit}</span>
                         </div>
                         <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.value}</span>
                           <span className={styles.inventoryMetricValue}>{formatCurrency(item.totalCost || 0)}</span>
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>Total Value</span>
+                          <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('Total Value')}</span>
                         </div>
                       </div>
 
@@ -922,7 +924,7 @@ export default function InventoryFeedsPage() {
                             className={styles.inventoryCardSecondaryAction}
                             onClick={() => handleOpenModal('editReorder', item, activeTab)}
                           >
-                            {activeTab === 'additive' ? 'Product' : 'Threshold'}
+                            {copy(activeTab === 'additive' ? 'Product' : 'Threshold')}
                           </button>
                         </div>
                       )}
@@ -961,10 +963,10 @@ export default function InventoryFeedsPage() {
               <div>
                 <div>
                   <h2 id="inventory-modal-title" style={{ fontSize: '17px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-                    {modalType === 'add' ? `Add New ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
+                    {modalType === 'add' ? `${copy('Add New')} ${copy(itemType === 'feed' ? 'Feed' : 'Additive')}` :
                      modalType === 'stockIn' ? t.inventory.stockIn :
                      modalType === 'usage' ? t.inventory.recordUsage :
-                     modalType === 'history' ? t.inventory.transactionHistory : itemType === 'additive' ? 'Product Label & Threshold' : 'Threshold Settings'}
+                     modalType === 'history' ? t.inventory.transactionHistory : copy(itemType === 'additive' ? 'Product Label & Threshold' : 'Threshold Settings')}
                   </h2>
                   {selectedItem && (
                     <p style={{ color: 'var(--text-muted)', fontSize: '12px', margin: '2px 0 0' }}>
@@ -975,7 +977,7 @@ export default function InventoryFeedsPage() {
               </div>
               <button
                 onClick={() => setModalOpen(false)}
-                aria-label="Close inventory dialog"
+                aria-label={copy('Close inventory dialog')}
                 style={{
                   width: '36px', height: '36px', background: 'var(--bg-mid)', border: '1px solid transparent', borderRadius: '10px',
                   padding: '0', cursor: 'pointer', color: 'var(--text-primary)', display: 'grid', placeItems: 'center'
@@ -994,12 +996,12 @@ export default function InventoryFeedsPage() {
                       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
                         <ArrowDownCircle size={20} />
                       </div>
-                      Stock In Records
+                      {copy('Stock In Records')}
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {selectedItem.stockInHistory.length === 0 ? (
                         <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
-                          No stock intake recorded.
+                          {copy('No stock intake recorded.')}
                         </div>
                       ) : (
                         [...selectedItem.stockInHistory].reverse().map((h) => (
@@ -1019,7 +1021,7 @@ export default function InventoryFeedsPage() {
                                 {formatDate(h.date)}
                               </div>
                               <div style={{ textAlign: 'right' }}>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>Unit Price</span>
+                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{copy('Unit Price')}</span>
                                 {formatCurrency(h.price)}
                               </div>
                             </div>
@@ -1040,12 +1042,12 @@ export default function InventoryFeedsPage() {
                       <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
                         <ArrowUpCircle size={20} />
                       </div>
-                      Usage History
+                      {copy('Usage History')}
                     </h3>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                       {selectedItem.usageHistory.length === 0 ? (
                         <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
-                          No usage logs found.
+                          {copy('No usage logs found.')}
                         </div>
                       ) : (
                         [...selectedItem.usageHistory].reverse().map((h) => (
@@ -1064,8 +1066,8 @@ export default function InventoryFeedsPage() {
                                 <Waves size={16} />
                               </div>
                               <div>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>Applied to</span>
-                                {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || 'Unknown Pond') : 'General Inventory Usage'}
+                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{copy('Applied to')}</span>
+                                {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}
                               </div>
                             </div>
                             {h.notes && (
@@ -1084,40 +1086,40 @@ export default function InventoryFeedsPage() {
                   {modalType === 'add' && (
                     <div className="responsive-form-grid inventory-add-details" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                       <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Item Identification</label>
-                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder={itemType === 'feed' ? 'e.g. Premium Growth Feed 02' : 'e.g. Pond Probiotic Blend'} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Item Identification')}</label>
+                        <input required value={formData.itemName} onChange={e => setFormData({...formData, itemName: e.target.value})} placeholder={copy(itemType === 'feed' ? 'e.g. Premium Growth Feed 02' : 'e.g. Pond Probiotic Blend')} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', transition: 'all 0.3s' }} />
                       </div>
                       <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Brand / Manufacturer</label>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Brand / Manufacturer')}</label>
                         <input value={itemType === 'feed' ? formData.brand : formData.manufacturer} onChange={e => setFormData({...formData, [itemType === 'feed' ? 'brand' : 'manufacturer']: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
                       {itemType === 'additive' && (
                         <>
                           <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Ingredients / Strains — One Per Line</label>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Ingredients / Strains — One Per Line')}</label>
                             <textarea rows={4} value={formData.ingredients} onChange={e => setFormData({...formData, ingredients: e.target.value})} placeholder="Bacillus subtilis 1×10⁹ CFU/g" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '15px', outline: 'none', resize: 'vertical' }} />
                           </div>
                           <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Official Label URL</label>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Official Label URL')}</label>
                             <input type="url" value={formData.labelSourceUrl} onChange={e => setFormData({...formData, labelSourceUrl: e.target.value})} placeholder="https://manufacturer.com/product-label.pdf" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '15px', outline: 'none' }} />
                           </div>
                         </>
                       )}
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Classification</label>
-                        <select required aria-label="Inventory classification" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
-                          {(itemType === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(c => <option key={c} value={c}>{c}</option>)}
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Classification')}</label>
+                        <select required aria-label={copy('Inventory classification')} value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
+                          {(itemType === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map(c => <option key={c} value={c}>{copy(c)}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Inventory Unit</label>
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Inventory Unit')}</label>
                         <select value={formData.unit} onChange={e => setFormData({...formData, unit: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }}>
                           {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
                         </select>
                       </div>
                       <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Alert Threshold</label>
-                        <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Notify when below..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
+                        <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Alert Threshold')}</label>
+                        <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder={copy('Notify when below...')} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
                     </div>
                   )}
@@ -1131,7 +1133,7 @@ export default function InventoryFeedsPage() {
 
                       {modalType === 'usage' && (
                         <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Assign to Pond</label>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Assign to Pond')}</label>
                           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '12px' }}>
                             <button
                               type="button"
@@ -1142,7 +1144,7 @@ export default function InventoryFeedsPage() {
                                 color: formData.pondId === '' ? 'white' : 'var(--text-muted)',
                                 border: '1px solid var(--border)', transition: 'all 0.3s'
                               }}
-                            >General Use</button>
+                            >{copy('General Use')}</button>
                             {activePonds.map((p: any) => (
                               <button
                                 key={p.id}
@@ -1164,7 +1166,7 @@ export default function InventoryFeedsPage() {
                       {modalType !== 'usage' && (
                         <div>
                           <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.unitPrice} ({currencyConfig.symbol})</label>
-                          <input required type="number" value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: e.target.value})} placeholder="Current Price" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
+                          <input required type="number" value={formData.unitPrice} onChange={e => setFormData({...formData, unitPrice: e.target.value})} placeholder={copy('Current Price')} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                         </div>
                       )}
 
@@ -1175,7 +1177,7 @@ export default function InventoryFeedsPage() {
                             <input required type="date" max={getFarmDateKey(new Date(), company?.timeZone)} value={formData.stockDate} onChange={e => setFormData({...formData, stockDate: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                           </div>
                           <div>
-                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>Expiry Date</label>
+                            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Expiry Date')}</label>
                             <input type="date" value={formData.expiry} onChange={e => setFormData({...formData, expiry: e.target.value})} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                           </div>
                         </>
@@ -1185,16 +1187,16 @@ export default function InventoryFeedsPage() {
 
                   {modalType === 'editReorder' && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Stock Reorder Threshold</label>
-                      <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder="Alert me when stock is below..." style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '24px', outline: 'none', color: '#e74c3c' }} />
-                      <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>We will display a critical alert on the dashboard when stock falls below this amount.</p>
+                      <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{copy('Stock Reorder Threshold')}</label>
+                      <input type="number" value={formData.reorderLevel} onChange={e => setFormData({...formData, reorderLevel: e.target.value})} placeholder={copy('Alert me when stock is below...')} style={{ width: '100%', padding: '20px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '24px', outline: 'none', color: '#e74c3c' }} />
+                      <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>{copy('We will display a critical alert on the dashboard when stock falls below this amount.')}</p>
                       {itemType === 'additive' && (
                         <>
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Manufacturer</label>
-                          <input value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})} placeholder="Company shown on the product label" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600 }} />
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ingredients / Strains — One Per Line</label>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{copy('Manufacturer')}</label>
+                          <input value={formData.manufacturer} onChange={e => setFormData({...formData, manufacturer: e.target.value})} placeholder={copy('Company shown on the product label')} style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600 }} />
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{copy('Ingredients / Strains — One Per Line')}</label>
                           <textarea rows={4} value={formData.ingredients} onChange={e => setFormData({...formData, ingredients: e.target.value})} placeholder="Bacillus subtilis 1×10⁹ CFU/g" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, resize: 'vertical' }} />
-                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Official Label URL</label>
+                          <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{copy('Official Label URL')}</label>
                           <input type="url" value={formData.labelSourceUrl} onChange={e => setFormData({...formData, labelSourceUrl: e.target.value})} placeholder="https://manufacturer.com/product-label.pdf" style={{ width: '100%', padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600 }} />
                         </>
                       )}
@@ -1204,7 +1206,7 @@ export default function InventoryFeedsPage() {
                   {modalType !== 'editReorder' && (
                     <div>
                       <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{t.inventory.notesOptional}</label>
-                      <textarea rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder="Any specific details about this transaction..." style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
+                      <textarea rows={2} value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})} placeholder={copy('Any specific details about this transaction...')} style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none', resize: 'none' }} />
                     </div>
                   )}
                 </form>
@@ -1217,15 +1219,15 @@ export default function InventoryFeedsPage() {
                   type="button"
                   className="btn-secondary"
                   onClick={() => setModalOpen(false)}
-                >Cancel</button>
+                >{copy('Cancel')}</button>
                 <button
                   form="inventoryForm"
                   type="submit"
                   className="btn-primary"
                 >
-                  {modalType === 'add' ? `Add ${itemType === 'feed' ? 'Feed' : 'Additive'}` :
-                   modalType === 'stockIn' ? 'Confirm stock in' :
-                   modalType === 'usage' ? 'Record usage' : 'Save threshold'}
+                  {modalType === 'add' ? `${copy('Add')} ${copy(itemType === 'feed' ? 'Feed' : 'Additive')}` :
+                   modalType === 'stockIn' ? copy('Confirm stock in') :
+                   modalType === 'usage' ? copy('Record usage') : copy('Save threshold')}
                 </button>
               </div>
             )}

@@ -16,6 +16,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, doc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useGemini } from '@/hooks/useGemini';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
 import { hasFarmPermission } from '../../../../../shared/permissions';
 
@@ -35,17 +36,10 @@ type PondContext = {
   [key: string]: unknown;
 };
 
-const SUGGESTED_PROMPTS = [
-  "Analyze today's 72-hour outlook",
-  "How do I lower ammonia in A1?",
-  "Check overfeeding and biomass risk",
-  "What is limiting growth?"
-];
-
-const createWelcomeMessage = (): ChatMessage => ({
+const createWelcomeMessage = (copy: (text: string) => string): ChatMessage => ({
   id: 'welcome',
   type: 'ai',
-  message: "Hello! I'm Orson, your AI aquaculture advisor. I've analyzed your farm data and I'm ready to help you optimize growth and prevent issues. What's on your mind today?",
+  message: copy("Hello! I'm Orson, your AI aquaculture advisor. I've analyzed your farm data and I'm ready to help you optimize growth and prevent issues. What's on your mind today?"),
   timestamp: new Date()
 });
 
@@ -68,13 +62,20 @@ const parseStoredMessages = (value: string | null): ChatMessage[] | null => {
 };
 
 export default function OrsonAIPage() {
+  const copy = useDashboardCopy();
+  const suggestedPrompts = [
+    copy("Analyze today's 72-hour outlook"),
+    copy('How do I lower ammonia in A1?'),
+    copy('Check overfeeding and biomass risk'),
+    copy('What is limiting growth?'),
+  ];
   const { user, company } = useAuth();
   const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const [ponds, setPonds] = useState<PondContext[]>([]);
   const [companyId, setCompanyId] = useState<string | undefined>();
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    if (typeof window === 'undefined') return [createWelcomeMessage()];
-    return parseStoredMessages(sessionStorage.getItem('orson_messages')) ?? [createWelcomeMessage()];
+    if (typeof window === 'undefined') return [createWelcomeMessage(copy)];
+    return parseStoredMessages(sessionStorage.getItem('orson_messages')) ?? [createWelcomeMessage(copy)];
   });
   const [inputText, setInputText] = useState('');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
@@ -176,16 +177,16 @@ export default function OrsonAIPage() {
   };
 
   const handleClearChat = () => {
-    if (window.confirm("Clear conversation history?")) {
+    if (window.confirm(copy('Clear conversation history?'))) {
       clearChat();
       sessionStorage.removeItem('orson_messages');
-      setMessages([createWelcomeMessage()]);
+      setMessages([createWelcomeMessage(copy)]);
     }
   };
 
   const aiMessageCount = messages.filter(message => message.type === 'ai').length;
 
-  if (!canUseOrson) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to use Orson AI.</div>;
+  if (!canUseOrson) return <div style={{ textAlign: 'center', padding: '100px' }}>{copy('You do not have permission to use Orson AI.')}</div>;
 
   return (
     <div className="dashboard-page authenticated-compact-page orson-page">
@@ -197,23 +198,23 @@ export default function OrsonAIPage() {
             </div>
             <div>
               <div className="section-eyebrow">Orson AI</div>
-              <h2 className="orson-title">Aquaculture assistant</h2>
+              <h2 className="orson-title">{copy('Aquaculture assistant')}</h2>
             </div>
           </div>
           <div className="orson-stats">
             <div className="orson-stat">
-              <span>Synced ponds</span>
+              <span>{copy('Synced ponds')}</span>
               <strong>{ponds.length}</strong>
             </div>
             <div className="orson-stat">
-              <span>AI replies</span>
+              <span>{copy('AI replies')}</span>
               <strong>{aiMessageCount}</strong>
             </div>
             <button
               onClick={handleClearChat}
               className="orson-reset"
             >
-              <Trash2 size={15} /> Reset
+              <Trash2 size={15} /> {copy('Reset')}
             </button>
           </div>
         </div>
@@ -221,7 +222,9 @@ export default function OrsonAIPage() {
         <div className="orson-content">
           <section className="orson-chat-card">
             <div className="orson-messages">
-              {messages.map((msg) => (
+              {messages.map((storedMessage) => {
+                const msg = storedMessage.id === 'welcome' ? createWelcomeMessage(copy) : storedMessage;
+                return (
                 <div key={msg.id} className={`orson-message-row ${msg.type === 'user' ? 'is-user' : 'is-ai'}`}>
                   <div className="orson-avatar">
                     {msg.type === 'user' ? 'U' : <Shrimp size={18} />}
@@ -235,7 +238,8 @@ export default function OrsonAIPage() {
                     </span>
                   </div>
                 </div>
-              ))}
+                );
+              })}
 
               {loading && !streamingReplyId && (
                 <div className="orson-message-row is-ai">
@@ -244,7 +248,7 @@ export default function OrsonAIPage() {
                   </div>
                   <div className="orson-message-stack">
                     <div className="orson-bubble is-thinking">
-                      Orson is analyzing farm metrics...
+                      {copy('Orson is analyzing farm metrics...')}
                     </div>
                   </div>
                 </div>
@@ -262,7 +266,7 @@ export default function OrsonAIPage() {
             <div className="orson-composer">
               <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="orson-form">
                 <textarea
-                  placeholder="Type a question for Orson..."
+                  placeholder={copy('Type a question for Orson...')}
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   onKeyDown={(e) => {
@@ -277,7 +281,7 @@ export default function OrsonAIPage() {
                   type="submit"
                   disabled={!inputText.trim() || loading}
                   className="orson-send"
-                  aria-label="Send message"
+                  aria-label={copy('Send message')}
                 >
                   <Send size={20} />
                 </button>
@@ -288,10 +292,10 @@ export default function OrsonAIPage() {
           <aside className="orson-side">
             <div className="orson-panel">
               <h4>
-                <MessageSquare size={16} /> Suggested queries
+                <MessageSquare size={16} /> {copy('Suggested queries')}
               </h4>
               <div className="orson-suggestion-list">
-                {SUGGESTED_PROMPTS.map(p => (
+                {suggestedPrompts.map(p => (
                   <button
                     key={p}
                     onClick={() => handleSend(p)}
@@ -306,22 +310,22 @@ export default function OrsonAIPage() {
 
             <div className="orson-panel">
               <h4>
-                <TrendingUp size={16} /> Analyzed ponds
+                <TrendingUp size={16} /> {copy('Analyzed ponds')}
               </h4>
               {ponds.length === 0 ? (
-                <p className="orson-empty">Connect pond records to give Orson live biological context before asking for analysis.</p>
+                <p className="orson-empty">{copy('Connect pond records to give Orson live biological context before asking for analysis.')}</p>
               ) : (
                 <div className="orson-pond-list">
                   {ponds.slice(0, 5).map(p => (
                     <div key={p.id} className="orson-pond-row">
                       <div className="orson-pond-name">
                         <span />
-                        <strong>{p.pondName || 'Unnamed pond'}</strong>
+                        <strong>{p.pondName || copy('Unnamed pond')}</strong>
                       </div>
                       <em>{p.plSupplier || p.supplier || 'N/A'}</em>
                     </div>
                   ))}
-                  {ponds.length > 5 && <div className="orson-more">+ {ponds.length - 5} more ponds synced</div>}
+                  {ponds.length > 5 && <div className="orson-more">+ {ponds.length - 5} {copy('more ponds synced')}</div>}
                 </div>
               )}
             </div>

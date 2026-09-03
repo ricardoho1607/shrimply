@@ -19,6 +19,7 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import {
   applyHarvestImpactToPond,
@@ -122,6 +123,7 @@ interface DashboardUser {
 type HarvestFormEntry = Omit<HarvestPond, 'pondName'> & { date: string };
 
 export default function HarvestPage() {
+  const copy = useDashboardCopy();
   const { company } = useAuth();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
@@ -423,7 +425,7 @@ export default function HarvestPage() {
 
   const addPondToBatch = () => {
     if (!formData.pondId || !formData.biomass || !formData.size || !formData.price) {
-      alert('Complete this pond before adding another.');
+      alert(copy('Complete this pond before adding another.'));
       return;
     }
     if (harvestBatch.some((entry) => entry.pondId === formData.pondId)) return;
@@ -537,7 +539,7 @@ export default function HarvestPage() {
 
   if (loading) {
     return (
-      <div className="dashboard-page-relaxed authenticated-compact-page" aria-label="Loading harvest data" style={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}>
+      <div className="dashboard-page-relaxed authenticated-compact-page" aria-label={copy('Loading harvest data')} style={{ minHeight: '55vh', display: 'grid', placeItems: 'center' }}>
         <Loader2 className="animate-spin" size={34} color="#0F4C75" />
       </div>
     );
@@ -725,7 +727,7 @@ export default function HarvestPage() {
                 <h2 className={styles.harvestTitle} style={{ fontSize: '20px', fontWeight: 600 }}>{t.harvestCycle.logHarvest}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
-              <button className={styles.closeButton} aria-label="Close" onClick={() => setModalOpen(false)} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
+              <button className={styles.closeButton} aria-label={copy('Close')} onClick={() => setModalOpen(false)} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -762,7 +764,7 @@ export default function HarvestPage() {
                     {harvestBatch.map((entry) => (
                       <div key={entry.pondId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', background: '#EAF6FD' }}>
                         <span style={{ fontWeight: 600 }}>{selectedCyclePonds.find((pond) => pond.id === entry.pondId)?.pondName} · {entry.biomass} kg</span>
-                        <button type="button" onClick={() => setHarvestBatch((current) => current.filter((item) => item.pondId !== entry.pondId))} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#e74c3c' }} aria-label="Remove pond from harvest batch"><Trash2 size={16} /></button>
+                        <button type="button" onClick={() => setHarvestBatch((current) => current.filter((item) => item.pondId !== entry.pondId))} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#e74c3c' }} aria-label={copy('Remove pond from harvest batch')}><Trash2 size={16} /></button>
                       </div>
                     ))}
                   </div>
@@ -835,7 +837,7 @@ export default function HarvestPage() {
                 </div>
                 {selectedCyclePonds.length > harvestBatch.length + 1 && (
                   <button type="button" onClick={addPondToBatch} style={{ gridColumn: 'span 2', minHeight: '40px', borderRadius: '10px', border: '1px solid #0F4C75', color: '#0F4C75', background: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}>
-                    <Plus size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> Add another pond to this harvest
+                    <Plus size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> {copy('Add another pond to this harvest')}
                   </button>
                 )}
               </div>

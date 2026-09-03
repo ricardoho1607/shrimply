@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { db, storage } from '@/lib/firebase';
 import { syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
@@ -88,6 +89,7 @@ const getLocationValue = (company: any) => {
 };
 
 export default function SettingsPage() {
+  const copy = useDashboardCopy();
   const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
   const { data: members } = useCompanyMembers<any>();
   const [saving, setSaving] = useState(false);
@@ -195,7 +197,7 @@ export default function SettingsPage() {
   const handleProfilePhoto = async (file?: File) => {
     if (!user || !file) return;
     if (!file.type.startsWith('image/') || file.size > 5 * 1024 * 1024) {
-      alert('Choose an image smaller than 5 MB.');
+      alert(copy('Choose an image smaller than 5 MB.'));
       return;
     }
     setUploadingPhoto(true);
@@ -207,7 +209,7 @@ export default function SettingsPage() {
       await updateDoc(doc(db, 'users', user.uid), { profileImage });
     } catch (error) {
       console.error('Error uploading profile photo:', error);
-      alert('Failed to upload profile photo.');
+      alert(copy('Failed to upload profile photo.'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -226,15 +228,15 @@ export default function SettingsPage() {
   };
 
   const handleRequestCompanyDeletion = async () => {
-    if (!window.confirm('Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a company deletion request?')) return;
+    if (!window.confirm(copy('Deleting this company requires approval from all owners and co-owners. Once all approve, the company and all its data will be permanently deleted.\n\nDo you want to initiate a company deletion request?'))) return;
     setDeletionLoading(true);
     try {
       const res = await requestCompanyDeletion();
       if (res.status === 'deleted') {
-        alert('Company has been permanently deleted.');
+        alert(copy('Company has been permanently deleted.'));
         window.location.href = '/roleselection';
       } else {
-        alert('Company deletion requested. All owners and co-owners must approve before the company is deleted.');
+        alert(copy('Company deletion requested. All owners and co-owners must approve before the company is deleted.'));
       }
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to request company deletion.');
@@ -244,12 +246,12 @@ export default function SettingsPage() {
   };
 
   const handleApproveCompanyDeletion = async () => {
-    if (!window.confirm('Are you sure you want to approve deleting this company? This action is irreversible once all owners and co-owners approve.')) return;
+    if (!window.confirm(copy('Are you sure you want to approve deleting this company? This action is irreversible once all owners and co-owners approve.'))) return;
     setDeletionLoading(true);
     try {
       const res = await approveCompanyDeletion();
       if (res.status === 'deleted') {
-        alert('All owners approved and the company has been permanently deleted.');
+        alert(copy('All owners approved and the company has been permanently deleted.'));
         window.location.href = '/roleselection';
       } else {
         alert(`Approval recorded (${res.approvedCount || 0}/${res.totalRequired || 0} approved).`);
@@ -262,11 +264,11 @@ export default function SettingsPage() {
   };
 
   const handleCancelCompanyDeletion = async () => {
-    if (!window.confirm('Are you sure you want to cancel the pending company deletion request?')) return;
+    if (!window.confirm(copy('Are you sure you want to cancel the pending company deletion request?'))) return;
     setDeletionLoading(true);
     try {
       await cancelCompanyDeletion();
-      alert('Company deletion request has been cancelled.');
+      alert(copy('Company deletion request has been cancelled.'));
     } catch (error) {
       alert(error instanceof Error ? error.message : 'Failed to cancel deletion request.');
     } finally {
@@ -336,7 +338,7 @@ export default function SettingsPage() {
       setTimeout(() => setSuccess(false), 3000);
     } catch (error: any) {
       console.error('Error saving settings:', error);
-      alert('Failed to save settings: ' + (error.message || 'Unknown error'));
+      alert(`${copy('Failed to save settings:')} ${error.message || copy('Unknown error')}`);
     } finally {
       setSaving(false);
     }
@@ -455,7 +457,7 @@ export default function SettingsPage() {
                 </div>
                 </div>
                 <Link href="/dashboard/company" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '12px', border: '1px solid var(--border)', color: 'var(--primary)', fontSize: '13px', fontWeight: 600, background: '#fff' }}>
-                  View profile
+                  {copy('View profile')}
                   <ArrowUpRight size={16} />
                 </Link>
               </div>
@@ -476,12 +478,12 @@ export default function SettingsPage() {
                     onChange={e => setCompanyForm({...companyForm, farmType: e.target.value})}
                     style={controlStyle}
                   >
-                    <option value="Shrimp Farm">Shrimp Farm</option>
-                    <option value="Hatchery">Hatchery</option>
-                    <option value="Processing Plant">Processing Plant</option>
-                    <option value="Consultancy">Consultancy</option>
-                    <option value="Shrimp Buyer">Shrimp Buyer</option>
-                    <option value="Individual Buyer">Individual Buyer</option>
+                    <option value="Shrimp Farm">{copy('Shrimp Farm')}</option>
+                    <option value="Hatchery">{copy('Hatchery')}</option>
+                    <option value="Processing Plant">{copy('Processing Plant')}</option>
+                    <option value="Consultancy">{copy('Consultancy')}</option>
+                    <option value="Shrimp Buyer">{copy('Shrimp Buyer')}</option>
+                    <option value="Individual Buyer">{copy('Individual Buyer')}</option>
                   </select>
                 </div>
                 <div style={fieldStyle}>
@@ -500,13 +502,13 @@ export default function SettingsPage() {
                     onChange={e => setCompanyForm({...companyForm, businessSize: e.target.value})}
                     style={controlStyle}
                   >
-                    <option value="small">{t.companyDetails.small || 'Small'} operation</option>
-                    <option value="medium">{t.companyDetails.medium || 'Medium'} operation</option>
-                    <option value="large">{t.companyDetails.large || 'Large'} operation</option>
+                    <option value="small">{t.companyDetails.small || 'Small'} {copy('operation')}</option>
+                    <option value="medium">{t.companyDetails.medium || 'Medium'} {copy('operation')}</option>
+                    <option value="large">{t.companyDetails.large || 'Large'} {copy('operation')}</option>
                   </select>
                 </div>
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Farm timezone</label>
+                  <label style={labelStyle}>{copy('Farm timezone')}</label>
                   <select
                     value={companyForm.timeZone}
                     onChange={e => setCompanyForm({...companyForm, timeZone: e.target.value})}
@@ -520,11 +522,11 @@ export default function SettingsPage() {
                     ))}
                   </select>
                   <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                    Daily farm records roll over at midnight in this timezone.
+                    {copy('Daily farm records roll over at midnight in this timezone.')}
                   </span>
                 </div>
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>Contact Phone</label>
+                  <label style={labelStyle}>{copy('Contact Phone')}</label>
                   <input
                     value={companyForm.contactPhone}
                     onChange={e => setCompanyForm({...companyForm, contactPhone: e.target.value})}
@@ -537,7 +539,7 @@ export default function SettingsPage() {
                   <textarea
                     value={companyForm.description}
                     onChange={e => setCompanyForm({...companyForm, description: e.target.value})}
-                    placeholder="Tell buyers and team members about this operation."
+                    placeholder={copy('Tell buyers and team members about this operation.')}
                     style={{ ...controlStyle, minHeight: '110px', resize: 'vertical', lineHeight: 1.55 }}
                   />
                 </div>
@@ -569,10 +571,10 @@ export default function SettingsPage() {
             <div className="settings-organization-panel" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div className="settings-organization-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ minWidth: 0 }}>
-                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>Team Members</h3>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Manage your organization&apos;s members and their roles.</p>
+                  <h3 style={{ fontSize: '18px', fontWeight: 600 }}>{copy('Team Members')}</h3>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{copy("Manage your organization's members and their roles.")}</p>
                 </div>
-                <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>+ Invite Member</button>
+                <button className="btn-primary settings-invite-button" style={{ padding: '10px 16px', fontSize: '13px', borderRadius: '10px' }}>{copy('+ Invite Member')}</button>
               </div>
 
               {canManageTeam && (
@@ -581,15 +583,15 @@ export default function SettingsPage() {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                       <Clock size={18} color="var(--primary)" />
                       <div>
-                        <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>Pending join requests</h4>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>Approve staff waiting to join this company.</p>
+                        <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>{copy('Pending join requests')}</h4>
+                        <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '3px 0 0' }}>{copy('Approve staff waiting to join this company.')}</p>
                       </div>
                     </div>
                   </div>
 
                   {joinRequests.length === 0 && (
                     <div style={{ padding: '14px', borderRadius: '12px', background: '#FFFFFF', border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: '13px', fontWeight: 600 }}>
-                      No pending join requests.
+                      {copy('No pending join requests.')}
                     </div>
                   )}
 
@@ -610,7 +612,7 @@ export default function SettingsPage() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
                         >
                           <XCircle size={15} />
-                          Reject
+                          {copy('Reject')}
                         </button>
                         <button
                           type="button"
@@ -619,7 +621,7 @@ export default function SettingsPage() {
                           style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 12px', borderRadius: '10px', border: '1px solid #BBE1FA', background: 'var(--primary)', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
                         >
                           {processingRequestId === request.id ? <Loader2 className="animate-spin" size={15} /> : <ShieldCheck size={15} />}
-                          Approve
+                          {copy('Approve')}
                         </button>
                       </div>
                     </div>
@@ -636,7 +638,7 @@ export default function SettingsPage() {
                     <div className="settings-member-copy" style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{member.name}</span>
-                        {member.id === user?.uid && <span style={{ padding: '2px 8px', borderRadius: '100px', background: 'white', border: '1px solid var(--border)', fontSize: '10px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>You</span>}
+                        {member.id === user?.uid && <span style={{ padding: '2px 8px', borderRadius: '100px', background: 'white', border: '1px solid var(--border)', fontSize: '10px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase' }}>{copy('You')}</span>}
                       </div>
                       <div className="settings-member-contact" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '2px' }}>
                         <span style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '4px', overflowWrap: 'anywhere' }}><Mail size={12} /> {member.email}</span>
@@ -665,15 +667,15 @@ export default function SettingsPage() {
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
                     <AlertTriangle size={20} color="#B42318" style={{ marginTop: '2px', flexShrink: 0 }} />
                     <div style={{ flex: 1 }}>
-                      <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#B42318' }}>Company Deletion Requested</h4>
+                      <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0, color: '#B42318' }}>{copy('Company Deletion Requested')}</h4>
                       <p style={{ fontSize: '13px', color: '#7A271A', margin: '4px 0 0', lineHeight: 1.4 }}>
-                        Requested by <strong>{company.deletionRequest.requestedByName || 'an owner'}</strong>. Deleting the company requires unanimous approval from all owners and co-owners.
+                        {copy('Requested by')} <strong>{company.deletionRequest.requestedByName || copy('an owner')}</strong>{copy('. Deleting the company requires unanimous approval from all owners and co-owners.')}
                       </p>
                     </div>
                   </div>
 
                   <div style={{ padding: '10px 14px', borderRadius: '10px', background: '#FEE4E2', color: '#B42318', fontSize: '13px', fontWeight: 600, textAlign: 'center' }}>
-                    Approvals: {company.deletionRequest.approvedByIds?.length || 0} / {company.deletionRequest.requiredApproverIds?.length || 0} owners & co-owners
+                    {copy('Approvals:')} {company.deletionRequest.approvedByIds?.length || 0} / {company.deletionRequest.requiredApproverIds?.length || 0} {copy('owners & co-owners')}
                   </div>
 
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '4px' }}>
@@ -685,7 +687,7 @@ export default function SettingsPage() {
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: 'none', background: '#D92D20', color: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}
                       >
                         {deletionLoading ? <Loader2 className="animate-spin" size={15} /> : <CheckCircle2 size={15} />}
-                        Approve Deletion
+                        {copy('Approve Deletion')}
                       </button>
                     )}
                     {canManageCompanyDeletion && (
@@ -695,7 +697,7 @@ export default function SettingsPage() {
                         onClick={handleCancelCompanyDeletion}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #D0D5DD', background: '#FFFFFF', color: '#344054', fontWeight: 600, cursor: 'pointer' }}
                       >
-                        Cancel Request
+                        {copy('Cancel Request')}
                       </button>
                     )}
                   </div>
@@ -707,10 +709,10 @@ export default function SettingsPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '20px', borderRadius: '16px', background: '#FFFFFF', border: '1px solid #FECDCA' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#B42318' }}>
                     <AlertTriangle size={18} />
-                    <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>Danger Zone</h4>
+                    <h4 style={{ fontSize: '15px', fontWeight: 600, margin: 0 }}>{copy('Danger Zone')}</h4>
                   </div>
                   <p style={{ fontSize: '13px', color: 'var(--text-muted)', margin: 0, lineHeight: 1.4 }}>
-                    Permanently delete this company and all associated records. This action requires unanimous approval from all owners and co-owners.
+                    {copy('Permanently delete this company and all associated records. This action requires unanimous approval from all owners and co-owners.')}
                   </p>
                   <div>
                     <button
@@ -720,7 +722,7 @@ export default function SettingsPage() {
                       style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '9px 14px', borderRadius: '10px', border: '1px solid #FECDCA', background: '#FEF3F2', color: '#B42318', fontWeight: 600, cursor: 'pointer' }}
                     >
                       {deletionLoading ? <Loader2 className="animate-spin" size={15} /> : <Trash2 size={15} />}
-                      Delete Company
+                      {copy('Delete Company')}
                     </button>
                   </div>
                 </div>

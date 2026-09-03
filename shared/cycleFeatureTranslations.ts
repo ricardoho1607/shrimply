@@ -131,7 +131,7 @@ const enterpriseCycleErrors = {
     pondBlockMismatch: 'Kolam ini tidak termasuk dalam blok yang ditetapkan ke siklus terpilih.',
     pondCycleMismatch: 'Kolam ini tidak ditetapkan ke siklus produksi terpilih.',
     addPhysicalPondHint: 'Tambahkan kolam fisik terlebih dahulu. Kepadatan, pemasok, tanggal tebar, dan detail PL diisi saat memulai siklus.',
-    editBaseline: 'Edit baseline', startCycle: 'Mulai siklus', saveBaseline: 'Simpan baseline', close: 'Tutup',
+    editBaseline: 'Ubah data awal', startCycle: 'Mulai siklus', saveBaseline: 'Simpan data awal', close: 'Tutup',
     cycleStartQuestion: 'Bagaimana siklus ini dimulai?', newCycle: 'Siklus baru', existingCycle: 'Siklus berjalan',
     newCycleHint: 'Gunakan ini saat tebar dimulai di Shrimply.', existingCycleHint: 'Gunakan ini saat kolam sudah berjalan. Shrimply akan membuat baseline estimasi untuk setiap kolam.',
     currentMbw: 'MBW saat ini (g)', currentMbwPlaceholder: 'contoh 7', currentPopulation: 'Populasi saat ini', currentPopulationPlaceholder: 'contoh 85000',

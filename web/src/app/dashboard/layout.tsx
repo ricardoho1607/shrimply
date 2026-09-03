@@ -9,6 +9,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getRequiredSetupRoute } from '@/config/routes';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import {
   LayoutDashboard,
   Waves,
@@ -64,7 +65,7 @@ const formatDashboardDate = (date: Date) => new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
 }).format(date);
 
-const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
+const NAV_STRUCTURE = (t: DashboardTranslations, copy: (text: string) => string): NavigationGroups => ({
   management: [
     { label: getString(t.nav.home, 'Home'), icon: LayoutDashboard, href: '/dashboard' },
     { label: getString(t.nav.ponds, 'Ponds'), icon: Waves, href: '/dashboard/ponds' },
@@ -82,7 +83,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
   business: [
     { label: getString(t.finance.title, 'Finance'), icon: Wallet, href: '/dashboard/finance' },
     {
-      label: 'Reports',
+      label: copy('Reports'),
       icon: FileText,
       id: 'reports',
       children: [
@@ -93,12 +94,12 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
       ]
     },
     {
-      label: 'Inventory',
+      label: copy('Inventory'),
       icon: Box,
       id: 'inventory',
       children: [
         { label: getString(t.nav.inventoryFeeds, 'Feeds & Additives'), href: '/dashboard/inventory/feeds' },
-        { label: 'Treatment Mixes', href: '/dashboard/inventory/treatment-mixes' },
+        { label: copy('Treatment Mixes'), href: '/dashboard/inventory/treatment-mixes' },
         { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
       ]
     },
@@ -110,6 +111,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
 
 function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage() as { t: DashboardTranslations };
+  const copy = useDashboardCopy();
   const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading, companyLoading } = useAuth();
   useNotificationChecker(company?.id, user?.role);
   const pathname = usePathname();
@@ -122,7 +124,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
-  const navigation = NAV_STRUCTURE(t);
+  const navigation = NAV_STRUCTURE(t, copy);
   const canViewFarm = hasFarmPermission(user, 'viewFarm', company?.ownerId);
   const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
   const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
@@ -156,16 +158,16 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   };
 
   const sectionLabels: Record<string, string> = {
-    management: 'Management',
-    appServices: 'App Services',
-    business: 'Business',
-    system: 'System',
+    management: copy('Management'),
+    appServices: copy('App Services'),
+    business: copy('Business'),
+    system: copy('System'),
   };
 
   const currentNavMeta = (() => {
     if (pathname === '/dashboard/company') {
       return {
-        section: 'Management',
+        section: copy('Management'),
         title: getString(t.companyDetails?.title, 'Company Details'),
       };
     }
@@ -199,8 +201,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     }
 
     return {
-      section: 'Management',
-      title: 'Dashboard',
+      section: copy('Management'),
+      title: copy('Dashboard'),
     };
   })();
 
@@ -532,7 +534,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         <button
           type="button"
           className="sidebar-backdrop"
-          aria-label="Close navigation"
+          aria-label={copy('Close navigation')}
           aria-hidden="true"
           tabIndex={-1}
           onClick={() => setSidebarOpen(false)}
@@ -548,7 +550,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         id="dashboard-navigation"
         role={isOverlayNavigation ? 'dialog' : 'navigation'}
         aria-modal={isOverlayNavigation ? true : undefined}
-        aria-label="Dashboard navigation"
+        aria-label={copy('Dashboard navigation')}
         aria-hidden={!(isDesktopNavigation || isSidebarOpen)}
         inert={!(isDesktopNavigation || isSidebarOpen) ? true : undefined}
         className={`sidebar ${isSidebarOpen ? 'mobile-open' : ''}`}
@@ -592,10 +594,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               <Waves size={18} color={pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8'} strokeWidth={pathname === '/dashboard/company' ? 2.5 : 2} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ overflow: 'hidden', color: 'inherit', fontSize: '0.8rem', fontWeight: pathname === '/dashboard/company' ? 600 : 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {company?.companyName || 'Company profile'}
+                  {company?.companyName || copy('Company Details')}
                 </div>
                 <div style={{ overflow: 'hidden', color: '#94a3b8', fontSize: '0.62rem', fontWeight: 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {company?.farmType || 'Open company details'}
+                  {company?.farmType || copy('Company Details')}
                 </div>
               </div>
               <Search size={14} color="#94a3b8" aria-hidden="true" />
@@ -604,7 +606,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               type="button"
               data-sidebar-toggle
               className="sidebar-toggle"
-              aria-label="Close dashboard navigation"
+              aria-label={copy('Close dashboard navigation')}
               aria-controls="dashboard-navigation"
               aria-expanded={isSidebarOpen}
               onClick={toggleSidebar}
@@ -766,7 +768,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               ref={sidebarTriggerRef}
               onClick={toggleSidebar}
               className="mobile-trigger"
-              aria-label="Open dashboard navigation"
+              aria-label={copy('Open dashboard navigation')}
               aria-expanded={isSidebarOpen}
               aria-controls="dashboard-navigation"
               style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '10px', padding: '10px', cursor: 'pointer', color: 'var(--primary)' }}
@@ -791,7 +793,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
               <span>{todayLabel}</span>
             </div>
 
-            <Link href="/dashboard/settings" className="dashboard-profile-button" aria-label="Open account settings" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '10px', background: 'transparent', color: 'inherit', textDecoration: 'none' }}>
+            <Link href="/dashboard/settings" className="dashboard-profile-button" aria-label={copy('Open account settings')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px 8px', borderRadius: '10px', background: 'transparent', color: 'inherit', textDecoration: 'none' }}>
               <div style={{ textAlign: 'right' }} className="mobile-trigger-hide">
                 <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-primary)', lineHeight: 1.2 }}>{user?.name || 'Captain'}</div>
                 <div style={{ fontSize: '0.62rem', fontWeight: 500, color: '#94a3b8', lineHeight: 1.2, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{getString((company as Record<string, unknown> | null | undefined)?.role || (user as Record<string, unknown> | null | undefined)?.role, 'Farmer')}</div>
@@ -824,8 +826,9 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 }
 
 function DashboardStartupState() {
+  const copy = useDashboardCopy();
   return (
-    <div className="dashboard-startup-state" aria-busy="true" aria-label="Loading dashboard">
+    <div className="dashboard-startup-state" aria-busy="true" aria-label={copy('Loading dashboard')}>
       <div className="dashboard-startup-summary">
         {Array.from({ length: 4 }).map((_, index) => (
           <div className="dashboard-startup-placeholder" key={index} />

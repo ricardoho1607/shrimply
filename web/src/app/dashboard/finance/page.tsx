@@ -26,6 +26,7 @@ import {
 import { db } from '@/lib/firebase';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useCompanyCycles,
@@ -62,6 +63,7 @@ interface FinanceCycle { id: string; cycleName: string; status?: string; blockNa
 interface FinancePond { id: string; pondName: string; cycleId?: string; pondCycleId?: string }
 
 export default function FinancePage() {
+  const copy = useDashboardCopy();
   const { t } = useLanguage();
   const generalCategoryLabel = t.financeCycle.general;
   const { formatCurrency, currencyConfig } = useCurrency();
@@ -249,13 +251,13 @@ export default function FinancePage() {
           <button
             type="button"
             className="pond-detail-record-trigger finance-input-trigger"
-            aria-label="Add finance input"
+            aria-label={copy('Add finance input')}
             aria-expanded={isInputMenuOpen}
             aria-haspopup="menu"
             onClick={() => setInputMenuOpen((open) => !open)}
           >
             <Plus size={15} />
-            <span>Input</span>
+            <span>{copy('Input')}</span>
           </button>
           {isInputMenuOpen && (
             <div
@@ -273,11 +275,11 @@ export default function FinancePage() {
             >
               <button type="button" role="menuitem" onClick={() => openTransactionForm('income')}>
                 <ArrowUpRight size={16} />
-                <span><strong>{t.finance.addRevenue}</strong><small>Record incoming funds</small></span>
+                <span><strong>{t.finance.addRevenue}</strong><small>{copy('Record incoming funds')}</small></span>
               </button>
               <button type="button" role="menuitem" onClick={() => openTransactionForm('expense')}>
                 <ArrowDownRight size={16} />
-                <span><strong>{t.finance.addExpense}</strong><small>Record operating costs</small></span>
+                <span><strong>{t.finance.addExpense}</strong><small>{copy('Record operating costs')}</small></span>
               </button>
             </div>
           )}
@@ -380,7 +382,7 @@ export default function FinancePage() {
               </div>
               <div style={{ marginTop: '12px', padding: '24px', borderRadius: '20px', background: 'var(--primary-dim)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--border)' }}>
                 <div>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>Operating Margin</div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{copy('Operating Margin')}</div>
                   <div style={{ fontSize: '28px', fontWeight: 600, color: 'var(--primary)' }}>
                     {operatingMarginDisplay}
                   </div>
@@ -396,18 +398,18 @@ export default function FinancePage() {
           {/* Quick Actions / Tips */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             <div className="glass-card" style={{ padding: '32px' }}>
-              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px', color: 'var(--text-primary)' }}>Financial Health</h4>
+              <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px', color: 'var(--text-primary)' }}>{copy('Financial Health')}</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Income Records</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{copy('Income Records')}</span>
                   <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{income.length}</span>
                 </div>
                 <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
-                  <span style={{ color: 'var(--text-muted)' }}>Expense Records</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{copy('Expense Records')}</span>
                   <span style={{ fontWeight: 600, color: '#ef4444' }}>{expenses.length}</span>
                 </div>
                 <div style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', fontSize: '14px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
-                  You have logged <b>{expenses.length + income.length}</b> transactions this period. Your cash flow is <b style={{color: stats.profit >= 0 ? '#27AE60' : '#ef4444'}}>{stats.profit >= 0 ? 'positive' : 'negative'}</b>.
+                  {copy('You have logged')} <b>{expenses.length + income.length}</b> {copy('transactions this period. Your cash flow is')} <b style={{color: stats.profit >= 0 ? '#27AE60' : '#ef4444'}}>{stats.profit >= 0 ? copy('positive') : copy('negative')}</b>.
                 </div>
               </div>
             </div>
@@ -417,11 +419,11 @@ export default function FinancePage() {
                 <TrendingUp size={20} />
               </div>
               <div>
-                <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px', color: 'var(--primary)' }}>Orson AI Optimization Tip</h4>
+                <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px', color: 'var(--primary)' }}>{copy('Orson AI Optimization Tip')}</h4>
                 <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
                   {stats.totalIncome > 0
-                    ? <>Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is <strong style={{color: 'var(--primary)'}}>{operatingMarginDisplay}</strong>.</>
-                    : 'Revenue is zero, so there is insufficient revenue data to calculate a margin.'}
+                    ? <>{copy('Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is')} <strong style={{color: 'var(--primary)'}}>{operatingMarginDisplay}</strong>.</>
+                    : copy('Revenue is zero, so there is insufficient revenue data to calculate a margin.')}
                 </p>
               </div>
             </div>
@@ -481,7 +483,7 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.paymentType}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || 'No Ref'}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || copy('No Ref')}</div>
                     </td>
                     <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>

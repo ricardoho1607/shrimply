@@ -19,9 +19,9 @@ test('inventory metrics reflow safely on narrow cards', () => {
 test('inventory cards keep header and actions compact without decorative icons', () => {
   assert.match(source, /className=\{styles\.inventoryCardHeader\}/);
   assert.match(source, /className=\{styles\.inventoryCardActions\}/);
-  assert.match(source, />\s*History\s*<\/button>/);
-  assert.match(source, />\s*Delete\s*<\/button>/);
-  assert.match(source, /activeTab === 'additive' \? 'Product' : 'Threshold'/);
+  assert.match(source, /copy\('History'\)/);
+  assert.match(source, /copy\('Delete'\)/);
+  assert.match(source, /copy\(activeTab === 'additive' \? 'Product' : 'Threshold'\)/);
   assert.doesNotMatch(source, /<History size=/);
   assert.doesNotMatch(source, /<Trash2 size=/);
   assert.match(stylesheet, /\.inventoryCardActions\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/s);
@@ -35,9 +35,9 @@ test('inventory card details use consistent rows without pushing metrics out of 
 });
 
 test('inventory dashboard uses one input popover for all create actions', () => {
-  assert.match(source, /aria-label="Add inventory input"/);
+  assert.match(source, /aria-label=\{copy\('Add inventory input'\)\}/);
   assert.match(source, /role="menu"[^>]*className="pond-detail-record-popover inventory-input-popover"/);
-  assert.match(source, />Treatment Mixes</);
+  assert.match(source, /copy\('Treatment Mixes'\)/);
   assert.match(source, /\{t\.inventory\.addFeed\}/);
   assert.match(source, /\{t\.inventory\.addAdditive\}/);
 });
@@ -52,13 +52,13 @@ test('inventory dashboard navigation and metrics use compact equal rows', () => 
 
 test('dashboard alerts and recent transactions keep compact icon-free headings', () => {
   assert.doesNotMatch(source, /Optimal Stock Levels/);
-  assert.match(source, /<h2 className="inventory-section-heading">Stock Status Alerts<\/h2>/);
-  assert.match(source, /<h2 className="inventory-section-heading">Recent Transactions<\/h2>/);
+  assert.match(source, /<h2 className="inventory-section-heading">\{copy\('Stock Status Alerts'\)\}<\/h2>/);
+  assert.match(source, /<h2 className="inventory-section-heading">\{copy\('Recent Transactions'\)\}<\/h2>/);
   assert.match(source, /className="inventory-alert-count"/);
 });
 
 test('transaction direction is selected from a sort popover', () => {
-  assert.match(source, /aria-label="Filter transactions"/);
+  assert.match(source, /aria-label=\{copy\('Filter transactions'\)\}/);
   assert.match(source, /<ArrowUpDown size=\{17\}/);
   assert.match(source, /className="pond-detail-record-popover inventory-filter-popover"/);
   assert.match(source, /All transactions/);
@@ -69,16 +69,16 @@ test('transaction direction is selected from a sort popover', () => {
 test('inventory input actions open the shared compact modal treatment', () => {
   assert.match(source, /className="glass-card responsive-modal animate-fade-up inventory-modal"/);
   assert.match(source, /role="dialog" aria-modal="true"/);
-  assert.match(source, /aria-label="Close inventory dialog"/);
+  assert.match(source, /aria-label=\{copy\('Close inventory dialog'\)\}/);
   assert.match(source, /className="responsive-modal-footer inventory-modal-footer"/);
   assert.match(source, /\.inventory-modal-footer\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
   assert.doesNotMatch(source, /modalType === 'add' \? <Plus/);
-  assert.match(source, /`Add \$\{itemType === 'feed' \? 'Feed' : 'Additive'\}`/);
+  assert.match(source, /`\$\{copy\('Add'\)\} \$\{copy\(itemType === 'feed' \? 'Feed' : 'Additive'\)\}`/);
 });
 
 test('inventory create form stays compact with constrained dropdown choices', () => {
   assert.match(source, /const FEED_CATEGORIES = \['Starter', 'Grower', 'Finisher', 'Other'\]/);
-  assert.match(source, /aria-label="Inventory classification"/);
+  assert.match(source, /aria-label=\{copy\('Inventory classification'\)\}/);
   assert.match(source, /className="responsive-form-grid inventory-add-details"/);
   assert.match(source, /className="responsive-form-grid inventory-stock-details"/);
   assert.match(source, /className="inventory-full-row"/);

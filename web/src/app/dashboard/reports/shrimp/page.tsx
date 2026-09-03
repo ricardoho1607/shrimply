@@ -34,6 +34,7 @@ import {
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
 import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -218,6 +219,7 @@ const getGlobalAverages = (ponds: Pond[], timeZone?: string) => {
 };
 
 const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
+  const copy = useDashboardCopy();
   const points = series.flatMap((item) => item.data);
 
   if (!points.length) {
@@ -235,7 +237,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
         textAlign: 'center',
         padding: '24px'
       }}>
-        No growth sampling data yet.
+        {copy('No growth sampling data yet.')}
       </div>
     );
   }
@@ -264,7 +266,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Growth trajectory chart" style={{ width: '100%', display: 'block', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label={copy('Growth trajectory chart')} style={{ width: '100%', display: 'block', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFFFFF' }}>
         <rect x="0" y="0" width={width} height={height} fill="#FFFFFF" />
         {yTicks.map((tick) => {
           const y = yScale(tick);
@@ -316,6 +318,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 };
 
 export default function ShrimpReportsPage() {
+  const copy = useDashboardCopy();
   const { currentLanguage } = useLanguage();
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
@@ -472,7 +475,7 @@ export default function ShrimpReportsPage() {
   };
 
   if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}><Loader2 className="animate-spin" size={48} color="var(--primary)" /></div>;
-  if (!canViewReports) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to view reports.</div>;
+  if (!canViewReports) return <div style={{ textAlign: 'center', padding: '100px' }}>{copy('You do not have permission to view reports.')}</div>;
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '40px' }}>
@@ -489,19 +492,19 @@ export default function ShrimpReportsPage() {
         flexWrap: 'wrap'
       }}>
         <div>
-          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>Reports</div>
-          <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Shrimp Production Audit</h1>
+          <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{copy('Reports')}</div>
+          <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{copy('Shrimp Production Audit')}</h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>
-            Performance analytics for {selectedPonds.length} of {activePonds.length} active production ponds.
+            {copy('Performance analytics for')} {selectedPonds.length} {copy('of')} {activePonds.length} {copy('active production ponds.')}
           </p>
         </div>
         <div className="sampling-report-actions">
           <button type="button" className="btn-secondary sampling-pond-trigger" onClick={openPondSelector} disabled={activePonds.length === 0}>
-            <span>Select ponds</span>
+            <span>{copy('Select ponds')}</span>
             <span className="sampling-pond-count">{selectedPonds.length}</span>
           </button>
           <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading || !canExportReports || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
-            {exportLoading ? <Loader2 size={19} className="animate-spin" /> : 'Export Audit PDF'}
+            {exportLoading ? <Loader2 size={19} className="animate-spin" /> : copy('Export Audit PDF')}
           </button>
         </div>
       </div>
@@ -523,18 +526,18 @@ export default function ShrimpReportsPage() {
 
       <div className="dashboard-report-grid">
         <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} /> Growth Trajectory</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={20} /> {copy('Growth Trajectory')}</h2>
           <GrowthTrajectoryChart series={growthSeries} />
         </div>
 
         <div className="glass-card" style={{ padding: '22px', background: '#FFF', border: '1px solid var(--border)' }}>
-          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> Pond Status</h2>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> {copy('Pond Status')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {global.stats.map((s: PondStats) => (
               <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
-                  <div><div style={{ fontSize: '16px', fontWeight: 600 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} days</div></div>
-                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: !s.hasGrowthSampling ? 'var(--text-muted)' : s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{s.hasGrowthSampling ? (s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL') : 'Awaiting sampling'}</div>
+                  <div><div style={{ fontSize: '16px', fontWeight: 600 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} {copy('days')}</div></div>
+                  <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: !s.hasGrowthSampling ? 'var(--text-muted)' : s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{copy(s.hasGrowthSampling ? (s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL') : 'Awaiting sampling')}</div>
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', textAlign: 'center', gap: '8px' }}>
                   <div><div style={{ fontSize: '10px', color: 'var(--text-faint)', fontWeight: 600 }}>ABW</div><div style={{ fontSize: '14px', fontWeight: 600 }}>{s.mbw.toFixed(2)}g</div></div>
@@ -557,20 +560,20 @@ export default function ShrimpReportsPage() {
           <div className="glass-card responsive-modal sampling-pond-modal" role="dialog" aria-modal="true" aria-labelledby="sampling-pond-title">
             <div className="responsive-modal-header sampling-pond-header">
               <div>
-                <h2 id="sampling-pond-title">Select ponds</h2>
-                <p>Choose which ponds to include in this report.</p>
+                <h2 id="sampling-pond-title">{copy('Select ponds')}</h2>
+                <p>{copy('Choose which ponds to include in this report.')}</p>
               </div>
-              <button type="button" className="sampling-pond-close" onClick={() => setIsPondSelectorOpen(false)} aria-label="Close pond selection">
+              <button type="button" className="sampling-pond-close" onClick={() => setIsPondSelectorOpen(false)} aria-label={copy('Close pond selection')}>
                 <X size={18} />
               </button>
             </div>
 
             <div className="responsive-modal-body sampling-pond-body">
               <div className="sampling-pond-toolbar">
-                <span>{draftPondIds.length} of {activePonds.length} selected</span>
+                <span>{draftPondIds.length} {copy('of')} {activePonds.length} {copy('selected')}</span>
                 <div>
-                  <button type="button" onClick={() => setDraftPondIds(activePonds.map((pond) => pond.id))}>Select all</button>
-                  <button type="button" onClick={() => setDraftPondIds([])}>Clear</button>
+                  <button type="button" onClick={() => setDraftPondIds(activePonds.map((pond) => pond.id))}>{copy('Select all')}</button>
+                  <button type="button" onClick={() => setDraftPondIds([])}>{copy('Clear')}</button>
                 </div>
               </div>
               <div className="sampling-pond-list">
@@ -580,7 +583,7 @@ export default function ShrimpReportsPage() {
                     <label key={pond.id} className={`sampling-pond-option${isSelected ? ' is-selected' : ''}`}>
                       <span>
                         <strong>{pond.pondName}</strong>
-                        <small>{(pond.samplings || []).filter((sampling) => getSamplingMbw(sampling) > 0).length} sampling records</small>
+                        <small>{(pond.samplings || []).filter((sampling) => getSamplingMbw(sampling) > 0).length} {copy('sampling records')}</small>
                       </span>
                       <input type="checkbox" checked={isSelected} onChange={() => toggleDraftPond(pond.id)} />
                     </label>
@@ -590,8 +593,8 @@ export default function ShrimpReportsPage() {
             </div>
 
             <div className="responsive-modal-footer sampling-pond-footer">
-              <button type="button" className="btn-secondary" onClick={() => setIsPondSelectorOpen(false)}>Cancel</button>
-              <button type="button" className="btn-primary" onClick={applyPondSelection}>Apply selection</button>
+              <button type="button" className="btn-secondary" onClick={() => setIsPondSelectorOpen(false)}>{copy('Cancel')}</button>
+              <button type="button" className="btn-primary" onClick={applyPondSelection}>{copy('Apply selection')}</button>
             </div>
           </div>
         </div>

@@ -15,7 +15,15 @@ export interface DailyOperationsMortalityRecord {
 
 export interface DailyOperationsWaterRecord {
   date?: string | null;
+  mbw?: string | number | null;
+  abw?: string | number | null;
+  feed?: string | number | null;
+  feedData?: { totalDailyFeed?: string | number | null } | null;
+  isBaselineEstimate?: boolean;
+  source?: string | null;
+  cumulativeFeedToDate?: string | number | null;
   phMorning?: string | number | null;
+  phEvening?: string | number | null;
   temperature?: string | number | null;
   waterAppearance?: string | null;
   waterDepthCm?: string | number | null;
@@ -33,6 +41,10 @@ export interface DailyOperationsPondSource {
   blockName?: string | null;
   cycleStatus?: 'active' | 'ended' | null;
   docStart?: string | null;
+  initialWeight?: number | string | null;
+  baselineDate?: string | null;
+  baselineMbw?: number | string | null;
+  baselineCumulativeFeed?: number | string | null;
   pondArea?: number | string | null;
   initialPopulation?: number | string | null;
   initialStock?: number | string | null;
@@ -67,12 +79,19 @@ export interface WaterQualityReportRow {
   doc: number;
   recordedBy: string;
   phMorning: string;
+  phEvening: string;
+  phRange: string;
   temperature: string;
   waterAppearance: string;
   waterDepthCm: string;
   transparency: string;
   salinity: string;
   alkalinity: string;
+  feedIndex: string;
+  dailyFeedKg: string;
+  cumulativeFeedKg: string;
+  adg: string;
+  estimatedPopulation: number | null;
 }
 
 export interface DailyOperationsReportData {
@@ -93,7 +112,58 @@ const textValue = (value: unknown): string => {
   return text || '-';
 };
 
+const phRangeValue = (morning: unknown, evening: unknown): string => {
+  const morningText = String(morning ?? '').trim();
+  const eveningText = String(evening ?? '').trim();
+  if (!morningText || !eveningText) return '-';
+  const morningValue = Number(morningText.replace(',', '.'));
+  const eveningValue = Number(eveningText.replace(',', '.'));
+  if (!Number.isFinite(morningValue) || !Number.isFinite(eveningValue)) return '-';
+  return Math.abs(eveningValue - morningValue).toFixed(2);
+};
+
 const dateKey = (value: unknown): string => String(value ?? '').match(/^\d{4}-\d{2}-\d{2}/)?.[0] || '';
+
+const isBaselineRecord = (record: DailyOperationsWaterRecord): boolean =>
+  Boolean(record.isBaselineEstimate) || record.source === 'midcycle_onboarding';
+
+const formatDecimal = (value: number, digits = 2): string =>
+  value.toFixed(digits).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+
+const recordMbw = (record: DailyOperationsWaterRecord): number =>
+  numberValue(record.mbw ?? record.abw);
+
+const daysBetween = (startDate: unknown, endDate: unknown): number | null => {
+  const startKey = dateKey(startDate);
+  const endKey = dateKey(endDate);
+  if (!startKey || !endKey) return null;
+  const difference = (Date.parse(`${endKey}T00:00:00Z`) - Date.parse(`${startKey}T00:00:00Z`)) / 86_400_000;
+  return Number.isFinite(difference) && difference > 0 ? difference : null;
+};
+
+const calculateReportAdg = (
+  pond: DailyOperationsPondSource,
+  recordsToDate: DailyOperationsWaterRecord[],
+): number | null => {
+  const sorted = [...recordsToDate].sort((left, right) => dateKey(left.date).localeCompare(dateKey(right.date)));
+  const operational = sorted.filter((record) => !isBaselineRecord(record) && recordMbw(record) > 0);
+  if (operational.length === 0) return null;
+
+  const latest = operational[operational.length - 1];
+  const previousOperational = operational.length >= 2 ? operational[operational.length - 2] : undefined;
+  const previousBaseline = [...sorted]
+    .reverse()
+    .find((record) => isBaselineRecord(record) && recordMbw(record) > 0 && dateKey(record.date) < dateKey(latest.date));
+  const previous = previousOperational || previousBaseline;
+  const hasPondBaseline = numberValue(pond.baselineMbw) > 0 &&
+    Boolean(dateKey(pond.baselineDate)) && dateKey(pond.baselineDate) < dateKey(latest.date);
+  const previousWeight = previous
+    ? recordMbw(previous)
+    : hasPondBaseline ? numberValue(pond.baselineMbw) : (numberValue(pond.initialWeight) || 0.5);
+  const previousDate = previous?.date || (hasPondBaseline ? pond.baselineDate : pond.docStart);
+  const days = daysBetween(previousDate, latest.date);
+  return days === null ? null : (recordMbw(latest) - previousWeight) / days;
+};
 
 const getDoc = (stockingDate: unknown, reportDate: string): number => {
   const startKey = dateKey(stockingDate);
@@ -159,40 +229,80 @@ const buildWaterQualityRow = (
   pond: DailyOperationsPondSource,
   reportDate: string,
 ): WaterQualityReportRow | null => {
-  const records = (pond.samplings || [])
-    .filter((record) => belongsToCurrentCycle(record, pond) && dateKey(record.date) === reportDate)
-    .filter((record) => [
+  const cycleRecords = (pond.samplings || []).filter((record) => belongsToCurrentCycle(record, pond));
+  const recordsToDate = cycleRecords.filter((record) => {
+    const recordDate = dateKey(record.date);
+    return Boolean(recordDate) && recordDate <= reportDate;
+  });
+  const dailyRecords = recordsToDate.filter((record) => dateKey(record.date) === reportDate);
+  const hasDailyReportData = dailyRecords.some((record) => [
       record.phMorning,
+      record.phEvening,
       record.temperature,
       record.waterAppearance,
       record.waterDepthCm,
       record.transparency,
       record.salinity,
       record.alkalinity,
+      record.feedData?.totalDailyFeed,
     ].some((value) => value !== null && value !== undefined && String(value).trim()));
-  if (records.length === 0) return null;
+  if (!hasDailyReportData) return null;
 
   const latestValue = (key: keyof DailyOperationsWaterRecord): unknown => {
-    for (let index = records.length - 1; index >= 0; index -= 1) {
-      const value = records[index][key];
+    for (let index = dailyRecords.length - 1; index >= 0; index -= 1) {
+      const value = dailyRecords[index][key];
       if (value !== null && value !== undefined && String(value).trim()) return value;
     }
     return undefined;
   };
 
+  const phMorning = latestValue('phMorning');
+  const phEvening = latestValue('phEvening');
+  const dailyFeedRecords = dailyRecords.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
+  const dailyFeed = dailyFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
+  const operationalFeedRecords = recordsToDate.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
+  const operationalFeed = operationalFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
+  const baselineFeedFromPond = !pond.baselineDate || pond.baselineDate <= reportDate
+    ? numberValue(pond.baselineCumulativeFeed)
+    : 0;
+  const baselineFeedFromRecords = recordsToDate
+    .filter(isBaselineRecord)
+    .reduce((maximum, record) => Math.max(
+      maximum,
+      numberValue(record.cumulativeFeedToDate) || numberValue(record.feed),
+    ), 0);
+  const baselineFeed = Math.max(baselineFeedFromPond, baselineFeedFromRecords);
+  const hasCumulativeFeed = baselineFeed > 0 || operationalFeedRecords.length > 0;
+  const cumulativeFeed = baselineFeed + operationalFeed;
+  const doc = getDoc(pond.docStart, reportDate);
+  const initialPopulation = numberValue(pond.initialPopulation ?? pond.initialStock);
+  const siponRow = buildSiponRow(pond, reportDate);
+  const estimatedPopulation = initialPopulation > 0 ? siponRow.estimatedPopulation : null;
+  const feedIndex = dailyFeed > 0 && doc > 0 && estimatedPopulation && estimatedPopulation > 0
+    ? (dailyFeed * 100_000) / (doc * estimatedPopulation)
+    : null;
+  const adg = calculateReportAdg(pond, recordsToDate);
+
   return {
     pondName: pond.pondName,
     blockName: textValue(pond.blockName),
     stockingDate: dateKey(pond.docStart),
-    doc: getDoc(pond.docStart, reportDate),
+    doc,
     recordedBy: textValue(latestValue('waterQualityRecordedByName')),
-    phMorning: textValue(latestValue('phMorning')),
+    phMorning: textValue(phMorning),
+    phEvening: textValue(phEvening),
+    phRange: phRangeValue(phMorning, phEvening),
     temperature: textValue(latestValue('temperature')),
     waterAppearance: textValue(latestValue('waterAppearance')),
     waterDepthCm: textValue(latestValue('waterDepthCm')),
     transparency: textValue(latestValue('transparency')),
     salinity: textValue(latestValue('salinity')),
     alkalinity: textValue(latestValue('alkalinity')),
+    feedIndex: feedIndex === null ? '-' : feedIndex.toFixed(2),
+    dailyFeedKg: dailyFeedRecords.length === 0 ? '-' : formatDecimal(dailyFeed),
+    cumulativeFeedKg: hasCumulativeFeed ? formatDecimal(cumulativeFeed) : '-',
+    adg: adg === null ? '-' : adg.toFixed(2),
+    estimatedPopulation,
   };
 };
 
@@ -261,9 +371,11 @@ export const generateDailyOperationsReportHTML = (
     </tr>`).join('');
   const waterRows = data.waterQualityRows.map((row) => `
     <tr><td>${escapeHtml(row.stockingDate || '-')}</td><td>${escapeHtml(row.pondName)}</td><td>${row.doc}</td>
-      <td>${escapeHtml(row.recordedBy)}</td><td>${escapeHtml(row.phMorning)}</td><td>${escapeHtml(row.temperature)}</td>
+      <td>${escapeHtml(row.recordedBy)}</td><td>${escapeHtml(row.phMorning)}</td><td>${escapeHtml(row.phEvening)}</td><td>${escapeHtml(row.phRange)}</td><td>${escapeHtml(row.temperature)}</td>
       <td>${escapeHtml(row.waterAppearance)}</td><td>${escapeHtml(row.waterDepthCm)}</td><td>${escapeHtml(row.transparency)}</td>
-      <td>${escapeHtml(row.salinity)}</td><td>${escapeHtml(row.alkalinity)}</td></tr>`).join('');
+      <td>${escapeHtml(row.salinity)}</td><td>${escapeHtml(row.alkalinity)}</td><td>${escapeHtml(row.feedIndex)}</td>
+      <td>${escapeHtml(row.dailyFeedKg)}</td><td>${escapeHtml(row.cumulativeFeedKg)}</td><td>${escapeHtml(row.adg)}</td>
+      <td>${row.estimatedPopulation === null ? '-' : formatInteger(row.estimatedPopulation)}</td></tr>`).join('');
   const hasLegacy = data.siponRows.some((row) => row.hasUnclassifiedData);
   const renderHeader = (title: string, subtitle: string) => `
     <div class="header">
@@ -312,6 +424,8 @@ export const generateDailyOperationsReportHTML = (
       table { width: 100%; border-collapse: collapse; table-layout: fixed; background: transparent; }
       th { background: rgba(15, 76, 117, 0.90); color: #fff; padding: 6px 3px; text-align: center; vertical-align: middle; font-size: 6.4px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1px; border-right: 1px solid rgba(255,255,255,0.22); line-height: 1.1; overflow-wrap: anywhere; }
       th.group { background: rgba(50, 130, 184, 0.92); }
+      th.feed-group { background: rgba(187, 225, 250, 0.96); color: #0F4C75; border-color: rgba(15,76,117,0.20); }
+      .water-table th { padding: 5px 2px; font-size: 5.6px; overflow-wrap: normal; word-break: normal; }
       td { padding: 6px 3px; text-align: center; vertical-align: middle; font-size: 7px; color: #26384A; border-bottom: 1px solid rgba(15, 76, 117, 0.18); line-height: 1.15; font-variant-numeric: tabular-nums; background: rgba(255,255,255,0.50); overflow-wrap: anywhere; }
       tbody tr:nth-child(even) td { background: rgba(255,255,255,0.64); }
       tfoot td { background: rgba(232,244,248,0.78); font-weight: 800; border-top: 2px solid #0F4C75; border-bottom: 1px solid #0F4C75; }
@@ -338,7 +452,7 @@ export const generateDailyOperationsReportHTML = (
       <div class="report-shell">
         ${renderHeader(copy.dailyWaterQualityReport, copy.waterDescription)}
         <div class="table-container">
-          ${data.waterQualityRows.length ? `<table><colgroup><col style="width:11%"><col style="width:7%"><col style="width:5%"><col style="width:12%"><col style="width:7%"><col style="width:8%"><col style="width:12%"><col style="width:9.5%"><col style="width:9.5%"><col style="width:9.5%"><col style="width:9%"></colgroup><thead><tr><th>${escapeHtml(copy.stockingDate)}</th><th>${escapeHtml(copy.pond)}</th><th>${escapeHtml(copy.doc)}</th><th>${escapeHtml(copy.recordedBy)}</th><th>pH</th><th>${escapeHtml(copy.temperature)}<br>°C</th><th>${escapeHtml(copy.waterAppearance)}</th><th>${escapeHtml(copy.waterDepth)}<br>cm</th><th>${escapeHtml(copy.transparency)}<br>cm</th><th>${escapeHtml(copy.salinity)}<br>ppt</th><th>${escapeHtml(copy.alkalinity)}<br>ppm</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
+          ${data.waterQualityRows.length ? `<table class="water-table"><colgroup><col style="width:8%"><col style="width:5.5%"><col style="width:3.5%"><col style="width:7.5%"><col span="3" style="width:4.5%"><col style="width:5%"><col style="width:7%"><col span="4" style="width:6%"><col style="width:4.5%"><col style="width:5%"><col style="width:6%"><col style="width:4.5%"><col style="width:6%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.stockingDate)}</th><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th rowspan="2">${escapeHtml(copy.recordedBy)}</th><th class="group" colspan="3">pH</th><th rowspan="2">${escapeHtml(copy.temperature)}<br>°C</th><th rowspan="2">${escapeHtml(copy.waterAppearance)}</th><th rowspan="2">${escapeHtml(copy.waterDepth)}<br>cm</th><th rowspan="2">${escapeHtml(copy.transparency)}<br>cm</th><th rowspan="2">${escapeHtml(copy.salinity)}<br>ppt</th><th rowspan="2">${escapeHtml(copy.alkalinity)}<br>ppm</th><th class="feed-group" colspan="5">${escapeHtml(copy.feedSection)}</th></tr><tr><th>${escapeHtml(copy.phMorning)}</th><th>${escapeHtml(copy.phEvening)}</th><th>${escapeHtml(copy.phRange)}</th><th class="feed-group">${escapeHtml(copy.feedIndex)}</th><th class="feed-group">${escapeHtml(copy.dailyFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.cumulativeFeed)}<br>kg</th><th class="feed-group">${escapeHtml(copy.actualAdg)}</th><th class="feed-group">${escapeHtml(copy.estimatedPopulation)}</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
         </div>
         ${renderFooter(2)}
       </div>

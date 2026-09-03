@@ -16,6 +16,7 @@ import {
 import { calculateTreatmentDoseLiters } from '../../../../../../shared/treatmentMix';
 import styles from './TreatmentMixesPage.module.css';
 import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 type Pond = {
   id: string;
@@ -34,6 +35,7 @@ const positiveNumber = (value: string) => {
 const message = (error: unknown) => error instanceof Error ? error.message : 'Operation failed';
 
 export default function TreatmentMixesPage() {
+  const copy = useDashboardCopy();
   const { company, user } = useAuth();
   const { formatCurrency } = useCurrency();
   const { additives: inventory, ponds, loading, companyId } = useInventoryFeeds<never, TreatmentMixInventoryItem, Pond>();
@@ -89,8 +91,8 @@ export default function TreatmentMixesPage() {
       const quantity = positiveNumber(quantities[item.id] || '');
       return quantity ? [{ additiveId: item.id, additiveName: item.itemName, quantity, unit: item.unit || 'kg' }] : [];
     });
-    if (!name.trim() || !finalYield || !components.length) return alert('Enter a name, final volume, and at least one ingredient.');
-    if (inventory.some((item) => item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return alert('That inventory name already exists.');
+    if (!name.trim() || !finalYield || !components.length) return alert(copy('Enter a name, final volume, and at least one ingredient.'));
+    if (inventory.some((item) => item.itemName.trim().toLowerCase() === name.trim().toLowerCase())) return alert(copy('That inventory name already exists.'));
     setSaving(true);
     try {
       await createTreatmentMix(companyId, { name, yieldLiters: finalYield, components, notes, timeZone: company?.timeZone });
@@ -126,9 +128,9 @@ export default function TreatmentMixesPage() {
   };
 
   const recordUse = async () => {
-    if (!companyId || !useMix || !selectedPond) return alert('Select a pond.');
+    if (!companyId || !useMix || !selectedPond) return alert(copy('Select a pond.'));
     const parsedPpm = positiveNumber(ppm);
-    if (!parsedPpm) return alert('PPM must be greater than zero.');
+    if (!parsedPpm) return alert(copy('PPM must be greater than zero.'));
     setSaving(true);
     try {
       await applyTreatmentMix(companyId, useMix.id, {
@@ -151,37 +153,37 @@ export default function TreatmentMixesPage() {
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: 40 }}>
       <div className={`dashboard-inline-toolbar ${styles.toolbarCompact}`}>
-        <Link href="/dashboard/inventory/feeds" className="dashboard-action dashboard-action-secondary" aria-label="Back to feeds and additives"><ArrowLeft size={18} /></Link>
+        <Link href="/dashboard/inventory/feeds" className="dashboard-action dashboard-action-secondary" aria-label={copy('Back to feeds and additives')}><ArrowLeft size={18} /></Link>
         <div className={styles.toolbarCopy}>
-          <h1>Treatment Mixes</h1>
-          <p>Prepare recipes, then apply finished mix to ponds by PPM.</p>
+          <h1>{copy('Treatment Mixes')}</h1>
+          <p>{copy('Prepare recipes, then apply finished mix to ponds by PPM.')}</p>
         </div>
-        {canEdit && <button className="dashboard-action dashboard-action-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> Create Mix</button>}
+        {canEdit && <button className="dashboard-action dashboard-action-primary" onClick={() => setShowCreate(true)}><Plus size={17} /> {copy('Create Mix')}</button>}
       </div>
 
       <div className={styles.doseLogic}>
-        <strong style={{ color: 'var(--primary)' }}>Dose logic:</strong> at the current assumed 1 m depth, required litres = PPM × pond area (m²) ÷ 1,000. A 2,500 m² pond at 2 PPM uses 5 L.
+        <strong style={{ color: 'var(--primary)' }}>{copy('Dose logic:')}</strong> {copy('at the current assumed 1 m depth, required litres = PPM × pond area (m²) ÷ 1,000. A 2,500 m² pond at 2 PPM uses 5 L.')}
       </div>
 
       <div style={{ marginTop: 22, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 18 }}>
         {mixes.map((mix) => (
           <article key={mix.id} className={`glass-card ${styles.mixCard}`} style={{ padding: 16 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <div style={{ flex: 1 }}><h2 style={{ margin: 0, fontSize: 19 }}>{mix.itemName}</h2><div style={{ marginTop: 4, color: 'var(--text-muted)' }}>{mix.totalStock || 0} L available</div></div>
+              <div style={{ flex: 1 }}><h2 style={{ margin: 0, fontSize: 19 }}>{mix.itemName}</h2><div style={{ marginTop: 4, color: 'var(--text-muted)' }}>{mix.totalStock || 0} {copy('L available')}</div></div>
               <strong>{formatCurrency(mix.totalCost || 0)}</strong>
             </div>
             <div style={{ marginTop: 16, padding: 14, borderRadius: 14, background: 'var(--bg-mid)' }}>
-              <strong>Recipe for {mix.treatmentMixRecipe?.yieldLiters || 0} L</strong>
+              <strong>{copy('Recipe for')} {mix.treatmentMixRecipe?.yieldLiters || 0} L</strong>
               {(mix.treatmentMixRecipe?.components || []).map((component) => <div key={component.additiveId} style={{ marginTop: 7, color: 'var(--text-muted)' }}>{component.quantity} {component.unit} · {component.additiveName}</div>)}
             </div>
             {canEdit && <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-              <button className="dashboard-action dashboard-action-secondary" style={{ flex: 1 }} onClick={() => setBatchMix(mix)}><RefreshCw size={17} /> Make Batch</button>
-              <button className="dashboard-action dashboard-action-primary" style={{ flex: 1 }} onClick={() => setUseMix(mix)} disabled={(mix.totalStock || 0) <= 0}><Waves size={17} /> Use</button>
+              <button className="dashboard-action dashboard-action-secondary" style={{ flex: 1 }} onClick={() => setBatchMix(mix)}><RefreshCw size={17} /> {copy('Make Batch')}</button>
+              <button className="dashboard-action dashboard-action-primary" style={{ flex: 1 }} onClick={() => setUseMix(mix)} disabled={(mix.totalStock || 0) <= 0}><Waves size={17} /> {copy('Use')}</button>
             </div>}
           </article>
         ))}
       </div>
-      {!mixes.length && <div className={styles.emptyState}><h2>No treatment mixes yet</h2><p>Create a reusable recipe from your additive inventory.</p></div>}
+      {!mixes.length && <div className={styles.emptyState}><h2>{copy('No treatment mixes yet')}</h2><p>{copy('Create a reusable recipe from your additive inventory.')}</p></div>}
 
       {(showCreate || useMix || batchMix) && (
         <div
@@ -193,32 +195,32 @@ export default function TreatmentMixesPage() {
         >
           <div className={`glass-card responsive-modal ${styles.modal}`} role="dialog" aria-modal="true" aria-labelledby="treatment-mix-modal-title" style={{ width: 'min(620px, 100%)', maxHeight: 'calc(100dvh - 24px)', overflow: 'hidden', padding: 0, background: '#fff' }}>
             <div className={`responsive-modal-header ${styles.modalHeader}`} style={{ display: 'flex', justifyContent: 'space-between', gap: 16 }}>
-              <div><h2 id="treatment-mix-modal-title" style={{ margin: 0 }}>{showCreate ? 'Create Treatment Mix' : useMix ? `Use ${useMix.itemName}` : `Make ${batchMix?.itemName}`}</h2><p style={{ color: 'var(--text-faint)' }}>{showCreate ? 'Saving makes the first batch and deducts ingredients.' : useMix ? 'Select the pond and PPM.' : 'Confirm the recipe before deducting ingredients.'}</p></div>
-              <button className="dashboard-action dashboard-action-secondary" onClick={reset} aria-label="Close"><X size={18} /></button>
+              <div><h2 id="treatment-mix-modal-title" style={{ margin: 0 }}>{showCreate ? copy('Create Treatment Mix') : useMix ? `${copy('Use')} ${useMix.itemName}` : `${copy('Make')} ${batchMix?.itemName}`}</h2><p style={{ color: 'var(--text-faint)' }}>{showCreate ? copy('Saving makes the first batch and deducts ingredients.') : useMix ? copy('Select the pond and PPM.') : copy('Confirm the recipe before deducting ingredients.')}</p></div>
+              <button className="dashboard-action dashboard-action-secondary" onClick={reset} aria-label={copy('Close')}><X size={18} /></button>
             </div>
 
             <div className={`responsive-modal-body ${styles.modalBody}`}>
             {showCreate ? <>
-              <label style={labelStyle}>Mix name<input style={inputStyle} value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Ionisation" /></label>
-              <label style={labelStyle}>Final prepared volume (L)<input style={inputStyle} type="number" min="0" step="any" value={yieldLiters} onChange={(event) => setYieldLiters(event.target.value)} /></label>
+              <label style={labelStyle}>{copy('Mix name')}<input style={inputStyle} value={name} onChange={(event) => setName(event.target.value)} placeholder={copy('e.g. Ionisation')} /></label>
+              <label style={labelStyle}>{copy('Final prepared volume (L)')}<input style={inputStyle} type="number" min="0" step="any" value={yieldLiters} onChange={(event) => setYieldLiters(event.target.value)} /></label>
               <section className={styles.ingredientsSection}>
                 <div className={styles.ingredientsHeader}>
-                  <div><h3>Additive ingredients</h3><p>Select stocked additives, then enter the amount used for one batch.</p></div>
-                  <span>{selectedIngredientIds.length} selected</span>
+                  <div><h3>{copy('Additive ingredients')}</h3><p>{copy('Select stocked additives, then enter the amount used for one batch.')}</p></div>
+                  <span>{selectedIngredientIds.length} {copy('selected')}</span>
                 </div>
                 <div className={styles.ingredientPicker}>
                   <button
                     type="button"
                     className="dashboard-action dashboard-action-secondary"
-                    aria-label="Select treatment mix ingredients"
+                    aria-label={copy('Select treatment mix ingredients')}
                     aria-haspopup="menu"
                     aria-expanded={isIngredientMenuOpen}
                     onClick={() => setIngredientMenuOpen((current) => !current)}
-                  ><Plus size={16} /> Select ingredients</button>
+                  ><Plus size={16} /> {copy('Select ingredients')}</button>
                   {isIngredientMenuOpen && (
-                    <div className={styles.ingredientMenu} role="menu" aria-label="Additive inventory">
+                    <div className={styles.ingredientMenu} role="menu" aria-label={copy('Additive inventory')}>
                       {additives.filter((item) => (item.totalStock || 0) > 0).length === 0 ? (
-                        <p>No stocked additives are available. Add additive stock from Feeds &amp; Additives first.</p>
+                        <p>{copy('No stocked additives are available. Add additive stock from Feeds & Additives first.')}</p>
                       ) : additives.filter((item) => (item.totalStock || 0) > 0).map((item) => {
                         const isSelected = selectedIngredientIds.includes(item.id);
                         return (
@@ -229,7 +231,7 @@ export default function TreatmentMixesPage() {
                             aria-checked={isSelected}
                             onClick={() => toggleIngredient(item.id)}
                           >
-                            <span><strong>{item.itemName}</strong><small>{item.totalStock || 0} {item.unit || 'kg'} available</small></span>
+                            <span><strong>{item.itemName}</strong><small>{item.totalStock || 0} {item.unit || 'kg'} {copy('available')}</small></span>
                             {isSelected && <Check size={17} aria-hidden="true" />}
                           </button>
                         );
@@ -238,29 +240,29 @@ export default function TreatmentMixesPage() {
                   )}
                 </div>
                 {selectedAdditives.length === 0 ? (
-                  <p className={styles.selectionHint}>No ingredients selected yet.</p>
+                  <p className={styles.selectionHint}>{copy('No ingredients selected yet.')}</p>
                 ) : selectedAdditives.map((item) => <div key={item.id} className={styles.ingredientRow}>
-                  <div><strong>{item.itemName}</strong><small>{item.totalStock || 0} {item.unit || 'kg'} available</small></div>
-                  <input aria-label={`${item.itemName} quantity`} style={inputStyle} type="number" min="0" max={item.totalStock || undefined} step="any" value={quantities[item.id] || ''} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="0" />
+                  <div><strong>{item.itemName}</strong><small>{item.totalStock || 0} {item.unit || 'kg'} {copy('available')}</small></div>
+                  <input aria-label={`${item.itemName} ${copy('quantity')}`} style={inputStyle} type="number" min="0" max={item.totalStock || undefined} step="any" value={quantities[item.id] || ''} onChange={(event) => setQuantities((current) => ({ ...current, [item.id]: event.target.value }))} placeholder="0" />
                   <span>{item.unit || 'kg'}</span>
-                  <button type="button" aria-label={`Remove ${item.itemName}`} onClick={() => toggleIngredient(item.id)}><X size={16} /></button>
+                  <button type="button" aria-label={`${copy('Remove')} ${item.itemName}`} onClick={() => toggleIngredient(item.id)}><X size={16} /></button>
                 </div>)}
               </section>
             </> : useMix ? <>
-              <div style={{ ...labelStyle, display: 'block' }}>Pond</div>
+              <div style={{ ...labelStyle, display: 'block' }}>{copy('Pond')}</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{activePonds.map((pond) => <button key={pond.id} className={`dashboard-action ${pond.id === pondId ? 'dashboard-action-primary' : 'dashboard-action-secondary'}`} onClick={() => setPondId(pond.id)}>{pond.pondName} · {pond.pondArea} m²</button>)}</div>
-              <label style={labelStyle}>Treatment concentration (PPM)<input style={inputStyle} type="number" min="0" step="any" value={ppm} onChange={(event) => setPpm(event.target.value)} /></label>
-              {dose && <div style={{ marginTop: 14, padding: 16, borderRadius: 14, background: 'var(--primary-dim)' }}><strong>Dose: {dose.requiredMixLiters} L</strong><div style={{ marginTop: 5 }}>{ppm} PPM × {selectedPond?.pondArea} m² ÷ 1,000</div>{useMix && dose.requiredMixLiters > useMix.totalStock && <div style={{ marginTop: 6, color: '#c0392b', fontWeight: 600 }}>Only {useMix.totalStock} L is available.</div>}</div>}
+              <label style={labelStyle}>{copy('Treatment concentration (PPM)')}<input style={inputStyle} type="number" min="0" step="any" value={ppm} onChange={(event) => setPpm(event.target.value)} /></label>
+              {dose && <div style={{ marginTop: 14, padding: 16, borderRadius: 14, background: 'var(--primary-dim)' }}><strong>{copy('Dose')}: {dose.requiredMixLiters} L</strong><div style={{ marginTop: 5 }}>{ppm} PPM × {selectedPond?.pondArea} m² ÷ 1,000</div>{useMix && dose.requiredMixLiters > useMix.totalStock && <div style={{ marginTop: 6, color: '#c0392b', fontWeight: 600 }}>{copy('Only {amount} L is available.', { amount: useMix.totalStock })}</div>}</div>}
             </> : <div className={styles.batchSummary}>
-              <strong>Recipe for {batchMix?.treatmentMixRecipe?.yieldLiters || 0} L</strong>
+              <strong>{copy('Recipe for')} {batchMix?.treatmentMixRecipe?.yieldLiters || 0} L</strong>
               {(batchMix?.treatmentMixRecipe?.components || []).map((component) => <div key={component.additiveId}><span>{component.additiveName}</span><strong>{component.quantity} {component.unit}</strong></div>)}
             </div>}
 
-            {!batchMix && <label style={labelStyle}>Notes (optional)<textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>}
+            {!batchMix && <label style={labelStyle}>{copy('Notes (optional)')}<textarea style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>}
             </div>
             <div className={`responsive-modal-footer ${styles.modalFooter}`}>
-              <button className="dashboard-action dashboard-action-secondary" onClick={reset}>Cancel</button>
-              <button className="dashboard-action dashboard-action-primary" disabled={saving} onClick={showCreate ? saveMix : useMix ? recordUse : confirmBatch}>{saving ? <Loader2 className="animate-spin" size={18} /> : showCreate ? 'Save & Make First Batch' : useMix ? 'Record Treatment' : 'Make Batch'}</button>
+              <button className="dashboard-action dashboard-action-secondary" onClick={reset}>{copy('Cancel')}</button>
+              <button className="dashboard-action dashboard-action-primary" disabled={saving} onClick={showCreate ? saveMix : useMix ? recordUse : confirmBatch}>{saving ? <Loader2 className="animate-spin" size={18} /> : showCreate ? copy('Save & Make First Batch') : useMix ? copy('Record Treatment') : copy('Make Batch')}</button>
             </div>
           </div>
         </div>

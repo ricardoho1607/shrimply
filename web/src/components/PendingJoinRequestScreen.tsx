@@ -6,6 +6,7 @@ import { collection, doc, getDoc, onSnapshot, query, where } from 'firebase/fire
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import OnboardingProgress from '@/components/OnboardingProgress';
 
 type PendingJoinRequest = {
@@ -100,6 +101,7 @@ export function usePendingJoinRequest(userId?: string) {
 }
 
 export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequest }) {
+  const copy = useDashboardCopy();
   const { signOut } = useAuth();
   const { t } = useLanguage();
   const [signingOut, setSigningOut] = useState(false);
@@ -152,10 +154,10 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
         </div>
 
         <h1 style={{ fontSize: '32px', fontWeight: 600, marginBottom: '12px', color: 'var(--text-primary)' }}>
-          Waiting for Approval
+          {copy('Waiting for Approval')}
         </h1>
         <p style={{ fontSize: '16px', color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: '24px' }}>
-          Your request to join {request.companyName} as {request.requestedRole} is pending. You will enter the dashboard automatically after the company owner approves it.
+          {copy('Your request to join')} {request.companyName} {copy('as')} {request.requestedRole} {copy('is pending. You will enter the dashboard automatically after the company owner approves it.')}
         </p>
 
         <div style={{
@@ -190,7 +192,7 @@ export function PendingJoinRequestScreen({ request }: { request: PendingJoinRequ
           }}
         >
           {signingOut ? <Loader2 className="animate-spin" size={16} /> : <LogOut size={16} />}
-          Sign Out
+          {copy('Sign Out')}
         </button>
         </section>
       </div>

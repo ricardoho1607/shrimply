@@ -21,6 +21,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCompanyNotifications } from '@/hooks/useDashboardData';
 import { getEffectiveNotificationPriority } from '../../../../../shared/orsonNotification';
 import styles from './NotificationsPage.module.css';
@@ -51,6 +52,7 @@ const isFirestoreTimestamp = (value: Notification['timestamp']): value is { toDa
 };
 
 export default function NotificationsPage() {
+  const copy = useDashboardCopy();
   const { t } = useLanguage();
   const {
     data: notifications,
@@ -204,13 +206,13 @@ export default function NotificationsPage() {
       <div className={`glass-card dashboard-summary-panel ${styles.metricGrid}`}>
         <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'all'} aria-pressed={filter === 'all'} onClick={() => setNotificationFilter('all')}>
           <div className="dashboard-summary-content">
-            <div className="dashboard-summary-label">Total alerts</div>
+            <div className="dashboard-summary-label">{copy('Total alerts')}</div>
             <div className="dashboard-summary-value">{notifications.length}</div>
           </div>
         </button>
         <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'unread'} aria-pressed={filter === 'unread'} onClick={() => setNotificationFilter('unread')}>
           <div className="dashboard-summary-content">
-            <div className="dashboard-summary-label">Unread</div>
+            <div className="dashboard-summary-label">{copy('Unread')}</div>
             <div className="dashboard-summary-value">{unreadCount}</div>
           </div>
         </button>
@@ -222,7 +224,7 @@ export default function NotificationsPage() {
         </button>
         <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'high'} aria-pressed={filter === 'high'} onClick={() => setNotificationFilter('high')}>
           <div className="dashboard-summary-content">
-            <div className="dashboard-summary-label">High priority</div>
+            <div className="dashboard-summary-label">{copy('High priority')}</div>
             <div className={`dashboard-summary-value ${styles.highPriorityValue}`}>{highPriorityCount}</div>
           </div>
         </button>
@@ -311,12 +313,12 @@ export default function NotificationsPage() {
               transition: 'all 0.2s'
             }}
           >
-            High priority
+            {copy('High priority')}
           </button>
         </div>
         <div className={styles.filterLabel} style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-faint)', fontSize: '13px', fontWeight: 600 }}>
           <Filter size={16} />
-          <span>Filter</span>
+          <span>{copy('Filter')}</span>
         </div>
       </div>
 
@@ -418,7 +420,7 @@ export default function NotificationsPage() {
                       // Navigation would go here
                     }}
                   >
-                    View Details
+                    {copy('View Details')}
                   </button>
                 )}
               </div>
@@ -427,7 +429,7 @@ export default function NotificationsPage() {
                 {!notification.read && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); markAsRead(notification.id); }}
-                    title="Mark as read"
+                    title={copy('Mark as read')}
                     style={{ 
                       background: 'none', 
                       border: 'none', 
@@ -447,7 +449,7 @@ export default function NotificationsPage() {
                 )}
                 <button 
                   onClick={(e) => { e.stopPropagation(); deleteNotification(notification.id); }}
-                  title="Delete"
+                  title={copy('Delete')}
                   style={{ 
                     background: 'none', 
                     border: 'none', 

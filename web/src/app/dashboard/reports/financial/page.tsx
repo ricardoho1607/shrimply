@@ -34,6 +34,7 @@ import {
   normalizeFarmDateKey,
 } from '../../../../../../shared/farmDate';
 import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 interface Expense {
   id: string;
@@ -85,6 +86,7 @@ const addBreakdown = (target: Record<string, number>, category: string, amount: 
 };
 
 export default function FinancialReportsPage() {
+  const copy = useDashboardCopy();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { currentLanguage, t } = useLanguage();
   const { user, company, loading: authLoading } = useAuth();
@@ -145,11 +147,11 @@ export default function FinancialReportsPage() {
   const applyCustomRange = (event: React.FormEvent) => {
     event.preventDefault();
     if (!customRangeDraft.startDateKey || !customRangeDraft.endDateKey) {
-      setCustomRangeError('Select both a start date and an end date.');
+      setCustomRangeError(copy('Select both a start date and an end date.'));
       return;
     }
     if (customRangeDraft.startDateKey > customRangeDraft.endDateKey) {
-      setCustomRangeError('The start date must be before the end date.');
+      setCustomRangeError(copy('The start date must be before the end date.'));
       return;
     }
     setCustomDateRange(customRangeDraft);
@@ -389,7 +391,7 @@ export default function FinancialReportsPage() {
   if (loading) {
     return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
   }
-  if (!canViewFinance) return <div style={{ textAlign: 'center', padding: '100px' }}>You do not have permission to view financial reports.</div>;
+  if (!canViewFinance) return <div style={{ textAlign: 'center', padding: '100px' }}>{copy('You do not have permission to view financial reports.')}</div>;
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page">
@@ -404,7 +406,7 @@ export default function FinancialReportsPage() {
                 <select id="financial-report-type" value={selectedReport} onChange={(event) => setSelectedReport(event.target.value)}>
                   {reportTypes.map((type) => <option key={type.id} value={type.id}>{type.name}</option>)}
                 </select>
-                <span>{selectedReportMeta.desc}</span>
+                <span>{copy(selectedReportMeta.desc)}</span>
               </div>
             </div>
           </div>
@@ -412,7 +414,7 @@ export default function FinancialReportsPage() {
           <div>
             <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>{t.financeCycle.selectPeriod}</h2>
             <div className="dashboard-segmented-tabs financial-report-filter-tabs" style={{ width: '100%' }}>
-              {PERIOD_OPTIONS.map((period) => <button key={period} type="button" onClick={() => selectPeriod(period)} className={`dashboard-segmented-tab ${selectedPeriod === period ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: 0 }}>{period}</button>)}
+              {PERIOD_OPTIONS.map((period) => <button key={period} type="button" onClick={() => selectPeriod(period)} className={`dashboard-segmented-tab ${selectedPeriod === period ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: 0 }}>{copy(period)}</button>)}
             </div>
             <div className="dashboard-segmented-tabs financial-report-filter-tabs financial-cycle-tabs" style={{ width: '100%', marginTop: '8px', overflowX: 'auto' }}>
               {[...activeCycles.map((cycle) => ({ key: cycle.id, label: cycle.cycleName })), { key: 'all', label: t.financeCycle.allHistory }].map((scope) => <button key={scope.key} type="button" onClick={() => setCycleScope(scope.key)} className={`dashboard-segmented-tab ${cycleScope === scope.key ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: '110px' }}>{scope.label}</button>)}
@@ -423,8 +425,8 @@ export default function FinancialReportsPage() {
             <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
               <div className="financial-inventory-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '14px' }}>
-                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Opening Inventory ({currencyConfig.symbol})<input type="number" value={openingInventory} onChange={(event) => setOpeningInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
-                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Closing Inventory ({currencyConfig.symbol})<input type="number" value={closingInventory} onChange={(event) => setClosingInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
+                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Opening Inventory')} ({currencyConfig.symbol})<input type="number" value={openingInventory} onChange={(event) => setOpeningInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
+                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Closing Inventory')} ({currencyConfig.symbol})<input type="number" value={closingInventory} onChange={(event) => setClosingInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
               </div>
             </div>
           ) : null}
@@ -432,7 +434,7 @@ export default function FinancialReportsPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="glass-card" style={{ background: '#FFF', padding: '22px', position: 'sticky', top: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 600 }}>Report Preview</h2></div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 600 }}>{copy('Report Preview')}</h2></div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {selectedReport === 'transaction-history' ? (
                 <>
@@ -443,15 +445,15 @@ export default function FinancialReportsPage() {
                 </>
               ) : (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Revenue</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>Expenses</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{previewProfit >= 0 ? 'Net Profit' : 'Net Loss'}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Revenue')}</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Expenses')}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{copy(previewProfit >= 0 ? 'Net Profit' : 'Net Loss')}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
                 </>
               )}
             </div>
             <button className="btn-primary" type="button" onClick={handleExport} disabled={exportLoading || !canExportReports} style={{ width: '100%', marginTop: '24px', padding: '14px', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
               {exportLoading ? <Loader2 className="animate-spin" size={20} /> : <Download size={20} />}
-              <span style={{ fontWeight: 600 }}>{exportLoading ? 'Generating PDF...' : 'Download Statement'}</span>
+              <span style={{ fontWeight: 600 }}>{copy(exportLoading ? 'Generating PDF...' : 'Download Statement')}</span>
             </button>
           </div>
         </div>
@@ -462,29 +464,29 @@ export default function FinancialReportsPage() {
           <div className="glass-card responsive-modal animate-fade-up custom-range-modal" role="dialog" aria-modal="true" aria-labelledby="custom-date-range-title" style={{ width: '100%', maxWidth: '440px', overflow: 'hidden', background: '#fff', boxShadow: '0 20px 50px rgba(15, 76, 117, 0.2)' }}>
             <div className="responsive-modal-header custom-range-header">
               <div>
-                <h2 id="custom-date-range-title">Custom date range</h2>
-                <p>Choose the transactions to include in this report.</p>
+                <h2 id="custom-date-range-title">{copy('Custom date range')}</h2>
+                <p>{copy('Choose the transactions to include in this report.')}</p>
               </div>
-              <button type="button" className="custom-range-close" aria-label="Close custom date range" onClick={() => setCustomRangeOpen(false)}><X size={20} /></button>
+              <button type="button" className="custom-range-close" aria-label={copy('Close custom date range')} onClick={() => setCustomRangeOpen(false)}><X size={20} /></button>
             </div>
 
             <form className="responsive-modal-body custom-range-form" onSubmit={applyCustomRange}>
               <div className="custom-range-body">
                 <div className="custom-range-fields">
                   <label className="custom-range-field">
-                    <span>Start date</span>
+                    <span>{copy('Start date')}</span>
                     <input type="date" required value={customRangeDraft.startDateKey} onChange={(event) => setCustomRangeDraft((range) => ({ ...range, startDateKey: event.target.value }))} />
                   </label>
                   <label className="custom-range-field">
-                    <span>End date</span>
+                    <span>{copy('End date')}</span>
                     <input type="date" required value={customRangeDraft.endDateKey} onChange={(event) => setCustomRangeDraft((range) => ({ ...range, endDateKey: event.target.value }))} />
                   </label>
                 </div>
                 {customRangeError ? <p role="alert" className="custom-range-error">{customRangeError}</p> : null}
               </div>
               <div className="responsive-modal-footer custom-range-footer">
-                <button type="button" className="custom-range-cancel" onClick={() => setCustomRangeOpen(false)}>Cancel</button>
-                <button type="submit" className="btn-primary custom-range-apply">Apply date range</button>
+                <button type="button" className="custom-range-cancel" onClick={() => setCustomRangeOpen(false)}>{copy('Cancel')}</button>
+                <button type="submit" className="btn-primary custom-range-apply">{copy('Apply date range')}</button>
               </div>
             </form>
           </div>

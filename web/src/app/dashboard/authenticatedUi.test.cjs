@@ -71,7 +71,7 @@ test('all enabled dashboard buttons receive a semantic hover highlight', () => {
 
 test('tablet navigation exposes an internal sidebar toggle', () => {
   assert.match(layout, /data-sidebar-toggle/);
-  assert.match(layout, /aria-label="Close dashboard navigation"/);
+  assert.match(layout, /aria-label=\{copy\('Close dashboard navigation'\)\}/);
   assert.match(layout, /onClick={toggleSidebar}/);
   assert.match(layout, /data-sidebar-toggle[\s\S]*?<PanelLeft size=\{18\} aria-hidden="true" \/>/);
   assert.doesNotMatch(layout, /PanelLeftClose/);

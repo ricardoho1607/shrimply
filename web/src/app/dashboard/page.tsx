@@ -26,6 +26,7 @@ import Link from 'next/link';
 import { doc, deleteDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -218,6 +219,8 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
 }
 
 function PondCard({ pond, calculateMetrics, timeZone }: any) {
+  const copy = useDashboardCopy();
+  const { t } = useLanguage();
   const m = calculateMetrics(pond, timeZone);
   const pondStatus = getEnterprisePondStatus(
     pond as Parameters<typeof getEnterprisePondStatus>[0],
@@ -256,7 +259,7 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
                   background: isHarvested ? '#64748b' : '#16a34a' 
                 }} />
                 <span style={{ overflow: 'hidden', fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 600, textOverflow: 'ellipsis', textTransform: 'uppercase', whiteSpace: 'nowrap', letterSpacing: '0.04em' }}>
-                  {isHarvested ? 'Harvested' : `Active • DOC ${m.doc}`}
+                  {isHarvested ? copy('Harvested') : `${copy('Active')} • DOC ${m.doc}`}
                 </span>
               </div>
             </div>
@@ -264,7 +267,9 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: '0 0 auto' }}>
             {!isHarvested && pondStatus.risk !== 'stable' && (
               <span
-                title={pondStatus.warnings[0]?.label}
+                title={pondStatus.warnings[0]?.translationCode
+                  ? t.enterprise.warningMessages[pondStatus.warnings[0].translationCode]
+                  : copy(pondStatus.warnings[0]?.label || '')}
                 style={{
                   padding: '4px 7px',
                   borderRadius: '999px',
@@ -276,7 +281,7 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
                   whiteSpace: 'nowrap',
                 }}
               >
-                {pondStatus.risk === 'high-risk' ? 'HIGH RISK' : 'WARNING'}
+                {pondStatus.risk === 'high-risk' ? copy('HIGH RISK') : copy('WARNING')}
               </span>
             )}
             <div style={{ padding: '5px', borderRadius: '8px', background: 'var(--bg-mid)', color: 'var(--text-faint)' }}>
@@ -287,19 +292,19 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 14px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Avg Weight</span>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>{copy('Avg Weight')}</span>
             <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
               {m.mbw.toFixed(1)}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>g</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Survival</span>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>{copy('Survival')}</span>
             <span style={{ fontSize: '0.88rem', color: m.sr > 85 ? '#16a34a' : '#ef4444', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
               {m.sr.toFixed(1)}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>%</span>
             </span>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>Biomass</span>
+            <span style={{ fontSize: '0.58rem', textTransform: 'uppercase', color: 'var(--text-faint)', letterSpacing: '0.08em', fontWeight: 600 }}>{copy('Biomass')}</span>
             <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)', fontWeight: 600, fontFamily: "var(--jakarta)" }}>
               {m.biomass.toLocaleString(undefined, {maximumFractionDigits:0})}<span style={{ fontSize: '0.7rem', fontWeight: 500, marginLeft: '2px' }}>kg</span>
             </span>
@@ -326,8 +331,8 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
                 {wqPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: wqPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Water Quality</span>
-                {wqPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>POSTED</span>}
+                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: wqPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{copy('Water Quality')}</span>
+                {wqPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>{copy('POSTED')}</span>}
               </div>
             </div>
             
@@ -343,8 +348,8 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
                 {feedPosted ? <Check size={10} strokeWidth={4} /> : <div style={{ width: '4px', height: '4px', borderRadius: '50%', background: 'currentColor' }} />}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>Feed status</span>
-                {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>{todayFeedResponse ? todayFeedResponse.toUpperCase() : 'COMPLETED'}</span>}
+                <span style={{ fontSize: '0.58rem', fontWeight: 600, color: feedPosted ? 'var(--text-primary)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.02em' }}>{copy('Feed status')}</span>
+                {feedPosted && <span style={{ fontSize: '0.52rem', color: '#16a34a', fontWeight: 600 }}>{todayFeedResponse ? copy(todayFeedResponse).toUpperCase() : copy('COMPLETED')}</span>}
               </div>
             </div>
           </div>
@@ -357,6 +362,7 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
 /* --- Buyer Components ----------------------------------------- */
 
 function BuyerDashboard({ t, user }: any) {
+  const copy = useDashboardCopy();
   const { formatCurrency } = useCurrency();
   const { data: listings } = useMarketplaceListings<any>();
   const { data: monitoredCompanies, loading } = useMonitoredCompanies<any>();
@@ -432,7 +438,7 @@ function BuyerDashboard({ t, user }: any) {
 
       <div className="animate-fade-up" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
         <div>
-          <div className="section-label" style={{ marginBottom: '16px' }}>Market Overview</div>
+          <div className="section-label" style={{ marginBottom: '16px' }}>{copy('Market Overview')}</div>
           <h1 style={{ fontSize: 'clamp(2.5rem, 4vw, 3.5rem)', letterSpacing: '-0.05em', lineHeight: 1 }}>
             {t.buyer.dashboardTitle.split(' ')[0]},<br />
             <span className="text-gradient">{user?.name?.split(' ')[0] || 'Buyer'}</span>
@@ -551,13 +557,13 @@ function BuyerDashboard({ t, user }: any) {
                   <span style={{ fontSize: '1rem', fontWeight: 600, color: 'var(--text-primary)', letterSpacing: '0' }}>{item.label}</span>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontSize: '1.15rem', fontWeight: 600, color: 'var(--primary)', fontFamily: "var(--jakarta)" }}>{formatCurrency(item.price)}</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Market Avg</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('Market Avg')}</div>
                   </div>
                 </div>
               ))}
               {Object.values(marketPrices).every(v => v === 0) && (
                 <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-faint)', fontSize: '0.9rem' }}>
-                  No active listings for price index
+                  {copy('No active listings for price index')}
                 </div>
               )}
             </div>
@@ -571,6 +577,7 @@ function BuyerDashboard({ t, user }: any) {
 /* --- Main Page ------------------------------------------------ */
 
 export default function DashboardPage() {
+  const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { user, company, loading: authLoading, companyLoading } = useAuth();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -639,7 +646,7 @@ export default function DashboardPage() {
 
   const farmHealthItems = [
     {
-      label: 'pH Level',
+      label: copy('pH Level'),
       value: (() => {
         const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).ph);
         return average === null ? '--' : average.toFixed(1);
@@ -647,7 +654,7 @@ export default function DashboardPage() {
       icon: Activity,
     },
     {
-      label: 'Transparency',
+      label: copy('Transparency'),
       value: (() => {
         const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).transparency);
         return average === null ? '--' : `${average.toFixed(0)}cm`;
@@ -663,7 +670,7 @@ export default function DashboardPage() {
       icon: Wind,
     },
     {
-      label: 'Daily Feed',
+      label: copy('Daily Feed'),
       value: (() => {
         const average = averageActivePondMetric((pond) => calculateMetrics(pond, company?.timeZone).dailyFeed);
         return average === null ? '--' : `${average.toFixed(0)}kg`;
@@ -706,7 +713,7 @@ export default function DashboardPage() {
             trendUp: totalMetrics.popTrend >= 0,
           },
           {
-            label: 'Active Ponds',
+            label: copy('Active Ponds'),
             value: totalMetrics.activeCount.toString(),
             trend: null,
             trendUp: true,
@@ -735,8 +742,8 @@ export default function DashboardPage() {
 
       <section className="glass-card animate-fade-up animate-delay-2 dashboard-health-panel" aria-labelledby="farm-health-title">
         <div className="dashboard-health-heading">
-          <h3 id="farm-health-title">Farm Health</h3>
-          <span>Current averages</span>
+          <h3 id="farm-health-title">{copy('Farm Health')}</h3>
+          <span>{copy('Current averages')}</span>
         </div>
         <div className="dashboard-health-grid">
           {farmHealthItems.map(({ label, value, icon: Icon }) => (
@@ -759,11 +766,11 @@ export default function DashboardPage() {
         {/* Left Column: Ponds List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
           <div className="dashboard-section-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, letterSpacing: '-0.02em' }}>Ponds</h3>
+            <h3 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, letterSpacing: '-0.02em' }}>{copy('Ponds')}</h3>
             <div className="dashboard-view-toggle" style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
               <button
                   onClick={() => setViewMode('grid')}
-                  aria-label="Grid view"
+                  aria-label={copy('Grid view')}
                   aria-pressed={viewMode === 'grid'}
                   style={{
                     width: '36px', height: '36px', padding: '0', borderRadius: '8px', border: 'none',
@@ -776,7 +783,7 @@ export default function DashboardPage() {
                 </button>
               <button
                   onClick={() => setViewMode('list')}
-                  aria-label="List view"
+                  aria-label={copy('List view')}
                   aria-pressed={viewMode === 'list'}
                   style={{
                     width: '36px', height: '36px', padding: '0', borderRadius: '8px', border: 'none',
@@ -799,14 +806,14 @@ export default function DashboardPage() {
                 background: 'rgba(241, 245, 249, 0.5)',
                 borderBottom: '1px solid var(--border)'
               }}>
-                {['POND NAME', 'DOC', 'ADG', 'BIOMASS', 'SR (%)', ''].map((label) => (
+                {[copy('POND NAME'), 'DOC', 'ADG', copy('Biomass').toUpperCase(), 'SR (%)', ''].map((label) => (
                   <span key={label} style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-faint)', letterSpacing: '0.05em' }}>{label}</span>
                 ))}
               </div>
             )}
             
             {pondsLoading ? (
-              <div className="dashboard-pond-grid" aria-busy="true" aria-label="Loading ponds">
+              <div className="dashboard-pond-grid" aria-busy="true" aria-label={copy('Loading ponds')}>
                 {Array.from({ length: 3 }).map((_, index) => (
                   <div
                     className="glass-card dashboard-summary-skeleton"
@@ -822,13 +829,13 @@ export default function DashboardPage() {
                   <div className={styles.emptyIcon} aria-hidden="true">
                     <Waves size={22} />
                   </div>
-                  <h2 className={styles.emptyTitle}>Add your first pond</h2>
+                  <h2 className={styles.emptyTitle}>{copy('Add your first pond')}</h2>
                   <p className={styles.emptyDetail}>
-                    Create a pond to begin tracking stocking, growth, water quality, feed, and harvest records.
+                    {copy('Create a pond to begin tracking stocking, growth, water quality, feed, and harvest records.')}
                   </p>
                   <Link className={styles.emptyAction} href="/dashboard/ponds">
                     <Plus size={16} aria-hidden="true" />
-                    Set up a pond
+                    {copy('Set up a pond')}
                   </Link>
                 </div>
               </div>

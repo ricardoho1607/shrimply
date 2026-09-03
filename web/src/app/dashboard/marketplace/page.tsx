@@ -29,6 +29,7 @@ import { collection, query, where, onSnapshot, doc, addDoc, serverTimestamp, inc
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { getCompanyCountry, getDefaultMarketplaceExpiry, validateMarketplaceListing } from '../../../../../shared/marketplaceParity';
@@ -84,6 +85,7 @@ const emptyListingForm: ListingFormState = {
 };
 
 export default function MarketplacePage() {
+  const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user, company } = useAuth();
@@ -176,7 +178,7 @@ export default function MarketplacePage() {
       const firebaseError = error as { code?: string; message?: string };
       console.error("Error deleting listing:", error);
       if (firebaseError.code === 'permission-denied') {
-        alert("Permission Denied: You do not have authority to delete this listing. Please check your Firestore rules.");
+        alert(copy('Permission Denied: You do not have authority to delete this listing. Please check your Firestore rules.'));
       } else {
         alert("Failed to delete listing: " + (firebaseError.message || "Unknown error"));
       }
@@ -221,7 +223,7 @@ export default function MarketplacePage() {
   const handlePostListing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !canManageMarketplace) {
-      alert("You must be logged in to post.");
+      alert(copy('You must be logged in to post.'));
       return;
     }
     
@@ -241,7 +243,7 @@ export default function MarketplacePage() {
 
       const topDays = Number(newListing.topDays);
       if (newListing.paymentMethod === 'top' && (!Number.isFinite(topDays) || topDays <= 0)) {
-        alert("Please enter valid TOP days.");
+        alert(copy('Please enter valid TOP days.'));
         return;
       }
 
@@ -287,7 +289,7 @@ export default function MarketplacePage() {
       setNewListing(emptyListingForm);
     } catch (error) {
       console.error("Error saving listing:", error);
-      alert("Failed to save listing. Make sure all price fields are valid numbers.");
+      alert(copy('Failed to save listing. Make sure all price fields are valid numbers.'));
     } finally {
       setIsSubmitting(false);
     }
@@ -331,7 +333,7 @@ export default function MarketplacePage() {
         <div className="glass-card" style={{ padding: '24px', background: '#FFF' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>Visible Results</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('Visible Results')}</div>
               <div style={{ fontSize: '28px', fontWeight: 600, color: 'var(--text-primary)' }}>{filteredListings.length}</div>
             </div>
             <TrendingUp size={24} color="#059669" />
@@ -340,9 +342,9 @@ export default function MarketplacePage() {
         <div className="glass-card" style={{ padding: '24px', background: '#FFF' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>My Offers</div>
+              <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('My Offers')}</div>
               <div style={{ fontSize: '28px', fontWeight: 600 }}>{myListingsCount}</div>
-              <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{totalViews} total views in current feed</div>
+              <div style={{ fontSize: '12px', color: 'var(--text-faint)', marginTop: '4px' }}>{totalViews} {copy('total views in current feed')}</div>
             </div>
             <CheckCircle2 size={24} color="var(--primary)" />
           </div>
@@ -359,7 +361,7 @@ export default function MarketplacePage() {
             <div style={{ flex: 1, position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
               <input 
-                placeholder="Search by company or city..."
+                placeholder={copy('Search by company or city...')}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 style={{ width: '100%', padding: '14px 14px 14px 48px', borderRadius: '14px', border: '1px solid var(--border)', background: '#FFF', fontSize: '14px', outline: 'none' }}
@@ -384,8 +386,8 @@ export default function MarketplacePage() {
                 <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: 'var(--bg-mid)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 18px' }}>
                   <Store size={32} />
                 </div>
-                <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>No matching listings</h3>
-                <p style={{ color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto' }}>Try a different city or switch back to all listings to broaden the feed.</p>
+                <h3 style={{ fontSize: '22px', fontWeight: 600, marginBottom: '8px', color: 'var(--text-primary)' }}>{copy('No matching listings')}</h3>
+                <p style={{ color: 'var(--text-muted)', maxWidth: '420px', margin: '0 auto' }}>{copy('Try a different city or switch back to all listings to broaden the feed.')}</p>
               </div>
             ) : filteredListings.map((listing) => (
               <div 
@@ -538,11 +540,11 @@ export default function MarketplacePage() {
                   <input required value={newListing.city} onChange={e => setNewListing({...newListing, city: e.target.value})} placeholder={t.CreateBuyerListingScreen.cityExample} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Country</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Country')}</label>
                   <input required value={newListing.country} onChange={e => setNewListing({...newListing, country: e.target.value})} placeholder="Australia" style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Expiry date</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Expiry date')}</label>
                   <input required type="date" min={listingDateLimits.min} max={listingDateLimits.max} value={newListing.expiryDate} onChange={e => setNewListing({...newListing, expiryDate: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
@@ -550,11 +552,11 @@ export default function MarketplacePage() {
                   <input required value={newListing.deliveryLocation} onChange={e => setNewListing({...newListing, deliveryLocation: e.target.value})} placeholder={t.CreateBuyerListingScreen.deliveryPlaceholder} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Contact phone</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Contact phone')}</label>
                   <input required type="tel" value={newListing.contactPhone} onChange={e => setNewListing({...newListing, contactPhone: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>Contact email</label>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Contact email')}</label>
                   <input required type="email" value={newListing.contactEmail} onChange={e => setNewListing({...newListing, contactEmail: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
                 </div>
               </div>
@@ -584,7 +586,7 @@ export default function MarketplacePage() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                   {[30, 40, 50, 60, 70, 80, 90, 100].map(size => (
                     <div key={size} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                      <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)' }}>Size {size}</label>
+                      <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)' }}>{copy('Size')} {size}</label>
                       <input 
                         type="number" 
                         step="0.01"
@@ -633,7 +635,7 @@ export default function MarketplacePage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: '22px', fontWeight: 600 }}>{selectedListing.companyName}</h2>
-                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Buyer Requirement • ID: {selectedListing.id.slice(-6)}</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>{copy('Buyer Requirement • ID:')} {selectedListing.id.slice(-6)}</p>
                 </div>
               </div>
               <button onClick={() => setSelectedListing(null)} style={{ background: 'var(--bg-mid)', border: 'none', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-muted)' }}>
@@ -649,21 +651,21 @@ export default function MarketplacePage() {
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <MapPin size={20} color="var(--primary)" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Delivery To</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{copy('Delivery To')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600 }}>{selectedListing.city}, {selectedListing.country}</div>
                   </div>
                 </div>
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <CreditCard size={20} color="#059669" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Payment</div>
-                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{selectedListing.paymentMethod === 'cash' ? 'Cash on Delivery' : `${selectedListing.topDays} Days TOP`}</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{copy('Payment')}</div>
+                    <div style={{ fontSize: '14px', fontWeight: 600 }}>{selectedListing.paymentMethod === 'cash' ? copy('Cash on Delivery') : `${selectedListing.topDays} ${copy('Days TOP')}`}</div>
                   </div>
                 </div>
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.05)', display: 'flex', gap: '12px', alignItems: 'center', gridColumn: 'span 2' }}>
                   <Clock size={20} color="#EF4444" />
                   <div>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Expiry Date</div>
+                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase' }}>{copy('Expiry Date')}</div>
                     <div style={{ fontSize: '14px', fontWeight: 600 }}>{new Date(selectedListing.expiryDate).toLocaleDateString()}</div>
                   </div>
                 </div>
@@ -678,8 +680,8 @@ export default function MarketplacePage() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ textAlign: 'left', fontSize: '11px', color: 'var(--text-faint)', borderBottom: '1px solid var(--border)' }}>
-                        <th style={{ padding: '8px' }}>Size</th>
-                        <th style={{ padding: '8px', textAlign: 'right' }}>Price</th>
+                        <th style={{ padding: '8px' }}>{copy('Size')}</th>
+                        <th style={{ padding: '8px', textAlign: 'right' }}>{copy('Price')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -688,7 +690,7 @@ export default function MarketplacePage() {
                         if (!price) return null;
                         return (
                           <tr key={size} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600 }}>Size {size}</td>
+                            <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600 }}>{copy('Size')} {size}</td>
                             <td style={{ padding: '12px 8px', fontSize: '14px', fontWeight: 600, textAlign: 'right', color: 'var(--primary)' }}>{formatCurrency(price)}</td>
                           </tr>
                         );
@@ -701,7 +703,7 @@ export default function MarketplacePage() {
               {/* Additional Notes */}
               {selectedListing.additionalNotes && (
                 <div style={{ padding: '20px', borderRadius: '16px', background: '#fff9f2', border: '1px solid #fee2e2' }}>
-                  <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#d97706' }}>Special Instructions</h4>
+                  <h4 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '8px', color: '#d97706' }}>{copy('Special Instructions')}</h4>
                   <p style={{ fontSize: '13px', color: '#92400e', lineHeight: 1.6 }}>{selectedListing.additionalNotes}</p>
                 </div>
               )}
@@ -717,21 +719,21 @@ export default function MarketplacePage() {
                     className="btn-secondary" 
                     style={{ flex: 1, height: '48px', color: '#ef4444', borderColor: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                   >
-                    <Trash2 size={18} /> Delete
+                    <Trash2 size={18} /> {copy('Delete')}
                   </button>
                   <button 
                     onClick={() => handleEditListing(selectedListing)}
                     className="btn-primary" 
                     style={{ flex: 1, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                   >
-                    <Edit size={18} /> Edit Post
+                    <Edit size={18} /> {copy('Edit Post')}
                   </button>
                 </>
               ) : (
                 <>
-                  <button className="btn-secondary" style={{ flex: 1, height: '48px' }}>Save Listing</button>
+                  <button className="btn-secondary" style={{ flex: 1, height: '48px' }}>{copy('Save Listing')}</button>
                   <button className="btn-primary" style={{ flex: 2, height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-                    <MessageSquare size={18} /> Send Offer
+                    <MessageSquare size={18} /> {copy('Send Offer')}
                   </button>
                 </>
               )}

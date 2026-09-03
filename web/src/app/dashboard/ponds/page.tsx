@@ -22,6 +22,7 @@ import { useRouter } from 'next/navigation';
 import { collection, doc, addDoc, serverTimestamp, deleteDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyBlocks, useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -157,6 +158,7 @@ const removeUndefinedFields = (value: unknown): unknown => {
 };
 
 export default function PondsPage() {
+  const copy = useDashboardCopy();
   const router = useRouter();
   const { t } = useLanguage();
   const { company } = useAuth();
@@ -305,7 +307,7 @@ export default function PondsPage() {
       return null;
     }
 
-    const cycleName = `Cycle ${cycles.length + 1}`;
+    const cycleName = `${copy('Cycle')} ${cycles.length + 1}`;
     const docRef = await addDoc(collection(db, 'companies', companyId, 'cycles'), {
       cycleName,
       status: 'stocking',
@@ -324,7 +326,7 @@ export default function PondsPage() {
     if (!canManageFarmCycle) return;
     const nextName = cycleNameDraft.trim();
     if (!nextName) {
-      alert('Cycle name cannot be empty.');
+      alert(copy('Cycle name cannot be empty.'));
       return;
     }
 
@@ -859,7 +861,7 @@ export default function PondsPage() {
         className="dashboard-page ponds-page"
         style={{ maxWidth: '1200px', margin: '0 auto' }}
         aria-busy="true"
-        aria-label="Loading ponds"
+        aria-label={copy('Loading ponds')}
       >
         <div className="ponds-loading-state">
           <Loader2 className="animate-spin" size={30} color="var(--primary)" />
@@ -870,21 +872,21 @@ export default function PondsPage() {
 
   return (
     <div className="dashboard-page ponds-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <section className="glass-card animate-fade-up ponds-cycle-panel" aria-label="Current farm cycle">
+      <section className="glass-card animate-fade-up ponds-cycle-panel" aria-label={copy('Current farm cycle')}>
         <div className="ponds-cycle-primary">
           <div className="ponds-cycle-copy">
             <div className="ponds-cycle-label-row">
-              <span className="ponds-eyebrow">Current cycle</span>
+              <span className="ponds-eyebrow">{copy('Current cycle')}</span>
               <span className={`ponds-status-badge ${activeFarmCycle ? 'is-active' : ''}`}>
-                {activeFarmCycle?.status || 'waiting'}
+                {activeFarmCycle?.status || copy('waiting')}
               </span>
             </div>
-            <strong>{activeFarmCycle?.cycleName || `Cycle ${cycles.length + 1} not started`}</strong>
+            <strong>{activeFarmCycle?.cycleName || `${copy('Cycle')} ${cycles.length + 1} ${copy('not started')}`}</strong>
           </div>
         </div>
 
         <div className="ponds-cycle-meta">
-          <span><Calendar size={14} />{activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || 'No start date'}</span>
+          <span><Calendar size={14} />{activeFarmCycle?.stockingStartDate || activeFarmCycle?.plannedStartDate || copy('No start date')}</span>
         </div>
 
         {canManageFarmCycle && activeFarmCycle && (
@@ -893,14 +895,14 @@ export default function PondsPage() {
               <input
                 value={cycleNameDraft}
                 onChange={(event) => setCycleNameDraft(event.target.value)}
-                placeholder="Cycle name"
-                aria-label="Cycle name"
+                placeholder={copy('Cycle name')}
+                aria-label={copy('Cycle name')}
               />
-              <button type="button" onClick={handleRenameCycle} title="Save cycle name" aria-label="Save cycle name">
+              <button type="button" onClick={handleRenameCycle} title={copy('Save cycle name')} aria-label={copy('Save cycle name')}>
                 <Check size={15} />
               </button>
             </div>
-            <button type="button" onClick={handleCloseFarmCycle} title="End cycle" aria-label="End cycle" className="is-danger">
+            <button type="button" onClick={handleCloseFarmCycle} title={copy('End cycle')} aria-label={copy('End cycle')} className="is-danger">
               <Lock size={15} />
             </button>
           </div>
@@ -923,7 +925,7 @@ export default function PondsPage() {
         )}
       </section>
 
-      <section className="glass-card animate-fade-up animate-delay-1 ponds-toolbar" aria-label="Pond controls">
+      <section className="glass-card animate-fade-up animate-delay-1 ponds-toolbar" aria-label={copy('Pond controls')}>
         <div className="ponds-search-field">
           <Search size={17} aria-hidden="true" />
           <input
@@ -933,11 +935,11 @@ export default function PondsPage() {
           />
         </div>
 
-        <div className="ponds-filter-tabs" role="tablist" aria-label="Pond cycle status">
+        <div className="ponds-filter-tabs" role="tablist" aria-label={copy('Pond cycle status')}>
           {([
             ['active', t.ponds.active || 'Active', activePondCount],
             ['inactive', t.ponds.inactive || 'Inactive', inactivePondOptions.length],
-            ['ended', 'Ended', endedPondCount],
+            ['ended', copy('Ended'), endedPondCount],
           ] as const).map(([value, label, count]) => (
             <button
               key={value}
@@ -952,10 +954,10 @@ export default function PondsPage() {
           ))}
         </div>
 
-        <div className="dashboard-view-toggle ponds-view-toggle" aria-label="Pond view">
+        <div className="dashboard-view-toggle ponds-view-toggle" aria-label={copy('Pond view')}>
           <button
             type="button"
-            aria-label="Grid view"
+            aria-label={copy('Grid view')}
             aria-pressed={viewMode === 'grid'}
             onClick={() => setViewMode('grid')}
             className={viewMode === 'grid' ? 'is-active' : ''}
@@ -964,7 +966,7 @@ export default function PondsPage() {
           </button>
           <button
             type="button"
-            aria-label="List view"
+            aria-label={copy('List view')}
             aria-pressed={viewMode === 'list'}
             onClick={() => setViewMode('list')}
             className={viewMode === 'list' ? 'is-active' : ''}
@@ -1004,7 +1006,8 @@ export default function PondsPage() {
             const isPhysical = item.kind === 'physical';
             const pond = item.pond;
             const cyclePond = item.kind === 'cycle' ? item.pond : null;
-            const statusLabel = isPhysical ? 'Inactive' : (isActiveCycle(cyclePond!) ? 'Active' : 'Ended');
+            const statusKey = isPhysical ? 'inactive' : (isActiveCycle(cyclePond!) ? 'active' : 'ended');
+            const statusLabel = isPhysical ? copy('Inactive') : (isActiveCycle(cyclePond!) ? copy('Active') : copy('Ended'));
             const pondHref = cyclePond ? `/dashboard/ponds/detail?id=${cyclePond.id}` : null;
 
             return (
@@ -1013,22 +1016,22 @@ export default function PondsPage() {
                   <div className="ponds-card-identity">
                     <div className="dashboard-pond-name-badge" title={pond.pondName}>{pond.pondName}</div>
                     <div>
-                      <span className={`ponds-card-status is-${statusLabel.toLowerCase()}`}>{statusLabel}</span>
+                      <span className={`ponds-card-status is-${statusKey}`}>{statusLabel}</span>
                       <p>{cyclePond ? getPlSupplier(cyclePond) : t.startPondCycle.readyForNextCycle}</p>
                     </div>
                   </div>
                   {canEditPonds && (
                     <div className="ponds-card-actions">
                       {cyclePond?.cycleStartMode === 'midcycle' && isActiveCycle(cyclePond) && (
-                        <button type="button" onClick={() => openBaselineEdit(cyclePond)} title="Edit baseline estimates" aria-label={`Edit ${pond.pondName} baseline`}>
+                        <button type="button" onClick={() => openBaselineEdit(cyclePond)} title={copy('Edit baseline estimates')} aria-label={`${copy('Edit Baseline')} ${pond.pondName}`}>
                           <Pencil size={15} />
                         </button>
                       )}
                       <button
                         type="button"
                         onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
-                        title={isPhysical || !isActiveCycle(cyclePond!) ? 'Start cycle' : 'End cycle'}
-                        aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? 'Start' : 'End'} ${pond.pondName} cycle`}
+                        title={isPhysical || !isActiveCycle(cyclePond!) ? copy('Start cycle') : copy('End cycle')}
+                        aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? copy('Start') : copy('End')} ${pond.pondName} ${copy('Cycle').toLowerCase()}`}
                       >
                         {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
                       </button>
@@ -1037,8 +1040,8 @@ export default function PondsPage() {
                           type="button"
                           className="is-danger"
                           onClick={() => isPhysical ? openDeletePhysicalPond(pond) : openDeleteCyclePond(cyclePond!)}
-                          title="Delete pond"
-                          aria-label={`Delete ${pond.pondName}`}
+                          title={copy('Delete pond')}
+                          aria-label={`${copy('Delete')} ${pond.pondName}`}
                         >
                           <Trash2 size={15} />
                         </button>
@@ -1051,13 +1054,13 @@ export default function PondsPage() {
                   <div><span>{t.ponds.area || 'Area'}</span><strong>{pond.pondArea.toLocaleString()} m²</strong></div>
                   <div><span>{t.ponds.density || 'Density'}</span><strong>{cyclePond ? `${cyclePond.density.toLocaleString()} PL/m²` : '—'}</strong></div>
                   <div><span>{t.ponds.population || 'Population'}</span><strong>{cyclePond ? estimatedPopulationByPondId.get(cyclePond.id)?.toLocaleString() : '—'}</strong></div>
-                  <div><span>{t.ponds.started || 'Started'}</span><strong>{cyclePond ? new Date(cyclePond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : 'Not started'}</strong></div>
+                  <div><span>{t.ponds.started || 'Started'}</span><strong>{cyclePond ? new Date(cyclePond.docStart).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' }) : copy('Not started')}</strong></div>
                 </div>
 
                 <div className="ponds-card-footer">
                   <span>{cyclePond ? `${t.ponds.lastSampled || 'Last sampled'}: ${getLatestSamplingDate(cyclePond.samplings) ? new Date(getLatestSamplingDate(cyclePond.samplings) as string).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : (t.ponds.never || 'Never')}` : t.startPondCycle.readyForNextCycle}</span>
                   {pondHref && (
-                    <Link href={pondHref} aria-label={`View ${pond.pondName} details`}><ChevronRight size={17} /></Link>
+                    <Link href={pondHref} aria-label={`${copy('View')} ${pond.pondName} ${copy('details')}`}><ChevronRight size={17} /></Link>
                   )}
                 </div>
               </article>
@@ -1067,13 +1070,14 @@ export default function PondsPage() {
       ) : (
         <div className="animate-fade-up animate-delay-2 ponds-list-panel">
           <div className="ponds-list-row ponds-list-header" aria-hidden="true">
-            <span>Pond</span><span className="ponds-list-status">Status</span><span>Area</span><span>Density</span><span>Population</span><span>Actions</span>
+            <span>{copy('Pond')}</span><span className="ponds-list-status">{copy('Status')}</span><span>{copy('Area')}</span><span>{copy('Density')}</span><span>{copy('Population')}</span><span>{copy('Actions')}</span>
           </div>
           {visiblePondItems.map((item) => {
             const isPhysical = item.kind === 'physical';
             const pond = item.pond;
             const cyclePond = item.kind === 'cycle' ? item.pond : null;
-            const statusLabel = isPhysical ? 'Inactive' : (isActiveCycle(cyclePond!) ? 'Active' : 'Ended');
+            const statusKey = isPhysical ? 'inactive' : (isActiveCycle(cyclePond!) ? 'active' : 'ended');
+            const statusLabel = isPhysical ? copy('Inactive') : (isActiveCycle(cyclePond!) ? copy('Active') : copy('Ended'));
 
             return (
               <div className="ponds-list-row ponds-list-data" key={`${item.kind}-${pond.id}`}>
@@ -1081,18 +1085,18 @@ export default function PondsPage() {
                   {cyclePond ? <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`}>{pond.pondName}</Link> : <strong>{pond.pondName}</strong>}
                   <small>{statusLabel}</small>
                 </div>
-                <span className={`ponds-list-status is-${statusLabel.toLowerCase()}`}>{statusLabel}</span>
+                <span className={`ponds-list-status is-${statusKey}`}>{statusLabel}</span>
                 <span>{pond.pondArea.toLocaleString()} m²</span>
                 <span>{cyclePond ? cyclePond.density.toLocaleString() : '—'}</span>
                 <span>{cyclePond ? estimatedPopulationByPondId.get(cyclePond.id)?.toLocaleString() : '—'}</span>
                 <div className="ponds-list-actions">
-                  {cyclePond && <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`} aria-label={`View ${pond.pondName} details`}><ChevronRight size={16} /></Link>}
+                  {cyclePond && <Link href={`/dashboard/ponds/detail?id=${cyclePond.id}`} aria-label={`${copy('View')} ${pond.pondName} ${copy('details')}`}><ChevronRight size={16} /></Link>}
                   {canEditPonds && (
                     <button
                       type="button"
                       onClick={() => isPhysical ? openStartCycle(pond) : (isActiveCycle(cyclePond!) ? setEndCyclePond(cyclePond) : openStartCycle(cyclePond!))}
-                      aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? 'Start' : 'End'} ${pond.pondName} cycle`}
-                      title={isPhysical || !isActiveCycle(cyclePond!) ? 'Start cycle' : 'End cycle'}
+                      aria-label={`${isPhysical || !isActiveCycle(cyclePond!) ? copy('Start') : copy('End')} ${pond.pondName} ${copy('Cycle').toLowerCase()}`}
+                      title={isPhysical || !isActiveCycle(cyclePond!) ? copy('Start cycle') : copy('End cycle')}
                     >
                       {isPhysical || !isActiveCycle(cyclePond!) ? <RotateCcw size={15} /> : <Lock size={15} />}
                     </button>
@@ -1118,7 +1122,7 @@ export default function PondsPage() {
             <div className="responsive-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h2 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{t.ponds.addNew || 'Add New Pond'}</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>Create a physical pond placeholder. Start cycle details are added separately.</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy('Create a physical pond placeholder. Start cycle details are added separately.')}</p>
               </div>
               <button
                 onClick={() => setModalOpen(false)}
@@ -1210,9 +1214,9 @@ export default function PondsPage() {
           <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>Edit Baseline</h2>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy('Edit Baseline')}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>
-                  Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.
+                  {copy('Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.')}
                 </p>
               </div>
               <button onClick={() => setBaselineEditPond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
@@ -1241,8 +1245,8 @@ export default function PondsPage() {
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
               <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>Save Baseline</button>
+                <button type="button" onClick={() => setBaselineEditPond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy('Cancel')}</button>
+                <button type="submit" className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{copy('Save Baseline')}</button>
               </div>
             </form>
           </div>
@@ -1258,8 +1262,8 @@ export default function PondsPage() {
           <div className="glass-card animate-fade-up responsive-modal" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className="responsive-modal-header" style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>End Cycle</h2>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} history will stay saved.</p>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy('End Cycle')}</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} {copy('history will stay saved.')}</p>
               </div>
               <button onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
@@ -1267,21 +1271,21 @@ export default function PondsPage() {
             </div>
             <div className="responsive-modal-body" style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                End Date
+                {copy('End Date')}
                 <input type="date" required value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Reason
+                {copy('Reason')}
                 <select value={endCycleForm.cycleEndReason} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndReason: e.target.value as typeof endCycleForm.cycleEndReason }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', color: 'var(--text-primary)' }}>
-                  <option value="harvested">Harvested</option>
-                  <option value="disease">Disease</option>
-                  <option value="reset">Reset</option>
-                  <option value="other">Other</option>
+                  <option value="harvested">{copy('Harvested')}</option>
+                  <option value="disease">{copy('Disease')}</option>
+                  <option value="reset">{copy('Reset')}</option>
+                  <option value="other">{copy('Other')}</option>
                 </select>
               </label>
               <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
-                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>End Cycle</button>
+                <button type="button" onClick={() => setEndCyclePond(null)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy('Cancel')}</button>
+                <button type="button" onClick={handleEndCycle} className="btn-primary" style={{ flex: 1, padding: '14px', borderRadius: '12px', fontWeight: 600 }}>{copy('End Cycle')}</button>
               </div>
             </div>
           </div>
