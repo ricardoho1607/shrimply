@@ -1812,6 +1812,8 @@ interface MortalityModalProps {
 }
 
 function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: MortalityModalProps) {
+  const { t } = useLanguage();
+
   if (!isOpen) return null;
 
   return (
@@ -1850,19 +1852,19 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
 
           {form.observationType === 'observed_recovered' ? <>
             <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Sipon Shift
+              {t.dailyOperationsReports.siponShift}
               <select value={form.siponShift} onChange={(event) => setForm({ ...form, siponShift: event.target.value as 'morning' | 'evening' })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
-                <option value="morning">Morning / Pagi</option>
-                <option value="evening">Evening / Sore</option>
+                <option value="morning">{t.dailyOperationsReports.morning}</option>
+                <option value="evening">{t.dailyOperationsReports.evening}</option>
               </select>
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Siphoned / Kesedot
+                {t.dailyOperationsReports.siphoned}
                 <input required type="number" min="0" step="1" value={form.siphonedCount} onChange={(event) => setForm({ ...form, siphonedCount: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Mortal
+                {t.dailyOperationsReports.mortal}
                 <input required type="number" min="0" step="1" value={form.mortalCount} onChange={(event) => setForm({ ...form, mortalCount: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
               </label>
             </div>

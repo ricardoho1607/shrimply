@@ -412,7 +412,7 @@ const EditMortalityModal = ({
                 {observationType === 'observed_recovered' && (
                   <>
                     <View style={styles.editInputContainer}>
-                      <Text style={styles.editInputLabel}>Sipon shift</Text>
+                      <Text style={styles.editInputLabel}>{t.dailyOperationsReports.siponShift}</Text>
                       <View style={styles.obsTypeSelector}>
                         {(['morning', 'evening'] as const).map((shift) => (
                           <TouchableOpacity
@@ -421,14 +421,14 @@ const EditMortalityModal = ({
                             onPress={() => setSiponShift(shift)}
                           >
                             <Text style={[styles.obsTypePillText, siponShift === shift && styles.obsTypePillTextActive]}>
-                              {shift === 'morning' ? 'Morning / Pagi' : 'Evening / Sore'}
+                              {shift === 'morning' ? t.dailyOperationsReports.morning : t.dailyOperationsReports.evening}
                             </Text>
                           </TouchableOpacity>
                         ))}
                       </View>
                     </View>
-                    <EditInputField label="Siphoned / Kesedot" value={siphonedCount} onChangeText={setSiphonedCount} keyboardType="numeric" />
-                    <EditInputField label="Mortal" value={mortalCount} onChangeText={setMortalCount} keyboardType="numeric" />
+                    <EditInputField label={t.dailyOperationsReports.siphoned} value={siphonedCount} onChangeText={setSiphonedCount} keyboardType="numeric" />
+                    <EditInputField label={t.dailyOperationsReports.mortal} value={mortalCount} onChangeText={setMortalCount} keyboardType="numeric" />
                   </>
                 )}
 

@@ -1185,14 +1185,14 @@ export default function WaterQualityScreen() {
 
                 <View style={styles.row}>
                   <View style={styles.inputGroup}>
-                    <Input label="Water appearance" value={values.waterAppearance} onChange={updateValue('waterAppearance')} placeholder="e.g., CH" />
+                    <Input label={t.dailyOperationsReports.waterAppearance} value={values.waterAppearance} onChange={updateValue('waterAppearance')} placeholder="e.g., CH" />
                   </View>
                   <View style={styles.inputGroup}>
-                    <Input label="Water depth (cm)" value={values.waterDepthCm} onChange={updateValue('waterDepthCm')} placeholder="e.g., 150" />
+                    <Input label={`${t.dailyOperationsReports.waterDepth} (cm)`} value={values.waterDepthCm} onChange={updateValue('waterDepthCm')} placeholder="e.g., 150" />
                   </View>
                 </View>
 
-                <Input label="Alkalinity (ppm)" value={values.alkalinity} onChange={updateValue('alkalinity')} placeholder="e.g., 204" />
+                <Input label={`${t.dailyOperationsReports.alkalinity} (ppm)`} value={values.alkalinity} onChange={updateValue('alkalinity')} placeholder="e.g., 204" />
 
                 <View style={styles.row}>
                   <View style={styles.inputGroup}>

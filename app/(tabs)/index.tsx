@@ -1708,7 +1708,7 @@ export default function PondManagementScreen() {
         {formData.mortalityObservationType === 'observed_recovered' && (
           <>
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Sipon shift</Text>
+              <Text style={styles.inputLabel}>{t.dailyOperationsReports.siponShift}</Text>
               <View style={styles.segmentRow}>
                 {(['morning', 'evening'] as const).map((shift) => (
                   <TouchableOpacity
@@ -1717,7 +1717,7 @@ export default function PondManagementScreen() {
                     onPress={() => updateForm('siponShift', shift)}
                   >
                     <Text style={[styles.segmentOptionText, formData.siponShift === shift && styles.segmentOptionTextSelected]}>
-                      {shift === 'morning' ? 'Morning / Pagi' : 'Evening / Sore'}
+                      {shift === 'morning' ? t.dailyOperationsReports.morning : t.dailyOperationsReports.evening}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -1725,10 +1725,10 @@ export default function PondManagementScreen() {
             </View>
             <View style={styles.row}>
               <View style={styles.inputGroup}>
-                <InputField label="Siphoned / Kesedot" value={formData.siphonedCount} onChangeText={(value) => updateForm('siphonedCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
+                <InputField label={t.dailyOperationsReports.siphoned} value={formData.siphonedCount} onChangeText={(value) => updateForm('siphonedCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
               </View>
               <View style={styles.inputGroup}>
-                <InputField label="Mortal" value={formData.mortalCount} onChangeText={(value) => updateForm('mortalCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
+                <InputField label={t.dailyOperationsReports.mortal} value={formData.mortalCount} onChangeText={(value) => updateForm('mortalCount', value)} placeholder="0" keyboardType="numeric" maxLength={12} />
               </View>
             </View>
           </>

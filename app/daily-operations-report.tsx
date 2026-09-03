@@ -1,17 +1,19 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 import { getFarmDateKey } from '../shared/farmDate';
 import {
   buildDailyOperationsReport,
@@ -33,7 +35,11 @@ const Cell = ({ value, width = 86, header = false }: { value: string | number; w
 );
 
 export default function DailyOperationsReportScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
+  const { t, currentLanguage } = useLanguage();
+  const copy = t.dailyOperationsReports;
   const ponds = usePondStore((state) => state.ponds);
   const today = getFarmDateKey(new Date(), company?.timeZone);
   const [reportDate, setReportDate] = useState(today);
@@ -63,43 +69,58 @@ export default function DailyOperationsReportScreen() {
     [activePonds, selectedBlock],
   );
   const report = useMemo(() => buildDailyOperationsReport({
-    companyName: company?.companyName || 'My Farm',
+    companyName: company?.companyName || copy.myFarm,
     reportDate,
-    generatedBy: user?.name || user?.email?.split('@')[0] || 'Shrimply user',
+    generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
     ponds: selectedPonds as DailyOperationsPondSource[],
-  }), [company?.companyName, reportDate, selectedPonds, user?.email, user?.name]);
+  }), [company?.companyName, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, user?.email, user?.name]);
 
   const exportReport = async () => {
     if (!canExportReports || exporting) return;
     setExporting(true);
     try {
-      await exportDailyOperationsReportPDF(report);
+      await exportDailyOperationsReportPDF(report, currentLanguage);
     } catch {
-      Alert.alert('Export failed', 'The daily operations PDF could not be created.');
+      Alert.alert(copy.exportFailedTitle, copy.exportFailedMessage);
     } finally {
       setExporting(false);
     }
   };
 
   if (!canViewReports) {
-    return <SafeAreaView style={styles.container}><Text style={styles.emptyTitle}>You do not have permission to view reports.</Text></SafeAreaView>;
+    return <SafeAreaView style={styles.container}><Text style={styles.emptyTitle}>{copy.noPermission}</Text></SafeAreaView>;
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen options={{ title: 'Daily Operations', headerStyle: { backgroundColor: '#dce8f2' }, headerTintColor: '#0d2137' }} />
-      <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
+            accessibilityRole="button"
+            accessibilityLabel={t.actions.back}
+          >
+            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{copy.menuLabel}</Text>
+          <View style={styles.headerSpacer} />
+        </View>
+      </SafeAreaView>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 44) }]}>
         <View style={styles.hero}>
           <View style={styles.heroIcon}><Ionicons name="clipboard-outline" size={24} color="#0F4C75" /></View>
           <View style={styles.heroCopy}>
-            <Text style={styles.title}>Daily Operations Reports</Text>
-            <Text style={styles.subtitle}>Review Sipon and water-quality records for one farm day.</Text>
+            <Text style={styles.title}>{copy.title}</Text>
+            <Text style={styles.subtitle}>{copy.subtitle}</Text>
           </View>
         </View>
 
         <View style={styles.filters}>
           <AppDatePicker
-            label="Report date"
+            label={copy.reportDate}
             value={reportDate}
             maximumDate={new Date(`${today}T23:59:59`)}
             onChange={(date) => setReportDate(getFarmDateKey(date, company?.timeZone))}
@@ -107,7 +128,7 @@ export default function DailyOperationsReportScreen() {
           {blocks.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
             {['all', ...blocks].map((block) => (
               <TouchableOpacity key={block} style={[styles.blockChip, selectedBlock === block && styles.blockChipActive]} onPress={() => setSelectedBlock(block)}>
-                <Text style={[styles.blockChipText, selectedBlock === block && styles.blockChipTextActive]}>{block === 'all' ? 'All blocks' : block}</Text>
+                <Text style={[styles.blockChipText, selectedBlock === block && styles.blockChipTextActive]}>{block === 'all' ? copy.allBlocks : block}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>}
@@ -115,8 +136,8 @@ export default function DailyOperationsReportScreen() {
 
         <View style={styles.tabs}>
           {([
-            { key: 'sipon' as const, label: 'Daily Sipon', icon: 'fish-outline' as const },
-            { key: 'water' as const, label: 'Water Quality', icon: 'water-outline' as const },
+            { key: 'sipon' as const, label: copy.dailySipon, icon: 'fish-outline' as const },
+            { key: 'water' as const, label: copy.waterQuality, icon: 'water-outline' as const },
           ]).map((tab) => (
             <TouchableOpacity key={tab.key} style={[styles.tab, activeTab === tab.key && styles.tabActive]} onPress={() => setActiveTab(tab.key)}>
               <Ionicons name={tab.icon} size={17} color={activeTab === tab.key ? '#fff' : '#315f57'} />
@@ -130,7 +151,7 @@ export default function DailyOperationsReportScreen() {
             {activeTab === 'sipon' ? (
               <View>
                 <View style={styles.row}>
-                  {['Pond', 'DOC', 'AM Siphoned', 'AM Mortal', 'AM Total', 'PM Siphoned', 'PM Mortal', 'PM Total', 'Daily', 'Cumulative', 'Population', 'Density'].map((label) => <Cell key={label} value={label} header width={label === 'Pond' ? 78 : 86} />)}
+                  {[copy.pond, copy.doc, copy.morningSiphoned, copy.morningMortal, copy.morningTotal, copy.eveningSiphoned, copy.eveningMortal, copy.eveningTotal, copy.dailyTotal, copy.cumulative, copy.population, copy.density].map((label) => <Cell key={label} value={label} header width={label === copy.pond ? 78 : 86} />)}
                 </View>
                 {report.siponRows.map((row) => <View key={row.pondName} style={styles.row}>
                   <Cell value={row.pondName} width={78} /><Cell value={row.doc} />
@@ -143,14 +164,14 @@ export default function DailyOperationsReportScreen() {
             ) : (
               <View>
                 <View style={styles.row}>
-                  {['Stocked', 'Pond', 'DOC', 'Recorded by', 'pH AM', 'Temp °C', 'Appearance', 'Depth cm', 'Clarity cm', 'Salinity', 'Alkalinity'].map((label) => <Cell key={label} value={label} header />)}
+                  {[copy.stocked, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, copy.salinity, copy.alkalinity].map((label) => <Cell key={label} value={label} header />)}
                 </View>
                 {report.waterQualityRows.map((row) => <View key={row.pondName} style={styles.row}>
                   <Cell value={row.stockingDate || '-'} /><Cell value={row.pondName} /><Cell value={row.doc} /><Cell value={row.recordedBy} />
                   <Cell value={row.phMorning} /><Cell value={row.temperature} /><Cell value={row.waterAppearance} /><Cell value={row.waterDepthCm} />
                   <Cell value={row.transparency} /><Cell value={row.salinity} /><Cell value={row.alkalinity} />
                 </View>)}
-                {report.waterQualityRows.length === 0 && <View style={styles.emptyRow}><Text style={styles.emptyText}>No water-quality records for this date.</Text></View>}
+                {report.waterQualityRows.length === 0 && <View style={styles.emptyRow}><Text style={styles.emptyText}>{copy.noWaterRecords}</Text></View>}
               </View>
             )}
           </ScrollView>
@@ -158,15 +179,20 @@ export default function DailyOperationsReportScreen() {
 
         <TouchableOpacity style={[styles.exportButton, (!canExportReports || exporting) && styles.disabled]} onPress={exportReport} disabled={!canExportReports || exporting}>
           {exporting ? <ActivityIndicator color="#fff" /> : <Ionicons name="download-outline" size={20} color="#fff" />}
-          <Text style={styles.exportText}>{exporting ? 'Creating PDF…' : 'Export both reports as PDF'}</Text>
+          <Text style={styles.exportText}>{exporting ? copy.exporting : copy.exportBoth}</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#dce8f2' },
+  header: { minHeight: 58, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  backButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', color: '#0d2137', fontSize: 19, fontWeight: '700' },
+  headerSpacer: { width: 42 },
   content: { padding: 18, paddingBottom: 44, gap: 16 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   heroIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#dce8f2' },

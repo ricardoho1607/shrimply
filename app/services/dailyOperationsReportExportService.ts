@@ -7,6 +7,7 @@ import {
   generateDailyOperationsReportHTML,
   type DailyOperationsReportData,
 } from '../../shared/dailyOperationsReport';
+import type { DailyOperationsLanguage } from '../../shared/dailyOperationsI18n';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -19,13 +20,16 @@ const loadBase64Asset = async (assetModule: number): Promise<string> => {
   return FileSystem.readAsStringAsync(assetUri, { encoding: FileSystem.EncodingType.Base64 });
 };
 
-export const exportDailyOperationsReportPDF = async (data: DailyOperationsReportData): Promise<void> => {
+export const exportDailyOperationsReportPDF = async (
+  data: DailyOperationsReportData,
+  language: DailyOperationsLanguage = 'en',
+): Promise<void> => {
   try {
     const [backgroundBase64, logoBase64] = await Promise.all([
       loadBase64Asset(PDF_BACKGROUND_ASSET),
       loadBase64Asset(PDF_LOGO_ASSET),
     ]);
-    const html = generateDailyOperationsReportHTML(data, { backgroundBase64, logoBase64 });
+    const html = generateDailyOperationsReportHTML(data, { backgroundBase64, logoBase64 }, language);
     const { uri } = await Print.printToFileAsync({ html, width: 792, height: 612 });
     const filename = `Shrimply-Daily-Operations-${data.reportDate}.pdf`;
 

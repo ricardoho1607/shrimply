@@ -26,6 +26,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app, auth, db, storage } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { getFarmDateKey } from '../../../../../shared/farmDate';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { EnterpriseGroupedPondGrid } from '@/components/EnterpriseDashboard';
@@ -226,6 +227,7 @@ const formatConditionLabel = (value: string | null | undefined): string => value
 
 export default function WaterQualityPage() {
   const { company } = useAuth();
+  const { t } = useLanguage();
   const today = useFarmDateKey(company?.timeZone);
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
   const [ponds, setPonds] = useState<Pond[]>([]);
@@ -1890,17 +1892,17 @@ export default function WaterQualityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Water Appearance</label>
+                  <label className="form-label">{t.dailyOperationsReports.waterAppearance}</label>
                   <input type="text" maxLength={40} placeholder="e.g., CH" value={formData.waterAppearance} onChange={e => setFormData({...formData, waterAppearance: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">Water Depth (CM)</label>
+                  <label className="form-label">{t.dailyOperationsReports.waterDepth} (CM)</label>
                   <input type="number" min="0" step="0.1" placeholder="150" value={formData.waterDepthCm} onChange={e => setFormData({...formData, waterDepthCm: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
-                  <label className="form-label">Alkalinity (PPM)</label>
+                  <label className="form-label">{t.dailyOperationsReports.alkalinity} (PPM)</label>
                   <input type="number" min="0" step="0.1" placeholder="204" value={formData.alkalinity} onChange={e => setFormData({...formData, alkalinity: e.target.value})} className="form-input" />
                 </div>
 

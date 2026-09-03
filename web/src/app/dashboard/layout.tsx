@@ -41,6 +41,7 @@ type DashboardTranslations = {
   companyDetails?: TranslationSection;
   finance: TranslationSection;
   financialReports: TranslationSection;
+  dailyOperationsReports: TranslationSection;
   cycleReport: { archiveTitle?: string };
   nav: TranslationSection;
   sidebar: TranslationSection;
@@ -87,7 +88,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations): NavigationGroups => ({
       children: [
         { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
         { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp' },
-        { label: 'Daily Operations', href: '/dashboard/reports/daily-operations' },
+        { label: getString(t.dailyOperationsReports.menuLabel, 'Daily Operations'), href: '/dashboard/reports/daily-operations' },
         { label: getString(t.cycleReport.archiveTitle, 'Cycle Reports'), href: '/dashboard/reports/cycles' },
       ]
     },

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildDailyOperationsReport } from './dailyOperationsReport.ts';
+import { buildDailyOperationsReport, generateDailyOperationsReportHTML } from './dailyOperationsReport.ts';
 
 test('builds shift totals, cumulative Sipon, population, and water-quality rows', () => {
   const report = buildDailyOperationsReport({
@@ -75,4 +75,18 @@ test('keeps legacy mortality in totals without inventing a shift', () => {
   assert.equal(report.siponRows[0].eveningTotal, 0);
   assert.equal(report.siponRows[0].dailyTotal, 5);
   assert.equal(report.siponRows[0].hasUnclassifiedData, true);
+});
+
+test('renders the exported report in the selected language', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'Tambak Uji',
+    reportDate: '2026-09-02',
+    generatedBy: 'Operator',
+    ponds: [],
+  });
+  const html = generateDailyOperationsReportHTML(report, { backgroundBase64: '', logoBase64: '' }, 'id');
+
+  assert.match(html, /Laporan Sipon Harian/);
+  assert.match(html, /Laporan Kualitas Air Harian/);
+  assert.match(html, /Tidak ada kolam yang tersedia/);
 });
