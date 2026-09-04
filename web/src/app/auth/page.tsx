@@ -27,6 +27,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [loginRequested, setLoginRequested] = useState(false);
   const [resetLoading, setResetLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -38,7 +39,7 @@ export default function AuthPage() {
   const { signIn, signInWithGoogle, resetPassword, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!loginRequested || !isAuthenticated) return;
 
     if (needsRoleSelection) {
       router.replace(ROUTES.roleSelection);
@@ -51,7 +52,7 @@ export default function AuthPage() {
     }
 
     router.replace(ROUTES.dashboard);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, router, user?.role]);
+  }, [isAuthenticated, loginRequested, needsRoleSelection, needsSetup, router, user?.role]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +62,7 @@ export default function AuthPage() {
     
     try {
       await signIn(email, password, inviteToken);
+      setLoginRequested(true);
     } catch (err: unknown) {
       setError(getLoginErrorMessage(err, t.messages.error || 'Failed to login'));
     } finally {
@@ -93,6 +95,7 @@ export default function AuthPage() {
     setError('');
     try {
       await signInWithGoogle(inviteToken);
+      setLoginRequested(true);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Google sign-in failed.');
     } finally {

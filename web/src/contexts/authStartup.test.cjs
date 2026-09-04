@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- This is a CommonJS Node test. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -86,9 +87,12 @@ test('auth page explains an installed-app network failure without blaming creden
   assert.doesNotMatch(authPage, /fully close and reopen/);
 });
 
-test('the auth page has one state-driven dashboard redirect', () => {
+test('the auth page redirects only after a user starts sign-in', () => {
   const dashboardRedirects = authPage.match(/router\.(?:push|replace)\(ROUTES\.dashboard\)/g) || [];
   assert.equal(dashboardRedirects.length, 1);
+  assert.match(authPage, /const \[loginRequested, setLoginRequested\] = useState\(false\)/);
+  assert.match(authPage, /if \(!loginRequested \|\| !isAuthenticated\) return/);
+  assert.equal((authPage.match(/setLoginRequested\(true\)/g) || []).length, 2);
 });
 
 test('authentication initialization keeps the route visible', () => {
