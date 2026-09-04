@@ -32,7 +32,7 @@ import { AccountTimeline } from './AccountTimeline';
 import { DeleteUserDialog } from './DeleteUserDialog';
 import { UserDirectory } from './UserDirectory';
 import { getFirestorePlatformHealth } from '@/lib/admin/firestoreAdminAdapter';
-import type { FarmPermissionOverrides } from '../../../../shared/permissions';
+import type { FarmPermissionOverrides, FarmStaffRole } from '../../../../shared/permissions';
 import styles from '@/app/admin/admin.module.css';
 
 type AccessState = 'checking' | 'allowed' | 'denied' | 'signed-out';
@@ -66,6 +66,7 @@ export default function AdminCommandCenter() {
   const [accountError, setAccountError] = useState<string | null>(null);
   const [farmModeUpdating, setFarmModeUpdating] = useState(false);
   const [permissionsUpdating, setPermissionsUpdating] = useState(false);
+  const [roleUpdating, setRoleUpdating] = useState(false);
 
   // Overview metrics
   const [overviewMetrics, setOverviewMetrics] = useState<PlatformOverviewMetrics | null>(null);
@@ -471,6 +472,18 @@ export default function AdminCommandCenter() {
     }
   };
 
+  const updateSelectedUserRole = async (role: FarmStaffRole) => {
+    if (!account) throw new Error('Select a user first.');
+    setRoleUpdating(true);
+    try {
+      await repository.updateUserRole({ userId: account.id, role });
+      await loadAccount();
+      setNotice(`User role changed to ${role}.`);
+    } finally {
+      setRoleUpdating(false);
+    }
+  };
+
   const getPageTitle = () => {
     if (activeView === 'overview') return 'Platform Overview';
     if (activeView === 'farms') return 'Farms & Operations Fleet';
@@ -628,15 +641,17 @@ export default function AdminCommandCenter() {
             <div className={styles.detailTabContent}>
               {detailTab === 'info' ? (
                 <AccountDetail
-                  key={`${account?.id || 'empty'}-${account?.farms?.[0]?.businessSize || 'none'}-${JSON.stringify(account?.permissionOverrides || {})}`}
+                  key={`${account?.id || 'empty'}-${account?.role || 'none'}-${account?.farms?.[0]?.businessSize || 'none'}-${JSON.stringify(account?.permissionOverrides || {})}`}
                   account={account}
                   loading={accountLoading}
                   error={accountError}
                   updatingFarmMode={farmModeUpdating}
                   updatingPermissions={permissionsUpdating}
+                  updatingRole={roleUpdating}
                   onRetry={() => void loadAccount()}
                   onUpdateFarmMode={updateSelectedFarmMode}
                   onUpdatePermissions={updateSelectedUserPermissions}
+                  onUpdateRole={updateSelectedUserRole}
                 />
               ) : (
                 <AccountTimeline

@@ -16,6 +16,7 @@ import {
   updateFirestoreTesterStatus,
   updateFirestoreFarmBusinessSize,
   updateFirestoreUserPermissions,
+  updateFirestoreUserRole,
 } from './firestoreAdminAdapter';
 import type {
   AccountIntelligence,
@@ -31,7 +32,7 @@ import type {
   SecurityPostureData,
   SupportOverviewData,
 } from './types';
-import type { FarmPermissionOverrides } from '../../../../shared/permissions';
+import type { FarmPermissionOverrides, FarmStaffRole } from '../../../../shared/permissions';
 
 const functions = getFunctions(app);
 
@@ -47,6 +48,7 @@ export interface AdminIntelligenceRepository {
   getAccount(userId: string): Promise<AccountIntelligence>;
   updateFarmBusinessSize(input: { userId: string; companyId: string; businessSize: FarmBusinessSize }): Promise<FarmBusinessSize>;
   updateUserPermissions(input: { userId: string; permissionOverrides: FarmPermissionOverrides }): Promise<void>;
+  updateUserRole(input: { userId: string; role: FarmStaffRole }): Promise<void>;
   getOverviewMetrics(periodDays?: 7 | 30): Promise<PlatformOverviewMetrics>;
   deleteUser(input: DeleteAdminUserInput): Promise<DeleteAdminUserResult>;
   getDetailedFarms(): Promise<DetailedFarm[]>;
@@ -101,6 +103,10 @@ class FirebaseAdminIntelligenceRepository implements AdminIntelligenceRepository
 
   async updateUserPermissions(input: { userId: string; permissionOverrides: FarmPermissionOverrides }) {
     return updateFirestoreUserPermissions(input);
+  }
+
+  async updateUserRole(input: { userId: string; role: FarmStaffRole }) {
+    return updateFirestoreUserRole(input);
   }
 
   async getOverviewMetrics(periodDays: 7 | 30 = 7) {

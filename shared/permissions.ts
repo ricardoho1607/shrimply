@@ -25,6 +25,8 @@ export const FARM_PERMISSION_DEFINITIONS = [
 
 export type FarmPermissionKey = typeof FARM_PERMISSION_DEFINITIONS[number]['key'];
 export type FarmUserRole = 'owner' | 'co-owner' | 'manager' | 'technician' | 'admin' | 'mechanic' | 'buyer';
+export const FARM_STAFF_ROLES = ['co-owner', 'manager', 'technician', 'admin', 'mechanic'] as const;
+export type FarmStaffRole = typeof FARM_STAFF_ROLES[number];
 export type FarmPermissionSet = Record<FarmPermissionKey, boolean>;
 export type FarmPermissionOverrides = Partial<FarmPermissionSet>;
 
@@ -58,6 +60,10 @@ export const FARM_ROLE_PERMISSION_DEFAULTS: Record<FarmUserRole, FarmPermissionS
 
 export const normalizeFarmUserRole = (value: unknown): FarmUserRole => (
   typeof value === 'string' && value in FARM_ROLE_PERMISSION_DEFAULTS ? value as FarmUserRole : 'technician'
+);
+
+export const isFarmStaffRole = (value: unknown): value is FarmStaffRole => (
+  typeof value === 'string' && FARM_STAFF_ROLES.includes(value as FarmStaffRole)
 );
 
 export const normalizePermissionOverrides = (value: unknown): FarmPermissionOverrides => {
@@ -94,6 +100,14 @@ export const createPermissionOverrides = (
     permissions[key] === defaults[key] ? [] : [[key, permissions[key]]]
   ))) as FarmPermissionOverrides;
 };
+
+export const rebasePermissionOverridesForRole = (
+  role: FarmStaffRole,
+  overrides?: unknown,
+): FarmPermissionOverrides => createPermissionOverrides(
+  role,
+  getEffectivePermissions(role, overrides),
+);
 
 export const hasFarmPermission = (
   user: { role?: unknown; permissionOverrides?: unknown; uid?: string; id?: string } | null | undefined,

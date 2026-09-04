@@ -40,7 +40,7 @@ import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
 
@@ -113,9 +113,10 @@ export default function AssetInventoryPage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
-  const { user: authUser, company } = useAuth();
-  const canManageAssets = hasFarmPermission(authUser, 'manageAssets', company?.ownerId);
-  const canLogMaintenance = hasFarmPermission(authUser, 'logAssetMaintenance', company?.ownerId);
+  const { company } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canManageAssets = hasPermission('manageAssets');
+  const canLogMaintenance = hasPermission('logAssetMaintenance');
   const isMaintenanceOnly = canLogMaintenance && !canManageAssets;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');

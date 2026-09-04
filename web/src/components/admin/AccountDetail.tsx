@@ -14,11 +14,14 @@ import { calculateAccountHealth } from '@/lib/admin/adminCore';
 import type { AccountIntelligence, FarmBusinessSize } from '@/lib/admin/types';
 import {
   FARM_PERMISSION_DEFINITIONS,
+  FARM_STAFF_ROLES,
   createPermissionOverrides,
   getDefaultPermissions,
+  isFarmStaffRole,
   type FarmPermissionKey,
   type FarmPermissionOverrides,
   type FarmPermissionSet,
+  type FarmStaffRole,
 } from '../../../../shared/permissions';
 import styles from '@/app/admin/admin.module.css';
 
@@ -28,6 +31,14 @@ const FARM_MODE_OPTIONS: Array<{ value: FarmBusinessSize; label: string }> = [
   { value: 'large', label: 'Large' },
   { value: 'enterprise', label: 'Enterprise' },
 ];
+
+const FARM_ROLE_LABELS: Record<FarmStaffRole, string> = {
+  'co-owner': 'Co-owner',
+  manager: 'Manager',
+  technician: 'Technician',
+  admin: 'Admin',
+  mechanic: 'Mechanic',
+};
 
 const formatDate = (value: string | null, includeTime = false) => {
   if (!value) return 'Unavailable';
@@ -44,18 +55,22 @@ export function AccountDetail({
   error,
   updatingFarmMode,
   updatingPermissions,
+  updatingRole,
   onRetry,
   onUpdateFarmMode,
   onUpdatePermissions,
+  onUpdateRole,
 }: {
   account: AccountIntelligence | null;
   loading: boolean;
   error: string | null;
   updatingFarmMode: boolean;
   updatingPermissions: boolean;
+  updatingRole: boolean;
   onRetry: () => void;
   onUpdateFarmMode: (companyId: string, businessSize: FarmBusinessSize) => Promise<void>;
   onUpdatePermissions: (permissionOverrides: FarmPermissionOverrides) => Promise<void>;
+  onUpdateRole: (role: FarmStaffRole) => Promise<void>;
 }) {
   const linkedFarm = account?.farms?.[0];
   const [farmMode, setFarmMode] = useState<FarmBusinessSize>(linkedFarm?.businessSize || 'medium');
@@ -64,6 +79,8 @@ export function AccountDetail({
     account?.effectivePermissions || getDefaultPermissions(account?.role),
   );
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [roleDraft, setRoleDraft] = useState<FarmStaffRole>(isFarmStaffRole(account?.role) ? account.role : 'technician');
+  const [roleError, setRoleError] = useState<string | null>(null);
 
   const saveFarmMode = async () => {
     if (!linkedFarm || farmMode === linkedFarm.businessSize) return;
@@ -96,6 +113,17 @@ export function AccountDetail({
       await onUpdatePermissions(permissionOverrides);
     } catch (updateError) {
       setPermissionError(updateError instanceof Error ? updateError.message : 'Permissions could not be changed.');
+    }
+  };
+
+  const saveRole = async () => {
+    if (!account || account.isCompanyOwner || !linkedFarm || roleDraft === account.role) return;
+    if (!window.confirm(`Change ${account.name}'s role from ${account.role} to ${FARM_ROLE_LABELS[roleDraft]}? Existing custom permissions will be preserved.`)) return;
+    setRoleError(null);
+    try {
+      await onUpdateRole(roleDraft);
+    } catch (updateError) {
+      setRoleError(updateError instanceof Error ? updateError.message : 'Role could not be changed.');
     }
   };
 
@@ -132,19 +160,27 @@ export function AccountDetail({
 
       <div className={styles.detailSection}>
         <div className={styles.sectionHeading}><h3>Permissions</h3><span>{account.isCompanyOwner ? 'Owner · locked' : `${Object.keys(account.permissionOverrides).length} custom`}</span></div>
+        {!account.isCompanyOwner && linkedFarm ? (
+          <div className={styles.farmModeControl}>
+            <label htmlFor="admin-user-role"><span>User role</span><select id="admin-user-role" value={roleDraft} disabled={updatingRole || updatingPermissions} onChange={(event) => setRoleDraft(event.target.value as FarmStaffRole)}>{FARM_STAFF_ROLES.map((role) => <option key={role} value={role}>{FARM_ROLE_LABELS[role]}</option>)}</select></label>
+            <button type="button" disabled={updatingRole || updatingPermissions || roleDraft === account.role} onClick={() => void saveRole()}>{updatingRole ? 'Saving…' : 'Save role'}</button>
+            {roleError ? <span className={styles.farmModeError}>{roleError}</span> : null}
+          </div>
+        ) : null}
         <p className={styles.permissionIntro}>{account.isCompanyOwner ? 'The company owner always keeps full access to prevent lockout.' : `Checked boxes include the ${account.role} defaults and any custom changes.`}</p>
+        {linkedFarm?.businessSize === 'enterprise' ? <p className={styles.permissionIntro}>Enterprise technicians remain limited to their assigned blocks. Other staff can use each granted permission across the farm without receiving block-management access.</p> : null}
         <div className={styles.permissionGrid}>
           {FARM_PERMISSION_DEFINITIONS.map((permission) => (
             <label className={styles.permissionOption} key={permission.key}>
-              <input type="checkbox" checked={permissionDraft[permission.key]} disabled={account.isCompanyOwner || updatingPermissions} onChange={() => togglePermission(permission.key)} />
+              <input type="checkbox" checked={permissionDraft[permission.key]} disabled={account.isCompanyOwner || updatingPermissions || updatingRole} onChange={() => togglePermission(permission.key)} />
               <span><strong>{permission.label}</strong><small>{permission.description}</small></span>
             </label>
           ))}
         </div>
         {!account.isCompanyOwner ? (
           <div className={styles.permissionActions}>
-            <button type="button" className={styles.permissionResetButton} disabled={updatingPermissions} onClick={() => setPermissionDraft(getDefaultPermissions(account.role))}>Use role defaults</button>
-            <button type="button" className={styles.permissionSaveButton} disabled={updatingPermissions || !permissionsChanged} onClick={() => void savePermissions()}>{updatingPermissions ? 'Saving…' : 'Save permissions'}</button>
+            <button type="button" className={styles.permissionResetButton} disabled={updatingPermissions || updatingRole} onClick={() => setPermissionDraft(getDefaultPermissions(account.role))}>Use role defaults</button>
+            <button type="button" className={styles.permissionSaveButton} disabled={updatingPermissions || updatingRole || !permissionsChanged} onClick={() => void savePermissions()}>{updatingPermissions ? 'Saving…' : 'Save permissions'}</button>
           </div>
         ) : null}
         {permissionError ? <span className={styles.farmModeError}>{permissionError}</span> : null}

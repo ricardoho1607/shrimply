@@ -8,7 +8,7 @@ export default {
     icon: './assets/images/app-icon.png',
     scheme: 'shrimply',
     userInterfaceStyle: 'automatic',
-    runtimeVersion: '3.2.1',
+    runtimeVersion: '3.2.1-sdk57',
     updates: {
       url: 'https://u.expo.dev/8a20b603-ee9c-44cc-8797-1865788511db',
       checkAutomatically: 'NEVER',
@@ -55,7 +55,7 @@ export default {
 
     plugins: [
       [
-        '@sentry/react-native/expo',
+        '@sentry/react-native',
         {
           url: 'https://sentry.io/',
           organization: 'shrimply',
@@ -63,6 +63,9 @@ export default {
         },
       ],
       'expo-router',
+      'expo-asset',
+      'expo-sharing',
+      'expo-status-bar',
       [
         'expo-splash-screen',
         {

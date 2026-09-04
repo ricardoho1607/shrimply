@@ -33,7 +33,7 @@ import {
 } from '@/lib/generated/mobileSamplingReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 /* --- Types --------------------------------------------------- */
@@ -329,8 +329,9 @@ export default function ShrimpReportsPage() {
   const [selectedPondIds, setSelectedPondIds] = useState<string[] | null>(null);
   const [draftPondIds, setDraftPondIds] = useState<string[]>([]);
   const [isPondSelectorOpen, setIsPondSelectorOpen] = useState(false);
-  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
-  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canViewReports = hasPermission('viewReports');
+  const canExportReports = hasPermission('exportReports');
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {

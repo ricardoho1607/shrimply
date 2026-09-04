@@ -15,7 +15,7 @@ import {
 } from '@/lib/treatmentMixInventory';
 import { calculateTreatmentDoseLiters } from '../../../../../../shared/treatmentMix';
 import styles from './TreatmentMixesPage.module.css';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 type Pond = {
@@ -36,7 +36,7 @@ const message = (error: unknown) => error instanceof Error ? error.message : 'Op
 
 export default function TreatmentMixesPage() {
   const copy = useDashboardCopy();
-  const { company, user } = useAuth();
+  const { company } = useAuth();
   const { formatCurrency } = useCurrency();
   const { additives: inventory, ponds, loading, companyId } = useInventoryFeeds<never, TreatmentMixInventoryItem, Pond>();
   const [showCreate, setShowCreate] = useState(false);
@@ -51,7 +51,8 @@ export default function TreatmentMixesPage() {
   const [pondId, setPondId] = useState('');
   const [ppm, setPpm] = useState('');
   const [saving, setSaving] = useState(false);
-  const canEdit = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEdit = hasPermission('manageFeedInventory');
 
   const additives = useMemo(() => inventory.filter((item) => item.inventoryKind !== 'treatmentMix'), [inventory]);
   const mixes = useMemo(() => inventory.filter((item) => item.inventoryKind === 'treatmentMix'), [inventory]);

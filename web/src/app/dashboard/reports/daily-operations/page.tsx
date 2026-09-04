@@ -14,7 +14,7 @@ import {
   type DailyOperationsPondSource,
 } from '../../../../../../shared/dailyOperationsReport';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import {
   filterEnterpriseRecordsForUser,
   type FarmBlock,
@@ -41,8 +41,9 @@ export default function DailyOperationsReportsPage() {
   const [ponds, setPonds] = useState<DailyOperationsPondSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
-  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
-  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canViewReports = hasPermission('viewReports');
+  const canExportReports = hasPermission('exportReports');
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
 
   useEffect(() => {

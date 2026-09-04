@@ -137,24 +137,18 @@ service cloud.firestore {
         || (role == 'buyer' && permission == 'manageMarketplace');
     }
 
-    function currentUserHasPermissionOverride(permission) {
-      return 'permissionOverrides' in userDoc().data
-        && userDoc().data.permissionOverrides is map
-        && permission in userDoc().data.permissionOverrides;
+    function userHasFarmPermission(user, permission) {
+      let overrides = user.get('permissionOverrides', {});
+      return overrides is map && permission in overrides
+        ? overrides[permission] == true
+        : roleHasDefaultPermission(user.get('role', null), permission);
     }
 
     function hasCompanyPermission(companyId, permission) {
       return isCompanyMember(companyId)
         && (
           isCompanyOwner(companyId)
-          || (
-            userBelongsToCompany(companyId)
-            && (
-              currentUserHasPermissionOverride(permission)
-                ? userDoc().data.permissionOverrides[permission] == true
-                : roleHasDefaultPermission(currentUserRole(), permission)
-            )
-          )
+          || userHasFarmPermission(userDoc().data, permission)
         );
     }
 
@@ -252,7 +246,9 @@ service cloud.firestore {
         && validOptionalBoolean(data, 'hasCompletedSetup')
         && validPermissionOverrides(data)
         && validOptionalTimestamp(data, 'permissionsUpdatedAt')
-        && validOptionalString(data, 'permissionsUpdatedBy', 160);
+        && validOptionalString(data, 'permissionsUpdatedBy', 160)
+        && validOptionalTimestamp(data, 'roleUpdatedAt')
+        && validOptionalString(data, 'roleUpdatedBy', 160);
     }
 
     function validCompanyPayload(data) {
@@ -320,7 +316,8 @@ service cloud.firestore {
     function validEnterprisePondBlock(companyId, data) {
       return !('businessSize' in companyDoc(companyId).data)
         || companyDoc(companyId).data.businessSize != 'enterprise'
-        || hasCompanyPermission(companyId, 'manageEnterpriseBlocks')
+        || isCompanyOwner(companyId)
+        || currentUserRole() in ['co-owner', 'manager', 'admin', 'mechanic', 'buyer']
         || (
           data.blockId is string
           && exists(/databases/$(database)/documents/companies/$(companyId)/blocks/$(data.blockId))
@@ -905,6 +902,28 @@ service cloud.firestore {
             || !exists(/databases/$(database)/documents/companies/$(resource.data.companyId))
             || companyDoc(resource.data.companyId).data.ownerId != userId
           )
+        )
+        || (
+          isFounderAdmin()
+          && validStaffRoleValue(request.resource.data.role)
+          && validPermissionOverrides(request.resource.data)
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+            'role',
+            'permissionOverrides',
+            'roleUpdatedAt',
+            'roleUpdatedBy',
+            'permissionsUpdatedAt',
+            'permissionsUpdatedBy'
+          ])
+          && request.resource.data.role != resource.data.role
+          && request.resource.data.roleUpdatedAt == request.time
+          && request.resource.data.roleUpdatedBy == request.auth.uid
+          && request.resource.data.permissionsUpdatedAt == request.time
+          && request.resource.data.permissionsUpdatedBy == request.auth.uid
+          && resource.data.companyId is string
+          && exists(/databases/$(database)/documents/companies/$(resource.data.companyId))
+          && companyDoc(resource.data.companyId).data.ownerId != userId
+          && companyDoc(resource.data.companyId).data.teamMembers.hasAny([userId])
         )
       );
       allow delete: if isFounderAdmin();

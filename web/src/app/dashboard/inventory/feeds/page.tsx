@@ -34,7 +34,7 @@ import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
 import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../shared/financeSync';
 import styles from './InventoryFeeds.module.css';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { buildInventoryProductLabel, type InventoryProductLabel } from '../../../../../../shared/productLabel';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
@@ -111,7 +111,8 @@ export default function InventoryFeedsPage() {
     () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
     [ponds]
   );
-  const canEditInventory = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditInventory = hasPermission('manageFeedInventory');
 
   useEffect(() => {
     if (!isInputMenuOpen && !isTransactionFilterOpen) return;

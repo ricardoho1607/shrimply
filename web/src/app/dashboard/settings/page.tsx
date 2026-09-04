@@ -33,7 +33,7 @@ import { useCurrency, CURRENCIES } from '@/contexts/CurrencyContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
 import { getSupportedTimeZones, getSystemTimeZone, resolveFarmTimeZone } from '../../../../../shared/farmDate';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 const settingsShellStyle: React.CSSProperties = {
   display: 'flex',
@@ -110,9 +110,10 @@ export default function SettingsPage() {
   const { currentLanguage, setLanguage, t } = useLanguage();
   const { currentCurrency, setCurrency, autoSyncEnabled, setAutoSyncEnabled } = useCurrency();
   const timeZoneOptions = useMemo(() => getSupportedTimeZones(), []);
-  const canEditCompany = hasFarmPermission(user, 'editCompanySettings', company?.ownerId);
-  const canManageTeam = hasFarmPermission(user, 'manageTeam', company?.ownerId);
-  const canManageCompanyDeletion = hasFarmPermission(user, 'manageCompanyDeletion', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditCompany = hasPermission('editCompanySettings');
+  const canManageTeam = hasPermission('manageTeam');
+  const canManageCompanyDeletion = hasPermission('manageCompanyDeletion');
 
   const AVAILABLE_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },

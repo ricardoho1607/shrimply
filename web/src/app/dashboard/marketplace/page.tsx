@@ -33,7 +33,7 @@ import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { getCompanyCountry, getDefaultMarketplaceExpiry, validateMarketplaceListing } from '../../../../../shared/marketplaceParity';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
 interface PriceList {
@@ -89,7 +89,8 @@ export default function MarketplacePage() {
   const { t } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { user, company } = useAuth();
-  const canManageMarketplace = hasFarmPermission(user, 'manageMarketplace', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canManageMarketplace = hasPermission('manageMarketplace');
   const [listings, setListings] = useState<BuyerListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

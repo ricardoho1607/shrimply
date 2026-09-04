@@ -33,7 +33,7 @@ import {
 } from '@/lib/cycleReport';
 import { generateCycleReportHtml } from '@/lib/generated/mobileCycleReport';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import styles from './CycleReports.module.css';
 
 type TabKey = 'overview' | 'ponds' | 'costs';
@@ -53,7 +53,7 @@ const formatDate = (value?: string) => {
 function CycleReportsContent() {
   const params = useSearchParams();
   const selectedCycleId = params.get('cycleId') || '';
-  const { user, company } = useAuth();
+  const { company } = useAuth();
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency } = useCurrency();
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<CycleReportCycle>('desc');
@@ -70,9 +70,10 @@ function CycleReportsContent() {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [exportLoading, setExportLoading] = useState(false);
 
-  const hasFinanceAccess = hasFarmPermission(user, 'viewReports', company?.ownerId)
-    && hasFarmPermission(user, 'viewFinance', company?.ownerId);
-  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const hasFinanceAccess = hasPermission('viewReports')
+    && hasPermission('viewFinance');
+  const canExportReports = hasPermission('exportReports');
 
   useEffect(() => {
     if (!company?.id || !hasFinanceAccess) {

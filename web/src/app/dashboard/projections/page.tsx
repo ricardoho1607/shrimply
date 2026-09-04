@@ -53,7 +53,7 @@ import {
   normalizeHarvestMarketPriceInputs,
   type HarvestMarketPriceInputs,
 } from '../../../../../shared/harvestProjectionSettings';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import styles from './ProjectionsPage.module.css';
 
@@ -313,8 +313,9 @@ export default function HarvestProjectionsPage() {
     return activePonds.find(p => p.id === selectedPondId) || activePonds[0] || null;
   }, [activePonds, selectedPondId]);
 
-  const canManagePriceLadder = hasFarmPermission(user, 'manageFinance', company?.ownerId);
-  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canManagePriceLadder = hasPermission('manageFinance');
+  const canUseOrson = hasPermission('useOrson');
   const hasSavedPriceLadder = Object.values(savedMarketPrices).some((value) => value !== '');
   const hasUnsavedPriceChanges = !harvestMarketPriceInputsEqual(marketPrices, savedMarketPrices);
 

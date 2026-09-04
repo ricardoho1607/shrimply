@@ -42,7 +42,7 @@ import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
 import { toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 /* --- Types --------------------------------------------------- */
@@ -292,8 +292,9 @@ export default function WaterQualityPage() {
   });
   const [selectedLabPondIds, setSelectedLabPondIds] = useState<string[]>([]);
   const [labRows, setLabRows] = useState<LabPondResult[]>([]);
-  const canEditWater = hasFarmPermission(user, 'recordPondData', company?.ownerId);
-  const canManageLabReports = hasFarmPermission(user, 'manageLabReports', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditWater = hasPermission('recordPondData');
+  const canManageLabReports = hasPermission('manageLabReports');
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {

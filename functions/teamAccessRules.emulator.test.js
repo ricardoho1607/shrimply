@@ -7,7 +7,7 @@ const {
   assertSucceeds,
   initializeTestEnvironment,
 } = require("@firebase/rules-unit-testing");
-const { doc, getDoc, serverTimestamp, setDoc, updateDoc } = require("firebase/firestore");
+const { collection, doc, getDoc, runTransaction, serverTimestamp, setDoc, updateDoc, writeBatch } = require("firebase/firestore");
 
 const projectId = "demo-shrimply-team-security";
 let testEnvironment;
@@ -186,6 +186,143 @@ test("platform owners cannot remove permissions from the actual company owner", 
     permissionOverrides: { managePonds: false },
     permissionsUpdatedAt: serverTimestamp(),
     permissionsUpdatedBy: "founder-a",
+  }));
+});
+
+test("enterprise feeding permission works independently while technicians keep block scope", async () => {
+  await seed([
+    ["users/manager-enterprise", { email: "manager@example.com", companyId: "enterprise-farm", role: "manager" }],
+    ["users/technician-enterprise", { email: "technician@example.com", companyId: "enterprise-farm", role: "technician" }],
+    ["companies/enterprise-farm", { ownerId: "owner", teamMembers: ["owner", "manager-enterprise", "technician-enterprise"], businessSize: "enterprise" }],
+    ["companies/enterprise-farm/ponds/pond-a", { pondName: "Pond A", blockId: "block-a", samplings: [] }],
+    ["companies/enterprise-farm/ponds/pond-b", { pondName: "Pond B", blockId: "block-b", samplings: [] }],
+    ["companies/enterprise-farm/blocks/block-a", { assignedTechnicianId: "technician" }],
+    ["companies/enterprise-farm/blocks/block-b", { assignedTechnicianId: "technician-enterprise" }],
+    ["companies/enterprise-farm/feeds/feed-a", { totalStock: 100 }],
+  ]);
+  const managerDb = testEnvironment.authenticatedContext("manager-enterprise", { email: "manager@example.com" }).firestore();
+  const technicianDb = testEnvironment.authenticatedContext("technician-enterprise", { email: "technician@example.com" }).firestore();
+  const ownerDb = testEnvironment.authenticatedContext("owner", { email: "owner@example.com" }).firestore();
+  const founderDb = testEnvironment.authenticatedContext("founder", { platformOwner: true }).firestore();
+  const pondRef = doc(managerDb, "companies/enterprise-farm/ponds/pond-a");
+  const feedRef = doc(managerDb, "companies/enterprise-farm/feeds/feed-a");
+  const recordFeed = () => runTransaction(managerDb, async (transaction) => {
+    const pond = await transaction.get(pondRef);
+    const feed = await transaction.get(feedRef);
+    transaction.update(pondRef, {
+      samplings: [...pond.data().samplings, { id: "feed-record", date: "2026-09-04", feedData: { totalDailyFeed: "5.00", inventoryFeedId: "feed-a" } }],
+      updatedBy: "manager-enterprise", updatedAt: serverTimestamp(),
+    });
+    transaction.update(feedRef, { totalStock: feed.data().totalStock - 5 });
+  });
+  await assertFails(recordFeed());
+  assert.equal((await getDoc(feedRef)).data().totalStock, 100, "Denied pond access must not deduct stock");
+  await updateDoc(doc(founderDb, "users/manager-enterprise"), {
+    permissionOverrides: { manageFeedInventory: true },
+    permissionsUpdatedAt: serverTimestamp(), permissionsUpdatedBy: "founder",
+  });
+  await assertSucceeds(recordFeed());
+  assert.equal((await getDoc(feedRef)).data().totalStock, 95);
+  assert.equal((await getDoc(pondRef)).data().samplings.length, 1);
+  await assertFails(updateDoc(doc(technicianDb, "companies/enterprise-farm/ponds/pond-a"), {
+    samplings: [], updatedBy: "technician-enterprise", updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(technicianDb, "companies/enterprise-farm/ponds/pond-b"), {
+    samplings: [{ id: "assigned-feed", feedData: { totalDailyFeed: "1.00" } }],
+    updatedBy: "technician-enterprise", updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(updateDoc(doc(ownerDb, "companies/enterprise-farm/ponds/pond-a"), {
+    samplings: [{ id: "owner-feed", feedData: { totalDailyFeed: "1.00" } }],
+    updatedBy: "owner", updatedAt: serverTimestamp(),
+  }));
+});
+
+test("admin feeding grants and revocations govern writes without a new login", async () => {
+  await seed([
+    ["users/manager-feed", { email: "manager@example.com", companyId: "feed-farm", role: "manager" }],
+    ["companies/feed-farm", { ownerId: "owner", teamMembers: ["owner", "manager-feed"] }],
+    ["companies/other-farm", { ownerId: "other-owner", teamMembers: ["other-owner"] }],
+  ]);
+  const managerDb = testEnvironment.authenticatedContext("manager-feed", { email: "manager@example.com" }).firestore();
+  const founderDb = testEnvironment.authenticatedContext("founder", { platformOwner: true }).firestore();
+  const feedRef = doc(managerDb, "companies/feed-farm/feeds/feed-a");
+  await assertFails(setDoc(feedRef, { feedName: "Feed A", totalStock: 100 }));
+  for (const granted of [true, false]) {
+    const batch = writeBatch(founderDb);
+    batch.update(doc(founderDb, "users/manager-feed"), {
+      permissionOverrides: { manageFeedInventory: granted },
+      permissionsUpdatedAt: serverTimestamp(),
+      permissionsUpdatedBy: "founder",
+    });
+    batch.set(doc(collection(founderDb, "adminAuditEvents")), {
+      targetId: "manager-feed", action: "account.permissions.updated", timestamp: serverTimestamp(),
+    });
+    await assertSucceeds(batch.commit());
+    const profile = await getDoc(doc(managerDb, "users/manager-feed"));
+    assert.equal(profile.data().permissionOverrides.manageFeedInventory, granted);
+    const write = setDoc(feedRef, { feedName: "Feed A", totalStock: 95 });
+    if (granted) await assertSucceeds(write);
+    else await assertFails(write);
+    await assertFails(setDoc(doc(managerDb, "companies/other-farm/feeds/feed-a"), { totalStock: 100 }));
+  }
+  await assertFails(updateDoc(doc(managerDb, "users/manager-feed"), {
+    permissionOverrides: { manageFeedInventory: true },
+    permissionsUpdatedAt: serverTimestamp(), permissionsUpdatedBy: "manager-feed",
+  }));
+});
+
+test("platform owners can change active staff roles but cannot change the company owner", async () => {
+  await seed([
+    ["users/owner-role", { email: "owner@example.com", companyId: "role-farm", role: "owner" }],
+    ["users/member-role", { email: "member@example.com", companyId: "role-farm", role: "manager", permissionOverrides: { manageFeedInventory: true } }],
+    ["companies/role-farm", { ownerId: "owner-role", teamMembers: ["owner-role", "member-role"] }],
+  ]);
+  const memberDb = testEnvironment.authenticatedContext("member-role", { email: "member@example.com" }).firestore();
+  const founderDb = testEnvironment.authenticatedContext("founder-role", { platformOwner: true }).firestore();
+  const memberRef = doc(founderDb, "users/member-role");
+
+  await assertFails(setDoc(doc(memberDb, "companies/role-farm/ponds/pond-role"), { pondName: "Role Pond" }));
+  const batch = writeBatch(founderDb);
+  batch.update(memberRef, {
+    role: "technician",
+    permissionOverrides: {},
+    roleUpdatedAt: serverTimestamp(),
+    roleUpdatedBy: "founder-role",
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "founder-role",
+  });
+  batch.set(doc(collection(founderDb, "adminAuditEvents")), {
+    targetId: "member-role",
+    action: "account.role.updated",
+    timestamp: serverTimestamp(),
+  });
+  await assertSucceeds(batch.commit());
+  assert.equal((await getDoc(doc(memberDb, "users/member-role"))).data().role, "technician");
+  await assertSucceeds(setDoc(doc(memberDb, "companies/role-farm/ponds/pond-role"), { pondName: "Role Pond" }));
+
+  await assertFails(updateDoc(doc(memberDb, "users/member-role"), {
+    role: "manager",
+    permissionOverrides: {},
+    roleUpdatedAt: serverTimestamp(),
+    roleUpdatedBy: "member-role",
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "member-role",
+  }));
+  await assertFails(updateDoc(doc(founderDb, "users/member-role"), {
+    role: "owner",
+    permissionOverrides: {},
+    roleUpdatedAt: serverTimestamp(),
+    roleUpdatedBy: "founder-role",
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "founder-role",
+  }));
+  await assertFails(updateDoc(doc(founderDb, "users/owner-role"), {
+    role: "manager",
+    permissionOverrides: {},
+    roleUpdatedAt: serverTimestamp(),
+    roleUpdatedBy: "founder-role",
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: "founder-role",
   }));
 });
 }

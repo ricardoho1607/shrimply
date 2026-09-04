@@ -33,7 +33,7 @@ import {
   isDateKeyInRange,
   normalizeFarmDateKey,
 } from '../../../../../../shared/farmDate';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
 interface Expense {
@@ -89,9 +89,10 @@ export default function FinancialReportsPage() {
   const copy = useDashboardCopy();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { currentLanguage, t } = useLanguage();
-  const { user, company, loading: authLoading } = useAuth();
-  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
-  const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
+  const { company, loading: authLoading } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canViewFinance = hasPermission('viewFinance');
+  const canExportReports = hasPermission('exportReports');
   const [selectedReport, setSelectedReport] = useState('profit-loss');
   const [selectedPeriod, setSelectedPeriod] = useState('This Month');
   const [cycleScope, setCycleScope] = useState('all');

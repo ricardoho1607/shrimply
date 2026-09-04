@@ -18,7 +18,7 @@ import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompl
 import { useGemini } from '@/hooks/useGemini';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 interface ChatMessage {
   id: string;
@@ -78,8 +78,9 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
     copy('Check overfeeding and biomass risk'),
     copy('What is limiting growth?'),
   ];
-  const { user, company } = useAuth();
-  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
+  const { company } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canUseOrson = hasPermission('useOrson');
   const [ponds, setPonds] = useState<PondContext[]>([]);
   const [pondsReady, setPondsReady] = useState(false);
   const storageKey = `orson_messages_v3:${identity}:`;

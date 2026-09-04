@@ -22,6 +22,7 @@ import {
 import { addDoc, collection, doc, serverTimestamp, updateDoc, writeBatch } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import {
@@ -102,6 +103,13 @@ const riskClass: Record<EnterprisePondRisk, string> = {
 export default function EnterpriseCycleDashboard({ ponds, timeZone }: EnterpriseCycleDashboardProps) {
   const dashboardCopy = useDashboardCopy();
   const { user, company } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canManagePonds = hasPermission('managePonds');
+  const canManageCycles = hasPermission('manageCycles');
+  const canManageBlocks = hasPermission('manageEnterpriseBlocks');
+  const canRecordPondData = hasPermission('recordPondData');
+  const canStartCycles = canManageCycles && canManagePonds;
+  const canAdd = canManagePonds || canStartCycles || canManageBlocks || canRecordPondData;
   const { t } = useLanguage();
   const copy = t.enterpriseCycle;
   const todayDate = getFarmDateKey(new Date(), timeZone);
@@ -253,6 +261,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   };
 
   const openCycleForm = () => {
+    if (!canStartCycles) return;
     setEditingCycle(null);
     setCycleFormOpen(true);
     setCycleName(copy.defaultCycleName.replace('{{number}}', String(cycles.length + 1)));
@@ -266,6 +275,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   };
 
   const openCycleFormForBlock = (blockId?: string | null) => {
+    if (!canStartCycles) return;
     if (!blockId) {
       openCycleForm();
       return;
@@ -294,6 +304,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   };
 
   const openEditCycleForm = (cycle: EnterpriseCycleRecord) => {
+    if (!canManageCycles) return;
     setEditingCycle(cycle);
     setStockingCycle(null);
     setCycleFormStep('details');
@@ -319,6 +330,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
 
   const createCycle = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canManageCycles || (!editingCycle && !canStartCycles)) return;
     if (!company?.id || !user?.uid || !cycleName.trim() || selectedBlockIds.length !== 1) return;
     const baselineDate = todayDate;
     if (!editingCycle && cycleStartMode === 'midcycle' && setupPonds.some((pond) => (
@@ -443,6 +455,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
 
   const createBlock = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canManageBlocks) return;
     if (!company?.id || !user?.uid || !newBlockName.trim()) return;
     if (sortedBlocks.some((block) => block.name.trim().toLowerCase() === newBlockName.trim().toLowerCase())) {
       window.alert(copy.duplicateBlock);
@@ -472,6 +485,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
 
   const createPhysicalPond = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canManagePonds) return;
     const selectedBlock = sortedBlocks.find((block) => block.id === newPondBlockId);
     const pondArea = Number(newPondArea);
     if (!company?.id || !user?.uid || !selectedBlock || !newPondName.trim() || !Number.isFinite(pondArea) || pondArea <= 0) return;
@@ -506,6 +520,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
 
   const savePondAssignment = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!canManagePonds) return;
     const block = sortedBlocks.find((candidate) => candidate.id === pondAssignmentBlockId);
     const assignment = unassignedPondOptions.find((candidate) => candidate.key === pondAssignmentKey);
     if (!company?.id || !user?.uid || !block || !assignment || saving) return;
@@ -562,6 +577,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
   };
 
   const closeCycle = async (cycle: EnterpriseCycleRecord) => {
+    if (!canManageCycles) return;
     if (!company?.id || !user?.uid) return;
     const cyclePonds = getEnterpriseCyclePonds(cycle.id, ponds);
     const activeCyclePonds = cyclePonds.filter((pond) => pond.cycleStatus !== 'ended');
@@ -603,7 +619,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
       <header className={styles.enterpriseTitleBar}>
         <div className={styles.enterpriseTitleCopy}><h1>{copy.dashboardTitle}</h1><p>{company?.companyName || copy.companyFallback}</p></div>
         <div className={styles.enterpriseTitleActions}>
-          {(user?.role === 'owner' || user?.role === 'co-owner') && sortedBlocks.length > 0 && unassignedPondOptions.length > 0 ? (
+          {canManagePonds && sortedBlocks.length > 0 && unassignedPondOptions.length > 0 ? (
             <button type="button" className={styles.displayButton} onClick={() => setPondAssignmentOpen(true)}>
               <ListPlus size={18} /> {t.enterprise.assignPond}
             </button>
@@ -611,9 +627,9 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
           <button type="button" className={styles.displayButton} onClick={enterOfficeDisplay}>
             <Maximize2 size={18} /> {copy.officeDisplay}
           </button>
-          <button type="button" className={styles.addButton} onClick={() => setAddMenuOpen(true)}>
+          {canAdd && <button type="button" className={styles.addButton} onClick={() => setAddMenuOpen(true)}>
             <Plus size={18} /> {copy.add}
-          </button>
+          </button>}
         </div>
       </header>
       <ProfileCompletionCard company={company} />
@@ -638,7 +654,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
       ) : (
         <div className={styles.blockList}>
           {(pondFilter === 'inactive' ? inactiveBlockRows.length === 0 : filteredCycleRows.length === 0) ? (
-            <button type="button" className={styles.emptyCycleButton} onClick={openCycleForm}>
+            <button type="button" className={styles.emptyCycleButton} disabled={!canStartCycles} onClick={openCycleForm}>
               {sortedCycles.length === 0 ? <><Plus size={20} /> {copy.createFirstCycle}</> : copy.noPonds.replace('{{status}}', pondFilter === 'active' ? t.farmCycle.filterActive.toLocaleLowerCase() : pondFilter === 'inactive' ? t.farmCycle.filterInactive.toLocaleLowerCase() : t.farmCycle.filterEnded.toLocaleLowerCase())}
             </button>
           ) : null}
@@ -651,7 +667,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
                     <span className={styles.productionCycleIcon}><Layers3 size={19} /></span>
                     <span className={styles.productionCycleCopy}><strong>{block.name}</strong><small>{copy.inactivePonds.replace('{{count}}', String(inactivePonds.length))}</small></span>
                   </div>
-                  <button type="button" className={styles.editCycleButton} onClick={() => openCycleFormForBlock(block.id)}>{openCycle ? <Play size={15} /> : <Plus size={15} />}{openCycle ? copy.continue : copy.createCycle}</button>
+                  {canStartCycles && <button type="button" className={styles.editCycleButton} onClick={() => openCycleFormForBlock(block.id)}>{openCycle ? <Play size={15} /> : <Plus size={15} />}{openCycle ? copy.continue : copy.createCycle}</button>}
                 </div>
                 <div className={styles.productionCycleBody}>
                   <div className={styles.cyclePondPreview}>
@@ -680,7 +696,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
                     </span>
                     {cycleExpanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
-                  <button type="button" className={styles.editCycleButton} onClick={() => openEditCycleForm(cycle)}><Pencil size={15} /> {t.actions.edit}</button>
+                  {canManageCycles && <button type="button" className={styles.editCycleButton} onClick={() => openEditCycleForm(cycle)}><Pencil size={15} /> {t.actions.edit}</button>}
                 </div>
 
                 {cycleExpanded ? (
@@ -700,7 +716,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         </div>
       )}
 
-      {pondAssignmentOpen ? (
+      {pondAssignmentOpen && canManagePonds ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && setPondAssignmentOpen(false)}>
           <form className={styles.modal} onSubmit={savePondAssignment} onPointerDown={dismissKeyboardOnContainerPress}>
             <div className={styles.modalHeader}>
@@ -726,7 +742,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         </div>
       ) : null}
 
-      {cycleFormOpen ? (
+      {cycleFormOpen && canManageCycles && (editingCycle || canStartCycles) ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && resetCycleForm()}>
           <form className={styles.modal} onSubmit={(event) => { if (!editingCycle && cycleFormStep === 'details') { event.preventDefault(); continueCycleForm(); } else { void createCycle(event); } }} onPointerDown={dismissKeyboardOnContainerPress}>
             <div className={styles.modalHeader}>
@@ -790,22 +806,22 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         </div>
       ) : null}
 
-      {addMenuOpen ? (
+      {addMenuOpen && canAdd ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setAddMenuOpen(false)}>
           <div className={styles.modal} role="dialog" aria-modal="true" aria-label={copy.addItemLabel}>
             <div className={styles.modalHeader}><div><h2>{copy.addPrompt}</h2><p>{copy.addPromptDescription}</p></div><button type="button" className={styles.iconButton} onClick={() => setAddMenuOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
             <div className={styles.addMenuGrid}>
-              <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('sampling'); }}><FlaskConical size={21} /><span>{t.home.samplingData}</span></button>
-              <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('mortality'); }}><Activity size={21} /><span>{dashboardCopy('Daily Mortality')}</span></button>
-              <button type="button" disabled={cycleBlockOptions.length === 0} onClick={() => { setAddMenuOpen(false); openCycleForm(); }}><CalendarDays size={21} /><span>{copy.newProductionCycle}</span></button>
-              <button type="button" onClick={() => { setAddMenuOpen(false); setCreateBlockOpen(true); }}><Layers3 size={21} /><span>{copy.newBlock}</span></button>
-              <button type="button" disabled={sortedBlocks.length === 0} onClick={() => { setAddMenuOpen(false); setCreatePondOpen(true); }}><Waves size={21} /><span>{copy.newPond}</span></button>
+              {canRecordPondData && <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('sampling'); }}><FlaskConical size={21} /><span>{t.home.samplingData}</span></button>}
+              {canRecordPondData && <button type="button" disabled={activePonds.length === 0} onClick={() => { setAddMenuOpen(false); setOperationAction('mortality'); }}><Activity size={21} /><span>{dashboardCopy('Daily Mortality')}</span></button>}
+              {canStartCycles && <button type="button" disabled={cycleBlockOptions.length === 0} onClick={() => { setAddMenuOpen(false); openCycleForm(); }}><CalendarDays size={21} /><span>{copy.newProductionCycle}</span></button>}
+              {canManageBlocks && <button type="button" onClick={() => { setAddMenuOpen(false); setCreateBlockOpen(true); }}><Layers3 size={21} /><span>{copy.newBlock}</span></button>}
+              {canManagePonds && <button type="button" disabled={sortedBlocks.length === 0} onClick={() => { setAddMenuOpen(false); setCreatePondOpen(true); }}><Waves size={21} /><span>{copy.newPond}</span></button>}
             </div>
           </div>
         </div>
       ) : null}
 
-      {operationAction ? (
+      {operationAction && canRecordPondData ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOperationAction(null)}>
           <div className={styles.modal} role="dialog" aria-modal="true" aria-label={operationAction === 'sampling' ? t.home.samplingData : dashboardCopy('Daily Mortality')}>
             <div className={styles.modalHeader}>
@@ -823,7 +839,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         </div>
       ) : null}
 
-      {createBlockOpen ? (
+      {createBlockOpen && canManageBlocks ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCreateBlockOpen(false)}>
           <form className={styles.modal} onSubmit={createBlock} onPointerDown={dismissKeyboardOnContainerPress}>
             <div className={styles.modalHeader}><div><h2>{copy.newBlock}</h2><p>{copy.newBlockDescription}</p></div><button type="button" className={styles.iconButton} onClick={() => setCreateBlockOpen(false)} aria-label={copy.close}><X size={20} /></button></div>
@@ -834,7 +850,7 @@ export default function EnterpriseCycleDashboard({ ponds, timeZone }: Enterprise
         </div>
       ) : null}
 
-      {createPondOpen ? (
+      {createPondOpen && canManagePonds ? (
         <div className={styles.overlay} role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setCreatePondOpen(false)}>
           <form className={styles.modal} onSubmit={createPhysicalPond} onPointerDown={dismissKeyboardOnContainerPress}>
             <div className={styles.modalHeader}><div><h2>{copy.newPond}</h2><p>{copy.newPondDescription}</p></div><button type="button" className={styles.iconButton} onClick={() => setCreatePondOpen(false)} aria-label={copy.close}><X size={20} /></button></div>

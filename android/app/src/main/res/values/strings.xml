@@ -1,4 +1,4 @@
 <resources>
   <string name="app_name">Shrimply</string>
-  <string name="expo_runtime_version">3.2.1</string>
+  <string name="expo_runtime_version">3.2.1-sdk57</string>
 </resources>

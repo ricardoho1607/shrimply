@@ -1,5 +1,7 @@
 "use client";
 
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
+
 import React, { useMemo } from 'react';
 import Link from 'next/link';
 import {
@@ -100,6 +102,8 @@ const statusColor = (status?: string) => {
 export default function CompanyPage() {
   const copy = useDashboardCopy();
   const { company, user } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canManageTeam = hasPermission('manageTeam');
   const { t } = useLanguage();
   const companyProfile = company as CompanyProfile | null;
   const { data: members, loading: loadingMembers } = useCompanyMembers<TeamMember>();
@@ -286,7 +290,7 @@ export default function CompanyPage() {
         )}
       </section>
 
-      {(user?.role === 'owner' || user?.role === 'co-owner') && (
+      {canManageTeam && (
         <section className="company-requests-panel" style={{ ...panelStyle, padding: '24px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '18px', flexWrap: 'wrap' }}>
           <div className="company-request-copy" style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
             <div style={{ width: '44px', height: '44px', borderRadius: '14px', background: 'var(--primary-dim)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>

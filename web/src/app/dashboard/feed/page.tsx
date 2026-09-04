@@ -50,7 +50,7 @@ import {
 } from '../../../../../shared/enterpriseBlocks';
 import { normalizeFarmDateKey } from '../../../../../shared/farmDate';
 import type { FeedingResponse } from '../../../../../shared/pondCalculations';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
 interface FeedData {
@@ -123,14 +123,13 @@ const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'sou
 export default function FeedRecordsPage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
-  const { company } = useAuth();
+  const { user, company } = useAuth();
   const searchParams = useSearchParams();
   const requestedPondId = searchParams.get('pondId');
   const requestedAction = searchParams.get('action');
   const today = useFarmDateKey(company?.timeZone);
   const [ponds, setPonds] = useState<Pond[]>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<{ uid: string; role?: string } | null>(null);
   const [companyId, setCompanyId] = useState<string | null>(null);
 
   const [isModalOpen, setModalOpen] = useState(false);
@@ -158,7 +157,8 @@ export default function FeedRecordsPage() {
     normal: t.feed.feedingResponseNormal,
     weak: t.feed.feedingResponseWeak,
   };
-  const canEditFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditFeed = hasPermission('manageFeedInventory');
   const enterpriseOwnerView = isEnterpriseOwner(company?.businessSize, user?.role);
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
@@ -228,10 +228,6 @@ export default function FeedRecordsPage() {
       if (firebaseUser) {
         unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
           const userData = uDoc.data();
-          setUser({
-            uid: firebaseUser.uid,
-            role: typeof userData?.role === 'string' ? userData.role : undefined,
-          });
           const cid = userData?.companyId;
           setCompanyId(cid);
           if (cid && cid !== currentCompanyId) {
@@ -262,7 +258,6 @@ export default function FeedRecordsPage() {
           }
         });
       } else {
-        setUser(null);
         setCompanyId(null);
         setPonds([]);
         setInventoryFeeds([]);
@@ -1036,7 +1031,7 @@ export default function FeedRecordsPage() {
       )}
 
       {/* -- LOG MODAL -------------------------------------- */}
-      {isModalOpen && (
+      {isModalOpen && canEditFeed && (
         <div className="responsive-modal-overlay feed-log-overlay">
           <div className="glass-card animate-fade-up responsive-modal feed-log-modal">
             <div className="responsive-modal-header feed-log-header">

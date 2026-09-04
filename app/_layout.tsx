@@ -220,7 +220,7 @@ function RootLayoutNav() {
   if (isLargeScreen) {
     return (
       <View style={{ flex: 1, flexDirection: 'row', backgroundColor: '#f4f8fc' }}>
-        <StatusBar style="dark" backgroundColor="#dce8f2" />
+        <StatusBar style="dark" />
         {isBuyer ? <StaticBuyerSidebar /> : <StaticSidebar />}
         <View style={{ flex: 1 }}>
           {content}
@@ -231,7 +231,7 @@ function RootLayoutNav() {
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor="#dce8f2" />
+      <StatusBar style="dark" />
       {content}
       {/* Render sidebars at root level - outside of tabs */}
       {isBuyer ? <BuyerSidebar /> : <RegularSidebar />}

@@ -18,10 +18,13 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import {
+  FARM_STAFF_ROLES,
   getEffectivePermissions,
   normalizePermissionOverrides,
+  rebasePermissionOverridesForRole,
   type FarmPermissionOverrides,
   type FarmPermissionSet,
+  type FarmStaffRole,
 } from '../../../../shared/permissions';
 import { getInitials, getLatestIsoTimestamp, maskEmail, maskPhone } from './adminCore';
 import type {
@@ -202,6 +205,62 @@ export const updateFirestoreUserPermissions = async (input: {
   const saved = await getFirestoreUserPermissionState(input.userId);
   if (JSON.stringify(saved.permissionOverrides) !== JSON.stringify(permissionOverrides)) {
     throw new Error('Permission verification failed.');
+  }
+};
+
+export const updateFirestoreUserRole = async (input: {
+  userId: string;
+  role: FarmStaffRole;
+}): Promise<void> => {
+  if (!FARM_STAFF_ROLES.includes(input.role)) throw new Error('Invalid staff role.');
+  const userSnapshot = await getDoc(doc(db, 'users', input.userId));
+  if (!userSnapshot.exists()) throw new Error('User account not found.');
+  const user = userSnapshot.data();
+  const companyId = asText(user.companyId);
+  if (!companyId) throw new Error('Only users linked to a farm can have a staff role.');
+  const companySnapshot = await getDoc(doc(db, 'companies', companyId));
+  if (!companySnapshot.exists()) throw new Error('Linked farm not found.');
+  const company = companySnapshot.data();
+  if (company.ownerId === input.userId) throw new Error('The company owner role is locked.');
+  if (!Array.isArray(company.teamMembers) || !company.teamMembers.includes(input.userId)) {
+    throw new Error('This user is not an active member of the linked farm.');
+  }
+
+  const previousRole = asText(user.role) || 'technician';
+  if (previousRole === input.role) return;
+  const permissionOverrides = rebasePermissionOverridesForRole(input.role, user.permissionOverrides);
+  const actorId = auth.currentUser?.uid || null;
+  const auditRef = doc(collection(db, 'adminAuditEvents'));
+  const batch = writeBatch(db);
+  batch.update(userSnapshot.ref, {
+    role: input.role,
+    permissionOverrides,
+    roleUpdatedAt: serverTimestamp(),
+    roleUpdatedBy: actorId,
+    permissionsUpdatedAt: serverTimestamp(),
+    permissionsUpdatedBy: actorId,
+  });
+  batch.set(auditRef, {
+    actorId,
+    targetId: input.userId,
+    action: 'account.role.updated',
+    timestamp: serverTimestamp(),
+    reason: 'Platform owner changed a user role from the User Database.',
+    metadata: {
+      source: 'admin-command-centre',
+      companyId,
+      previousRole,
+      role: input.role,
+      previousOverrides: normalizePermissionOverrides(user.permissionOverrides),
+      permissionOverrides,
+    },
+  });
+  await batch.commit();
+  clearFirestoreAdminCache();
+
+  const saved = await getFirestoreUserPermissionState(input.userId);
+  if (saved.role !== input.role || JSON.stringify(saved.permissionOverrides) !== JSON.stringify(permissionOverrides)) {
+    throw new Error('Role verification failed.');
   }
 };
 

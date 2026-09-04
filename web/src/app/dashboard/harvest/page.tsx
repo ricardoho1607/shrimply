@@ -42,7 +42,7 @@ import {
   isHistoricalHarvestRecord,
 } from '../../../../../shared/harvestCycleScope';
 import styles from './HarvestPage.module.css';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
 interface HarvestPond {
@@ -157,7 +157,8 @@ export default function HarvestPage() {
     subPrice: ''
   });
   const [harvestBatch, setHarvestBatch] = useState<HarvestFormEntry[]>([]);
-  const canEditHarvest = hasFarmPermission(user, 'manageHarvests', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditHarvest = hasPermission('manageHarvests');
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,

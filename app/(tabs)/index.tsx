@@ -293,11 +293,10 @@ export default function PondManagementScreen() {
   }, []);
 
   const availableEnterpriseBlocks = useMemo(() => {
-    if (!isEnterpriseFarm) return [];
-    if (user?.role === 'owner' || user?.role === 'co-owner') return enterpriseBlocks.blocks;
+    if (!isEnterpriseFarm || !canManagePonds) return [];
     if (user?.role === 'technician') return enterpriseBlocks.blocksAssignedToUser;
-    return [];
-  }, [enterpriseBlocks.blocks, enterpriseBlocks.blocksAssignedToUser, isEnterpriseFarm, user?.role]);
+    return enterpriseBlocks.blocks;
+  }, [canManagePonds, enterpriseBlocks.blocks, enterpriseBlocks.blocksAssignedToUser, isEnterpriseFarm, user?.role]);
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,

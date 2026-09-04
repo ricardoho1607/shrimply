@@ -32,7 +32,7 @@ import {
   TrendingUp,
   type LucideIcon,
 } from 'lucide-react';
-import { hasFarmPermission } from '../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Navigation Config --------------------------------------- */
 
@@ -125,11 +125,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
   const navigation = NAV_STRUCTURE(t, copy);
-  const canViewFarm = hasFarmPermission(user, 'viewFarm', company?.ownerId);
-  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
-  const canViewReports = hasFarmPermission(user, 'viewReports', company?.ownerId);
-  const canViewAssets = hasFarmPermission(user, 'viewAssets', company?.ownerId);
-  const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canViewFarm = hasPermission('viewFarm');
+  const canViewFinance = hasPermission('viewFinance');
+  const canViewReports = hasPermission('viewReports');
+  const canViewAssets = hasPermission('viewAssets');
+  const canUseOrson = hasPermission('useOrson');
   const isNavLink = (item: NavItem): item is NavLinkItem => 'href' in item;
   const isNavGroup = (item: NavItem): item is NavGroupItem => Array.isArray((item as { children?: NavChild[] }).children);
   const visibleNavigation: NavigationGroups = {

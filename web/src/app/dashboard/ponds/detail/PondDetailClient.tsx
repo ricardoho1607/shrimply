@@ -64,7 +64,7 @@ import {
   getAssignedEnterpriseBlockIds,
   type FarmBlock,
 } from '../../../../../../shared/enterpriseBlocks';
-import { hasFarmPermission } from '../../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import type { PlanktonOverwatchSnapshot } from '../../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 import type { PondDetailCopy } from '../../../../../../shared/pondDetailI18n';
@@ -299,7 +299,7 @@ const GrowthChart = ({ data, emptyMessage }: { data: { x: number, y: number }[];
 };
 
 export default function PondDetailClient() {
-  const { company, user } = useAuth();
+  const { company } = useAuth();
   const { t } = useLanguage();
   const copy = t.pondDetail;
   const searchParams = useSearchParams();
@@ -440,10 +440,11 @@ export default function PondDetailClient() {
   const isEnterpriseTechnician = company?.businessSize === 'enterprise' && userRole === 'technician';
   const hasPondAccess = !isEnterpriseTechnician
     || (typeof pond?.blockId === 'string' && assignedBlockIds.has(pond.blockId));
-  const canManagePond = hasFarmPermission(user, 'managePonds', company?.ownerId) && hasPondAccess;
-  const canRecordPondData = hasFarmPermission(user, 'recordPondData', company?.ownerId) && hasPondAccess;
-  const canManageCycles = hasFarmPermission(user, 'manageCycles', company?.ownerId) && hasPondAccess;
-  const canManageFeed = hasFarmPermission(user, 'manageFeedInventory', company?.ownerId) && hasPondAccess;
+  const hasPermission = useFarmPermissions();
+  const canManagePond = hasPermission('managePonds') && hasPondAccess;
+  const canRecordPondData = hasPermission('recordPondData') && hasPondAccess;
+  const canManageCycles = hasPermission('manageCycles') && hasPondAccess;
+  const canManageFeed = hasPermission('manageFeedInventory') && hasPondAccess;
   const canEditPond = canManagePond || canRecordPondData;
 
   const handleDeleteSampling = async (samplingId: string) => {

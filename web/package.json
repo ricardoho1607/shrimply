@@ -5,10 +5,11 @@
   "scripts": {
     "predev": "node ../scripts/sync-web-pdf-generators.cjs",
     "dev": "next dev --webpack",
-    "prebuild": "node ../scripts/sync-web-pdf-generators.cjs && node scripts/validate-public-env.cjs",
+    "prebuild": "npm run test:permissions && node ../scripts/sync-web-pdf-generators.cjs && node scripts/validate-public-env.cjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:permissions": "node --test src/hooks/useFarmPermissions.test.cjs src/app/dashboard/permissionControls.test.cjs ../functions/shared/permissions.test.js",
     "test:cursor": "node --test src/components/Cursor.test.cjs",
     "test:dashboard-summary-ui": "node --test src/app/dashboard/dashboardSummaryUi.test.cjs",
     "test:enterprise-cycle-ui": "node --test src/components/enterpriseCycleUi.test.cjs",

@@ -1,5 +1,7 @@
 "use client";
 
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
+
 import React, { useState, useMemo } from 'react';
 import { 
   Plus,
@@ -580,6 +582,8 @@ export default function DashboardPage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { user, company, loading: authLoading, companyLoading } = useAuth();
+  const hasPermission = useFarmPermissions();
+  const canManageEnterpriseBlocks = hasPermission('manageEnterpriseBlocks');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<Pond>('asc');
   const { data: cycles } = useCompanyCycles<FarmCycle>();
@@ -680,7 +684,8 @@ export default function DashboardPage() {
   ];
 
   if (userData?.role === 'buyer') return <BuyerDashboard t={t} user={userData} />;
-  if (isEnterpriseOwner(company?.businessSize, userData?.role)) {
+  if (isEnterpriseOwner(company?.businessSize, userData?.role)
+    || (company?.businessSize === 'enterprise' && canManageEnterpriseBlocks)) {
     return <EnterpriseDashboard ponds={ponds} timeZone={company?.timeZone} />;
   }
 

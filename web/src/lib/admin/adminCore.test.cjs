@@ -61,6 +61,19 @@ test('selected account permissions use role defaults and audited Firestore overr
   assert.match(rules, /permissionsUpdatedBy == request\.auth\.uid/);
 });
 
+test('selected farm members can change role without unlocking the company owner', () => {
+  const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');
+  const adapter = fs.readFileSync(path.join(process.cwd(), 'src/lib/admin/firestoreAdminAdapter.ts'), 'utf8');
+  const rules = fs.readFileSync(path.join(process.cwd(), '..', 'firestore.rules'), 'utf8');
+  assert.match(detail, /onUpdateRole/);
+  assert.match(detail, /Existing custom permissions will be preserved/);
+  assert.match(adapter, /account\.role\.updated/);
+  assert.match(adapter, /The company owner role is locked/);
+  assert.match(adapter, /rebasePermissionOverridesForRole/);
+  assert.match(rules, /validStaffRoleValue\(request\.resource\.data\.role\)/);
+  assert.match(rules, /data\.ownerId != userId/);
+});
+
 test('admin UI masks directory contacts and audits the selected email reveal', () => {
   const directory = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/UserDirectory.tsx'), 'utf8');
   const detail = fs.readFileSync(path.join(process.cwd(), 'src/components/admin/AccountDetail.tsx'), 'utf8');

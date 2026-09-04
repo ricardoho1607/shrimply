@@ -1594,7 +1594,7 @@ const styles = StyleSheet.create({
   labUploadButton: { backgroundColor: '#315f57', borderRadius: 14, paddingVertical: 13, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   labUploadButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
   actionSheetOverlay: { flex: 1, justifyContent: 'flex-end' },
-  actionSheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 76, 117, 0.45)' },
+  actionSheetBackdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(15, 76, 117, 0.45)' },
   actionSheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingBottom: 28, borderWidth: 1, borderColor: '#e8f2f9' },
   actionSheetHandle: { width: 44, height: 5, borderRadius: 999, backgroundColor: '#dbe9f2', alignSelf: 'center', marginBottom: 14 },
   actionSheetHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 16 },

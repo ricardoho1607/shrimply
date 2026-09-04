@@ -40,7 +40,7 @@ import {
   getLatestGrowthSampling,
   type SharedMortalityRecord,
 } from '../../../../../shared/pondCalculations';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
 interface Sampling {
@@ -261,15 +261,15 @@ export default function PondsPage() {
     }
     return openFarmCycles[0] || undefined;
   }, [openFarmCycles, selectedCycleId]);
-  const canEditPonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canEditPonds = hasPermission('managePonds');
   const isEnterpriseFarm = company?.businessSize === 'enterprise';
-  const canManageFarmCycle = hasFarmPermission(user, 'manageCycles', company?.ownerId);
+  const canManageFarmCycle = hasPermission('manageCycles');
   const availableFarmBlocks = useMemo(() => {
-    if (!isEnterpriseFarm) return [];
-    if (user?.role === 'owner' || user?.role === 'co-owner') return farmBlocks;
+    if (!isEnterpriseFarm || !canEditPonds) return [];
     if (user?.role === 'technician') return farmBlocks.filter((block) => block.assignedTechnicianId === user.uid);
-    return [];
-  }, [farmBlocks, isEnterpriseFarm, user]);
+    return farmBlocks;
+  }, [canEditPonds, farmBlocks, isEnterpriseFarm, user]);
   const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, {
     businessSize: company?.businessSize,
     role: user?.role,

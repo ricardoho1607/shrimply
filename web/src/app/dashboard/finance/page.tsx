@@ -39,7 +39,7 @@ import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
 } from '../../../../../shared/financeCycleAllocation';
-import { hasFarmPermission } from '../../../../../shared/permissions';
+import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { getOperatingMarginDisplay } from '../../../../../shared/financeMetrics';
 
 /* --- Types --------------------------------------------------- */
@@ -68,8 +68,9 @@ export default function FinancePage() {
   const generalCategoryLabel = t.financeCycle.general;
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
-  const canViewFinance = hasFarmPermission(user, 'viewFinance', company?.ownerId);
-  const canManageFinance = hasFarmPermission(user, 'manageFinance', company?.ownerId);
+  const hasPermission = useFarmPermissions();
+  const canViewFinance = hasPermission('viewFinance');
+  const canManageFinance = hasPermission('manageFinance');
   const today = useFarmDateKey(company?.timeZone);
 
   const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics];
