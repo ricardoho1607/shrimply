@@ -19,6 +19,9 @@ test('production deployment uploads the monorepo dependencies used by the web bu
 
 test('Vercel includes shared client contracts and excludes backend secrets and code', () => {
   const excluded = ignore().add(fs.readFileSync(path.join(repositoryRoot, '.vercelignore'), 'utf8'));
+  for (const directory of ['functions', 'functions/shared']) {
+    assert.equal(excluded.ignores(directory), false, `${directory} must be traversed during upload`);
+  }
   for (const contract of ['labMeasurementContract', 'orsonPromptPolicy']) {
     for (const extension of ['js', 'd.ts']) {
       const file = `functions/shared/${contract}.${extension}`;
@@ -26,7 +29,7 @@ test('Vercel includes shared client contracts and excludes backend secrets and c
       assert.equal(excluded.ignores(file), false, `${file} must reach the web build`);
     }
   }
-  for (const file of ['functions/.secret.local', 'functions/.env', 'functions/orson.js', 'functions/node_modules/example/index.js', 'functions/shared/metaModelApi.js']) {
+  for (const file of ['.env', '.env.local', 'web/.env.production', '.secret.local', 'functions/.secret.local', 'functions/.env', 'functions/orson.js', 'functions/node_modules/example/index.js', 'functions/shared/metaModelApi.js']) {
     assert.equal(excluded.ignores(file), true, `${file} must stay out of the web deployment`);
   }
 });

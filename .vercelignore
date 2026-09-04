@@ -1,7 +1,7 @@
 ios
 android
 functions/*
-!functions/shared/
+!functions/shared
 functions/shared/*
 !functions/shared/labMeasurementContract.js
 !functions/shared/labMeasurementContract.d.ts
@@ -12,5 +12,7 @@ output
 .agents
 .expo
 .firebase
+.env*
+.secret.local
 *.jks
 *.keystore
