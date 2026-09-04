@@ -7,6 +7,7 @@ functions/shared/*
 !functions/shared/labMeasurementContract.d.ts
 !functions/shared/orsonPromptPolicy.js
 !functions/shared/orsonPromptPolicy.d.ts
+!functions/shared/permissions.js
 output
 .codex
 .agents
