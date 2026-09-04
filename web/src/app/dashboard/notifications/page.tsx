@@ -1,5 +1,6 @@
 "use client";
 
+import { getOrsonAlertCaption } from '../../../../../shared/orsonNotification';
 import React, { useMemo, useState, useTransition } from 'react';
 import { 
   Bell, 
@@ -393,7 +394,7 @@ export default function NotificationsPage() {
                     {notification.title}
                   </h4>
                   <span className={styles.notificationTime} style={{ fontSize: '12px', color: 'var(--text-faint)', fontWeight: 600 }}>
-                    {formatTime(notification.timestamp)}
+                    {getOrsonAlertCaption(notification, formatTime(notification.timestamp)) || formatTime(notification.timestamp)}
                   </span>
                 </div>
                 <p style={{ 

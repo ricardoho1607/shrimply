@@ -48,3 +48,10 @@ export const getEffectiveNotificationPriority = (
       : 'warning';
   return getOrsonNotificationPriority(severity, riskIds);
 };
+export const getOrsonAlertCaption = (notification: { type: string; message?: string; data?: Record<string, unknown> }, createdText?: string): string | null => {
+  if (notification.type !== 'orson_risk') return null;
+  const sourceDate = notification.data?.sourceDate || notification.message?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const status = notification.data?.status === 'active' ? 'Active'
+    : notification.data?.status === 'resolved' ? 'Resolved' : 'Historical';
+  return `${status} · Event: ${typeof sourceDate === 'string' ? sourceDate : 'date unavailable'}${createdText ? ` · Alert created: ${createdText}` : ''}`;
+};

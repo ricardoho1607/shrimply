@@ -13,7 +13,7 @@ export const FEED_KNOWLEDGE: ParameterKnowledge[] = [
         'Confirm whether a logged feed decrease was planned before treating it as a biological warning.',
       ],
       increase: [
-        'Increase slowly, usually around 5%, only when growth, biomass assumptions, and water quality support it.',
+        'Adjust feed only after direct tray response, biomass assumptions and water quality support it; follow the farm feeding protocol.',
         'Validate biomass and survival assumptions before increasing late-cycle feed.',
       ],
       stabilize: [

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Plus,
   Droplets,
@@ -21,7 +21,7 @@ import {
   type LucideIcon
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, getDoc, addDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, serverTimestamp, addDoc, runTransaction } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { app, auth, db, storage } from '@/lib/firebase';
@@ -37,6 +37,8 @@ import {
   isEnterpriseOwner,
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
+import { LAB_WATER_FIELDS, createManualLabUnits, labMeasurementLabel, validateLabRow, type LabMeasurementUnits } from '../../../../../functions/shared/labMeasurementContract';
+import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
 import { toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
@@ -100,6 +102,7 @@ interface LabStatus {
 }
 
 interface LabPondResult {
+  measurementUnits?: LabMeasurementUnits;
   pondId: string;
   pondCode: string;
   doc?: string;
@@ -109,6 +112,8 @@ interface LabPondResult {
     phLab?: string;
     salinityCustomer?: string;
     salinityLab?: string;
+    tan?: string;
+    nh3?: string;
     nh4?: string;
     no2?: string;
     alkalinityTotal?: string;
@@ -203,9 +208,6 @@ interface DashboardUser {
   companyId?: string;
   [key: string]: unknown;
 }
-
-const isBaselineSampling = (sampling: Pick<Sampling, 'isBaselineEstimate' | 'source'>): boolean =>
-  Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 
 const hasSavedValue = (value: unknown): boolean => value !== null && value !== undefined && value !== '';
 
@@ -344,124 +346,38 @@ export default function WaterQualityPage() {
     return () => window.clearInterval(interval);
   }, []);
 
-  // -- Sync form data with existing records when pond/date changes ----
-  useEffect(() => {
-    if (!isModalOpen || !formData.pondId || !formData.date) return;
-
-    const pond = accessiblePonds.find(p => p.id === formData.pondId);
-    const existing = pond?.samplings?.find(s =>
-      !isBaselineSampling(s) &&
-      !s.feedData &&
-      !s.harvestData &&
-      s.mbw === 0 &&
-      s.feed === 0 &&
-      s.mortality === 0 &&
-      s.date === formData.date
-    );
-
-    if (existing) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFormData(prev => {
-        // Only update if the values are actually different to avoid input loops
-        if (
-          prev.phMorning === (existing.phMorning || '') &&
-          prev.phEvening === (existing.phEvening || '') &&
-          prev.doMorning === (existing.doMorning || '') &&
-          prev.doEvening === (existing.doEvening || '') &&
-          prev.transparency === (existing.transparency || '') &&
-          prev.salinity === (existing.salinity || '') &&
-          prev.temperature === (existing.temperature || '') &&
-          prev.waterAppearance === (existing.waterAppearance || '') &&
-          prev.waterDepthCm === (existing.waterDepthCm || '') &&
-          prev.alkalinity === (existing.alkalinity || '') &&
-          prev.ammonia === (existing.ammonia || '') &&
-          prev.operationalNotes === (existing.operationalNotes || '') &&
-          prev.weatherEvent === (existing.weatherEvent || null) &&
-          prev.waterExchangePercent === (existing.waterExchangePercent || '') &&
-          prev.sludgeLoad === (existing.sludgeLoad || null) &&
-          prev.surfaceScum === (existing.surfaceScum ?? null) &&
-          prev.shrimpBehaviour === (existing.shrimpBehaviour || null)
-        ) return prev;
-
-        return {
-          ...prev,
-          phMorning: existing.phMorning || '',
-          phEvening: existing.phEvening || '',
-          doMorning: existing.doMorning || '',
-          doEvening: existing.doEvening || '',
-          transparency: existing.transparency || '',
-          salinity: existing.salinity || '',
-          temperature: existing.temperature || '',
-          waterAppearance: existing.waterAppearance || '',
-          waterDepthCm: existing.waterDepthCm || '',
-          alkalinity: existing.alkalinity || '',
-          ammonia: existing.ammonia || '',
-          operationalNotes: existing.operationalNotes || '',
-          weatherEvent: existing.weatherEvent || null,
-          waterExchangePercent: existing.waterExchangePercent || '',
-          sludgeLoad: existing.sludgeLoad || null,
-          surfaceScum: existing.surfaceScum ?? null,
-          shrimpBehaviour: existing.shrimpBehaviour || null,
-        };
-      });
-    } else {
-      setFormData(prev => {
-        // Only clear if not already empty
-        if (
-          !prev.phMorning && !prev.phEvening && !prev.doMorning &&
-          !prev.doEvening && !prev.transparency && !prev.salinity && !prev.temperature &&
-          !prev.waterAppearance && !prev.waterDepthCm && !prev.alkalinity &&
-          !prev.ammonia && !prev.operationalNotes &&
-          !prev.weatherEvent && !prev.waterExchangePercent && !prev.sludgeLoad &&
-          prev.surfaceScum === null && !prev.shrimpBehaviour
-        ) return prev;
-
-        return {
-          ...prev,
-          phMorning: '',
-          phEvening: '',
-          doMorning: '',
-          doEvening: '',
-          transparency: '',
-          salinity: '',
-          temperature: '',
-          waterAppearance: '',
-          waterDepthCm: '',
-          alkalinity: '',
-          ammonia: '',
-          operationalNotes: '',
-          weatherEvent: null,
-          waterExchangePercent: '',
-          sludgeLoad: null,
-          surfaceScum: null,
-          shrimpBehaviour: null,
-        };
-      });
-    }
-  }, [accessiblePonds, formData.pondId, formData.date, isModalOpen]);
+  const waterDrafts = useRef(new Map<string, typeof formData>());
+  const [waterSubmitting, setWaterSubmitting] = useState(false);
+  const createWaterDraft = (pondId: string, date: string) => {
+    const pond = accessiblePonds.find(pond => pond.id === pondId);
+    return initializeWaterDraft(pondId, date, pond?.samplings || []);
+  };
+  const openWaterRecord = (pondId = '') => {
+    waterDrafts.current.clear();
+    setFormData(createWaterDraft(pondId, today));
+    setModalOpen(true);
+  };
+  const selectWaterRecord = (pondId: string, date: string) => {
+    waterDrafts.current.set(`${formData.pondId}:${formData.date}`, formData);
+    setFormData(waterDrafts.current.get(`${pondId}:${date}`) || createWaterDraft(pondId, date));
+  };
 
   const handleAddWQ = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyId || !formData.pondId || !user) return;
+    if (!companyId || !formData.pondId || !user || waterSubmitting) return;
     if (!canEditWater) return;
     if (!accessiblePonds.some((pond) => pond.id === formData.pondId)) return;
 
+    setWaterSubmitting(true);
     try {
       const pondRef = doc(db, 'companies', companyId, 'ponds', formData.pondId);
-      const pondDoc = await getDoc(pondRef);
+      await runTransaction(db, async transaction => {
+        const pondDoc = await transaction.get(pondRef);
 
-      if (pondDoc.exists()) {
+        if (!pondDoc.exists()) throw new Error('Pond no longer exists.');
         const pondData = pondDoc.data();
         const samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s =>
-          !isBaselineSampling(s) &&
-          !s.feedData &&
-          !s.harvestData &&
-          s.mbw === 0 &&
-          s.feed === 0 &&
-          s.mortality === 0 &&
-          s.date === formData.date
-        );
+        const existingIndex = samplings.findIndex((record: Sampling) => isDailyWaterRecord(record, formData.date));
 
         const wqData = {
           cycleId: pondData.cycleId,
@@ -488,30 +404,7 @@ export default function WaterQualityPage() {
         };
 
         if (existingIndex >= 0) {
-          samplings[existingIndex] = {
-            ...samplings[existingIndex],
-            cycleId: pondData.cycleId,
-            cycleName: pondData.cycleName,
-            pondCycleId: pondData.pondCycleId || formData.pondId,
-            phMorning: formData.phMorning || samplings[existingIndex].phMorning || '',
-            phEvening: formData.phEvening || samplings[existingIndex].phEvening || '',
-            doMorning: formData.doMorning || samplings[existingIndex].doMorning || '',
-            doEvening: formData.doEvening || samplings[existingIndex].doEvening || '',
-            transparency: formData.transparency || samplings[existingIndex].transparency || '',
-            salinity: formData.salinity || samplings[existingIndex].salinity || '',
-            temperature: formData.temperature || samplings[existingIndex].temperature || '',
-            waterAppearance: formData.waterAppearance || samplings[existingIndex].waterAppearance || '',
-            waterDepthCm: formData.waterDepthCm || samplings[existingIndex].waterDepthCm || '',
-            alkalinity: formData.alkalinity || samplings[existingIndex].alkalinity || '',
-            waterQualityRecordedByName: user.name || (typeof user.email === 'string' ? user.email.split('@')[0] : '') || samplings[existingIndex].waterQualityRecordedByName || '',
-            ammonia: formData.ammonia || samplings[existingIndex].ammonia || '',
-            operationalNotes: formData.operationalNotes.trim(),
-            weatherEvent: formData.weatherEvent,
-            waterExchangePercent: formData.waterExchangePercent,
-            sludgeLoad: formData.sludgeLoad,
-            surfaceScum: formData.surfaceScum,
-            shrimpBehaviour: formData.shrimpBehaviour,
-          };
+          samplings[existingIndex] = { ...samplings[existingIndex], ...wqData };
         } else {
           samplings.push({
             id: `wq-${Date.now()}`,
@@ -521,44 +414,27 @@ export default function WaterQualityPage() {
           });
         }
 
-        await updateDoc(pondRef, {
+        transaction.update(pondRef, {
           samplings,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid
         });
 
-        setModalOpen(false);
-        setFormData({
-          pondId: '',
-          date: today,
-          phMorning: '',
-          phEvening: '',
-          doMorning: '',
-          doEvening: '',
-          transparency: '',
-          salinity: '',
-          temperature: '',
-          waterAppearance: '',
-          waterDepthCm: '',
-          alkalinity: '',
-          ammonia: '',
-          operationalNotes: '',
-          weatherEvent: null,
-          waterExchangePercent: '',
-          sludgeLoad: null,
-          surfaceScum: null,
-          shrimpBehaviour: null,
-        });
-      }
+      });
+      setModalOpen(false);
+      waterDrafts.current.clear();
     } catch (error) {
       console.error('Error adding water quality:', error);
       alert(copy('Failed to update water quality.'));
+    } finally {
+      setWaterSubmitting(false);
     }
   };
 
   const createEmptyLabRow = (pond: Pond): LabPondResult => ({
     pondId: pond.id,
     pondCode: pond.pondName,
+    measurementUnits: createManualLabUnits(),
     doc: '',
     transparencyCm: '',
     waterQuality: {
@@ -566,6 +442,8 @@ export default function WaterQualityPage() {
       phLab: '',
       salinityCustomer: '',
       salinityLab: '',
+      tan: '',
+      nh3: '',
       nh4: '',
       no2: '',
       alkalinityTotal: '',
@@ -655,6 +533,7 @@ export default function WaterQualityPage() {
     return {
       pondId: row.pondId,
       pondCode: row.pondCode,
+      measurementUnits: row.measurementUnits || {},
       doc: toOptionalNumber(row.doc),
       transparencyCm: toOptionalNumber(row.transparencyCm),
       waterQuality: {
@@ -662,6 +541,8 @@ export default function WaterQualityPage() {
         phLab: toOptionalNumber(row.waterQuality?.phLab),
         salinityCustomer: toOptionalNumber(row.waterQuality?.salinityCustomer),
         salinityLab: toOptionalNumber(row.waterQuality?.salinityLab),
+        tan: toOptionalNumber(row.waterQuality?.tan),
+        nh3: toOptionalNumber(row.waterQuality?.nh3),
         nh4: toOptionalNumber(row.waterQuality?.nh4),
         no2: toOptionalNumber(row.waterQuality?.no2),
         alkalinityTotal: toOptionalNumber(row.waterQuality?.alkalinityTotal),
@@ -709,6 +590,7 @@ export default function WaterQualityPage() {
   };
 
   const denormalizeLabRow = (row: LabPondResult): LabPondResult => ({
+    measurementUnits: row.measurementUnits || {},
     pondId: row.pondId,
     pondCode: row.pondCode || accessiblePonds.find(pond => pond.id === row.pondId)?.pondName || '',
     doc: toInputString(row.doc),
@@ -718,6 +600,8 @@ export default function WaterQualityPage() {
       phLab: toInputString(row.waterQuality?.phLab),
       salinityCustomer: toInputString(row.waterQuality?.salinityCustomer),
       salinityLab: toInputString(row.waterQuality?.salinityLab),
+      tan: toInputString(row.waterQuality?.tan),
+      nh3: toInputString(row.waterQuality?.nh3),
       nh4: toInputString(row.waterQuality?.nh4),
       no2: toInputString(row.waterQuality?.no2),
       alkalinityTotal: toInputString(row.waterQuality?.alkalinityTotal),
@@ -945,6 +829,8 @@ export default function WaterQualityPage() {
     const accessiblePondIds = new Set(accessiblePonds.map((pond) => pond.id));
     const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
     if (permittedLabRows.length === 0) return;
+    const issues = permittedLabRows.flatMap(row => validateLabRow(row).map(issue => `${row.pondCode}: ${issue}`));
+    if (issues.length) { alert(issues.join('\n')); return; }
     setLabSubmitting(true);
 
     try {
@@ -1058,16 +944,18 @@ export default function WaterQualityPage() {
       { label: 'DOC', path: ['doc'] },
     ];
     const mineralColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
-      { label: 'Transp.', path: ['transparencyCm'] },
-      { label: 'Sal. Cust.', path: ['waterQuality', 'salinityCustomer'] },
-      { label: 'Sal. Lab', path: ['waterQuality', 'salinityLab'] },
-      { label: 'NH4', path: ['waterQuality', 'nh4'] },
-      { label: 'NO2', path: ['waterQuality', 'no2'] },
-      { label: 'Alk.', path: ['waterQuality', 'alkalinityTotal'] },
-      { label: 'TOM', path: ['waterQuality', 'tom'] },
-      { label: 'Ca', path: ['waterQuality', 'hardnessCa'] },
-      { label: 'Mg', path: ['waterQuality', 'hardnessMg'] },
-      { label: 'Hardness', path: ['waterQuality', 'hardnessTotal'] },
+      { label: 'Transparency (cm)', path: ['transparencyCm'] },
+      { label: 'Salinity field (ppt)', path: ['waterQuality', 'salinityCustomer'] },
+      { label: 'Salinity lab (ppt)', path: ['waterQuality', 'salinityLab'] },
+      { label: LAB_WATER_FIELDS.tan.label + ' (unit/basis below)', path: ['waterQuality', 'tan'] },
+      { label: LAB_WATER_FIELDS.nh3.label + ' (unit/basis below)', path: ['waterQuality', 'nh3'] },
+      { label: LAB_WATER_FIELDS.nh4.label + ' (unit/basis below)', path: ['waterQuality', 'nh4'] },
+      { label: LAB_WATER_FIELDS.no2.label + ' (unit/basis below)', path: ['waterQuality', 'no2'] },
+      { label: LAB_WATER_FIELDS.alkalinityTotal.label + ' (unit/basis below)', path: ['waterQuality', 'alkalinityTotal'] },
+      { label: LAB_WATER_FIELDS.tom.label + ' (unit/basis below)', path: ['waterQuality', 'tom'] },
+      { label: LAB_WATER_FIELDS.hardnessCa.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessCa'] },
+      { label: LAB_WATER_FIELDS.hardnessMg.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessMg'] },
+      { label: LAB_WATER_FIELDS.hardnessTotal.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessTotal'] },
       { label: 'Vib. Y', path: ['microbiology', 'vibrioYellow'] },
       { label: 'Vib. G', path: ['microbiology', 'vibrioGreen'] },
       { label: 'Vib. Total', path: ['microbiology', 'vibrioTotal'] },
@@ -1144,8 +1032,7 @@ export default function WaterQualityPage() {
         {canEditWater && activeView === 'daily' && (
           <button
             onClick={() => {
-              setFormData({ ...formData, pondId: '', date: today });
-              setModalOpen(true);
+              openWaterRecord();
             }}
             className="dashboard-action dashboard-action-primary"
           >
@@ -1252,7 +1139,7 @@ export default function WaterQualityPage() {
                 {canEditWater && (
                   <div className="water-pond-actions">
                     <button
-                      onClick={() => { setFormData({ ...formData, pondId: pond.id, date: today }); setModalOpen(true); }}
+                      onClick={() => openWaterRecord(pond.id)}
                       className="water-quick-log"
                     >
                       <Plus size={15} /> {copy('Log')}
@@ -1444,12 +1331,15 @@ export default function WaterQualityPage() {
                           {report.reportType !== 'plankton' && (
                             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                               {[
-                                ['NH4', formatLabValue(water.nh4)],
-                                ['NO2', formatLabValue(water.no2)],
-                                ['Alkalinity', formatLabValue(water.alkalinityTotal)],
-                                ['Ca', formatLabValue(water.hardnessCa)],
-                                ['Mg', formatLabValue(water.hardnessMg)],
-                                ['Hardness', formatLabValue(water.hardnessTotal)],
+                                [labMeasurementLabel('tan', row.measurementUnits), formatLabValue(water.tan)],
+                                [labMeasurementLabel('nh3', row.measurementUnits), formatLabValue(water.nh3)],
+                                [labMeasurementLabel('tom', row.measurementUnits), formatLabValue(water.tom)],
+                                [labMeasurementLabel('nh4', row.measurementUnits), formatLabValue(water.nh4)],
+                                [labMeasurementLabel('no2', row.measurementUnits), formatLabValue(water.no2)],
+                                [labMeasurementLabel('alkalinityTotal', row.measurementUnits), formatLabValue(water.alkalinityTotal)],
+                                [labMeasurementLabel('hardnessCa', row.measurementUnits), formatLabValue(water.hardnessCa)],
+                                [labMeasurementLabel('hardnessMg', row.measurementUnits), formatLabValue(water.hardnessMg)],
+                                [labMeasurementLabel('hardnessTotal', row.measurementUnits), formatLabValue(water.hardnessTotal)],
                                 ['Vibrio', formatLabValue(micro.vibrioTotal)],
                               ].map(([label, value]) => (
                                 <div key={label} style={{ background: '#fff', borderRadius: '10px', border: '1px solid var(--border)', padding: '10px' }}>
@@ -1780,6 +1670,7 @@ export default function WaterQualityPage() {
                     <AlertTriangle size={18} color="var(--primary)" />
                     <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{copy('Bulk Result Grid')}</h3>
                   </div>
+                  <p>{copy('Enter at least one result per pond. Match each unit and basis to the lab report. N means nitrogen mass; CaCO3 means carbonate-equivalent hardness. Other units and TOM methods are kept as reported and excluded from automated comparisons.')}</p>
                   <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: labForm.reportType === 'plankton' ? '2200px' : labForm.reportType === 'combined' ? '2800px' : '1280px' }}>
                       <thead>
@@ -1793,7 +1684,10 @@ export default function WaterQualityPage() {
                         {labRows.map(row => (
                           <tr key={row.pondId}>
                             <td style={{ padding: '8px', fontWeight: 600, minWidth: 90 }}>{row.pondCode}</td>
-                            {labGridColumns.map(({ path, inputType = 'number' }) => {
+                            {labGridColumns.map(({ label, path, inputType = 'number' }) => {
+                              const field = path[0] === 'waterQuality' ? LAB_WATER_FIELDS[path[1]] : null;
+                              const units = row.measurementUnits?.[path[1]];
+                              const setUnits = (unit: string, basis: string) => setLabRows(previous => previous.map(item => item.pondId !== row.pondId ? item : { ...item, measurementUnits: { ...item.measurementUnits, [path[1]]: { unit, basis } } }));
                               const sectionValue = row[path[0] as keyof LabPondResult];
                               const value = path.length === 1
                                 ? (sectionValue as string | undefined)
@@ -1802,11 +1696,25 @@ export default function WaterQualityPage() {
                                 <td key={path.join('.')} style={{ padding: '6px', borderTop: '1px solid var(--border)' }}>
                                   <input
                                     type={inputType}
-                                    step={inputType === 'number' ? '0.01' : undefined}
+                                    aria-label={`${row.pondCode} ${label}`}
+                                    title={field ? labMeasurementLabel(path[1], row.measurementUnits) : label}
+                                    min={inputType === 'number' ? 0 : undefined}
+                                    max={field?.max ?? (path[1]?.endsWith('Percent') ? 100 : undefined)}
+                                    step={inputType === 'number' ? 'any' : undefined}
                                     value={value || ''}
                                     onChange={e => updateLabRow(row.pondId, path, e.target.value)}
                                     style={{ width: inputType === 'text' ? '170px' : '86px', padding: '8px', borderRadius: '9px', border: '1px solid var(--border)', fontWeight: 600 }}
                                   />
+                                  {field && <div style={{ display: 'grid', gap: 4, marginTop: 6 }}>
+                                    <select aria-label={`${row.pondCode} ${field.label} unit`} value={units?.unit || ''} onChange={e => setUnits(e.target.value, units?.basis || '')}>
+                                      <option value="">Select unit</option>
+                                      {[...new Set([field.unit, ...(field.unit === 'mg/L' ? ['µg/L', 'ppm'] : []), ...(units?.unit ? [units.unit] : [])])].map(unit => <option key={unit}>{unit}</option>)}
+                                    </select>
+                                    <select aria-label={`${row.pondCode} ${field.label} basis`} value={units?.basis || ''} onChange={e => setUnits(units?.unit || field.unit, e.target.value)}>
+                                      <option value="">Select basis</option>
+                                      {[...new Set([...field.bases, ...(units?.basis ? [units.basis] : [])])].map(basis => <option key={basis} value={basis}>{`as ${basis}`}</option>)}
+                                    </select>
+                                  </div>}
                                 </td>
                               );
                             })}
@@ -1820,7 +1728,7 @@ export default function WaterQualityPage() {
 
               <div className="water-lab-form-footer">
                 <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">{copy('Cancel')}</button>
-                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0} className="water-lab-primary-button water-confirm-lab-button">
+                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0 || labRows.some(row => validateLabRow(row).length > 0)} className="water-lab-primary-button water-confirm-lab-button">
                   {copy(labSubmitting ? 'Saving...' : 'Confirm Lab Report')}
                 </button>
               </div>
@@ -1850,7 +1758,7 @@ export default function WaterQualityPage() {
                   <select
                     required
                     value={formData.pondId}
-                    onChange={e => setFormData({...formData, pondId: e.target.value})}
+                    onChange={e => selectWaterRecord(e.target.value, formData.date)}
                     className="form-input"
                   >
                     <option value="">{copy('Select a pond asset...')}</option>
@@ -1860,7 +1768,7 @@ export default function WaterQualityPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('Date')}</label>
-                  <input type="date" value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} className="form-input" />
+                  <input type="date" value={formData.date} onChange={e => selectWaterRecord(formData.pondId, e.target.value)} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
@@ -2002,7 +1910,7 @@ export default function WaterQualityPage() {
                   flex: 1, borderRadius: '10px', border: '1px solid var(--border)',
                   background: 'transparent', fontWeight: 600, cursor: 'pointer'
                 }}>{copy('Cancel')}</button>
-                <button type="submit" disabled={!formData.pondId} className="water-save-log-button">{copy('Save Log Entry')}</button>
+                <button type="submit" disabled={!formData.pondId || waterSubmitting} className="water-save-log-button">{copy('Save Log Entry')}</button>
               </div>
             </form>
           </div>

@@ -12,7 +12,7 @@ const mobileHookSource = fs.readFileSync(path.join(__dirname, '../../../../../ap
 test('web and mobile render Orson replies without duplicate reply bubbles', () => {
   for (const source of [webSource, mobileSource]) {
     assert.match(source, /onPartialResponse:\s*\(partialResponse\)/);
-    assert.match(source, /upsertReply\(partialResponse\)/);
+    assert.match(source, /upsertReply\(partialResponse,/);
     assert.match(source, /loading\s*&&\s*!streamingReplyId/);
     assert.match(source, /upsertReply\(aiResponse\)/);
   }
@@ -22,4 +22,10 @@ test('web streams Orson replies while React Native uses the compatible non-strea
   assert.match(webHookSource, /consumeOrsonCallableStream\(/);
   assert.doesNotMatch(mobileHookSource, /consumeOrsonCallableStream\(/);
   assert.match(mobileHookSource, /withOrsonTimeout\([\s\S]*generateOrsonResponse\(requestPayload\)/);
+});
+
+test('both Firebase clients allow time for the server claim review', () => {
+  for (const source of [webHookSource, mobileHookSource]) {
+    assert.match(source, /functions, 'generateOrsonResponse', \{ timeout: ORSON_MODEL_TIMEOUT_MS \}/);
+  }
 });

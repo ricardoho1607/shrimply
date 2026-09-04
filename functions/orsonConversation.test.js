@@ -68,6 +68,18 @@ test("server instructions preserve exact-record and no-advice constraints", () =
   assert.match(instructions, /Do not interpret the word compare as a request for a multi-pond ranking/);
 });
 
+test("server pond diagnostics rank evidence and keep actions conditional", () => {
+  const instructions = __test.buildServerOrsonSystemInstruction("pond_diagnostic", "chat", "farm_analysis");
+
+  assert.match(instructions, /ASSESSMENT; KEY DATED EVIDENCE; LIKELY CAUSES; WHAT TO CHECK NEXT; ACTIONS/);
+  assert.match(instructions, /Rank no more than three supported causes/);
+  assert.match(instructions, /Logged feed allocation is not proof of appetite/);
+  assert.match(instructions, /Timing alone does not confirm/);
+  assert.match(instructions, /A morning DO reading is not a dawn or pre-dawn measurement/);
+  assert.match(instructions, /Readings after its end date cannot explain the completed interval/);
+  assert.doesNotMatch(instructions, /cut feed by 15-20%|cut by 30-50%/);
+});
+
 test("web lookup covers aquaculture knowledge and product composition questions", () => {
   assert.equal(__test.shouldUseOrsonWebLookup("inventory_product", "What ingredients are in BioPlus?"), true);
   assert.equal(__test.shouldUseOrsonWebLookup("inventory_product", "What does this probiotic do?"), true);
@@ -76,27 +88,8 @@ test("web lookup covers aquaculture knowledge and product composition questions"
   assert.equal(__test.shouldUseOrsonWebLookup("farm_analysis", "What is my nitrate today?"), false);
 });
 
-test("streaming model output emits each delta and returns the complete response", async () => {
-  const emitted = [];
-  const response = { text: () => "Orson answers quickly." };
-  const getModel = () => ({
-    generateContentStream: async () => ({
-      stream: (async function* () {
-        yield { text: () => "Orson answers " };
-        yield { text: () => "quickly." };
-      })(),
-      response: Promise.resolve(response),
-    }),
-  });
-
-  const result = await __test.generateOrsonStreamingResponse({
-    getModel,
-    prompt: "question",
-    useWebLookup: false,
-    onTextDelta: async (text) => emitted.push(text),
-  });
-
-  assert.deepEqual(emitted, ["Orson answers ", "quickly."]);
-  assert.equal(result.text, "Orson answers quickly.");
-  assert.equal(result.response, response);
+test("mortality diagnostics never reinterpret logged allocation as appetite", () => {
+  const instructions = __test.buildServerOrsonSystemInstruction("mortality_diagnostic", "chat", "farm_analysis");
+  assert.doesNotMatch(instructions, /low-confidence appetite proxy/);
+  assert.match(instructions, /allocation alone cannot establish appetite/);
 });

@@ -6,6 +6,8 @@ const test = require('node:test');
 const pageSource = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const globalStyles = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
 const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/water-quality.tsx'), 'utf8');
+require('sucrase/register/ts');
+const { initializeWaterDraft } = require('./waterFormState.ts');
 const pondStore = fs.readFileSync(path.join(__dirname, '../../../../../app/store/pondStore.ts'), 'utf8');
 
 test('water quality uses the compact authenticated layout', () => {
@@ -37,7 +39,7 @@ test('water quality modals use compact options and the authenticated primary act
   assert.match(pageSource, /className="glass-card responsive-modal animate-fade-up water-log-modal"/);
   assert.match(globalStyles, /@media \(max-width: 640px\)[\s\S]*\.water-log-form-grid/);
   assert.match(pageSource, /<label className="form-label">\{copy\('Date'\)\}<\/label>/);
-  assert.match(pageSource, /disabled=\{!formData\.pondId\} className="water-save-log-button"/);
+  assert.match(pageSource, /disabled=\{!formData\.pondId \|\| waterSubmitting\} className="water-save-log-button"/);
   assert.match(globalStyles, /\.water-save-log-button:disabled\s*\{[\s\S]*background:\s*var\(--bg-mid\)/);
 });
 
@@ -51,8 +53,9 @@ test('water quality shows Plankton Overwatch and keeps pond-condition evidence o
 });
 
 test('daily water quality preserves optional farm context and legacy records', () => {
-  assert.match(pageSource, /ammonia: existing\.ammonia \|\| ''/);
-  assert.match(pageSource, /operationalNotes: existing\.operationalNotes \|\| ''/);
+  const draft = initializeWaterDraft('pond', '2026-09-04', [{ date: '2026-09-04', mbw: 0, feed: 0, mortality: 0, ammonia: '0', operationalNotes: 'Normal swimming' }]);
+  assert.equal(draft.ammonia, '0');
+  assert.equal(draft.operationalNotes, 'Normal swimming');
   assert.match(pageSource, /copy\('Ammonia \(TAN\) \(mg\/L\)'\)/);
   assert.match(pageSource, /copy\('Operational Notes'\)/);
   assert.match(pageSource, /temperature: formData\.temperature/);

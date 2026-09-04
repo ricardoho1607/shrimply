@@ -76,8 +76,9 @@ export const runPipelineSelfTest = () => {
 
   assert(focused.promptPackage.questionFocus.focusedPondName === 'A1', 'detects focused pond');
   assert(focused.promptPackage.questionFocus.shouldSummarize === false, 'narrow question does not request summary');
-  assert(focused.promptPackage.context.includes('"pond": "A1"'), 'includes the focused pond');
-  assert(!focused.promptPackage.context.includes('"pond": "B2"'), 'excludes unselected ponds from focused prompts');
+  const focusedPayload = JSON.parse(focused.promptPackage.context.split('ORSON RISK PAYLOAD:\n')[1]);
+  assert(focusedPayload[0].pond === 'A1', 'includes the focused pond');
+  assert(focusedPayload.every((item: { pond: string }) => item.pond !== 'B2'), 'excludes unselected ponds from focused prompts');
 
   const exactHistory = buildOrsonAnalysis([
     {
@@ -243,7 +244,7 @@ export const runPipelineSelfTest = () => {
     },
   });
   assert(calibrated.metrics[0].calibration.scope === 'company', 'applies company memory to shared Orson analysis');
-  assert(calibrated.promptPackage.context.includes('v2-company'), 'passes calibration evidence to Gemini recommendations');
+  assert(calibrated.promptPackage.context.includes('v2-company'), 'passes calibration evidence to AI recommendations');
 
   const largeFarm = buildOrsonAnalysis(
     Array.from({ length: 100 }, (_, index) => ({
@@ -260,7 +261,7 @@ export const runPipelineSelfTest = () => {
     new Date('2026-01-16T00:00:00Z'),
   );
   assert(largeFarm.promptPackage.context.includes('"active_pond_count": 100'), 'preserves the full large-farm pond count');
-  assert(largeFarm.promptPackage.context.includes('"included_pond_count": 5'), 'bounds large-farm Gemini context to five highest-risk ponds');
+  assert(largeFarm.promptPackage.context.includes('"included_pond_count": 5'), 'bounds large-farm AI context to five highest-risk ponds');
 
   return analysis;
 };

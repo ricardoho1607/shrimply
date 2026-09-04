@@ -9,6 +9,7 @@ export interface KnowledgeSource {
   label: string;
   sourceType: 'curated_guidance' | 'research_anchor' | 'extension_guidance';
   reviewedAt: string;
+  url?: string;
 }
 
 export interface ParameterKnowledge {
@@ -42,4 +43,5 @@ export interface SelectedKnowledge {
   crossParameterRules: CrossParameterRule[];
   missingDataQuestions: string[];
   sourceLabels: string[];
+  sources?: KnowledgeSource[];
 }

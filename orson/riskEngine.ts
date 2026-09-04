@@ -133,6 +133,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     latestWeatherRecord?.weatherEvent === 'heavy_rain'
     && hasNumber(latestWeatherRecord.doMinimumMgL)
     && latestWeatherRecord.doMinimumMgL < 5
+    && !metrics.dailyRecords14d.some(record => record.date > latestWeatherRecord.date && hasNumber(record.doMinimumMgL) && record.doMinimumMgL >= 5)
   ) {
     findings.push(createFinding({
       id: 'heavy_rain_low_do',
@@ -446,7 +447,7 @@ export const analyzePondRisks = (metrics: OrsonPondMetrics, generatedAt = new Da
     }
   }
 
-  if (hasNumber(metrics.smoothedAdgGPerDay) && hasNumber(metrics.currentDoc) && metrics.currentDoc > 10) {
+  if (metrics.growthEvidence?.adgSource === 'measured' && hasNumber(metrics.smoothedAdgGPerDay) && hasNumber(metrics.currentDoc) && metrics.currentDoc > 10) {
     const expectedAdg = metrics.currentDoc <= 30 ? 0.15 : 0.2;
     if (metrics.smoothedAdgGPerDay < expectedAdg * 0.7) {
       findings.push(createFinding({

@@ -1,3 +1,4 @@
+import { labMeasurementLabel, validateLabRow } from '../../functions/shared/labMeasurementContract';
 import React, { useState, useMemo, useCallback, useRef } from "react";
 import { FlatList, StyleSheet, Text, View, TouchableOpacity, Modal, TextInput, ScrollView, StatusBar, Alert, Platform, KeyboardAvoidingView, ActivityIndicator, Linking, InteractionManager } from "react-native";
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -653,23 +654,25 @@ export default function WaterQualityScreen() {
       {
         title: t.waterQuality.nitrogen,
         values: [
-          { label: 'NH4', value: formatLabValue(water.nh4) },
-          { label: 'NO2', value: formatLabValue(water.no2) },
+          { label: labMeasurementLabel('tan', row?.measurementUnits), value: formatLabValue(water.tan) },
+          { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
+          { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
+          { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
         ],
       },
       {
         title: t.waterQuality.bufferAndMinerals,
         values: [
-          { label: t.waterQuality.alkalinity, value: formatLabValue(water.alkalinityTotal) },
-          { label: 'Ca', value: formatLabValue(water.hardnessCa) },
-          { label: 'Mg', value: formatLabValue(water.hardnessMg) },
-          { label: t.waterQuality.hardness, value: formatLabValue(water.hardnessTotal) },
+          { label: labMeasurementLabel('alkalinityTotal', row?.measurementUnits), value: formatLabValue(water.alkalinityTotal) },
+          { label: labMeasurementLabel('hardnessCa', row?.measurementUnits), value: formatLabValue(water.hardnessCa) },
+          { label: labMeasurementLabel('hardnessMg', row?.measurementUnits), value: formatLabValue(water.hardnessMg) },
+          { label: labMeasurementLabel('hardnessTotal', row?.measurementUnits), value: formatLabValue(water.hardnessTotal) },
         ],
       },
       {
         title: t.waterQuality.organicAndBacteria,
         values: [
-          { label: 'TOM', value: formatLabValue(water.tom) },
+          { label: labMeasurementLabel('tom', row?.measurementUnits), value: formatLabValue(water.tom) },
           { label: 'Vibrio', value: formatLabValue(micro.vibrioTotal) },
           { label: 'TBC', value: formatLabValue(micro.tbc) },
         ],
@@ -758,6 +761,9 @@ export default function WaterQualityScreen() {
     }
 
     try {
+      const unitIssues = (reportToConfirm.pondResults || []).flatMap(row => validateLabRow(row));
+      if (!reportToConfirm.pondResults?.length) unitIssues.push('Enter at least one measured pond result.');
+      if (unitIssues.length) { Alert.alert('Check lab results', unitIssues.join('\n') + '\nReview missing units and bases in the web lab form.'); return; }
       setIsConfirmingLab(true);
       const now = Timestamp.now();
       const patch = {
@@ -1376,11 +1382,13 @@ export default function WaterQualityScreen() {
                   const rowKey = `${row.pondId || row.pondCode || index}-${index}`;
                   const expanded = !!expandedReviewRows[rowKey];
                   const mineralChips = [
-                    { label: 'NH4', value: formatLabValue(water.nh4) },
-                    { label: 'NO2', value: formatLabValue(water.no2) },
-                    { label: 'Alk', value: formatLabValue(water.alkalinityTotal) },
-                    { label: 'Ca', value: formatLabValue(water.hardnessCa) },
-                    { label: 'Mg', value: formatLabValue(water.hardnessMg) },
+                    { label: labMeasurementLabel('tan', row?.measurementUnits), value: formatLabValue(water.tan) },
+                    { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
+                    { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
+                    { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
+                    { label: labMeasurementLabel('alkalinityTotal', row?.measurementUnits), value: formatLabValue(water.alkalinityTotal) },
+                    { label: labMeasurementLabel('hardnessCa', row?.measurementUnits), value: formatLabValue(water.hardnessCa) },
+                    { label: labMeasurementLabel('hardnessMg', row?.measurementUnits), value: formatLabValue(water.hardnessMg) },
                     { label: 'Vibrio', value: formatLabValue(micro.vibrioTotal) },
                   ];
                   const planktonChips = [
@@ -1395,23 +1403,25 @@ export default function WaterQualityScreen() {
                     {
                       title: t.waterQuality.nitrogen,
                       values: [
-                        { label: 'NH4', value: formatLabValue(water.nh4) },
-                        { label: 'NO2', value: formatLabValue(water.no2) },
+                        { label: labMeasurementLabel('tan', row?.measurementUnits), value: formatLabValue(water.tan) },
+                        { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
+                        { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
+                        { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
                       ],
                     },
                     {
                       title: t.waterQuality.bufferAndMinerals,
                       values: [
-                        { label: t.waterQuality.alkalinity, value: formatLabValue(water.alkalinityTotal) },
-                        { label: 'Ca', value: formatLabValue(water.hardnessCa) },
-                        { label: 'Mg', value: formatLabValue(water.hardnessMg) },
-                        { label: t.waterQuality.hardness, value: formatLabValue(water.hardnessTotal) },
+                        { label: labMeasurementLabel('alkalinityTotal', row?.measurementUnits), value: formatLabValue(water.alkalinityTotal) },
+                        { label: labMeasurementLabel('hardnessCa', row?.measurementUnits), value: formatLabValue(water.hardnessCa) },
+                        { label: labMeasurementLabel('hardnessMg', row?.measurementUnits), value: formatLabValue(water.hardnessMg) },
+                        { label: labMeasurementLabel('hardnessTotal', row?.measurementUnits), value: formatLabValue(water.hardnessTotal) },
                       ],
                     },
                     {
                       title: t.waterQuality.organicAndBacteria,
                       values: [
-                        { label: 'TOM', value: formatLabValue(water.tom) },
+                        { label: labMeasurementLabel('tom', row?.measurementUnits), value: formatLabValue(water.tom) },
                         { label: 'Vibrio', value: formatLabValue(micro.vibrioTotal) },
                         { label: 'TBC', value: formatLabValue(micro.tbc) },
                       ],

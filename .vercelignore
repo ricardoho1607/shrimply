@@ -1,6 +1,12 @@
 ios
 android
-functions
+functions/*
+!functions/shared/
+functions/shared/*
+!functions/shared/labMeasurementContract.js
+!functions/shared/labMeasurementContract.d.ts
+!functions/shared/orsonPromptPolicy.js
+!functions/shared/orsonPromptPolicy.d.ts
 output
 .codex
 .agents

@@ -42,6 +42,7 @@ export const evaluateCrossParameterRules = (metrics: OrsonPondMetrics): OrsonRis
   }
 
   if (
+    metrics.growthEvidence?.adgSource === 'measured' &&
     hasNumber(metrics.smoothedAdgGPerDay) &&
     hasNumber(metrics.currentDoc) &&
     metrics.currentDoc > 10 &&

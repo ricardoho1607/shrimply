@@ -1,3 +1,4 @@
+import { getOrsonAlertCaption } from '../shared/orsonNotification';
 // app/notifications.tsx - Updated with Clear All Button
 import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
@@ -407,7 +408,7 @@ export default function NotificationsScreen() {
             <View style={styles.notificationContent}>
               <Text style={styles.notificationTitle}>{notification.title}</Text>
               <Text style={styles.notificationMessage}>{notification.message}</Text>
-              <Text style={styles.timestamp}>{formatTimestamp(notification.timestamp)}</Text>
+              <Text style={styles.timestamp}>{getOrsonAlertCaption(notification, formatTimestamp(notification.timestamp)) || formatTimestamp(notification.timestamp)}</Text>
             </View>
           </TouchableOpacity>
         )}

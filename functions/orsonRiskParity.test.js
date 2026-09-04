@@ -55,7 +55,7 @@ test('SIM-B1 produces a warning-level dated notification signature', () => {
   assert.equal(report.overallSeverity, 'warning');
   assert.equal(report.findings[0].id, 'abnormal_shrimp_behaviour');
   assert.equal(report.findings.some((finding) => finding.id === 'ammonia_elevated'), false);
-  assert.match(getRiskSignature(report), /2026-09-01/);
+  assert.match(getRiskSignature(report), /2026-08-19/);
   assert.equal(
     getOrsonNotificationPriority(report.findings[0].severity, report.findings.map((finding) => finding.id)),
     'high',

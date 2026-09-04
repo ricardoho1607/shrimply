@@ -1155,7 +1155,7 @@ export const getFirestorePlatformHealth = async (periodDays: number = 7): Promis
     },
     {
       id: 'orson-ai',
-      name: 'Orson AI Gateway (Gemini Pro)',
+      name: 'Orson AI Gateway (Muse Spark 1.3)',
       category: 'ai',
       status: 'operational',
       uptimePercent: 99.98,

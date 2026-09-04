@@ -1,9 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { getAuth } from 'firebase/auth';
+import { useAuth } from '@/contexts/AuthContext';
+import { orsonIdentityKey, OrsonRequestSession, OrsonSessionChangedError } from '../../../orson/session';
+import { requireCompleteOrsonResponse, OrsonIncompleteResponseError, type OrsonResponse } from '../../../orson/responseCompletion';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { doc, getDoc } from 'firebase/firestore';
 import { app, db } from '@/lib/firebase';
 import { getErrorMessage, withTimeout } from '@/lib/asyncUtils';
-import NotificationService from '@/lib/notificationService';
 import { buildOrsonAnalysis } from '../../../orson/pipeline';
 import {
   type OrsonAiFunction,
@@ -85,9 +88,19 @@ const getRemoteOrsonLimit = (error: unknown): {
 };
 
 export const useGemini = () => {
+  const { user, company, loading: authLoading } = useAuth();
+  const identity = !authLoading && user?.companyId === company?.id ? orsonIdentityKey(user?.uid, company?.id) : null;
+  const requestSessionRef = useRef<OrsonRequestSession | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Reset the conversation at the external auth boundary.
+    setChatHistory([]);
+    setLoading(false);
+    setError(null);
+    return () => requestSessionRef.current?.cancel();
+  }, [identity]);
   
   const chatSessionRef = useRef<unknown>(null);
   const latestRequestId = useRef(0);
@@ -112,33 +125,20 @@ export const useGemini = () => {
     } catch (e) { console.error("Cache Write Error", e); }
   };
 
-  const createRiskNotifications = async (companyId: string | undefined, analysis: ReturnType<typeof buildOrsonAnalysis>) => {
-    if (!companyId) return;
-
-    await Promise.all(
-      analysis.reports.flatMap((report) => {
-        return report.findings
-          .filter((finding) => finding.severity === 'warning' || finding.severity === 'critical')
-          .slice(0, 2)
-          .map((finding) => NotificationService.createOrsonRiskNotification(companyId, {
-            pondId: report.pondId,
-            pondName: report.pondName,
-            riskId: finding.id,
-            severity: finding.severity,
-            title: finding.title,
-            message: `${finding.summary} ${finding.recommendation}`,
-            confidence: finding.confidence,
-          }));
-      })
-    );
-  };
-
   const sendMessage = async (
     userMessage: string,
     allPonds: object[],
     options: SendMessageOptions = {},
   ) => {
     const requestId = latestRequestId.current + 1;
+    requestSessionRef.current?.cancel();
+    const session = new OrsonRequestSession(identity);
+    requestSessionRef.current = session;
+    const assertCurrent = () => {
+      session.assertCurrent();
+      if (getAuth(app).currentUser?.uid !== user?.uid || options.companyId !== company?.id) throw new OrsonSessionChangedError();
+    };
+    assertCurrent();
     const requestStartedAt = Date.now();
     latestRequestId.current = requestId;
     setLoading(true);
@@ -171,6 +171,7 @@ export const useGemini = () => {
       }
 
       const analysisStartedAt = Date.now();
+      assertCurrent();
       let analysis = buildOrsonAnalysis(
         allPonds as Parameters<typeof buildOrsonAnalysis>[0],
         userMessage,
@@ -232,9 +233,7 @@ export const useGemini = () => {
           );
         }
       }
-      if (analysis.promptPackage.questionFocus.route === 'farm_analysis') {
-        void createRiskNotifications(options.companyId, analysis);
-      }
+      assertCurrent();
       const analysisMs = Date.now() - analysisStartedAt;
 
       if (analysis.promptPackage.exactRecordAnswer) {
@@ -249,7 +248,8 @@ export const useGemini = () => {
         return exactText;
       }
 
-      const cachedText = getCachedResponse(analysis.promptPackage.cacheKey);
+      const cachedText = getCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null);
+      assertCurrent();
       if (cachedText) {
         setChatHistory(prev => [
           ...prev,
@@ -275,11 +275,12 @@ export const useGemini = () => {
           console.warn('Orson prediction snapshot could not be recorded.', predictionError);
         }
       }
+      assertCurrent();
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
-        { text?: string },
+        { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'pond_diagnostic' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
+        OrsonResponse,
         OrsonTextStreamChunk
-      >(functions, 'generateOrsonResponse');
+      >(functions, 'generateOrsonResponse', { timeout: ORSON_MODEL_TIMEOUT_MS });
 
       const requestPayload = {
           companyId: options.companyId,
@@ -297,14 +298,17 @@ export const useGemini = () => {
         callable: generateOrsonResponse,
         request: requestPayload,
         timeoutMs: ORSON_MODEL_TIMEOUT_MS,
+        signal: session.signal,
         onPartialResponse: (partialText) => {
+          assertCurrent();
           if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
           options.onPartialResponse?.(cleanOrsonResponse(partialText));
         },
       });
       if (latestRequestId.current !== requestId) return 'A newer question is already being answered.';
 
-      const text = cleanOrsonResponse(resultData.text || '');
+      assertCurrent();
+      const text = cleanOrsonResponse(requireCompleteOrsonResponse(resultData));
       console.info('orson_client_latency', {
         route: analysis.promptPackage.questionFocus.route,
         promptChars: requestPayload.prompt.length,
@@ -314,7 +318,7 @@ export const useGemini = () => {
         totalMs: Date.now() - requestStartedAt,
       });
 
-      saveToCache(analysis.promptPackage.cacheKey, text);
+      saveToCache(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
 
       setChatHistory(prev => {
         if (latestRequestId.current !== requestId) return prev;
@@ -331,6 +335,11 @@ export const useGemini = () => {
       return text;
 
     } catch (err: unknown) {
+      assertCurrent();
+      if (err instanceof OrsonIncompleteResponseError) {
+        setLoading(false);
+        throw err;
+      }
       console.error("Orson Error:", err);
       if (latestRequestId.current === requestId) {
         setLoading(false);
@@ -374,6 +383,9 @@ export const useGemini = () => {
   };
 
   const clearChat = () => {
+    requestSessionRef.current?.cancel();
+    setLoading(false);
+    setError(null);
     setChatHistory([]);
     chatSessionRef.current = null;
   };

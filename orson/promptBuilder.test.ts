@@ -158,14 +158,14 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.systemInstruction.includes('daily_records_14d'), 'system instruction references daily_records_14d');
   assert(farmPackage.systemInstruction.includes('recent_lab_reports'), 'system instruction references recent_lab_reports');
   assert(farmPackage.systemInstruction.includes('compare the ponds side-by-side'), 'system instruction references pond comparisons');
-  assert(farmPackage.systemInstruction.includes('exact numerical adjustments'), 'system instruction references exact feed adjustments');
+  assert(farmPackage.systemInstruction.includes('Give a numerical change only when'), 'makes numerical feed adjustments conditional on evidence');
   assert(farmPackage.systemInstruction.includes('reply in that same language'), 'keeps replies in the user question language');
   assert(farmPackage.context.includes('ORSON RISK PAYLOAD'), 'builds payload context');
   assert(farmPackage.context.includes('feed_pressure_ratio'), 'includes feed pressure');
   assert(farmPackage.context.includes('feed_allocation_trend'), 'includes recent feed allocation trend');
   assert(farmPackage.context.includes('daily_records_14d'), 'includes 14-day daily records in context payload');
-  assert(farmRiskPayload[0].daily_records_14d.length === 5, 'keeps routine farm prompts to five recent daily records');
-  assert(historyRiskPayload[0].daily_records_14d.length === 5, 'keeps explicit history questions to the latest five relevant records');
+  assert(farmRiskPayload[0].daily_records_14d.length > 5 && farmRiskPayload[0].daily_records_14d.length <= 14, 'keeps the available calendar window for diagnostic prompts');
+  assert(historyRiskPayload[0].daily_records_14d.length > 5 && historyRiskPayload[0].daily_records_14d.length <= 14, 'keeps the available calendar window for explicit history questions');
   assert(farmPackage.context.includes('recent_lab_reports'), 'includes recent lab reports in context payload');
   assert(farmPackage.context.includes('plankton_overwatch'), 'includes deterministic Plankton Overwatch context');
   assert(farmPackage.context.includes('feeding_response'), 'includes direct feeding response separately from feed quantity');
@@ -178,7 +178,7 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.context.includes('shrimp_behaviour'), 'includes shrimp behaviour observations');
   assert(farmPackage.context.includes('biomass_range_kg'), 'includes biomass range');
   assert(farmPackage.context.includes('calibration'), 'includes bounded company calibration context');
-  assert(farmPackage.context.length < 15000, 'keeps prompt context compact');
+  assert(estimateOrsonPromptTokens(farmPackage.context) < ORSON_PROMPT_TOKEN_BUDGET, 'keeps prompt context within its token budget');
   assert(cleanOrsonResponse('## **Risk**  \nUse aeration.') === 'Risk\nUse aeration.', 'cleans markdown-heavy responses');
   assert(cleanOrsonResponse('Weather: heavy_rain') === 'Weather: Heavy Rain', 'formats raw enum values for display');
 
@@ -263,8 +263,8 @@ export const runPromptBuilderSelfTest = () => {
   const focusedRecords = focusedRiskPayload[0].daily_records_14d;
   const requestPrompt = buildOrsonRequestPrompt(focusedPackage.context, focusedPackage.userMessage);
   assert(focusedRiskPayload.length === 1, 'sends only the explicitly selected pond');
-  assert(focusedRecords.length >= 3 && focusedRecords.length <= 5, 'sends only the latest three to five relevant records');
-  assert(focusedRecords.at(-1).date === '2026-01-30', 'keeps the latest selected-pond record');
+  assert(focusedRecords.length === 14, 'sends the selected pond calendar window for a diagnostic question');
+  assert(focusedRecords.at(-1).date === '2026-01-16', 'excludes future-dated selected-pond records');
   assert(focusedRecords.every((record: { operational_notes?: string | null }) => !record.operational_notes || record.operational_notes.length <= 180), 'trims long operational notes');
   assert(estimateOrsonPromptTokens(requestPrompt) <= ORSON_PROMPT_TOKEN_BUDGET, 'enforces the Orson request token budget');
 

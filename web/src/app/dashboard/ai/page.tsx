@@ -11,10 +11,10 @@ import {
   TrendingUp,
   Shrimp
 } from 'lucide-react';
-import type { Unsubscribe } from 'firebase/firestore';
-import { onAuthStateChanged } from 'firebase/auth';
-import { collection, onSnapshot, doc } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { orsonIdentityKey, OrsonSessionChangedError } from '../../../../../orson/session';
+import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompletion';
 import { useGemini } from '@/hooks/useGemini';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,6 +25,7 @@ interface ChatMessage {
   type: 'user' | 'ai';
   message: string;
   timestamp: Date;
+  retryPrompt?: string;
 }
 
 type PondContext = {
@@ -62,6 +63,14 @@ const parseStoredMessages = (value: string | null): ChatMessage[] | null => {
 };
 
 export default function OrsonAIPage() {
+  const { user, company, loading, companyLoading } = useAuth();
+  const identity = !loading && !companyLoading && user?.companyId === company?.id
+    ? orsonIdentityKey(user?.uid, company?.id) : null;
+  if (!identity) return null;
+  return <OrsonChat key={identity} identity={identity} companyId={company!.id} uid={user!.uid} />;
+}
+
+function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: string; uid: string }) {
   const copy = useDashboardCopy();
   const suggestedPrompts = [
     copy("Analyze today's 72-hour outlook"),
@@ -72,10 +81,12 @@ export default function OrsonAIPage() {
   const { user, company } = useAuth();
   const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
   const [ponds, setPonds] = useState<PondContext[]>([]);
-  const [companyId, setCompanyId] = useState<string | undefined>();
+  const [pondsReady, setPondsReady] = useState(false);
+  const storageKey = `orson_messages_v3:${identity}:`;
+  const generation = useRef(0);
   const [messages, setMessages] = useState<ChatMessage[]>(() => {
     if (typeof window === 'undefined') return [createWelcomeMessage(copy)];
-    return parseStoredMessages(sessionStorage.getItem('orson_messages')) ?? [createWelcomeMessage(copy)];
+    return parseStoredMessages(sessionStorage.getItem(storageKey)) ?? [createWelcomeMessage(copy)];
   });
   const [inputText, setInputText] = useState('');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
@@ -84,72 +95,50 @@ export default function OrsonAIPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    let unsubUser: Unsubscribe | undefined;
-    let unsubPonds: Unsubscribe | undefined;
-
-    const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      unsubUser?.();
-      unsubPonds?.();
-      unsubUser = undefined;
-      unsubPonds = undefined;
-
-      if (firebaseUser) {
-        unsubUser = onSnapshot(doc(db, 'users', firebaseUser.uid), (uDoc) => {
-          const cid = uDoc.data()?.companyId;
-          setCompanyId(cid);
-          if (cid) {
-            unsubPonds = onSnapshot(collection(db, 'companies', cid, 'ponds'), (snapshot) => {
-              setPonds(snapshot.docs
-                .map(doc => ({ id: doc.id, ...doc.data() } as PondContext))
-                .filter((pond) => pond.cycleStatus !== 'ended'));
-            });
-          } else {
-            setPonds([]);
-          }
-        });
-      } else {
-        setCompanyId(undefined);
-        setPonds([]);
-      }
+    sessionStorage.removeItem('orson_messages');
+    let active = true;
+    const unsubscribe = onSnapshot(collection(db, 'companies', companyId, 'ponds'), (snapshot) => {
+      if (!active || auth.currentUser?.uid !== uid) return;
+      setPonds(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PondContext))
+        .filter(pond => pond.cycleStatus !== 'ended'));
+      setPondsReady(true);
     });
-
-    return () => {
-      unsubAuth();
-      unsubUser?.();
-      unsubPonds?.();
-    };
-  }, []);
+    return () => { active = false; generation.current += 1; unsubscribe(); };
+  }, [companyId, uid]);
 
   useEffect(() => {
     const persistenceTimer = window.setTimeout(() => {
-      if (messages.length > 0) sessionStorage.setItem('orson_messages', JSON.stringify(messages));
+      if (auth.currentUser?.uid === uid && messages.length > 0) sessionStorage.setItem(storageKey, JSON.stringify(messages));
     }, 250);
     return () => window.clearTimeout(persistenceTimer);
-  }, [messages]);
+  }, [messages, storageKey, uid]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const handleSend = async (textToSubmit?: string) => {
+  const handleSend = async (textToSubmit?: string, retryId?: string) => {
     const text = textToSubmit || inputText;
-    if (!text.trim() || loading) return;
+    if (!text.trim() || loading || !pondsReady || auth.currentUser?.uid !== uid) return;
+    const currentGeneration = ++generation.current;
+    const isCurrent = () => generation.current === currentGeneration && auth.currentUser?.uid === uid;
 
+    const replyTimestamp = new Date();
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${replyTimestamp.getTime()}-${currentGeneration}`,
       type: 'user',
       message: text.trim(),
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
-    const replyId = `orson-${Date.now()}`;
-    const replyTimestamp = new Date();
-    const upsertReply = (message: string) => {
+    const replyId = retryId || `orson-${replyTimestamp.getTime()}-${currentGeneration}`;
+    const upsertReply = (message: string, retryPrompt?: string) => {
+      if (!isCurrent()) return;
       setMessages((previous) => {
         const existing = previous.findIndex((item) => item.id === replyId);
-        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp };
+        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}) };
         if (existing < 0) return [...previous, reply];
         return previous.map((item, index) => index === existing ? reply : item);
       });
@@ -160,26 +149,31 @@ export default function OrsonAIPage() {
         companyId,
         timeZone: company?.timeZone,
         conversationHistory: messages
-          .filter((message) => message.id !== 'welcome')
+          .filter((message) => message.id !== 'welcome' && !message.retryPrompt && message.id !== retryId)
           .slice(-10)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
+          if (!isCurrent()) return;
           setStreamingReplyId(replyId);
-          upsertReply(partialResponse);
+          upsertReply(partialResponse, text.trim());
         },
       });
       upsertReply(aiResponse);
     } catch (err) {
-      console.error(err);
+      if (!isCurrent() || err instanceof OrsonSessionChangedError) return;
+      if (err instanceof OrsonIncompleteResponseError) upsertReply(err.partialText || copy('No answer received.'), text.trim());
+      else upsertReply(copy('No answer received.'), text.trim());
     } finally {
-      setStreamingReplyId(null);
+      if (isCurrent()) setStreamingReplyId(null);
     }
   };
 
   const handleClearChat = () => {
     if (window.confirm(copy('Clear conversation history?'))) {
+      generation.current += 1;
+      setStreamingReplyId(null);
       clearChat();
-      sessionStorage.removeItem('orson_messages');
+      sessionStorage.removeItem(storageKey);
       setMessages([createWelcomeMessage(copy)]);
     }
   };
@@ -232,6 +226,7 @@ export default function OrsonAIPage() {
                   <div className="orson-message-stack">
                     <div className="orson-bubble">
                       {msg.message}
+                      {msg.retryPrompt && <div role="status">{copy('Response interrupted.')} <button type="button" disabled={loading || !pondsReady} onClick={() => handleSend(msg.retryPrompt, msg.id)}>{copy('Retry')}</button></div>}
                     </div>
                     <span className="orson-time">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -279,7 +274,7 @@ export default function OrsonAIPage() {
                 />
                 <button
                   type="submit"
-                  disabled={!inputText.trim() || loading}
+                  disabled={!inputText.trim() || loading || !pondsReady}
                   className="orson-send"
                   aria-label={copy('Send message')}
                 >
@@ -299,7 +294,7 @@ export default function OrsonAIPage() {
                   <button
                     key={p}
                     onClick={() => handleSend(p)}
-                    disabled={loading}
+                    disabled={loading || !pondsReady}
                     className="orson-suggestion"
                   >
                     {p}

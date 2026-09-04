@@ -8,7 +8,7 @@ import { getFarmDateKey } from '../shared/farmDate';
 
 export type OrsonAiFunction = 'chat' | 'projection';
 
-export const ORSON_GEMINI_MODEL = 'gemini-2.5-flash-lite';
+export const ORSON_CHAT_MODEL = 'muse-spark-1.3-contributor';
 
 export const ORSON_DAILY_LIMITS: Record<OrsonAiFunction, number> = {
   chat: 20,

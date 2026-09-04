@@ -8,8 +8,9 @@ import { FEED_KNOWLEDGE } from './feedKnowledge';
 import { GROWTH_KNOWLEDGE } from './growthKnowledge';
 import { LAB_KNOWLEDGE } from './labKnowledge';
 import type { CrossParameterRule, ParameterKnowledge, SelectedKnowledge } from './knowledgeTypes';
-import { getKnowledgeSourceLabels } from './sources';
+import { getKnowledgeSourceLabels, KNOWLEDGE_SOURCES } from './sources';
 import { WATER_QUALITY_KNOWLEDGE } from './waterQualityKnowledge';
+import { DIAGNOSTIC_KNOWLEDGE } from './diagnosticKnowledge';
 
 const ALL_PARAMETER_KNOWLEDGE = [
   ...WATER_QUALITY_KNOWLEDGE,
@@ -17,6 +18,7 @@ const ALL_PARAMETER_KNOWLEDGE = [
   ...GROWTH_KNOWLEDGE,
   ...LAB_KNOWLEDGE,
   ...ADDITIVE_KNOWLEDGE,
+  ...DIAGNOSTIC_KNOWLEDGE,
 ];
 
 const normalize = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
@@ -40,27 +42,58 @@ const uniqueById = <T extends { id: string }>(items: T[]): T[] => {
 const selectParameterKnowledge = (
   userMessage: string,
   focus: OrsonQuestionFocus,
+  metrics: OrsonPondMetrics[],
 ): ParameterKnowledge[] => {
-  const selected: ParameterKnowledge[] = [];
+  const evidenceTopics = new Set<string>();
+  const nitrogenObservations = metrics.flatMap(metric => metric.diagnosticContext.history.observations ?? []);
+  const hasUnverifiedNitrite = nitrogenObservations.some(record => record.nitriteMgL !== undefined
+    && !['NO2', 'NO2-N', 'NO2 as N'].includes(record.nitrogenBasis ?? ''));
+  if (focus.analysisMode !== 'standard' && focus.route === 'farm_analysis') metrics.forEach(metric => {
+    metric.diagnosticContext.signals.forEach(signal => {
+      if (signal.type.startsWith('ADG_')) evidenceTopics.add('growth_performance');
+      if (signal.type.startsWith('DAILY_FEED_')) evidenceTopics.add('feed_control');
+      if (signal.type.startsWith('MORNING_DO_')) evidenceTopics.add('dissolved_oxygen');
+      if (signal.type.startsWith('PH_SWING_')) { evidenceTopics.add('ph'); evidenceTopics.add('alkalinity'); evidenceTopics.add('plankton_transparency'); }
+      if (signal.type.startsWith('ALKALINITY_')) evidenceTopics.add('alkalinity');
+      if (signal.type.startsWith('SALINITY_')) evidenceTopics.add('salinity');
+      if (signal.type.startsWith('FCR_')) evidenceTopics.add('fcr');
+    });
+    if (metric.doMinimumLatest !== null && metric.doMinimumLatest < 5) evidenceTopics.add('dissolved_oxygen');
+    if (metric.latestMortalityCount !== null && metric.latestMortalityCount > 0) { evidenceTopics.add('mortality'); evidenceTopics.add('disease_warning_signs'); }
+    if (metric.latestTemperatureC !== null) evidenceTopics.add('temperature');
+    const observations = metric.diagnosticContext.history.observations ?? [];
+    if (observations.some(record => record.tanMgL !== undefined)) evidenceTopics.add('ammonia');
+    if (observations.some(record => record.nitriteMgL !== undefined)) evidenceTopics.add('nitrite');
+  });
+  const waterIds = ['dissolved_oxygen', 'ph', 'ammonia', 'nitrite', 'salinity', 'alkalinity', 'plankton_transparency'];
+  const score = (knowledge: ParameterKnowledge): number => {
+    let value = 0;
+    if (evidenceTopics.has(knowledge.id)) value += 80;
+    if (focus.requestedParameter === knowledge.id) value += 120;
+    if (questionMatchesKnowledge(userMessage, knowledge)) value += 100;
+    if (focus.intent === 'feed' && knowledge.domain === 'feed') value += 50;
+    if ((focus.intent === 'growth' || focus.intent === 'biomass' || focus.intent === 'survival') && knowledge.domain === 'growth') value += 50;
+    if (focus.intent === 'lab' && knowledge.domain === 'lab') value += 50;
+    if ((focus.intent === 'water_quality' || focus.intent === 'parameter_control') && waterIds.includes(knowledge.id)) value += 20;
+    if (focus.route === 'inventory_product' && knowledge.domain === 'additive' && questionMatchesKnowledge(userMessage, knowledge)) value += 50;
+    return value;
+  };
 
-  if (focus.requestedParameter) {
-    const byId = ALL_PARAMETER_KNOWLEDGE.find((knowledge) => knowledge.id === focus.requestedParameter);
-    if (byId) selected.push(byId);
-  }
-
-  selected.push(...ALL_PARAMETER_KNOWLEDGE.filter((knowledge) => questionMatchesKnowledge(userMessage, knowledge)));
-
-  if (focus.intent === 'feed') selected.push(...FEED_KNOWLEDGE);
-  if (focus.intent === 'growth' || focus.intent === 'biomass' || focus.intent === 'survival') selected.push(...GROWTH_KNOWLEDGE);
-  if (focus.intent === 'lab') selected.push(...LAB_KNOWLEDGE);
-  if (focus.route === 'inventory_product') selected.push(...ADDITIVE_KNOWLEDGE.filter((knowledge) => questionMatchesKnowledge(userMessage, knowledge)));
-  if (focus.intent === 'water_quality' || focus.intent === 'parameter_control') {
-    selected.push(...WATER_QUALITY_KNOWLEDGE.filter((knowledge) => {
-      return ['dissolved_oxygen', 'ph', 'ammonia', 'nitrite', 'salinity', 'alkalinity', 'plankton_transparency'].includes(knowledge.id);
-    }));
-  }
-
-  return uniqueById(selected).slice(0, 4);
+  return ALL_PARAMETER_KNOWLEDGE
+    .map((knowledge, index) => ({ knowledge, index, score: score(knowledge) }))
+    .filter((item) => item.score > 0)
+    .sort((first, second) => second.score - first.score || first.index - second.index)
+    .map((item) => item.knowledge)
+    .slice(0, 6)
+    .map(knowledge => knowledge.id === 'nitrite' && hasUnverifiedNitrite ? {
+      ...knowledge,
+      target: undefined,
+      warning: undefined,
+      critical: undefined,
+      evidenceBase: 'Nitrite was recorded with an unspecified analyte basis. Its risk category and toxicity are unavailable until NO2 versus NO2-N and the source unit are verified.',
+      actions: { investigate: ['Confirm nitrite analyte basis, unit and method before comparing values to any numerical threshold.'] },
+      cautions: ['Do not classify the unverified values as safe, warning, critical or toxic, and do not calculate a treatment from them.'],
+    } : knowledge);
 };
 
 const selectCrossParameterRules = (
@@ -124,7 +157,7 @@ export const selectOrsonKnowledge = (params: {
   questionFocus: OrsonQuestionFocus;
   metrics: OrsonPondMetrics[];
 }): SelectedKnowledge => {
-  const parameterGuidance = selectParameterKnowledge(params.userMessage, params.questionFocus);
+  const parameterGuidance = selectParameterKnowledge(params.userMessage, params.questionFocus, params.metrics);
   const crossParameterRules = selectCrossParameterRules(parameterGuidance, params.metrics, params.questionFocus);
   const sourceIds = [
     ...parameterGuidance.flatMap((knowledge) => knowledge.sourceIds),
@@ -136,5 +169,6 @@ export const selectOrsonKnowledge = (params: {
     crossParameterRules,
     missingDataQuestions: buildMissingDataQuestions(parameterGuidance, params.metrics),
     sourceLabels: getKnowledgeSourceLabels(sourceIds),
+    sources: KNOWLEDGE_SOURCES.filter(source => sourceIds.includes(source.id)),
   };
 };

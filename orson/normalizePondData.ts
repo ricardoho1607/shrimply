@@ -17,6 +17,7 @@ import {
   differenceInFarmCalendarDays,
   getFarmDateKey,
   normalizeFarmDateKey,
+  resolveFarmTimeZone,
 } from '../shared/farmDate';
 
 type RawRecord = Record<string, any>;
@@ -129,6 +130,9 @@ const normalizeLabMetrics = (value: unknown): OrsonLabMetrics | null => {
     nh4MgL: firstNumber(water.nh4MgL, water.nh4, legacyNh4),
     nitriteMgL: firstNumber(water.nitriteMgL, water.nitrite, water.no2),
     tomMgL: firstNumber(water.tomMgL, water.tom),
+    calciumHardnessMgLCaCO3: firstNumber(water.calciumHardnessMgLCaCO3),
+    magnesiumHardnessMgLCaCO3: firstNumber(water.magnesiumHardnessMgLCaCO3),
+    totalHardnessMgLCaCO3: firstNumber(water.totalHardnessMgLCaCO3),
   };
   const normalizedMicrobiology: NonNullable<OrsonLabMetrics['microbiology']> = {
     date: normalizeDateString(microbiology.date),
@@ -158,9 +162,20 @@ const normalizeLabMetrics = (value: unknown): OrsonLabMetrics | null => {
   const normalizedMicro = hasMetric(normalizedMicrobiology) ? normalizedMicrobiology : null;
   const normalizedPlanktonMetrics = hasMetric(normalizedPlankton) ? normalizedPlankton : null;
   if (!waterQuality && !normalizedMicro && !normalizedPlanktonMetrics) return null;
+  const measurementUnits = raw.measurementUnits && typeof raw.measurementUnits === 'object'
+    ? Object.fromEntries(Object.entries(raw.measurementUnits as RawPond).flatMap(([field, value]) => {
+        if (!value || typeof value !== 'object') return [];
+        const unit = firstString((value as RawPond).unit) ?? '';
+        const basis = firstString((value as RawPond).basis) ?? '';
+        return [[field, { unit, basis }]];
+      }))
+    : undefined;
 
   return {
     schemaVersion: 2,
+    ...(raw.measurementSchemaVersion === 1 ? { measurementSchemaVersion: 1 as const } : {}),
+    measurementWarnings: Array.isArray(raw.measurementWarnings) ? raw.measurementWarnings.filter((value): value is string => typeof value === 'string') : ['Historical lab units and bases were not verified.'],
+    ...(measurementUnits && Object.keys(measurementUnits).length > 0 ? { measurementUnits } : {}),
     waterQuality,
     microbiology: normalizedMicro,
     plankton: normalizedPlanktonMetrics,
@@ -185,6 +200,16 @@ const normalizeDateString = (value: unknown): string | null => {
     }
   }
 
+  return null;
+};
+
+const normalizeObservedAt = (value: unknown): string | null => {
+  if (typeof value === 'string' && value.includes('T') && Number.isFinite(new Date(value).getTime())) return value.trim();
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
+  if (value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') {
+    const date = value.toDate();
+    if (date instanceof Date && Number.isFinite(date.getTime())) return date.toISOString();
+  }
   return null;
 };
 
@@ -216,19 +241,24 @@ const normalizeLabStatus = (value: unknown): OrsonLabStatusSummary | null => {
   return hasContent ? summary : null;
 };
 
-const labBelongsToCurrentCycle = (status: OrsonLabStatusSummary, pond: RawPond): boolean => {
+const labBelongsToCurrentCycle = (
+  status: Pick<OrsonLabStatusSummary, 'sampleDate' | 'cycleId' | 'pondCycleId'>,
+  pond: RawPond,
+  asOfDate: string,
+): boolean => {
+  const cycleStartDate = normalizeDateString(pond.cycleStartedAt ?? pond.docStart ?? pond.stockingDate ?? pond.startDate);
+  if (status.sampleDate && (status.sampleDate > asOfDate || (cycleStartDate && status.sampleDate < cycleStartDate))) return false;
   const pondCycleId = firstString(pond.pondCycleId, pond.id);
   const cycleId = firstString(pond.cycleId);
   if (status.pondCycleId && pondCycleId) return status.pondCycleId === pondCycleId;
   if (status.cycleId && cycleId) return status.cycleId === cycleId;
-  const cycleStartDate = normalizeDateString(pond.cycleStartedAt ?? pond.docStart ?? pond.stockingDate ?? pond.startDate);
-  return !cycleStartDate || !status.sampleDate || status.sampleDate >= cycleStartDate;
+  return true;
 };
 
-const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
+const normalizeLabContext = (pond: RawPond, asOfDate: string): OrsonLabContext => {
   const latestLabStatus = pond.latestLabStatus;
   const normalizedLatest = normalizeLabStatus(latestLabStatus);
-  const latest = normalizedLatest && labBelongsToCurrentCycle(normalizedLatest, pond) ? normalizedLatest : null;
+  const latest = normalizedLatest && labBelongsToCurrentCycle(normalizedLatest, pond, asOfDate) ? normalizedLatest : null;
   const typedStatuses: OrsonLabStatusSummary[] = [];
 
   if (latestLabStatus && typeof latestLabStatus === 'object') {
@@ -241,7 +271,7 @@ const normalizeLabContext = (pond: RawPond): OrsonLabContext => {
     }
   }
 
-  const allStatuses = [...typedStatuses].filter((status) => labBelongsToCurrentCycle(status, pond));
+  const allStatuses = [...typedStatuses].filter((status) => labBelongsToCurrentCycle(status, pond, asOfDate));
   if (latest) {
     const hasDuplicate = allStatuses.some((status) => {
       if (latest.labReportId && status.labReportId === latest.labReportId) return true;
@@ -339,7 +369,7 @@ const collectMissingFields = (fields: Record<string, unknown>): string[] => {
     .map(([key]) => key);
 };
 
-const normalizeTreatments = (pond: RawPond): OrsonPromptTreatmentEvent[] => {
+const normalizeTreatments = (pond: RawPond, asOfDate: string): OrsonPromptTreatmentEvent[] => {
   const rawTreatments = Array.isArray(pond.treatments)
     ? pond.treatments
     : Array.isArray(pond.additivesUsage)
@@ -348,6 +378,11 @@ const normalizeTreatments = (pond: RawPond): OrsonPromptTreatmentEvent[] => {
 
   return rawTreatments
     .filter((item) => item && typeof item === 'object')
+    .filter((item) => labBelongsToCurrentCycle({
+      sampleDate: normalizeDateString(item.date),
+      cycleId: firstString(item.cycleId),
+      pondCycleId: firstString(item.pondCycleId),
+    }, pond, asOfDate))
     .map((item, index) => ({
       id: firstString(item.id) ?? `treatment-${index}`,
       date: normalizeDateString(item.date) ?? '',
@@ -406,6 +441,8 @@ const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null =>
   return {
     totalDailyFeedKg,
     inventoryFeedId: firstString(rawFeedData.inventoryFeedId),
+    feedType: firstString(rawFeedData.feedType, rawFeedData.feedName),
+    feedingFrequency: firstNumber(rawFeedData.feedingFrequency),
     feedingResponse: rawFeedData.feedingResponse === 'strong'
       || rawFeedData.feedingResponse === 'normal'
       || rawFeedData.feedingResponse === 'weak'
@@ -416,13 +453,15 @@ const normalizeFeedData = (record: RawRecord): OrsonNormalizedFeedData | null =>
 
 const recordKinds = (record: RawRecord, feedData: OrsonNormalizedFeedData | null): OrsonRecordKind[] => {
   const kinds: OrsonRecordKind[] = [];
-  const mbw = firstNumber(record.mbw);
+  const mbw = firstNumber(record.mbw, record.abw);
   const mortality = firstNumber(record.mortality, record.dead, record.deaths);
   const feed = firstNumber(record.feed);
 
   if ((mbw !== null && mbw > 0) || (mortality !== null && mortality > 0)) kinds.push('sampling');
   if (record.mortalityObservationType) kinds.push('mortality');
   if (
+    firstNumber(record.alkalinity, record.alkalinityMgL, record.nitriteMgL, record.temperatureMorning, record.temperatureEvening) !== null
+    ||
     firstNumber(record.phMorning, record.phEvening, record.doMorning, record.doEvening, record.salinity, record.transparency, record.temperature, record.ammonia, record.ammoniaMgL, record.tanMgL, record.waterExchangePercent) !== null
     || firstString(record.operationalNotes) !== null
     || record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
@@ -457,10 +496,28 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
   const mortalityObservedCount = mortalityObservationType
     ? firstNumber(record.mortality, record.count) ?? 0
     : firstNumber(record.mortality, record.dead, record.deaths);
+  const harvestData = record.harvestData && typeof record.harvestData === 'object' ? record.harvestData as RawPond : null;
+  const mainHarvestBiomass = harvestData ? firstNumber(harvestData.biomass) : null;
+  const subHarvestBiomass = harvestData ? firstNumber(harvestData.subBiomass) : null;
+  const mainHarvestSize = harvestData ? firstNumber(harvestData.size) : null;
+  const subHarvestSize = harvestData ? firstNumber(harvestData.subSize) : null;
+  const harvestBiomassKg = mainHarvestBiomass !== null || subHarvestBiomass !== null
+    ? (mainHarvestBiomass ?? 0) + (subHarvestBiomass ?? 0)
+    : null;
+  const harvestPopulation = (
+    (mainHarvestBiomass !== null && mainHarvestSize !== null)
+    || (subHarvestBiomass !== null && subHarvestSize !== null)
+  )
+    ? ((mainHarvestBiomass ?? 0) * (mainHarvestSize ?? 0)) + ((subHarvestBiomass ?? 0) * (subHarvestSize ?? 0))
+    : null;
 
   const normalized: OrsonNormalizedRecord = {
     id: firstString(record.id),
+    cycleId: firstString(record.cycleId),
+    pondCycleId: firstString(record.pondCycleId),
+    source: firstString(record.source),
     date,
+    observedAt: normalizeObservedAt(record.observedAt ?? record.date),
     timestampMs,
     doc: calculateDoc(docStartDate, date, timeZone),
     kinds: recordKinds(record, feedData),
@@ -477,7 +534,22 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     salinityPpt: firstNumber(record.salinity),
     transparencyCm: firstNumber(record.transparency),
     temperatureC: firstNumber(record.temp, record.temperature, record.temperatureC),
-    ammoniaMgL: firstNumber(record.ammonia, record.ammoniaMgL, record.tanMgL),
+    ammoniaMgL: firstNumber(record.ammonia, record.ammoniaMgL),
+    diagnosticMeasurements: Object.fromEntries(Object.entries({
+      alkalinityMgL: firstNumber(record.alkalinityMgL, record.alkalinity),
+      tanMgL: firstNumber(record.tanMgL),
+      nitriteMgL: firstNumber(record.nitriteMgL),
+      nitrogenBasis: firstString(record.nitrogenBasis),
+      temperatureMorningC: firstNumber(record.temperatureMorningC, record.temperatureMorning),
+      temperatureEveningC: firstNumber(record.temperatureEveningC, record.temperatureEvening),
+      estimatedPopulation: firstNumber(record.estimatedPopulation),
+      estimatedBiomassKg: firstNumber(record.estimatedBiomassKg, record.biomassKg),
+      survivalPercent: firstNumber(record.survivalPercent, record.survivalRate),
+      samplingMethod: firstString(record.samplingMethod),
+      recordedFcr: firstNumber(record.fcr),
+      fcrBasis: firstString(record.fcrBasis),
+      recordedFeedIndex: firstNumber(record.feedIndex),
+    }).filter(([, value]) => value !== null)),
     operationalNotes: firstString(record.operationalNotes),
     weatherEvent: record.weatherEvent === 'rain' || record.weatherEvent === 'heavy_rain' || record.weatherEvent === 'sudden_cloud'
       ? record.weatherEvent
@@ -490,6 +562,11 @@ const normalizeRecord = (record: RawRecord, docStartDate: string | null, timeZon
     shrimpBehaviour: record.shrimpBehaviour === 'normal' || record.shrimpBehaviour === 'abnormal'
       ? record.shrimpBehaviour
       : null,
+    harvestType: harvestData?.harvestType === 'partial' || harvestData?.harvestType === 'final'
+      ? harvestData.harvestType
+      : null,
+    harvestBiomassKg,
+    harvestPopulation,
     feedData,
     isBaselineEstimate: Boolean(record.isBaselineEstimate) || record.source === 'midcycle_onboarding',
     missingFields: [],
@@ -507,6 +584,7 @@ export const normalizePondData = (
   options: OrsonNormalizeOptions = {},
 ): OrsonNormalizedPond => {
   const now = options.now ?? new Date();
+  const asOfDate = getFarmDateKey(now, options.timeZone);
   const docStartDate = normalizeDateString(pond.docStart ?? pond.stockingDate ?? pond.startDate);
   const docStartTimestampMs = toTimestampMs(docStartDate);
   const pondAreaM2 = firstNumber(pond.pondArea, pond.area, pond.areaM2);
@@ -544,6 +622,9 @@ export const normalizePondData = (
   const normalized: OrsonNormalizedPond = {
     id: firstString(pond.id),
     pondName: firstString(pond.pondName, pond.name) ?? 'Unnamed pond',
+    species: firstString(pond.species),
+    asOfDate,
+    timeZone: resolveFarmTimeZone(options.timeZone),
     docStartDate,
     docStartTimestampMs,
     currentDoc: calculateDoc(docStartDate, now, options.timeZone),
@@ -573,9 +654,9 @@ export const normalizePondData = (
     cycleId: firstString(pond.cycleId),
     pondCycleId: firstString(pond.pondCycleId, pond.id),
     cycleStatus: pond.cycleStatus === 'ended' ? 'ended' : 'active',
-    labContext: normalizeLabContext(pond),
+    labContext: normalizeLabContext(pond, asOfDate),
     planktonOverwatch: normalizePlanktonOverwatch(pond.latestPlanktonOverwatch),
-    treatments: normalizeTreatments(pond),
+    treatments: normalizeTreatments(pond, asOfDate),
     historicalBenchmark: normalizeHistoricalBenchmark(pond),
     records,
     missingFields: [],

@@ -121,19 +121,21 @@ export const runIntelligenceCompletionSelfTest = () => {
   const promptAnalysis = risk(parityFixtures[0].pond);
   const promptMetrics = promptAnalysis.metrics[0];
   const context = promptAnalysis.promptPackage.context;
-  assert(context.includes(`\"adg_g_per_day\": ${JSON.stringify(promptMetrics.adgGPerDay)}`), 'prompt contains exact ADG');
-  assert(context.includes(`\"smoothed_adg_g_per_day\": ${JSON.stringify(promptMetrics.smoothedAdgGPerDay)}`), 'prompt contains exact smoothed ADG');
-  assert(context.includes(`\"growth_confidence\": ${JSON.stringify(promptMetrics.growthConfidence)}`), 'prompt contains growth confidence');
-  assert(context.includes(`\"fcr\": ${JSON.stringify(promptMetrics.fcr)}`), 'prompt contains exact FCR');
-  assert(context.includes(`\"latest_percent\": ${JSON.stringify(promptMetrics.latestMortalityPercent)}`), 'prompt contains exact mortality rate');
-  assert(context.includes('\"latest_metrics\"'), 'prompt contains current lab metrics');
-  assert(context.includes('\"tanMgL\": 1.2'), 'prompt contains exact TAN');
-  assert(context.includes('\"nh3MgL\": 0.02'), 'prompt contains exact NH3');
-  assert(context.includes('\"nh4MgL\": 0.7'), 'prompt contains exact NH4');
+  const promptPayload = JSON.parse(context.split('ORSON RISK PAYLOAD:\n')[1])[0];
+  assert(promptPayload.adg_g_per_day === promptMetrics.adgGPerDay, 'prompt contains exact ADG');
+  assert(promptPayload.smoothed_adg_g_per_day === promptMetrics.smoothedAdgGPerDay, 'prompt contains exact smoothed ADG');
+  assert(promptPayload.growth_confidence === promptMetrics.growthConfidence, 'prompt contains growth confidence');
+  assert(promptPayload.fcr === promptMetrics.fcr, 'prompt contains exact FCR');
+  assert(promptPayload.mortality_metrics.latest_percent === promptMetrics.latestMortalityPercent, 'prompt contains exact mortality rate');
+  assert(promptPayload.lab_context.latest_metrics, 'prompt contains current lab metrics');
+  assert(promptPayload.lab_context.latest_metrics.waterQuality.tanMgL === 1.2, 'prompt contains exact TAN');
+  assert(promptPayload.lab_context.latest_metrics.waterQuality.nh3MgL === 0.02, 'prompt contains exact NH3');
+  assert(promptPayload.lab_context.latest_metrics.waterQuality.nh4MgL === 0.7, 'prompt contains exact NH4');
 
   const mortalityPromptAnalysis = risk(parityFixtures.find((fixture) => fixture.id === 'population-scaled-mortality')!.pond);
+  const mortalityPromptPayload = JSON.parse(mortalityPromptAnalysis.promptPackage.context.split('ORSON RISK PAYLOAD:\n')[1])[0];
   assert(
-    mortalityPromptAnalysis.promptPackage.context.includes(`\"latest_percent\": ${mortalityPromptAnalysis.metrics[0].latestMortalityPercent}`),
+    mortalityPromptPayload.mortality_metrics.latest_percent === mortalityPromptAnalysis.metrics[0].latestMortalityPercent,
     'prompt contains exact non-zero mortality rate',
   );
 

@@ -1,4 +1,4 @@
-import { calculatePondsMetrics } from './metrics';
+import { calculatePondsMetrics, extractDailyRecords14d } from './metrics';
 import { normalizePondsData } from './normalizePondData';
 import { build72HourOutlooks } from './outlook';
 import { buildOrsonPromptPackage } from './promptBuilder';
@@ -17,6 +17,12 @@ export const buildOrsonAnalysis = (
 ) => {
   const normalizedPonds = normalizePondsData(ponds, { now, timeZone }).filter((pond) => pond.cycleStatus !== 'ended');
   const metrics = calculatePondsMetrics(normalizedPonds, calibration);
+  const extendedDays = /\b(?:last|past|previous)\s+(2[1-9]|30)\s+days\b/i.exec(userMessage)?.[1];
+  const extendedWeeks = /\b(?:last|past|previous)\s+([34])\s+weeks\b/i.exec(userMessage)?.[1];
+  const historyDays = extendedDays ? Number(extendedDays) : extendedWeeks ? Number(extendedWeeks) * 7 : null;
+  if (historyDays) metrics.forEach((metric, index) => {
+    metric.diagnosticContext.history.extendedDaily = extractDailyRecords14d(normalizedPonds[index], normalizedPonds[index].asOfDate, historyDays);
+  });
   const reports = analyzePondsRisks(metrics, now);
   const outlooks = build72HourOutlooks(reports, now);
   const promptParams = {

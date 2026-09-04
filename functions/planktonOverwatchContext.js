@@ -1,3 +1,4 @@
+const { canonicalLabValue, labMeasurementWarnings } = require('./shared/labMeasurementContract');
 const { STATE_RANK, evaluatePlanktonOverwatch } = require("./planktonOverwatch");
 
 const toNumber = (value) => {
@@ -17,7 +18,6 @@ const hasAnyValue = (record, fields) => fields.some((field) => (
 
 const extractLabMetrics = (result = {}, sampleDate = null) => {
   const plankton = result.plankton && typeof result.plankton === "object" ? result.plankton : {};
-  const water = result.waterQuality && typeof result.waterQuality === "object" ? result.waterQuality : {};
   const microbiology = result.microbiology && typeof result.microbiology === "object" ? result.microbiology : {};
   const planktonMetrics = {
     date: sampleDate,
@@ -35,13 +35,16 @@ const extractLabMetrics = (result = {}, sampleDate = null) => {
   };
   const waterQualityMetrics = {
     date: sampleDate,
-    salinityPpt: toNumber(water.salinityLab ?? water.salinityCustomer),
-    alkalinityMgL: toNumber(water.alkalinityTotal),
-    tanMgL: toNumber(water.tan),
-    nh3MgL: toNumber(water.nh3),
-    nh4MgL: toNumber(water.nh4),
-    nitriteMgL: toNumber(water.no2),
-    tomMgL: toNumber(water.tom),
+    salinityPpt: canonicalLabValue(result, 'salinityLab') ?? canonicalLabValue(result, 'salinityCustomer'),
+    alkalinityMgL: canonicalLabValue(result, 'alkalinityTotal'),
+    tanMgL: canonicalLabValue(result, 'tan'),
+    nh3MgL: canonicalLabValue(result, 'nh3'),
+    nh4MgL: canonicalLabValue(result, 'nh4'),
+    nitriteMgL: canonicalLabValue(result, 'no2'),
+    tomMgL: canonicalLabValue(result, 'tom'),
+    calciumHardnessMgLCaCO3: canonicalLabValue(result, 'hardnessCa'),
+    magnesiumHardnessMgLCaCO3: canonicalLabValue(result, 'hardnessMg'),
+    totalHardnessMgLCaCO3: canonicalLabValue(result, 'hardnessTotal'),
   };
   const microbiologyMetrics = {
     date: sampleDate,
@@ -53,6 +56,9 @@ const extractLabMetrics = (result = {}, sampleDate = null) => {
 
   return {
     schemaVersion: 2,
+    measurementSchemaVersion: 1,
+    measurementWarnings: labMeasurementWarnings(result),
+    measurementUnits: result.measurementUnits || {},
     plankton: hasAnyValue(planktonMetrics, [
       "totalCellPerMl",
       "greenAlgaePercent",
@@ -68,6 +74,9 @@ const extractLabMetrics = (result = {}, sampleDate = null) => {
       "nh4MgL",
       "nitriteMgL",
       "tomMgL",
+      "calciumHardnessMgLCaCO3",
+      "magnesiumHardnessMgLCaCO3",
+      "totalHardnessMgLCaCO3",
     ]) ? waterQualityMetrics : null,
     microbiology: hasAnyValue(microbiologyMetrics, [
       "vibrioYellow",

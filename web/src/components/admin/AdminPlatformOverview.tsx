@@ -361,7 +361,7 @@ export function AdminPlatformOverview({
         <div className={styles.analyticsCard}>
           <div className={styles.analyticsCardHeader}>
             <h3>Orson AI Task Distribution</h3>
-            <span>Gemini Multimodal Model</span>
+            <span>Muse Spark 1.3 Contributor</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

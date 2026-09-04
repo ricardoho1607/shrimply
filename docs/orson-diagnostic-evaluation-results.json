@@ -1,0 +1,836 @@
+{
+  "model": "muse-spark-1.3-contributor",
+  "generatedAt": "2026-09-04T09:02:57.723Z",
+  "live": true,
+  "rubric": [
+    "Connect related variables",
+    "Do not invent facts",
+    "Rank supported causes",
+    "State uncertainty",
+    "Prioritize useful checks",
+    "Give practical conditional actions",
+    "Avoid overdiagnosis",
+    "Separate correlation from causation"
+  ],
+  "scoring": "Reviewer scores each dimension 0 (fails), 1 (partial), 2 (meets). Keyword checks are smoke tests, not a quality score.",
+  "results": [
+    {
+      "id": "01",
+      "title": "Growth, feed and oxygen interaction",
+      "review": "Link falling ADG and morning DO with increased allocation as a hypothesis; never rename morning as dawn or claim measured waste.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9700,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT**\nTest Pond at DOC 95 shows slower measured growth while logged feed allocation rose. ADG fell from 0.31 to 0.22 g/day, with morning DO declining through the same 2026-08-24 to 2026-09-03 interval. Timing alone does not confirm cause, and consumption was not measured.\n\n**KEY DATED EVIDENCE**\n- Growth: 8.0 g on 2026-08-14 to 11.1 g on 2026-08-24 = 0.31 g/day; 11.1 g to 13.3 g on 2026-09-03 = 0.22 g/day, -0.09 g/day, -29%, 10 days each.\n- Feed in interval 2026-08-24 to 2026-09-03: 52 kg to 62 kg, avg 57 kg. Logged allocation only, not proof of consumption.\n- Later observation after interval: 63 kg on 2026-09-04 vs 59 kg on 2026-08-31, +4 kg, +6.8%. Cannot explain completed interval.\n- Morning DO in interval: 4.93 mg/L on 2026-08-24 to 4.08 mg/L on 2026-09-03, avg 4.51 mg/L. Later: 4.0 mg/L morning and minimum recorded DO on 2026-09-04.\n- Evening DO 6.4 mg/L, pH swing 0.3, salinity 19 ppt, temperature 29 C, transparency 35 cm on 2026-09-04; feeding response logged normal 2026-08-24 to 2026-09-03 without tray clearance %.\n- Feed pressure 1.718x on 2026-09-04: actual 63 kg vs expected 36.67 kg, different window than ADG interval. Biomass 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% low confidence. FCR 0.76 from available recorded feed and estimated biomass, complete cycle feed coverage unverified. No mortality observations, no recent lab, no harvests.\n\n**LIKELY CAUSES**\n1. Oxygen limitation during interval — Confidence: moderate. Supporting: morning DO below >=5 mg/L target through interval and falling; 29 C raises demand. Missing: timed pre-dawn DO, aeration/sludge data, TAN/NO2; evening DO 6.4 and pH swing 0.3 stable.\n2. Logged feed rise outpacing demand, consumption unproven — Confidence: low. Supporting: allocation 52 to 62 kg rose while ADG fell. Missing: measured tray clearance, verified population/mortality; Sep-04 pressure date mismatch weakens link.\n\n**WHAT TO CHECK NEXT**\n1. Timed morning and evening DO plus aerator function — confirms persistent limitation vs fluctuation.\n2. Tray response at next 2-3 meals with time-to-clear — answers whether 63 kg is eaten.\n3. Standardized MBW resample with count/method plus edge/mortality check — verifies 0.22 g/day vs sampling variation.\n\n**ACTIONS**\nImmediate low-risk: increase aeration especially before sunrise and recheck morning DO before next feeding; hold further feed increases while morning DO 4.0-4.5 mg/L; inspect sludge/uneaten feed. Dependent: adjust feed only after tray clearance, DO stability, and biomass/survival support it per farm protocol.",
+      "finishReason": "STOP",
+      "outputTokens": 5445,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unmatched_calculation_basis",
+        "answer_structure"
+      ],
+      "reviewOutputTokens": 1805,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 60091,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Keeps DO/feed observations dated and avoids a biomass-growth claim. The low-confidence demand hypothesis could be more selective; several checks bundle observations."
+    },
+    {
+      "id": "02",
+      "title": "Slow growth with stable measured water",
+      "review": "Consider sampling, biomass and feed quality; sampled water cannot rule out overnight stress or disease.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 8348,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3193
+      },
+      "text": "ASSESSMENT: Yes, ADG is lower from 0.31 g/day to 0.22 g/day (-0.09 g/day, -29%), while dated morning DO, pH swing, salinity and temperature were flat in the growth interval. Cause is not established. Stable morning/evening logs do not rule out overnight DO sag, nitrogen waste, organic load, or health effects, and mortality, lab, consumption and sampling details are missing.\n\nKEY DATED EVIDENCE:\n- Growth: 2026-08-14 8.0 g to 2026-08-24 11.1 g = 0.31 g/day, 10 d; 2026-08-24 11.1 g to 2026-09-03 13.3 g = 0.22 g/day, 10 d.\n- Latest growth interval 2026-08-24 to 2026-09-03: logged feed allocation 50 kg/day flat every day, average/min/max 50 kg; direct feeding response normal on all 11 days.\n- Same interval: morning DO 5.8 mg/L flat, pH swing 0.3 units flat, salinity 19 ppt flat. Full 14 d window to 2026-09-04: DO morning 5.8 / evening 6.4 mg/L, pH 7.8 / 8.1, temperature 29 C, transparency 35 cm, all unchanged.\n- A morning label does not prove a pre-dawn measurement; minimum recorded 5.8 mg/L is not a confirmed overnight minimum. 2026-09-04 readings are later observations after the interval end.\n- Biomass 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% with low survival confidence. Feed pressure on 2026-09-04 is 1.364x, actual 50 kg vs expected 36.67 kg, which alone does not prove over- or under-feeding. No harvests, no treatments. Mortality unknown, no recent numeric lab, tray clearance not recorded.\n\nLIKELY CAUSES:\n1. Flat logged allocation relative to larger individual size creating unproven intake uncertainty - Low confidence.\nSupporting: allocation held at 50 kg/day from 2026-08-24 to 2026-09-03 while MBW rose 11.1 g to 13.3 g. Opposing / missing: feeding response stayed normal; actual eaten feed, tray clearance, feed quality, TAN/NO2, pre-dawn DO, sludge load and health not recorded, so intake change is unproven.\nNo other ranked cause is supported. Stable pH swing, morning DO, salinity and temperature argue against a basic water shift, but unmeasured factors remain unknown.\n\nWHAT TO CHECK NEXT:\n1. Repeat MBW on same schedule with fixed method, time, sampler, n shrimp and size range to verify 13.3 g and ADG 0.22 g/day.\n2. Record timed tray clearance at 2-3 meals for 2-3 days plus pond-side behaviour and recovered mortality count.\n3. Take timed pre-dawn DO plus TAN and NO2 with units and analyte basis.\n\nACTIONS:\n- Immediate low-risk: hold feed at 50 kg/day without increase; maintain aeration routine; keep dated logs with measurement times.\n- Conditional, only after checks: adjust feed only if trays show consistent leftover/empty plus resampling confirms MBW trend and pre-dawn DO and nitrogen are acceptable.",
+      "finishReason": "STOP",
+      "outputTokens": 5956,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 2416,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 80189,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Sampling/health gaps remain unknown rather than ranked causes. Intake uncertainty is still a weak explanatory hypothesis, explicitly low confidence."
+    },
+    {
+      "id": "03",
+      "title": "Recorded FCR rises while biomass estimate stays flat",
+      "review": "Discuss feed-to-gain accounting and uncertain biomass; do not assume consumption or assign a confirmed cause.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9606,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3440
+      },
+      "text": "ASSESSMENT:\nRecorded FCR in Test Pond rose from 1.2 on 2026-08-22 [water-feed-0] to 1.85 on 2026-09-04 [water-feed-13], +0.65, +54.2%, n=14, basis: cumulative feed / biomass gain; same cycle. A single biological cause is not established. The calculation itself is uncertain because biomass inputs disagree and feed coverage is unverified.\n\nKEY DATED EVIDENCE:\n- Recorded FCR: 1.2 to 1.85 as above. Limitation: depends on feed coverage, harvest accounting and biomass estimates; verify consistent inputs.\n- Model FCR 0.672 on 2026-09-04: 700 kg cumulative feed / 1041.37 kg biomass gain. Limitation: complete cycle feed coverage not verified. Different inputs/coverage from recorded 1.85; do not equate them.\n- ADG intervals: 0.31 g/day 2026-08-14 to 2026-08-24 [sample-1 8g to sample-2 11.1g] vs 0.22 g/day 2026-08-24 to 2026-09-03 [sample-2 to sample-3 13.3g], -0.09, -29%, 10 days each. ADG windows do not match FCR window 2026-08-22 to 2026-09-04, so ADG cannot mathematically explain the recorded FCR change.\n- Latest growth interval 2026-08-24 to 2026-09-03: avg logged feed 50 kg/day, morning DO 5.8 mg/L, pH swing 0.3 units, salinity 19 ppt, direct feeding response normal daily. Values on 2026-09-04 are later observations, not explanations for that interval.\n- Feed pressure on 2026-09-04: actual 50 kg vs expected 36.67 kg, ratio 1.364x for current biomass assumptions. Logged feed is allocation, not proof of consumption.\n- Biomass estimates stayed flat: field 1200 kg 2026-08-22 to 2026-09-04 vs model 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% low confidence. Feed-based population 111887 vs mortality-based 82058 differ 36.4%.\n- Water: morning DO 5.8, evening 6.4 mg/L, pH morning 7.8 to evening 8.1, temp 29C, transparency 35 cm, alkalinity 130 mg/L, all flat 14d. No harvests, no explicit mortality counts, no recent lab measurements.\n\nLIKELY CAUSES:\n1. Apparent rise reflects uncertain FCR inputs rather than confirmed worsening conversion. Supporting: flat 1200 kg vs 1091 kg range, 36.4% population disagreement, 0.672 vs 1.85 mismatch, no mortality/harvest verification, feed coverage unverified. Missing: consistent cumulative feed, stocking-to-present accounting, comparable biomass method. Confidence: moderate.\n\nWHAT TO CHECK NEXT:\n1. Re-sample MBW with fixed method, time, net, shrimp count and size range to test if 13.3g on 2026-09-03 is comparable to prior samples.\n2. Timed tray checks over 2-3 meals recording time-to-clear and leftovers to test if 50 kg/day is cleared.\n3. Population audit: daily mortality counts + cast-net survival check to reconcile 82058 vs 111887 and verify which biomass/FCR basis is correct.\n\nACTIONS:\n- Immediate low-risk: hold feed at 50 kg, do not increase while pressure is 1.364x and recorded FCR is rising; maintain aeration and morning/evening DO/pH logs; start daily mortality log.\n- Confirm-first: adjust feed only after tray clearance, re-sampling, and biomass reconciliation support it per farm protocol; reconcile FCR basis before changing strategy.",
+      "finishReason": "STOP",
+      "outputTokens": 5950,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_fcr_explanation"
+      ],
+      "reviewOutputTokens": 3139,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 86244,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Preserves flat recorded biomass and distinguishes recorded versus calculated FCR. Explicitly rejects deriving the recorded FCR change from unmatched individual-ADG windows; no confirmed denominator error."
+    },
+    {
+      "id": "04",
+      "title": "Falling morning pH and alkalinity",
+      "review": "Link buffering and pH conditionally; check source water/rain and do not invent a bicarbonate dose.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9741,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT**\nTest Pond shows a steady fall in morning pH with stable evening pH and steadily falling alkalinity, a pattern consistent with gradual loss of buffering plus ongoing overnight respiration / biological load, but the exact cause is not established from timing alone.\n\nMorning pH is now at the low-warning edge and daily swing is above the >0.5 warning threshold, while alkalinity has fallen below its 100-160 mg/L target toward minimum levels.\n\n**KEY DATED EVIDENCE**\n- pH morning: 7.8 on 2026-08-22 -> 7.74 on 2026-08-24 -> 7.59 on 2026-08-29 -> 7.44 on 2026-09-03 -> 7.41 on 2026-09-04\n- pH evening: 8.1 on all 14 days 2026-08-22 to 2026-09-04\n- pH swing: 0.3 on 2026-08-22 -> 0.69 on 2026-09-04, +0.39, crossed >0.5 on 2026-08-29 at 0.51\n- Alkalinity: 130 mg/L on 2026-08-22 -> 115 on 2026-08-27 -> 100 on 2026-09-01 -> 91 on 2026-09-04, -39 mg/L in 14 days, steady decline\n- DO morning 5.8 mg/L and DO evening 6.4 mg/L flat all 14 days; labels are morning/evening, not proven pre-dawn minimum\n- Transparency 35 cm, salinity 19 ppt, temperature 29 C flat; feed 50 kg/day flat; direct feeding response normal all days\n- Growth context: ADG 0.31 g/day 2026-08-14 to 2026-08-24 vs 0.22 g/day 2026-08-24 to 2026-09-03\n- Missing: no TAN/NH3, NO2, lab plankton, mortality counts, water exchange, rain, sludge, or source-water chemistry; survival 82.06% confidence low\n\n**LIKELY CAUSES**\n1. In-pond biological load consuming alkalinity and adding overnight CO2, lowering morning pH\n- Supporting: DOC 82 to 95, constant 50 kg/day logged feed, alkalinity loss ~3 mg/L per day with morning-only pH fall while evening 8.1 held.\n- Opposing / missing: Morning DO did not fall, still 5.8 mg/L; no TAN, NH3, NO2 to confirm nitrification pressure; logged feed is not proof of consumption.\n- Confidence: moderate.\n\n2. Weakening buffering amplifying normal daily swing\n- Supporting: Alkalinity fell from inside target to 91 mg/L, swing widened 0.3 to 0.69; guidance rule: alkalinity <80 + swing >0.5 risks unstable chemistry.\n- Opposing / missing: Still above <60 critical and <80 warning; no source-water pH/alkalinity or exchange/dilution records to exclude outside cause.\n- Confidence: moderate.\n\nNo third ranked cause is supported. Stable transparency and normal feeding response do not support a bloom crash hypothesis at this time.\n\n**WHAT TO CHECK NEXT**\n1. Same-day TAN, NH3 basis, NO2, alkalinity with matching method/unit plus morning and afternoon pH - tests if nitrification / ammonia pressure explains buffering loss.\n2. Timed morning and evening DO, aerator function, pond bottom sludge / uneaten feed / surface scum and water color - tests if overnight respiration load explains morning dip.\n3. Source-water pH/alkalinity and recent exchange, rainfall, and liming history - tests dilution vs in-pond consumption.\n\n**ACTIONS**\nImmediate low-risk:\n- Keep measuring pH morning and afternoon plus alkalinity, DO morning/evening, transparency daily; do not chase pH with sudden lime or acid correction.\n- Verify aeration coverage, inspect sludge and tray clearance; hold any feed increase while swing is high - actual 50 kg vs expected 36.67 kg, pressure 1.364x, but biomass range 943-1243 kg is uncertain.\n\nAfter confirming data:\n- If labs confirm low buffering / rising nitrogen, improve buffering gradually using farm-approved protocol and use only gradual exchange with tested stable source water.\n- Safety: abrupt pH movement can stress shrimp and molting; high pH plus elevated TAN would raise toxic NH3 risk, so check TAN before feeding up.\n",
+      "finishReason": "STOP",
+      "outputTokens": 5637,
+      "sources": [],
+      "groundingStatus": "passed",
+      "groundingIssues": [],
+      "reviewOutputTokens": 2016,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 67889,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Buffering and respiration are tentative explanations, with contrary stable DO retained and no invented dose. Checks remain broad."
+    },
+    {
+      "id": "05",
+      "title": "Larger pH swing and lower transparency",
+      "review": "Investigate plankton and suspended material; transparency alone does not prove a bloom species.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9625,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3100
+      },
+      "text": "### ASSESSMENT\nTest Pond, DOC 95 on 2026-09-04, MBW 13.3 g on 2026-09-03, shows unstable water driven by widening pH swing and steadily falling transparency. Evening pH is rising while morning pH stays flat. Alkalinity buffering remains in target, which points away from weak buffering. Growth slowed in the same window, but cause is not established.\n\n### KEY DATED EVIDENCE\n- pH morning 7.8 flat 2026-08-22 to 2026-09-04, pH evening 8.1 to 8.62, swing 0.30 to 0.82 [water-feed-0 to water-feed-13]. Evening 8.62 is outside 7.5-8.5 target; swing >0.5 is warning.\n- Transparency 40 cm on 2026-08-22 to 27 cm on 2026-09-04, steady decline, now below 30-40 cm target.\n- Alkalinity 130 mg/L as CaCO3 flat, salinity 19 ppt flat, temperature 29 C flat.\n- Morning DO 5.8 mg/L flat, evening DO 6.4 mg/L flat. Morning label does not prove pre-dawn minimum; overnight minimum unknown.\n- Logged feed 50 kg/day flat; feeding response normal all 14 days. Logged allocation is not proof of consumption.\n- Feed pressure 1.364x on 2026-09-04: actual 50 kg vs expected 36.67 kg, but biomass 1091.37 kg range 943.56-1243.15 kg, survival 82.06% confidence low, so expected feed is uncertain.\n- ADG 0.31 g/day 2026-08-14 to 2026-08-24 to 0.22 g/day 2026-08-24 to 2026-09-03, -29%. In that interval pH swing 0.38 to 0.78, transparency 38 to 28 cm.\n- Missing: no TAN/NH3, NO2, plankton dominance, water color, mortality, sludge or tray-clearance observations.\n\n### LIKELY CAUSES\n**1. Increasing phytoplankton biomass / photosynthetic activity — Moderate confidence**\nSupporting: evening-only pH rise with stable morning pH, swing +0.52 units from 2026-08-22 to 2026-09-04, plus steady transparency loss while alkalinity held at 130 mg/L.\nMissing: lab plankton dominance, water color, nutrients, pre-dawn DO to confirm bloom status or crash risk.\n\n**2. Sustained nutrient / organic load from 50 kg/day allocation held through ADG-drop interval — Low confidence**\nSupporting: 50 kg/day held flat 2026-08-24 to 2026-09-03 while transparency fell 38 to 28 cm.\nMissing: tray clearance, uneaten feed, sludge, TAN/NO2; normal feeding response reported; 1.364x pressure cannot prove overfeeding or biomass error given low survival confidence.\n\nAlkalinity-related instability is not supported at 130 mg/L within 100-160 target.\n\n### WHAT TO CHECK NEXT\n1. Pre-dawn plus morning and evening DO, morning and evening pH, transparency and water color for 2-3 days.\n2. TAN/NH3 and NO2 with units and analyte basis plus alkalinity recheck.\n3. Tray response / uneaten feed check plus sludge and surface scum observation.\n\n### ACTIONS\nImmediate low-risk: hold feed increase, confirm tray consumption, maintain aeration especially before sunrise. Measure pH morning and afternoon and track transparency daily. Do not chase pH with sudden chemical correction and do not crash bloom abruptly. Conditional: if dawn DO <4.0 mg/L or TAN/NO2 rise with evening pH >8.5, reduce feed in small steps, increase aeration, use only gradual exchange with tested source water per farm protocol.",
+      "finishReason": "STOP",
+      "outputTokens": 4132,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "answer_structure"
+      ],
+      "reviewOutputTokens": 2537,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 64463,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Plankton activity is a hypothesis supported by pH/transparency, with composition unconfirmed. No invented shrimp biomass trend or named plankton species."
+    },
+    {
+      "id": "06",
+      "title": "Mortality despite normal sampled DO",
+      "review": "Recovered counts are not total mortality; normal sampled DO cannot rule out past low DO or establish a pathogen.",
+      "mode": "mortality_diagnostic",
+      "promptTokens": 9644,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "Test Pond, DOC 95 on 2026-09-04: recovered deaths rose from 5 on 2026-09-01 (source death-1, 6.09/100k) to 40 on 2026-09-04 (source death-2, 48.75/100k). True acceleration is unconfirmed because baseline confidence is low.\n\nTimeline 2026-08-22 to 2026-09-04:\n2026-08-22 to 2026-08-31: no mortality observation recorded, not zero. Feed 50 kg/day flat, morning DO 5.8 mg/L, evening DO 6.4 mg/L, pH 7.8/8.1 swing 0.3 units, salinity 19 ppt, temperature 29C, transparency 35 cm, feeding response logged as normal.\n2026-09-01: 5 observed_recovered. Same water/feed values, response normal.\n2026-09-02 to 2026-09-03: no mortality observation recorded. MBW 13.3 g on 2026-09-03 (sample-3).\n2026-09-04: 40 observed_recovered. Same water/feed values, response still logged as normal. Recovered deaths are observations, not a complete count.\n\nDeterministic trace:\nBaseline has only 1 prior observation, median 6.09/100k, increase ratio 8x but isSpike=false, confidence low. Reason: fewer than three prior observations, cannot establish usual. Appetite proxy: no_signal, low confidence, feed change 0%, feed-pressure change -11.8%. Logged allocation is not proof of appetite or consumption.\n\nHypothesis (1 supported):\n1. Feed and organic-load pressure — moderate: Actual 50 kg vs expected 36.67 kg = 1.364x on 2026-09-04. Biomass 1091.37 kg [943.56-1243.15], survival 82.06% low confidence. Mortality-based population 82058 vs feed-based 111887 differ 36.4% — treat biomass as range. High pressure alone does not prove biomass over- or underestimated. ADG slowed to 0.22 g/day in 2026-08-24 to 2026-09-03 from 0.31 g/day in 2026-08-14 to 2026-08-24 (-0.09, -29%) with flat 50 kg/day and normal logged response; only 5 deaths observed inside that interval on 2026-09-01. Readings after 2026-09-03 cannot explain that completed interval.\n\nUncertainty, not causes:\nMorning DO, pH swing, salinity, temperature flat 14 days argues against a logged crash, but morning label is not proven dawn minimum. No TAN/NH3, nitrite, lab, sludge, aeration logs. No clinical signs, PCR, microscopy or culture to confirm or exclude disease; no pathogen named. No harvests recorded.\n\nChecks (next 24-48h):\n1. Check current DO with time, shrimp behaviour, aeration, tray clearance/sludge, and collection method on 2026-09-01 vs 2026-09-04. 2. Hold feed increases; verify population/MBW with consistent sampling before adjusting. 3. Record daily mortality count+method, timed DO, pH swing, tray response, temperature, condition. Outlook watch, confidence 0.83 — close observation 72h.",
+      "finishReason": "STOP",
+      "outputTokens": 3442,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_causal_confidence",
+        "unsupported_health_cause",
+        "unsupported_cause"
+      ],
+      "reviewOutputTokens": 2622,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 64180,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Recovered mortality remains separate from total deaths; no pathogen diagnosis. The organic-load hypothesis is weakly supported and checks could be more focused."
+    },
+    {
+      "id": "07",
+      "title": "Direct weak feeding and TAN increase",
+      "review": "Use actual weak response as evidence; distinguish TAN from NH3 and check concurrent pH/temperature.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9468,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT**\nTest Pond shows weak direct feeding response on 4 consecutive days, 2026-09-01 to 2026-09-04, while logged allocation stayed flat at 50.0 kg/day. ADG fell 29% in the completed 2026-08-24 to 2026-09-03 interval as TAN as N rose, but timing alone does not confirm cause. Biomass is 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% with low confidence, so true intake and biomass remain uncertain.\n\n**KEY DATED EVIDENCE**\n- Feed vs response 2026-08-22 to 2026-09-04: 50.0 kg every day, 14 days. Response normal 08-22 to 08-31, weak 09-01, 09-02, 09-03, 09-04.\n- Growth: 8.0 g on 08-14 to 11.1 g on 08-24 = 0.31 g/day x10d; 11.1 g to 13.3 g on 09-03 = 0.22 g/day x10d, change -0.09 g/day, -29%.\n- Interval observations 08-24 to 09-03: TAN as N 0.6 rising to 1.6 mg/L; morning DO 5.8 mg/L, evening 6.4 mg/L, pH 7.8 morning / 8.1 evening, swing 0.3, temperature 29 C, salinity 19 ppt, transparency 35 cm stable. Feed 50 kg/day flat.\n- Later observation after interval: 09-04 TAN as N 1.7 mg/L, feed 50 kg, response weak, morning DO 5.8 mg/L.\n- Feed pressure 09-04: actual 50 kg vs expected 36.67 kg = 1.364x. Model disagreement 36.4%: mortality-based 82,058 vs feed-based 111,887. Logged feed is allocation, not proof of consumption.\n- Unknown: mortality status unknown, no recent lab nitrite, no tray clearance %, no paired NH3 from pH-temperature.\n\n**LIKELY CAUSES**\n1. Rising TAN / organic-load stress suppressing appetite - **moderate confidence**\nSupporting: TAN as N rose from 0.4 on 08-22 to 1.4 on first weak day 09-01 at pH 7.8-8.1, 29C; flat 50 kg allocation adds load. Missing: nitrite, NH3 calculation, mortality/behaviour to confirm toxicity; DO and pH swing stable.\n2. Allocation ahead of current intake with uncertain biomass - **moderate confidence**\nSupporting: 50 kg unchanged through 4 weak days 09-01 to 09-04; 1.364x expected feed; wide 943-1243 kg range with low survival confidence. Missing: verified count, measured tray waste, size-variation data; ratio alone cannot show over- or under-estimate direction.\n\n**WHAT TO CHECK NEXT**\n1. Next 2 feedings: timed tray check plus uneaten feed, faeces, activity and dead-shrimp count.\n2. Same-time TAN as N + pH + temperature plus nitrite and morning/evening DO.\n3. Cast-net check for size variation and mortality signs to test 36.67 kg expected-feed assumption.\n\n**ACTIONS**\nHold any increase above 50 kg; maintain aeration; remove uneaten feed/sludge if seen; keep daily tray, DO, pH, TAN logs. After confirmation, per farm protocol: adjust only on tray consumption plus water results; controlled exchange only with tested source water.",
+      "finishReason": "STOP",
+      "outputTokens": 4532,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "answer_structure",
+        "date_mismatch"
+      ],
+      "reviewOutputTokens": 2394,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 65791,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Uses direct weak feeding observations, preserves TAN as N, and keeps toxicity unconfirmed. Checks bundle several observations."
+    },
+    {
+      "id": "08",
+      "title": "Rain and salinity drop",
+      "review": "Rain dilution is plausible; check depth/stratification and avoid abrupt salinity correction.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9667,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT:**\nTest Pond shows a sharp 19 to 12 ppt salinity step between 2026-09-01 and 2026-09-02 on the same date as logged Heavy Rain, consistent with rain dilution and runoff inflow, but timing alone does not prove cause.\nCurrent 12 ppt on 2026-09-04 is below the 15-30 ppt practical vannamei target and the ~7 ppt move in ~1 day exceeds the >3 ppt/day warning for osmotic and molting stress. Direct feeding response stayed normal and logged pH/DO were flat, so stress is a risk to watch, not a confirmed impact.\n\n**KEY DATED EVIDENCE:**\nTest Pond, DOC 95 on 2026-09-04:\n- 2026-08-22 to 2026-09-01: salinity 19 ppt daily, no weather event logged\n- 2026-09-02: salinity 12 ppt, weather_event Heavy Rain [water-feed-11], feed 50 kg, feeding response normal, pH morning 7.8 / evening 8.1 swing 0.3, DO morning 5.8 / evening 6.4 mg/L, temp 29C, transparency 35 cm\n- 2026-09-03: salinity 12 ppt, MBW 13.3 g, feeding normal\n- 2026-09-04: salinity 12 ppt, feeding normal\nChange 19 to 12 ppt, -7 ppt, -36.8%; slope -0.538 ppt/day is a 14-day average, actual step was 09-01 to 09-02.\nMismatch: ADG slowed from 0.31 g/day [08-14 to 08-24] to 0.22 g/day [08-24 to 09-03]. The drop occurred only at the end of that interval, so it cannot explain the whole-interval slowdown. Alkalinity logged 130 mg/L as CaCO3 unchanged, no TAN/NH3 lab, mortality unknown, no exchange logs.\n\n**LIKELY CAUSES:**\n1. Rain dilution + dike/runoff inflow - Moderate confidence\nSupporting: stable 19 ppt for 11 days, then step to 12 ppt on Heavy Rain date. Missing: rainfall mm, water level/overflow, runoff path, source-water salinity; expected co-shifts in alkalinity, pH, transparency not seen in logs.\n2. Persistent low-salinity volume after rain, not a transient dip - Low confidence\nSupporting: 12 ppt persisted 09-02, 09-03, 09-04. Missing: surface vs bottom salinity, water level, drain/overflow record to confirm volume change.\n\n**WHAT TO CHECK NEXT:**\n1. Repeat salinity profile same time/depth - surface, middle, bottom plus inlet/outlet and source water with calibrated meter.\n2. Record water level, overflow, runoff entry points, and any exchange/drain since 09-01.\n3. Check shrimp response over 48-72h - tray response, behaviour, molting shells, mortality count - to test for osmotic stress.\n\n**ACTIONS:**\nImmediate low-risk: do not correct salinity abruptly; slow water exchange and hold feed increases; feed logged flat at 50 kg/day with feed pressure 1.364x expected, verify tray clearance before any increase; monitor daily salinity same time/depth, appetite, mortality, molting, plus morning/evening DO and pH.\nConditional: if 12 ppt confirmed and shrimp stable, raise only gradually using tested source water or farm-approved mineral protocol in small steps, watching appetite/mortality after each step.",
+      "finishReason": "STOP",
+      "outputTokens": 3713,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 2040,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 59213,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Rain timing supports a tentative dilution explanation; stress remains a risk. The second cause partly restates persistence of the low reading."
+    },
+    {
+      "id": "09",
+      "title": "Possible carrying capacity pressure",
+      "review": "A single/repeated unchanged estimate is not biomass growth; assess aeration and feed loading before declaring capacity exceeded.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9627,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 4139
+      },
+      "text": "**ASSESSMENT**\nMorning DO in Test Pond declined steadily over 14 days to 4.13 mg/L on 2026-09-04, below the >=5 mg/L target, while logged feed allocation rose. Late-cycle load and overnight supply-demand imbalance are tentative hypotheses only; causation is not established.\nHigh biomass as the cause is not supported: logged biomass estimates stayed flat at 6000 kg on 2026-08-22 and 6000 kg on 2026-09-04, and the calculated estimate is 1091 kg [range 943-1243 kg] with low survival confidence. Disagreement means biomass must be treated as an uncertain range.\n\n**KEY DATED EVIDENCE**\n- Morning DO: 5.30 mg/L on 2026-08-22 -> 4.13 mg/L on 2026-09-04, -1.17 mg/L, -22.1%, n=14. Decline was steady across daily records.\n- Evening DO: 6.4 mg/L every day 2026-08-22 to 2026-09-04. Morning label does not prove pre-dawn timing; minimum available morning reading is not the overnight minimum.\n- Logged feed: 100 kg on 2026-08-22 -> 113 kg on 2026-09-04; 109 kg on 2026-08-31 -> 113 kg on 2026-09-04. Logged allocation only, not proof of consumption or tray clearance.\n- Growth interval 2026-08-24 to 2026-09-03: MBW 11.1 g -> 13.3 g, ADG 0.22 g/day, down from 0.31 g/day in 2026-08-14 to 2026-08-24 interval.\n- Latest interval load 2026-08-24 to 2026-09-03: avg feed 107 kg/day, avg morning DO 4.67 mg/L, range 5.12 to 4.22 mg/L.\n- Feed pressure 3.082x: actual 113 kg vs expected 36.67 kg on 2026-09-04 based on estimated population 82,058. Feed-based vs mortality-based populations differ by 208.2%.\n- pH swing 0.3 units stable, salinity 19 ppt flat, temperature 29 C, transparency 35 cm, alkalinity 130 mg/L throughout 2026-08-22 to 2026-09-04.\n- Unknown: tray/direct feeding response, mortality status, lab TAN/NO2, aeration operation, sludge/plankton observations.\n\n**LIKELY CAUSES**\n1. **Rising logged feed increasing daytime and night oxygen demand - Moderate confidence**\nSupporting: feed allocation rose from 100 to 113 kg while morning DO fell daily from 5.30 to 4.13 mg/L in overlapping 2026-08-22 to 2026-09-04 window.\nMissing: no tray clearance to confirm consumption vs waste, no sludge/scum observation, no TAN/NO2 lab. Timing alone does not prove causation.\n\n2. **Insufficient overnight oxygen supply relative to respiration - Low confidence**\nSupporting: mornings fell steadily while evenings held flat at 6.4 mg/L from 2026-08-22 to 2026-09-04, consistent with overnight consumption exceeding supply.\nMissing: no aerator run-times or coverage, no confirmed pre-sunrise measurement time, no weather, exchange or plankton data.\n\nHigh biomass increase is not established as the cause; estimates stayed flat.\n\n**WHAT TO CHECK NEXT**\n1. Timed pre-sunrise DO + aerator status check before next feeding - answers whether true minimum is lower than recorded morning value and if supply is limiting.\n2. Tray response at next 2 meals + bottom/sludge/uneaten feed inspection - answers whether 112-113 kg is consumed or adding load.\n3. Repeat MBW sample with method/count + mortality/survival check with harvest history - answers which biomass range is credible.\n\n**ACTIONS**\n- Immediate low-risk: Increase aeration now, especially before sunrise, and recheck DO before feeding. Hold any feed increase; do not push feed while DO is 4.13 mg/L and falling.\nWhy it works: adds supply during peak demand and avoids adding demand from uneaten feed.\nMonitor next: DO morning/evening, tray clearance, mortality/behaviour.\n- Conditional, only after data: Adjust feed only after tray, DO stability and biomass check support it per farm protocol; remove sludge/improve exchange only if inspection confirms load.\n- Safety caution: Do not increase feed while DO is unstable or <5 mg/L; do not use bloom-kill chemicals, large exchanges, or nitrogen addition without diagnosis.",
+      "finishReason": "STOP",
+      "outputTokens": 3285,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_biomass_trend"
+      ],
+      "reviewOutputTokens": 3051,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 58557,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Retains flat 6000 kg recorded estimates and the conflicting model estimate; does not claim biomass grew, capacity was exceeded, or identify the direction of estimation error."
+    },
+    {
+      "id": "10",
+      "title": "Possible plankton crash",
+      "review": "Prioritize oxygen and confirm plankton change; no algicide, nutrient dose or confirmed species claim.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9788,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3138
+      },
+      "text": "ASSESSMENT:\nThe sudden pale water, transparency jump and morning DO drop on 2026-09-02 is consistent with a possible plankton die-off / crash, but the cause is not confirmed.\nMorning minimum is now 3.8 mg/L, below the >=5 mg/L target, with transparency at 65 cm above the 30-40 cm target, while pH swing is unchanged. ADG also slowed in the last measured interval, but lab data, mortality, and dawn DO are missing and survival confidence is low.\n\nKEY DATED EVIDENCE:\n- Transparency: 25 cm daily 2026-08-22 to 2026-09-01, then 65 cm on 2026-09-02, 2026-09-03, 2026-09-04\n- Operational note 2026-09-02: Water suddenly became pale after cloudy weather\n- Morning DO: 5.7 mg/L daily 2026-08-22 to 2026-09-01, then 3.8 mg/L on 2026-09-02, 2026-09-03, 2026-09-04. Change -1.9 mg/L, -33.3%\n- Evening DO 6.4 mg/L stable, pH 7.8 morning / 8.1 evening, swing 0.3 stable throughout 14d\n- Feed allocation 50 kg/day flat throughout, feeding response reported normal throughout, including 2026-09-02 to 2026-09-04\n- Growth: 8 g on 2026-08-14, 11.1 g on 2026-08-24 ADG 0.31 g/day, 13.3 g on 2026-09-03 ADG 0.22 g/day, change -0.09 g/day, -29%\n- Latest interval 2026-08-24 to 2026-09-03: feed 50 kg/day flat, morning DO first 5.7 last 3.8 min 3.8 max 5.7 avg 5.355 mg/L\n- Current DOC 95, biomass estimate 1091.37 kg range 943.56-1243.15 kg, survival 82.06% low confidence, feed pressure 1.364x expected 36.67 kg vs actual 50 kg\n- Missing: mortality unknown, recent lab unavailable, no sludge, TAN, NO2, or plankton composition\n\nLIKELY CAUSES:\n1. Plankton die-off after cloudy weather\nSupporting: same-date 2026-09-02 pale color note + transparency 25 to 65 cm + morning DO 5.7 to 3.8 mg/L.\nOpposing/missing: pH swing unchanged at 0.3, evening DO unchanged at 6.4, no lab plankton dominance, no mortality or behaviour data.\nConfidence: moderate\n\n2. Biomass oxygen demand exceeding overnight supply\nSupporting: DOC 94-95, estimated biomass ~1091 kg with flat 50 kg/day allocation during latest growth interval that ended 2026-09-03 with lower ADG.\nOpposing/missing: feed flat not increased, no sludge load, no TAN/NO2, no timed dawn measurement, feeding response still normal, biomass range wide and survival confidence low.\nConfidence: low\n\nWHAT TO CHECK NEXT:\n1. Timed morning and evening DO plus transparency, water color and surface scum daily to see if low morning DO persists or recovers.\n2. Water lab with plankton dominance, method, unit, sample source and date/time to test crash vs shift in composition.\n3. Direct tray feeding response with clearance time plus bottom sludge, mortality count and shrimp behaviour to separate uneaten feed and disease pressure from plankton effect.\n\nACTIONS:\nImmediate low-risk:\n- Increase aeration, especially before sunrise, and recheck morning DO before next feeding window\n- Hold feed increase until morning DO stabilizes; confirm trays before adjusting; logged 50 kg is allocation not proof of consumption\n- Track color, transparency, pH swing and morning DO daily; remove accessible organic waste and intensify observation\n\nAfter confirming data:\n- Use gradual water exchange only with stable source water if DO stays low and color stays pale; do not crash a bloom abruptly - dead algae can consume oxygen and worsen ammonia\n- Review MBW sampling, population assumption and mortality before any feed strategy change",
+      "finishReason": "STOP",
+      "outputTokens": 6165,
+      "sources": [],
+      "groundingStatus": "passed",
+      "groundingIssues": [],
+      "reviewOutputTokens": 2103,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 67238,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Possible crash remains unconfirmed, based on pale water, transparency and morning DO. A second low-confidence oxygen-demand hypothesis has weaker independent support."
+    },
+    {
+      "id": "11",
+      "title": "Feed drop after partial harvest",
+      "review": "Check harvest removal before attributing feed drop to appetite decline.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 8272,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "ASSESSMENT\nThe logged feed drop from 50 to 35 kg/day on 2026-09-01 is consistent with a possible planned reduction after partial harvest, but a cause is not established from timing alone. Water quality was flat through the window and current feed at 35 kg is close to expected feed at 36.34 kg, while tray response, mortality, and lab data are missing. Logged allocation is not proof of appetite or consumption.\n\nKEY DATED EVIDENCE\n- Daily feed kg from daily_records_14d:\n  - 2026-08-22 to 2026-08-31: 50.0 kg each day\n  - 2026-09-01 to 2026-09-04: 35.0 kg each day\n  - Change: -15 kg/day, -30% from 2026-08-31 [water-feed-9] to 2026-09-04 [water-feed-13]\n- Harvest event: 2026-09-01 partial harvest 300 kg biomass, 24000 population [harvest] — same date feed steps down.\n- Growth: 11.1 g on 2026-08-24 [sample-2] to 13.3 g on 2026-09-03 [sample-3]; ADG 0.22 g/day for 2026-08-24 to 2026-09-03 vs 0.31 g/day for 2026-08-14 to 2026-08-24; change -0.09 g/day, -29%.\n- Latest growth interval 2026-08-24 to 2026-09-03 average feed 45.909 kg/day, range 35-50 kg; most of interval was still at 50 kg.\n- Water stable: morning DO 5.8 mg/L, evening DO 6.4 mg/L, minimum recorded DO 5.8 mg/L, pH morning 7.8 / evening 8.1 / swing 0.3, salinity 19 ppt, temperature 29 C, transparency 35 cm — unchanged 2026-08-22 to 2026-09-04.\n- Current: DOC 95, biomass 1081.44 kg range 911.1-1254.93 kg, survival 81.31% medium confidence, feed pressure 0.963x.\n- Missing: direct feeding/tray observations unavailable, no explicit mortality observation, no recent numeric lab measurements.\n\nLIKELY CAUSES\n1. Planned ration adjustment after partial harvest removal — moderate confidence.\n- Supporting: exact date match of harvest and feed step-down on 2026-09-01; 300 kg removal lowers demand; actual 35 kg vs expected 36.34 kg aligned.\n- Opposing/missing: no farm note confirming planned schedule; survival confidence medium and biomass range wide; no tray data to confirm appetite.\n\nNo other cause is supported. Water-quality stress is opposed by flat DO, pH swing, salinity, and temperature. Date mismatch weakens feed-drop as explanation for ADG drop, since ADG interval largely precedes the cut.\n\nWHAT TO CHECK NEXT\n1. Confirm from pond log whether 35 kg from 2026-09-01 was the planned post-harvest ration.\n2. Record tray clearance / direct feeding response for 2-3 meals to test appetite at current biomass.\n3. Do one pond-side mortality and behavior check to rule out unlogged health reason, since mortality status is unknown.\n\nACTIONS\n- Immediate low-risk: hold at current allocation, monitor morning/evening DO, pH swing, and behavior before any increase; follow farm feeding protocol.\n- Dependent on checks: validate post-harvest population/biomass and tray response before increasing late-cycle feed; do not increase feed on slow growth alone if appetite or water weakens.\n",
+      "finishReason": "STOP",
+      "outputTokens": 5684,
+      "sources": [],
+      "groundingStatus": "passed",
+      "groundingIssues": [],
+      "reviewOutputTokens": 1523,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 58933,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Accounts for the dated partial harvest before interpreting feed reduction; does not convert logged allocation into appetite."
+    },
+    {
+      "id": "12",
+      "title": "Missing mortality and tray evidence",
+      "review": "No mortality or tray records means unknown, not normal, no deaths or reduced appetite.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 8453,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3227
+      },
+      "text": "**ASSESSMENT:**\nGrowth in Test Pond slowed from 0.31 to 0.22 g/day (-29%) between the two 10-day measured intervals. A cause for the decline is not established from current evidence. Logged feed allocation rose while measured water variables stayed flat, and tray response, mortality, and lab data are missing.\n\n**KEY DATED EVIDENCE:**\n- MBW: 8.0 g on 2026-08-14, 11.1 g on 2026-08-24, 13.3 g on 2026-09-03\n- ADG: 0.31 g/day 2026-08-14 to 2026-08-24, 0.22 g/day 2026-08-24 to 2026-09-03; change -0.09 g/day, -29%\n- Latest growth interval 2026-08-24 to 2026-09-03: feed 52 kg to 62 kg, avg 57 kg; morning DO 5.8 mg/L flat; minimum recorded DO 5.8 mg/L flat; pH swing 0.3 flat; salinity 19 ppt flat\n- Daily feed comparison 59 kg on 2026-08-31 to 63 kg on 2026-09-04 (+6.8%) only partly overlaps the growth interval; 2026-09-04 is a later observation after interval end\n- Current 2026-09-04: actual feed 63 kg vs expected 36.67 kg, pressure ratio 1.718x\n- Biomass 1091.37 kg, range 943.56-1243.15 kg; survival 82.06% with low confidence; feed-based population 140977 vs mortality-based 82058, differ 71.8%\n- FCR 0.76 uses available recorded feed 791 kg / biomass gain 1041.37 kg; complete cycle feed coverage not verified\n- Water 2026-08-22 to 2026-09-04: morning DO 5.8, evening DO 6.4, pH morning 7.8 / evening 8.1, temp 29C, transparency 35 cm - all unchanged\n- Missing: direct feeding/tray response unavailable, mortality unknown, recent lab unavailable\n\n**LIKELY CAUSES:**\n1. Logged feed allocation rose while measured ADG fell, intake unverified - hypothesis\n- Supporting: logged allocation rose 52 to 62 kg during 2026-08-24 to 2026-09-03 while ADG fell; feed pressure 1.718x on 2026-09-04.\n- Opposing/missing: logged allocation is not proof of consumption; no tray data; 2026-09-04 feed is after interval end; no dated DO/pH deterioration to corroborate stress.\n- Confidence: low\n\nNo dated deterioration in morning DO, pH swing, salinity, or temperature explains the drop. Morning 5.8 mg/L is not a pre-dawn minimum - overnight low remains unknown.\n\n**WHAT TO CHECK NEXT:**\n1. Repeat MBW sample same time/method with shrimp count and size range to confirm 13.3 g and ADG.\n2. Record tray clearance / direct feeding response with actual feed for 3 days to test intake vs allocation.\n3. Record timed pre-dawn DO for 3 days to test overnight oxygen limitation.\n\n**ACTIONS:**\n- Immediate low-risk: hold further feed increases; check trays, behaviour, recovered mortality, and aeration operation daily; stabilize water monitoring.\n- Conditional, after checks: adjust feed only if tray consumption, validated biomass, and timed DO support it per farm protocol; verify survival assumption before pushing late-cycle feed.",
+      "finishReason": "STOP",
+      "outputTokens": 4685,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 2803,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 72085,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "No mortality/tray observations remains unknown. Removes sampling/health causes based solely on missing data; feed/intake uncertainty remains a weak, explicitly tentative hypothesis."
+    },
+    {
+      "id": "13",
+      "title": "Water problem after growth interval",
+      "review": "September 4 low DO cannot explain the already completed August 24–September 3 growth interval.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9359,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT**\nNo. The Sept 4 morning DO of 3.5 mg/L did not cause the measured ADG drop from 0.31 to 0.22 g/day over Aug 24-Sept 3. The low reading is dated after the completed growth interval, so timing alone rules it out as the cause. The Sept 4 value is below the >=5 mg/L target and in the <4.0 mg/L critical range, so it is an acute current risk for Test Pond, not an explanation for past growth.\n\n**KEY DATED EVIDENCE - Test Pond, DOC 95 on 2026-09-04**\n- Growth: Aug 14 8.0 g to Aug 24 11.1 g = 0.31 g/day, 10 d; Aug 24 11.1 g to Sept 3 13.3 g = 0.22 g/day, 10 d; change -0.09 g/day, -29%.\n- Latest growth interval Aug 24-Sept 3: logged feed 50 kg/day flat every day, morning DO 5.8 mg/L every day, min 5.8 / max 5.8 / avg 5.8 mg/L, pH swing 0.3 units, salinity 19 ppt, direct feeding response normal every day.\n- Later observation after interval: Sept 4 morning DO 3.5 mg/L, evening DO 6.4 mg/L, minimum recorded DO 3.5 mg/L. Morning label does not prove a before-dawn measurement.\n- Other water Aug 22-Sept 4 flat: pH morning 7.8 / evening 8.1, temperature 29 C on Sept 4, transparency 35 cm, alkalinity 130 mg/L as CaCO3.\n- Uncertainty: mortality observations unavailable - status unknown; no recent lab; sampling method unknown; survival 82.06% with low confidence; biomass 1091.37 kg, range 943.56-1243.15 kg, is one estimate and cannot establish increase; logged 50 kg feed is allocation, not proof of consumption.\n\n**LIKELY CAUSES of Aug 24-Sept 3 ADG drop**\nNo ranked cause is supported from dated observations. Morning DO during the interval met target at 5.8 mg/L every day, feeding response was normal, and pH swing, salinity, temperature and logged feed were flat, so they do not explain the drop. The Sept 4 drop to 3.5 mg/L is a date mismatch - Sept 4 is after Sept 3 MBW. Missing mortality, health, tray-clearance, and sampling-detail data are unknown, not evidence for a cause.\n\n**WHAT TO CHECK NEXT**\n1. Timed DO today and tomorrow - record exact morning time plus evening DO and aerator function - answers if 3.5 mg/L is persistent limitation.\n2. Repeat MBW with same method, same time, adequate n and size distribution at next sample - answers if 0.22 g/day persists.\n3. Tray clearance / direct feeding response + shrimp behaviour and pond-bottom check for 2-3 days - answers if flat 50 kg allocation reflects actual appetite.\n\n**ACTIONS**\nImmediate low-risk, no dose:\n- Increase aeration especially before sunrise, recheck DO before next feeding window.\n- Hold feed increase while DO is <5 mg/L; inspect sludge, uneaten feed, and scum.\n- Track morning + evening DO, appetite, and mortality daily.\nAfter confirmation:\n- Adjust feed only if DO is stable >=5 mg/L and trays confirm consumption; validate with re-sampling before pushing feed upward.",
+      "finishReason": "STOP",
+      "outputTokens": 4184,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause",
+        "unsupported_cause"
+      ],
+      "reviewOutputTokens": 1824,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 60317,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Separates the September 4 DO problem from the completed growth interval and does not invent an earlier cause."
+    },
+    {
+      "id": "14",
+      "title": "Unspecified nitrogen basis",
+      "review": "Require NO2 versus NO2-N basis; do not silently convert or declare toxicity from an unspecified basis.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9017,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "**ASSESSMENT:**\nTest Pond ADG fell 29% from 0.31 to 0.22 g/day while unverified nitrite readings rose, a pattern consistent with possible nitrogen-waste stress, but causation is not established.\n\nGrowth is still positive — MBW 11.1g on 2026-08-24 to 13.3g on 2026-09-03 — with normal direct feeding response and stable morning DO / pH swing. Nitrite basis is unverified, survival confidence is low, and there is no lab confirmation, so nitrite cannot be confirmed as the cause.\n\n**KEY DATED EVIDENCE:**\n- Growth intervals: 2026-08-14 to 2026-08-24: 8.0g to 11.1g, 10 days, ADG 0.31 g/day; 2026-08-24 to 2026-09-03: 11.1g to 13.3g, 10 days, ADG 0.22 g/day, change -0.09 g/day, -29%\n- Nitrite observations (unverified NO2 vs NO2-N basis, unit/method unverified): 0.3 on 2026-08-24 rising to 0.8 on 2026-09-03; 0.85 on 2026-09-04 is a later observation after the growth interval ended and cannot explain that interval\n- Latest growth interval 2026-08-24 to 2026-09-03: actual daily feed logged 50 kg/day flat, min 50 / max 50 / avg 50; morning DO 5.8 mg/L flat; evening DO 6.4 mg/L; pH swing 0.3 stable; salinity 19 ppt flat; temperature 29C; transparency 35 cm; feeding response normal on all 11 days\n- Feed pressure 1.364x on 2026-09-04: actual 50 kg vs expected 36.67 kg for current biomass assumptions; biomass 1091.37 kg range 943.56-1243.15 kg; survival 82.06% with low confidence\n- Deterministic findings: feed-based vs mortality-based population differ 36.4%; FCR 0.672 uses available recorded feed and estimated biomass, complete cycle coverage not verified\n- Missing: no explicit mortality observations — mortality status unknown; no recent numeric lab reports\n\n**LIKELY CAUSES:**\n1. Rising waste / unverified nitrite load during sustained feeding — **moderate confidence**\n   - Supporting: nitrite readings rose 0.3 to 0.8 during same 10-day interval ADG fell; DOC 84 to 94 with 50 kg/day logged feed sustained.\n   - Opposing / missing: analyte basis, unit and method unverified so toxicity, threshold band and treatment calculation are unavailable; morning DO, pH swing, alkalinity 130 mg/L, and feeding response show no corroborating stress; no lab confirmation. Timing alone cannot establish cause.\n\nNo supported evidence for DO crash, pH swing, salinity shift, or temperature stress in this window — all flat.\n\n**WHAT TO CHECK NEXT:**\n1. Confirm nitrite test basis — ask lab/kit whether result is NO2 or NO2-N, units and method, then repeat dated test to verify 0.3 to 0.8 rise.\n2. Repeat standardized MBW sampling — same gear, time, pond locations, recorded n and size range.\n3. Record 3 days of tray-based direct feeding response plus recovered mortality counts and shrimp behaviour to distinguish appetite/health vs water stress.\n\n**ACTIONS:**\n- Immediate low-risk: hold feed increase, maintain aeration, monitor morning/evening DO, pH swing, alkalinity, feed input and appetite; do not apply bloom-kill chemicals, large exchanges, or nitrogen addition on N:P alone.\n- Dependent on confirmation: any feed adjustment, water exchange, sludge removal, or nitrite treatment only after verified NO2 basis/unit and corroborating DO/appetite/mortality evidence. Use Shrimply Harvest Projection screen for projections.",
+      "finishReason": "STOP",
+      "outputTokens": 3398,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 2108,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 49525,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Preserves unknown nitrogen basis and avoids toxicity thresholds or treatment calculations. Nitrogen-stress ranking remains tentative and would be stronger after analyte confirmation."
+    },
+    {
+      "id": "15",
+      "title": "Sampling method changed",
+      "review": "Consider sampling bias; recommend representative repeat sampling before changing feed.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 8479,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "Yes — the slower measured growth in Test Pond could be a sampling problem, but current data show a pattern consistent with that possibility, not proof of it.\n\nASSESSMENT\nTest Pond MBW went from 11.1 g on 2026-08-24 to 12 g on 2026-09-03, ADG 0.09 g/day, down 71% from 0.31 g/day in the prior 10-day interval. Logged feed was flat at 50 kg/day and direct feeding response was normal through the interval, while the sampling method changed between the two MBWs. True biological slowdown remains uncertain.\n\nKEY DATED EVIDENCE\n- Growth: 2026-08-14 8 g -> 2026-08-24 11.1 g (10d, 0.31 g/d) -> 2026-09-03 12 g (10d, 0.09 g/d). Change -0.22 g/d.\n- Sampling method: 2026-08-24 cast net from several areas vs 2026-09-03 handful from one tray.\n- Interval 2026-08-24 to 2026-09-03: actual daily feed 50 kg/day flat, morning DO 5.8 mg/L flat, evening DO 6.4 mg/L flat, pH swing 0.3 flat, salinity 19 ppt flat, temperature 29 C, transparency 35 cm.\n- Feeding response: normal on all 11 days 2026-08-24 to 2026-09-03.\n- Later observation after interval: on 2026-09-04 biomass 984.7 kg range 851.33-1121.64 kg, survival 82.06% with low confidence, feed pressure 1.463x actual 50 kg vs expected 34.18 kg.\n- Missing: no mortality counts so mortality status unknown; no recent lab; no size-variation or sample-n by method; no harvests recorded.\n\nLIKELY CAUSES\n1. Sampling inconsistency / method bias - moderate confidence\n- Supporting: ADG drop occurs exactly across the interval where method changed from dispersed cast-net to single-tray handful; single-point tray samples are less representative of pond size structure.\n- Opposing/missing: no sample size, size distribution, or repeat sample to confirm direction or magnitude of bias; cannot tell if 2026-09-03 under- or 2026-08-24 over-estimated MBW.\nStable morning DO, pH swing, and normal feeding response during the latest growth interval argue against an obvious water or appetite collapse, but do not rule it out - morning label is not pre-dawn minimum and TAN/NO2 lab data are missing.\n\nWHAT TO CHECK NEXT\n1. Repeat MBW using the 2026-08-24 method - cast net from several areas with recorded shrimp count - to test if 12 g repeats.\n2. Record size distribution and sample number for the next sample to check for selective sampling of small shrimp.\n3. Record daily recovered mortality with method for 3 days to resolve survival/biomass uncertainty.\n\nACTIONS\nImmediate low-risk:\n- Hold feed increase until MBW is validated; review tray clearance, mortality, and water before pushing feed.\n- Keep aeration and daily morning/evening DO, pH, temperature monitoring unchanged; water stable at morning DO 5.8 mg/L, pH swing 0.3.\nConditional on confirmation:\n- Only reconsider feed after a standardized repeat sample plus confirmed tray consumption and stable water; do not adjust feed on the single 12 g tray sample alone.",
+      "finishReason": "STOP",
+      "outputTokens": 3713,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_cause"
+      ],
+      "reviewOutputTokens": 3091,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 62106,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Recorded method change supports a tentative sampling hypothesis; confidence is moderate, with repeat sampling needed to establish bias."
+    },
+    {
+      "id": "16",
+      "title": "Cooling water and growth",
+      "review": "Explain temperature as a plausible contributor and consider feeding evidence, not a universal ADG target.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 8361,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3116
+      },
+      "text": "**ASSESSMENT**\nTest Pond MBW rose from 11.1 g on 2026-08-24 to 13.3 g on 2026-09-03, but interval ADG fell from 0.31 to 0.22 g/day while temperature fell steadily. Timing overlaps, but timing alone does not confirm cause. Other logged water was flat and direct feeding response stayed normal, with no corroborating oxygen, pH or salinity signal. Biomass and population uncertainty limits feed-based interpretation.\n\n**KEY DATED EVIDENCE**\n- Growth: 2026-08-14 MBW 8 g; 2026-08-24 MBW 11.1 g; 2026-09-03 MBW 13.3 g.\n- ADG intervals: 08-14 to 08-24 0.31 g/day, 10 days; 08-24 to 09-03 0.22 g/day, 10 days; change -0.09 g/day, -29%.\n- Temperature: 08-24 29.2 C falling to 09-03 25.2 C; 09-04 24.8 C is a later observation after the growth interval and cannot explain it.\n- Feed 50 kg/day flat 08-22 to 09-04. Logged allocation is not proof of consumption.\n- Direct feeding response normal 08-24 through 09-03.\n- Morning DO 5.8 mg/L flat, evening DO 6.4 mg/L flat; pH morning 7.8 / evening 8.1, swing 0.3 flat; salinity 19 ppt flat; transparency 35 cm flat. Morning label does not prove pre-dawn measurement.\n- Biomass 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% low confidence; feed-based 111887 vs mortality-based 82058 differ 36.4%. FCR 0.672 uses available recorded feed and estimated biomass, with complete cycle feed coverage unverified. Feed pressure 1.364x expected, 50 kg actual vs 36.67 kg expected.\n- No harvests; mortality status unknown; no recent lab.\n\n**LIKELY CAUSES**\n1. Lower temperature reducing metabolic rate and intake - Hypothesis. Supporting: 4.0 C fall across the exact 10-day ADG interval; temperature affects metabolism, feeding and oxygen demand. Missing: feeding response stayed normal; morning DO stable; no timed AM/PM temperature-DO check, no TAN/NO2 lab. Confidence: moderate\n\n**WHAT TO CHECK NEXT**\n1. Repeat MBW with same method, time and adequate sample number with size variation to test if 0.22 g/day is repeatable.\n2. Check tray clearance, behaviour and uneaten feed over 2-3 days to test appetite versus 50 kg allocation.\n3. Measure timed AM/PM temperature with timed DO plus TAN/NO2 lab to test hidden water stress.\n\n**ACTIONS**\n- Immediate low-risk: hold feed flat, maintain aeration, log temperature, timed DO, pH swing, transparency and mortality daily. Do not push feed upward while feed pressure is elevated.\n- Dependent on checks: adjust feed only after tray, MBW validation and water lab confirm need; verify population before using expected-feed calculation.",
+      "finishReason": "STOP",
+      "outputTokens": 3765,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 1915,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 54552,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Cooling is a supported tentative contributor; normal recorded feeding and missing confirmation remain explicit. No invented sampling bias or biomass increase."
+    },
+    {
+      "id": "17",
+      "title": "FCR calculation basis mismatch",
+      "review": "Do not compare weekly and cumulative FCR as one trend; ask for matching windows.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9013,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3133
+      },
+      "text": "No — worsening FCR is not confirmed; slower individual gain with flat logged feed and a higher last-week recorded FCR is consistent with possible worsening conversion, but the FCR numbers use different calculation bases and cannot be compared as a trend.\n\n**ASSESSMENT**\nTest Pond at DOC 95, MBW 13.3 g on 2026-09-03 shows ADG slowdown while logged feed allocation stayed flat at 50 kg/day. Deterministic FCR 0.672 and logged recorded FCRs 1.2 vs 2.0 use unmatched bases, and biomass/survival uncertainty with unverified feed coverage prevent a firm FCR-trend call.\n\n**KEY DATED EVIDENCE**\n- Growth: 8.0 g on 2026-08-14 to 11.1 g on 2026-08-24 = 0.31 g/day, then 11.1 g to 13.3 g on 2026-09-03 = 0.22 g/day, change -0.09 g/day (-29%), 3 measured samples, method Compare two latest consecutive measured MBW intervals.\n- Logged feed: 50 kg/day every day 2026-08-22 to 2026-09-04, flat 5-point comparison 2026-08-31 to 2026-09-04; limitation: logged allocation is not proof of appetite, tray clearance or consumption.\n- FCRs not comparable: deterministic 0.672 = 700 kg / 1041.37 kg gain with limitation Uses available recorded feed and estimated biomass. Complete cycle feed coverage is not verified; logged recorded FCR 1.2 cycle cumulative feed/gain 2026-08-22 to 2026-09-03 vs 2.0 last week feed/gain on 2026-09-04.\n- Feed pressure 2026-09-04: actual 50 kg vs expected 36.67 kg = 1.364x; direction of any biomass error is undetermined from this ratio.\n- Biomass: single estimate 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% low confidence; no comparable saved estimates supplied, so no biomass increase can be described. Mortality-based population 82058 vs feed-based 111887 differs 36.4%.\n- Water 2026-08-22 to 2026-09-04 flat: morning DO 5.8 mg/L, evening 6.4 mg/L, pH 7.8/8.1 swing 0.3, temp 29 C, salinity 19 ppt, transparency 35 cm; morning label does not prove pre-dawn. Direct feeding response normal daily 2026-08-24 to 2026-09-03.\n- Missing: no mortality counts so mortality unknown, no recent lab, no harvests, no sampling method.\n\n**LIKELY CAUSES**\nNo ranked causes — positive supporting observations are insufficient to rank efficiency loss, health, or sampling explanations. Wide biomass range and 36.4% population disagreement establish biomass uncertainty only, not over- or under-estimation. Only 3 samples with unknown method does not support sampling bias as a cause.\n\n**WHAT TO CHECK NEXT**\n1. Check feed-tray clearance time and uneaten feed for next 3 consecutive meals to test whether 50 kg allocation is consumed.\n2. Repeat MBW with consistent method, time of day, and recorded shrimp count to test interval ADG reliability.\n3. Record daily recovered mortality and check pond bottom/outlet for 3 days to resolve survival uncertainty.\n\n**ACTIONS**\n- Immediate low-risk: Hold feed at 50 kg, do not increase; maintain aeration and monitor morning/evening DO and pH swing.\n- Dependent on confirmation: Only adjust feed after tray clearance and revised biomass/survival check; use Shrimply Harvest Projection screen for harvest economics, not chat estimates.",
+      "finishReason": "STOP",
+      "outputTokens": 3239,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_estimate_direction",
+        "unsupported_sampling_cause"
+      ],
+      "reviewOutputTokens": 2037,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 47320,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Rejects a trend across weekly versus cumulative FCR. Removes unsupported biomass-direction and sampling causes; missing observations do not become diagnoses."
+    },
+    {
+      "id": "18",
+      "title": "N:P missing phosphorus",
+      "review": "Ratio is unavailable without P and matching N analyte; no fertilizer prescription.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 9304,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 2,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 2,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "text": "ASSESSMENT:\nThe N:P ratio says nothing about plankton in Test Pond because it cannot be calculated, and the observed pattern of flat transparency, DO and pH swing from 2026-08-22 to 2026-09-04 is consistent with a currently stable plankton profile, but a nutrient cause is not established.\n\nKEY DATED EVIDENCE:\n- Transparency: 35 cm every day 2026-08-22 to 2026-09-04, source_ids water-feed-0 to water-feed-13. Target is 30-40 cm, so inside target and stable.\n- pH swing: morning 7.8 / evening 8.1 = swing 0.3 every day 2026-08-22 to 2026-09-04. No widening to suggest dense/unstable bloom.\n- DO: morning 5.8 mg/L / evening 6.4 mg/L every day 2026-08-22 to 2026-09-04. Morning label only; not proven pre-dawn, no overnight minimum available.\n- Direct feeding response: normal every day 2026-08-22 to 2026-09-04.\n- Nutrients: TAN 0.5 mg/L on 2026-08-22 rising to 0.63 mg/L on 2026-09-04, alkalinity 130 mg/L flat. No phosphorus result, no lab plankton composition/count, no mortality observation in window.\n- Growth context: MBW 8 g on 2026-08-14, 11.1 g on 2026-08-24, 13.3 g on 2026-09-03; ADG 0.31 to 0.22 g/day, -29% descriptive change only.\n\nLIKELY CAUSES:\nNo plankton instability to diagnose, so no causal ranking is warranted. Specifically:\n- Nutrient-limitation from N:P cannot be ranked — supporting evidence missing. TAN is not total nitrogen, phosphorus is missing, and sample date/analyte/unit/basis cannot be matched. Confidence in any N:P interpretation: not assessable.\n- Stable transparency/DO/pH with normal feeding is best described as stable at current observation level, with uncertainty about composition and harmful groups because lab plankton data are absent.\n\nWHAT TO CHECK NEXT:\n1. Paired total nitrogen and phosphorus from same dated sample with analyte, fraction (total vs dissolved), unit, and mass/molar basis — answers whether a valid N:P can be calculated.\n2. Lab plankton identification and dominance with sample source, date/time, method and unit — answers whether stable transparency hides harmful groups rising.\n3. Daily water color, transparency, timed pH swing and morning DO plus tray/feeding response — answers whether stability continues or a bloom/crash pattern starts.\n\nACTIONS:\nImmediate low-risk:\n- Continue tracking transparency, water color, pH swing, morning DO, and feeding response; maintain aeration. Do not crash a bloom abruptly.\n- Do not add nitrogen, cut feed by a fixed %, do large exchange, or apply bloom-kill chemicals based on N:P alone.\n\nConditional on new data:\n- Only after matched N+P and plankton composition are available, interpret N:P together with transparency, DO, pH swing, TAN, temperature and feeding response.\n- Review feed pressure finding separately: actual 50 kg vs expected 36.67 kg, ratio 1.364x on 2026-09-04 — verify MBW, population/biomass range 943-1243 kg, and tray clearance before increasing feed.\n",
+      "finishReason": "STOP",
+      "outputTokens": 2989,
+      "sources": [],
+      "groundingStatus": "passed",
+      "groundingIssues": [],
+      "reviewOutputTokens": 1638,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 47913,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Does not calculate N:P without phosphorus or prescribe nutrients; uncertainty about plankton composition remains."
+    },
+    {
+      "id": "19",
+      "title": "Bounded month-long history",
+      "review": "Use the extended dates and distinguish them from 14-day comparisons; retain knowledge and evidence through budgeting.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 11354,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 2675
+      },
+      "text": "**Test Pond — DOC 95 — 30-day water + feed trend analysis**\n\n### ASSESSMENT\nTest Pond shows steadily rising logged feed allocation with steadily falling morning DO and slower recent individual growth, a pattern consistent with increasing feed-load and oxygen pressure, but causation is not established.\nGrowth is still positive at 13.3 g on 2026-09-03, but ADG fell 29% while allocated feed rose, and morning DO fell into warning range at 4.84 mg/L on 2026-09-04. Survival / biomass confidence is low and tray response, mortality, and lab data are missing.\n\n### KEY DATED EVIDENCE — 2026-08-06 to 2026-09-04\nFeed — logged allocation, not proof of consumption:\n- 2026-08-06 DOC 66: 35 kg [water-feed-0] -> +1 kg/day every day -> 2026-09-04 DOC 95: 64 kg [water-feed-29]\n- Last 5-day comparison: 60 kg on 2026-08-31 to 64 kg on 2026-09-04, +4 kg, +6.7%\n- Latest growth interval 2026-08-24 to 2026-09-03: avg 58 kg/day, range 53-63 kg\n- Feed pressure on 2026-09-04: 64 kg actual vs 36.67 kg expected = 1.745x expected. At a fixed feeding rate, higher assumed biomass raises expected feed and lowers pressure; lower assumed biomass does the reverse. Pressure alone does not prove over- or under-estimation.\n- FCR 1.426 = 1485 kg cumulative feed / 1041.37 kg biomass gain. Limitation: uses available recorded feed and estimated biomass, with complete cycle feed coverage unverified.\n\nWater — morning label does not prove pre-dawn:\n- DO morning: 6.0 mg/L on 2026-08-06 -> 5.36 on 2026-08-22 -> 4.84 on 2026-09-04. -0.52 mg/L in 14d, -9.7%\n- Within latest growth interval: 5.28 mg/L on 2026-08-24 to 4.88 mg/L on 2026-09-03. 4.84 mg/L on 2026-09-04 is a later observation after the interval end.\n- DO evening: 6.4 mg/L flat all 30 days. Minimum recorded DO = morning value each day, not a confirmed overnight minimum.\n- pH morning 7.8 / evening 8.1 / swing 0.3 flat all 30 days; salinity 19 ppt flat, temperature 29 C flat, transparency 35 cm flat, alkalinity 130 mg/L flat\n\nGrowth / biomass:\n- 2026-08-14 DOC 74: 8 g -> 2026-08-24 DOC 84: 11.1 g = ADG 0.31 g/day\n- 2026-08-24 -> 2026-09-03 DOC 94: 13.3 g = ADG 0.22 g/day, -0.09 g/day\n- Single biomass estimate 1091.37 kg, range 943.56-1243.15 kg, survival 82.06% with low confidence. No comparable saved estimates supplied, so no biomass increase can be established. Feed-based vs mortality-based population differ by 74.5%; direction of any error is undetermined.\n- No harvests to explain feed/biomass change. No mortality observations — status unknown.\n\n### LIKELY CAUSES\n1. **Rising logged feed load contributing to morning DO decline** — moderate confidence\n- Supports: logged allocation rose daily from 35 kg to 64 kg while morning DO fell steadily; evening DO stable at 6.4 mg/L while morning fell.\n- Missing: no pre-dawn timed DO, aeration, sludge, or organic-load observations to confirm mechanism; no tray clearance to confirm consumption vs waste.\n\n2. **Actual feed high relative to expected under uncertain population/biomass assumptions** — moderate confidence\n- Supports: 1.745x expected feed, 74.5% model disagreement, survival confidence low, no tray clearance to confirm consumption.\n- Missing: no direct feeding response or mortality counts; FCR 1.426 alone with unverified coverage cannot confirm overfeeding vs underestimated need. Error direction undetermined.\n\nNo third cause ranked — insufficient evidence to rank disease, plankton, or nitrogen causes without lab, mortality, or behaviour data.\n\n### WHAT TO CHECK NEXT\n1. Timed pre-sunrise DO + aerator check on 2026-09-05 — answers whether 4.84 mg/L morning value is near the true minimum.\n2. Tray feeding response 1-2 hr after feeding for next 3 meals — answers whether 64 kg allocation is being eaten vs wasted.\n3. Consistent MBW sampling + pond-side mortality / behaviour check — answers whether ADG drop to 0.22 reflects true growth vs sampling variation.\n\n### ACTIONS\nImmediate low-risk:\n- Increase aeration, especially before sunrise, and recheck DO before next feeding window. Do not increase feed while DO is 4.0-4.9 mg/L.\n- Hold feed increase; use small adjustments only after tray response and DO stabilize.\n\nDependent on checks:\n- If trays show leftover + DO stays <5, reduce allocation per farm protocol and inspect sludge / uneaten feed.\n- If trays clear quickly + DO recovers to >=5 and mortality normal, then re-validate biomass/survival before any late-cycle feed increase.",
+      "finishReason": "STOP",
+      "outputTokens": 3310,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_biomass_trend",
+        "unsupported_estimate_direction"
+      ],
+      "reviewOutputTokens": 2925,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 58598,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Original biomass-growth and estimate-direction failures are corrected. Retains full-month versus growth-interval dates and explains feed-pressure arithmetic in the correct direction; answer remains long."
+    },
+    {
+      "id": "20",
+      "title": "Original handover typed measurements",
+      "review": "Use calculated -29%, -21.6%, +133.3%; mark user-reported. No invented earlier alkalinity, stable salinity, normal mortality, biomass growth, confirmed waste or named disease.",
+      "mode": "pond_diagnostic",
+      "promptTokens": 3311,
+      "generationSettings": {
+        "reasoningEffort": "high",
+        "maxOutputTokens": 10000,
+        "timeoutMs": 90000
+      },
+      "scores": {
+        "Connect related variables": 2,
+        "Do not invent facts": 2,
+        "Rank supported causes": 1,
+        "State uncertainty": 2,
+        "Prioritize useful checks": 1,
+        "Give practical conditional actions": 2,
+        "Avoid overdiagnosis": 2,
+        "Separate correlation from causation": 2
+      },
+      "earlierAttempt": {
+        "finishReason": "STOP",
+        "outputTokens": 3122
+      },
+      "text": "ASSESSMENT:\nAt DOC 67, user-reported unverified values show slower ADG with higher logged feed allocation, lower user-described dawn DO, wider pH swing and alkalinity below target, consistent with oxygen / pond-stability stress possibly limiting utilization — cause not established without dates and methods.\n\nKEY DATED EVIDENCE:\n- DOC 67, all user-reported unverified, dates and methods to confirm, not saved records:\n  - ADG 0.31 to 0.22 g/day (-29%)\n  - User-described dawn DO 5.1 to 4.0 mg/L, exact time unconfirmed; 4.0 mg/L is warning 4.0-4.9 mg/L, below target >=5 mg/L\n  - pH swing 0.3 to 0.7 units, now above warning >0.5\n  - Logged feed allocation +14%, not proof of consumption\n  - Alkalinity 92 mg/L CaCO3, below target 100-160, above minimum ~80\n  - Salinity 19 ppt, within 15-30 ppt, no change rate given\n- Missing: before-vs-now dates, morning/evening DO and pH times, TAN/NH3, nitrite, mortality, behaviour, direct tray response, MBW sample size/interval, biomass/survival basis, FCR, aeration, exchange, weather, sludge/scum.\n\nLIKELY CAUSES — hypotheses, not confirmed:\n1. Oxygen limitation / unstable buffering reducing intake and conversion — Moderate confidence.\nSupporting: dawn DO fall to 4.0 plus wider swing plus alkalinity 92 indicates less stable chemistry; low DO can reduce feeding and increase susceptibility.\nMissing: evening DO, aeration, organic load, plankton, mortality/behaviour; timing alone does not prove causation.\n2. Logged feed allocation mismatched to actual intake and uncertain biomass — Moderate confidence.\nSupporting: ADG fell while logged allocation rose; tables are only a starting point and need biomass, survival, water quality and tray cross-check; direction of any biomass error undetermined.\nMissing: expected feed, biomass confidence, tray clearance, FCR trend.\n3. Plankton photosynthesis-respiration swing driving DO and pH movement — Low confidence.\nSupporting: swing 0.3 to 0.7 suggests stronger bloom activity or weaker buffering.\nMissing: transparency, plankton trend, paired morning/evening pH/DO, nutrients.\n\nWHAT TO CHECK NEXT:\n1. Morning + evening DO with exact time and aerator status for 2-3 days.\n2. Morning + afternoon pH with alkalinity re-check and TAN/NH3 basis and units before any correction.\n3. Direct tray response + mortality + MBW details to test intake versus sampling issue.\n\nACTIONS:\n- Immediate low-risk: check aeration especially before sunrise, track DO/pH morning and evening, hold further feed increases until DO and appetite stabilize, inspect sludge, uneaten feed and dead algae.\n- Only after confirming data: adjust feed per farm protocol if tray, biomass/survival and water quality support it; improve buffering gradually per farm protocol, avoid sudden chemical correction or large exchange.\n- Caution: do not increase feed while DO is unstable; high pH with elevated TAN would raise toxic NH3 risk.",
+      "finishReason": "STOP",
+      "outputTokens": 2140,
+      "sources": [],
+      "groundingStatus": "revised",
+      "groundingIssues": [
+        "unsupported_estimate_direction",
+        "answer_structure"
+      ],
+      "reviewOutputTokens": 3047,
+      "reviewFinishReason": "STOP",
+      "elapsedMs": 55619,
+      "finalClaimChecks": {
+        "passed": true,
+        "issues": []
+      },
+      "reviewNotes": "Typed measurements remain user-reported and unverified. No invented biomass increase, normal mortality, stable salinity trend or confirmed disease; several hypotheses/checks remain broad."
+    }
+  ],
+  "reviewSummary": {
+    "reviewedAt": "2026-09-04T09:06:14.240Z",
+    "method": "Manual review against each synthetic fixture, plus the final deterministic claim checks. Live requests used the production shared review helper; targeted reruns resolved observed defects.",
+    "completedCases": 20,
+    "knownClaimRegressionsPassed": true,
+    "groundingCounts": {
+      "passed": 4,
+      "revised": 16,
+      "fallback": 0
+    },
+    "allSemanticsPassed": false,
+    "remainingLimitations": [
+      "Some tentative cause rankings remain weak or repetitive.",
+      "Some replies exceed the preferred length or bundle several observations into one check.",
+      "A model-based review plus targeted deterministic checks is not a guarantee of factual accuracy for every future reply."
+    ],
+    "deploymentStatus": "Local implementation only; no production deployment or signed-in production smoke test performed."
+  }
+}

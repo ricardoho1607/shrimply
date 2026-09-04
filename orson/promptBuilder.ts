@@ -5,8 +5,13 @@ import {
   ORSON_UNSUPPORTED_CLAIMS,
 } from './sourceOfTruth';
 import { selectOrsonKnowledge } from './knowledge/knowledgeSelector';
+import { calculateUserReportedChanges } from './userReportedMeasurements';
 import type { SelectedKnowledge } from './knowledge/knowledgeTypes';
 import { isMortalityDiagnosticQuestion } from './mortalityDiagnostic';
+import {
+  ORSON_EVIDENCE_PROMPT_RULES,
+  ORSON_POND_DIAGNOSTIC_PROMPT_RULES,
+} from '../functions/shared/orsonPromptPolicy';
 import type {
   OrsonAnalysisMode,
   OrsonConversationMessage,
@@ -21,9 +26,18 @@ import type {
   OrsonRiskReport,
   OrsonRiskSeverity,
   OrsonMortalityTrace,
+  OrsonMetricComparison,
+  OrsonPondDiagnosticContext,
+  OrsonIntervalSeriesSummary,
 } from './types';
 
+const EXPLICIT_GENERAL = /\b(secara umum|pertanyaan umum|bukan analisis kolam|in general|general (?:question|guidance)|not (?:a |an )?(?:pond|farm)(?:-specific)? analysis)\b/i;
+
 const FARM_SPECIFIC_PATTERNS = [
+  /\bcompare\s+(?:all\s+)?ponds\b/i,
+  /\b(kolam|tambak)\s+(saya|kami|ini|semua|sim-[a-z0-9-]+)\b/i,
+  /\b(analisis|periksa)\b/i,
+  /\b(seluruh|semua)\s+(kolam|tambak)\b/i,
   /\bmy\s+(pond|farm|shrimp|feed|water|harvest|stock|stocking|biomass)\b/i,
   /\b(this|that|the)\s+(pond|farm|projection|harvest|feed|water)\b/i,
   /\bpond\s+[a-z0-9-]+\b/i,
@@ -49,6 +63,7 @@ const FARM_SPECIFIC_PATTERNS = [
 ];
 
 const GENERAL_AQUACULTURE_PATTERNS = [
+  /\b(apa itu|jelaskan|bagaimana cara|secara umum|pertanyaan umum)\b/i,
   /\bwhat\s+is\b/i,
   /\bhow\s+do\s+i\b/i,
   /\bexplain\b/i,
@@ -57,6 +72,7 @@ const GENERAL_AQUACULTURE_PATTERNS = [
 ];
 
 const AQUACULTURE_SCOPE_PATTERNS = [
+  /\b(udang|vaname|tambak|kolam|pakan|nitrat|nitrit|amonia|oksigen|salinitas|alkalinitas)\b/i,
   /\baquaculture\b/i,
   /\bshrimp\b/i,
   /\bprawn\b/i,
@@ -142,6 +158,41 @@ const DETAILED_HISTORY_PATTERNS = [
   /\b(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2}\b/i,
 ];
 
+const POND_DIAGNOSTIC_PATTERNS = [
+  /\blow\s+adg\b|\bhigh\s+fcr\b|\bgrowth\s+slow(?:ed|ing)?\b|\bunstable\b|\banalysis\b|\babnormal\s+feed(?:ing)?\s+response\b/i,
+  /\bwhy\b/i,
+  /\bwhat(?:'s| is) happening\b/i,
+  /\bwhat (?:has )?changed\b/i,
+  /\bcaus(?:e|ed|ing)\b/i,
+  /\bdiagnos(?:e|is|tic)\b/i,
+  /\binvestigat(?:e|ion)\b/i,
+  /\banaly[sz]e\b/i,
+  /\bworsen(?:ed|ing)?\b/i,
+  /\bcrash(?:ed|ing)?\b/i,
+  /\bkenapa\b|\bmengapa\b|\bpenyebab\b|\bapa yang terjadi\b|\banalisis\b/i,
+  /tại sao|nguyên nhân|phân tích/i,
+  /ทำไม|สาเหตุ|วิเคราะห์/u,
+  /为什么|為什麼|原因|分析/u,
+];
+
+const DIAGNOSTIC_VARIABLE_PATTERNS = [
+  /\badg\b|\bgrowth\b|\bmbw\b|\babw\b|\bpertumbuhan\b/i,
+  /\bfcr\b|\bfeed(?:ing)?\b|\bappetite\b|\btray\b|\bpakan\b/i,
+  /\bD\.?O\.?\b|\bdissolved oxygen\b|\boxygen\b|\boksigen\b/i,
+  /\bph\b|\balkalinity\b|\balkalinitas\b/i,
+  /\bsalinity\b|\bsalinitas\b/i,
+  /\bammonia\b|\btan\b|\bnh3\b|\bnh4\b|\bnitrite\b|\bno2\b/i,
+  /\bmortality\b|\bdead\b|\bkematian\b/i,
+  /\bplankton\b|\btransparency\b|\bweather\b|\brain\b|\bsludge\b/i,
+];
+
+const USER_REPORTED_MEASUREMENT_PATTERN = /\b(?:doc|adg|fcr|feed|pakan|dawn\s+do|do|ph(?:\s+swing)?|alkalinity|alkalinitas|salinity|salinitas|tan|nh3|nh4|nitrite|no2|mbw|abw)\b[^\n.!?]{0,24}?[-+]?\d+(?:\.\d+)?/i;
+
+const isPondDiagnosticQuestion = (question: string): boolean => (
+  POND_DIAGNOSTIC_PATTERNS.some((pattern) => pattern.test(question))
+  || DIAGNOSTIC_VARIABLE_PATTERNS.filter((pattern) => pattern.test(question)).length >= 3
+);
+
 const SUMMARY_PATTERNS = [
   /\banaly[sz]e\b/i,
   /\boverview\b/i,
@@ -204,9 +255,9 @@ const RECORD_COUNT_WORDS: Record<string, number> = {
   ten: 10,
 };
 
-export const ORSON_MODEL_TIMEOUT_MS = 25000;
+export const ORSON_MODEL_TIMEOUT_MS = 155000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
-export const ORSON_PROMPT_TOKEN_BUDGET = 9000;
+export const ORSON_PROMPT_TOKEN_BUDGET = 16000;
 const ORSON_CONTEXT_NOTE_MAX_CHARS = 180;
 const ORSON_CONVERSATION_MESSAGE_MAX_CHARS = 400;
 const ORSON_USER_MESSAGE_MAX_CHARS = 2000;
@@ -229,28 +280,45 @@ export const estimateOrsonPromptTokens = (value: string): number => {
   return Math.ceil(weightedCharacters / 3);
 };
 
-const truncateToOrsonTokenBudget = (value: string, maxTokens: number): string => {
-  if (estimateOrsonPromptTokens(value) <= maxTokens) return value;
-  const suffix = '\n[Older or lower-priority context trimmed to stay within the Orson token budget.]';
-  const suffixTokens = estimateOrsonPromptTokens(suffix);
-  let weightedCharacters = 0;
-  let endIndex = 0;
-  const maxWeightedCharacters = Math.max(0, (maxTokens - suffixTokens) * 3);
-  for (const character of value) {
-    const weight = (character.codePointAt(0) ?? 0) > 127 ? 2 : 1;
-    if (weightedCharacters + weight > maxWeightedCharacters) break;
-    weightedCharacters += weight;
-    endIndex += character.length;
-  }
-  return `${value.slice(0, endIndex).trimEnd()}${suffix}`;
+const CONTEXT_OMITTED_NOTE = '[Lower-priority Orson context omitted to preserve complete evidence blocks and the current question.]';
+
+const contextSectionPriority = (section: string): number => {
+  if (section.startsWith('ORSON QUESTION FOCUS:')) return 0;
+  if (section.startsWith('ORSON USER-REPORTED COMPARISONS:')) return 0;
+  if (section.startsWith('ORSON FARM SCOPE:')) return 1;
+  if (section.startsWith('ORSON EXACT RECORDS:') || section.startsWith('ORSON MORTALITY TRACE:')) return 2;
+  if (section.startsWith('ORSON RISK PAYLOAD:')) return 3;
+  if (section.startsWith('ORSON SELECTED KNOWLEDGE:')) return 4;
+  if (section.startsWith('ORSON COMPARATIVE MATRIX:')) return 5;
+  if (section.startsWith('ORSON RECENT CONVERSATION:')) return 6;
+  return 7;
+};
+
+const selectCompleteContextSections = (context: string, maxTokens: number): string => {
+  if (estimateOrsonPromptTokens(context) <= maxTokens) return context;
+  const sections = context.split(/\n\n(?=ORSON [A-Z][A-Z ]*:)/).filter(Boolean);
+  const noteTokens = estimateOrsonPromptTokens(CONTEXT_OMITTED_NOTE);
+  let remainingTokens = Math.max(0, maxTokens - noteTokens);
+  const selected = sections
+    .map((section, index) => ({ section, index, priority: contextSectionPriority(section) }))
+    .sort((first, second) => first.priority - second.priority || first.index - second.index)
+    .filter(({ section }) => {
+      const tokens = estimateOrsonPromptTokens(section) + 1;
+      if (tokens > remainingTokens) return false;
+      remainingTokens -= tokens;
+      return true;
+    })
+    .sort((first, second) => first.index - second.index)
+    .map(({ section }) => section);
+  return [...selected, CONTEXT_OMITTED_NOTE].join('\n\n');
 };
 
 export const buildOrsonRequestPrompt = (context: string, userMessage: string): string => {
   const boundedQuestion = trimPromptText(userMessage, ORSON_USER_MESSAGE_MAX_CHARS) || '';
-  return truncateToOrsonTokenBudget(
-    `${context}\n\nUSER QUESTION:\n${boundedQuestion}`,
-    ORSON_PROMPT_TOKEN_BUDGET,
-  );
+  const questionBlock = `Answer in the language of the current user question, regardless of previous replies. Honor an explicit language request.\n\nUSER QUESTION:\n${boundedQuestion}`;
+  const contextBudget = Math.max(0, ORSON_PROMPT_TOKEN_BUDGET - estimateOrsonPromptTokens(questionBlock) - 2);
+  const selectedContext = selectCompleteContextSections(context, contextBudget);
+  return selectedContext ? `${selectedContext}\n\n${questionBlock}` : questionBlock;
 };
 
 const round = (value: number, decimals = 2) => {
@@ -333,6 +401,7 @@ const normalizeConversationHistory = (
 };
 
 const inferStandaloneRoute = (question: string): OrsonConversationRoute => {
+  if (EXPLICIT_GENERAL.test(question) && AQUACULTURE_SCOPE_PATTERNS.some(pattern => pattern.test(question))) return 'aquaculture_knowledge';
   if (INVENTORY_PRODUCT_PATTERNS.some((pattern) => pattern.test(question))) return 'inventory_product';
   if (isFarmSpecificQuestion(question)) return 'farm_analysis';
   if (
@@ -346,6 +415,7 @@ export const inferOrsonConversationRoute = (
   question: string,
   history: OrsonConversationMessage[] = [],
 ): OrsonConversationRoute => {
+  if (EXPLICIT_GENERAL.test(question)) return inferStandaloneRoute(question);
   const normalizedHistory = normalizeConversationHistory(history);
   if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))) {
     const previousUserMessage = [...normalizedHistory].reverse().find((message) => message.role === 'user');
@@ -358,6 +428,7 @@ export const inferOrsonConversationRoute = (
 };
 
 const isConversationFollowUpQuestion = (question: string): boolean => (
+  !EXPLICIT_GENERAL.test(question) &&
   question.trim().length <= 80 && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))
 );
 
@@ -426,22 +497,41 @@ export const buildOrsonQuestionFocus = (
     return includesSearchTerm(normalizedQuestion, payload.pondName) ||
       includesSearchTerm(normalizedQuestion, payload.pondId);
   });
+  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
+  const previousFocusedPayload = usesConversationHistory
+    ? [...conversationHistory].reverse().flatMap((message) => {
+        if (message.role !== 'user') return [];
+        const normalizedMessage = normalizeSearchText(message.text);
+        const matches = payloads.filter((payload) => (
+          includesSearchTerm(normalizedMessage, payload.pondName)
+          || includesSearchTerm(normalizedMessage, payload.pondId)
+        ));
+        return matches.length === 1 ? matches : [];
+      })[0] ?? null
+    : null;
   const intent = inferOrsonQuestionIntent(question);
   const isComparison = intent === 'comparison' || mentionedPayloads.length >= 2;
-  const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : null;
+  const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : previousFocusedPayload;
   const requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
   const requestedDates = detectRequestedDates(question);
   const requestedFields = detectRequestedRecordFields(question);
   const requestedRecordCount = detectRequestedRecordCount(question);
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
-  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
-  const route = mentionedPayloads.length > 0 && inferredRoute !== 'inventory_product'
+  const containsUserReportedMeasurements = requestedDates.length === 0 && USER_REPORTED_MEASUREMENT_PATTERN.test(question);
+  const route = !EXPLICIT_GENERAL.test(question)
+    && (mentionedPayloads.length > 0 || (containsUserReportedMeasurements && isPondDiagnosticQuestion(question)))
+    && inferredRoute !== 'inventory_product'
     ? 'farm_analysis'
     : inferredRoute;
+  const analysisMode: OrsonAnalysisMode = route !== 'farm_analysis'
+    ? 'standard'
+    : isMortalityDiagnosticQuestion(question)
+      ? 'mortality_diagnostic'
+      : isPondDiagnosticQuestion(question) ? 'pond_diagnostic' : 'standard';
 
   return {
-    analysisMode: isMortalityDiagnosticQuestion(question) ? 'mortality_diagnostic' : 'standard',
+    analysisMode,
     route,
     intent: isComparison ? 'comparison' : intent,
     focusedPondName: focusedPayload?.pondName ?? null,
@@ -455,9 +545,10 @@ export const buildOrsonQuestionFocus = (
     isPondSpecific: focusedPayload !== null,
     isComparison,
     comparedPondNames: mentionedPayloads.map((p) => p.pondName),
-    requiresDetailedHistory: isMortalityDiagnosticQuestion(question) || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question)),
+    requiresDetailedHistory: analysisMode !== 'standard' || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question)),
     usesConversationHistory,
     shouldSummarize: intent === 'summary' || isComparison || /\banaly[sz]e\b/i.test(question),
+    containsUserReportedMeasurements,
   };
 };
 
@@ -467,6 +558,7 @@ const orderPayloadsForQuestion = (
 ): OrsonPromptPondPayload[] => {
   if (focus.route === 'aquaculture_knowledge' || focus.route === 'out_of_scope') return [];
   if (focus.route === 'inventory_product' && !focus.isPondSpecific) return [];
+  if (focus.containsUserReportedMeasurements && !focus.isPondSpecific) return [];
 
   if (focus.isPondSpecific) {
     const focused = payloads.find((payload) => {
@@ -493,7 +585,7 @@ const orderPayloadsForQuestion = (
 
 export const isFarmSpecificQuestion = (question: string): boolean => {
   const trimmed = question.trim();
-  if (!trimmed) return false;
+  if (!trimmed || EXPLICIT_GENERAL.test(trimmed)) return false;
 
   if (GENERAL_AQUACULTURE_PATTERNS.some((pattern) => pattern.test(trimmed))) return false;
   if (FARM_SPECIFIC_PATTERNS.some((pattern) => pattern.test(trimmed))) return true;
@@ -524,12 +616,21 @@ export const buildOrsonPromptPayload = (
   return {
     pondId: metrics.pondId,
     pondName: metrics.pondName,
+    species: metrics.species,
+    pondAreaM2: metrics.pondAreaM2,
+    densityPerM2: metrics.densityPerM2,
+    initialPopulation: metrics.initialPopulation,
     currentDoc: metrics.currentDoc,
     latestMbwG: metrics.latestMbwG,
     adgGPerDay: metrics.adgGPerDay,
     smoothedAdgGPerDay: metrics.smoothedAdgGPerDay,
     growthConfidence: metrics.growthConfidence,
+    growthEvidence: metrics.growthEvidence,
     fcr: metrics.fcr,
+    totalFeedKg: metrics.totalFeedKg,
+    biomassGainKg: metrics.biomassGainKg,
+    totalHarvestedBiomassKg: metrics.totalHarvestedBiomassKg,
+    totalHarvestedPopulation: metrics.totalHarvestedPopulation,
     mbwOutlierDates: metrics.mbwOutlierDates,
     biomassKg: metrics.estimatedBiomassKg,
     biomassRangeKg: metrics.feedBiomassModel.biomassRangeKg,
@@ -559,6 +660,7 @@ export const buildOrsonPromptPayload = (
     dailyRecords14d: metrics.dailyRecords14d || [],
     recentLabReports: metrics.recentLabReports || [],
     recentTreatments: metrics.recentTreatments || [],
+    recentHarvests: metrics.recentHarvests || [],
     historicalBenchmark: metrics.historicalBenchmark || null,
     outlook: {
       direction: outlook.direction,
@@ -576,6 +678,7 @@ export const buildOrsonPromptPayload = (
       evidence: finding.evidence.slice(0, 2),
       recommendation: finding.recommendation,
     })),
+    diagnosticContext: metrics.diagnosticContext,
   };
 };
 
@@ -594,14 +697,14 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- When official-source lookup is available, prefer the manufacturer label, regulator, FAO, university extension, or peer-reviewed source and identify the source. If exact composition remains unverified, ask for the product label.',
     '',
     'SOURCE OF TRUTH:',
-    '- Use the provided ORSON RISK PAYLOAD as the source of truth.',
+    '- Use the provided ORSON RISK PAYLOAD and ORSON COMPARATIVE MATRIX as the source of truth for included farm values.',
     '- The payload is produced by deterministic Shrimply calculations before this model call.',
     '- If ORSON EXACT RECORDS is present, use it instead of ORSON RISK PAYLOAD. Report only its pond, requested dates, and requested fields; do not add other pond metrics, biological conclusions, or unrequested context.',
-    '- Biological risk conclusions must come from the deterministic findings. You may explain or compare raw values, but do not create a new biological conclusion or threshold that is absent from the findings.',
-    '- Use only the latest 3-5 question-relevant records for the selected pond in daily_records_14d, recent_lab_reports, and recent_treatments. Mortality diagnostics may separately include the bounded 14-day ORSON MORTALITY TRACE.',
+    '- Deterministic risk levels and findings remain authoritative. Diagnostic explanations may connect dated evidence, but must remain labelled as hypotheses unless a finding or confirmed lab result establishes them.',
+    '- Routine questions use the latest 3-5 question-relevant records from daily_records_14d, recent_lab_reports, and recent_treatments. Explicit history and diagnostic questions may use the complete included calendar window shown in history_coverage.',
     '- For historical or timeline lookback questions (e.g. "show the last 7 days of mortality", "what was the feed given on August 15", "how did DO trend this week"), extract the exact dates and numbers from daily_records_14d and list them clearly.',
     '- Cross-reference daily timeline changes (feed, DO, pH, mortality, MBW) with lab report findings (nitrite, vibrio, plankton) to answer questions and explain causes.',
-    '- If recent_treatments exist, cross-reference treatments (lime, probiotics, minerals) with water quality and lab pathogen trends to confirm whether treatments were effective.',
+    '- If recent_treatments exist, describe the dated changes before and after treatment. Do not claim the treatment was effective from timing alone.',
     '- If historical_benchmark exists, reference past completed cycle averages when answering cycle-over-cycle comparison questions.',
     '- Do not invent measurements, disease diagnoses, pathogen results, or lab data.',
     '- Do not treat a change in logged daily feed as measured appetite or proof that feed was consumed.',
@@ -613,6 +716,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Never diagnose plankton risk from total cell count alone. Use composition, same-cycle trends, dawn DO, pH swing, transparency, direct feeding response, nutrients or organic load, mortality, and behaviour where available.',
     '- When asked why a condition changed, inspect the dated weather event, water exchange, sludge load, surface scum, shrimp behaviour, feeding response, and water-quality history together. Describe timing and evidence, but do not claim timing alone proves causation.',
     '- For plankton risk, do not prescribe automatic bloom-kill chemicals, fixed feed cuts, large water exchanges, or nitrogen addition based only on an N:P ratio.',
+    ...ORSON_EVIDENCE_PROMPT_RULES.map((rule) => `- ${rule}`),
     '',
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
@@ -620,7 +724,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- If ORSON QUESTION FOCUS sets exact_record_lookup to true, compare only the requested dated records. Do not interpret the word compare as a request for a multi-pond ranking.',
     '- Follow route from ORSON QUESTION FOCUS: farm_analysis may use pond evidence; aquaculture_knowledge must not introduce pond status; inventory_product must focus on saved product data and verified sources; out_of_scope must redirect briefly.',
     '- If the question asks to compare ponds (or asks which pond is best/worst), rank and compare the ponds side-by-side using growth (MBW/ADG), FCR, survival rate, and DO stability, and explain the key reasons behind performance differences.',
-    '- If the question asks about feed adjustments or feeding recommendations, compare actual_feed_kg with expected_feed_kg and water status to give exact numerical adjustments (e.g. cut feed by 15-20% if DO < 4.0 mg/L; cut by 30-50% if DO < 3.0 mg/L; increase by +5% to +10% or up to expected_feed_kg if DO > 5.0 mg/L and shrimp are converting well).',
+    '- If the question asks about feed adjustments, compare actual daily feed, expected feed, direct feeding response, biomass confidence, and current water evidence. Give a numerical change only when the supplied farm protocol or deterministic finding supports it.',
     '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
     '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
     '- If the question asks for past daily numbers or history, provide the exact dated list available in daily_records_14d and state that it is the latest bounded record set.',
@@ -651,12 +755,17 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Keep routine answers under 5 sentences unless the user asks for detail.',
     '- Prioritize critical and warning findings before watch/info findings.',
     '- Do not provide exact chemical dose rates unless the app payload includes pond volume, product concentration, and farm protocol.',
+    ...(mode === 'pond_diagnostic' ? [
+      '',
+      'POND DIAGNOSTIC METHOD:',
+      ...ORSON_POND_DIAGNOSTIC_PROMPT_RULES.map((rule) => `- ${rule}`),
+    ] : []),
     ...(mode === 'mortality_diagnostic' ? [
       '',
       'MORTALITY DIAGNOSTIC SAFETY:',
       '- Use ORSON MORTALITY TRACE to explain the dated sequence across the previous 14 farm-calendar days.',
       '- Rank environmental, operational, and biological contributors by evidence; timing alone does not prove causation.',
-      '- A declining feed allocation is only a low-confidence appetite proxy unless direct tray or appetite observations exist.',
+      '- A change in logged feed allocation alone cannot establish appetite; use direct tray or feeding-response observations when available.',
       '- Account for partial harvest before interpreting lower feed, biomass, population, survival, or mortality rate.',
       '- Name a pathogen or disease only when confirmed lab evidence explicitly supports it; otherwise use suspected or cannot-be-ruled-out language.',
       '- Separate immediate actions, actions within 24-48 hours, monitoring, missing data, and the 72-hour outlook.',
@@ -689,9 +798,13 @@ const isPromptRecordRelevant = (
 const selectRecentPromptRecords = (
   records: OrsonPromptDailyRecord[],
   questionFocus: OrsonQuestionFocus,
+  coverage?: OrsonPondDiagnosticContext['history']['coverage'],
 ): OrsonPromptDailyRecord[] => {
-  const chronological = [...records].sort((first, second) => first.date.localeCompare(second.date));
+  const chronological = [...records]
+    .filter((record) => !coverage || (record.date >= coverage.windowStart && record.date <= coverage.windowEnd))
+    .sort((first, second) => first.date.localeCompare(second.date));
   const relevant = chronological.filter((record) => isPromptRecordRelevant(record, questionFocus));
+  if (questionFocus.requiresDetailedHistory) return relevant.length > 0 ? relevant : chronological;
   return (relevant.length >= 3 ? relevant : chronological).slice(-5);
 };
 
@@ -774,6 +887,145 @@ const buildExactRecordAnswer = (
   ].join('\n');
 };
 
+const compactComparison = (comparison: OrsonMetricComparison | null) => comparison ? ({
+  unit: comparison.unit,
+  previous: {
+    value: comparison.previous.value,
+    farm_date: comparison.previous.farmDate,
+    source_ids: comparison.previous.sourceIds,
+  },
+  current: {
+    value: comparison.current.value,
+    farm_date: comparison.current.farmDate,
+    source_ids: comparison.current.sourceIds,
+  },
+  absolute_change: comparison.absoluteChange,
+  percent_change: comparison.percentChange,
+  sample_count: comparison.sampleCount,
+  method: comparison.method,
+  limitations: comparison.limitations,
+}) : null;
+
+const withoutUnavailable = (value: Record<string, unknown>): Record<string, unknown> => Object.fromEntries(
+  Object.entries(value).filter(([, field]) => (
+    field !== null && field !== undefined && (!Array.isArray(field) || field.length > 0)
+  )),
+);
+
+const compactSeriesSummary = (summary: OrsonIntervalSeriesSummary | null) => summary ? ({
+  unit: summary.unit,
+  recorded_days: summary.recordedDays,
+  first: summary.first,
+  first_date: summary.firstDate,
+  last: summary.last,
+  last_date: summary.lastDate,
+  minimum: summary.minimum,
+  maximum: summary.maximum,
+  average: summary.average,
+  source_ids: summary.sourceIds,
+}) : null;
+
+const compactGrowthInterval = (interval: OrsonPondDiagnosticContext['latestGrowthInterval']) => interval ? ({
+  start_date: interval.startDate,
+  end_date: interval.endDate,
+  included_start_date: interval.includedStartDate,
+  days: interval.days,
+  adg_g_per_day: interval.adgGPerDay,
+  actual_daily_feed_kg: compactSeriesSummary(interval.actualDailyFeedKg),
+  morning_do_mg_l: compactSeriesSummary(interval.morningDoMgL),
+  minimum_recorded_do_mg_l: compactSeriesSummary(interval.minimumRecordedDoMgL),
+  ph_swing: compactSeriesSummary(interval.phSwing),
+  salinity_ppt: compactSeriesSummary(interval.salinityPpt),
+  mortality: {
+    estimated_total: interval.mortality.estimatedTotal,
+    observed_recovered: interval.mortality.observedRecovered,
+    observation_days: interval.mortality.observationDays,
+  },
+  direct_feeding_responses: interval.directFeedingResponses.map((response) => ({
+    farm_date: response.farmDate,
+    response: response.response,
+    source_ids: response.sourceIds,
+  })),
+  events: interval.events.map((event) => ({
+    farm_date: event.farmDate,
+    type: event.type,
+    value: event.value,
+    source_ids: event.sourceIds,
+  })),
+  limitations: interval.limitations,
+}) : null;
+
+const compactDiagnosticContext = (context: OrsonPondDiagnosticContext) => ({
+  schema_version: context.schemaVersion,
+  as_of_date: context.asOfDate,
+  farm_time_zone: context.timeZone,
+  current_evidence_dates: context.currentEvidenceDates,
+  history: {
+    sampling: context.history.sampling.map((sample) => ({
+      source_id: sample.sourceId,
+      farm_date: sample.farmDate,
+      observed_at: sample.observedAt,
+      doc: sample.doc,
+      mbw_g: sample.mbwG,
+      source_type: sample.sourceType,
+      estimated_population: sample.estimatedPopulation ?? null,
+      estimated_biomass_kg: sample.estimatedBiomassKg ?? null,
+      survival_percent: sample.survivalPercent ?? null,
+      sampling_method: sample.samplingMethod ?? null,
+      biomass_basis: sample.biomassBasis ?? null,
+    })),
+    observations: context.history.observations ?? [],
+    ...(context.history.extendedDaily ? { extended_daily: context.history.extendedDaily.map(record => withoutUnavailable({ ...record })) } : {}),
+    coverage: {
+      window_start: context.history.coverage.windowStart,
+      window_end: context.history.coverage.windowEnd,
+      included_start: context.history.coverage.includedStart,
+      included_end: context.history.coverage.includedEnd,
+      recorded_days: context.history.coverage.recordedDays,
+      missing_dates: context.history.coverage.missingDates,
+      omitted_older_records: context.history.coverage.omittedOlderRecords,
+      excluded_future_records: context.history.coverage.excludedFutureRecords,
+    },
+  },
+  comparisons: {
+    adg_intervals: context.comparisons.adgIntervals.map((interval) => ({
+      start_date: interval.startDate,
+      end_date: interval.endDate,
+      start_mbw_g: interval.startMbwG,
+      end_mbw_g: interval.endMbwG,
+      days: interval.days,
+      adg_g_per_day: interval.adgGPerDay,
+      source_ids: interval.sourceIds,
+    })),
+    adg_interval_change: compactComparison(context.comparisons.adgIntervalChange),
+    daily_feed: compactComparison(context.comparisons.dailyFeed),
+    morning_do: compactComparison(context.comparisons.morningDo),
+    ph_swing: compactComparison(context.comparisons.phSwing),
+    salinity: compactComparison(context.comparisons.salinity),
+    alkalinity: compactComparison(context.comparisons.alkalinity ?? null),
+    recorded_fcr: compactComparison(context.comparisons.recordedFcr ?? null),
+    estimated_biomass: compactComparison(context.comparisons.estimatedBiomass ?? null),
+  },
+  signals: context.signals.map((signal) => ({
+    type: signal.type,
+    direction: signal.direction,
+    unit: signal.unit,
+    absolute_change: signal.absoluteChange,
+    percent_change: signal.percentChange,
+    previous_date: signal.previousDate,
+    current_date: signal.currentDate,
+    source_ids: signal.sourceIds,
+    interpretation: signal.interpretation,
+  })),
+  latest_growth_interval: compactGrowthInterval(context.latestGrowthInterval),
+  data_quality: {
+    missing: context.dataQuality.missing,
+    stale: context.dataQuality.stale,
+    conflicts: context.dataQuality.conflicts,
+    assumptions: context.dataQuality.assumptions,
+  },
+});
+
 export const buildOrsonPromptContext = (
   payloads: OrsonPromptPondPayload[],
   questionFocus: OrsonQuestionFocus,
@@ -836,12 +1088,40 @@ export const buildOrsonPromptContext = (
 
   const compactPayloads = payloads.map((payload) => ({
     pond: payload.pondName,
+    species: payload.species,
+    pond_area_m2: payload.pondAreaM2,
+    stocking_density_per_m2: payload.densityPerM2,
+    initial_population: payload.initialPopulation,
     doc: payload.currentDoc,
     mbw_g: payload.latestMbwG,
     adg_g_per_day: payload.adgGPerDay,
     smoothed_adg_g_per_day: payload.smoothedAdgGPerDay,
     growth_confidence: payload.growthConfidence,
+    growth_evidence: payload.growthEvidence,
     fcr: payload.fcr,
+    calculation_context: {
+      adg: {
+        value_g_per_day: payload.adgGPerDay,
+        source: payload.growthEvidence.adgSource,
+        measured_sample_count: payload.growthEvidence.sampleCount,
+        latest_mbw_date: payload.diagnosticContext.currentEvidenceDates.mbw,
+      },
+      fcr: {
+        value: payload.fcr,
+        method: 'cumulative_feed_divided_by_biomass_gain',
+        cumulative_feed_kg: payload.totalFeedKg,
+        biomass_gain_kg: payload.biomassGainKg,
+        harvested_biomass_kg: payload.totalHarvestedBiomassKg,
+        limitation: 'Uses available recorded feed and estimated biomass. Complete cycle feed coverage is not verified by this number.',
+      },
+      feed_index: payload.diagnosticContext.feedIndex ?? null,
+      biomass: {
+        estimated_kg: payload.biomassKg,
+        range_kg: payload.biomassRangeKg,
+        survival_confidence: payload.survivalConfidence,
+        harvested_population: payload.totalHarvestedPopulation,
+      },
+    },
     mbw_outlier_dates: payload.mbwOutlierDates.slice(-5),
     biomass_kg: payload.biomassKg,
     biomass_range_kg: payload.biomassRangeKg,
@@ -871,20 +1151,60 @@ export const buildOrsonPromptContext = (
       temperature_latest_c: payload.temperatureLatestC,
       transparency_latest_cm: payload.transparencyLatestCm,
       salinity_trend: payload.salinityTrend,
+      ph_swing_trend: compactComparison(payload.diagnosticContext.comparisons.phSwing),
+      morning_do_trend: compactComparison(payload.diagnosticContext.comparisons.morningDo),
     },
+    history_coverage: {
+      window_start: payload.diagnosticContext.history.coverage.windowStart,
+      window_end: payload.diagnosticContext.history.coverage.windowEnd,
+      included_start: payload.diagnosticContext.history.coverage.includedStart,
+      included_end: payload.diagnosticContext.history.coverage.includedEnd,
+      recorded_days: payload.diagnosticContext.history.coverage.recordedDays,
+      missing_dates: payload.diagnosticContext.history.coverage.missingDates,
+      omitted_older_records: payload.diagnosticContext.history.coverage.omittedOlderRecords,
+      excluded_future_records: payload.diagnosticContext.history.coverage.excludedFutureRecords,
+    },
+    diagnostic_context: payloads.length === 1
+      ? compactDiagnosticContext(payload.diagnosticContext)
+      : {
+          schema_version: payload.diagnosticContext.schemaVersion,
+          as_of_date: payload.diagnosticContext.asOfDate,
+          farm_time_zone: payload.diagnosticContext.timeZone,
+          current_evidence_dates: payload.diagnosticContext.currentEvidenceDates,
+          signals: payload.diagnosticContext.signals,
+        },
     mortality_metrics: {
       latest_count: payload.mortalityLatestCount,
       latest_percent: payload.mortalityLatestPercent,
       latest_date: payload.mortalityLatestDate,
     },
-    daily_records_14d: selectRecentPromptRecords(payload.dailyRecords14d || [], questionFocus)
-      .map((r) => ({
+    daily_records_location: payloads.length === 1 && questionFocus.requiresDetailedHistory && payload.diagnosticContext.history.extendedDaily
+      ? 'diagnostic_context.history.extended_daily contains the full requested window, including the latest 14 days.' : 'daily_records_14d',
+    daily_records_14d: (payloads.length === 1 && questionFocus.requiresDetailedHistory && payload.diagnosticContext.history.extendedDaily
+      ? [] : payloads.length === 1
+      ? selectRecentPromptRecords(
+          payload.dailyRecords14d || [],
+          questionFocus,
+          payload.diagnosticContext.history.coverage,
+        )
+      : selectRecentPromptRecords(
+          payload.dailyRecords14d || [],
+          { ...questionFocus, requiresDetailedHistory: false },
+          payload.diagnosticContext.history.coverage,
+        ).slice(-3))
+      .map((r) => withoutUnavailable({
       date: r.date,
+      observed_at: r.observedAt,
       doc: r.doc,
       feed_kg: r.feedKg,
       feed_kg_display: typeof r.feedKg === 'number' ? formatRecordedDecimal(r.feedKg) : null,
+      feed_source: r.feedSource,
+      actual_daily_feed_kg: r.actualDailyFeedKg,
+      sampling_feed_estimate_kg: r.samplingFeedEstimateKg,
       mbw_g: r.mbwG,
       mortality: r.mortalityCount,
+      mortality_observed_recovered: r.mortalityObservedCount,
+      mortality_observation_types: r.mortalityObservationTypes,
       do_min_mg_l: r.doMinimumMgL,
       do_morning: r.doMorning,
       do_evening: r.doEvening,
@@ -902,18 +1222,23 @@ export const buildOrsonPromptContext = (
       sludge_load: r.sludgeLoad,
       surface_scum: r.surfaceScum,
       shrimp_behaviour: r.shrimpBehaviour,
+      source_ids: r.sourceIds,
+      source_kinds: r.sourceKinds,
     })),
-    recent_lab_reports: (payload.recentLabReports || []).slice(0, 5).map((l) => ({
+    recent_lab_reports: (payload.recentLabReports || []).slice(0, payloads.length === 1 ? 5 : 1).map((l) => ({
+      source_id: l.labReportId ?? null,
       sample_date: l.sampleDate,
       report_type: l.reportType,
       status: l.status,
       main_issue: trimPromptText(l.mainIssue, ORSON_CONTEXT_NOTE_MAX_CHARS),
       key_risks: l.keyRisks.slice(0, 3).map((risk) => trimPromptText(risk, 140)),
       recommendations: l.recommendations.slice(0, 3).map((recommendation) => trimPromptText(recommendation, 140)),
+      metrics: payloads.length === 1 ? l.metrics ?? null : null,
+      measurement_warnings: l.measurementWarnings ?? [],
     })),
     recent_treatments: [...(payload.recentTreatments || [])]
       .sort((first, second) => first.date.localeCompare(second.date))
-      .slice(-5)
+      .slice(payloads.length === 1 ? -5 : -1)
       .map((t) => ({
       date: t.date,
       additive_name: trimPromptText(t.additiveName, 100),
@@ -923,6 +1248,16 @@ export const buildOrsonPromptContext = (
       ppm: t.ppm,
       notes: trimPromptText(t.notes, ORSON_CONTEXT_NOTE_MAX_CHARS),
     })),
+    recent_harvests: [...(payload.recentHarvests || [])]
+      .sort((first, second) => first.date.localeCompare(second.date))
+      .slice(payloads.length === 1 ? -5 : -1)
+      .map((harvest) => ({
+        source_id: harvest.id,
+        farm_date: harvest.date,
+        harvest_type: harvest.harvestType,
+        biomass_kg: harvest.biomassKg,
+        population: harvest.population,
+      })),
     historical_benchmark: payload.historicalBenchmark ? {
       completed_cycle_count: payload.historicalBenchmark.completedCycleCount,
       average_final_mbw_g: payload.historicalBenchmark.averageFinalMbwG,
@@ -1001,13 +1336,15 @@ export const buildOrsonPromptContext = (
       is_pond_specific: questionFocus.isPondSpecific,
       detailed_history_included: questionFocus.requiresDetailedHistory,
       should_summarize: questionFocus.shouldSummarize,
-      ...(questionFocus.analysisMode === 'mortality_diagnostic' ? { analysis_mode: questionFocus.analysisMode } : {}),
+      user_question_measurements: questionFocus.containsUserReportedMeasurements ? 'user_reported_unverified' : 'none_detected',
+      ...(questionFocus.analysisMode !== 'standard' ? { analysis_mode: questionFocus.analysisMode } : {}),
     }, null, 2),
     '',
     'ORSON SELECTED KNOWLEDGE:',
     JSON.stringify({
-      parameter_guidance: selectedKnowledge.parameterGuidance.slice(0, 4).map((guidance) => ({
+      parameter_guidance: selectedKnowledge.parameterGuidance.slice(0, 6).map((guidance) => ({
         id: guidance.id,
+        source_ids: guidance.sourceIds,
         label: guidance.label,
         target: guidance.target,
         warning: guidance.warning,
@@ -1031,6 +1368,7 @@ export const buildOrsonPromptContext = (
       })),
       missing_data_questions: selectedKnowledge.missingDataQuestions.slice(0, 6).map((question) => trimPromptText(question, 140)),
       source_labels: selectedKnowledge.sourceLabels.slice(0, 8),
+      sources: selectedKnowledge.sources ?? [],
     }),
     '',
     ...(mortalityTrace ? [
@@ -1041,11 +1379,15 @@ export const buildOrsonPromptContext = (
       'ORSON COMPARATIVE MATRIX:',
       JSON.stringify(payloads.map((p) => ({
         pond: p.pondName,
+        species: p.species,
+        pond_area_m2: p.pondAreaM2,
+        stocking_density_per_m2: p.densityPerM2,
         doc: p.currentDoc,
         mbw_g: p.latestMbwG,
         adg_g_per_day: p.adgGPerDay,
         smoothed_adg_g_per_day: p.smoothedAdgGPerDay,
         growth_confidence: p.growthConfidence,
+        growth_evidence: p.growthEvidence,
         fcr: p.fcr,
         biomass_kg: p.biomassKg,
         survival_pct: p.survivalPercent,
@@ -1055,11 +1397,13 @@ export const buildOrsonPromptContext = (
         do_min_mg_l: p.doMinimumLatest,
         mortality_pct: p.mortalityLatestPercent,
         risk_level: p.outlook.level,
+        data_completeness_pct: round(p.dataCompletenessScore * 100, 0),
+        current_evidence_dates: p.diagnosticContext.currentEvidenceDates,
       })), null, 2),
       '',
     ] : []),
     ...(compactPayloads.length > 0 ? [
-      `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads, null, 2)}`,
+      `ORSON RISK PAYLOAD:\n${JSON.stringify(compactPayloads)}`,
     ] : []),
   ].join('\n');
 };
@@ -1091,27 +1435,40 @@ export const buildOrsonPromptPackage = (params: {
       }
     : detectedFocus;
   const orderedPayloads = orderPayloadsForQuestion(payloads, questionFocus);
+  const orderedPondKeys = new Set(orderedPayloads.flatMap((payload) => [
+    payload.pondId ? `id:${payload.pondId}` : '',
+    `name:${payload.pondName.toLowerCase()}`,
+  ]).filter(Boolean));
+  const selectedMetrics = params.metrics.filter((metric) => (
+    (metric.pondId !== null && orderedPondKeys.has(`id:${metric.pondId}`))
+    || orderedPondKeys.has(`name:${metric.pondName.toLowerCase()}`)
+  ));
   const selectedKnowledge = selectOrsonKnowledge({
     userMessage,
     questionFocus,
-    metrics: params.metrics,
+    metrics: questionFocus.route === 'farm_analysis' ? selectedMetrics : [],
   });
 
   return {
     systemInstruction: buildOrsonSystemInstruction(questionFocus.analysisMode),
-    context: buildOrsonPromptContext(
+    context: [
+      ...(questionFocus.containsUserReportedMeasurements ? [
+        `ORSON USER-REPORTED COMPARISONS:\n${JSON.stringify(calculateUserReportedChanges(userMessage))}`,
+      ] : []),
+      buildOrsonPromptContext(
       orderedPayloads,
       questionFocus,
       selectedKnowledge,
       params.metrics.length,
       params.mortalityTrace ?? null,
       relevantConversationHistory,
-    ),
+      ),
+    ].join('\n\n'),
     userMessage,
-    cacheKey: questionFocus.analysisMode === 'mortality_diagnostic' || questionFocus.route === 'inventory_product' || questionFocus.usesConversationHistory
+    cacheKey: questionFocus.analysisMode !== 'standard' || questionFocus.route === 'inventory_product' || questionFocus.usesConversationHistory
       ? null
       : buildOrsonCacheKey(userMessage, orderedPayloads),
-    isFarmSpecific: questionFocus.analysisMode === 'mortality_diagnostic'
+    isFarmSpecific: questionFocus.analysisMode !== 'standard'
       ? true
       : isFarmSpecificQuestion(userMessage),
     questionFocus,

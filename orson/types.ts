@@ -4,14 +4,44 @@ export interface OrsonNormalizedFeedData {
   totalDailyFeedKg: OrsonNumber;
   inventoryFeedId: string | null;
   feedingResponse: 'strong' | 'normal' | 'weak' | null;
+  feedType?: string | null;
+  feedingFrequency?: OrsonNumber;
 }
 
-export type OrsonAnalysisMode = 'standard' | 'mortality_diagnostic';
+export interface OrsonDiagnosticMeasurements {
+  alkalinityMgL?: number;
+  tanMgL?: number;
+  nitriteMgL?: number;
+  nitrogenBasis?: string;
+  temperatureMorningC?: number;
+  temperatureEveningC?: number;
+  estimatedPopulation?: number;
+  estimatedBiomassKg?: number;
+  survivalPercent?: number;
+  samplingMethod?: string;
+  recordedFcr?: number;
+  fcrBasis?: string;
+  recordedFeedIndex?: number;
+}
+
+export interface OrsonDiagnosticObservation extends OrsonDiagnosticMeasurements {
+  sourceId: string;
+  farmDate: string;
+  observedAt: string | null;
+  feedType?: string;
+  feedingFrequency?: number;
+  inventoryFeedId?: string;
+}
+
+export type OrsonAnalysisMode = 'standard' | 'pond_diagnostic' | 'mortality_diagnostic';
 
 export type OrsonLabStatusLevel = 'good' | 'info' | 'watch' | 'warning' | 'critical';
 
 export interface OrsonLabMetrics {
   schemaVersion: 2;
+  measurementSchemaVersion?: 1;
+  measurementWarnings?: string[];
+  measurementUnits?: Record<string, { unit: string; basis: string }>;
   waterQuality: {
     date: string | null;
     salinityPpt: OrsonNumber;
@@ -21,6 +51,9 @@ export interface OrsonLabMetrics {
     nh4MgL: OrsonNumber;
     nitriteMgL: OrsonNumber;
     tomMgL: OrsonNumber;
+    calciumHardnessMgLCaCO3?: OrsonNumber;
+    magnesiumHardnessMgLCaCO3?: OrsonNumber;
+    totalHardnessMgLCaCO3?: OrsonNumber;
   } | null;
   microbiology: {
     date: string | null;
@@ -88,7 +121,11 @@ export type OrsonRecordKind = 'sampling' | 'mortality' | 'water_quality' | 'feed
 
 export interface OrsonNormalizedRecord {
   id: string | null;
+  cycleId: string | null;
+  pondCycleId: string | null;
+  source: string | null;
   date: string | null;
+  observedAt: string | null;
   timestampMs: number | null;
   doc: number | null;
   kinds: OrsonRecordKind[];
@@ -112,14 +149,21 @@ export interface OrsonNormalizedRecord {
   sludgeLoad: 'low' | 'moderate' | 'high' | null;
   surfaceScum: boolean | null;
   shrimpBehaviour: 'normal' | 'abnormal' | null;
+  harvestType: 'partial' | 'final' | null;
+  harvestBiomassKg: OrsonNumber;
+  harvestPopulation: OrsonNumber;
   feedData: OrsonNormalizedFeedData | null;
   isBaselineEstimate: boolean;
   missingFields: string[];
+  diagnosticMeasurements?: OrsonDiagnosticMeasurements;
 }
 
 export interface OrsonNormalizedPond {
   id: string | null;
   pondName: string;
+  species: string | null;
+  asOfDate: string;
+  timeZone: string;
   docStartDate: string | null;
   docStartTimestampMs: number | null;
   currentDoc: number | null;
@@ -235,14 +279,21 @@ export interface OrsonFeedBiomassModel {
 export interface OrsonPondMetrics {
   pondId: string | null;
   pondName: string;
+  species: string | null;
+  pondAreaM2: OrsonNumber;
+  densityPerM2: OrsonNumber;
+  initialPopulation: OrsonNumber;
   currentDoc: number | null;
   latestMbwG: OrsonNumber;
   latestMbwDate: string | null;
   adgGPerDay: OrsonNumber;
   smoothedAdgGPerDay: OrsonNumber;
   growthConfidence: 'low' | 'medium' | 'high';
+  growthEvidence: { sampleCount: number; adgSource: 'unavailable' | 'stocking_comparison' | 'measured'; weightSource: 'measured' | 'baseline' | 'fallback' };
   mbwOutlierDates: string[];
   totalFeedKg: number;
+  totalHarvestedBiomassKg: OrsonNumber;
+  totalHarvestedPopulation: OrsonNumber;
   baselineFeedKg: number;
   operationalFeedKg: number;
   hasMidcycleBaseline: boolean;
@@ -274,6 +325,7 @@ export interface OrsonPondMetrics {
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
   recentTreatments: OrsonPromptTreatmentEvent[];
+  recentHarvests: OrsonDiagnosticHarvestEvent[];
   historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   dataCompleteness: OrsonDataCompleteness;
   calibration: {
@@ -281,6 +333,7 @@ export interface OrsonPondMetrics {
     scope: 'default' | 'company' | 'pond';
     sampleSize: number;
   };
+  diagnosticContext: OrsonPondDiagnosticContext;
 }
 
 export type OrsonRiskSeverity = 'info' | 'watch' | 'warning' | 'critical';
@@ -351,11 +404,18 @@ export interface Orson72HourOutlook {
 }
 
 export interface OrsonPromptDailyRecord {
+  diagnosticMeasurements?: OrsonDiagnosticMeasurements;
   date: string;
+  observedAt?: string[];
   doc: number | null;
   feedKg: OrsonNumber;
+  feedSource?: 'daily_feed' | 'sampling_estimate' | 'mixed' | null;
+  actualDailyFeedKg?: OrsonNumber;
+  samplingFeedEstimateKg?: OrsonNumber;
   mbwG: OrsonNumber;
   mortalityCount: OrsonNumber;
+  mortalityObservedCount?: OrsonNumber;
+  mortalityObservationTypes?: ('estimated_total' | 'observed_recovered' | 'none_observed' | 'legacy_positive')[];
   doMorning: OrsonNumber;
   doEvening: OrsonNumber;
   doMinimumMgL: OrsonNumber;
@@ -373,15 +433,160 @@ export interface OrsonPromptDailyRecord {
   sludgeLoad?: 'low' | 'moderate' | 'high' | null;
   surfaceScum?: boolean | null;
   shrimpBehaviour?: 'normal' | 'abnormal' | null;
+  sourceIds?: string[];
+  sourceKinds?: OrsonRecordKind[];
 }
 
 export interface OrsonPromptLabReport {
+  labReportId?: string | null;
   sampleDate: string | null;
   reportType: string | null;
   status: OrsonLabStatusLevel | null;
   mainIssue: string | null;
   keyRisks: string[];
   recommendations: string[];
+  metrics?: OrsonLabMetrics | null;
+  measurementWarnings?: string[];
+}
+
+export interface OrsonPromptSamplingRecord {
+  sourceId: string | null;
+  farmDate: string;
+  observedAt: string | null;
+  doc: number | null;
+  mbwG: number;
+  sourceType: 'sampling';
+  estimatedPopulation?: OrsonNumber;
+  estimatedBiomassKg?: OrsonNumber;
+  survivalPercent?: OrsonNumber;
+  samplingMethod?: string | null;
+  biomassBasis?: string | null;
+}
+
+export interface OrsonDatedValue {
+  value: number;
+  farmDate: string;
+  sourceIds: string[];
+}
+
+export interface OrsonMetricComparison {
+  unit: string;
+  previous: OrsonDatedValue;
+  current: OrsonDatedValue;
+  absoluteChange: number;
+  percentChange: number | null;
+  sampleCount: number;
+  method: string;
+  limitations: string[];
+}
+
+export interface OrsonAdgInterval {
+  startDate: string;
+  endDate: string;
+  startMbwG: number;
+  endMbwG: number;
+  days: number;
+  adgGPerDay: number;
+  sourceIds: string[];
+}
+
+export interface OrsonDiagnosticSignal {
+  type: string;
+  direction: 'increase' | 'decrease';
+  unit: string;
+  absoluteChange: number;
+  percentChange: number | null;
+  previousDate: string;
+  currentDate: string;
+  sourceIds: string[];
+  interpretation: 'descriptive_change_only';
+}
+
+export interface OrsonIntervalSeriesSummary {
+  unit: string;
+  recordedDays: number;
+  first: number;
+  firstDate: string;
+  last: number;
+  lastDate: string;
+  minimum: number;
+  maximum: number;
+  average: number;
+  sourceIds: string[];
+}
+
+export interface OrsonGrowthIntervalContext {
+  startDate: string;
+  endDate: string;
+  includedStartDate: string;
+  days: number;
+  adgGPerDay: number;
+  actualDailyFeedKg: OrsonIntervalSeriesSummary | null;
+  morningDoMgL: OrsonIntervalSeriesSummary | null;
+  minimumRecordedDoMgL: OrsonIntervalSeriesSummary | null;
+  phSwing: OrsonIntervalSeriesSummary | null;
+  salinityPpt: OrsonIntervalSeriesSummary | null;
+  mortality: {
+    estimatedTotal: number | null;
+    observedRecovered: number | null;
+    observationDays: number;
+  };
+  directFeedingResponses: { farmDate: string; response: 'strong' | 'normal' | 'weak'; sourceIds: string[] }[];
+  events: { farmDate: string; type: string; value: string | number | boolean; sourceIds: string[] }[];
+  limitations: string[];
+}
+
+export interface OrsonHistoryCoverage {
+  windowStart: string;
+  windowEnd: string;
+  includedStart: string | null;
+  includedEnd: string | null;
+  recordedDays: number;
+  missingDates: string[];
+  omittedOlderRecords: number;
+  excludedFutureRecords: number;
+}
+
+export interface OrsonPondDiagnosticContext {
+  schemaVersion: 1;
+  feedIndex?: {
+    value: number;
+    farmDate: string;
+    actualDailyFeedKg: number;
+    doc: number;
+    estimatedPopulation: number;
+    sourceIds: string[];
+    method: string;
+    limitation: string;
+  } | null;
+  asOfDate: string;
+  timeZone: string;
+  currentEvidenceDates: Record<string, string | null>;
+  history: {
+    sampling: OrsonPromptSamplingRecord[];
+    coverage: OrsonHistoryCoverage;
+    observations?: OrsonDiagnosticObservation[];
+    extendedDaily?: OrsonPromptDailyRecord[];
+  };
+  comparisons: {
+    adgIntervals: OrsonAdgInterval[];
+    adgIntervalChange: OrsonMetricComparison | null;
+    dailyFeed: OrsonMetricComparison | null;
+    morningDo: OrsonMetricComparison | null;
+    phSwing: OrsonMetricComparison | null;
+    salinity: OrsonMetricComparison | null;
+    alkalinity?: OrsonMetricComparison | null;
+    recordedFcr?: OrsonMetricComparison | null;
+    estimatedBiomass?: OrsonMetricComparison | null;
+  };
+  signals: OrsonDiagnosticSignal[];
+  latestGrowthInterval: OrsonGrowthIntervalContext | null;
+  dataQuality: {
+    missing: string[];
+    stale: string[];
+    conflicts: string[];
+    assumptions: string[];
+  };
 }
 
 export interface OrsonPromptTreatmentEvent {
@@ -421,12 +626,21 @@ export interface OrsonComparativePondMetric {
 export interface OrsonPromptPondPayload {
   pondId: string | null;
   pondName: string;
+  species: string | null;
+  pondAreaM2: OrsonNumber;
+  densityPerM2: OrsonNumber;
+  initialPopulation: OrsonNumber;
   currentDoc: number | null;
   latestMbwG: OrsonNumber;
   adgGPerDay: OrsonNumber;
   smoothedAdgGPerDay: OrsonNumber;
   growthConfidence: 'low' | 'medium' | 'high';
+  growthEvidence: { sampleCount: number; adgSource: 'unavailable' | 'stocking_comparison' | 'measured'; weightSource: 'measured' | 'baseline' | 'fallback' };
   fcr: OrsonNumber;
+  totalFeedKg: number;
+  biomassGainKg: OrsonNumber;
+  totalHarvestedBiomassKg: OrsonNumber;
+  totalHarvestedPopulation: OrsonNumber;
   mbwOutlierDates: string[];
   biomassKg: OrsonNumber;
   biomassRangeKg: OrsonRangeEstimate;
@@ -456,9 +670,11 @@ export interface OrsonPromptPondPayload {
   dailyRecords14d: OrsonPromptDailyRecord[];
   recentLabReports: OrsonPromptLabReport[];
   recentTreatments: OrsonPromptTreatmentEvent[];
+  recentHarvests: OrsonDiagnosticHarvestEvent[];
   historicalBenchmark: OrsonPromptHistoricalBenchmark | null;
   outlook: Pick<Orson72HourOutlook, 'direction' | 'level' | 'confidence' | 'summary' | 'topReason' | 'nextAction'>;
   findings: Pick<OrsonRiskFinding, 'id' | 'severity' | 'confidence' | 'summary' | 'evidence' | 'recommendation'>[];
+  diagnosticContext: OrsonPondDiagnosticContext;
 }
 
 export type OrsonQuestionIntent =
@@ -504,6 +720,7 @@ export interface OrsonQuestionFocus {
   requiresDetailedHistory: boolean;
   usesConversationHistory: boolean;
   shouldSummarize: boolean;
+  containsUserReportedMeasurements: boolean;
 }
 
 export interface OrsonDiagnosticLabRecord {

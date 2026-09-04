@@ -19,6 +19,8 @@ import { useGemini } from './hooks/useGemini';
 import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 import ShrimpIcon from './components/icons/ShrimpIcon';
+import { orsonIdentityKey, OrsonSessionChangedError } from '../orson/session';
+import { OrsonIncompleteResponseError } from '../orson/responseCompletion';
 import { hasFarmPermission } from '../shared/permissions';
 
 interface ChatMessage {
@@ -27,6 +29,7 @@ interface ChatMessage {
   message: string;
   timestamp: Date;
   language?: string;
+  retryPrompt?: string;
 }
 
 // --- HELPERS ---
@@ -63,13 +66,22 @@ const getWelcomeMessage = (language: string) => {
 
 // --- MAIN COMPONENT ---
 export default function AIChat() {
+  const { user, company, loading } = useAuth();
+  const { currentCompanyId, farmCacheUserId } = usePondStore();
+  const identity = !loading && user?.companyId === company?.id && currentCompanyId === company?.id && farmCacheUserId === user?.uid
+    ? orsonIdentityKey(user?.uid, company?.id) : null;
+  if (!identity) return null;
+  return <AIChatSession key={identity} />;
+}
+
+function AIChatSession() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [conversationLanguage, setConversationLanguage] = useState('en');
   const [isInitialized, setIsInitialized] = useState(false);
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
   
-  const { sendMessage, loading } = useGemini();
+  const { sendMessage, loading, clearChat } = useGemini();
   const { ponds } = usePondStore(); 
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { user, company } = useAuth();
@@ -78,6 +90,8 @@ export default function AIChat() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
+  const generation = useRef(0);
+  useEffect(() => () => { generation.current += 1; }, []);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -106,6 +120,9 @@ export default function AIChat() {
           text: "Clear", 
           style: "destructive", 
           onPress: () => {
+            generation.current += 1;
+            clearChat();
+            setStreamingReplyId(null);
             setMessages([{
               id: Date.now().toString(),
               type: 'ai',
@@ -118,9 +135,11 @@ export default function AIChat() {
     );
   };
 
-  const handleSend = async () => {
-    if (!inputText.trim() || loading) return;
-    const userText = inputText.trim();
+  const handleSend = async (retryPrompt?: string, retryId?: string) => {
+    const userText = (retryPrompt || inputText).trim();
+    if (!userText || loading) return;
+    const currentGeneration = ++generation.current;
+    const isCurrent = () => generation.current === currentGeneration;
     const detectedLang = detectLanguage(userText);
     if (detectedLang !== conversationLanguage && detectedLang !== 'en') {
       setConversationLanguage(detectedLang);
@@ -132,14 +151,15 @@ export default function AIChat() {
       timestamp: new Date(),
       language: detectedLang
     };
-    setMessages(prev => [...prev, userMessage]);
+    if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
-    const replyId = `orson-${Date.now()}`;
+    const replyId = retryId || `orson-${Date.now()}`;
     const replyTimestamp = new Date();
-    const upsertReply = (message: string) => {
+    const upsertReply = (message: string, retryPrompt?: string) => {
+      if (!isCurrent()) return;
       setMessages((previous) => {
         const existing = previous.findIndex((item) => item.id === replyId);
-        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp };
+        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}) };
         if (existing < 0) return [...previous, reply];
         return previous.map((item, index) => index === existing ? reply : item);
       });
@@ -149,18 +169,21 @@ export default function AIChat() {
         companyId: company?.id,
         timeZone: company?.timeZone,
         conversationHistory: messages
+          .filter(message => !message.retryPrompt && message.id !== retryId && message.id !== '1')
           .slice(-10)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
+          if (!isCurrent()) return;
           setStreamingReplyId(replyId);
-          upsertReply(partialResponse);
+          upsertReply(partialResponse, userText);
         },
       });
       upsertReply(aiResponse);
-    } catch {
-      Alert.alert('Orson Error', 'Failed to get a response. Please check your internet.');
+    } catch (error) {
+      if (!isCurrent() || error instanceof OrsonSessionChangedError) return;
+      upsertReply(error instanceof OrsonIncompleteResponseError ? error.partialText : '', userText);
     } finally {
-      setStreamingReplyId(null);
+      if (isCurrent()) setStreamingReplyId(null);
     }
   };
 
@@ -223,6 +246,7 @@ export default function AIChat() {
                   <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
                     {message.message}
                   </Text>
+                  {message.retryPrompt && <TouchableOpacity disabled={loading} onPress={() => handleSend(message.retryPrompt, message.id)}><Text>Response interrupted. Retry</Text></TouchableOpacity>}
                 </View>
                 <Text style={styles.timestamp}>
                   {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -254,7 +278,7 @@ export default function AIChat() {
             />
             <TouchableOpacity 
               style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
-              onPress={handleSend}
+              onPress={() => handleSend()}
             >
               <Ionicons name="send" size={20} color="#fff" />
             </TouchableOpacity>
