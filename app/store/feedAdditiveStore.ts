@@ -845,6 +845,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     }
     const samplingWithoutFeedData = { ...samplings[samplingIndex] };
     delete samplingWithoutFeedData.feedData;
+    samplingWithoutFeedData.feedEntryStatus = 'not_recorded';
     samplings[samplingIndex] = samplingWithoutFeedData;
     usePondStore.getState().updateSampling(pondId, samplingId, {
       ...samplingWithoutFeedData,

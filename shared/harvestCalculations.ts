@@ -8,6 +8,17 @@ import {
 } from './pondCalculations';
 
 export type HarvestType = 'partial' | 'final';
+export type HarvestDayFeedStatus = 'not_recorded' | 'fasted';
+
+export interface HarvestDateSamplingInput {
+  id: string;
+  date: string;
+  mbw: number;
+  feedStatus: HarvestDayFeedStatus;
+  cycleId?: string;
+  cycleName?: string;
+  pondCycleId?: string;
+}
 
 export interface HarvestLineInput {
   biomass?: number | string | null;
@@ -61,6 +72,18 @@ export const getHarvestDateSampling = (
       && getSamplingMbw(sampling) > 0
     ));
 };
+
+export const buildHarvestDateSampling = (input: HarvestDateSamplingInput) => ({
+  id: input.id,
+  date: input.date,
+  mbw: input.mbw,
+  mortality: 0,
+  feedEntryStatus: input.feedStatus,
+  ...(input.feedStatus === 'fasted' ? { feed: 0 } : {}),
+  ...(input.cycleId ? { cycleId: input.cycleId } : {}),
+  ...(input.cycleName ? { cycleName: input.cycleName } : {}),
+  ...(input.pondCycleId ? { pondCycleId: input.pondCycleId } : {}),
+});
 
 export const getSamplingSize = (sampling?: SharedSampling): number => {
   const mbw = getSamplingMbw(sampling);

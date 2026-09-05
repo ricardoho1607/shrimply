@@ -76,6 +76,7 @@ interface FeedFormData extends Omit<FeedData, 'feedAllocations'> {
 
 interface Sampling {
   id: string; date: string; cycleId?: string; cycleName?: string; pondCycleId?: string; feedData?: FeedData;
+  feedEntryStatus?: 'not_recorded' | 'fasted' | 'recorded';
   isBaselineEstimate?: boolean;
   source?: string;
 }
@@ -351,11 +352,18 @@ export default function FeedRecordsPage() {
 
         const pondData = pondDoc.data();
         const samplings = [...(pondData.samplings || [])];
-        const existingIndex = samplings.findIndex(s => (
+        let existingIndex = samplings.findIndex(s => (
           !isBaselineSampling(s) &&
           s.feedData &&
           (editingFeedRecord ? s.id === editingFeedRecord.id : s.date === formData.date)
         ));
+        if (existingIndex < 0 && !editingFeedRecord) {
+          existingIndex = samplings.findIndex(s => (
+            !isBaselineSampling(s)
+            && s.date === formData.date
+            && (s.feedEntryStatus === 'not_recorded' || s.feedEntryStatus === 'fasted')
+          ));
+        }
         const existingFeedData = existingIndex >= 0 ? samplings[existingIndex]?.feedData : undefined;
         const previousAllocations = normalizeFeedAllocations(existingFeedData);
         const desiredByFeedId = new Map(requestedAllocations.map((allocation) => (
@@ -379,6 +387,7 @@ export default function FeedRecordsPage() {
             cycleId: pondData.cycleId,
             cycleName: pondData.cycleName,
             pondCycleId: pondData.pondCycleId || formData.pondId,
+            feedEntryStatus: 'recorded',
             feedData: { ...(samplings[existingIndex].feedData || {}), ...feedData }
           };
         } else {
@@ -386,6 +395,7 @@ export default function FeedRecordsPage() {
             id: `feed-${Date.now()}`,
             date: formData.date,
             mbw: 0, mortality: 0, feed: 0,
+            feedEntryStatus: 'recorded',
             cycleId: pondData.cycleId,
             cycleName: pondData.cycleName,
             pondCycleId: pondData.pondCycleId || formData.pondId,
@@ -716,6 +726,7 @@ export default function FeedRecordsPage() {
 
         const samplingWithoutFeedData = { ...samplings[samplingIndex] };
         delete samplingWithoutFeedData.feedData;
+        samplingWithoutFeedData.feedEntryStatus = 'not_recorded';
         samplings[samplingIndex] = samplingWithoutFeedData;
         transaction.update(pondRef, {
           samplings,

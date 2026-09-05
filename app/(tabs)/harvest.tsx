@@ -9,9 +9,11 @@ import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFarmDateKey } from '../../shared/farmDate';
 import {
+  buildHarvestDateSampling,
   getHarvestDateSampling,
   getSamplingSize,
   harvestSizeDiffersFromSampling,
+  type HarvestDayFeedStatus,
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { getSamplingMbw } from '../../shared/pondCalculations';
@@ -139,6 +141,7 @@ export default function HarvestScreen() {
   const [expandedPondId, setExpandedPondId] = useState<string | null>(selectedCyclePonds[0]?.id ?? null);
   const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
   const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
+  const [samplingFeedStatuses, setSamplingFeedStatuses] = useState<Record<string, HarvestDayFeedStatus>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -234,16 +237,15 @@ export default function HarvestScreen() {
       return;
     }
 
-    addSampling(pond.id, {
+    addSampling(pond.id, buildHarvestDateSampling({
       id: createHarvestSamplingId(),
       date: harvestDate,
       mbw,
-      feed: 0,
-      mortality: 0,
+      feedStatus: samplingFeedStatuses[pond.id] || 'not_recorded',
       cycleId: pond.cycleId,
       cycleName: pond.cycleName,
       pondCycleId: pond.pondCycleId || pond.id,
-    });
+    }));
     setPondData((current) => current.map((entry) => entry.pondId === pond.id && !entry.size
       ? { ...entry, size: String(Math.round(1000 / mbw)) }
       : entry));
@@ -433,6 +435,7 @@ export default function HarvestScreen() {
     setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
     setSecondaryPondIds([]);
     setSamplingMbwDrafts({});
+    setSamplingFeedStatuses({});
   };
 
   const handleModalClose = () => {
@@ -731,6 +734,7 @@ export default function HarvestScreen() {
                   const harvestSampling = getHarvestDateSampling(pond, harvestDate);
                   const sampledMbw = getSamplingMbw(harvestSampling);
                   const sampledSize = getSamplingSize(harvestSampling);
+                  const samplingFeedStatus = samplingFeedStatuses[pond.id] || 'not_recorded';
                   const isExpanded = expandedPondId === pond.id;
                   const hasData = hasAnyHarvestData(currentPondData);
                   const isComplete = Boolean(harvestSampling) && isPondEntryComplete(currentPondData);
@@ -784,21 +788,41 @@ export default function HarvestScreen() {
 
                       {!harvestSampling ? (
                         <View style={styles.samplingGuardCard}>
-                          <Text style={styles.samplingGuardTitle}>{t.harvest.samplingRequired}</Text>
-                          <Text style={styles.samplingGuardText}>
-                            {t.harvest.samplingRequiredMessage
-                              .replace('{{pondName}}', pond.pondName)
-                              .replace('{{date}}', harvestDate)}
-                          </Text>
-                          <Input
-                            label={t.harvest.samplingMbw}
-                            value={samplingMbwDrafts[pond.id] || ''}
-                            onChangeText={(value: string) => setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: value }))}
-                            placeholder="e.g., 15.5"
-                          />
-                          <TouchableOpacity style={styles.saveSamplingButton} onPress={() => saveRequiredSampling(pond)}>
-                            <Text style={styles.saveSamplingButtonText}>{t.harvest.saveSampling}</Text>
-                          </TouchableOpacity>
+                          <View style={styles.samplingGuardHeader}>
+                            <Ionicons name="alert-circle-outline" size={17} color="#8A5700" />
+                            <Text style={styles.samplingGuardTitle}>{t.harvest.samplingRequired}</Text>
+                            <Text style={styles.samplingGuardDate}>{harvestDate}</Text>
+                          </View>
+                          <View style={styles.compactSamplingRow}>
+                            <View style={styles.compactSamplingInputGroup}>
+                              <Text style={styles.compactSamplingLabel}>{t.harvest.samplingMbw}</Text>
+                              <TextInput
+                                style={styles.compactSamplingInput}
+                                keyboardType="numeric"
+                                value={samplingMbwDrafts[pond.id] || ''}
+                                onChangeText={(value: string) => setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: value }))}
+                                placeholder="e.g., 15.5"
+                                placeholderTextColor="#8A7A62"
+                              />
+                            </View>
+                            <TouchableOpacity style={styles.saveSamplingButton} onPress={() => saveRequiredSampling(pond)}>
+                              <Text style={styles.saveSamplingButtonText}>{t.harvest.saveSampling}</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <View style={styles.feedStatusRow}>
+                            <Text style={styles.feedStatusLabel}>{t.harvest.feedStatusLabel}</Text>
+                            {(['not_recorded', 'fasted'] as HarvestDayFeedStatus[]).map((status) => (
+                              <TouchableOpacity
+                                key={status}
+                                style={[styles.feedStatusChip, samplingFeedStatus === status && styles.feedStatusChipActive]}
+                                onPress={() => setSamplingFeedStatuses((current) => ({ ...current, [pond.id]: status }))}
+                              >
+                                <Text style={[styles.feedStatusChipText, samplingFeedStatus === status && styles.feedStatusChipTextActive]}>
+                                  {status === 'fasted' ? t.harvest.fasted : t.harvest.enterFeedLater}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         </View>
                       ) : (
                         <>
@@ -1037,13 +1061,24 @@ const styles = StyleSheet.create({
   pondEntryStatusComplete: { color: '#2e7d63' },
   pondEntryStatusInProgress: { color: '#b7791f' },
   pondFormContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#fbfdff' },
-  samplingGuardCard: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#F1C27D', backgroundColor: '#FFF8EA' },
-  samplingGuardTitle: { color: '#8A5700', fontSize: 15, fontWeight: '800', marginBottom: 6 },
-  samplingGuardText: { color: '#6B4B16', fontSize: 13, lineHeight: 19, marginBottom: 14 },
-  saveSamplingButton: { minHeight: 44, borderRadius: 10, backgroundColor: '#0F4C75', alignItems: 'center', justifyContent: 'center' },
-  saveSamplingButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
-  samplingReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: 10, backgroundColor: '#EAF7F1', marginBottom: 14 },
-  samplingReadyText: { flex: 1, color: '#246B52', fontSize: 12, fontWeight: '700' },
+  samplingGuardCard: { padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#F1C27D', backgroundColor: '#FFF8EA' },
+  samplingGuardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 9 },
+  samplingGuardTitle: { flex: 1, color: '#8A5700', fontSize: 13, fontWeight: '800' },
+  samplingGuardDate: { color: '#8A5700', fontSize: 11, fontWeight: '700' },
+  compactSamplingRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  compactSamplingInputGroup: { flex: 1, minWidth: 0 },
+  compactSamplingLabel: { color: '#6B4B16', fontSize: 11, fontWeight: '700', marginBottom: 4 },
+  compactSamplingInput: { minHeight: 40, borderWidth: 1, borderColor: '#D7B36F', paddingHorizontal: 11, borderRadius: 8, backgroundColor: '#FFFFFF', color: '#0d2137', fontSize: 14 },
+  saveSamplingButton: { minHeight: 40, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#0F4C75', alignItems: 'center', justifyContent: 'center' },
+  saveSamplingButtonText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+  feedStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, flexWrap: 'wrap' },
+  feedStatusLabel: { color: '#6B4B16', fontSize: 10, fontWeight: '700' },
+  feedStatusChip: { minHeight: 28, paddingHorizontal: 9, borderRadius: 14, borderWidth: 1, borderColor: '#D7B36F', alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  feedStatusChipActive: { borderColor: '#0F4C75', backgroundColor: '#EAF6FD' },
+  feedStatusChipText: { color: '#6B4B16', fontSize: 10, fontWeight: '700' },
+  feedStatusChipTextActive: { color: '#0F4C75' },
+  samplingReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 8, backgroundColor: '#EAF7F1', marginBottom: 10 },
+  samplingReadyText: { flex: 1, color: '#246B52', fontSize: 11, fontWeight: '700' },
   harvestTypeSelector: { flexDirection: 'row', padding: 4, marginBottom: 16, borderRadius: 12, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9' },
   harvestTypeOption: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: 9 },
   harvestTypeOptionActive: { backgroundColor: '#0d2137' },

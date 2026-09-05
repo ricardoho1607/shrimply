@@ -23,6 +23,7 @@ export interface SharedSampling {
   abw?: number | string | null;
   mortality?: number | string | null;
   feed?: number | string | null;
+  feedEntryStatus?: 'not_recorded' | 'fasted' | 'recorded';
   feedData?: SharedFeedData | null;
   cycleId?: string | null;
   pondCycleId?: string | null;

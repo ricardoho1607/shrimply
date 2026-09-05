@@ -23,6 +23,7 @@ import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import {
   applyHarvestImpactToPond,
+  buildHarvestDateSampling,
   calculateHarvestRemoval,
   getHarvestDateSampling,
   getNextPartialHarvestNumber,
@@ -30,6 +31,7 @@ import {
   harvestSizeDiffersFromSampling,
   reverseHarvestImpactOnPond,
   withHarvestReference,
+  type HarvestDayFeedStatus,
   type HarvestType,
 } from '../../../../../shared/harvestCalculations';
 import { calculatePondMetricsWithHarvest, getSamplingMbw } from '../../../../../shared/pondCalculations';
@@ -87,7 +89,7 @@ interface Pond {
   blockName?: string;
   initialPopulation?: number;
   initialWeight?: number;
-  samplings?: { date?: string; mbw?: number; abw?: number; mortality?: number }[];
+  samplings?: { date?: string; mbw?: number; abw?: number; mortality?: number; feed?: number; feedEntryStatus?: 'not_recorded' | 'fasted' | 'recorded' }[];
   totalHarvestedBiomass?: number;
   totalHarvestedPopulation?: number;
   partialHarvestCount?: number;
@@ -161,6 +163,7 @@ export default function HarvestPage() {
   });
   const [harvestBatch, setHarvestBatch] = useState<HarvestFormEntry[]>([]);
   const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
+  const [samplingFeedStatuses, setSamplingFeedStatuses] = useState<Record<string, HarvestDayFeedStatus>>({});
   const [samplingSavingPondId, setSamplingSavingPondId] = useState<string | null>(null);
   const hasPermission = useFarmPermissions();
   const canEditHarvest = hasPermission('manageHarvests');
@@ -344,16 +347,15 @@ export default function HarvestPage() {
         transaction.update(pondRef, {
           samplings: [
             ...(serverPond.samplings || []),
-            {
+            buildHarvestDateSampling({
               id: `harvest-sampling-${Date.now()}`,
               date: formData.date,
               mbw,
-              feed: 0,
-              mortality: 0,
+              feedStatus: samplingFeedStatuses[pond.id] || 'not_recorded',
               cycleId: serverPond.cycleId,
               cycleName: serverPond.cycleName,
               pondCycleId: serverPond.pondCycleId || serverPond.id,
-            },
+            }),
           ],
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,
@@ -840,6 +842,7 @@ export default function HarvestPage() {
                         subPrice: '',
                       });
                       setHarvestBatch([]);
+                      setSamplingFeedStatuses({});
                     }}
                     onKeyDown={(event) => event.preventDefault()}
                     onPaste={(event) => event.preventDefault()}
@@ -848,14 +851,14 @@ export default function HarvestPage() {
                 </div>
 
                 {missingSamplingPonds.length > 0 && (
-                  <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '12px', border: '1px solid #F1C27D', background: '#FFF8EA' }}>
-                    <div>
-                      <div style={{ color: '#8A5700', fontSize: '14px', fontWeight: 700 }}>{t.harvest.samplingRequired}</div>
-                      <div style={{ color: '#6B4B16', fontSize: '12px', marginTop: '4px' }}>{t.harvest.samplingGuardHelp}</div>
+                  <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px', borderRadius: '10px', border: '1px solid #F1C27D', background: '#FFF8EA' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: '10px', color: '#8A5700', fontSize: '12px', fontWeight: 700 }}>
+                      <span>{t.harvest.samplingRequired}</span>
+                      <span>{formData.date}</span>
                     </div>
                     {missingSamplingPonds.map((pond) => (
-                      <div key={pond.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', alignItems: 'end' }}>
-                        <div style={{ minHeight: '40px', display: 'flex', alignItems: 'center', fontSize: '13px', fontWeight: 600 }}>{pond.pondName}</div>
+                      <div key={pond.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '6px', alignItems: 'end' }}>
+                        <div style={{ minHeight: '36px', display: 'flex', alignItems: 'center', fontSize: '12px', fontWeight: 600 }}>{pond.pondName}</div>
                         <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#6B4B16', fontSize: '11px', fontWeight: 600 }}>
                           {t.harvest.samplingMbw}
                           <input
@@ -864,14 +867,25 @@ export default function HarvestPage() {
                             type="number"
                             value={samplingMbwDrafts[pond.id] || ''}
                             onChange={(event) => setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: event.target.value }))}
-                            style={{ minWidth: 0, padding: '10px', borderRadius: '8px', border: '1px solid #D7B36F', background: '#FFF' }}
+                            style={{ minWidth: 0, minHeight: '36px', padding: '7px 9px', borderRadius: '7px', border: '1px solid #D7B36F', background: '#FFF' }}
                           />
+                        </label>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#6B4B16', fontSize: '11px', fontWeight: 600 }}>
+                          {t.harvest.feedStatusLabel}
+                          <select
+                            value={samplingFeedStatuses[pond.id] || 'not_recorded'}
+                            onChange={(event) => setSamplingFeedStatuses((current) => ({ ...current, [pond.id]: event.target.value as HarvestDayFeedStatus }))}
+                            style={{ minWidth: 0, minHeight: '36px', padding: '7px', borderRadius: '7px', border: '1px solid #D7B36F', background: '#FFF' }}
+                          >
+                            <option value="not_recorded">{t.harvest.enterFeedLater}</option>
+                            <option value="fasted">{t.harvest.fasted}</option>
+                          </select>
                         </label>
                         <button
                           type="button"
                           disabled={samplingSavingPondId !== null}
                           onClick={() => saveRequiredSampling(pond)}
-                          style={{ minHeight: '40px', padding: '0 12px', border: 0, borderRadius: '8px', background: '#0F4C75', color: '#FFF', fontWeight: 600, cursor: samplingSavingPondId ? 'wait' : 'pointer', opacity: samplingSavingPondId && samplingSavingPondId !== pond.id ? 0.55 : 1 }}
+                          style={{ minHeight: '36px', padding: '0 10px', border: 0, borderRadius: '7px', background: '#0F4C75', color: '#FFF', fontSize: '12px', fontWeight: 600, cursor: samplingSavingPondId ? 'wait' : 'pointer', opacity: samplingSavingPondId && samplingSavingPondId !== pond.id ? 0.55 : 1 }}
                         >
                           {samplingSavingPondId === pond.id ? `${t.harvest.saveSampling}…` : t.harvest.saveSampling}
                         </button>

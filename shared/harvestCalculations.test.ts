@@ -1,5 +1,6 @@
 import {
   applyHarvestImpactToPond,
+  buildHarvestDateSampling,
   calculateHarvestRemoval,
   getHarvestDateSampling,
   getNextPartialHarvestNumber,
@@ -22,6 +23,27 @@ import {
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
 };
+
+{
+  const pendingFeed = buildHarvestDateSampling({
+    id: 'sampling-pending-feed',
+    date: '2026-07-12',
+    mbw: 10,
+    feedStatus: 'not_recorded',
+  });
+  if ('feed' in pendingFeed) throw new Error('unknown harvest-day feed must not be saved as zero');
+  if (pendingFeed.feedEntryStatus !== 'not_recorded') throw new Error('unknown harvest-day feed status was not preserved');
+
+  const fasted = buildHarvestDateSampling({
+    id: 'sampling-fasted',
+    date: '2026-07-12',
+    mbw: 10,
+    feedStatus: 'fasted',
+  });
+  if (fasted.feed !== 0 || fasted.feedEntryStatus !== 'fasted') {
+    throw new Error('confirmed fasting must be stored distinctly from unknown feed');
+  }
+}
 
 {
   const pond = {
