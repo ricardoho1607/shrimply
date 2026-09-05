@@ -16,6 +16,7 @@ import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, M
 import { AppState, Platform } from 'react-native';
 import {
   applyHarvestImpactToPond,
+  getHarvestDateSampling,
   getNextPartialHarvestNumber,
   reverseHarvestImpactOnPond,
   withHarvestReference,
@@ -791,6 +792,9 @@ const useFirebaseSyncController = () => {
                   const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
                   if (!pondSnapshot?.exists()) throw new Error(`Pond ${harvestPond.pondId} was not found`);
                   const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+                  if (!getHarvestDateSampling(pondData, sourceRecord.date)) {
+                    throw new Error(`Pond ${harvestPond.pondId} requires a positive-MBW sampling on ${sourceRecord.date}`);
+                  }
                   const partialHarvestNumber = harvestPond.harvestType === 'partial'
                     ? getNextPartialHarvestNumber(pondData)
                     : undefined;

@@ -39,6 +39,13 @@ test('close control is square and highlights only on hover', () => {
   assert.match(styles, /\.closeButton:hover\s*{[\s\S]*?background:\s*var\(--bg-mid\);/);
 });
 
+test('harvest requires a positive-MBW sampling on the selected date', () => {
+  assert.match(source, /getHarvestDateSampling\(selectedPond, formData\.date\)/);
+  assert.match(source, /disabled={!ready}/);
+  assert.match(source, /saveRequiredSampling\(pond\)/);
+  assert.match(source, /harvestSizeDiffersFromSampling/);
+});
+
 test('harvest waits for ponds, cycles, and records before showing counts', () => {
   assert.match(source, /const \[pondsResolved, setPondsResolved\] = useState\(false\)/);
   assert.match(source, /const \[cyclesResolved, setCyclesResolved\] = useState\(false\)/);

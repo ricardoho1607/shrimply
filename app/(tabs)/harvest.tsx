@@ -8,7 +8,13 @@ import { useCurrency } from '../../context/CurrencyContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFarmDateKey } from '../../shared/farmDate';
-import type { HarvestType } from '../../shared/harvestCalculations';
+import {
+  getHarvestDateSampling,
+  getSamplingSize,
+  harvestSizeDiffersFromSampling,
+  type HarvestType,
+} from '../../shared/harvestCalculations';
+import { getSamplingMbw } from '../../shared/pondCalculations';
 import { filterEnterpriseRecordsForUser } from '../../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import AppDatePicker from '../components/forms/AppDatePicker';
@@ -40,13 +46,15 @@ const SummaryItem = React.memo(function SummaryItem({ iconName, label, value, un
   );
 });
 
+const createHarvestSamplingId = () => `harvest-sampling-${Date.now()}`;
+
 export default function HarvestScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
-  const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
+  const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, addSampling, calculatePondMetricsWithHarvest } = usePondStore();
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
@@ -130,6 +138,7 @@ export default function HarvestScreen() {
   const [pondData, setPondData] = useState(initializePondData());
   const [expandedPondId, setExpandedPondId] = useState<string | null>(selectedCyclePonds[0]?.id ?? null);
   const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
+  const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -196,7 +205,10 @@ export default function HarvestScreen() {
     return (hasMainHarvest || hasSubHarvest) && isMainComplete && isSubComplete;
   };
 
-  const completedPondCount = pondData.filter(isPondEntryComplete).length;
+  const completedPondCount = pondData.filter((entry) => {
+    const pond = selectedCyclePonds.find((item) => item.id === entry.pondId);
+    return Boolean(pond && getHarvestDateSampling(pond, harvestDate) && isPondEntryComplete(entry));
+  }).length;
   const enteredPondCount = pondData.filter(hasAnyHarvestData).length;
 
   const toggleSecondaryHarvest = (pondId: string) => {
@@ -214,6 +226,29 @@ export default function HarvestScreen() {
 
   const getHarvestBiomass = (pond: { biomass: string; subBiomass: string }) =>
     (parseFloat(pond.biomass) || 0) + (parseFloat(pond.subBiomass) || 0);
+
+  const saveRequiredSampling = (pond: typeof selectedCyclePonds[number]) => {
+    const mbw = parsePositiveNumber(samplingMbwDrafts[pond.id] || '');
+    if (!mbw) {
+      Alert.alert(t.messages.error, t.harvest.samplingMbwRequired);
+      return;
+    }
+
+    addSampling(pond.id, {
+      id: createHarvestSamplingId(),
+      date: harvestDate,
+      mbw,
+      feed: 0,
+      mortality: 0,
+      cycleId: pond.cycleId,
+      cycleName: pond.cycleName,
+      pondCycleId: pond.pondCycleId || pond.id,
+    });
+    setPondData((current) => current.map((entry) => entry.pondId === pond.id && !entry.size
+      ? { ...entry, size: String(Math.round(1000 / mbw)) }
+      : entry));
+    setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: '' }));
+  };
 
   const getExcessHarvestWarning = (pondsWithData: typeof pondData) => {
     const warningPond = pondsWithData.find((harvestPond) => {
@@ -295,6 +330,22 @@ export default function HarvestScreen() {
       return;
     }
 
+    const missingSamplingPond = pondsWithData.find((entry) => {
+      const pond = selectedCyclePonds.find((item) => item.id === entry.pondId);
+      return !pond || !getHarvestDateSampling(pond, harvestDate);
+    });
+    if (missingSamplingPond) {
+      Alert.alert(
+        t.harvest.samplingRequired,
+        t.harvest.samplingRequiredMessage
+          .replace('{{pondName}}', missingSamplingPond.pondName)
+          .replace('{{date}}', harvestDate),
+      );
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
+
     const invalidPond = pondsWithData.find((pond) => {
       const hasMainHarvest = !!(pond.biomass || pond.size || pond.price);
       const hasSubHarvest = !!(pond.subBiomass || pond.subSize || pond.subPrice);
@@ -326,11 +377,39 @@ export default function HarvestScreen() {
       return;
     }
 
-    const warning = getExcessHarvestWarning(pondsWithData);
-    if (warning) {
+    const finishSave = () => {
+      const warning = getExcessHarvestWarning(pondsWithData);
+      if (warning) {
+        Alert.alert(
+          t.harvest.biomassWarningTitle,
+          `${warning.pondName}: ${t.harvest.biomassWarningMessage} (${warning.harvestBiomass.toFixed(1)} kg vs ${warning.estimatedBiomass.toFixed(1)} kg).`,
+          [
+            {
+              text: t.actions.cancel,
+              style: 'cancel',
+              onPress: () => {
+                submitLockRef.current = false;
+                setIsSubmitting(false);
+              },
+            },
+            { text: t.harvest.continueSave, onPress: () => saveHarvestRecords(pondsWithData) },
+          ]
+        );
+        return;
+      }
+      saveHarvestRecords(pondsWithData);
+    };
+
+    const sizeWarning = pondsWithData.find((entry) => {
+      const pond = selectedCyclePonds.find((item) => item.id === entry.pondId);
+      const sampling = pond ? getHarvestDateSampling(pond, harvestDate) : undefined;
+      return harvestSizeDiffersFromSampling(entry.size, sampling)
+        || harvestSizeDiffersFromSampling(entry.subSize, sampling);
+    });
+    if (sizeWarning) {
       Alert.alert(
-        t.harvest.biomassWarningTitle,
-        `${warning.pondName}: ${t.harvest.biomassWarningMessage} (${warning.harvestBiomass.toFixed(1)} kg vs ${warning.estimatedBiomass.toFixed(1)} kg).`,
+        t.harvest.sizeDifferenceTitle,
+        t.harvest.sizeDifferenceMessage.replace('{{pondName}}', sizeWarning.pondName),
         [
           {
             text: t.actions.cancel,
@@ -340,22 +419,20 @@ export default function HarvestScreen() {
               setIsSubmitting(false);
             },
           },
-          {
-            text: t.harvest.continueSave,
-            onPress: () => saveHarvestRecords(pondsWithData),
-          },
-        ]
+          { text: t.harvest.continueSave, onPress: finishSave },
+        ],
       );
       return;
     }
 
-    saveHarvestRecords(pondsWithData);
+    finishSave();
   };
 
   const resetForm = () => {
     setPondData(initializePondData());
     setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
     setSecondaryPondIds([]);
+    setSamplingMbwDrafts({});
   };
 
   const handleModalClose = () => {
@@ -651,9 +728,12 @@ export default function HarvestScreen() {
                 {selectedCyclePonds.map((pond) => {
                   const currentPondData = pondData.find(p => p.pondId === pond.id);
                   if (!currentPondData) return null;
+                  const harvestSampling = getHarvestDateSampling(pond, harvestDate);
+                  const sampledMbw = getSamplingMbw(harvestSampling);
+                  const sampledSize = getSamplingSize(harvestSampling);
                   const isExpanded = expandedPondId === pond.id;
                   const hasData = hasAnyHarvestData(currentPondData);
-                  const isComplete = isPondEntryComplete(currentPondData);
+                  const isComplete = Boolean(harvestSampling) && isPondEntryComplete(currentPondData);
                   const showSecondaryHarvest = secondaryPondIds.includes(pond.id);
                   const hasSecondaryData = !!(
                     currentPondData.subBiomass || currentPondData.subSize || currentPondData.subPrice
@@ -683,7 +763,9 @@ export default function HarvestScreen() {
                             isComplete && styles.pondEntryStatusComplete,
                             hasData && !isComplete && styles.pondEntryStatusInProgress,
                           ]}>
-                            {isComplete
+                            {!harvestSampling
+                              ? t.harvest.samplingRequired
+                              : isComplete
                               ? `${harvestTypeLabel} · ${biomassTotal.toLocaleString()} · ${currentPondData.size || currentPondData.subSize} ${t.harvest.pcsPerKg}`
                               : hasData
                                 ? t.harvest.inProgress
@@ -699,6 +781,35 @@ export default function HarvestScreen() {
 
                       {isExpanded && (
                         <View style={styles.pondFormContent}>
+
+                      {!harvestSampling ? (
+                        <View style={styles.samplingGuardCard}>
+                          <Text style={styles.samplingGuardTitle}>{t.harvest.samplingRequired}</Text>
+                          <Text style={styles.samplingGuardText}>
+                            {t.harvest.samplingRequiredMessage
+                              .replace('{{pondName}}', pond.pondName)
+                              .replace('{{date}}', harvestDate)}
+                          </Text>
+                          <Input
+                            label={t.harvest.samplingMbw}
+                            value={samplingMbwDrafts[pond.id] || ''}
+                            onChangeText={(value: string) => setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: value }))}
+                            placeholder="e.g., 15.5"
+                          />
+                          <TouchableOpacity style={styles.saveSamplingButton} onPress={() => saveRequiredSampling(pond)}>
+                            <Text style={styles.saveSamplingButtonText}>{t.harvest.saveSampling}</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                      <View style={styles.samplingReadyCard}>
+                        <Ionicons name="checkmark-circle" size={18} color="#2e7d63" />
+                        <Text style={styles.samplingReadyText}>
+                          {t.harvest.samplingReady
+                            .replace('{{mbw}}', sampledMbw.toFixed(2))
+                            .replace('{{size}}', String(sampledSize))}
+                        </Text>
+                      </View>
 
                       <Text style={styles.inputLabel}>{t.harvest.harvestType}</Text>
                       <View style={styles.harvestTypeSelector}>
@@ -800,6 +911,8 @@ export default function HarvestScreen() {
                           color={isComplete ? "#FFFFFF" : "#8ba2b3"}
                         />
                       </TouchableOpacity>
+                        </>
+                      )}
                         </View>
                       )}
                     </View>
@@ -924,6 +1037,13 @@ const styles = StyleSheet.create({
   pondEntryStatusComplete: { color: '#2e7d63' },
   pondEntryStatusInProgress: { color: '#b7791f' },
   pondFormContent: { paddingHorizontal: 14, paddingTop: 14, paddingBottom: 16, borderTopWidth: 1, borderTopColor: '#e8f2f9', backgroundColor: '#fbfdff' },
+  samplingGuardCard: { padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#F1C27D', backgroundColor: '#FFF8EA' },
+  samplingGuardTitle: { color: '#8A5700', fontSize: 15, fontWeight: '800', marginBottom: 6 },
+  samplingGuardText: { color: '#6B4B16', fontSize: 13, lineHeight: 19, marginBottom: 14 },
+  saveSamplingButton: { minHeight: 44, borderRadius: 10, backgroundColor: '#0F4C75', alignItems: 'center', justifyContent: 'center' },
+  saveSamplingButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  samplingReadyCard: { flexDirection: 'row', alignItems: 'center', gap: 8, padding: 11, borderRadius: 10, backgroundColor: '#EAF7F1', marginBottom: 14 },
+  samplingReadyText: { flex: 1, color: '#246B52', fontSize: 12, fontWeight: '700' },
   harvestTypeSelector: { flexDirection: 'row', padding: 4, marginBottom: 16, borderRadius: 12, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#e8f2f9' },
   harvestTypeOption: { flex: 1, paddingVertical: 11, alignItems: 'center', borderRadius: 9 },
   harvestTypeOptionActive: { backgroundColor: '#0d2137' },

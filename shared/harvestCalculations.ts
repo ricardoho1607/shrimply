@@ -1,7 +1,9 @@
 import {
   calculatePondMetricsWithHarvest,
   getSamplingMbw,
+  isBaselineSampling,
   toFiniteNumber,
+  type SharedSampling,
   type SharedPond,
 } from './pondCalculations';
 
@@ -43,6 +45,38 @@ export interface PondCycleIdentity {
   pondCycleId?: string | null;
   cycleId?: string | null;
 }
+
+export const getHarvestDateSampling = (
+  pond: Pick<SharedPond, 'samplings'>,
+  harvestDate: string,
+): SharedSampling | undefined => {
+  const dateKey = String(harvestDate || '').slice(0, 10);
+  if (!dateKey) return undefined;
+
+  return [...(pond.samplings || [])]
+    .reverse()
+    .find((sampling) => (
+      !isBaselineSampling(sampling)
+      && String(sampling.date || '').slice(0, 10) === dateKey
+      && getSamplingMbw(sampling) > 0
+    ));
+};
+
+export const getSamplingSize = (sampling?: SharedSampling): number => {
+  const mbw = getSamplingMbw(sampling);
+  return mbw > 0 ? Math.round(1000 / mbw) : 0;
+};
+
+export const harvestSizeDiffersFromSampling = (
+  harvestSize: number | string | null | undefined,
+  sampling?: SharedSampling,
+  threshold = 0.2,
+): boolean => {
+  const sampledSize = getSamplingSize(sampling);
+  const enteredSize = Math.max(0, toFiniteNumber(harvestSize));
+  if (sampledSize <= 0 || enteredSize <= 0) return false;
+  return Math.abs(enteredSize - sampledSize) / sampledSize > threshold;
+};
 
 export const calculateHarvestRemoval = (harvest: HarvestLineInput) => {
   const mainBiomass = Math.max(0, toFiniteNumber(harvest.biomass));

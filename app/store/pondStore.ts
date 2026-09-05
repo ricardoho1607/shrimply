@@ -10,6 +10,7 @@ import {
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 import {
   applyHarvestImpactToPond,
+  getHarvestDateSampling,
   getNextPartialHarvestNumber,
   reverseHarvestImpactOnPond,
   withHarvestReference,
@@ -557,6 +558,14 @@ export const usePondStore = create<PondStore>()(
 
       addHarvestRecord: (record) => {
         const ponds = get().ponds;
+        const pondWithoutSampling = record.ponds.find((harvestPond) => {
+          const pond = ponds.find((item) => item.id === harvestPond.pondId);
+          return !pond || !getHarvestDateSampling(pond, record.date);
+        });
+        if (pondWithoutSampling) {
+          console.warn('Skipped harvest record: every pond requires a positive-MBW sampling on the harvest date.');
+          return;
+        }
         const firstPond = ponds.find((pond) => record.ponds.some((item) => item.pondId === pond.id));
         const resolvedCycleId = record.cycleId || firstPond?.cycleId;
         const resolvedHarvestPonds = record.ponds.map((harvestPond) => ({

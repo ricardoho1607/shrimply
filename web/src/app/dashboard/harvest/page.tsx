@@ -24,12 +24,15 @@ import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import {
   applyHarvestImpactToPond,
   calculateHarvestRemoval,
+  getHarvestDateSampling,
   getNextPartialHarvestNumber,
+  getSamplingSize,
+  harvestSizeDiffersFromSampling,
   reverseHarvestImpactOnPond,
   withHarvestReference,
   type HarvestType,
 } from '../../../../../shared/harvestCalculations';
-import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
+import { calculatePondMetricsWithHarvest, getSamplingMbw } from '../../../../../shared/pondCalculations';
 import { buildHarvestRevenue, financeSyncDocumentId } from '../../../../../shared/financeSync';
 import { useCompanyBlocks } from '@/hooks/useDashboardData';
 import {
@@ -157,6 +160,8 @@ export default function HarvestPage() {
     subPrice: ''
   });
   const [harvestBatch, setHarvestBatch] = useState<HarvestFormEntry[]>([]);
+  const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
+  const [samplingSavingPondId, setSamplingSavingPondId] = useState<string | null>(null);
   const hasPermission = useFarmPermissions();
   const canEditHarvest = hasPermission('manageHarvests');
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
@@ -200,6 +205,14 @@ export default function HarvestPage() {
     )),
     [activeCycles.length, activePonds, effectiveSelectedCycleId],
   );
+  const missingSamplingPonds = useMemo(
+    () => selectedCyclePonds.filter((pond) => !getHarvestDateSampling(pond, formData.date)),
+    [formData.date, selectedCyclePonds],
+  );
+  const selectedFormPond = selectedCyclePonds.find((pond) => pond.id === formData.pondId);
+  const selectedFormSampling = selectedFormPond
+    ? getHarvestDateSampling(selectedFormPond, formData.date)
+    : undefined;
   const selectedCyclePondIds = useMemo(
     () => new Set(selectedCyclePonds.map((pond) => pond.id)),
     [selectedCyclePonds],
@@ -312,6 +325,49 @@ export default function HarvestPage() {
     });
   }, [companyId, t.harvestCycle.productionCycle]);
 
+  const saveRequiredSampling = async (pond: Pond) => {
+    if (!companyId || !user || samplingSavingPondId) return;
+    const mbw = Number(samplingMbwDrafts[pond.id]);
+    if (!Number.isFinite(mbw) || mbw <= 0) {
+      alert(t.harvest.samplingMbwRequired);
+      return;
+    }
+
+    setSamplingSavingPondId(pond.id);
+    try {
+      const pondRef = doc(db, 'companies', companyId, 'ponds', pond.id);
+      await runTransaction(db, async (transaction) => {
+        const snapshot = await transaction.get(pondRef);
+        if (!snapshot.exists()) throw new Error('Pond was not found');
+        const serverPond = { id: snapshot.id, ...snapshot.data() } as Pond;
+        if (getHarvestDateSampling(serverPond, formData.date)) return;
+        transaction.update(pondRef, {
+          samplings: [
+            ...(serverPond.samplings || []),
+            {
+              id: `harvest-sampling-${Date.now()}`,
+              date: formData.date,
+              mbw,
+              feed: 0,
+              mortality: 0,
+              cycleId: serverPond.cycleId,
+              cycleName: serverPond.cycleName,
+              pondCycleId: serverPond.pondCycleId || serverPond.id,
+            },
+          ],
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+        });
+      });
+      setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: '' }));
+    } catch (error) {
+      console.error('Error adding harvest-date sampling:', error);
+      alert(t.harvestCycle.saveFailed);
+    } finally {
+      setSamplingSavingPondId(null);
+    }
+  };
+
   const handleAddHarvest = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !formData.pondId || !user) return;
@@ -323,6 +379,18 @@ export default function HarvestPage() {
       if (selectedPonds.some((pond) => !pond)) return;
       for (let index = 0; index < entries.length; index += 1) {
         const selectedPond = selectedPonds[index]!;
+        const harvestSampling = getHarvestDateSampling(selectedPond, formData.date);
+        if (!harvestSampling) {
+          alert(t.harvest.samplingRequiredMessage
+            .replace('{{pondName}}', selectedPond.pondName)
+            .replace('{{date}}', formData.date));
+          return;
+        }
+        if (
+          (harvestSizeDiffersFromSampling(entries[index].size, harvestSampling)
+            || harvestSizeDiffersFromSampling(entries[index].subSize, harvestSampling))
+          && !window.confirm(t.harvest.sizeDifferenceMessage.replace('{{pondName}}', selectedPond.pondName))
+        ) return;
         const removal = calculateHarvestRemoval(entries[index]);
         const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass;
         if (estimatedBiomass > 0 && removal.biomass > estimatedBiomass * 1.1 && !window.confirm(
@@ -367,6 +435,9 @@ export default function HarvestPage() {
         const canonicalPonds = pondSnapshots.map((pondSnapshot, index) => {
           const serverPond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
           const harvestPond = newRecord.ponds[index];
+          if (!getHarvestDateSampling(serverPond, newRecord.date)) {
+            throw new Error(`${serverPond.pondName} requires a positive-MBW sampling on ${newRecord.date}`);
+          }
           const partialHarvestNumber = harvestPond.harvestType === 'partial' ? getNextPartialHarvestNumber(serverPond) : undefined;
           const canonicalHarvestPond = withHarvestReference(serverPond, { ...harvestPond, partialHarvestNumber });
           const updatedPond = applyHarvestImpactToPond(serverPond, canonicalHarvestPond, newRecord.date, partialHarvestNumber);
@@ -427,6 +498,11 @@ export default function HarvestPage() {
   const addPondToBatch = () => {
     if (!formData.pondId || !formData.biomass || !formData.size || !formData.price) {
       alert(copy('Complete this pond before adding another.'));
+      return;
+    }
+    const selectedPond = selectedCyclePonds.find((pond) => pond.id === formData.pondId);
+    if (!selectedPond || !getHarvestDateSampling(selectedPond, formData.date)) {
+      alert(t.harvest.samplingRequired);
       return;
     }
     if (harvestBatch.some((entry) => entry.pondId === formData.pondId)) return;
@@ -745,18 +821,88 @@ export default function HarvestPage() {
                 </div>
               </div>
               <div className={`responsive-form-grid ${styles.harvestGrid}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className={styles.dateField} style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.harvestDate}</label>
+                  <input
+                    type="date"
+                    max={today}
+                    value={formData.date}
+                    onChange={(event) => {
+                      setFormData({
+                        ...formData,
+                        date: event.target.value,
+                        pondId: '',
+                        biomass: '',
+                        size: '',
+                        price: '',
+                        subBiomass: '',
+                        subSize: '',
+                        subPrice: '',
+                      });
+                      setHarvestBatch([]);
+                    }}
+                    onKeyDown={(event) => event.preventDefault()}
+                    onPaste={(event) => event.preventDefault()}
+                    style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}
+                  />
+                </div>
+
+                {missingSamplingPonds.length > 0 && (
+                  <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '10px', padding: '14px', borderRadius: '12px', border: '1px solid #F1C27D', background: '#FFF8EA' }}>
+                    <div>
+                      <div style={{ color: '#8A5700', fontSize: '14px', fontWeight: 700 }}>{t.harvest.samplingRequired}</div>
+                      <div style={{ color: '#6B4B16', fontSize: '12px', marginTop: '4px' }}>{t.harvest.samplingGuardHelp}</div>
+                    </div>
+                    {missingSamplingPonds.map((pond) => (
+                      <div key={pond.id} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '8px', alignItems: 'end' }}>
+                        <div style={{ minHeight: '40px', display: 'flex', alignItems: 'center', fontSize: '13px', fontWeight: 600 }}>{pond.pondName}</div>
+                        <label style={{ display: 'flex', flexDirection: 'column', gap: '4px', color: '#6B4B16', fontSize: '11px', fontWeight: 600 }}>
+                          {t.harvest.samplingMbw}
+                          <input
+                            min="0.01"
+                            step="0.01"
+                            type="number"
+                            value={samplingMbwDrafts[pond.id] || ''}
+                            onChange={(event) => setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: event.target.value }))}
+                            style={{ minWidth: 0, padding: '10px', borderRadius: '8px', border: '1px solid #D7B36F', background: '#FFF' }}
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          disabled={samplingSavingPondId !== null}
+                          onClick={() => saveRequiredSampling(pond)}
+                          style={{ minHeight: '40px', padding: '0 12px', border: 0, borderRadius: '8px', background: '#0F4C75', color: '#FFF', fontWeight: 600, cursor: samplingSavingPondId ? 'wait' : 'pointer', opacity: samplingSavingPondId && samplingSavingPondId !== pond.id ? 0.55 : 1 }}
+                        >
+                          {samplingSavingPondId === pond.id ? `${t.harvest.saveSampling}…` : t.harvest.saveSampling}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <div className={styles.pondField} style={{ display: 'flex', flexDirection: 'column', gap: '6px', gridColumn: 'span 2' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.selectPond}</label>
                   <select
                     required
                     value={formData.pondId}
-                    onChange={e => setFormData({...formData, pondId: e.target.value})}
+                    onChange={(event) => {
+                      const pond = selectedCyclePonds.find((item) => item.id === event.target.value);
+                      const sampling = pond ? getHarvestDateSampling(pond, formData.date) : undefined;
+                      setFormData({
+                        ...formData,
+                        pondId: event.target.value,
+                        size: sampling ? String(getSamplingSize(sampling)) : '',
+                      });
+                    }}
                     style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}
                   >
                     <option value="">{t.harvestCycle.choosePond}</option>
                     {selectedCyclePonds
                       .filter((pond) => !harvestBatch.some((entry) => entry.pondId === pond.id))
-                      .map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
+                      .map((pond) => {
+                        const ready = Boolean(getHarvestDateSampling(pond, formData.date));
+                        return <option key={pond.id} value={pond.id} disabled={!ready}>{pond.pondName}{ready ? '' : ` — ${t.harvest.samplingRequired}`}</option>;
+                      })}
                   </select>
                 </div>
 
@@ -770,11 +916,6 @@ export default function HarvestPage() {
                     ))}
                   </div>
                 )}
-
-                <div className={styles.dateField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.harvestDate}</label>
-                  <input type="date" max={today} value={formData.date} onChange={e => setFormData({...formData, date: e.target.value})} onKeyDown={(event) => event.preventDefault()} onPaste={(event) => event.preventDefault()} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
-                </div>
 
                 <div className={styles.typeField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvest.harvestType}</label>
@@ -801,6 +942,14 @@ export default function HarvestPage() {
                     ))}
                   </div>
                 </div>
+
+                {selectedFormSampling && (
+                  <div style={{ gridColumn: 'span 2', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 12px', borderRadius: '10px', background: '#EAF7F1', color: '#246B52', fontSize: '12px', fontWeight: 600 }}>
+                    {t.harvest.samplingReady
+                      .replace('{{mbw}}', getSamplingMbw(selectedFormSampling).toFixed(2))
+                      .replace('{{size}}', String(getSamplingSize(selectedFormSampling)))}
+                  </div>
+                )}
 
                 <div className={styles.sizeField} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.averageSize}</label>

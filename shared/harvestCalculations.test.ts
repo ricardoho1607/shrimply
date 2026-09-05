@@ -1,7 +1,10 @@
 import {
   applyHarvestImpactToPond,
   calculateHarvestRemoval,
+  getHarvestDateSampling,
   getNextPartialHarvestNumber,
+  getSamplingSize,
+  harvestSizeDiffersFromSampling,
   hasFinalHarvestForPondCycle,
   reverseHarvestImpactOnPond,
   withHarvestReference,
@@ -19,6 +22,22 @@ import {
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
 };
+
+{
+  const pond = {
+    samplings: [
+      { id: 'baseline', date: '2026-07-12', mbw: 9, isBaselineEstimate: true },
+      { id: 'feed-only', date: '2026-07-12', mbw: 0, feed: 20 },
+      { id: 'valid', date: '2026-07-12', mbw: 10 },
+    ],
+  };
+  const sampling = getHarvestDateSampling(pond, '2026-07-12');
+  if (sampling?.id !== 'valid') throw new Error('harvest date sampling must use a real positive-MBW sample');
+  assertClose(getSamplingSize(sampling), 100, 'sampling size');
+  if (!harvestSizeDiffersFromSampling(125, sampling)) throw new Error('large harvest size difference was not detected');
+  if (harvestSizeDiffersFromSampling(115, sampling)) throw new Error('small harvest size difference was incorrectly detected');
+  if (getHarvestDateSampling(pond, '2026-07-13')) throw new Error('sampling from another date was accepted');
+}
 
 export const runHarvestCalculationsSelfTest = () => {
   const mixedDailyRecords = [
