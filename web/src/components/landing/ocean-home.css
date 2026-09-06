@@ -1019,6 +1019,14 @@
   height: 180svh;
 }
 
+@media (min-width: 801px) {
+  .ocean-home .orson-copy {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+  }
+}
+
 .ocean-home .conversation-journey .conversation {
   position: sticky;
   top: 24px;
