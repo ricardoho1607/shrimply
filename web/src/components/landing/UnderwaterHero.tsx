@@ -23,8 +23,10 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
     const section = sectionRef.current;
     const stage = stageRef.current;
     if (!section || !stage) return;
+    const cards = cardsRef.current;
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     let frame = 0;
+    let previousSelection = -1;
     const update = () => {
       frame = 0;
       const distance = Math.max(1, section.offsetHeight - stage.offsetHeight);
@@ -36,13 +38,30 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
       stage.style.setProperty('--journey-progress', `${progress * 100}%`);
       cardsRef.current.forEach((card, i) => {
         if (!card) return;
-        const delta = i - travel;
-        const opacity = motion.matches ? Number(i === selected) : Math.max(0, Math.min(1, (.67 - Math.abs(delta)) / .37));
-        card.style.opacity = String(opacity);
-        card.style.visibility = opacity > .001 ? 'visible' : 'hidden';
-        card.style.transform = motion.matches ? 'none' : `translate3d(${delta * 42}px, ${delta * 16}px, ${-delta * 160}px)`;
-        card.style.zIndex = String(10 - i);
+        const isSelected = i === selected;
+        card.style.opacity = isSelected ? '1' : '0';
+        card.style.visibility = isSelected ? 'visible' : 'hidden';
+        card.style.transform = 'none';
+        card.style.zIndex = isSelected ? '10' : '0';
+        if (selected !== previousSelection) {
+          card.getAnimations().forEach(animation => animation.cancel());
+          if (previousSelection !== -1 && !motion.matches) {
+            const direction = Math.sign(selected - previousSelection);
+            if (isSelected) {
+              card.animate([
+                { opacity: 0, transform: `translate3d(${direction * 100}px, ${direction * 28}px, -200px)` },
+                { opacity: 1, transform: 'translate3d(0, 0, 0)' },
+              ], { duration: 650, easing: 'cubic-bezier(.22, 1, .36, 1)' });
+            } else if (i === previousSelection) {
+              card.animate([
+                { visibility: 'visible', opacity: 1, transform: 'translate3d(0, 0, 0)' },
+                { visibility: 'visible', opacity: 0, transform: `translate3d(${-direction * 100}px, ${-direction * 28}px, 100px)` },
+              ], { duration: 450, easing: 'ease-out' });
+            }
+          }
+        }
       });
+      previousSelection = selected;
     };
     const queueUpdate = () => { if (!frame) frame = requestAnimationFrame(update); };
     const observer = new ResizeObserver(queueUpdate);
@@ -54,6 +73,7 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
     update();
     return () => {
       cancelAnimationFrame(frame);
+      cards.forEach(card => card?.getAnimations().forEach(animation => animation.cancel()));
       observer.disconnect();
       window.removeEventListener('scroll', queueUpdate);
       window.removeEventListener('resize', queueUpdate);
