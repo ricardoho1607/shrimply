@@ -21,16 +21,13 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
     let frame = 0;
     const update = () => {
       frame = 0;
+      let cardScale = 1;
       if (mobile.matches) {
-        panelsRef.current.forEach(panel => {
-          if (!panel) return;
-          panel.style.opacity = '1';
-          panel.style.visibility = 'visible';
-          panel.style.transform = 'none';
-          panel.style.zIndex = 'auto';
-          panel.removeAttribute('aria-hidden');
-        });
-        return;
+        const height = Math.max(1, ...panelsRef.current.map(panel => panel?.scrollHeight ?? 0));
+        const stageStyle = getComputedStyle(stage);
+        const availableHeight = stage.clientHeight - parseFloat(stageStyle.paddingTop) - parseFloat(stageStyle.paddingBottom);
+        cardScale = Math.min(1, Math.max(1, availableHeight) / height);
+        stage.style.setProperty('--mobile-card-height', `${height * cardScale}px`);
       }
       const distance = Math.max(1, showcase.offsetHeight - stage.offsetHeight);
       const progress = Math.min(1, Math.max(0, -showcase.getBoundingClientRect().top / distance));
@@ -49,8 +46,8 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
         panel.style.opacity = isActive ? '1' : '0';
         panel.style.visibility = isActive ? 'visible' : 'hidden';
         panel.style.transform = reducedMotion.matches
-          ? 'none'
-          : `translate3d(0, ${delta * 32}px, 0) scale(${1 - Math.min(Math.abs(delta), 1) * 0.015})`;
+          ? `scale(${cardScale})`
+          : `translate3d(0, ${delta * 32}px, 0) scale(${cardScale * (1 - Math.min(Math.abs(delta), 1) * 0.015)})`;
         panel.style.zIndex = isActive ? '1' : '0';
       });
     };

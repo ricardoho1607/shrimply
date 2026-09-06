@@ -2540,33 +2540,31 @@
   }
 
   .ocean-home .showcase {
-    height: auto;
+    height: 400svh;
   }
 
   .ocean-home .feature-scroll-stage {
-    position: relative;
-    top: auto;
-    height: auto;
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    box-sizing: border-box;
+    padding-top: max(16px, env(safe-area-inset-top));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
     min-height: 0;
     overflow: visible;
   }
 
   .ocean-home .feature-panels {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    height: auto;
+    display: block;
+    overflow: visible;
+    height: var(--mobile-card-height, 600px);
     min-height: 0;
   }
 
   .ocean-home .feature-panels .feature-content {
-    position: relative;
-    inset: auto;
-    flex: 0 0 100%;
-    scroll-snap-align: start;
-    pointer-events: auto;
+    position: absolute;
+    inset: 0 0 auto;
+    transform-origin: top center;
     min-width: 0;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
