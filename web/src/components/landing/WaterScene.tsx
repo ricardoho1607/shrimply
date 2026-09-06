@@ -39,6 +39,7 @@ export default function WaterScene({ progressRef, label }: { progressRef?: RefOb
       const centerX = width * .64;
       const centerY = height * .30;
       for (let band = 0; band < 10; band++) {
+        ctx.save();
         ctx.beginPath();
         const phase = ((band / 10 + travel * .8 + elapsed * .014) % 1 + 1) % 1;
         const yBase = height * (.22 + Math.pow(phase, 1.5) * 1.15);
@@ -48,12 +49,17 @@ export default function WaterScene({ progressRef, label }: { progressRef?: RefOb
           if (step === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
         }
         const fade = Math.sin(phase * Math.PI);
-        ctx.strokeStyle = `rgba(50,130,184,${fade * .12})`;
-        ctx.lineWidth = 7 + phase * 13;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.filter = `blur(${8 + phase * 8}px)`;
+        ctx.strokeStyle = `rgba(50,130,184,${fade * .055})`;
+        ctx.lineWidth = 16 + phase * 20;
         ctx.stroke();
-        ctx.strokeStyle = `rgba(245,252,255,${fade * .55})`;
-        ctx.lineWidth = 1.5 + phase * 3;
+        ctx.filter = `blur(${4 + phase * 5}px)`;
+        ctx.strokeStyle = `rgba(245,252,255,${fade * .2})`;
+        ctx.lineWidth = 5 + phase * 7;
         ctx.stroke();
+        ctx.restore();
       }
 
       for (let particle = 0; particle < 22; particle++) {
