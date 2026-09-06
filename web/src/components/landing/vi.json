@@ -1,15 +1,9 @@
 {
   "start": "Bắt đầu miễn phí",
   "explore": "Khám phá nền tảng",
-  "eyebrow": "HIỂU RÕ HƠN DƯỚI MẶT NƯỚC",
   "headline": "Hiểu rõ ao nuôi.",
   "headlineAccent": "Tự tin phát triển.",
   "intro": "Từ lần cho ăn đầu tiên đến vụ thu hoạch cuối cùng. Kết nối ao nuôi, đội ngũ và số liệu trong một nền tảng quản lý trang trại.",
-  "notes": [
-    "Tại ao nuôi",
-    "Tại văn phòng",
-    "Luôn đồng bộ"
-  ],
   "pond": "Ao",
   "day": "Ngày",
   "activeCycle": "VỤ NUÔI HIỆN TẠI",
@@ -34,7 +28,7 @@
   "foundation": [
     "Từ thả giống đến thu hoạch",
     "Làm việc ngoại tuyến tại ao",
-    "Thông tin từ Orson AI"
+    "Tham vấn Orson AI"
   ],
   "platformEyebrow": "TRANG TRẠI ĐƯỢC KẾT NỐI",
   "platformTitle": "Dữ liệu tập trung hơn.",
@@ -225,7 +219,7 @@
   "nextStep": "Bước tiếp theo",
   "nextAction": "Ghi kết quả kiểm tra sàng ăn và đo nước mới.",
   "responseCaption": "Câu trả lời minh họa dựa trên dữ liệu ao mẫu.",
-  "workflowEyebrow": "TỪ BỜ AO ĐẾN VĂN PHÒNG",
+  "workflowEyebrow": "TỪ BỜ AO ĐẾN TAY BẠN",
   "workflowTitle": "Phù hợp với cách",
   "workflowAccent": "trang trại vận hành.",
   "workflowIntro": "Ghi lại công việc ngay tại hiện trường. Chia sẻ cùng dữ liệu với những người lập kế hoạch cho bước tiếp theo.",

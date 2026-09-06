@@ -74,9 +74,9 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
     <div className="journey-stage" ref={stageRef} data-water-interaction>
       <WaterScene progressRef={progressRef} label={c.waterLabel}/>
       <div className="journey-shade"/>
-      <div className="journey-top wrap"><span>{c.eyebrow}</span><span className="journey-chapter">{c.pond} {ponds[active].id} <span>/ 03</span></span></div>
+      <div className="journey-top wrap"><span className="journey-chapter">{c.pond} {ponds[active].id} <span>/ 03</span></span></div>
       <div className="journey-content wrap">
-        <div className="journey-copy"><h1>{c.headline}<br/><span>{c.headlineAccent}</span></h1><p>{c.intro}</p><div className="hero-actions"><Link className="button" href="/auth/join" prefetch={false}>{c.start}</Link><a className="text-link" href="#platform">{c.explore}</a></div><div className="hero-notes">{c.notes.map(note => <span key={note}>{note}</span>)}</div></div>
+        <div className="journey-copy"><h1>{c.headline}<br/><span>{c.headlineAccent}</span></h1><p>{c.intro}</p><div className="hero-actions"><Link className="button" href="/auth/join" prefetch={false}>{c.start}</Link><a className="text-link" href="#platform">{c.explore}</a></div></div>
         <div className="pond-journey"><div className="pond-window-label">{c.farmFocus} <span>{c.example}</span></div><div className="pond-depth-stage">
           {ponds.map((pond, index) => <article key={pond.id} ref={element => { cardsRef.current[index] = element; }} className="journey-pond" aria-hidden={index !== active} style={{ opacity: index === 0 ? 1 : 0, visibility: index === 0 ? 'visible' : 'hidden' }}>
             <div className="journey-pond-head"><div><span>{c.activeCycle}</span><h2>{c.pond} {pond.id}</h2></div><span className="pond-day">{c.day} {pond.day}</span></div>

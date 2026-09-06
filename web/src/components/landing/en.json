@@ -1,15 +1,9 @@
 {
   "start": "Start for free",
   "explore": "Explore the platform",
-  "eyebrow": "A CLEARER VIEW BELOW THE SURFACE",
   "headline": "Know your ponds.",
   "headlineAccent": "Grow with clarity.",
   "intro": "From the first feeding to the final harvest. Bring your ponds, people, and numbers together in one connected farm platform.",
-  "notes": [
-    "In the field",
-    "In the office",
-    "In sync"
-  ],
   "pond": "Pond",
   "day": "Day",
   "activeCycle": "ACTIVE CYCLE",
@@ -34,7 +28,7 @@
   "foundation": [
     "Pond to harvest",
     "Offline-ready field work",
-    "Insights with Orson AI"
+    "Consult with Orson AI"
   ],
   "platformEyebrow": "YOUR FARM, CONNECTED",
   "platformTitle": "Less scattered records.",
@@ -45,7 +39,7 @@
       "id": "growth",
       "label": "Growth & sampling",
       "number": "01",
-      "title": "See how your crop is really growing.",
+      "title": "See how your shrimp are really growing.",
       "description": "Turn sampling records into a clearer view of average weight, daily growth, survival, and biomass. Keep every cycle in perspective, right through harvest.",
       "points": [
         "Follow growth across the whole cycle",
@@ -225,7 +219,7 @@
   "nextStep": "Next step",
   "nextAction": "Record a tray check and fresh water readings.",
   "responseCaption": "Illustrative response using sample pond records.",
-  "workflowEyebrow": "FROM THE POND EDGE TO THE OFFICE",
+  "workflowEyebrow": "FROM THE POND EDGE TO YOUR HAND",
   "workflowTitle": "Fits the way",
   "workflowAccent": "your farm works.",
   "workflowIntro": "Capture the work where it happens. Bring the same records to the people planning what comes next.",

@@ -1,15 +1,9 @@
 {
   "start": "Mulai gratis",
   "explore": "Jelajahi platform",
-  "eyebrow": "PANDANGAN LEBIH JELAS DI BAWAH PERMUKAAN",
   "headline": "Kenali tambak Anda.",
   "headlineAccent": "Tumbuh dengan kepastian.",
   "intro": "Dari pemberian pakan pertama hingga panen terakhir. Satukan tambak, tim, dan angka dalam satu platform pengelolaan tambak.",
-  "notes": [
-    "Di lapangan",
-    "Di kantor",
-    "Tersinkron"
-  ],
   "pond": "Tambak",
   "day": "Hari",
   "activeCycle": "SIKLUS AKTIF",
@@ -34,7 +28,7 @@
   "foundation": [
     "Dari tebar hingga panen",
     "Kerja lapangan siap offline",
-    "Wawasan bersama Orson AI"
+    "Konsultasi dengan Orson AI"
   ],
   "platformEyebrow": "TAMBAK ANDA, TERHUBUNG",
   "platformTitle": "Catatan lebih tertata.",
@@ -225,7 +219,7 @@
   "nextStep": "Langkah berikutnya",
   "nextAction": "Catat pemeriksaan anco dan hasil pengukuran air terbaru.",
   "responseCaption": "Ilustrasi jawaban menggunakan contoh catatan kolam.",
-  "workflowEyebrow": "DARI TEPI TAMBAK KE KANTOR",
+  "workflowEyebrow": "DARI TEPI TAMBAK KE TANGAN ANDA",
   "workflowTitle": "Mengikuti cara",
   "workflowAccent": "tambak Anda bekerja.",
   "workflowIntro": "Catat pekerjaan di tempatnya. Bagikan catatan yang sama kepada tim yang merencanakan langkah berikutnya.",

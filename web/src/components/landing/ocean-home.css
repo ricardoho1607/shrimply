@@ -1713,7 +1713,7 @@
 .ocean-home .journey-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding-top: 36px;
   gap: 20px;
   font-size: 12px;
