@@ -72,7 +72,7 @@ export default function VannameiShrimpFarmingLanding() {
             quality, review pond performance, and prepare reports from one mobile and web platform.
           </p>
           <div className="animate-hero mobile-cta-row van-hero-actions" style={{ animationDelay: "0.98s" }}>
-            <Link href="/auth/join" prefetch={false} className="btn-primary">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Start for free</Link>
             <Link href="/shrimp-farm-management-software" className="btn-outline">Farm Software</Link>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function VannameiShrimpFarmingLanding() {
             control, reporting, and better cycle visibility.
           </p>
           <div className="mobile-cta-row">
-            <Link href="/auth/join" prefetch={false} className="btn-primary">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Start for free</Link>
             <Link href="/resources" className="btn-outline">Education Hub</Link>
           </div>
         </div>

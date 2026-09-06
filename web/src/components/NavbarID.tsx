@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
 import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
@@ -165,7 +164,7 @@ export default function NavbarID() {
         aria-controls="mobile-navigation"
         onClick={() => setMenuOpen(current => !current)}
       >
-        {menuOpen ? <X size={21} strokeWidth={1.8} /> : <Menu size={22} strokeWidth={1.8} />}
+        {menuOpen ? 'Tutup' : 'Menu'}
       </button>
 
       <button
@@ -188,7 +187,7 @@ export default function NavbarID() {
       >
         <div className="drawer-header">
           <button className="drawer-close" type="button" aria-label="Tutup menu navigasi" onClick={closeMenu}>
-            <X size={20} strokeWidth={1.8} />
+            Tutup
           </button>
         </div>
 

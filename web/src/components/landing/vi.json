@@ -1,0 +1,256 @@
+{
+  "start": "Bắt đầu miễn phí",
+  "explore": "Khám phá nền tảng",
+  "eyebrow": "HIỂU RÕ HƠN DƯỚI MẶT NƯỚC",
+  "headline": "Hiểu rõ ao nuôi.",
+  "headlineAccent": "Tự tin phát triển.",
+  "intro": "Từ lần cho ăn đầu tiên đến vụ thu hoạch cuối cùng. Kết nối ao nuôi, đội ngũ và số liệu trong một nền tảng quản lý trang trại.",
+  "notes": [
+    "Tại ao nuôi",
+    "Tại văn phòng",
+    "Luôn đồng bộ"
+  ],
+  "pond": "Ao",
+  "day": "Ngày",
+  "activeCycle": "VỤ NUÔI HIỆN TẠI",
+  "farmFocus": "HIỂU RÕ TRANG TRẠI CỦA BẠN",
+  "example": "DỮ LIỆU MINH HỌA",
+  "weight": "Trọng lượng trung bình",
+  "fcr": "Hệ số chuyển đổi thức ăn",
+  "survival": "Tỷ lệ sống",
+  "biomass": "Sinh khối",
+  "pondFocus": [
+    "Mỗi bản ghi. Một góc nhìn rõ hơn.",
+    "Nhiều ao nuôi. Một trang trại kết nối.",
+    "Toàn bộ vụ nuôi trong tầm nhìn."
+  ],
+  "heroOrson": "Orson kết nối thông tin giữa các ao nuôi.",
+  "scroll": "Cuộn để khám phá trang trại",
+  "scrollEnd": "Tiếp tục cuộn để khám phá Shrimply",
+  "journeyLabel": "Khám phá ba ao nuôi qua hành trình dưới nước",
+  "jumpLabel": "Chọn ao nuôi",
+  "waterLabel": "Sóng nước xanh nhạt tiến về phía bạn khi cuộn qua ba ao nuôi.",
+  "foundationLabel": "MỘT TRANG TRẠI. MỘT GÓC NHÌN TOÀN DIỆN.",
+  "foundation": [
+    "Từ thả giống đến thu hoạch",
+    "Làm việc ngoại tuyến tại ao",
+    "Thông tin từ Orson AI"
+  ],
+  "platformEyebrow": "TRANG TRẠI ĐƯỢC KẾT NỐI",
+  "platformTitle": "Dữ liệu tập trung hơn.",
+  "platformAccent": "Quyết định sáng suốt hơn.",
+  "platformIntro": "Đặt mỗi lần cho ăn, kiểm tra nước và lấy mẫu vào bức tranh chung. Khám phá những gì Shrimply kết nối.",
+  "features": [
+    {
+      "id": "growth",
+      "label": "Tăng trưởng & lấy mẫu",
+      "number": "01",
+      "title": "Theo dõi tôm thực sự phát triển ra sao.",
+      "description": "Biến dữ liệu lấy mẫu thành góc nhìn rõ ràng về trọng lượng trung bình, tăng trưởng hằng ngày, tỷ lệ sống và sinh khối. Theo dõi trọn vụ nuôi đến thu hoạch.",
+      "points": [
+        "Theo dõi tăng trưởng suốt vụ nuôi",
+        "Kết nối lấy mẫu, hao hụt và thu hoạch"
+      ],
+      "path": "growth-sampling",
+      "panel": "Ao A1 · Tăng trưởng",
+      "metric": "18.5",
+      "unit": "g",
+      "metricLabel": "Trọng lượng trung bình",
+      "secondary": "0.29 g/ngày",
+      "secondaryLabel": "Tăng trưởng trung bình mỗi ngày",
+      "chartLabel": "TRỌNG LƯỢNG TRUNG BÌNH",
+      "values": [
+        "9.2",
+        "11.0",
+        "13.2",
+        "15.6",
+        "18.5"
+      ],
+      "dates": [
+        "Ngày 33",
+        "Ngày 41",
+        "Ngày 49",
+        "Ngày 57",
+        "Ngày 65"
+      ]
+    },
+    {
+      "id": "water",
+      "label": "Chất lượng nước",
+      "number": "02",
+      "title": "Hiểu xu hướng sau mỗi chỉ số.",
+      "description": "Lưu oxy hòa tan, pH, nhiệt độ và các chỉ số nước cùng nhau. Theo dõi thay đổi theo thời gian để chuẩn bị cho lần kiểm tra ao tiếp theo.",
+      "points": [
+        "Xem lịch sử chất lượng nước từng ao",
+        "Kết nối điều kiện thay đổi với tăng trưởng"
+      ],
+      "path": "water-quality-monitoring",
+      "panel": "Ao A1 · Chất lượng nước",
+      "metric": "5.2",
+      "unit": "mg/L",
+      "metricLabel": "Oxy hòa tan",
+      "secondary": "7.8",
+      "secondaryLabel": "Chỉ số pH mới nhất",
+      "chartLabel": "OXY HÒA TAN BUỔI SÁNG",
+      "values": [
+        "5.8",
+        "5.6",
+        "5.3",
+        "5.5",
+        "5.2"
+      ],
+      "dates": [
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ]
+    },
+    {
+      "id": "feed",
+      "label": "Thức ăn & tồn kho",
+      "number": "03",
+      "title": "Biết đã dùng gì, còn lại bao nhiêu.",
+      "description": "Kết nối cho ăn hằng ngày với kho thức ăn. Cho ăn thực tế trừ tồn kho, còn lấy mẫu tập trung vào hiệu quả vụ nuôi và hệ số chuyển đổi thức ăn.",
+      "points": [
+        "Theo dõi tổng thức ăn hằng ngày theo ao",
+        "Xem tồn kho và ngưỡng đặt hàng lại"
+      ],
+      "path": "feed-inventory",
+      "panel": "Ao A1 · Cho ăn",
+      "metric": "38",
+      "unit": "kg",
+      "metricLabel": "Thức ăn ghi nhận hôm nay",
+      "secondary": "760 kg",
+      "secondaryLabel": "Thức ăn còn trong kho",
+      "chartLabel": "THỨC ĂN GHI NHẬN HẰNG NGÀY",
+      "values": [
+        "32",
+        "34",
+        "34",
+        "36",
+        "38"
+      ],
+      "dates": [
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6"
+      ]
+    },
+    {
+      "id": "finance",
+      "label": "Tài chính & báo cáo",
+      "number": "04",
+      "title": "Hiểu rõ hiệu quả kinh doanh.",
+      "description": "Kết nối chi phí trang trại và thu nhập từ thu hoạch. Xem dòng tiền, chi phí sản xuất, lãi lỗ và dự báo dựa trên giả định trong từng báo cáo.",
+      "points": [
+        "Phân biệt dòng tiền với lợi nhuận",
+        "Chia sẻ báo cáo PDF rõ ràng với đội ngũ"
+      ],
+      "path": "shrimp-farm-finance",
+      "panel": "Vụ 02 · Cơ cấu chi phí",
+      "metric": "62",
+      "unit": "%",
+      "metricLabel": "Tỷ trọng thức ăn trong chi phí đã ghi",
+      "secondary": "5 báo cáo",
+      "secondaryLabel": "Góc nhìn tài chính & sản xuất",
+      "chartLabel": "PHÂN BỔ CHI PHÍ ĐÃ GHI",
+      "values": [
+        "62",
+        "18",
+        "10",
+        "6",
+        "4"
+      ],
+      "dates": [
+        "Thức ăn",
+        "Giống",
+        "Điện",
+        "Nhân công",
+        "Khác"
+      ]
+    }
+  ],
+  "connectedFarm": "TRANG TRẠI KẾT NỐI",
+  "featureExplore": "Khám phá",
+  "exampleShort": "Minh họa",
+  "recordsConnected": "Dữ liệu của bạn, được kết nối",
+  "thisCycle": "VỤ NUÔI NÀY",
+  "lastDays": "5 NGÀY GẦN NHẤT",
+  "panelFooter": "Hiểu rõ hơn qua từng bản ghi.",
+  "sampleCaption": "Giao diện minh họa · Dữ liệu mẫu, không phải trang trại thực",
+  "capabilities": [
+    {
+      "title": "Ao nuôi & thu hoạch",
+      "body": "Theo dõi từ thả giống đến thu tỉa và thu hoạch cuối vụ.",
+      "cta": "Theo dõi vụ nuôi",
+      "path": "/features/shrimp-harvest-tracking"
+    },
+    {
+      "title": "Nhận biết dịch bệnh",
+      "body": "Theo dõi báo cáo dịch bệnh khu vực và dấu hiệu rủi ro tại trang trại.",
+      "cta": "Luôn cập nhật",
+      "path": "/features/disease-alerts"
+    },
+    {
+      "title": "Tài sản & bảo trì",
+      "body": "Theo dõi thiết bị, lịch sử bảo dưỡng và di chuyển qua mã QR.",
+      "cta": "Duy trì vận hành",
+      "path": "/how-it-works"
+    },
+    {
+      "title": "Một đội ngũ kết nối",
+      "body": "Cấp quyền phù hợp cho chủ trại, quản lý và kỹ thuật viên.",
+      "cta": "Cùng làm việc",
+      "path": "/how-it-works"
+    }
+  ],
+  "orsonEyebrow": "LÀM QUEN VỚI ORSON AI",
+  "orsonTitle": "Dữ liệu có câu chuyện riêng.",
+  "orsonAccent": "Orson giúp bạn đọc hiểu.",
+  "orsonIntro": "Một chỉ số nước chỉ phản ánh một thời điểm. Lịch sử ao nuôi cho bạn góc nhìn toàn diện. Orson sử dụng mô hình frontier để suy luận, kết nối dữ liệu chất lượng nước, lấy mẫu và thức ăn gần đây để giúp bạn nhận ra điều cần kiểm tra kỹ hơn.",
+  "orsonCta": "Tìm hiểu về Orson",
+  "orsonFootnote": "Dựa trên lịch sử được ghi lại của trang trại.",
+  "orsonPartner": "Người bạn đồng hành trong nuôi trồng thủy sản",
+  "question": "Tôi nên kiểm tra gì trước khi tăng thức ăn ở Ao A1?",
+  "connecting": "KẾT NỐI DỮ LIỆU CỦA BẠN",
+  "answer": "Tổng thức ăn ghi nhận hằng ngày đã tăng trong năm ngày qua, trong khi oxy buổi sáng giảm.",
+  "feedLogged": "Thức ăn đã ghi",
+  "oxygen": "Oxy buổi sáng",
+  "dailyUnit": "kg/ngày",
+  "advice": "Trước lần tăng tiếp theo, hãy kiểm tra sàng ăn, oxy hiện tại và ước tính sinh khối mới nhất. Lượng thức ăn ghi nhận tăng không cho biết tôm đã ăn bao nhiêu.",
+  "nextStep": "Bước tiếp theo",
+  "nextAction": "Ghi kết quả kiểm tra sàng ăn và đo nước mới.",
+  "responseCaption": "Câu trả lời minh họa dựa trên dữ liệu ao mẫu.",
+  "workflowEyebrow": "TỪ BỜ AO ĐẾN VĂN PHÒNG",
+  "workflowTitle": "Phù hợp với cách",
+  "workflowAccent": "trang trại vận hành.",
+  "workflowIntro": "Ghi lại công việc ngay tại hiện trường. Chia sẻ cùng dữ liệu với những người lập kế hoạch cho bước tiếp theo.",
+  "steps": [
+    {
+      "title": "Ghi chép tại ao.",
+      "body": "Ghi cho ăn, kiểm tra nước và lấy mẫu trên điện thoại. Làm việc ngoại tuyến và đồng bộ khi có mạng trở lại.",
+      "tag": "Dành cho công việc bên bờ ao"
+    },
+    {
+      "title": "Xem toàn bộ trang trại.",
+      "body": "Xem lịch sử ao, tồn kho và hoạt động đội ngũ trên web. Cùng làm việc với dữ liệu được kết nối.",
+      "tag": "Góc nhìn chung tại văn phòng"
+    },
+    {
+      "title": "Lập kế hoạch có cơ sở.",
+      "body": "Dùng thông tin từ Orson và báo cáo trang trại để xem rủi ro, hiểu chi phí và chuẩn bị bước tiếp theo.",
+      "tag": "Bối cảnh cho quyết định tiếp theo"
+    }
+  ],
+  "downloadIntro": "Trang trại luôn bên bạn.",
+  "download": "Tải cho Android",
+  "finalEyebrow": "MỖI VỤ NUÔI BẮT ĐẦU BẰNG GÓC NHÌN RÕ HƠN",
+  "finalTitle": "Vụ thu hoạch tiếp theo.",
+  "finalAccent": "Góc nhìn toàn diện hơn.",
+  "finalIntro": "Đưa ra quyết định tốt hơn cho trang trại với Shrimply.",
+  "finalNote": "Di động tại ao. Web tại văn phòng."
+}

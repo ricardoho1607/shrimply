@@ -40,7 +40,7 @@ export default function OrsonPageID() {
             Melampaui Data.<br /><em>Kecerdasan Biologis.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.7s', maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>
-            Pelajari bagaimana Orson mengubah data tambak yang kompleks menjadi deteksi risiko biologis, kecerdasan pakan, dan perkiraan praktis untuk 72 jam ke depan.
+            Orson menggunakan model frontier untuk penalaran, menghubungkan catatan kualitas air, sampling, dan pakan terbaru agar Anda tahu apa yang perlu diperiksa lebih lanjut.
           </p>
         </div>
       </section>

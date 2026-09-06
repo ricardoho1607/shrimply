@@ -1,0 +1,256 @@
+{
+  "start": "Start for free",
+  "explore": "Explore the platform",
+  "eyebrow": "A CLEARER VIEW BELOW THE SURFACE",
+  "headline": "Know your ponds.",
+  "headlineAccent": "Grow with clarity.",
+  "intro": "From the first feeding to the final harvest. Bring your ponds, people, and numbers together in one connected farm platform.",
+  "notes": [
+    "In the field",
+    "In the office",
+    "In sync"
+  ],
+  "pond": "Pond",
+  "day": "Day",
+  "activeCycle": "ACTIVE CYCLE",
+  "farmFocus": "YOUR FARM, IN FOCUS",
+  "example": "EXAMPLE DATA",
+  "weight": "Mean body weight",
+  "fcr": "Feed conversion",
+  "survival": "Survival",
+  "biomass": "Biomass",
+  "pondFocus": [
+    "Every record. A clearer picture.",
+    "Different ponds. One connected farm.",
+    "The whole cycle. In perspective."
+  ],
+  "heroOrson": "Orson connects the dots across your ponds.",
+  "scroll": "Scroll to move through your farm",
+  "scrollEnd": "Keep scrolling to explore Shrimply",
+  "journeyLabel": "Explore three ponds through an underwater journey",
+  "jumpLabel": "Jump to a pond",
+  "waterLabel": "Light blue underwater waves flow toward you as you scroll through three ponds.",
+  "foundationLabel": "ONE FARM. ONE CONNECTED PICTURE.",
+  "foundation": [
+    "Pond to harvest",
+    "Offline-ready field work",
+    "Insights with Orson AI"
+  ],
+  "platformEyebrow": "YOUR FARM, CONNECTED",
+  "platformTitle": "Less scattered records.",
+  "platformAccent": "More informed decisions.",
+  "platformIntro": "Give every feeding, water check, and sampling a place in the bigger picture. Explore what Shrimply brings together.",
+  "features": [
+    {
+      "id": "growth",
+      "label": "Growth & sampling",
+      "number": "01",
+      "title": "See how your crop is really growing.",
+      "description": "Turn sampling records into a clearer view of average weight, daily growth, survival, and biomass. Keep every cycle in perspective, right through harvest.",
+      "points": [
+        "Follow growth across the whole cycle",
+        "Connect sampling, mortality, and harvest records"
+      ],
+      "path": "growth-sampling",
+      "panel": "Pond A1 · Growth overview",
+      "metric": "18.5",
+      "unit": "g",
+      "metricLabel": "Mean body weight",
+      "secondary": "0.29 g/day",
+      "secondaryLabel": "Average daily growth",
+      "chartLabel": "MEAN BODY WEIGHT",
+      "values": [
+        "9.2",
+        "11.0",
+        "13.2",
+        "15.6",
+        "18.5"
+      ],
+      "dates": [
+        "Day 33",
+        "Day 41",
+        "Day 49",
+        "Day 57",
+        "Day 65"
+      ]
+    },
+    {
+      "id": "water",
+      "label": "Water quality",
+      "number": "02",
+      "title": "See the trend behind every reading.",
+      "description": "Keep dissolved oxygen, pH, temperature, and other water records together. Follow changes over time and give your team the context for the next pond check.",
+      "points": [
+        "Review water-quality history for each pond",
+        "Connect changing conditions with growth records"
+      ],
+      "path": "water-quality-monitoring",
+      "panel": "Pond A1 · Water quality",
+      "metric": "5.2",
+      "unit": "mg/L",
+      "metricLabel": "Dissolved oxygen",
+      "secondary": "7.8",
+      "secondaryLabel": "Latest pH reading",
+      "chartLabel": "MORNING DISSOLVED OXYGEN",
+      "values": [
+        "5.8",
+        "5.6",
+        "5.3",
+        "5.5",
+        "5.2"
+      ],
+      "dates": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri"
+      ]
+    },
+    {
+      "id": "feed",
+      "label": "Feed & inventory",
+      "number": "03",
+      "title": "Know what goes in. Know what’s left.",
+      "description": "Connect daily feeding with feed stock. Actual feeding deducts inventory, while sampling records stay focused on crop performance and feed-conversion tracking.",
+      "points": [
+        "Track daily feed totals by pond",
+        "Keep stock levels and reorder thresholds in view"
+      ],
+      "path": "feed-inventory",
+      "panel": "Pond A1 · Feeding overview",
+      "metric": "38",
+      "unit": "kg",
+      "metricLabel": "Feed logged today",
+      "secondary": "760 kg",
+      "secondaryLabel": "Feed stock remaining",
+      "chartLabel": "DAILY FEED LOGGED",
+      "values": [
+        "32",
+        "34",
+        "34",
+        "36",
+        "38"
+      ],
+      "dates": [
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri"
+      ]
+    },
+    {
+      "id": "finance",
+      "label": "Finance & reports",
+      "number": "04",
+      "title": "Bring the business side into focus.",
+      "description": "Connect farm spending and harvest income. Review cash flow, production costs, profit and loss, and assumption-based projections in dedicated reports.",
+      "points": [
+        "Keep cash flow separate from profitability",
+        "Share clear PDF reports with your team"
+      ],
+      "path": "shrimp-farm-finance",
+      "panel": "Cycle 02 · Cost breakdown",
+      "metric": "62",
+      "unit": "%",
+      "metricLabel": "Feed share of recorded costs",
+      "secondary": "5 reports",
+      "secondaryLabel": "Financial & production views",
+      "chartLabel": "RECORDED COST DISTRIBUTION",
+      "values": [
+        "62",
+        "18",
+        "10",
+        "6",
+        "4"
+      ],
+      "dates": [
+        "Feed",
+        "Seed",
+        "Energy",
+        "Labor",
+        "Other"
+      ]
+    }
+  ],
+  "connectedFarm": "THE CONNECTED FARM",
+  "featureExplore": "Explore",
+  "exampleShort": "Example",
+  "recordsConnected": "Your records, connected",
+  "thisCycle": "THIS CYCLE",
+  "lastDays": "LAST 5 DAYS",
+  "panelFooter": "A clearer view, one record at a time.",
+  "sampleCaption": "Illustrative view · Sample data, not a live farm",
+  "capabilities": [
+    {
+      "title": "Ponds & harvests",
+      "body": "Follow each crop from stocking to partial and final harvest.",
+      "cta": "Follow the cycle",
+      "path": "/features/shrimp-harvest-tracking"
+    },
+    {
+      "title": "Disease awareness",
+      "body": "Keep regional disease reports and farm risk signals in view.",
+      "cta": "Stay informed",
+      "path": "/features/disease-alerts"
+    },
+    {
+      "title": "Assets & maintenance",
+      "body": "Track equipment, service history, and movement with QR codes.",
+      "cta": "Keep work moving",
+      "path": "/how-it-works"
+    },
+    {
+      "title": "One connected team",
+      "body": "Give owners, managers, and technicians the right access.",
+      "cta": "Work together",
+      "path": "/how-it-works"
+    }
+  ],
+  "orsonEyebrow": "MEET ORSON AI",
+  "orsonTitle": "Your records have a story.",
+  "orsonAccent": "Orson helps you read it.",
+  "orsonIntro": "A water reading is a moment. Your pond history is the bigger picture. Orson uses a frontier model for reasoning, connecting recent water quality, sampling, and feed records to help you understand what needs a closer look.",
+  "orsonCta": "Get to know Orson",
+  "orsonFootnote": "Grounded in your farm’s recorded history.",
+  "orsonPartner": "Your aquaculture thinking partner",
+  "question": "What should I check before increasing feed in Pond A1?",
+  "connecting": "CONNECTING YOUR RECORDS",
+  "answer": "Your daily feed total has risen over the last five days, while morning oxygen readings have moved lower.",
+  "feedLogged": "Feed logged",
+  "oxygen": "Morning oxygen",
+  "dailyUnit": "kg/day",
+  "advice": "Before the next increase, check feed trays, current oxygen, and the latest biomass estimate. More feed logged does not tell us how much the shrimp ate.",
+  "nextStep": "Next step",
+  "nextAction": "Record a tray check and fresh water readings.",
+  "responseCaption": "Illustrative response using sample pond records.",
+  "workflowEyebrow": "FROM THE POND EDGE TO THE OFFICE",
+  "workflowTitle": "Fits the way",
+  "workflowAccent": "your farm works.",
+  "workflowIntro": "Capture the work where it happens. Bring the same records to the people planning what comes next.",
+  "steps": [
+    {
+      "title": "Record in the field.",
+      "body": "Log feeding, water checks, and sampling on mobile. Work offline and sync when your connection returns.",
+      "tag": "Built for the pond edge"
+    },
+    {
+      "title": "See the whole farm.",
+      "body": "Review pond histories, inventory, and team activity from the web. Keep everyone working from connected records.",
+      "tag": "A shared view in the office"
+    },
+    {
+      "title": "Plan with perspective.",
+      "body": "Use Orson’s insights and farm reports to review risks, understand costs, and prepare your next move.",
+      "tag": "Context for your next decision"
+    }
+  ],
+  "downloadIntro": "Your farm goes with you.",
+  "download": "Download for Android",
+  "finalEyebrow": "EVERY CYCLE STARTS WITH A CLEARER VIEW",
+  "finalTitle": "Your next harvest.",
+  "finalAccent": "Your bigger picture.",
+  "finalIntro": "Make room for better farm decisions with Shrimply.",
+  "finalNote": "Mobile in the field. Web in the office."
+}

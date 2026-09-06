@@ -154,7 +154,7 @@ export default function SeoLandingPage({
             {intro}
           </p>
           <div className="mobile-cta-row" style={{ display: "flex", gap: "16px", marginTop: "40px" }}>
-            <Link href="/auth/join" prefetch={false} className="btn-primary">Start Free Trial</Link>
+            <Link href="/auth/join" prefetch={false} className="btn-primary">Start for free</Link>
             <Link href="/" className="btn-outline">Back to Home</Link>
           </div>
         </div>

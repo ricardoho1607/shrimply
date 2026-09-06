@@ -40,7 +40,7 @@ export default function HowItWorksPage() {
             Beyond Data.<br /><em>Biological Intelligence.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.7s', maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>
-            Learn how Orson turns messy pond data into biological risk detection, feed intelligence, and a practical 72-hour outlook.
+            Orson uses a frontier model for reasoning, connecting your recent water quality, sampling, and feed records to help you understand what needs a closer look.
           </p>
         </div>
       </section>

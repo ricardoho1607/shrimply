@@ -1,5 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import "@/components/landing/public-theme.css";
+import "@/components/landing/ocean-home.css";
+import PublicTheme from "@/components/landing/PublicTheme";
 import { SITE_CONFIG } from "@/config/site";
 import MetaPixel from "@/components/MetaPixel";
 import PortalProviders from "@/components/PortalProviders";
@@ -94,7 +97,7 @@ export default function RootLayout({
       <body>
         <PortalProviders>
           <div className="main-container">
-            {children}
+            <PublicTheme>{children}</PublicTheme>
           </div>
         </PortalProviders>
         <MetaPixel />

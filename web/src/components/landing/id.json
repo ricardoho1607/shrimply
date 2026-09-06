@@ -1,0 +1,256 @@
+{
+  "start": "Mulai gratis",
+  "explore": "Jelajahi platform",
+  "eyebrow": "PANDANGAN LEBIH JELAS DI BAWAH PERMUKAAN",
+  "headline": "Kenali tambak Anda.",
+  "headlineAccent": "Tumbuh dengan kepastian.",
+  "intro": "Dari pemberian pakan pertama hingga panen terakhir. Satukan tambak, tim, dan angka dalam satu platform pengelolaan tambak.",
+  "notes": [
+    "Di lapangan",
+    "Di kantor",
+    "Tersinkron"
+  ],
+  "pond": "Tambak",
+  "day": "Hari",
+  "activeCycle": "SIKLUS AKTIF",
+  "farmFocus": "TAMBAK ANDA, LEBIH JELAS",
+  "example": "DATA CONTOH",
+  "weight": "Berat rata-rata",
+  "fcr": "Konversi pakan",
+  "survival": "Kelangsungan hidup",
+  "biomass": "Biomassa",
+  "pondFocus": [
+    "Setiap catatan. Gambaran lebih jelas.",
+    "Berbagai kolam. Satu tambak terhubung.",
+    "Seluruh siklus dalam satu pandangan."
+  ],
+  "heroOrson": "Orson menghubungkan informasi antarkolam Anda.",
+  "scroll": "Gulir untuk menjelajahi tambak Anda",
+  "scrollEnd": "Terus gulir untuk menjelajahi Shrimply",
+  "journeyLabel": "Jelajahi tiga kolam melalui perjalanan bawah air",
+  "jumpLabel": "Pilih kolam",
+  "waterLabel": "Gelombang bawah air biru muda mengalir mendekat saat Anda menggulir melalui tiga kolam.",
+  "foundationLabel": "SATU TAMBAK. SATU GAMBARAN UTUH.",
+  "foundation": [
+    "Dari tebar hingga panen",
+    "Kerja lapangan siap offline",
+    "Wawasan bersama Orson AI"
+  ],
+  "platformEyebrow": "TAMBAK ANDA, TERHUBUNG",
+  "platformTitle": "Catatan lebih tertata.",
+  "platformAccent": "Keputusan lebih terarah.",
+  "platformIntro": "Hubungkan setiap pemberian pakan, pemeriksaan air, dan sampling. Lihat bagaimana Shrimply menyatukan semuanya.",
+  "features": [
+    {
+      "id": "growth",
+      "label": "Pertumbuhan & sampling",
+      "number": "01",
+      "title": "Lihat perkembangan udang Anda.",
+      "description": "Ubah catatan sampling menjadi gambaran berat rata-rata, pertumbuhan harian, kelangsungan hidup, dan biomassa. Ikuti setiap siklus hingga panen.",
+      "points": [
+        "Pantau pertumbuhan sepanjang siklus",
+        "Hubungkan sampling, kematian, dan panen"
+      ],
+      "path": "growth-sampling",
+      "panel": "Tambak A1 · Pertumbuhan",
+      "metric": "18.5",
+      "unit": "g",
+      "metricLabel": "Berat rata-rata",
+      "secondary": "0.29 g/hari",
+      "secondaryLabel": "Pertumbuhan harian rata-rata",
+      "chartLabel": "BERAT RATA-RATA",
+      "values": [
+        "9.2",
+        "11.0",
+        "13.2",
+        "15.6",
+        "18.5"
+      ],
+      "dates": [
+        "Hari 33",
+        "Hari 41",
+        "Hari 49",
+        "Hari 57",
+        "Hari 65"
+      ]
+    },
+    {
+      "id": "water",
+      "label": "Kualitas air",
+      "number": "02",
+      "title": "Pahami tren di balik setiap pengukuran.",
+      "description": "Satukan catatan oksigen terlarut, pH, suhu, dan parameter air lainnya. Ikuti perubahan dari waktu ke waktu untuk membantu pemeriksaan berikutnya.",
+      "points": [
+        "Tinjau riwayat kualitas air setiap kolam",
+        "Hubungkan perubahan kondisi dengan pertumbuhan"
+      ],
+      "path": "water-quality-monitoring",
+      "panel": "Tambak A1 · Kualitas air",
+      "metric": "5.2",
+      "unit": "mg/L",
+      "metricLabel": "Oksigen terlarut",
+      "secondary": "7.8",
+      "secondaryLabel": "Pengukuran pH terakhir",
+      "chartLabel": "OKSIGEN TERLARUT PAGI",
+      "values": [
+        "5.8",
+        "5.6",
+        "5.3",
+        "5.5",
+        "5.2"
+      ],
+      "dates": [
+        "Sen",
+        "Sel",
+        "Rab",
+        "Kam",
+        "Jum"
+      ]
+    },
+    {
+      "id": "feed",
+      "label": "Pakan & persediaan",
+      "number": "03",
+      "title": "Ketahui yang masuk dan yang tersisa.",
+      "description": "Hubungkan pemberian pakan harian dengan stok. Pemberian pakan mengurangi persediaan, sedangkan sampling tetap berfokus pada kinerja udang dan konversi pakan.",
+      "points": [
+        "Pantau total pakan harian per kolam",
+        "Lihat stok dan batas pemesanan ulang"
+      ],
+      "path": "feed-inventory",
+      "panel": "Tambak A1 · Pakan",
+      "metric": "38",
+      "unit": "kg",
+      "metricLabel": "Pakan tercatat hari ini",
+      "secondary": "760 kg",
+      "secondaryLabel": "Sisa stok pakan",
+      "chartLabel": "PAKAN HARIAN TERCATAT",
+      "values": [
+        "32",
+        "34",
+        "34",
+        "36",
+        "38"
+      ],
+      "dates": [
+        "Sen",
+        "Sel",
+        "Rab",
+        "Kam",
+        "Jum"
+      ]
+    },
+    {
+      "id": "finance",
+      "label": "Keuangan & laporan",
+      "number": "04",
+      "title": "Pahami sisi bisnis tambak Anda.",
+      "description": "Hubungkan pengeluaran tambak dan pendapatan panen. Tinjau arus kas, biaya produksi, laba rugi, dan proyeksi berbasis asumsi melalui laporan khusus.",
+      "points": [
+        "Pisahkan arus kas dari profitabilitas",
+        "Bagikan laporan PDF yang jelas kepada tim"
+      ],
+      "path": "shrimp-farm-finance",
+      "panel": "Siklus 02 · Rincian biaya",
+      "metric": "62",
+      "unit": "%",
+      "metricLabel": "Porsi pakan dari biaya tercatat",
+      "secondary": "5 laporan",
+      "secondaryLabel": "Keuangan & produksi",
+      "chartLabel": "DISTRIBUSI BIAYA TERCATAT",
+      "values": [
+        "62",
+        "18",
+        "10",
+        "6",
+        "4"
+      ],
+      "dates": [
+        "Pakan",
+        "Benur",
+        "Energi",
+        "Tenaga",
+        "Lainnya"
+      ]
+    }
+  ],
+  "connectedFarm": "TAMBAK TERHUBUNG",
+  "featureExplore": "Jelajahi",
+  "exampleShort": "Contoh",
+  "recordsConnected": "Catatan Anda, terhubung",
+  "thisCycle": "SIKLUS INI",
+  "lastDays": "5 HARI TERAKHIR",
+  "panelFooter": "Gambaran lebih jelas, satu catatan setiap saat.",
+  "sampleCaption": "Ilustrasi · Data contoh, bukan tambak aktif",
+  "capabilities": [
+    {
+      "title": "Kolam & panen",
+      "body": "Ikuti setiap siklus dari tebar hingga panen parsial dan akhir.",
+      "cta": "Ikuti siklus",
+      "path": "/features/shrimp-harvest-tracking"
+    },
+    {
+      "title": "Kesadaran penyakit",
+      "body": "Pantau laporan penyakit regional dan tanda risiko tambak.",
+      "cta": "Tetap terinformasi",
+      "path": "/features/disease-alerts"
+    },
+    {
+      "title": "Aset & pemeliharaan",
+      "body": "Lacak peralatan, riwayat servis, dan perpindahan dengan kode QR.",
+      "cta": "Jaga kelancaran kerja",
+      "path": "/how-it-works"
+    },
+    {
+      "title": "Satu tim terhubung",
+      "body": "Berikan akses yang tepat kepada pemilik, manajer, dan teknisi.",
+      "cta": "Bekerja bersama",
+      "path": "/how-it-works"
+    }
+  ],
+  "orsonEyebrow": "KENALI ORSON AI",
+  "orsonTitle": "Catatan Anda punya cerita.",
+  "orsonAccent": "Orson membantu membacanya.",
+  "orsonIntro": "Satu hasil pemeriksaan air hanyalah sesaat. Riwayat kolam memberi gambaran utuh. Orson menggunakan model frontier untuk penalaran, menghubungkan catatan kualitas air, sampling, dan pakan terbaru agar Anda tahu apa yang perlu diperiksa lebih lanjut.",
+  "orsonCta": "Kenali Orson lebih dekat",
+  "orsonFootnote": "Berdasarkan riwayat yang dicatat tambak Anda.",
+  "orsonPartner": "Mitra berpikir untuk akuakultur Anda",
+  "question": "Apa yang perlu saya periksa sebelum menambah pakan di Tambak A1?",
+  "connecting": "MENGHUBUNGKAN CATATAN ANDA",
+  "answer": "Total pakan harian meningkat selama lima hari terakhir, sementara kadar oksigen pagi menurun.",
+  "feedLogged": "Pakan tercatat",
+  "oxygen": "Oksigen pagi",
+  "dailyUnit": "kg/hari",
+  "advice": "Sebelum menambah pakan, periksa anco, oksigen terkini, dan estimasi biomassa terbaru. Peningkatan pakan tercatat tidak menunjukkan berapa banyak yang dimakan udang.",
+  "nextStep": "Langkah berikutnya",
+  "nextAction": "Catat pemeriksaan anco dan hasil pengukuran air terbaru.",
+  "responseCaption": "Ilustrasi jawaban menggunakan contoh catatan kolam.",
+  "workflowEyebrow": "DARI TEPI TAMBAK KE KANTOR",
+  "workflowTitle": "Mengikuti cara",
+  "workflowAccent": "tambak Anda bekerja.",
+  "workflowIntro": "Catat pekerjaan di tempatnya. Bagikan catatan yang sama kepada tim yang merencanakan langkah berikutnya.",
+  "steps": [
+    {
+      "title": "Catat di lapangan.",
+      "body": "Catat pakan, pemeriksaan air, dan sampling lewat ponsel. Bekerja offline dan sinkronkan saat terhubung kembali.",
+      "tag": "Dibuat untuk tepi tambak"
+    },
+    {
+      "title": "Lihat seluruh tambak.",
+      "body": "Tinjau riwayat kolam, persediaan, dan aktivitas tim lewat web. Bekerja dengan catatan yang terhubung.",
+      "tag": "Pandangan bersama di kantor"
+    },
+    {
+      "title": "Rencanakan dengan konteks.",
+      "body": "Gunakan wawasan Orson dan laporan tambak untuk meninjau risiko, memahami biaya, dan menyiapkan langkah berikutnya.",
+      "tag": "Konteks untuk keputusan berikutnya"
+    }
+  ],
+  "downloadIntro": "Tambak Anda selalu bersama Anda.",
+  "download": "Unduh untuk Android",
+  "finalEyebrow": "SETIAP SIKLUS DIMULAI DENGAN GAMBARAN LEBIH JELAS",
+  "finalTitle": "Panen berikutnya.",
+  "finalAccent": "Gambaran lebih utuh.",
+  "finalIntro": "Buat keputusan tambak yang lebih terarah bersama Shrimply.",
+  "finalNote": "Ponsel di lapangan. Web di kantor."
+}

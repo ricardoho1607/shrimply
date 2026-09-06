@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
 import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
@@ -153,7 +152,7 @@ export default function Navbar() {
           Sign In
         </Link>
         <Link href="/auth/join" prefetch={false} className="btn-primary get-started-link">
-          Get Started
+          Start for free
         </Link>
       </div>
 
@@ -166,7 +165,7 @@ export default function Navbar() {
         aria-controls="mobile-navigation"
         onClick={() => setMenuOpen(current => !current)}
       >
-        {menuOpen ? <X size={21} strokeWidth={1.8} /> : <Menu size={22} strokeWidth={1.8} />}
+        {menuOpen ? 'Close' : 'Menu'}
       </button>
 
       <button
@@ -189,7 +188,7 @@ export default function Navbar() {
       >
         <div className="drawer-header">
           <button className="drawer-close" type="button" aria-label="Close navigation menu" onClick={closeMenu}>
-            <X size={20} strokeWidth={1.8} />
+            Close
           </button>
         </div>
 
@@ -269,7 +268,7 @@ export default function Navbar() {
             }}
             onClick={closeMenu}
           >
-            Get Started
+            Start for free
           </Link>
         </div>
       </aside>

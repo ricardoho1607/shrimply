@@ -40,7 +40,7 @@ export default function OrsonPageVI() {
             Vượt xa dữ liệu thuần túy.<br /><em>Trí tuệ Sinh học Thực thụ.</em>
           </h1>
           <p className="animate-hero" style={{ animationDelay: '0.7s', maxWidth: '600px', margin: '0 auto', fontSize: '1.1rem' }}>
-            Tìm hiểu cách Orson biến dữ liệu ao nuôi phức tạp thành hệ thống phát hiện rủi ro sinh học, phân tích sức ăn và đưa ra dự báo 72 giờ thực tiễn.
+            Orson sử dụng mô hình frontier để suy luận, kết nối dữ liệu chất lượng nước, lấy mẫu và thức ăn gần đây để giúp bạn nhận ra điều cần kiểm tra kỹ hơn.
           </p>
         </div>
       </section>

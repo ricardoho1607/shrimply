@@ -3,7 +3,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Menu, X } from 'lucide-react';
 import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
@@ -165,7 +164,7 @@ export default function NavbarTH() {
         aria-controls="mobile-navigation"
         onClick={() => setMenuOpen(current => !current)}
       >
-        {menuOpen ? <X size={21} strokeWidth={1.8} /> : <Menu size={22} strokeWidth={1.8} />}
+        {menuOpen ? 'ปิด' : 'เมนู'}
       </button>
 
       <button
@@ -188,7 +187,7 @@ export default function NavbarTH() {
       >
         <div className="drawer-header">
           <button className="drawer-close" type="button" aria-label="ปิดเมนู" onClick={closeMenu}>
-            <X size={20} strokeWidth={1.8} />
+            ปิด
           </button>
         </div>
 
