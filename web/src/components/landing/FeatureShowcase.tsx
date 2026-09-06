@@ -1,38 +1,82 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { LandingCopy } from './copy';
 import { landingPath, type LandingLocale } from './publicRoutes';
 
 export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy; locale: LandingLocale }) {
   const [active, setActive] = useState(0);
-  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
-  const navigate = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
-    const last = c.features.length - 1;
-    const next = event.key === 'ArrowRight' ? (index + 1) % c.features.length
-      : event.key === 'ArrowLeft' ? (index + last) % c.features.length
-      : event.key === 'Home' ? 0 : event.key === 'End' ? last : null;
-    if (next === null) return;
-    event.preventDefault();
-    setActive(next);
-    tabs.current[next]?.focus();
-  };
+  const showcaseRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const panelsRef = useRef<(HTMLDivElement | null)[]>([]);
 
-  return <div className="showcase">
-    <div role="tablist" className="feature-tabs" aria-label={c.platformEyebrow}>
-      {c.features.map((feature, index) => <button key={feature.id} type="button" role="tab"
-        ref={element => { tabs.current[index] = element; }}
-        id={`feature-tab-${feature.id}`} aria-controls={`feature-panel-${feature.id}`}
-        aria-selected={active === index} tabIndex={active === index ? 0 : -1}
-        className="feature-tab" onClick={() => setActive(index)} onKeyDown={event => navigate(event, index)}>
-        {feature.label}
-      </button>)}
-    </div>
-    {c.features.map((f, index) => <div key={f.id} role="tabpanel" id={`feature-panel-${f.id}`}
-      aria-labelledby={`feature-tab-${f.id}`} hidden={index !== active} tabIndex={0} className="feature-content">
+  useEffect(() => {
+    const showcase = showcaseRef.current;
+    const stage = stageRef.current;
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const mobile = window.matchMedia('(max-width: 800px)');
+    if (!showcase || !stage) return;
+
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      if (mobile.matches) {
+        const height = Math.max(...panelsRef.current.map(panel => panel?.scrollHeight ?? 0));
+        stage.style.setProperty('--mobile-card-height', `${height}px`);
+      }
+      const distance = Math.max(1, showcase.offsetHeight - stage.offsetHeight);
+      const progress = Math.min(1, Math.max(0, -showcase.getBoundingClientRect().top / distance));
+      const travel = progress * Math.max(0, c.features.length - 1);
+      const selected = Math.round(travel);
+
+      setActive(current => current === selected ? current : selected);
+      stage.style.setProperty('--feature-progress', `${progress * 100}%`);
+
+      panelsRef.current.forEach((panel, index) => {
+        if (!panel) return;
+        const delta = index - selected;
+        const isActive = index === selected;
+
+        panel.style.opacity = isActive ? '1' : '0';
+        panel.style.visibility = isActive ? 'visible' : 'hidden';
+        panel.style.transform = reducedMotion.matches
+          ? 'none'
+          : `translate3d(0, ${delta * 32}px, 0) scale(${1 - Math.min(Math.abs(delta), 1) * 0.015})`;
+        panel.style.zIndex = isActive ? '1' : '0';
+      });
+    };
+
+    const scheduleUpdate = () => {
+      if (!frame) frame = window.requestAnimationFrame(update);
+    };
+    const resizeObserver = new ResizeObserver(scheduleUpdate);
+
+    resizeObserver.observe(showcase);
+    resizeObserver.observe(stage);
+    panelsRef.current.forEach(panel => { if (panel) resizeObserver.observe(panel); });
+    window.addEventListener('scroll', scheduleUpdate, { passive: true });
+    window.addEventListener('resize', scheduleUpdate);
+    reducedMotion.addEventListener('change', scheduleUpdate);
+    update();
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
+      window.removeEventListener('scroll', scheduleUpdate);
+      window.removeEventListener('resize', scheduleUpdate);
+      reducedMotion.removeEventListener('change', scheduleUpdate);
+    };
+  }, [c.features]);
+
+  return <div className="showcase" ref={showcaseRef}>
+    <div className="feature-scroll-stage" ref={stageRef}>
+      <div className="feature-panels">
+        {c.features.map((f, index) => <div key={f.id} id={`feature-panel-${f.id}`}
+      ref={element => { panelsRef.current[index] = element; }} aria-hidden={active !== index}
+      className="feature-content" style={{ opacity: index === 0 ? 1 : 0, visibility: index === 0 ? 'visible' : 'hidden' }}>
       <div className="feature-copy">
-        <span className="feature-number">{f.number} / {c.connectedFarm}</span>
+        <span className="feature-number">{f.number} / {f.label}</span>
         <h3>{f.title}</h3><p>{f.description}</p><ul>{f.points.map(point => <li key={point}>{point}</li>)}</ul>
         <Link className="text-link" href={landingPath(locale, `/features/${f.path}`)}>{c.featureExplore} {f.label}</Link>
       </div>
@@ -48,5 +92,8 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
         </div><div className="panel-footer">{c.panelFooter}</div>
       </div><span className="demo-caption">{c.sampleCaption}</span></div>
     </div>)}
+      </div>
+      <div className="feature-scroll-progress" aria-hidden="true"><span /></div>
+    </div>
   </div>;
 }

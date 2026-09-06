@@ -59,3 +59,13 @@ test('theme styles cannot select signed-in application elements', () => {
     });
   }
 });
+
+test('feature showcase advances with page scroll and has no clickable menu tabs', () => {
+  const showcase = fs.readFileSync(path.join(__dirname, 'FeatureShowcase.tsx'), 'utf8');
+
+  assert.match(showcase, /className="feature-scroll-stage"/);
+  assert.match(showcase, /addEventListener\('scroll'/);
+  assert.doesNotMatch(showcase, /feature-scroll-menu/);
+  assert.doesNotMatch(showcase, /role="tab(?:list)?"/);
+  assert.doesNotMatch(showcase, /className="feature-tab"/);
+});

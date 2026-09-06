@@ -1011,7 +1011,26 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 90px;
-  align-items: center
+  align-items: start
+}
+
+.ocean-home .conversation-journey {
+  min-width: 0;
+  height: 180svh;
+}
+
+.ocean-home .conversation-journey .conversation {
+  position: sticky;
+  top: 24px;
+  overflow: hidden;
+}
+
+.ocean-home .conversation-journey .conversation-body {
+  height: min(440px, calc(100svh - 160px));
+  max-height: min(440px, calc(100svh - 160px));
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3282b8 #e4edf3;
 }
 
 .ocean-home .orson-copy .eyebrow {
@@ -2445,4 +2464,162 @@
   .ocean-home .journey-metrics dt { max-width: none; font-size: 11px; line-height: 1.3; margin-bottom: 4px; }
   .ocean-home .journey-metrics dd { line-height: 1.2; }
   .ocean-home .journey-copy h1 { font-size: clamp(38px, 12vw, 47px); }
+}
+
+.ocean-home .showcase {
+  position: relative;
+  height: 400svh;
+}
+
+.ocean-home .feature-scroll-stage {
+  --feature-progress: 0%;
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  min-height: 680px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.ocean-home .feature-panels {
+  position: relative;
+  width: 100%;
+  height: min(620px, 100svh);
+  min-height: 540px;
+}
+
+.ocean-home .feature-panels .feature-content {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  pointer-events: none;
+  transition: opacity .35s ease, transform .45s cubic-bezier(.22, 1, .36, 1);
+  will-change: opacity, transform;
+}
+
+.ocean-home .feature-panels .feature-content[aria-hidden='false'] {
+  pointer-events: auto;
+}
+
+.ocean-home .feature-scroll-progress {
+  position: absolute;
+  right: 0;
+  bottom: 18px;
+  left: 0;
+  height: 1px;
+  overflow: hidden;
+  background: #0f4c7515;
+}
+
+.ocean-home .feature-scroll-progress > span {
+  display: block;
+  width: var(--feature-progress);
+  height: 100%;
+  background: #3282b8;
+}
+
+@media (max-width: 800px) {
+  .ocean-home .showcase {
+    height: 400svh;
+  }
+
+  .ocean-home .feature-scroll-stage {
+    position: sticky;
+    top: min(0px, calc(100svh - var(--mobile-card-height, 100svh) - 24px));
+    height: max(100svh, calc(var(--mobile-card-height, 0px) + 24px));
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .ocean-home .feature-panels {
+    display: block;
+    overflow: visible;
+    height: var(--mobile-card-height, 700px);
+    min-height: 0;
+  }
+
+  .ocean-home .feature-panels .feature-content {
+    position: absolute;
+    inset: 0 0 auto;
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 12px;
+    padding: 14px 12px;
+    border: 1px solid #dce5ea;
+    border-radius: 16px;
+    background: #f0f6fa;
+  }
+
+  .ocean-home .feature-panels .feature-content + .feature-content {
+    border-top: 1px solid #dce5ea;
+  }
+
+  .ocean-home .feature-panels .feature-copy h3 {
+    font-size: 25px;
+    line-height: 1.2;
+    margin: 10px 0;
+  }
+
+  .ocean-home .feature-panels .feature-copy p {
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .ocean-home .feature-panels .feature-copy ul {
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .ocean-home .feature-panels .product-stage {
+    min-width: 0;
+    padding: 0;
+    background: none;
+  }
+
+  .ocean-home .feature-panels .product-panel {
+    padding: 14px;
+  }
+
+  .ocean-home .feature-panels .panel-metrics {
+    gap: 12px;
+    padding: 12px 0;
+  }
+
+  .ocean-home .feature-panels .panel-heading {
+    padding-bottom: 10px;
+  }
+
+  .ocean-home .feature-panels .panel-footer {
+    padding-top: 8px;
+    margin-top: 8px;
+  }
+
+  .ocean-home .feature-panels .panel-metrics strong {
+    font-size: 28px;
+  }
+
+  .ocean-home .feature-panels .panel-metrics b {
+    font-size: 17px;
+  }
+
+  .ocean-home .feature-panels .feature-copy p {
+    margin-bottom: 10px;
+  }
+
+  .ocean-home .feature-panels .feature-copy ul {
+    margin-bottom: 10px;
+  }
+
+  .ocean-home .feature-scroll-progress {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ocean-home .feature-panels .feature-content {
+    transition: none;
+  }
 }
