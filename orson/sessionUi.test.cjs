@@ -1,8 +1,7 @@
-require('sucrase/register/ts');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const { transform } = require('sucrase');
+const ts = require('typescript');
 const { createRequire } = require('node:module');
 const path = require('node:path');
 
@@ -17,6 +16,10 @@ const setup = () => {
   const timers = new Set();
   const storage = new Map();
   const auth = { currentUser: null };
+  class OrsonSessionChangedError extends Error {}
+  class OrsonIncompleteResponseError extends Error {
+    constructor(partialText, finishReason) { super('Orson response was incomplete.'); this.partialText = partialText; this.finishReason = finishReason; }
+  }
   const react = {
     createElement: (type, props, ...children) => ({ type, props: { ...props, children } }),
     useState: initial => {
@@ -37,7 +40,12 @@ const setup = () => {
   const source = process.env.SHRIMPLY_QA_BASELINE
     ? require('node:child_process').execFileSync('git', ['show', 'HEAD:web/src/app/dashboard/ai/page.tsx'], { encoding: 'utf8' })
     : fs.readFileSync(filename, 'utf8');
-  const compiled = transform(source, { transforms: ['typescript', 'jsx', 'imports'], jsxRuntime: 'classic' }).code;
+  const compiled = ts.transpileModule(source, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS,
+    jsx: ts.JsxEmit.React,
+    esModuleInterop: true,
+    target: ts.ScriptTarget.ES2020,
+  } }).outputText;
   const mockedRequire = name => {
     if (name === 'react') return react;
     if (name === 'lucide-react') return new Proxy({}, { get: (_, key) => String(key) });
@@ -53,7 +61,9 @@ const setup = () => {
       loading: false, clearChat() {}, error: null,
       sendMessage: (question, ponds, options) => new Promise((resolve, reject) => requests.push({ question, ponds, options, resolve, reject })),
     }) };
-    if (name.endsWith('/permissions')) return { hasFarmPermission: () => true };
+    if (name.endsWith('/orson/session')) return { OrsonSessionChangedError, orsonIdentityKey: (uid, companyId) => uid && companyId ? `${uid}:${companyId}` : null };
+    if (name.endsWith('/orson/responseCompletion')) return { OrsonIncompleteResponseError };
+    if (name === '@/hooks/useFarmPermissions') return { useFarmPermissions: () => () => true };
     return localRequire(name);
   };
   const loaded = { exports: {} };
@@ -93,7 +103,7 @@ const setup = () => {
     render();
     await Promise.resolve();
   };
-  return { storage, signIn, render, send, requests, text, elements, reload: () => { cleanup(instance); instance = null; signIn(authState.user.uid, authState.company.id); }, flush: () => { [...timers].forEach(callback => callback()); timers.clear(); } };
+  return { storage, signIn, render, send, requests, text, elements, OrsonIncompleteResponseError, reload: () => { cleanup(instance); instance = null; signIn(authState.user.uid, authState.company.id); }, flush: () => { [...timers].forEach(callback => callback()); timers.clear(); } };
 };
 
 test('legacy unscoped chat is never displayed or sent by a new account', async () => {
@@ -126,6 +136,23 @@ test('account/company changes cancel delayed saves and ignore in-flight replies'
   }
 });
 
+test('a successful delayed final chunk never shows an interruption state', async () => {
+  const ui = setup();
+  ui.signIn('A', 'company-A');
+  await ui.send('What does nitrite mean?');
+  const request = ui.requests[0];
+  request.options.onPartialResponse('Orson is still completing this answer');
+  ui.render();
+  assert.ok(ui.text().includes('Orson is still completing this answer'));
+  assert.ok(!ui.text().includes('Response interrupted.'));
+  assert.equal(ui.elements().filter(node => node.type === 'button' && node.props.children.includes('Retry')).length, 0);
+  request.resolve('Orson completed the answer.');
+  await Promise.resolve();
+  ui.render();
+  assert.ok(ui.text().includes('Orson completed the answer.'));
+  assert.ok(!ui.text().includes('Response interrupted.'));
+});
+
 
 test('refresh restores only scoped history and retry replaces an incomplete bubble', async () => {
   const ui = setup();
@@ -133,7 +160,7 @@ test('refresh restores only scoped history and retry replaces an incomplete bubb
   await ui.send('How should I feed?');
   const request = ui.requests[0];
   request.options.onPartialResponse('Incomplete answer');
-  request.reject(new (require('./responseCompletion.ts').OrsonIncompleteResponseError)('Incomplete answer', 'MAX_TOKENS'));
+  request.reject(new ui.OrsonIncompleteResponseError('Incomplete answer', 'MAX_TOKENS'));
   await Promise.resolve();
   ui.render(); ui.flush(); ui.reload();
   assert.ok(ui.text().includes('Incomplete answer'));

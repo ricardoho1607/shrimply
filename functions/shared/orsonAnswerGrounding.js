@@ -8,9 +8,58 @@ const ISSUE_CODES = new Set([
   'unsupported_sampling_cause', 'unsupported_health_cause',
   'unsupported_fcr_explanation',
   'unsupported_cause', 'invented_fact', 'missing_as_normal', 'feed_as_consumption', 'date_mismatch',
-  'unverified_nitrogen_basis', 'unmatched_calculation_basis', 'scope_or_language', 'unsupported_action', 'answer_structure',
+  'unverified_nitrogen_basis', 'ambiguous_nitrogen_threshold', 'missing_nitrogen_context',
+  'conflicting_nitrogen_thresholds', 'mixed_nitrogen_threshold_purposes',
+  'unmatched_calculation_basis', 'scope_or_language', 'unsupported_action', 'answer_structure',
 ]);
 const asArray = value => Array.isArray(value) ? value : [];
+
+const isNitrogenThresholdGuidance = question => (
+  /\b(?:nitrite|nitrate|nitrit|nitrat|no2|no3)\b/i.test(String(question))
+  && /\b(?:best|safe|target|range|level|limit|threshold|risk|toxic|lethal|worry|recommended|aman|target|rentang|kadar|batas|risiko|toksik|mematikan|khawatir|rekomendasi)\b/i.test(String(question))
+);
+
+const nitrogenGuidanceIssues = (text, question) => {
+  if (!isNitrogenThresholdGuidance(question)) return [];
+  const issues = new Set();
+  const plain = String(text).replace(/[*_`]/g, '').replace(/[—–]/g, '-');
+  const thresholdLines = plain.split(/\n|(?<=[.!?])\s+/).filter(line => (
+    /\d+(?:[.,]\d+)?\s*mg\s*\/\s*l\b/i.test(line)
+    && /\b(?:nitrite|nitrate|nitrit|nitrat|no2|no3|target|safe|caution|warning|action|toxic|lethal|lc\d+|batas|aman|waspada|tindakan|toksik|mematikan)\b/i.test(line)
+  ));
+  if (!thresholdLines.length) return [];
+
+  const firstThreshold = plain.search(/\d+(?:[.,]\d+)?\s*mg\s*\/\s*l\b/i);
+  const contextBeforeThreshold = firstThreshold >= 0 ? plain.slice(0, firstThreshold) : plain;
+  const hasSalinityContext = /\b(?:salinity|salinitas)\b/i.test(contextBeforeThreshold);
+  const hasLifeStageContext = /\b(?:life stage|stage|shrimp size|size|doc|tahap hidup|stadia|umur|ukuran)\b/i.test(contextBeforeThreshold);
+  const hasDurationContext = /\b(?:exposure|duration|time exposed|paparan|durasi|lama paparan)\b/i.test(contextBeforeThreshold);
+  if (!hasSalinityContext || !hasLifeStageContext || !hasDurationContext) issues.add('missing_nitrogen_context');
+
+  const claims = [];
+  for (const line of thresholdLines) {
+    const hasAnalyte = /\b(?:nitrite|nitrate|nitrit|nitrat|no2|no3)\b/i.test(line);
+    const basisMatch = line.match(/\b(?:no2|no3)[-−]?n\b|\b(?:no2|no3)\s+ion\b|\b(?:as|sebagai|basis)\s+(?:n|no2|no3|nitrite|nitrate|nitrit|nitrat)\b|\b(?:nitrite|nitrate)\s+ion\b|\bion\s+(?:nitrit|nitrat)\b/i);
+    const purposeMatch = line.match(/\b(?:operating target|operational target|target operasional|safe|recommended|caution|action|warning|toxicity|toxic|lethal|lc\d+|experimental|study|aman|rekomendasi|waspada|tindakan|peringatan|toksisitas|toksik|mematikan|eksperimental|penelitian)\b/i);
+    if (!hasAnalyte || !basisMatch || !purposeMatch) issues.add('ambiguous_nitrogen_threshold');
+
+    const hasOperatingPurpose = /\b(?:operating target|operational target|target operasional|safe|recommended|caution|action|warning|aman|rekomendasi|waspada|tindakan|peringatan)\b/i.test(line);
+    const hasToxicityPurpose = /\b(?:toxicity|toxic|lethal|lc\d+|experimental|study|toksisitas|toksik|mematikan|eksperimental|penelitian)\b/i.test(line);
+    if (hasOperatingPurpose && hasToxicityPurpose) issues.add('mixed_nitrogen_threshold_purposes');
+
+    const valueMatch = line.match(/(\d+(?:[.,]\d+)?)\s*mg\s*\/\s*l\b/i);
+    if (valueMatch && basisMatch) {
+      const basis = basisMatch[0].toLowerCase().replace(/[−\s]/g, '-');
+      claims.push({ value: Number(valueMatch[1].replace(',', '.')), basis, hasOperatingPurpose, hasToxicityPurpose });
+    }
+  }
+  for (const operating of claims.filter(claim => claim.hasOperatingPurpose)) {
+    if (claims.some(claim => claim.hasToxicityPurpose && claim.basis === operating.basis && claim.value < operating.value)) {
+      issues.add('conflicting_nitrogen_thresholds');
+    }
+  }
+  return [...issues];
+};
 
 // Read only complete context sections before the actual question, including pretty-printed JSON.
 const readSection = (context, label) => {
@@ -75,7 +124,7 @@ const getClaimLimits = (prompt) => {
 };
 
 const findUnsupportedClaims = (text, limits) => {
-  const issues = new Set();
+  const issues = new Set(nitrogenGuidanceIssues(text, limits.question));
   const plain = String(text).replace(/[*_`]/g, '').replace(/^#{1,6}\s*/gm, '').replace(/[—–]/g, '-');
   const sentences = plain.split(/\n|(?<=[.!?])\s+(?=[A-Z])|;\s*|,?\s+(?:but|although|however)\s+/);
   for (const sentence of sentences) {
@@ -147,6 +196,11 @@ const METRIC_LABELS = { adg_interval_change: 'ADG', adg: 'ADG', daily_feed: 'Fee
 const buildFactualFallback = limits => {
   const language = languageFor(limits.question);
   const copy = FALLBACK_COPY[language];
+  if (isNitrogenThresholdGuidance(limits.question)) {
+    return language === 'id'
+      ? 'Saya belum dapat memverifikasi satu batas nitrogen yang aman untuk semua tambak. Pastikan hasil uji menyebut NO2-N atau ion NO2, atau NO3-N atau ion NO3, lalu gunakan panduan setempat yang sesuai dengan salinitas, ukuran udang, dan lama paparan.'
+      : 'I could not verify one nitrogen threshold that is safe for every pond. Confirm whether the test reports NO2-N or NO2 ion, or NO3-N or NO3 ion, then use local guidance for the pond salinity, shrimp size, and exposure duration.';
+  }
   const facts = [];
   if (limits.focus.exact_record_lookup && Array.isArray(limits.exactRecords?.records)) {
     const fieldLabels = { feed_kg: 'Feed (kg)', mbw_g: 'MBW (g)', do_morning: 'Morning DO', do_evening: 'Evening DO', ph_morning: 'Morning pH', ph_evening: 'Evening pH' };
@@ -178,10 +232,10 @@ const buildFactualFallback = limits => {
 };
 
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, deadlineMs = Date.now() + 140000 }) => {
-  if (questionRoute !== 'farm_analysis' && mode === 'standard') {
+  const limits = getClaimLimits(prompt);
+  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }
-  const limits = getClaimLimits(prompt);
   const settings = getOrsonGenerationSettings(mode);
   const remainingTimeout = cap => Math.max(1, Math.min(cap, deadlineMs - Date.now()));
   const draft = await generate({
@@ -230,4 +284,4 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     groundingStatus: status, groundingIssues: [...new Set(issues)], reviewOutputTokens: reviewTokens, reviewFinishReason };
 };
 
-module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims };
+module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues };

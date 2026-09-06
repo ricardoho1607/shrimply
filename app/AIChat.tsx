@@ -175,7 +175,7 @@ function AIChatSession() {
         onPartialResponse: (partialResponse) => {
           if (!isCurrent()) return;
           setStreamingReplyId(replyId);
-          upsertReply(partialResponse, userText);
+          upsertReply(partialResponse);
         },
       });
       upsertReply(aiResponse);

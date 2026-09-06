@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims } = require('./orsonAnswerGrounding');
+const { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, nitrogenGuidanceIssues } = require('./orsonAnswerGrounding');
 
 const promptFor = (comparison = null, question = 'Why did growth slow?', focus = {}) => [
   'ORSON QUESTION FOCUS:', JSON.stringify({ route: 'farm_analysis', ...focus }), '',
@@ -144,6 +144,42 @@ test('general knowledge retains streaming with one model call', async () => {
   assert.equal(calls, 1);
   assert.deepEqual(chunks, ['FCR is a ratio.']);
   assert.equal(result.groundingStatus, 'not_required');
+});
+
+test('nitrogen guidance rejects missing bases and conflicting threshold purposes', () => {
+  const question = 'What is a safe nitrite level and when does it become lethal?';
+  const unsafe = 'Salinity, shrimp size, and exposure duration change risk. Safe nitrite is 0.25 mg/L as NO2-N. Nitrite above 0.1 mg/L can be lethal.';
+  assert.ok(nitrogenGuidanceIssues(unsafe, question).includes('ambiguous_nitrogen_threshold'));
+
+  const conflicting = 'Salinity, shrimp size, and exposure duration change risk. Safe nitrite operating target: 0.25 mg/L as NO2-N. Experimental nitrite toxicity endpoint: 0.1 mg/L as NO2-N.';
+  assert.ok(nitrogenGuidanceIssues(conflicting, question).includes('conflicting_nitrogen_thresholds'));
+});
+
+test('English and Indonesian nitrogen guidance requires basis, purpose, and risk context', () => {
+  const answers = [
+    ['What nitrite range is safe at 5, 15, or 30 ppt salinity?', 'Salinity, shrimp size, and exposure duration change risk, so confirm the test basis first. Nitrite operating target: 0.25 mg/L as NO2-N. Nitrite experimental toxicity endpoint: 10 mg/L as NO2-N.'],
+    ['Kapan kadar nitrit aman dan kapan perlu khawatir?', 'Salinitas, ukuran udang, dan lama paparan mengubah risiko, jadi pastikan basis alat uji lebih dahulu. Target operasional nitrit: 0,25 mg/L sebagai NO2-N. Titik toksisitas eksperimental nitrit: 10 mg/L sebagai NO2-N.'],
+  ];
+  for (const [question, answer] of answers) assert.deepEqual(nitrogenGuidanceIssues(answer, question), []);
+});
+
+test('nitrogen guidance is buffered and reviewed before a successful stream is published', async () => {
+  const prompt = 'USER QUESTION:\nWhat is a safe nitrite level for shrimp?';
+  const unsafe = 'Safe nitrite is 0.25 mg/L as NO2-N. Above 0.1 mg/L nitrite can be lethal.';
+  const safe = 'Salinity, shrimp size, and exposure duration change risk. Nitrite operating target: 0.25 mg/L as NO2-N. Nitrite experimental toxicity endpoint: 10 mg/L as NO2-N.';
+  const chunks = [];
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({ prompt, mode: 'standard', questionRoute: 'aquaculture_knowledge',
+    onTextDelta: async text => chunks.push(text), generate: async options => {
+      calls++;
+      if (calls === 1) { await options.onTextDelta?.(unsafe); return reply(unsafe); }
+      assert.match(options.prompt, /ambiguous_nitrogen_threshold/);
+      return reply(JSON.stringify({ status: 'rewrite', issues: ['ambiguous_nitrogen_threshold'], answer: safe }));
+    } });
+  assert.equal(calls, 2);
+  assert.equal(result.text, safe);
+  assert.deepEqual(chunks, [safe]);
+  assert.equal(result.groundingStatus, 'revised');
 });
 
 test('fallback respects exact-record scope and suppressed advice', async () => {

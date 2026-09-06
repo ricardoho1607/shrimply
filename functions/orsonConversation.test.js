@@ -57,6 +57,9 @@ test("server instructions keep general knowledge and unrelated questions away fr
   const unrelated = __test.buildServerOrsonSystemInstruction("standard", "chat", "out_of_scope");
 
   assert.match(knowledge, /Do not introduce pond status, feed pressure, or farm measurements/);
+  assert.match(knowledge, /every numeric threshold must name the analyte, unit, reporting basis/);
+  assert.match(knowledge, /salinity, life stage or shrimp size, and exposure duration/);
+  assert.match(knowledge, /Keep operating targets separate from LC\/toxicity-study results/);
   assert.match(unrelated, /Do not mention or reveal farm data/);
 });
 

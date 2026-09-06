@@ -156,7 +156,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
         onPartialResponse: (partialResponse) => {
           if (!isCurrent()) return;
           setStreamingReplyId(replyId);
-          upsertReply(partialResponse, text.trim());
+          upsertReply(partialResponse);
         },
       });
       upsertReply(aiResponse);

@@ -12,7 +12,8 @@ const mobileHookSource = fs.readFileSync(path.join(__dirname, '../../../../../ap
 test('web and mobile render Orson replies without duplicate reply bubbles', () => {
   for (const source of [webSource, mobileSource]) {
     assert.match(source, /onPartialResponse:\s*\(partialResponse\)/);
-    assert.match(source, /upsertReply\(partialResponse,/);
+    assert.match(source, /upsertReply\(partialResponse\);/);
+    assert.doesNotMatch(source, /upsertReply\(partialResponse,\s*[^)]/);
     assert.match(source, /loading\s*&&\s*!streamingReplyId/);
     assert.match(source, /upsertReply\(aiResponse\)/);
   }
