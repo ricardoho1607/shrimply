@@ -22,8 +22,15 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
     const update = () => {
       frame = 0;
       if (mobile.matches) {
-        const height = Math.max(...panelsRef.current.map(panel => panel?.scrollHeight ?? 0));
-        stage.style.setProperty('--mobile-card-height', `${height}px`);
+        panelsRef.current.forEach(panel => {
+          if (!panel) return;
+          panel.style.opacity = '1';
+          panel.style.visibility = 'visible';
+          panel.style.transform = 'none';
+          panel.style.zIndex = 'auto';
+          panel.removeAttribute('aria-hidden');
+        });
+        return;
       }
       const distance = Math.max(1, showcase.offsetHeight - stage.offsetHeight);
       const progress = Math.min(1, Math.max(0, -showcase.getBoundingClientRect().top / distance));
@@ -37,6 +44,7 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
         if (!panel) return;
         const delta = index - selected;
         const isActive = index === selected;
+        panel.setAttribute('aria-hidden', String(!isActive));
 
         panel.style.opacity = isActive ? '1' : '0';
         panel.style.visibility = isActive ? 'visible' : 'hidden';

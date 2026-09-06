@@ -2529,28 +2529,44 @@
 }
 
 @media (max-width: 800px) {
+  .ocean-home .journey-stage {
+    height: auto;
+    min-height: 100svh;
+  }
+
+  .ocean-home .journey-bottom {
+    flex-shrink: 0;
+    padding-bottom: max(24px, env(safe-area-inset-bottom));
+  }
+
   .ocean-home .showcase {
-    height: 400svh;
+    height: auto;
   }
 
   .ocean-home .feature-scroll-stage {
-    position: sticky;
-    top: min(0px, calc(100svh - var(--mobile-card-height, 100svh) - 24px));
-    height: max(100svh, calc(var(--mobile-card-height, 0px) + 24px));
+    position: relative;
+    top: auto;
+    height: auto;
     min-height: 0;
     overflow: visible;
   }
 
   .ocean-home .feature-panels {
-    display: block;
-    overflow: visible;
-    height: var(--mobile-card-height, 700px);
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    height: auto;
     min-height: 0;
   }
 
   .ocean-home .feature-panels .feature-content {
-    position: absolute;
-    inset: 0 0 auto;
+    position: relative;
+    inset: auto;
+    flex: 0 0 100%;
+    scroll-snap-align: start;
+    pointer-events: auto;
     min-width: 0;
     grid-template-columns: minmax(0, 1fr);
     align-content: start;
