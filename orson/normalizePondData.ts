@@ -129,6 +129,7 @@ const normalizeLabMetrics = (value: unknown): OrsonLabMetrics | null => {
     nh3MgL: firstNumber(water.nh3MgL, water.nh3),
     nh4MgL: firstNumber(water.nh4MgL, water.nh4, legacyNh4),
     nitriteMgL: firstNumber(water.nitriteMgL, water.nitrite, water.no2),
+    phosphateMgL: firstNumber(water.phosphateMgL),
     tomMgL: firstNumber(water.tomMgL, water.tom),
     calciumHardnessMgLCaCO3: firstNumber(water.calciumHardnessMgLCaCO3),
     magnesiumHardnessMgLCaCO3: firstNumber(water.magnesiumHardnessMgLCaCO3),

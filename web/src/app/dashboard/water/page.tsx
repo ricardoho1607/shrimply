@@ -39,6 +39,7 @@ import {
 } from '../../../../../shared/enterpriseBlocks';
 import { LAB_WATER_FIELDS, createManualLabUnits, labMeasurementLabel, validateLabRow, type LabMeasurementUnits } from '../../../../../functions/shared/labMeasurementContract';
 import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
+import { getManualLabColumns } from '@/lib/manualLabColumns';
 import { toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
@@ -116,6 +117,7 @@ interface LabPondResult {
     nh3?: string;
     nh4?: string;
     no2?: string;
+    phosphate?: string;
     alkalinityTotal?: string;
     tom?: string;
     hardnessCa?: string;
@@ -235,6 +237,7 @@ export default function WaterQualityPage() {
   const today = useFarmDateKey(company?.timeZone);
   const [activeView, setActiveView] = useState<WaterPageView>('daily');
   const [ponds, setPonds] = useState<Pond[]>([]);
+  const [downloadingLabReportId, setDownloadingLabReportId] = useState<string | null>(null);
   const [labReports, setLabReports] = useState<LabReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DashboardUser | null>(null);
@@ -447,6 +450,7 @@ export default function WaterQualityPage() {
       nh3: '',
       nh4: '',
       no2: '',
+      phosphate: '',
       alkalinityTotal: '',
       tom: '',
       hardnessCa: '',
@@ -546,6 +550,7 @@ export default function WaterQualityPage() {
         nh3: toOptionalNumber(row.waterQuality?.nh3),
         nh4: toOptionalNumber(row.waterQuality?.nh4),
         no2: toOptionalNumber(row.waterQuality?.no2),
+        phosphate: toOptionalNumber(row.waterQuality?.phosphate),
         alkalinityTotal: toOptionalNumber(row.waterQuality?.alkalinityTotal),
         tom: toOptionalNumber(row.waterQuality?.tom),
         hardnessCa: toOptionalNumber(row.waterQuality?.hardnessCa),
@@ -605,6 +610,7 @@ export default function WaterQualityPage() {
       nh3: toInputString(row.waterQuality?.nh3),
       nh4: toInputString(row.waterQuality?.nh4),
       no2: toInputString(row.waterQuality?.no2),
+      phosphate: toInputString(row.waterQuality?.phosphate),
       alkalinityTotal: toInputString(row.waterQuality?.alkalinityTotal),
       tom: toInputString(row.waterQuality?.tom),
       hardnessCa: toInputString(row.waterQuality?.hardnessCa),
@@ -873,6 +879,26 @@ export default function WaterQualityPage() {
     }
   };
 
+  const handleDownloadLabReport = async (report: LabReport) => {
+    if (downloadingLabReportId) return;
+    setDownloadingLabReportId(report.id);
+    try {
+      const { generateManualLabReportHTML } = await import('@/lib/manualLabReport');
+      const { loadMobilePdfBrandAssets, downloadMobilePdf } = await import('@/lib/mobilePdfExport');
+      const assets = await loadMobilePdfBrandAssets('landscape');
+      await downloadMobilePdf({
+        html: generateManualLabReportHTML(report, assets),
+        filename: `lab-report-${report.sampleDate || 'undated'}-${report.id.replace(/[^a-zA-Z0-9_-]/g, '')}.pdf`,
+        orientation: 'landscape',
+      });
+    } catch (error) {
+      console.error('Error downloading lab report:', error);
+      alert(copy('Failed to download the lab report. Please try again.'));
+    } finally {
+      setDownloadingLabReportId(null);
+    }
+  };
+
   const filteredPonds = useMemo(() => {
     return accessiblePonds.filter(p => p.pondName.toLowerCase().includes(searchTerm.toLowerCase()));
   }, [accessiblePonds, searchTerm]);
@@ -940,56 +966,7 @@ export default function WaterQualityPage() {
     return logs[0] || null;
   };
 
-  const labGridColumns = useMemo(() => {
-    const baseColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
-      { label: 'DOC', path: ['doc'] },
-    ];
-    const mineralColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
-      { label: 'Transparency (cm)', path: ['transparencyCm'] },
-      { label: 'Salinity field (ppt)', path: ['waterQuality', 'salinityCustomer'] },
-      { label: 'Salinity lab (ppt)', path: ['waterQuality', 'salinityLab'] },
-      { label: LAB_WATER_FIELDS.tan.label + ' (unit/basis below)', path: ['waterQuality', 'tan'] },
-      { label: LAB_WATER_FIELDS.nh3.label + ' (unit/basis below)', path: ['waterQuality', 'nh3'] },
-      { label: LAB_WATER_FIELDS.nh4.label + ' (unit/basis below)', path: ['waterQuality', 'nh4'] },
-      { label: LAB_WATER_FIELDS.no2.label + ' (unit/basis below)', path: ['waterQuality', 'no2'] },
-      { label: LAB_WATER_FIELDS.alkalinityTotal.label + ' (unit/basis below)', path: ['waterQuality', 'alkalinityTotal'] },
-      { label: LAB_WATER_FIELDS.tom.label + ' (unit/basis below)', path: ['waterQuality', 'tom'] },
-      { label: LAB_WATER_FIELDS.hardnessCa.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessCa'] },
-      { label: LAB_WATER_FIELDS.hardnessMg.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessMg'] },
-      { label: LAB_WATER_FIELDS.hardnessTotal.label + ' (unit/basis below)', path: ['waterQuality', 'hardnessTotal'] },
-      { label: 'Vib. Y', path: ['microbiology', 'vibrioYellow'] },
-      { label: 'Vib. G', path: ['microbiology', 'vibrioGreen'] },
-      { label: 'Vib. Total', path: ['microbiology', 'vibrioTotal'] },
-      { label: 'TBC', path: ['microbiology', 'tbc'] },
-      { label: 'TVC/TBC %', path: ['microbiology', 'tvcTbcRatioPercent'] },
-    ];
-    const planktonColumns: { label: string; path: string[]; inputType?: 'number' | 'text' }[] = [
-      { label: 'Total Plankton', path: ['plankton', 'totalCellPerMl'] },
-      { label: 'Good Plankton', path: ['plankton', 'beneficialCellPerMl'] },
-      { label: 'Bad Plankton', path: ['plankton', 'harmfulCellPerMl'] },
-      { label: 'Green Algae Cells', path: ['plankton', 'chlorophytaCellPerMl'] },
-      { label: 'Green Algae %', path: ['plankton', 'chlorophytaPercent'] },
-      { label: 'Green Algae Species', path: ['plankton', 'chlorophytaSpecies'], inputType: 'text' },
-      { label: 'Blue-Green Cells', path: ['plankton', 'cyanophytaCellPerMl'] },
-      { label: 'Blue-Green %', path: ['plankton', 'cyanophytaPercent'] },
-      { label: 'Blue-Green Species', path: ['plankton', 'cyanophytaSpecies'], inputType: 'text' },
-      { label: 'Diatom Cells', path: ['plankton', 'diatomCellPerMl'] },
-      { label: 'Diatom %', path: ['plankton', 'diatomPercent'] },
-      { label: 'Diatom Species', path: ['plankton', 'diatomSpecies'], inputType: 'text' },
-      { label: 'Golden-Green Cells', path: ['plankton', 'chrysophytaCellPerMl'] },
-      { label: 'Golden-Green %', path: ['plankton', 'chrysophytaPercent'] },
-      { label: 'Golden-Green Species', path: ['plankton', 'chrysophytaSpecies'], inputType: 'text' },
-      { label: 'Dino Cells', path: ['plankton', 'dinoflagellataCellPerMl'] },
-      { label: 'Dino %', path: ['plankton', 'dinoflagellataPercent'] },
-      { label: 'Dino Species', path: ['plankton', 'dinoflagellataSpecies'], inputType: 'text' },
-      { label: 'Protozoa Cells', path: ['plankton', 'protozoaCellPerMl'] },
-      { label: 'Protozoa %', path: ['plankton', 'protozoaPercent'] },
-      { label: 'Protozoa Species', path: ['plankton', 'protozoaSpecies'], inputType: 'text' },
-    ];
-    if (labForm.reportType === 'plankton') return planktonColumns;
-    if (labForm.reportType === 'combined') return [...baseColumns, ...mineralColumns, ...planktonColumns];
-    return [...baseColumns, ...mineralColumns];
-  }, [labForm.reportType]);
+  const labGridColumns = useMemo(() => getManualLabColumns(labForm.reportType), [labForm.reportType]);
 
   const mineralPdfActionState = getPdfActionState('water_quality');
   const planktonPdfActionState = getPdfActionState('plankton');
@@ -1285,6 +1262,14 @@ export default function WaterQualityPage() {
                         {copy('Review & Confirm')}
                       </button>
                     )}
+                    {(report.entryMode || 'manual') === 'manual' && (
+                      <button type="button" className="btn-secondary"
+                        disabled={downloadingLabReportId !== null}
+                        onClick={() => handleDownloadLabReport(report)}
+                        style={{ padding: '8px 12px', fontSize: '0.76rem' }}>
+                        {copy(downloadingLabReportId === report.id ? 'Generating PDF...' : 'Download PDF')}
+                      </button>
+                    )}
                     {report.sourcePdfUrl && (
                       <a
                         href={report.sourcePdfUrl}
@@ -1337,6 +1322,7 @@ export default function WaterQualityPage() {
                                 [labMeasurementLabel('tom', row.measurementUnits), formatLabValue(water.tom)],
                                 [labMeasurementLabel('nh4', row.measurementUnits), formatLabValue(water.nh4)],
                                 [labMeasurementLabel('no2', row.measurementUnits), formatLabValue(water.no2)],
+                                [labMeasurementLabel('phosphate', row.measurementUnits), formatLabValue(water.phosphate)],
                                 [labMeasurementLabel('alkalinityTotal', row.measurementUnits), formatLabValue(water.alkalinityTotal)],
                                 [labMeasurementLabel('hardnessCa', row.measurementUnits), formatLabValue(water.hardnessCa)],
                                 [labMeasurementLabel('hardnessMg', row.measurementUnits), formatLabValue(water.hardnessMg)],

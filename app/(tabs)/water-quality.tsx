@@ -658,6 +658,7 @@ export default function WaterQualityScreen() {
           { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
           { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
           { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
+          { label: labMeasurementLabel('phosphate', row?.measurementUnits), value: formatLabValue(water.phosphate) },
         ],
       },
       {
@@ -1386,6 +1387,7 @@ export default function WaterQualityScreen() {
                     { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
                     { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
                     { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
+                    { label: labMeasurementLabel('phosphate', row?.measurementUnits), value: formatLabValue(water.phosphate) },
                     { label: labMeasurementLabel('alkalinityTotal', row?.measurementUnits), value: formatLabValue(water.alkalinityTotal) },
                     { label: labMeasurementLabel('hardnessCa', row?.measurementUnits), value: formatLabValue(water.hardnessCa) },
                     { label: labMeasurementLabel('hardnessMg', row?.measurementUnits), value: formatLabValue(water.hardnessMg) },
@@ -1407,6 +1409,7 @@ export default function WaterQualityScreen() {
                         { label: labMeasurementLabel('nh3', row?.measurementUnits), value: formatLabValue(water.nh3) },
                         { label: labMeasurementLabel('nh4', row?.measurementUnits), value: formatLabValue(water.nh4) },
                         { label: labMeasurementLabel('no2', row?.measurementUnits), value: formatLabValue(water.no2) },
+                        { label: labMeasurementLabel('phosphate', row?.measurementUnits), value: formatLabValue(water.phosphate) },
                       ],
                     },
                     {

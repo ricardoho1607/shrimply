@@ -1599,6 +1599,7 @@ Use this exact JSON shape:
         "tom": number | null,
         "hardnessCa": number | null,
         "hardnessMg": number | null,
+        "phosphate": number | null,
         "hardnessTotal": number | null
       },
       "microbiology": {
@@ -1922,6 +1923,7 @@ exports.extractLabReportFromPdf = onCall({ timeoutSeconds: 120, memory: "1GiB", 
           tom: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.tom),
           hardnessCa: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessCa),
           hardnessMg: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessMg),
+          phosphate: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.phosphate),
           hardnessTotal: requestedReportType === "plankton" ? null : toNumber(row.waterQuality?.hardnessTotal),
         },
         microbiology: {

@@ -7,6 +7,7 @@ const LAB_WATER_FIELDS = {
   tan: { label: 'TAN', unit: 'mg/L', bases: ['N'] },
   nh3: { label: 'NH3', unit: 'mg/L', bases: ['NH3', 'N'] },
   nh4: { label: 'NH4', unit: 'mg/L', bases: ['NH4', 'N'] },
+  phosphate: { label: 'Phosphate', unit: 'mg/L', bases: ['PO4', 'P'] },
   no2: { label: 'NO2', unit: 'mg/L', bases: ['NO2', 'N'] },
   alkalinityTotal: { label: 'Alkalinity', unit: 'mg/L', bases: ['CaCO3'] },
   tom: { label: 'TOM', unit: 'mg/L', bases: ['KMnO4 consumption', 'O2 demand'] },

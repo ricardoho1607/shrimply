@@ -50,6 +50,7 @@ export interface OrsonLabMetrics {
     nh3MgL: OrsonNumber;
     nh4MgL: OrsonNumber;
     nitriteMgL: OrsonNumber;
+    phosphateMgL?: OrsonNumber;
     tomMgL: OrsonNumber;
     calciumHardnessMgLCaCO3?: OrsonNumber;
     magnesiumHardnessMgLCaCO3?: OrsonNumber;
