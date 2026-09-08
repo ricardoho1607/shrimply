@@ -1262,7 +1262,7 @@ export default function WaterQualityPage() {
                         {copy('Review & Confirm')}
                       </button>
                     )}
-                    {(report.entryMode || 'manual') === 'manual' && (
+                    {(report.entryMode || 'manual') === 'manual' && report.reportType === 'plankton' && (
                       <button type="button" className="btn-secondary"
                         disabled={downloadingLabReportId !== null}
                         onClick={() => handleDownloadLabReport(report)}

@@ -3,7 +3,7 @@ import { getManualLabColumns, type ManualLabColumn } from './manualLabColumns';
 import { generateSamplingReportHTML, type PdfBrandAssets } from './generated/mobileSamplingReport';
 
 type Value = string | number | null;
-interface LabRow {
+export interface LabRow {
   pondId: string;
   pondCode: string;
   doc?: Value;
@@ -13,7 +13,7 @@ interface LabRow {
   microbiology?: Record<string, Value>;
   plankton?: Record<string, Value>;
 }
-interface ManualLabReport {
+export interface ManualLabReport {
   sampleDate?: string;
   labName?: string;
   farmName?: string;

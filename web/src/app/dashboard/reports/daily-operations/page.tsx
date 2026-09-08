@@ -14,13 +14,14 @@ import {
   type DailyOperationsPondSource,
 } from '../../../../../../shared/dailyOperationsReport';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
+import MineralLabResults from '@/components/MineralLabResults';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import {
   filterEnterpriseRecordsForUser,
   type FarmBlock,
 } from '../../../../../../shared/enterpriseBlocks';
 
-type ReportTab = 'sipon' | 'water';
+type ReportTab = 'sipon' | 'water' | 'mineral';
 
 const cellStyle: React.CSSProperties = {
   padding: '10px 8px',
@@ -108,10 +109,10 @@ export default function DailyOperationsReportsPage() {
           <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>{copy.title}</h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', margin: '4px 0 0' }}>{copy.subtitle}</p>
         </div>
-        <button className="btn-primary" onClick={exportPdf} disabled={!canExportReports || exporting || filteredPonds.length === 0} style={{ minHeight: '44px', padding: '0 17px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {activeTab !== 'mineral' && <button className="btn-primary" onClick={exportPdf} disabled={!canExportReports || exporting || filteredPonds.length === 0} style={{ minHeight: '44px', padding: '0 17px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
           {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
           {exporting ? copy.exporting : copy.exportBoth}
-        </button>
+        </button>}
       </div>
 
       <div className="glass-card" style={{ marginTop: '16px', background: '#fff', border: '1px solid var(--border)', borderRadius: '18px', padding: '16px', display: 'flex', alignItems: 'end', gap: '18px', flexWrap: 'wrap' }}>
@@ -127,10 +128,11 @@ export default function DailyOperationsReportsPage() {
         </div>}
       </div>
 
-      <div style={{ marginTop: '16px', display: 'flex', gap: '8px', padding: '5px', background: 'var(--bg-mid)', borderRadius: '14px', width: 'fit-content' }} role="tablist">
+      <div style={{ marginTop: '16px', display: 'flex', gap: '8px', padding: '5px', background: 'var(--bg-mid)', borderRadius: '14px', width: 'fit-content', maxWidth: '100%', flexWrap: 'wrap' }} role="tablist">
         {([
           { key: 'sipon' as const, label: copy.dailySipon, icon: FileText },
           { key: 'water' as const, label: copy.waterQuality, icon: Droplets },
+          { key: 'mineral' as const, label: copy.mineralLabResults, icon: FileText },
         ]).map((tab) => {
           const Icon = tab.icon;
           const active = activeTab === tab.key;
@@ -139,7 +141,7 @@ export default function DailyOperationsReportsPage() {
       </div>
 
       <div className="glass-card" style={{ marginTop: '12px', background: '#fff', border: '1px solid var(--border)', borderRadius: '18px', overflowX: 'auto' }}>
-        {activeTab === 'sipon' ? <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1080px' }}>
+        {activeTab === 'mineral' ? (company?.id && <MineralLabResults companyId={company.id} ponds={accessiblePonds} reportDate={reportDate} selectedBlock={selectedBlock} canExport={canExportReports} />) : activeTab === 'sipon' ? <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1080px' }}>
           <thead><tr>{[copy.pond, copy.doc, copy.morningSiphoned, copy.morningMortal, copy.morningTotal, copy.eveningSiphoned, copy.eveningMortal, copy.eveningTotal, copy.dailyTotal, copy.cumulative, copy.estimatedPopulation, copy.density].map((label) => <th key={label} style={headerCell}>{label}</th>)}</tr></thead>
           <tbody>{report.siponRows.map((row) => <tr key={row.pondName}>
             <td style={{ ...cellStyle, fontWeight: 700 }}>{row.pondName}</td><td style={cellStyle}>{row.doc}</td>

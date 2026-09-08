@@ -146,7 +146,7 @@ test('renders the exported report in the selected language', () => {
   });
   const html = generateDailyOperationsReportHTML(report, { backgroundBase64: '', logoBase64: '' }, 'id');
 
-  assert.match(html, /Laporan Sipon Harian/);
+  assert.match(html, /Laporan Mortalitas/);
   assert.match(html, /Laporan Kualitas Air &amp; Pakan Harian/);
   assert.match(html, /Tidak ada kolam yang tersedia/);
 });
