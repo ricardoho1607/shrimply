@@ -28,6 +28,8 @@ export interface TransactionHistorySource {
   description?: string;
   amount: number;
   paymentType?: string;
+  settlements?: { id: string; date: string; amount: number }[];
+  voided?: boolean;
   reference?: string;
   cycleName?: string;
   timestamp?: number;
@@ -112,6 +114,20 @@ export const prepareTransactionHistoryData = (
   currencyCode: string,
   currencySymbol: string,
 ): TransactionHistoryData => {
+  expenses = expenses.filter(transaction => !transaction.voided);
+  revenues = revenues.filter(transaction => !transaction.voided);
+  if (!Number.isFinite(openingBalance)) throw new Error('The opening recorded balance is invalid.');
+  for (const transaction of [...expenses, ...revenues]) {
+    if (transaction.amount == null || String(transaction.amount).trim() === '' || !Number.isFinite(Number(transaction.amount))) {
+      throw new Error('A transaction amount is missing or invalid. Correct it before exporting.');
+    }
+    const settlements = transaction.settlements || [];
+    if (settlements.some(payment => !Number.isFinite(payment.amount) || payment.amount <= 0)
+      || new Set(settlements.map(payment => payment.id)).size !== settlements.length
+      || (settlements.length > 0 && settlements.reduce((sum, payment) => sum + payment.amount, 0) > Number(transaction.amount) + 0.001)) {
+      throw new Error('A transaction has invalid payment records. Reconcile its payments before exporting.');
+    }
+  }
   const transactions = [
     ...expenses.map((transaction): TransactionHistoryRow => ({ ...transaction, type: 'expense' })),
     ...revenues.map((transaction): TransactionHistoryRow => ({ ...transaction, type: 'income' })),
@@ -147,19 +163,24 @@ const generateTransactionHistoryHTML = (
   useIosPrintLayout = false,
 ): string => {
   const money = (amount: number) => formatCurrency(amount, data.currencyCode, data.currencySymbol, language);
-  const firstPageSize = 14;
-  const continuationPageSize = 18;
-  const pages: TransactionHistoryRow[][] = [];
-  pages.push(data.transactions.slice(0, firstPageSize));
-  for (let index = firstPageSize; index < data.transactions.length; index += continuationPageSize) {
-    pages.push(data.transactions.slice(index, index + continuationPageSize));
+  const firstPageSize = 7;
+  const continuationPageSize = 10;
+  const expanded = data.transactions.flatMap(transaction => {
+    const detail = [transaction.item, transaction.description, transaction.reference || transaction.id].filter(Boolean).join(' | ');
+    const parts = detail.match(/[\s\S]{1,120}/g) || ['-'];
+    return parts.map((detailPart, index) => ({ ...transaction, detailPart, continuation: index > 0 }));
+  });
+  const pages: (typeof expanded)[] = [];
+  pages.push(expanded.slice(0, firstPageSize));
+  for (let index = firstPageSize; index < expanded.length; index += continuationPageSize) {
+    pages.push(expanded.slice(index, index + continuationPageSize));
   }
   if (pages.length === 0) pages.push([]);
 
   let runningBalance = data.openingBalance;
   const pageRows = pages.map((page) => page.map((transaction) => {
     const amount = Number(transaction.amount) || 0;
-    runningBalance += transaction.type === 'income' ? amount : -amount;
+    if (!transaction.continuation) runningBalance += transaction.type === 'income' ? amount : -amount;
     return { transaction, amount, runningBalance };
   }));
 
@@ -184,8 +205,8 @@ const generateTransactionHistoryHTML = (
         ${pageIndex === 0 ? `
           <div class="summary-grid">
             <div class="summary-card"><span>Opening Net Position</span><strong>${money(data.openingBalance)}</strong></div>
-            <div class="summary-card"><span>Total Money In</span><strong>${money(data.totalIncome)}</strong></div>
-            <div class="summary-card"><span>Total Money Out</span><strong>${money(data.totalExpenses)}</strong></div>
+            <div class="summary-card"><span>Recorded Income</span><strong>${money(data.totalIncome)}</strong></div>
+            <div class="summary-card"><span>Recorded Expenses</span><strong>${money(data.totalExpenses)}</strong></div>
             <div class="summary-card"><span>Closing Net Position</span><strong>${money(data.closingBalance)}</strong></div>
           </div>
         ` : ''}
@@ -196,19 +217,21 @@ const generateTransactionHistoryHTML = (
             <th class="date-column">Date</th>
             <th>Details</th>
             <th class="payment-column">Payment</th>
-            <th class="amount-column">Money In</th>
-            <th class="amount-column">Money Out</th>
+            <th class="amount-column">Income</th>
+            <th class="amount-column">Expense</th>
             <th class="amount-column">Running Net</th>
           </tr></thead>
           <tbody>
             ${rows.length > 0 ? rows.map(({ transaction, amount, runningBalance: balance }) => {
-              const detail = [transaction.category, transaction.cycleName].filter(Boolean).join(' | ') || '-';
+              const detail = [transaction.category, transaction.cycleName, transaction.continuation ? '(continued)' : ''].filter(Boolean).join(' | ') || '-';
+              const paid = (transaction.settlements || []).reduce((sum, payment) => sum + Number(payment.amount), 0);
+              const paymentText = transaction.continuation ? '' : `Confirmed: ${money(paid)} • Outstanding: ${money(Math.max(0, amount - paid))}`;
               return `<tr>
                 <td><span class="cell-clip">${formatReportDate(transaction.date, language, { year: 'numeric', month: 'short', day: '2-digit' })}</span></td>
-                <td><strong class="cell-clip">${escapeHtml(detail)}</strong></td>
-                <td><span class="cell-clip">${escapeHtml(transaction.paymentType || '-')}</span></td>
-                <td class="number income"><span class="cell-clip">${transaction.type === 'income' ? money(amount) : '-'}</span></td>
-                <td class="number expense"><span class="cell-clip">${transaction.type === 'expense' ? money(amount) : '-'}</span></td>
+                <td><strong class="detail-copy">${escapeHtml(detail)}</strong><span class="detail-copy">${escapeHtml(transaction.detailPart)}</span></td>
+                <td><span class="detail-copy">${escapeHtml(paymentText)}</span></td>
+                <td class="number income"><span class="cell-clip">${!transaction.continuation && transaction.type === 'income' ? money(amount) : '-'}</span></td>
+                <td class="number expense"><span class="cell-clip">${!transaction.continuation && transaction.type === 'expense' ? money(amount) : '-'}</span></td>
                 <td class="number"><span class="cell-clip">${money(balance)}</span></td>
               </tr>`;
             }).join('') : `<tr><td colspan="6" class="empty">No transactions were recorded for this period.</td></tr>`}
@@ -245,8 +268,8 @@ const generateTransactionHistoryHTML = (
         .header { position: relative; min-height: 56px; padding-right: 70px; overflow: hidden; }
         .page-logo { position: absolute; top: -5px; right: 0; width: 54px; height: 54px; object-fit: contain; filter: grayscale(1); }
         .title { font-size: 24px; line-height: 1.1; font-weight: 700; color: #111827; margin-bottom: 3px; }
-        .company-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 600; margin-bottom: 1px; }
-        .subtitle, .date-range { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; color: #334155; }
+        .company-name { max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; font-weight: 600; margin-bottom: 1px; }
+        .subtitle, .date-range { white-space: normal; overflow-wrap: anywhere; font-size: 9px; color: #334155; }
         .divider { flex: 0 0 auto; height: 2px; background: #374151; margin: 7px 0 9px; }
         .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
         .summary-card { min-width: 0; min-height: 34px; border: 1px solid #94A3B8; background: #FFFFFF; padding: 6px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; overflow: hidden; }
@@ -256,12 +279,13 @@ const generateTransactionHistoryHTML = (
         table { width: 100%; border-collapse: collapse; table-layout: fixed; background: rgba(255,255,255,0.82); }
         tr { height: 25px; break-inside: avoid; page-break-inside: avoid; }
         th { height: 28px; background: #E8EEF2; color: #1F2937; font-size: 6.8px; line-height: 1.1; text-align: left; text-transform: uppercase; letter-spacing: 0.1px; padding: 4px; border: 1px solid #94A3B8; white-space: normal; overflow: hidden; }
-        td { height: 25px; max-height: 25px; padding: 5px 4px; border: 1px solid #CBD5E1; vertical-align: middle; font-size: 8px; line-height: 1.15; overflow: hidden; }
+        td { min-height: 25px; padding: 5px 4px; border: 1px solid #CBD5E1; vertical-align: middle; font-size: 8px; line-height: 1.15; overflow: hidden; }
         td strong { display: block; font-size: 8px; line-height: 1.15; }
-        .cell-clip { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .date-column { width: 13.5%; }
-        .payment-column { width: 11%; }
-        .amount-column { width: 16%; text-align: right; }
+        .cell-clip { display: block; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+        .detail-copy { display: block; white-space: normal; overflow-wrap: anywhere; font-size: 7px; line-height: 1.3; }
+        .date-column { width: 11%; }
+        .payment-column { width: 17%; }
+        .amount-column { width: 14%; text-align: right; }
         .number { text-align: right; font-size: 7px; letter-spacing: -0.1px; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .income { color: #166534; }
         .expense { color: #991B1B; }

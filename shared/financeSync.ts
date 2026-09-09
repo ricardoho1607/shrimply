@@ -18,6 +18,7 @@ export interface InventoryFinanceSource {
   id: string;
   itemId: string;
   type: 'feed' | 'additive';
+  sourceStockIndex?: number;
   itemName: string;
   quantity: number;
   price: number;
@@ -54,7 +55,9 @@ export const buildHarvestRevenue = (harvest: HarvestFinanceSource) => {
     amount: totals.amount,
     cycleId: harvest.cycleId,
     cycleName: harvest.cycleName,
-    paymentType: 'Cash',
+    paymentType: 'Unconfirmed',
+    sourceKind: 'harvest',
+    sourceId: harvest.id,
     reference: `HARVEST-${harvest.id}`,
     notes: 'Auto-synced from harvest records',
   };
@@ -65,8 +68,36 @@ export const buildInventoryExpense = (stock: InventoryFinanceSource) => ({
   category: stock.category || (stock.type === 'feed' ? 'Feed' : 'Pond Additives'),
   item: `${stock.itemName} - ${finiteNumber(stock.quantity)} ${stock.unit || 'kg'}${stock.batch ? ` (Batch: ${stock.batch})` : ''}`,
   amount: finiteNumber(stock.quantity) * finiteNumber(stock.price),
-  paymentType: 'Cash',
+  paymentType: 'Unconfirmed',
+  sourceKind: 'inventory',
+  sourceId: stock.itemId,
+  sourceCollection: stock.type === 'feed' ? 'feeds' : 'additives',
+  sourceLineId: stock.id,
+  sourceStockIndex: stock.sourceStockIndex ?? 0,
   reference: `INVENTORY-${stock.type}-${stock.itemId}-${stock.id}`,
   notes: `Auto-synced from inventory${stock.notes ? `: ${stock.notes}` : ''}`,
   linkedInventory: stock.itemName,
 });
+
+/** Source metadata is verified against the source document by Firestore rules. */
+export const financeSourceEntry = (record: { amount: number; date: string; reference: string }) => ({
+  amount: record.amount, date: record.date, reference: record.reference, voided: false,
+});
+
+export function buildInventoryLedgerEntries(itemId: string, item: {
+  feedName?: string; additiveName?: string; unit?: string; inventoryKind?: string;
+  stockInHistory?: { id: string; date: unknown; quantity: number; price: number; notes?: string; source?: string }[];
+}, type: 'feed' | 'additive') {
+  if (item.inventoryKind === 'treatmentMix') return [];
+  return (item.stockInHistory || []).filter(stock => stock.source !== 'treatmentMixProduction').map(stock => {
+    const value = stock.date as { toDate?: () => Date; seconds?: number };
+    const date = typeof stock.date === 'string' ? stock.date.split('T')[0]
+      : value?.toDate ? value.toDate().toISOString().slice(0, 10)
+      : typeof value?.seconds === 'number' ? new Date(value.seconds * 1000).toISOString().slice(0, 10) : '';
+    if (!date || !Number.isFinite(Number(stock.quantity)) || !Number.isFinite(Number(stock.price)) || stock.quantity <= 0 || stock.price <= 0) {
+      throw new Error('Inventory purchase date, quantity and price are required for finance.');
+    }
+    const record = buildInventoryExpense({ ...stock, sourceStockIndex: item.stockInHistory!.indexOf(stock), date, itemId, type, itemName: item.feedName || item.additiveName || 'Inventory', unit: item.unit });
+    return { id: financeSyncDocumentId(record.reference), record };
+  });
+}

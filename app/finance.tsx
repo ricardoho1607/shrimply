@@ -1,10 +1,16 @@
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '@/config/firebase';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import { reconcileFinanceSources } from '../shared/financeReconciliation';
+import { isSourceLinkedFinance, monetaryValue } from '../shared/financeIntegrity';
 // app/finance.tsx - Optimized with consistent Android styles
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
 import {
   FlatList, View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator,
-  Modal, Dimensions, Switch, Platform, StatusBar,
+  Modal, Dimensions, Platform, StatusBar,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
@@ -16,7 +22,6 @@ import revenueService, { Revenue, RevenueInput } from './services/revenueService
 import { usePondStore } from './store/pondStore';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { getFarmDateKey, getFarmPeriodDateKeys, isDateKeyInRange } from '../shared/farmDate';
-import { financeSyncDocumentId } from '../shared/financeSync';
 import AppDatePicker from './components/forms/AppDatePicker';
 import CycleSelector from './components/forms/CycleSelector';
 import {
@@ -107,8 +112,9 @@ export default function FinancePage() {
   const router = useRouter();
   const { user, company } = useAuth();
   const { t } = useLanguage();
-  const { formatCurrency } = useCurrency();
-  const { harvestRecords, cycles, ponds } = usePondStore();
+  const { formatCurrency: displayCurrency } = useCurrency();
+  const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
+  const { cycles, ponds } = usePondStore();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
@@ -119,14 +125,14 @@ export default function FinancePage() {
     t.finance?.labor || 'Labor',
     t.finance?.repairs || 'Repairs',
     t.finance?.utilities || 'Utilities',
-    t.finance?.miscellaneous || 'Miscellaneous'
+    t.finance?.miscellaneous || 'Miscellaneous', 'Equipment', 'Property', 'Infrastructure', 'Interest', 'Taxes', 'Loan Payment', 'Owner Withdrawal', 'Dividend'
   ];
 
   const REVENUE_CATEGORIES = [
     t.finance?.shrimpSales || 'Shrimp Sales',
     t.finance?.consultation || 'Consultation',
     t.finance?.equipmentRental || 'Equipment Rental',
-    t.finance?.otherIncome || 'Other Income'
+    t.finance?.otherIncome || 'Other Income', 'Loan Received', 'Capital Contribution', 'Asset Sale'
   ];
 
   const TRANSLATED_PAYMENT_TYPES = [
@@ -147,11 +153,11 @@ export default function FinancePage() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editingRevenue, setEditingRevenue] = useState<Revenue | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'revenues'>('overview');
-  const [harvestSyncEnabled, setHarvestSyncEnabled] = useState(true);
-  const [inventorySyncEnabled, setInventorySyncEnabled] = useState(true);
-  const [syncedHarvestIds, setSyncedHarvestIds] = useState<Set<string>>(new Set());
-  const [syncedInventoryIds, setSyncedInventoryIds] = useState<Set<string>>(new Set());
 
+  const [paymentTarget, setPaymentTarget] = useState<{ item: Expense | Revenue; type: 'expense' | 'revenue' } | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentDate, setPaymentDate] = useState(getFarmDateKey(new Date(), company?.timeZone));
+  const [savingPayment, setSavingPayment] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     date: getFarmDateKey(new Date(), company?.timeZone),
     category: CATEGORIES[0], 
@@ -198,48 +204,12 @@ export default function FinancePage() {
     }
     loadData();
     feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
-    feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+    const stopInventory = feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+    const onLedgerError = (error: Error) => console.error('Finance listener:', error);
+    const stopExpenses = financeService.subscribe(company.id, setExpenses, onLedgerError);
+    const stopRevenues = revenueService.subscribe(company.id, setRevenues, onLedgerError);
+    return () => { stopExpenses(); stopRevenues(); stopInventory?.(); };
   }, [company?.id, company?.timeZone]);
-
-  useEffect(() => {
-    if (!company?.id || !user?.uid || loading) return;
-    const handleSyncToggle = async () => {
-      if (harvestSyncEnabled) {
-        const unsyncedHarvests = harvestRecords.filter(harvest => !syncedHarvestIds.has(harvest.id));
-        if (unsyncedHarvests.length > 0) await syncHarvestToRevenue();
-      } else {
-        await removeSyncedRevenues();
-      }
-    };
-    handleSyncToggle();
-  }, [harvestSyncEnabled, harvestRecords.length]);
-
-  useEffect(() => {
-    if (!company?.id || !user?.uid || loading) return;
-    const handleInventorySyncToggle = async () => {
-      if (inventorySyncEnabled) {
-        const allStockIns = [
-          ...feedAdditiveStore.feeds.flatMap(feed => 
-            (feed.stockInHistory || []).map(stock => ({ 
-              ...stock, itemName: feed.feedName, category: t.inventory?.feeds || 'Feed',
-              itemId: feed.id, type: 'feed' as const 
-            }))
-          ),
-          ...feedAdditiveStore.additives.filter(additive => additive.inventoryKind !== 'treatmentMix').flatMap(additive =>
-            (additive.stockInHistory || []).map(stock => ({ 
-              ...stock, itemName: additive.additiveName, category: t.inventory?.additives || 'Pond Additives',
-              itemId: additive.id, type: 'additive' as const 
-            }))
-          )
-        ];
-        const unsyncedStockIns = allStockIns.filter(stock => !syncedInventoryIds.has(`${stock.type}-${stock.itemId}-${stock.id}`));
-        if (unsyncedStockIns.length > 0) await syncInventoryToExpense(unsyncedStockIns);
-      } else {
-        await removeSyncedExpenses();
-      }
-    };
-    handleInventorySyncToggle();
-  }, [inventorySyncEnabled, feedAdditiveStore.feeds.length, feedAdditiveStore.additives.length]);
 
   const loadData = async () => {
     if (!company?.id) return;
@@ -252,149 +222,11 @@ export default function FinancePage() {
       setExpenses(fetchedExpenses);
       setRevenues(fetchedRevenues);
 
-      const harvestRefs = new Set(
-        fetchedRevenues.filter(r => r.reference?.startsWith('HARVEST-')).map(r => r.reference!.replace('HARVEST-', ''))
-      );
-      setSyncedHarvestIds(harvestRefs);
-
-      const inventoryRefs = new Set(
-        fetchedExpenses.filter(e => e.reference?.startsWith('INVENTORY-')).map(e => e.reference!.replace('INVENTORY-', ''))
-      );
-      setSyncedInventoryIds(inventoryRefs);
     } catch (error: any) {
       console.error('Failed to load finance data:', error);
       Alert.alert('Error', 'Failed to load finance data. Please try again.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const syncInventoryToExpense = async (stockIns: any[]) => {
-    if (!company?.id || !user?.uid) return;
-
-    for (const stock of stockIns) {
-      const totalCost = (stock.quantity || 0) * (stock.price || 0);
-      
-      if (totalCost > 0) {
-        const expenseData: ExpenseInput = {
-          date: stock.date instanceof Date ? getFarmDateKey(stock.date, company?.timeZone) :
-                typeof stock.date === 'string' ? stock.date.split('T')[0] : 
-                getFarmDateKey(new Date(), company?.timeZone),
-          category: stock.category,
-          item: `${stock.itemName} - ${stock.quantity} ${stock.unit || 'kg'}${stock.batch ? ` (${t.finance?.batch || 'Batch'}: ${stock.batch})` : ''}`,
-          amount: totalCost,
-          paymentType: 'Cash',
-          reference: `INVENTORY-${stock.type}-${stock.itemId}-${stock.id}`,
-          notes: `${t.finance?.autoSynced || 'Auto-synced from'} inventory${stock.notes ? `: ${stock.notes}` : ''}`,
-          linkedInventory: stock.itemName,
-        };
-
-        try {
-          await financeService.upsertSyncedExpense(
-            company.id,
-            financeSyncDocumentId(expenseData.reference),
-            expenseData,
-            user.uid,
-            user.name || user.email?.split('@')[0] || 'Unknown'
-          );
-          setSyncedInventoryIds(prev => new Set([...prev, `${stock.type}-${stock.itemId}-${stock.id}`]));
-        } catch (error: any) {
-          console.error('Failed to sync inventory:', error);
-        }
-      } else {
-        setSyncedInventoryIds(prev => new Set([...prev, `${stock.type}-${stock.itemId}-${stock.id}`]));
-      }
-    }
-    await loadData();
-  };
-
-  const removeSyncedExpenses = async () => {
-    if (!company?.id) return;
-    try {
-      const syncedExpenses = expenses.filter(e => e.reference?.startsWith('INVENTORY-'));
-      for (const expense of syncedExpenses) {
-        try {
-          await financeService.deleteExpense(company.id, expense.id);
-        } catch (error: any) {
-          console.error('Failed to delete synced expense:', error);
-        }
-      }
-      setSyncedInventoryIds(new Set());
-      await loadData();
-    } catch (error: any) {
-      console.error('Error removing synced expenses:', error);
-      Alert.alert('Error', 'Failed to remove some synced expenses');
-    }
-  };
-
-  const syncHarvestToRevenue = async () => {
-    if (!company?.id || !user?.uid) return;
-
-    const unsyncedHarvests = harvestRecords.filter(harvest => !syncedHarvestIds.has(harvest.id));
-    if (unsyncedHarvests.length === 0) return;
-
-    for (const harvest of unsyncedHarvests) {
-      let totalBiomass = 0;
-      let totalPrice = 0;
-
-      harvest.ponds.forEach(pond => {
-        const biomass = parseFloat(pond.biomass) || 0;
-        const pricePerKg = parseFloat(pond.price) || 0;
-        const subBiomass = parseFloat(pond.subBiomass) || 0;
-        const subPricePerKg = parseFloat(pond.subPrice) || 0;
-
-        totalBiomass += biomass + subBiomass;
-        totalPrice += (biomass * pricePerKg) + (subBiomass * subPricePerKg);
-      });
-
-      if (totalPrice > 0) {
-        const revenueData: RevenueInput = {
-          date: harvest.date,
-          category: REVENUE_CATEGORIES[0],
-          item: `${t.harvest?.title || 'Harvest'} (${new Date(harvest.date).toLocaleDateString()}) - ${totalBiomass.toFixed(1)} kg`,
-          amount: totalPrice,
-          cycleId: harvest.cycleId,
-          cycleName: harvest.cycleName,
-          paymentType: 'Cash',
-          reference: `HARVEST-${harvest.id}`,
-          notes: `${t.finance?.autoSynced || 'Auto-synced from'} harvest`,
-        };
-
-        try {
-          await revenueService.upsertSyncedRevenue(
-            company.id,
-            financeSyncDocumentId(revenueData.reference),
-            revenueData,
-            user.uid,
-            user.name || user.email?.split('@')[0] || 'Unknown'
-          );
-          setSyncedHarvestIds(prev => new Set([...prev, harvest.id]));
-        } catch (error: any) {
-          console.error('Failed to sync harvest:', error);
-        }
-      } else {
-        setSyncedHarvestIds(prev => new Set([...prev, harvest.id]));
-      }
-    }
-    await loadData();
-  };
-
-  const removeSyncedRevenues = async () => {
-    if (!company?.id) return;
-    try {
-      const syncedRevenues = revenues.filter(r => r.reference?.startsWith('HARVEST-'));
-      for (const revenue of syncedRevenues) {
-        try {
-          await revenueService.deleteRevenue(company.id, revenue.id);
-        } catch (error: any) {
-          console.error('Failed to delete synced revenue:', error);
-        }
-      }
-      setSyncedHarvestIds(new Set());
-      await loadData();
-    } catch (error: any) {
-      console.error('Error removing synced revenues:', error);
-      Alert.alert('Error', 'Failed to remove some synced revenues');
     }
   };
 
@@ -469,7 +301,7 @@ export default function FinancePage() {
 
   const handleEdit = (type: 'expense' | 'revenue', item: Expense | Revenue) => {
     if (!canManageFinance) return;
-    if (type === 'revenue' && item.reference?.startsWith('HARVEST-')) {
+    if (isSourceLinkedFinance(item)) {
       Alert.alert(t.finance?.cannotEdit || 'Cannot Edit', t.finance?.cannotEditHarvest || 'This revenue was auto-synced from a harvest record and cannot be edited directly.');
       return;
     }
@@ -492,6 +324,7 @@ export default function FinancePage() {
   };
 
   const handleDelete = async (type: 'expense' | 'revenue', item: Expense | Revenue) => {
+    if (isSourceLinkedFinance(item)) { Alert.alert('Linked entry', 'Correct or void this entry from its source record.'); return; }
     if (!canManageFinance) return;
     if (type === 'revenue' && item.reference?.startsWith('HARVEST-')) {
       Alert.alert(t.finance?.cannotDelete || 'Cannot Delete', t.finance?.cannotDeleteHarvest || 'This revenue was auto-synced from a harvest record. To remove it, delete the corresponding harvest record or disable harvest sync.');
@@ -567,7 +400,7 @@ export default function FinancePage() {
   const getFilteredRevenues = () => getFilteredData(revenues, false);
 
   const calculateTotals = (data: Expense[] | Revenue[], service: typeof financeService | typeof revenueService) => {
-    const total = service.calculateTotal(data);
+    const total = data.some(row => monetaryValue(row.amount) === null) ? Number.NaN : service.calculateTotal(data);
     const byCategory = service.getCategoryBreakdown(data);
     const top = service === financeService 
       ? (service as typeof financeService).getTopExpenses(data as Expense[], 3)
@@ -612,10 +445,36 @@ export default function FinancePage() {
 
   const expensePieChartData = createPieChartData(expenseTotals.byCategory);
 
+  const shareReconciliation = async () => {
+    if (!company?.id || !canManageFinance) return;
+    try {
+      const snapshots = await Promise.all(['harvestRecords', 'feeds', 'additives', 'expenses', 'revenues'].map(name => getDocs(collection(db, 'companies', company.id, name))));
+      const [harvests, feeds, additives, expenses, revenues] = snapshots.map(snapshot => snapshot.docs.map(row => ({ ...row.data(), id: row.id })));
+      const result = reconcileFinanceSources({ harvests, feeds, additives, expenses, revenues } as Parameters<typeof reconcileFinanceSources>[0]);
+      if (!FileSystem.cacheDirectory || !await Sharing.isAvailableAsync()) throw new Error('File sharing is unavailable on this device. Use Finance on web to download reconciliation.');
+      const uri = `${FileSystem.cacheDirectory}finance-reconciliation.json`;
+      await FileSystem.writeAsStringAsync(uri, JSON.stringify(result, null, 2));
+      await Sharing.shareAsync(uri, { mimeType: 'application/json' });
+      Alert.alert('Reconciliation complete', `${result.issues.length} issues found. No records were changed.`);
+    } catch (error) { Alert.alert('Reconciliation unavailable', error instanceof Error ? error.message : 'Try again online'); }
+  };
+
+  const savePayment = async () => {
+    if (!company?.id || !paymentTarget || !canManageFinance || savingPayment) return;
+    setSavingPayment(true);
+    try {
+      const payment = { id: `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`, date: paymentDate, amount: Number(paymentAmount) };
+      if (paymentTarget.type === 'expense') await financeService.recordPayment(company.id, paymentTarget.item as Expense, payment);
+      else await revenueService.recordPayment(company.id, paymentTarget.item as Revenue, payment);
+      setPaymentTarget(null); await loadData();
+    } catch (error) { Alert.alert('Payment not saved', error instanceof Error ? error.message : 'Try again'); }
+    finally { setSavingPayment(false); }
+  };
+
   const renderLedgerItem = (item: Expense | Revenue, type: 'expense' | 'revenue') => {
     const isHarvestSynced = type === 'revenue' && item.reference?.startsWith('HARVEST-');
     const isInventorySynced = type === 'expense' && item.reference?.startsWith('INVENTORY-');
-    const isSynced = isHarvestSynced || isInventorySynced;
+    const isSynced = isSourceLinkedFinance(item);
     
     return (
       <View key={item.id} style={styles.ledgerItem}>
@@ -652,6 +511,7 @@ export default function FinancePage() {
         <View style={styles.ledgerFooter}>
           <Text style={styles.ledgerAddedBy}>{item.addedByName}</Text>
           {canManageFinance && <View style={styles.ledgerActions}>
+            <TouchableOpacity onPress={() => { setPaymentTarget({ item, type }); setPaymentAmount(''); setPaymentDate(getFarmDateKey(new Date(), company?.timeZone)); }}><Text style={{ color: '#0F4C75' }}>Record payment</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => handleEdit(type, item)} 
               style={[styles.iconButton, isSynced && styles.iconButtonDisabled]} disabled={isSynced}>
               <Ionicons name="create-outline" size={18} color={isSynced ? "#BDC3C7" : "#3498DB"} />
@@ -690,7 +550,10 @@ export default function FinancePage() {
             <Ionicons name="arrow-back" size={24} color="#2C3E50" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
+          <Text style={{ color: '#52677a', fontSize: 12 }}>Recorded balance compares income with purchases and expenses. Use P&amp;L for profit and Cash Flow for confirmed payments. Confirm payments separately.</Text>
+          {[...expenses, ...revenues].some(row => monetaryValue(row.amount) === null) && <Text style={{ color: '#e74c3c' }}>Some amounts are invalid. Reconcile entries before relying on totals.</Text>}
           {canManageFinance && <View style={styles.headerActions}>
+            <TouchableOpacity onPress={shareReconciliation}><Text style={{ color: '#0F4C75' }}>Reconcile</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => {
                 resetForm();
                 setFormType('revenue');
@@ -749,7 +612,7 @@ export default function FinancePage() {
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryRowLabel}>{t.finance?.profitLoss || 'Profit & Loss'}</Text>
+            <Text style={styles.summaryRowLabel}>{'Recorded balance'}</Text>
             <Text style={[styles.summaryRowAmount, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>
               {formatCurrency(Math.abs(profit))}
             </Text>
@@ -808,7 +671,7 @@ export default function FinancePage() {
                               <View style={styles.dividerLine} />
                               
                               <View style={styles.profitRow}>
-                                <Text style={styles.profitLabel}>{isProfit ? t.finance?.netProfit || 'Net Profit' : t.finance?.netLoss || 'Net Loss'}</Text>
+                                <Text style={styles.profitLabel}>{isProfit ? 'Recorded balance' : 'Recorded deficit'}</Text>
                                 <Text style={[styles.profitValue, isProfit ? styles.profitPositive : styles.profitNegative]}>
                                   {formatCurrency(Math.abs(data.profit))}
                                 </Text>
@@ -928,11 +791,10 @@ export default function FinancePage() {
                 <Ionicons name="sync" size={20} color="#3498DB" />
                 <View style={styles.syncToggleTextContainer}>
                   <Text style={styles.syncToggleLabel}>{t.finance?.autoSyncInventory || 'Auto-sync Inventory'}</Text>
-                  <Text style={styles.syncToggleSubtext}>{t.finance?.autoSyncInventorySubtext || 'Automatically add stock-in expenses from inventory'}</Text>
+                  <Text style={styles.syncToggleSubtext}>{'Purchases post with inventory saves. Linked history is protected.'}</Text>
                 </View>
               </View>
-              <Switch value={inventorySyncEnabled} onValueChange={setInventorySyncEnabled} disabled={!canManageFinance}
-                trackColor={{ false: '#ECF0F1', true: '#3498DB' }} thumbColor={inventorySyncEnabled ? '#FFFFFF' : '#BDC3C7'} />
+              <Ionicons name="checkmark-circle" size={22} color="#0F4C75" />
             </View>
 
             <View style={styles.ledgerHeader}>
@@ -971,11 +833,10 @@ export default function FinancePage() {
                 <Ionicons name="sync" size={20} color="#27AE60" />
                 <View style={styles.syncToggleTextContainer}>
                   <Text style={styles.syncToggleLabel}>{t.finance?.autoSyncHarvest || 'Auto-sync Harvest'}</Text>
-                  <Text style={styles.syncToggleSubtext}>{t.finance?.autoSyncHarvestSubtext || 'Automatically add harvest sales to revenue'}</Text>
+                  <Text style={styles.syncToggleSubtext}>{'Sales post with harvest saves, including offline replay.'}</Text>
                 </View>
               </View>
-              <Switch value={harvestSyncEnabled} onValueChange={setHarvestSyncEnabled} disabled={!canManageFinance}
-                trackColor={{ false: '#ECF0F1', true: '#27AE60' }} thumbColor={harvestSyncEnabled ? '#FFFFFF' : '#BDC3C7'} />
+              <Ionicons name="checkmark-circle" size={22} color="#0F4C75" />
             </View>
 
             <Text style={styles.ledgerTitle}>{t.finance?.revenueLedger || 'Revenue Ledger'}</Text>
@@ -997,6 +858,18 @@ export default function FinancePage() {
         )}
       </ScrollView>
 
+      <Modal visible={Boolean(paymentTarget)} transparent animationType="slide" onRequestClose={() => setPaymentTarget(null)}>
+        <View style={{ flex: 1, justifyContent: 'center', padding: 24, backgroundColor: '#0008' }}>
+          <View style={{ backgroundColor: '#fff', padding: 24, borderRadius: 16, gap: 16 }}>
+            <Text style={{ fontSize: 18, fontWeight: '600' }}>Record confirmed payment</Text>
+            <Text>{paymentTarget?.item.item}</Text>
+            <TextInput accessibilityLabel="Payment amount" placeholder="Amount paid or received" keyboardType="decimal-pad" value={paymentAmount} onChangeText={setPaymentAmount} style={{ borderWidth: 1, borderColor: '#ccc', padding: 12 }} />
+            <TextInput accessibilityLabel="Payment date" placeholder="YYYY-MM-DD" value={paymentDate} onChangeText={setPaymentDate} style={{ borderWidth: 1, borderColor: '#ccc', padding: 12 }} />
+            <TouchableOpacity disabled={savingPayment} onPress={savePayment}><Text style={{ color: '#0F4C75' }}>{savingPayment ? 'Saving…' : 'Save payment'}</Text></TouchableOpacity>
+            <TouchableOpacity onPress={() => setPaymentTarget(null)}><Text>Cancel</Text></TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={showForm} animationType="slide" transparent onRequestClose={() => { resetForm(); setShowForm(false); }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>

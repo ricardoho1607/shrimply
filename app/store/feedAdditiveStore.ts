@@ -1,3 +1,4 @@
+import { getUsageReturnCost } from '../../shared/financeIntegrity';
 import { create } from 'zustand';
 import { collection, doc, query, where, onSnapshot, Timestamp } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
@@ -96,6 +97,7 @@ export interface UsageHistory {
 }
 
 export interface Feed {
+  archived?: boolean;
   id: string;
   companyId: string;
   feedName: string;
@@ -112,6 +114,7 @@ export interface Feed {
 }
 
 export interface Additive {
+  archived?: boolean;
   id: string;
   companyId: string;
   additiveName: string;
@@ -650,7 +653,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     const historicalUnitPrice = matchingUsage
       ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
       : 0;
-    const unitPrice = isDeduction && currentStock > 0 ? currentCost / currentStock : historicalUnitPrice || (currentStock > 0 ? currentCost / currentStock : 0);
+    const unitPrice = isDeduction ? (currentStock > 0 ? currentCost / currentStock : historicalUnitPrice) : getUsageReturnCost((feed.usageHistory || []).filter(usage => usage.pondId === pondId && usage.notes === notes), quantity).unitPrice;
     if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
     const pond = pondId ? usePondStore.getState().ponds.find((item) => item.id === pondId) : undefined;
     const feeds = await queueInventoryAdjustments(
@@ -728,7 +731,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
         : 0;
       const unitPrice = quantityDelta > 0 && currentStock > 0
         ? currentCost / currentStock
-        : historicalUnitPrice || (currentStock > 0 ? currentCost / currentStock : 0);
+        : getUsageReturnCost((feed.usageHistory || []).filter(usage => isDailyFeedUsage(usage, pondId, date)), Math.abs(quantityDelta)).unitPrice;
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error(DAILY_FEED_ERROR_CODES.missingCost);
       return [{ feed, feedId, quantityDelta, unitPrice }];
     });
@@ -803,12 +806,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       if (!feed) return [];
       const quantityToRestore = getDailyFeedUsageTotal(feed.usageHistory, pondId, date);
       if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) return [];
-      const matchingUsage = (feed.usageHistory || []).filter((usage) => (
-        isDailyFeedUsage(usage, pondId, date) && Number(usage.quantity) > 0
-      )).slice().reverse().find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
-      const unitPrice = matchingUsage
-        ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
-        : (Number(feed.totalStock) > 0 ? Number(feed.totalCost) / Number(feed.totalStock) : 0);
+      const unitPrice = getUsageReturnCost((feed.usageHistory || []).filter(usage => isDailyFeedUsage(usage, pondId, date)), quantityToRestore).unitPrice;
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error(DAILY_FEED_ERROR_CODES.missingCost);
       restoredQuantity += quantityToRestore;
       return [{ feedId, quantityToRestore, unitPrice }];
@@ -858,6 +856,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     if (!currentCompanyId) throw new Error('No company selected');
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('No authenticated user');
+    const item = get().feeds.find(item => item.id === feedId);
+    if (item && (item.stockInHistory.length || item.usageHistory.length)) throw new Error('This item has financial history and cannot be deleted.');
     try {
       await saveDurableMutation({
         id: createOfflineOperationId(`feed-delete-${feedId}`),
@@ -1130,6 +1130,8 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     if (!currentCompanyId) throw new Error('No company selected');
     const userId = auth.currentUser?.uid;
     if (!userId) throw new Error('No authenticated user');
+    const item = get().additives.find(item => item.id === additiveId);
+    if (item && (item.stockInHistory.length || item.usageHistory.length)) throw new Error('This item has financial history and cannot be deleted.');
     try {
       await saveDurableMutation({
         id: createOfflineOperationId(`additive-delete-${additiveId}`),

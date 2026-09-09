@@ -148,7 +148,7 @@ export interface MobileCycleReport {
   harvestRecords: { id: string }[];
   notes: {
     severity: 'info' | 'warning';
-    key: 'noPonds' | 'noHarvestRecords' | 'missingFeedCost' | 'missingAdditiveCost' | 'noMbwSampling' | 'cycleNotClosed';
+    key: 'noPonds' | 'noHarvestRecords' | 'missingFeedCost' | 'missingAdditiveCost' | 'noMbwSampling' | 'maintenancePosting' | 'cycleNotClosed';
     pondName?: string;
     message: string;
   }[];

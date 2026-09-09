@@ -1,5 +1,6 @@
 "use client";
 
+import { getUsageReturnCost } from '../../../../../shared/financeIntegrity';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
@@ -434,7 +435,9 @@ export default function FeedRecordsPage() {
           const historicalUnitPrice = matchingUsage
             ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
             : 0;
-          const unitPrice = currentStock > 0 ? currentCost / currentStock : historicalUnitPrice;
+          const unitPrice = quantityDelta > 0
+            ? (currentStock > 0 ? currentCost / currentStock : historicalUnitPrice)
+            : getUsageReturnCost((currentFeedData.usageHistory || []).filter(usage => isDailyFeedUsage(usage, formData.pondId, formData.date)), Math.abs(quantityDelta)).unitPrice;
           if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
             throw new Error('Feed cost is missing. Stock this feed with a price before recording usage.');
           }
@@ -671,21 +674,9 @@ export default function FeedRecordsPage() {
           if (!Number.isFinite(quantityToRestore) || quantityToRestore <= 0) continue;
           restoredQuantity += quantityToRestore;
 
-          const matchingUsage = (inventoryFeed.usageHistory || [])
-            .filter((usage) => (
-              isDailyFeedUsage(usage, selectedPondForHistory.id, deletingFeedRecord.date) &&
-              Number(usage.quantity) > 0
-            ))
-            .slice()
-            .reverse()
-            .find((usage) => Number(usage.unitPrice) > 0 || Number(usage.totalCost) > 0);
-          const historicalUnitPrice = matchingUsage
-            ? Number(matchingUsage.unitPrice) || (Number(matchingUsage.totalCost) / Number(matchingUsage.quantity))
-            : 0;
           const currentStock = Number(inventoryFeed.totalStock) || 0;
-          const currentCost = Number(inventoryFeed.totalCost) || 0;
-          const fallbackUnitPrice = currentStock > 0 ? currentCost / currentStock : 0;
-          const unitPrice = historicalUnitPrice || fallbackUnitPrice;
+        const currentCost = Number(inventoryFeed.totalCost) || 0;
+        const unitPrice = getUsageReturnCost((inventoryFeed.usageHistory || []).filter(usage => isDailyFeedUsage(usage, selectedPondForHistory.id, deletingFeedRecord.date)), quantityToRestore).unitPrice;
           if (!Number.isFinite(unitPrice) || unitPrice <= 0) {
             throw new Error(t.feed.missingFeedCost);
           }

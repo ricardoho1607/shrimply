@@ -59,6 +59,8 @@ export interface DailyFeedUsageLike {
   date?: unknown;
   pondId?: unknown;
   quantity?: unknown;
+  totalCost?: unknown;
+  unitPrice?: unknown;
   notes?: unknown;
   source?: unknown;
   feedRecordId?: unknown;

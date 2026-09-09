@@ -1,6 +1,9 @@
+import { isSourceLinkedFinance, sumMoney, monetaryValue, appendSettlement } from '../../shared/financeIntegrity';
 // services/revenueService.ts
 import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
+  onSnapshot,
+  getDoc,
   collection, 
   doc, 
   getDocs, 
@@ -20,6 +23,8 @@ import {
 
 export interface Revenue {
   id: string;
+  voided?: boolean;
+  settlements?: { id: string; date: string; amount: number }[];
   companyId: string;
   date: string;
   category: string;
@@ -166,6 +171,9 @@ class RevenueService {
    * Delete a revenue
    */
   async deleteRevenue(companyId: string, revenueId: string): Promise<void> {
+    if (revenueId.startsWith('sync_')) throw new Error('Linked finance entries must be corrected at their source.');
+    const existing = await getDoc(doc(this.getRevenuesCollection(companyId), revenueId));
+    if (existing.exists() && isSourceLinkedFinance(existing.data())) throw new Error('Linked finance entries must be corrected at their source.');
     try {
       const userId = this.requireUserId();
       await persistCollectionAfterMutation<Revenue>({
@@ -185,7 +193,22 @@ class RevenueService {
   /**
    * Get all revenues for a company
    */
-  async getRevenues(companyId: string): Promise<Revenue[]> {
+  async recordPayment(companyId: string, record: Revenue, payment: { id: string; date: string; amount: number }) {
+    const settlements = appendSettlement(record, payment);
+    await persistCollectionAfterMutation<Revenue>({
+      id: payment.id, userId: this.requireUserId(), companyId, createdAt: Date.now(), kind: 'set',
+      path: ['companies', companyId, 'revenues', record.id], data: { settlements }, merge: true, settlement: payment,
+    }, 'finance-revenues', ['companies', companyId, 'revenues']);
+  }
+
+  subscribe(companyId: string, onData: (records: Revenue[]) => void, onError: (error: Error) => void, includeVoided = false) {
+    return onSnapshot(this.getRevenuesCollection(companyId), snapshot => {
+      const records = snapshot.docs.map(row => ({ ...row.data(), id: row.id, amount: monetaryValue(row.data().amount) ?? Number.NaN } as Revenue)).filter(row => includeVoided || !row.voided);
+      onData(records.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0)));
+    }, onError);
+  }
+
+  async getRevenues(companyId: string, includeVoided = false): Promise<Revenue[]> {
     const userId = this.requireUserId();
     const cached = await loadOfflineCollectionWithMutations<Revenue>(
       userId,
@@ -193,10 +216,10 @@ class RevenueService {
       'finance-revenues',
       ['companies', companyId, 'revenues'],
     );
-    if (!await isWorkspaceOnline()) return cached.sort((a, b) => b.timestamp - a.timestamp);
+    if (!await isWorkspaceOnline()) return cached.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN })).sort((a, b) => b.timestamp - a.timestamp);
     try {
       const revenuesRef = this.getRevenuesCollection(companyId);
-      const q = query(revenuesRef, orderBy('timestamp', 'desc'));
+      const q = query(revenuesRef);
       
       const querySnapshot = await getDocs(q);
       
@@ -206,10 +229,10 @@ class RevenueService {
       })) as Revenue[];
       const merged = await overlayOfflineMutations(remote, userId, companyId, ['companies', companyId, 'revenues']);
       await persistOfflineCollection(userId, companyId, 'finance-revenues', merged);
-      return merged;
+      return merged.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
     } catch (error) {
       console.error('Error getting revenues:', error);
-      return cached;
+      return cached.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
     }
   }
 
@@ -240,7 +263,7 @@ class RevenueService {
    * Calculate total revenues for a period
    */
   calculateTotal(revenues: Revenue[]): number {
-    return revenues.reduce((sum, revenue) => sum + revenue.amount, 0);
+    return sumMoney(revenues);
   }
 
   /**

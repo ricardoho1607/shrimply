@@ -1,5 +1,8 @@
 "use client";
 
+import { buildProfitLoss, buildConfirmedCashFlow } from '../../../../../../shared/financeReports';
+import { monetaryValue, NON_OPERATING_INCOME } from '../../../../../../shared/financeIntegrity';
+import { transactionOpeningPosition } from '../../../../../../shared/reportingIntegrity';
 import React, { useMemo, useState } from 'react';
 import {
   Calculator,
@@ -33,7 +36,6 @@ import {
   getFarmDateKey,
   getFarmPeriodDateKeys,
   isDateKeyInRange,
-  normalizeFarmDateKey,
 } from '../../../../../../shared/farmDate';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
@@ -42,6 +44,8 @@ import { buildCogsReport, type CogsPond, type CogsHarvest, type CogsUsage } from
 interface Expense {
   id: string;
   amount: number;
+  settlements?: { id: string; date: string; amount: number }[];
+  voided?: boolean;
   category: string;
   date: string;
   description?: string;
@@ -59,6 +63,8 @@ interface Expense {
 interface Revenue {
   id: string;
   amount: number;
+  settlements?: { id: string; date: string; amount: number }[];
+  voided?: boolean;
   category: string;
   date: string;
   description?: string;
@@ -85,9 +91,6 @@ const REPORT_TYPES = [
   { id: 'cash-flow', name: 'Cash Flow', icon: CircleDollarSign, color: '#9B59B6', desc: 'Liquidity Analysis' },
   { id: 'transaction-history', name: 'Transaction History', icon: ReceiptText, color: '#0F4C75', desc: 'Money In and Money Out' },
 ];
-const NON_OPEX_CATEGORIES = ['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend'];
-const INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
-const FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
 
 const addBreakdown = (target: Record<string, number>, category: string, amount: number) => {
   const key = normalizeCategory(category);
@@ -96,7 +99,8 @@ const addBreakdown = (target: Record<string, number>, category: string, amount: 
 
 export default function FinancialReportsPage() {
   const copy = useDashboardCopy();
-  const { formatCurrency, currencyConfig } = useCurrency();
+  const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
+  const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { currentLanguage, t } = useLanguage();
   const { company, loading: authLoading } = useAuth();
   const hasPermission = useFarmPermissions();
@@ -112,12 +116,15 @@ export default function FinancialReportsPage() {
   const [exportLoading, setExportLoading] = useState(false);
   const [openingInventory, setOpeningInventory] = useState(0);
   const [closingInventory, setClosingInventory] = useState(0);
-  const { expenses, revenues, loading: financeLoading } = useFinanceRecords<Expense, Revenue>();
+  const { expenses: rawExpenses, revenues: rawRevenues, loading: financeLoading } = useFinanceRecords<Expense, Revenue>(true);
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
   const { data: feeds, loading: feedsLoading } = useCompanyFeeds<InventoryItem>();
   const { data: additives, loading: additivesLoading } = useCompanyAdditives<InventoryItem>();
   const { data: ponds, loading: pondsLoading } = useCompanyPonds<CogsPond>();
   const { data: harvests, loading: harvestsLoading } = useCompanyHarvestRecords<CogsHarvest>();
+  const invalidMoneyCount = [...rawExpenses, ...rawRevenues].filter(row => monetaryValue(row.amount) === null).length;
+  const expenses = rawExpenses.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
+  const revenues = rawRevenues.map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading || pondsLoading || harvestsLoading;
   const reportTypes = REPORT_TYPES.map((report) => ({
@@ -200,68 +207,35 @@ export default function FinancialReportsPage() {
   }, [company?.timeZone, customDateRange, selectedPeriod]);
 
   const filteredExpenses = expenses.filter((expense) => (
-    (cycleScope === 'all' || expense.cycleId === cycleScope)
+    !expense.voided && (cycleScope === 'all' || expense.cycleId === cycleScope)
     && isDateKeyInRange(expense.date, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone)
   ));
   const filteredRevenues = revenues.filter((revenue) => (
-    (cycleScope === 'all' || revenue.cycleId === cycleScope)
+    !revenue.voided && (cycleScope === 'all' || revenue.cycleId === cycleScope)
     && isDateKeyInRange(revenue.date, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone)
   ));
-  const usageMatchesScope = (usage: InventoryUsage) => Boolean(
-    usage.date
-    && usage.cycleId
-    && (cycleScope === 'all' || usage.cycleId === cycleScope)
-    && isDateKeyInRange(usage.date, dateRange.startDateKey, dateRange.endDateKey, company?.timeZone)
-  );
-  const feedUsageCost = feeds.flatMap((feed) => feed.usageHistory || [])
-    .filter(usageMatchesScope)
-    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
-  const additiveUsageCost = additives.flatMap((additive) => additive.usageHistory || [])
-    .filter(usageMatchesScope)
-    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
-  const cycleProductionExpenses = filteredExpenses.filter((expense) => (
-    Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
-  ));
-
-  const cogs = buildCogsReport({
+  const cogsInput = {
     ponds, expenses, revenues, harvests,
     feedUsage: feeds.flatMap(feed => feed.usageHistory || []),
     additiveUsage: additives.flatMap(additive => additive.usageHistory || []),
     cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || copy('All cycles'),
     startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey,
     timeZone: company?.timeZone, normalizeCategory,
-  });
+  };
+  const cogs = buildCogsReport(cogsInput);
+  const pl = buildProfitLoss(cogsInput, openingInventory, closingInventory);
+  const cash = buildConfirmedCashFlow({ expenses, revenues, startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey, timeZone: company?.timeZone, normalizeCategory });
   const cogsTotal = cogs.totalProductionCost + openingInventory - closingInventory;
   const cogsGrossProfit = cogs.revenue - cogsTotal;
 
   const totalRevenue = filteredRevenues.reduce((sum, revenue) => sum + revenue.amount, 0);
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const previewProfit = totalRevenue - totalExpenses;
-  const openingBalance = revenues
-    .filter((revenue) => {
-      const key = normalizeFarmDateKey(revenue.date, company?.timeZone);
-      return Boolean(
-        (cycleScope === 'all' || revenue.cycleId === cycleScope)
-        && dateRange.startDateKey
-        && key
-        && key < dateRange.startDateKey,
-      );
-    })
-    .reduce((sum, revenue) => sum + revenue.amount, 0)
-    - expenses
-      .filter((expense) => {
-        const key = normalizeFarmDateKey(expense.date, company?.timeZone);
-        return Boolean(
-          (cycleScope === 'all' || expense.cycleId === cycleScope)
-          && dateRange.startDateKey
-          && key
-          && key < dateRange.startDateKey,
-        );
-      })
-      .reduce((sum, expense) => sum + expense.amount, 0);
+  const previewProfit = selectedReport === 'profit-loss' ? pl.netProfit : totalRevenue - totalExpenses;
+  const openingBalance = transactionOpeningPosition({ expenses, revenues, cycleScope, startDateKey: dateRange.startDateKey, timeZone: company?.timeZone });
 
   const handleExport = async () => {
     if (!canExportReports) return;
+    if (invalidMoneyCount || (['profit-loss', 'cogs'].includes(selectedReport) && pl.missingAmounts) || (selectedReport === 'cash-flow' && cash.invalidCount) || (selectedReport === 'transaction-history' && !Number.isFinite(openingBalance))) { alert('Some amounts or costs are invalid or missing. Reconcile the source entries before exporting.'); return; }
     setExportLoading(true);
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');
@@ -269,42 +243,20 @@ export default function FinancialReportsPage() {
       const startDate = dateRange.startDate.toISOString();
       const endDate = dateRange.endDate.toISOString();
       const revenueBreakdown: Record<string, number> = {};
-      filteredRevenues.forEach((revenue) => addBreakdown(revenueBreakdown, revenue.category, revenue.amount));
+      filteredRevenues.filter(revenue => selectedReport !== 'profit-loss' || !NON_OPERATING_INCOME.includes(normalizeCategory(revenue.category))).forEach((revenue) => addBreakdown(revenueBreakdown, revenue.category, revenue.amount));
 
       let html: string;
       let filename: string;
 
       if (selectedReport === 'profit-loss') {
-        const cogsBreakdown: Record<string, number> = {};
-        if (feedUsageCost) cogsBreakdown[t.financeCycle.feedUsage] = feedUsageCost;
-        if (additiveUsageCost) cogsBreakdown[t.financeCycle.additiveUsage] = additiveUsageCost;
-        cycleProductionExpenses.forEach((expense) => addBreakdown(cogsBreakdown, expense.category, expense.amount));
-        const totalCOGS = feedUsageCost + additiveUsageCost
-          + cycleProductionExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-        const opexExpenses = filteredExpenses.filter((expense) => {
-          const category = normalizeCategory(expense.category);
-          return !expense.cycleId
-            && !expense.reference?.startsWith('INVENTORY-')
-            && !NON_OPEX_CATEGORIES.includes(category);
-        });
-        const opexBreakdown: Record<string, number> = {};
-        opexExpenses.forEach((expense) => addBreakdown(opexBreakdown, expense.category, expense.amount));
-        const totalOPEX = opexExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-        const otherExpenses = filteredExpenses.filter((expense) => (
-          ['Loan Payment', 'Taxes', 'Interest'].includes(normalizeCategory(expense.category))
-        ));
-        const otherExpenseBreakdown: Record<string, number> = {};
-        otherExpenses.forEach((expense) => addBreakdown(otherExpenseBreakdown, expense.category, expense.amount));
-        const totalOtherExpenses = otherExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-        const grossProfit = totalRevenue - totalCOGS;
-        const operatingIncome = grossProfit - totalOPEX;
+        const { totalCOGS, cogsBreakdown, totalOPEX, opexBreakdown, totalOtherExpenses, otherExpenseBreakdown, grossProfit, operatingIncome } = pl;
         const data: FinancialData = {
           period: selectedPeriod,
           startDate,
           endDate,
           companyName,
-          totalRevenue,
-          revenueBreakdown,
+          totalRevenue: pl.totalRevenue,
+          revenueBreakdown: pl.revenueBreakdown,
           totalCOGS,
           cogsBreakdown,
           grossProfit,
@@ -320,34 +272,14 @@ export default function FinancialReportsPage() {
         html = generateProfitLossHTML(data, brandAssets, currentLanguage);
         filename = `Profit_Loss_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       } else if (selectedReport === 'cash-flow') {
-        const operatingActivities = {
-          cashFromSales: 0,
-          cashFromCustomers: 0,
-          paymentToSuppliers: 0,
-          paymentForExpenses: 0,
-          otherOperatingCash: 0,
-        };
-        const investingActivities = { purchaseOfAssets: 0, saleOfAssets: 0, purchaseOfInvestments: 0, saleOfInvestments: 0 };
-        const financingActivities = { loansReceived: 0, loanRepayments: 0, capitalContributed: 0, dividendsPaid: 0, ownerWithdrawals: 0 };
-        filteredRevenues.forEach((revenue) => {
-          if (normalizeCategory(revenue.category) === 'Shrimp Sales') operatingActivities.cashFromSales += revenue.amount;
-          else operatingActivities.cashFromCustomers += revenue.amount;
-        });
-        filteredExpenses.forEach((expense) => {
-          const category = normalizeCategory(expense.category);
-          if (INVESTING_CATEGORIES.includes(category)) investingActivities.purchaseOfAssets += expense.amount;
-          else if (FINANCING_CATEGORIES.includes(category)) {
-            if (category === 'Loan Payment') financingActivities.loanRepayments += expense.amount;
-            else financingActivities.ownerWithdrawals += expense.amount;
-          } else if (category === 'Feed' || category === 'Pond Additives') operatingActivities.paymentToSuppliers += expense.amount;
-          else operatingActivities.paymentForExpenses += expense.amount;
-        });
+        const { operating: operatingActivities, investing: investingActivities, financing: financingActivities } = cash;
         const data: CashFlowData = {
           period: selectedPeriod,
           startDate,
           endDate,
           companyName,
-          openingBalance,
+          basisNote: `Company-wide confirmed payments only. ${cash.unconfirmedCount} entries have an unconfirmed balance. Opening cash is derived from recorded payments, not a reconciled bank balance.`,
+          openingBalance: cash.openingBalance,
           operatingActivities,
           investingActivities,
           financingActivities,
@@ -381,7 +313,7 @@ export default function FinancialReportsPage() {
         filename = `Transaction_Register_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       }
 
-      await downloadMobilePdf({ html, filename, orientation: 'portrait', compress: selectedReport === 'cogs' });
+      await downloadMobilePdf({ html, filename, orientation: 'portrait', compress: true });
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
@@ -418,11 +350,13 @@ export default function FinancialReportsPage() {
               {PERIOD_OPTIONS.map((period) => <button key={period} type="button" onClick={() => selectPeriod(period)} className={`dashboard-segmented-tab ${selectedPeriod === period ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: 0 }}>{copy(period)}</button>)}
             </div>
             <div className="dashboard-segmented-tabs financial-report-filter-tabs financial-cycle-tabs" style={{ width: '100%', marginTop: '8px', overflowX: 'auto' }}>
-              {[...activeCycles.map((cycle) => ({ key: cycle.id, label: cycle.cycleName })), { key: 'all', label: t.financeCycle.allHistory }].map((scope) => <button key={scope.key} type="button" onClick={() => setCycleScope(scope.key)} className={`dashboard-segmented-tab ${cycleScope === scope.key ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: '110px' }}>{scope.label}</button>)}
+              {[...activeCycles.map((cycle) => ({ key: cycle.id, label: cycle.cycleName })), { key: 'all', label: t.financeCycle.allHistory }].map((scope) => <button key={scope.key} type="button" disabled={selectedReport === 'cash-flow'} onClick={() => setCycleScope(scope.key)} className={`dashboard-segmented-tab ${(selectedReport === 'cash-flow' ? 'all' : cycleScope) === scope.key ? 'active' : ''}`} style={{ flex: '1 1 0', minWidth: '110px' }}>{scope.label}</button>)}
             </div>
           </div>
 
-          {selectedReport === 'cogs' ? (
+          {selectedReport === 'cash-flow' && <div className="glass-card" style={{ padding: 16 }}>Company-wide confirmed cash movements only. Purchases and sales remain unconfirmed until payment is recorded in Finance. {cash.unconfirmedCount} entries have an unconfirmed balance.</div>}
+          {invalidMoneyCount > 0 && <p role="alert">{invalidMoneyCount} finance entries have invalid amounts. Correct these before exporting.</p>}
+          {(selectedReport === 'cogs' || selectedReport === 'profit-loss') ? (
             <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
               <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: '12px' }}>{copy('Feed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.')}</p>
@@ -445,6 +379,12 @@ export default function FinancialReportsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.moneyOut}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{t.financialReports.netMovement}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(previewProfit)}</span></div>
                 </>
+              ) : selectedReport === 'cash-flow' ? (
+                <>
+                  <div>Confirmed opening cash: <strong>{formatCurrency(cash.openingBalance)}</strong></div>
+                  <div>Confirmed net movement: <strong>{formatCurrency(cash.operating.cashFromSales + cash.operating.cashFromCustomers - cash.operating.paymentToSuppliers - cash.operating.paymentForExpenses + cash.operating.otherOperatingCash + cash.investing.saleOfAssets + cash.investing.saleOfInvestments - cash.investing.purchaseOfAssets - cash.investing.purchaseOfInvestments + cash.financing.loansReceived + cash.financing.capitalContributed - cash.financing.loanRepayments - cash.financing.dividendsPaid - cash.financing.ownerWithdrawals)}</strong></div>
+                  <p>{cash.unconfirmedCount} entries have an unconfirmed balance. This is not a bank-reconciled balance.</p>
+                </>
               ) : selectedReport === 'cogs' ? (
                 <>
                   {[
@@ -459,8 +399,8 @@ export default function FinancialReportsPage() {
                 </>
               ) : (
                 <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Revenue')}</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Expenses')}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Revenue')}</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(pl.totalRevenue)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy('Expenses')}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(selectedReport === 'profit-loss' ? pl.totalCOGS + pl.totalOPEX + pl.totalOtherExpenses : totalExpenses)}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{copy(previewProfit >= 0 ? 'Net Profit' : 'Net Loss')}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(Math.abs(previewProfit))}</span></div>
                 </>
               )}

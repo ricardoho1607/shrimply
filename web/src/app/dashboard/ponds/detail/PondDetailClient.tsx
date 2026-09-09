@@ -635,7 +635,7 @@ export default function PondDetailClient() {
     try {
       if (endCycleForm.cycleEndReason === 'harvested') {
         const harvestSnapshot = await getDocs(collection(db, 'companies', companyId, 'harvestRecords'));
-        const harvestRecords = harvestSnapshot.docs.map((harvestDoc) => ({
+        const harvestRecords = harvestSnapshot.docs.filter(row => !row.data().voided).map((harvestDoc) => ({
           id: harvestDoc.id,
           ...harvestDoc.data(),
         } as HarvestRecord));

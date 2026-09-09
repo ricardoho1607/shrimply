@@ -14,6 +14,9 @@ type PdfPhrase = Record<PdfLanguage, string>;
 
 // Report copy lives here so mobile and web exports always use the same terminology.
 const PDF_PHRASES: PdfPhrase[] = [
+  { en: 'Maintenance includes Finance entries only. Asset maintenance history is not added again; post each maintenance cost once in Finance.', id: 'Biaya pemeliharaan hanya mencakup entri Keuangan. Riwayat pemeliharaan aset tidak dijumlahkan lagi; catat setiap biaya pemeliharaan satu kali di Keuangan.', th: 'ค่าบำรุงรักษารวมเฉพาะรายการในระบบการเงิน ไม่รวมประวัติการบำรุงรักษาสินทรัพย์ซ้ำ บันทึกค่าบำรุงรักษาแต่ละรายการในระบบการเงินเพียงครั้งเดียว', vi: 'Chi phí bảo trì chỉ gồm các bút toán Tài chính. Lịch sử bảo trì tài sản không được cộng lại; ghi mỗi chi phí bảo trì một lần trong Tài chính.', zh: '维护成本仅包括财务记录，不重复计入资产维护历史。请在财务中仅记录一次各项维护费用。' },
+  { en: 'Recorded Income', id: 'Pendapatan Tercatat', th: 'รายได้ที่บันทึก', vi: 'Thu nhập đã ghi nhận', zh: '已记录收入' },
+  { en: 'Recorded Expenses', id: 'Beban Tercatat', th: 'ค่าใช้จ่ายที่บันทึก', vi: 'Chi phí đã ghi nhận', zh: '已记录费用' },
   { en: 'Profit and Loss Statement', id: 'Laporan Laba Rugi', th: 'งบกำไรขาดทุน', vi: 'Báo cáo lãi lỗ', zh: '损益表' },
   { en: 'Income Statement', id: 'Laporan Laba Rugi', th: 'งบกำไรขาดทุน', vi: 'Báo cáo kết quả kinh doanh', zh: '利润表' },
   { en: 'Multi-Step Profit & Loss', id: 'Laba Rugi Bertahap', th: 'งบกำไรขาดทุนแบบหลายขั้น', vi: 'Lãi lỗ nhiều bước', zh: '多步式损益表' },

@@ -1,5 +1,7 @@
 "use client";
 
+import { isSourceLinkedFinance, appendSettlement, monetaryValue } from '../../../../../shared/financeIntegrity';
+import { reconcileFinanceSources } from '../../../../../shared/financeReconciliation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { 
   Wallet, 
@@ -20,6 +22,8 @@ import {
   collection, 
   doc, 
   addDoc, 
+  getDocs,
+  runTransaction,
   deleteDoc, 
   serverTimestamp 
 } from 'firebase/firestore';
@@ -49,6 +53,7 @@ interface Transaction {
   category: string;
   item: string;
   amount: number;
+  settlements?: { id: string; date: string; amount: number }[];
   paymentType: string;
   reference: string;
   notes: string;
@@ -66,15 +71,16 @@ export default function FinancePage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const generalCategoryLabel = t.financeCycle.general;
-  const { formatCurrency, currencyConfig } = useCurrency();
+  const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
+  const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { user, company } = useAuth();
   const hasPermission = useFarmPermissions();
   const canViewFinance = hasPermission('viewFinance');
   const canManageFinance = hasPermission('manageFinance');
   const today = useFarmDateKey(company?.timeZone);
 
-  const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics];
-  const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome];
+  const EXPENSE_CATEGORIES = [t.financeCycle.general, t.finance.labor, t.finance.repairs, t.finance.utilities, t.finance.miscellaneous, t.financeCycle.feed, t.financeCycle.chemicals, t.financeCycle.probiotics, 'Equipment', 'Property', 'Infrastructure', 'Interest', 'Taxes', 'Loan Payment', 'Owner Withdrawal', 'Dividend'];
+  const INCOME_CATEGORIES = [t.finance.shrimpSales, t.finance.consultation, t.finance.equipmentRental, t.finance.otherIncome, 'Loan Received', 'Capital Contribution', 'Asset Sale'];
   const PAYMENT_TYPES = [t.finance.cash, t.finance.bankTransfer, t.finance.mobilePayment];
 
   const [activeTab, setActiveTab] = useState<'overview' | 'expenses' | 'income'>('overview');
@@ -141,8 +147,8 @@ export default function FinancePage() {
     : income.filter((record) => record.cycleId === cycleScope), [cycleScope, income]);
 
   const stats = useMemo(() => {
-    const totalExpense = scopedExpenses.reduce((sum, e) => sum + (Number(e.amount) || 0), 0);
-    const totalIncome = scopedIncome.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
+    const totalExpense = scopedExpenses.reduce((sum, e) => sum + (monetaryValue(e.amount) ?? Number.NaN), 0);
+    const totalIncome = scopedIncome.reduce((sum, i) => sum + (monetaryValue(i.amount) ?? Number.NaN), 0);
     const profit = totalIncome - totalExpense;
     
     return { totalExpense, totalIncome, profit, count: scopedExpenses.length + scopedIncome.length };
@@ -208,8 +214,40 @@ export default function FinancePage() {
     });
   };
 
+  const downloadReconciliation = async () => {
+    if (!company?.id || !canManageFinance) return;
+    try {
+      const [harvests, feeds, additives, expenses, revenues] = await Promise.all(['harvestRecords', 'feeds', 'additives', 'expenses', 'revenues'].map(name => getDocs(collection(db, 'companies', company.id, name))));
+      const rows = (snapshot: typeof harvests) => snapshot.docs.map(row => ({ ...row.data(), id: row.id }));
+      const report = reconcileFinanceSources({ harvests: rows(harvests), feeds: rows(feeds), additives: rows(additives), expenses: rows(expenses), revenues: rows(revenues) } as Parameters<typeof reconcileFinanceSources>[0]);
+      const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a'); link.href = url; link.download = `finance-reconciliation-${today}.json`; link.click(); URL.revokeObjectURL(url);
+      alert(`${report.issues.length} issues found. The downloaded report lists them; no records were changed.`);
+    } catch (error) { alert(error instanceof Error ? error.message : 'Reconciliation failed'); }
+  };
+
+  const recordPayment = async (record: Transaction, type: 'expense' | 'income') => {
+    if (!company?.id || !canManageFinance) return;
+    const outstanding = (monetaryValue(record.amount) ?? 0) - (record.settlements || []).reduce((sum, payment) => sum + payment.amount, 0);
+    const raw = window.prompt(`Amount ${type === 'income' ? 'received' : 'paid'} (${currencyConfig.symbol}), outstanding ${outstanding}`, String(outstanding));
+    if (raw === null) return;
+    const date = window.prompt('Payment date (YYYY-MM-DD)', today);
+    if (!date) return;
+    const payment = { id: crypto.randomUUID(), date, amount: Number(raw) };
+    try {
+      const ref = doc(db, 'companies', company.id, type === 'expense' ? 'expenses' : 'revenues', record.id);
+      await runTransaction(db, async tx => {
+        const snapshot = await tx.get(ref);
+        if (!snapshot.exists()) throw new Error('Finance entry not found');
+        tx.update(ref, { settlements: appendSettlement(snapshot.data(), payment), updatedAt: serverTimestamp() });
+      });
+    } catch (error) { alert(error instanceof Error ? error.message : 'Payment could not be recorded'); }
+  };
+
   const handleDelete = async (id: string, type: 'expense' | 'income') => {
     if (!company?.id || !canManageFinance) return;
+    const record = (type === 'expense' ? expenses : income).find(record => record.id === id);
+    if (!record || isSourceLinkedFinance(record)) { alert('Correct or void linked entries from their source record.'); return; }
     if (!window.confirm(t.messages.deleteConfirm)) return;
     const collectionName = type === 'expense' ? 'expenses' : 'revenues';
     try {
@@ -287,6 +325,9 @@ export default function FinancePage() {
         </div>}
       </div>
 
+      {canManageFinance && <button type="button" onClick={downloadReconciliation} className="btn-secondary">Download finance reconciliation</button>}
+      {[...expenses, ...income].some(row => monetaryValue(row.amount) === null) && <p role="alert">Some finance amounts are missing or invalid. Totals are unavailable until these entries are corrected.</p>}
+      <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Recorded balance compares income with purchases and expenses. Use the P&amp;L report for profit and Cash Flow for confirmed payments. New entries require a separate payment confirmation.</p>
       {/* Summary Cards */}
       <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
         <div className="glass-card animate-fade-up" style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', color: '#065F46', border: '1px solid #A7F3D0' }}>
@@ -324,10 +365,10 @@ export default function FinancePage() {
               <Wallet size={20} />
             </div>
             <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFF', background: stats.profit >= 0 ? '#27AE60' : '#ef4444', padding: '4px 10px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-              {stats.profit >= 0 ? t.finance.netProfit : t.finance.netLoss}
+              {stats.profit >= 0 ? copy('Recorded balance') : copy('Recorded deficit')}
             </div>
           </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.profitLoss}</div>
+          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy('Recorded balance')}</div>
           <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.profit)}</div>
         </div>
       </div>
@@ -389,7 +430,7 @@ export default function FinancePage() {
                   </div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{t.finance.netProfit}</div>
+                  <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '4px' }}>{copy('Recorded balance')}</div>
                   <div style={{ fontSize: '28px', fontWeight: 600, color: stats.profit >= 0 ? '#27AE60' : '#ef4444' }}>{formatCurrency(stats.profit)}</div>
                 </div>
               </div>
@@ -484,11 +525,12 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.paymentType}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || copy('No Ref')}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || copy('No Ref')} · Confirmed: {formatCurrency((t.settlements || []).reduce((sum, payment) => sum + payment.amount, 0))}</div>
                     </td>
                     <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
-                      {canManageFinance && (
+                      {canManageFinance && <button type="button" onClick={() => recordPayment(t, t.type)} style={{ color: '#0F4C75', padding: 8 }}>Record payment</button>}
+                      {canManageFinance && !isSourceLinkedFinance(t) && (
                       <button 
                         onClick={() => handleDelete(t.id, t.type)}
                         style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer', transition: 'opacity 0.2s' }}

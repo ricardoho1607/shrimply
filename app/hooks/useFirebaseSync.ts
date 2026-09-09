@@ -1,3 +1,4 @@
+import { buildHarvestRevenue, financeSyncDocumentId, financeSourceEntry } from '../../shared/financeSync';
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
 import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { 
@@ -626,6 +627,7 @@ const useFirebaseSyncController = () => {
             
             snapshot.forEach(doc => {
               const data = doc.data();
+              if (data.voided) return;
               serverHarvestRecords.push({
                 id: doc.id,
                 date: data.date || '',
@@ -776,7 +778,7 @@ const useFirebaseSyncController = () => {
               const harvestSnapshot = await transaction.get(harvestRef);
 
               if (change.action === 'create' && harvestSnapshot.exists()) return;
-              if (change.action === 'delete' && !harvestSnapshot.exists()) return;
+              if (change.action === 'delete' && (!harvestSnapshot.exists() || harvestSnapshot.data()?.voided)) return;
 
               const sourceRecord = change.action === 'delete'
                 ? ({ id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord)
@@ -821,13 +823,19 @@ const useFirebaseSyncController = () => {
                   return canonicalHarvestPond;
                 });
 
+                const revenue = buildHarvestRevenue({ ...sourceRecord, id: harvestRef.id, ponds: canonicalPonds });
+                const revenueId = financeSyncDocumentId(revenue.reference);
                 transaction.set(harvestRef, {
+                  financeEntry: { ...financeSourceEntry(revenue), id: revenueId },
                   ...removeUndefinedFields(sourceRecord),
                   id: harvestRef.id,
                   ponds: canonicalPonds.map(removeUndefinedFields),
                   createdAt: serverTimestamp(),
                   createdBy: user.uid,
                 });
+                if (revenue.amount > 0) transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), {
+                  ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, addedByName: user.name || user.email || 'Harvest', timestamp: Date.now(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+                }, { merge: true });
                 return;
               }
 
@@ -847,7 +855,10 @@ const useFirebaseSyncController = () => {
                   updatedBy: user.uid,
                 });
               });
-              transaction.delete(harvestRef);
+              const revenue = buildHarvestRevenue(sourceRecord);
+              const revenueId = financeSyncDocumentId(revenue.reference);
+              transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
+              if (revenue.amount > 0) transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
             });
             didProcess = true;
           }

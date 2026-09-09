@@ -1045,49 +1045,75 @@ service cloud.firestore {
 
       match /harvestRecords/{harvestId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageHarvests');
+        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageHarvests');
+        allow delete: if false;
       }
 
       match /feeds/{feedId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
+        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
+        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
+          && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0;
       }
 
       match /additives/{additiveId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow write: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
+        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
+        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
+          && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0;
       }
 
+      function protectedFinanceReference(data) {
+        return data.get('reference', '').matches('(INVENTORY-|HARVEST-|ASSET-).*');
+      }
+      function paymentOnlyUpdate() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['settlements', 'updatedAt'])
+          && request.resource.data.settlements is list;
+      }
+      function matchingInventorySource(companyId, expenseId) {
+        let data = request.resource.data;
+        let source = getAfter(/databases/$(database)/documents/companies/$(companyId)/$(data.sourceCollection)/$(data.sourceId)).data;
+        let entry = source.financeEntries[expenseId];
+        let stock = source.stockInHistory[data.sourceStockIndex];
+        return data.sourceKind == 'inventory'
+          && data.sourceCollection in ['feeds', 'additives']
+          && data.companyId == companyId
+          && expenseId.matches('sync_INVENTORY-.*')
+          && entry.reference == data.reference && entry.amount == data.amount && entry.date == data.date
+          && source.companyId == companyId
+          && stock.id == data.sourceLineId && stock.quantity * stock.price == data.amount
+          && data.get('voided', false) == false;
+      }
+      function matchingHarvestSource(companyId, revenueId) {
+        let data = request.resource.data;
+        let source = getAfter(/databases/$(database)/documents/companies/$(companyId)/harvestRecords/$(data.sourceId)).data;
+        let entry = source.financeEntry;
+        return data.sourceKind == 'harvest' && data.companyId == companyId
+          && revenueId.matches('sync_HARVEST-.*')
+          && entry.id == revenueId && entry.reference == data.reference
+          && entry.amount == data.amount && entry.date == data.date
+          && entry.voided == data.get('voided', false)
+          && source.get('voided', false) == data.get('voided', false);
+      }
       match /expenses/{expenseId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
-        allow create, update: if hasCompanyPermission(companyId, 'manageFinance')
-          || (
-            hasCompanyPermission(companyId, 'manageFeedInventory')
-            && expenseId.matches('sync_INVENTORY-.*')
-            && request.resource.data.companyId == companyId
-            && request.resource.data.reference.matches('INVENTORY-.*')
-          );
-        allow delete: if isFounderAdmin()
-          || hasCompanyPermission(companyId, 'manageFinance')
-          || (hasCompanyPermission(companyId, 'manageFeedInventory')
-            && expenseId.matches('sync_INVENTORY-.*')
-            && resource.data.reference.matches('INVENTORY-.*'));
+        allow create: if (hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
+          || (hasCompanyPermission(companyId, 'manageFeedInventory') && matchingInventorySource(companyId, expenseId));
+        allow update: if (hasCompanyPermission(companyId, 'manageFinance')
+            && ((!protectedFinanceReference(resource.data) && !protectedFinanceReference(request.resource.data)) || paymentOnlyUpdate()))
+          || (hasCompanyPermission(companyId, 'manageFeedInventory') && matchingInventorySource(companyId, expenseId)
+            && request.resource.data.get('settlements', []) == resource.data.get('settlements', []));
+        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data);
       }
-
       match /revenues/{revenueId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFinance');
-        allow create, update: if hasCompanyPermission(companyId, 'manageFinance')
-          || (
-            hasCompanyPermission(companyId, 'manageHarvests')
-            && revenueId.matches('sync_HARVEST-.*')
-            && request.resource.data.companyId == companyId
-            && request.resource.data.reference.matches('HARVEST-.*')
-          );
-        allow delete: if isFounderAdmin()
-          || hasCompanyPermission(companyId, 'manageFinance')
-          || (hasCompanyPermission(companyId, 'manageHarvests')
-            && revenueId.matches('sync_HARVEST-.*')
-            && resource.data.reference.matches('HARVEST-.*'));
+        allow create: if (hasCompanyPermission(companyId, 'manageFinance') && !protectedFinanceReference(request.resource.data))
+          || (hasCompanyPermission(companyId, 'manageHarvests') && matchingHarvestSource(companyId, revenueId));
+        allow update: if (hasCompanyPermission(companyId, 'manageFinance')
+            && ((!protectedFinanceReference(resource.data) && !protectedFinanceReference(request.resource.data)) || paymentOnlyUpdate()))
+          || (hasCompanyPermission(companyId, 'manageHarvests') && matchingHarvestSource(companyId, revenueId)
+            && request.resource.data.get('settlements', []) == resource.data.get('settlements', []));
+        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFinance')) && !protectedFinanceReference(resource.data);
       }
 
       match /billing/{docId} {

@@ -2,7 +2,7 @@ import {
   differenceInFarmCalendarDays,
   getFarmDateKey,
   normalizeFarmDateKey,
-} from './farmDate';
+} from './farmDate.ts';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 

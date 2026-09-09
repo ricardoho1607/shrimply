@@ -43,7 +43,7 @@ const SummaryItem = React.memo(function SummaryItem({ iconName, label, value, un
 export default function HarvestScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { t } = useLanguage();
+  const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
   const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
@@ -834,14 +834,14 @@ export default function HarvestScreen() {
               <View style={styles.deleteModalIcon}>
                 <Ionicons name="warning-outline" size={48} color="#e74c3c" />
               </View>
-              <Text style={styles.deleteModalTitle}>{t.harvest.deleteTitle}</Text>
-              <Text style={styles.deleteModalText}>{t.harvest.deleteMessage}</Text>
+              <Text style={styles.deleteModalTitle}>{currentLanguage === 'id' ? 'Batalkan panen?' : 'Void harvest?'}</Text>
+              <Text style={styles.deleteModalText}>{currentLanguage === 'id' ? 'Panen dan pendapatannya akan dibatalkan. Riwayat dan pembayaran yang dikonfirmasi tetap disimpan. Catat pengembalian dana secara terpisah.' : 'This voids the harvest and its revenue. History and confirmed payments are retained. Record any refund separately.'}</Text>
               <View style={styles.deleteModalButtons}>
                 <TouchableOpacity style={styles.deleteModalCancelButton} onPress={cancelDeleteHarvest}>
                   <Text style={styles.deleteModalCancelText}>{t.actions.cancel}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.deleteModalConfirmButton} onPress={confirmDeleteHarvest}>
-                  <Text style={styles.deleteModalConfirmText}>{t.actions.delete}</Text>
+                  <Text style={styles.deleteModalConfirmText}>{currentLanguage === 'id' ? 'Batalkan panen' : 'Void harvest'}</Text>
                 </TouchableOpacity>
               </View>
             </View>

@@ -56,16 +56,17 @@ function CycleReportsContent() {
   const { company } = useAuth();
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency } = useCurrency();
-  const { data: cycles, loading: cyclesLoading } = useCompanyCycles<CycleReportCycle>('desc');
-  const { data: ponds, loading: pondsLoading } = useCompanyPonds<CycleReportPondSource>('desc');
-  const { data: harvestRecords, loading: harvestLoading } = useCompanyHarvestRecords<CycleReportHarvestRecord>('desc');
-  const { feeds, additives, loading: inventoryLoading } = useInventoryFeeds<
+  const { data: cycles, loading: cyclesLoading, error: cyclesError } = useCompanyCycles<CycleReportCycle>('desc');
+  const { data: ponds, loading: pondsLoading, error: pondsError } = useCompanyPonds<CycleReportPondSource>('desc');
+  const { data: harvestRecords, loading: harvestLoading, error: harvestError } = useCompanyHarvestRecords<CycleReportHarvestRecord>('desc');
+  const { feeds, additives, loading: inventoryLoading, error: inventoryError } = useInventoryFeeds<
     CycleReportInventoryItem,
     CycleReportInventoryItem,
     CycleReportPondSource
   >();
-  const { expenses, loading: financeLoading } = useFinanceRecords<CycleReportExpense, { id: string }>();
+  const { expenses, loading: financeLoading, error: financeError } = useFinanceRecords<CycleReportExpense, { id: string }>();
   const [assets, setAssets] = useState<CycleReportAsset[]>([]);
+  const [assetsError, setAssetsError] = useState<Error | null>(null);
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [exportLoading, setExportLoading] = useState(false);
@@ -84,7 +85,7 @@ function CycleReportsContent() {
       return;
     }
 
-    queueMicrotask(() => setAssetsLoading(true));
+    queueMicrotask(() => { setAssetsLoading(true); setAssetsError(null); });
     return onSnapshot(
       query(collection(db, 'assets'), where('companyId', '==', company.id)),
       (snapshot) => {
@@ -93,6 +94,7 @@ function CycleReportsContent() {
       },
       (error) => {
         console.error('Failed to load cycle report assets:', error);
+        setAssetsError(error);
         setAssets([]);
         setAssetsLoading(false);
       },
@@ -129,8 +131,11 @@ function CycleReportsContent() {
   ]);
   const loading = cyclesLoading || pondsLoading || harvestLoading || inventoryLoading || financeLoading || assetsLoading;
 
+  const sourceError = cyclesError || pondsError || harvestError || inventoryError || financeError || assetsError;
+  const invalidCosts = report ? !Object.values(report.totals.costs).every(Number.isFinite) : false;
+
   const handleExport = async () => {
-    if (!report || !canExportReports) return;
+    if (!report || !canExportReports || loading || sourceError || invalidCosts) return;
     setExportLoading(true);
     try {
       const brandAssets = await loadMobilePdfBrandAssets('portrait');
@@ -143,7 +148,7 @@ function CycleReportsContent() {
       await downloadMobilePdf({
         html,
         filename: `Cycle_Report_${report.cycle.cycleName.replace(/[^a-z0-9]+/gi, '_')}.pdf`,
-        orientation: 'portrait',
+        orientation: 'portrait', preserveTemplateScale: true,
       });
     } catch (error) {
       console.error('Cycle report export failed:', error);
@@ -205,7 +210,10 @@ function CycleReportsContent() {
     );
   }
 
-  if (loading && !report) {
+  if (sourceError) return <div role="alert">A report data source could not be loaded. Reload before exporting.</div>;
+  if (invalidCosts) return <div role="alert">Some recorded usage costs are missing or invalid. Correct the source costs before exporting.</div>;
+
+  if (loading) {
     return <div className={`${styles.empty} authenticated-compact-page business-dashboard-page`}><Loader2 className="animate-spin" /><p>{t.cycleReport.loading}</p></div>;
   }
 
@@ -232,7 +240,7 @@ function CycleReportsContent() {
         </div>
         <div className={styles.headerActions}>
           <Link href="/dashboard/reports/cycles" className={styles.backButton}>{t.cycleReport.backToArchive}</Link>
-          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={exportLoading || !canExportReports}>
+          <button type="button" className={styles.actionButton} onClick={handleExport} disabled={loading || Boolean(sourceError) || invalidCosts || exportLoading || !canExportReports}>
             {exportLoading ? <Loader2 className="animate-spin" size={17} /> : <FileDown size={17} />} {t.cycleReport.exportPdf}
           </button>
         </div>
@@ -300,6 +308,7 @@ function CycleReportsContent() {
         <>
           <section className={styles.section}>
             <h2>{t.cycleReport.costBreakdown}</h2>
+            <p>Maintenance includes Finance entries only. Post each asset maintenance cost once in Finance.</p>
             <div className={styles.costList}>
               <div className={styles.costRow}><span>{t.cycleReport.feedCost}</span><b>{formatCurrency(report.totals.costs.feed)}</b></div>
               <div className={styles.costRow}><span>{t.cycleReport.additiveCost}</span><b>{formatCurrency(report.totals.costs.additives)}</b></div>

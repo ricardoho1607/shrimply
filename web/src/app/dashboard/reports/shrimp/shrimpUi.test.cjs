@@ -64,6 +64,6 @@ test('ponds without a real growth sampling are not performance-rated', () => {
 test('sampling reports expose cycle selection instead of restricting reports to the first open cycle', () => {
   assert.doesNotMatch(source, /filterActiveCyclePonds/);
   assert.match(source, /aria-label=\{copy\('Production cycle'\)\}/);
-  assert.match(source, /filterSamplingReportPonds\(ponds, cycles, cycleScope\)/);
+  assert.match(source, /filterSamplingReportPonds\(accessiblePonds, cycles, cycleScope\)/);
   assert.match(source, /setSelectedPondIds\(null\)/);
 });

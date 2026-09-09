@@ -6,7 +6,7 @@ import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { db } from '@/lib/firebase';
-import { useCompanyBlocks } from '@/hooks/useDashboardData';
+import { useCompanyBlocks, useCompanyHarvestRecords } from '@/hooks/useDashboardData';
 import { downloadMobilePdf, loadMobilePdfBrandAssets } from '@/lib/mobilePdfExport';
 import {
   buildDailyOperationsReport,
@@ -17,6 +17,7 @@ import {
   dailyOperationsTranslations,
   type DailyOperationsLanguage,
 } from '../../../../../../shared/dailyOperationsI18n';
+import { pondExistsOnReportDate, type ReportHarvest } from '../../../../../../shared/reportSnapshots';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import MineralLabResults, { type MineralLabResultsHandle } from '@/components/MineralLabResults';
 import type { SavedMineralLabReport } from '@/lib/mineralLabResults';
@@ -63,6 +64,7 @@ export default function DailyOperationsReportsPage() {
   const hasPermission = useFarmPermissions();
   const canViewReports = hasPermission('viewReports');
   const canExportReports = hasPermission('exportReports');
+  const { data: harvests, loading: harvestLoading, error: harvestError } = useCompanyHarvestRecords<ReportHarvest & { id: string }>();
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export default function DailyOperationsReportsPage() {
     userId: user?.uid,
     blocks: farmBlocks,
   }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
-  const activePonds = useMemo(() => accessiblePonds.filter((pond) => pond.cycleStatus !== 'ended'), [accessiblePonds]);
+  const activePonds = useMemo(() => accessiblePonds.filter((pond) => pondExistsOnReportDate(pond, reportDate, company?.timeZone)), [accessiblePonds, reportDate, company?.timeZone]);
   const blocks = useMemo(() => Array.from(new Set(activePonds.map((pond) => pond.blockName).filter(Boolean) as string[])).sort(), [activePonds]);
   const filteredPonds = useMemo(
     () => selectedBlock === 'all' ? activePonds : activePonds.filter((pond) => pond.blockName === selectedBlock),
@@ -101,17 +103,17 @@ export default function DailyOperationsReportsPage() {
     companyName: company?.companyName || copy.myFarm,
     reportDate,
     generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
-    ponds: filteredPonds,
+    ponds: filteredPonds, harvests,
     timeZone: company?.timeZone,
-  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, filteredPonds, reportDate, user?.email, user?.name]);
+  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, filteredPonds, harvests, reportDate, user?.email, user?.name]);
 
   const exportPdf = async () => {
-    if (!canExportReports || exporting) return;
+    if (!canExportReports || exporting || harvestLoading || harvestError || report.warnings?.length) return;
     setExporting(true);
     try {
       const assets = await loadMobilePdfBrandAssets('landscape');
       const html = generateDailyOperationsReportHTML(report, assets, currentLanguage);
-      await downloadMobilePdf({ html, filename: `Shrimply-Daily-Operations-${reportDate}.pdf`, orientation: 'landscape' });
+      await downloadMobilePdf({ html, filename: `Shrimply-Daily-Operations-${reportDate}.pdf`, orientation: 'landscape', preserveTemplateScale: true });
     } catch (error) {
       console.error('Failed to export daily operations PDF:', error);
       window.alert(copy.exportFailedMessage);
@@ -141,6 +143,8 @@ export default function DailyOperationsReportsPage() {
 
   return (
     <div className="dashboard-page-relaxed authenticated-compact-page business-dashboard-page" style={{ paddingBottom: '40px' }}>
+      {harvestError && <p role="alert">Harvest history could not be loaded. Reload before exporting.</p>}
+      {report.warnings?.map(message => <p role="alert" key={message}>{message}</p>)}
       <div className="glass-card" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: '18px', padding: '20px 22px', display: 'flex', justifyContent: 'space-between', gap: '18px', alignItems: 'center', flexWrap: 'wrap' }}>
         <div>
           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{t.nav.reports || 'Reports'}</div>
@@ -150,7 +154,7 @@ export default function DailyOperationsReportsPage() {
         <button
           className="btn-primary"
           onClick={handleExport}
-          disabled={!canExportReports || isAnyExporting || filteredPonds.length === 0}
+          disabled={!canExportReports || isAnyExporting || (activeTab === 'mineral' ? !selectedMineralReport : harvestLoading || Boolean(harvestError) || Boolean(report.warnings?.length) || filteredPonds.length === 0)}
           style={{ minHeight: '44px', padding: '0 17px', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}
         >
           {isAnyExporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
@@ -230,7 +234,7 @@ export default function DailyOperationsReportsPage() {
             copy.transparencyMorning,
             copy.transparencyEvening,
             copy.salinity,
-            copy.alkalinity,
+            copy.alkalinity, 'DO AM (mg/L)', 'DO PM (mg/L)', 'Ammonia (mg/L)',
             copy.feedIndex,
             copy.dailyFeed,
             copy.cumulativeFeed,
@@ -244,7 +248,7 @@ export default function DailyOperationsReportsPage() {
             <td style={cellStyle}>{row.waterAppearanceMorning || 'N/A'}</td><td style={cellStyle}>{row.waterAppearanceEvening || 'N/A'}</td>
             <td style={cellStyle}>{row.waterDepthCmMorning || 'N/A'}</td><td style={cellStyle}>{row.waterDepthCmEvening || 'N/A'}</td>
             <td style={cellStyle}>{row.transparencyMorning || 'N/A'}</td><td style={cellStyle}>{row.transparencyEvening || 'N/A'}</td>
-            <td style={cellStyle}>{row.salinity || 'N/A'}</td><td style={cellStyle}>{row.alkalinity || 'N/A'}</td>
+            <td style={cellStyle}>{row.salinity || 'N/A'}</td><td style={cellStyle}>{row.alkalinity || 'N/A'}</td><td style={cellStyle}>{row.doMorning}</td><td style={cellStyle}>{row.doEvening}</td><td style={cellStyle}>{row.ammonia}</td>
             <td style={cellStyle}>{row.feedIndex || 'N/A'}</td><td style={cellStyle}>{row.dailyFeedKg || 'N/A'}</td><td style={cellStyle}>{row.cumulativeFeedKg || 'N/A'}</td><td style={cellStyle}>{row.targetAdg || 'N/A'}</td>
             <td style={cellStyle}>{row.estimatedPopulation == null || !Number.isFinite(row.estimatedPopulation) ? 'N/A' : Math.round(row.estimatedPopulation).toLocaleString()}</td>
           </tr>)}</tbody>

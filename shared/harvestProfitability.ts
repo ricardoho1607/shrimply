@@ -1,3 +1,4 @@
+import { isCycleOperatingExpense } from './reportingIntegrity';
 import { differenceInFarmCalendarDays, normalizeFarmDateKey } from './farmDate';
 import { daysToTargetMbwWithTapering } from './pondCalculations';
 
@@ -24,6 +25,7 @@ export interface AllocatableCostRecord {
 }
 
 export interface ExpenseCostLike {
+  voided?: boolean;
   id: string;
   date?: string | null;
   amount?: number | string | null;
@@ -36,6 +38,7 @@ export interface ExpenseCostLike {
 }
 
 export interface InventoryUsageCostLike {
+  source?: string;
   id?: string | null;
   date?: string | null;
   quantity?: number | string | null;
@@ -173,7 +176,7 @@ export const isInventoryPurchaseExpense = (expense: ExpenseCostLike): boolean =>
   Boolean(expense.reference?.startsWith('INVENTORY-') || expense.linkedInventory?.trim());
 
 export const expenseToCostRecord = (expense: ExpenseCostLike, timeZone?: string): AllocatableCostRecord | null => {
-  if (isInventoryPurchaseExpense(expense)) return null;
+  if (isInventoryPurchaseExpense(expense) || !isCycleOperatingExpense(expense)) return null;
   const date = validDate(expense.date, timeZone);
   const amount = finite(expense.amount);
   if (!date || amount === null || amount <= 0) return null;
@@ -195,6 +198,7 @@ export const inventoryUsageToCostRecord = (
   fallbackId: string,
   timeZone?: string,
 ): AllocatableCostRecord | null => {
+  if (usage.source === 'treatmentMixProduction') return null;
   const date = validDate(usage.date, timeZone);
   const quantity = finite(usage.quantity);
   const savedCost = finite(usage.totalCost);
@@ -350,6 +354,7 @@ export const buildPondProfitabilityCostSnapshot = ({
 
   const feedQuantityRecords = feeds.flatMap((item) =>
     (item.usageHistory || []).reduce<AllocatableCostRecord[]>((records, usage, index) => {
+      if (usage.source === 'treatmentMixProduction') return records;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
       if (!date || quantity === null || quantity === 0) return records;
@@ -441,6 +446,7 @@ export const buildDailyFeedTotalsForPond = (
   feeds.forEach((feed) => {
     (feed.usageHistory || []).forEach((usage) => {
       if (usage.pondId !== pondId) return;
+      if (usage.source === 'treatmentMixProduction') return;
       const date = validDate(usage.date, timeZone);
       const quantity = finite(usage.quantity);
       if (!date || quantity === null) return;

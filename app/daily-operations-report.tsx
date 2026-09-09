@@ -1,3 +1,4 @@
+import { pondExistsOnReportDate } from '../shared/reportSnapshots';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -29,7 +30,7 @@ import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import { exportDailyOperationsReportPDF } from './services/dailyOperationsReportExportService';
-import { isPondCycleActive, usePondStore } from './store/pondStore';
+import { usePondStore } from './store/pondStore';
 
 type ReportTab = 'sipon' | 'water';
 
@@ -57,6 +58,7 @@ export default function DailyOperationsReportScreen() {
     }
     return merged as typeof dailyOperationsTranslations.en;
   }, [currentLanguage, localeCopy, t?.dailyOperationsReports]);
+  const harvests = usePondStore((state) => state.harvestRecords);
   const ponds = usePondStore((state) => state.ponds);
   const today = useFarmDateKey(company?.timeZone);
   const [reportDate, setReportDate] = useState(today);
@@ -81,11 +83,11 @@ export default function DailyOperationsReportScreen() {
   );
 
   const activePonds = useMemo(() => ponds.filter((pond) => (
-    isPondCycleActive(pond) && (
+    pondExistsOnReportDate(pond, reportDate, company?.timeZone) && (
       company?.businessSize !== 'enterprise' || user?.role !== 'technician' ||
       (typeof pond.blockId === 'string' && assignedBlockIds.has(pond.blockId))
     )
-  )), [assignedBlockIds, company?.businessSize, ponds, user?.role]);
+  )), [assignedBlockIds, company?.businessSize, company?.timeZone, reportDate, ponds, user?.role]);
   const blocks = useMemo(() => Array.from(new Set(activePonds.map((pond) => pond.blockName).filter(Boolean) as string[])).sort(), [activePonds]);
   const selectedPonds = useMemo(
     () => selectedBlock === 'all' ? activePonds : activePonds.filter((pond) => pond.blockName === selectedBlock),
@@ -95,12 +97,13 @@ export default function DailyOperationsReportScreen() {
     companyName: company?.companyName || copy.myFarm,
     reportDate,
     generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
-    ponds: selectedPonds as DailyOperationsPondSource[],
+    ponds: selectedPonds as DailyOperationsPondSource[], harvests,
     timeZone: company?.timeZone,
-  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, user?.email, user?.name]);
+  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, harvests, user?.email, user?.name]);
 
   const exportReport = async () => {
     if (!canExportReports || exporting) return;
+    if (report.warnings?.length) { Alert.alert('Incomplete report history', report.warnings.join('\n')); return; }
     setExporting(true);
     try {
       await exportDailyOperationsReportPDF(report, currentLanguage);
@@ -213,7 +216,7 @@ export default function DailyOperationsReportScreen() {
                     copy.transparencyMorning,
                     copy.transparencyEvening,
                     copy.salinity,
-                    copy.alkalinity,
+                    copy.alkalinity, 'DO AM (mg/L)', 'DO PM (mg/L)', 'Ammonia (mg/L)',
                     copy.feedIndex,
                     copy.dailyFeed,
                     copy.cumulativeFeed,
@@ -228,7 +231,7 @@ export default function DailyOperationsReportScreen() {
                   <Cell value={row.waterAppearanceMorning || 'N/A'} /><Cell value={row.waterAppearanceEvening || 'N/A'} />
                   <Cell value={row.waterDepthCmMorning || 'N/A'} /><Cell value={row.waterDepthCmEvening || 'N/A'} />
                   <Cell value={row.transparencyMorning || 'N/A'} /><Cell value={row.transparencyEvening || 'N/A'} />
-                  <Cell value={row.salinity || 'N/A'} /><Cell value={row.alkalinity || 'N/A'} />
+                  <Cell value={row.salinity || 'N/A'} /><Cell value={row.alkalinity || 'N/A'} /><Cell value={row.doMorning} /><Cell value={row.doEvening} /><Cell value={row.ammonia} />
                   <Cell value={row.feedIndex || 'N/A'} /><Cell value={row.dailyFeedKg || 'N/A'} /><Cell value={row.cumulativeFeedKg || 'N/A'} /><Cell value={row.targetAdg || 'N/A'} />
                   <Cell value={row.estimatedPopulation == null || !Number.isFinite(row.estimatedPopulation) ? 'N/A' : Math.round(row.estimatedPopulation).toLocaleString()} />
                 </View>)}

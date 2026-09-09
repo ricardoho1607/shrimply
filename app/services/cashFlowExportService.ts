@@ -53,6 +53,7 @@ interface CashFlowData {
     dividendsPaid: number;
     ownerWithdrawals: number;
   };
+  basisNote?: string;
   currencyCode: string;
   currencySymbol: string;
 }
@@ -211,12 +212,15 @@ const getCashFlowAnalysis = (data: CashFlowData, language: PdfLanguage) => {
   return { executiveSummary, riskAssessment };
 };
 
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
+
 const generateCashFlowHTML = (
   data: CashFlowData,
   brandAssets: PdfBrandAssets,
   language: PdfLanguage,
   useIosPrintLayout = false,
 ): string => {
+  const basisNote = language === 'id' ? data.basisNote?.replace('Company-wide confirmed payments only.', 'Hanya pembayaran terkonfirmasi untuk seluruh perusahaan.').replace(/(\d+) entries have an unconfirmed balance\./, '$1 transaksi memiliki saldo yang belum dikonfirmasi.').replace('Opening cash is derived from recorded payments, not a reconciled bank balance.', 'Kas awal berasal dari pembayaran yang dicatat, bukan saldo bank yang telah direkonsiliasi.') : data.basisNote;
   const { 
     startDate, 
     endDate, 
@@ -468,6 +472,7 @@ const generateCashFlowHTML = (
             <div class="company-name">${companyName}</div>
             <div class="subtitle">Cash Flow Statement (Direct Method)</div>
             <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+            ${basisNote ? `<div class="date-range">${escapeHtml(basisNote)}</div>` : ''}
           </div>
       
       <div class="divider"></div>
@@ -653,6 +658,7 @@ const generateCashFlowHTML = (
             <div class="company-name">${companyName}</div>
             <div class="subtitle">Closing Cash Position, Executive Review, and Liquidity Risks</div>
             <div class="date-range">For the period ${formatDate(startDate, language)} - ${formatDate(endDate, language)}</div>
+            ${basisNote ? `<div class="date-range">${escapeHtml(basisNote)}</div>` : ''}
           </div>
           <div class="divider"></div>
 

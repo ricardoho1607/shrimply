@@ -1,3 +1,6 @@
+import { transactionOpeningPosition } from '../shared/reportingIntegrity';
+import { buildProfitLoss, buildConfirmedCashFlow } from '../shared/financeReports';
+import { monetaryValue } from '../shared/financeIntegrity';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
 import { useState, useEffect, useMemo } from 'react';
@@ -36,7 +39,8 @@ export default function FinancialReportsPage() {
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t, currentLanguage } = useLanguage();
-  const { formatCurrency, currencyConfig } = useCurrency();
+  const { formatCurrency: displayCurrency, currencyConfig } = useCurrency();
+  const formatCurrency = (value: number) => Number.isFinite(value) ? displayCurrency(value) : 'N/A';
   const { cycles, ponds, harvestRecords } = usePondStore();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
@@ -90,7 +94,11 @@ export default function FinancialReportsPage() {
     }
     loadData();
     feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
-    feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+    const stopInventory = feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+    const onLedgerError = (error: Error) => console.error('Finance listener:', error);
+    const stopExpenses = financeService.subscribe(company.id, setExpenses, onLedgerError, true);
+    const stopRevenues = revenueService.subscribe(company.id, setRevenues, onLedgerError, true);
+    return () => { stopExpenses(); stopRevenues(); stopInventory?.(); };
   }, [company?.id]);
 
   const loadData = async () => {
@@ -98,8 +106,8 @@ export default function FinancialReportsPage() {
     setLoading(true);
     try {
       const [fetchedExpenses, fetchedRevenues] = await Promise.all([
-        financeService.getExpenses(company.id),
-        revenueService.getRevenues(company.id),
+        financeService.getExpenses(company.id, true),
+        revenueService.getRevenues(company.id, true),
       ]);
       setExpenses(fetchedExpenses);
       setRevenues(fetchedRevenues);
@@ -154,15 +162,15 @@ export default function FinancialReportsPage() {
         : items;
 
     return {
-      filteredExpenses: scopeFinance(expenses).filter(e => isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)),
-      filteredRevenues: scopeFinance(revenues).filter(r => isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone))
+      filteredExpenses: scopeFinance(expenses).filter(e => !e.voided && isDateKeyInRange(e.date, startDateKey, endDateKey, company?.timeZone)),
+      filteredRevenues: scopeFinance(revenues).filter(r => !r.voided && isDateKeyInRange(r.date, startDateKey, endDateKey, company?.timeZone))
     };
   };
 
   const { filteredExpenses, filteredRevenues } = getFilteredData();
 
   const calculateTotals = (data: Expense[] | Revenue[], service: typeof financeService | typeof revenueService) => ({
-    total: service.calculateTotal(data),
+    total: data.reduce((sum, row) => sum + (monetaryValue(row.amount) ?? 0), 0),
     byCategory: service.getCategoryBreakdown(data),
     top: service === financeService ? (service as typeof financeService).getTopExpenses(data as Expense[], 3) : (service as typeof revenueService).getTopRevenues(data as Revenue[], 3)
   });
@@ -173,126 +181,23 @@ export default function FinancialReportsPage() {
 
 
   const { startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey } = getDateRange();
-  const usageMatchesScope = (usage: { date?: string; cycleId?: string }) => Boolean(
-    usage.date
-    && usage.cycleId
-    && (cycleScope === 'all' || usage.cycleId === cycleScope)
-    && isDateKeyInRange(usage.date, cogsStartDateKey, cogsEndDateKey, company?.timeZone)
-  );
-  const feedUsageCost = feedAdditiveStore.feeds.flatMap((feed) => feed.usageHistory || [])
-    .filter(usageMatchesScope)
-    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
-  const additiveUsageCost = feedAdditiveStore.additives.flatMap((additive) => additive.usageHistory || [])
-    .filter(usageMatchesScope)
-    .reduce((sum, usage) => sum + (Number(usage.totalCost) || 0), 0);
-
-  const cycleProductionExpenses = filteredExpenses.filter((expense) => (
-    Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
-  ));
-  const cogs = buildCogsReport({
+  const cogsInput = {
     ponds, expenses, revenues, harvests: harvestRecords,
     feedUsage: feedAdditiveStore.feeds.flatMap(feed => feed.usageHistory || []),
     additiveUsage: feedAdditiveStore.additives.flatMap(additive => additive.usageHistory || []),
     cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || 'All cycles',
     startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory,
-  });
+  };
+  const cogs = buildCogsReport(cogsInput);
+  const pl = buildProfitLoss(cogsInput, openingInventory, closingInventory);
   const { purchases, directLabor, directMaterials } = cogs;
   const totalCOGSInventory = openingInventory + cogs.totalProductionCost - closingInventory;
   const cogsGrossProfit = cogs.revenue - totalCOGSInventory;
 
-  // P&L Metrics — use English display names in breakdowns so PDF always shows clean labels
-  const cogsCategoryBreakdown: { [key: string]: number } = {};
-  if (feedUsageCost) cogsCategoryBreakdown[t.financeCycle.feedUsage] = feedUsageCost;
-  if (additiveUsageCost) cogsCategoryBreakdown[t.financeCycle.additiveUsage] = additiveUsageCost;
-  cycleProductionExpenses.forEach(exp => {
-    const key = normalizeCategory(exp.category);
-    cogsCategoryBreakdown[key] = (cogsCategoryBreakdown[key] || 0) + exp.amount;
-  });
-  const totalCOGSPL = feedUsageCost + additiveUsageCost + cycleProductionExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const grossProfitPL = revenueTotals.total - totalCOGSPL;
-
-  const NON_OPEX_CATEGORIES = ['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend'];
-
-  const opexExpenses = filteredExpenses.filter(e => {
-    const norm = normalizeCategory(e.category);
-    return !e.cycleId && !e.reference?.startsWith('INVENTORY-') && !NON_OPEX_CATEGORIES.includes(norm);
-  });
-  const opexCategoryBreakdown: { [key: string]: number } = {};
-  opexExpenses.forEach(exp => {
-    const key = normalizeCategory(exp.category);
-    opexCategoryBreakdown[key] = (opexCategoryBreakdown[key] || 0) + exp.amount;
-  });
-  const totalOPEX = opexExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-  const operatingIncome = grossProfitPL - totalOPEX;
-
-  const otherExpenses = filteredExpenses.filter(e => ['Loan Payment', 'Taxes', 'Interest'].includes(normalizeCategory(e.category)));
-  const otherExpenseBreakdown: { [key: string]: number } = {};
-  otherExpenses.forEach(exp => {
-    const key = normalizeCategory(exp.category);
-    otherExpenseBreakdown[key] = (otherExpenseBreakdown[key] || 0) + exp.amount;
-  });
-  const totalOtherExpenses = otherExpenses.reduce((sum, e) => sum + e.amount, 0);
-
-  const netProfitPL = operatingIncome - totalOtherExpenses;
-
-  const getOpeningBalance = () => {
-    const { startDateKey } = getDateRange();
-    const previousRevenues = revenues.filter(r => {
-      const dateKey = normalizeFarmDateKey(r.date, company?.timeZone);
-      return Boolean(
-        (cycleScope === 'all' || r.cycleId === cycleScope)
-        && startDateKey
-        && dateKey
-        && dateKey < startDateKey,
-      );
-    });
-    const previousExpenses = expenses.filter(e => {
-      const dateKey = normalizeFarmDateKey(e.date, company?.timeZone);
-      return Boolean(
-        (cycleScope === 'all' || e.cycleId === cycleScope)
-        && startDateKey
-        && dateKey
-        && dateKey < startDateKey,
-      );
-    });
-    return revenueService.calculateTotal(previousRevenues) - financeService.calculateTotal(previousExpenses);
-  };
-
-  const CF_INVESTING_CATEGORIES = ['Equipment', 'Property', 'Infrastructure'];
-  const CF_FINANCING_CATEGORIES = ['Loan Payment', 'Owner Withdrawal', 'Dividend'];
-
-  const categorizeCashFlow = () => {
-    const operating = { cashFromSales: 0, cashFromCustomers: 0, paymentToSuppliers: 0, paymentForExpenses: 0, otherOperatingCash: 0 };
-    const investing = { purchaseOfAssets: 0, saleOfAssets: 0, purchaseOfInvestments: 0, saleOfInvestments: 0 };
-    const financing = { loansReceived: 0, loanRepayments: 0, capitalContributed: 0, dividendsPaid: 0, ownerWithdrawals: 0 };
-
-    filteredRevenues.forEach(rev => {
-      if (normalizeCategory(rev.category) === 'Shrimp Sales') operating.cashFromSales += rev.amount;
-      else operating.cashFromCustomers += rev.amount;
-    });
-
-    filteredExpenses.forEach(exp => {
-      const norm = normalizeCategory(exp.category);
-      if (!CF_INVESTING_CATEGORIES.includes(norm) && !CF_FINANCING_CATEGORIES.includes(norm)) {
-        if (norm === 'Feed' || norm === 'Pond Additives') operating.paymentToSuppliers += exp.amount;
-        else operating.paymentForExpenses += exp.amount;
-      } else if (CF_INVESTING_CATEGORIES.includes(norm)) {
-        investing.purchaseOfAssets += exp.amount;
-      } else if (CF_FINANCING_CATEGORIES.includes(norm)) {
-        if (norm === 'Loan Payment') financing.loanRepayments += exp.amount;
-        else financing.ownerWithdrawals += exp.amount;
-      } else {
-        // Fallback for any unhandled categories
-        operating.paymentForExpenses += exp.amount;
-      }
-    });
-    return { operating, investing, financing };
-  };
-
-  const { operating, investing, financing } = categorizeCashFlow();
-  const openingBalance = getOpeningBalance();
-  
+  const { totalCOGS: totalCOGSPL, cogsBreakdown: cogsCategoryBreakdown, grossProfit: grossProfitPL, totalOPEX, opexBreakdown: opexCategoryBreakdown, operatingIncome, totalOtherExpenses, otherExpenseBreakdown, netProfit: netProfitPL } = pl;
+  const registerOpeningBalance = transactionOpeningPosition({ expenses, revenues, cycleScope, startDateKey: cogsStartDateKey, timeZone: company?.timeZone });
+  const cash = buildConfirmedCashFlow({ expenses, revenues, startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory });
+  const { operating, investing, financing, openingBalance } = cash;
   const netOperatingCash = operating.cashFromSales + operating.cashFromCustomers - operating.paymentToSuppliers - operating.paymentForExpenses + operating.otherOperatingCash;
   const netInvestingCash = investing.saleOfAssets + investing.saleOfInvestments - investing.purchaseOfAssets - investing.purchaseOfInvestments;
   const netFinancingCash = financing.loansReceived + financing.capitalContributed - financing.loanRepayments - financing.dividendsPaid - financing.ownerWithdrawals;
@@ -310,21 +215,22 @@ export default function FinancialReportsPage() {
 
   const handleGenerateReport = async () => {
     if (!canExportReports) return;
+    if ((['profit-loss', 'cogs'].includes(selectedReportType) && pl.missingAmounts) || (selectedReportType === 'transaction-history' && !Number.isFinite(registerOpeningBalance)) || [...expenses, ...revenues].some(row => monetaryValue(row.amount) === null) || (selectedReportType === 'cash-flow' && cash.invalidCount)) { Alert.alert('Incomplete finance data', 'Correct missing or invalid amounts and costs before exporting.'); return; }
     setGenerating(true);
     try {
       const { startDate, endDate } = getDateRange();
       if (selectedReportType === 'profit-loss') {
         await exportFinancialPDF(prepareFinancialData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
           company?.companyName || company?.id || 'Company', 
-          revenueTotals.total, revenueTotals.byCategory, 
+          pl.totalRevenue, pl.revenueBreakdown,
           totalCOGSPL, cogsCategoryBreakdown, grossProfitPL, 
           totalOPEX, opexCategoryBreakdown, operatingIncome, 
           totalOtherExpenses, otherExpenseBreakdown, netProfitPL,
           currencyConfig.code, currencyConfig.symbol), currentLanguage);
       } else if (selectedReportType === 'cash-flow') {
-        await exportCashFlowPDF(prepareCashFlowData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
+        await exportCashFlowPDF({ ...prepareCashFlowData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
           company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing,
-          currencyConfig.code, currencyConfig.symbol), currentLanguage);
+          currencyConfig.code, currencyConfig.symbol), basisNote: `Company-wide confirmed payments only. ${cash.unconfirmedCount} entries have an unconfirmed balance. Opening cash is derived from recorded payments, not a reconciled bank balance.` }, currentLanguage);
       } else if (selectedReportType === 'cogs') {
         await exportCOGSPDF(prepareCOGSData(selectedPeriod, cogsStartDateKey || startDate.toISOString(), cogsEndDateKey,
           company?.companyName || company?.id || 'Company', openingInventory, purchases, directLabor,
@@ -336,7 +242,7 @@ export default function FinancialReportsPage() {
           startDate.toISOString(),
           endDate.toISOString(),
           company?.companyName || company?.id || 'Company',
-          openingBalance,
+          registerOpeningBalance,
           filteredExpenses,
           filteredRevenues,
           currencyConfig.code,
@@ -459,9 +365,9 @@ export default function FinancialReportsPage() {
             ))}
           </View>
 
-          <View style={styles.cycleSelectorContainer}>
+          <View style={styles.cycleSelectorContainer} pointerEvents={selectedReportType === 'cash-flow' ? 'none' : 'auto'}>
             <CycleSelector
-              value={cycleScope}
+              value={selectedReportType === 'cash-flow' ? 'all' : cycleScope}
               options={activeCycles}
               onChange={setCycleScope}
               includeAllHistory
@@ -500,7 +406,8 @@ export default function FinancialReportsPage() {
           )}
         </View>
 
-        {selectedReportType === 'cogs' && (
+        {selectedReportType === 'cash-flow' && <Text style={styles.previewSubtitle}>Company-wide confirmed cash movements only. Record payments in Finance. {cash.unconfirmedCount} entries have an unconfirmed balance.</Text>}
+        {(selectedReportType === 'cogs' || selectedReportType === 'profit-loss') && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t.financialReports?.inventoryValues || 'Inventory Values'}</Text>
             <Text style={styles.previewSubtitle}>Feed and additives use consumed costs. Enter only production carry-forward, not unused stock. Zero means no adjustment entered.</Text>
@@ -534,20 +441,20 @@ export default function FinancialReportsPage() {
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.totalRevenue || 'Total Revenue'}</Text>
-                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatCurrency(revenueTotals.total)}</Text>
+                <Text style={[styles.summaryValue, styles.revenueColor]}>{formatCurrency(pl.totalRevenue)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.totalExpenses || 'Total Expenses'}</Text>
-                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatCurrency(expenseTotals.total)}</Text>
+                <Text style={[styles.summaryValue, styles.expenseColor]}>{formatCurrency(pl.totalCOGS + pl.totalOPEX + pl.totalOtherExpenses)}</Text>
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabelBold}>{profit >= 0 ? t.financialReports?.netProfit || 'Net Profit' : t.financialReports?.netLoss || 'Net Loss'}</Text>
-                <Text style={[styles.summaryValueBold, profit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(profit))}</Text>
+                <Text style={styles.summaryLabelBold}>{netProfitPL >= 0 ? t.financialReports?.netProfit || 'Net Profit' : t.financialReports?.netLoss || 'Net Loss'}</Text>
+                <Text style={[styles.summaryValueBold, netProfitPL >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(netProfitPL))}</Text>
               </View>
               <View style={styles.breakdownPreview}>
                 <Text style={styles.breakdownTitle}>{t.financialReports?.revenueBreakdown || 'Revenue Breakdown'}</Text>
-                {Object.entries(revenueTotals.byCategory).slice(0, 3).map(([category, amount]) => (
+                {Object.entries(pl.revenueBreakdown).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>{category}</Text>
                     <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>
@@ -556,7 +463,7 @@ export default function FinancialReportsPage() {
               </View>
               <View style={styles.breakdownPreview}>
                 <Text style={styles.breakdownTitle}>{t.financialReports?.expenseBreakdown || 'Expense Breakdown'}</Text>
-                {Object.entries(expenseTotals.byCategory).slice(0, 3).map(([category, amount]) => (
+                {Object.entries(pl.expenseBreakdown).slice(0, 3).map(([category, amount]) => (
                   <View key={category} style={styles.breakdownRow}>
                     <Text style={styles.breakdownLabel}>{category}</Text>
                     <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>

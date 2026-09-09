@@ -11,7 +11,7 @@ test('finance combines transaction actions into the shared input menu', () => {
   assert.match(source, /document\.addEventListener\('pointerdown', closeInputMenu\)/);
   assert.match(source, /className="pond-detail-record-menu finance-input-menu"/);
   assert.match(source, /className="pond-detail-record-trigger finance-input-trigger"/);
-  assert.match(source, /<Plus size=\{15\} \/>[\s\S]*?<span>Input<\/span>/);
+  assert.match(source, /<Plus size=\{15\} \/>[\s\S]*?<span>\{copy\('Input'\)\}<\/span>/);
   assert.match(source, /className="pond-detail-record-popover finance-input-popover"[\s\S]*?role="menu"/);
   assert.match(source, /openTransactionForm\('income'\)/);
   assert.match(source, /openTransactionForm\('expense'\)/);

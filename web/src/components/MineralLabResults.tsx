@@ -105,56 +105,18 @@ const MineralLabResults = forwardRef<MineralLabResultsHandle, MineralLabResultsP
     if (defaultRows.length > 0) {
       return {
         id: `mineral-${reportDate}`,
-        status: 'confirmed',
+        status: 'draft',
         entryMode: 'manual',
         reportType: 'water_quality',
         sampleDate: reportDate,
-        labName: copy.mineralLabResults,
+        labName: `${copy.mineralLabResults} — Blank worksheet (no confirmed results)`,
         pondResults: defaultRows,
       } as SavedMineralLabReport;
     }
     return null;
   }, [confirmedReport, copy.mineralLabResults, defaultRows, reportDate]);
 
-  const rows = useMemo(() => {
-    if (confirmedReport?.pondResults && confirmedReport.pondResults.length > 0) {
-      const labByPondId = new Map<string, (typeof confirmedReport.pondResults)[0]>();
-      const labByPondCode = new Map<string, (typeof confirmedReport.pondResults)[0]>();
-      for (const row of confirmedReport.pondResults) {
-        if (row.pondId) labByPondId.set(row.pondId, row);
-        if (row.pondCode) labByPondCode.set(row.pondCode.toLowerCase(), row);
-      }
-
-      if (activePonds.length > 0) {
-        const seenLabKeys = new Set<string>();
-        const mapped = activePonds.map(pond => {
-          const labRow = (pond.id ? labByPondId.get(pond.id) : undefined)
-            || (pond.pondCode ? labByPondCode.get(pond.pondCode.toLowerCase()) : undefined)
-            || (pond.pondName ? labByPondCode.get(pond.pondName.toLowerCase()) : undefined);
-          if (labRow) {
-            if (labRow.pondId) seenLabKeys.add(labRow.pondId);
-            if (labRow.pondCode) seenLabKeys.add(labRow.pondCode.toLowerCase());
-            return labRow;
-          }
-          return {
-            pondId: pond.id,
-            pondCode: pond.pondCode || pond.pondName || pond.id,
-            doc: getDocDays(pond.docStart || pond.stockingDate, reportDate),
-          };
-        });
-        const extras = confirmedReport.pondResults.filter(row => {
-          const idMatch = row.pondId && seenLabKeys.has(row.pondId);
-          const codeMatch = row.pondCode && seenLabKeys.has(row.pondCode.toLowerCase());
-          return !idMatch && !codeMatch;
-        });
-        return [...mapped, ...extras];
-      }
-
-      return confirmedReport.pondResults;
-    }
-
-    return defaultRows;
-  }, [activePonds, confirmedReport, defaultRows, reportDate]);
+  const rows = selected?.pondResults || [];
 
   useEffect(() => {
     onSelectedReportChange?.(selected || null);

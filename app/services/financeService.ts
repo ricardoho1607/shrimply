@@ -1,6 +1,9 @@
+import { isSourceLinkedFinance, sumMoney, monetaryValue, appendSettlement } from '../../shared/financeIntegrity';
 // services/financeService.ts
 import { normalizeCategory } from '../utils/categoryNormalizer';
 import { 
+  onSnapshot,
+  getDoc,
   collection, 
   doc, 
   getDocs, 
@@ -21,6 +24,8 @@ import {
 
 export interface Expense {
   id: string;
+  voided?: boolean;
+  settlements?: { id: string; date: string; amount: number }[];
   companyId: string;
   date: string;
   category: string;
@@ -173,6 +178,9 @@ class FinanceService {
    * Delete an expense
    */
   async deleteExpense(companyId: string, expenseId: string): Promise<void> {
+    if (expenseId.startsWith('sync_')) throw new Error('Linked finance entries must be corrected at their source.');
+    const existing = await getDoc(doc(this.getExpensesCollection(companyId), expenseId));
+    if (existing.exists() && isSourceLinkedFinance(existing.data())) throw new Error('Linked finance entries must be corrected at their source.');
     try {
       const userId = this.requireUserId();
       await persistCollectionAfterMutation<Expense>({
@@ -192,7 +200,22 @@ class FinanceService {
   /**
    * Get all expenses for a company
    */
-  async getExpenses(companyId: string): Promise<Expense[]> {
+  async recordPayment(companyId: string, record: Expense, payment: { id: string; date: string; amount: number }) {
+    const settlements = appendSettlement(record, payment);
+    await persistCollectionAfterMutation<Expense>({
+      id: payment.id, userId: this.requireUserId(), companyId, createdAt: Date.now(), kind: 'set',
+      path: ['companies', companyId, 'expenses', record.id], data: { settlements }, merge: true, settlement: payment,
+    }, 'finance-expenses', ['companies', companyId, 'expenses']);
+  }
+
+  subscribe(companyId: string, onData: (records: Expense[]) => void, onError: (error: Error) => void, includeVoided = false) {
+    return onSnapshot(this.getExpensesCollection(companyId), snapshot => {
+      const records = snapshot.docs.map(row => ({ ...row.data(), id: row.id, amount: monetaryValue(row.data().amount) ?? Number.NaN } as Expense)).filter(row => includeVoided || !row.voided);
+      onData(records.sort((a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0)));
+    }, onError);
+  }
+
+  async getExpenses(companyId: string, includeVoided = false): Promise<Expense[]> {
     const userId = this.requireUserId();
     const cached = await loadOfflineCollectionWithMutations<Expense>(
       userId,
@@ -200,10 +223,10 @@ class FinanceService {
       'finance-expenses',
       ['companies', companyId, 'expenses'],
     );
-    if (!await isWorkspaceOnline()) return cached.sort((a, b) => b.timestamp - a.timestamp);
+    if (!await isWorkspaceOnline()) return cached.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN })).sort((a, b) => b.timestamp - a.timestamp);
     try {
       const expensesRef = this.getExpensesCollection(companyId);
-      const q = query(expensesRef, orderBy('timestamp', 'desc'));
+      const q = query(expensesRef);
       
       const querySnapshot = await getDocs(q);
       
@@ -213,10 +236,10 @@ class FinanceService {
       })) as Expense[];
       const merged = await overlayOfflineMutations(remote, userId, companyId, ['companies', companyId, 'expenses']);
       await persistOfflineCollection(userId, companyId, 'finance-expenses', merged);
-      return merged;
+      return merged.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
     } catch (error) {
       console.error('Error getting expenses:', error);
-      return cached;
+      return cached.filter(row => includeVoided || !row.voided).map(row => ({ ...row, amount: monetaryValue(row.amount) ?? Number.NaN }));
     }
   }
 
@@ -247,7 +270,7 @@ class FinanceService {
    * Calculate total expenses for a period
    */
   calculateTotal(expenses: Expense[]): number {
-    return expenses.reduce((sum, expense) => sum + expense.amount, 0);
+    return sumMoney(expenses);
   }
 
   /**

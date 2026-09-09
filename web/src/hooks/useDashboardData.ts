@@ -151,7 +151,8 @@ export function useCompanyAdditives<T>() {
 
 export function useCompanyHarvestRecords<T>(sort: 'asc' | 'desc' = 'desc') {
   const constraints = useMemo(() => [orderBy('date', sort)], [sort]);
-  return useCompanySubcollection<T>('harvestRecords', constraints);
+  const state = useCompanySubcollection<T>('harvestRecords', constraints);
+  return { ...state, data: state.data.filter(item => !(item as { voided?: boolean }).voided) };
 }
 
 export function useCompanyMembers<T>() {
@@ -204,7 +205,7 @@ export function useCompanyMembers<T>() {
   return { ...state, companyId };
 }
 
-export function useFinanceRecords<TExpense, TRevenue>() {
+export function useFinanceRecords<TExpense, TRevenue>(includeVoided = false) {
   const { companyId } = useCompanyId();
   const [expenses, setExpenses] = useState<TExpense[]>([]);
   const [revenues, setRevenues] = useState<TRevenue[]>([]);
@@ -240,11 +241,11 @@ export function useFinanceRecords<TExpense, TRevenue>() {
 
     const expensesQuery = query(
       collection(db, 'companies', companyId, 'expenses'),
-      orderBy('timestamp', 'desc')
+      // Sort locally so legacy entries without timestamp are not silently omitted.
     );
     const revenuesQuery = query(
       collection(db, 'companies', companyId, 'revenues'),
-      orderBy('timestamp', 'desc')
+      // Sort locally so legacy entries without timestamp are not silently omitted.
     );
 
     const markReady = () => {
@@ -254,8 +255,9 @@ export function useFinanceRecords<TExpense, TRevenue>() {
     const unsubExpenses = onSnapshot(
       expensesQuery,
       (snapshot) => {
+        if (!isActive) return;
         receivedExpenses = true;
-        setExpenses(snapshot.docs.map((item) => ({ id: item.id, type: 'expense', ...item.data() } as TExpense)));
+        setExpenses(snapshot.docs.filter(item => includeVoided || !item.data().voided).sort((a, b) => (Number(b.data().timestamp) || Date.parse(b.data().date) || 0) - (Number(a.data().timestamp) || Date.parse(a.data().date) || 0)).map((item) => ({ ...item.data(), id: item.id, type: 'expense' } as TExpense)));
         markReady();
       },
       (snapshotError) => {
@@ -269,8 +271,9 @@ export function useFinanceRecords<TExpense, TRevenue>() {
     const unsubRevenues = onSnapshot(
       revenuesQuery,
       (snapshot) => {
+        if (!isActive) return;
         receivedRevenues = true;
-        setRevenues(snapshot.docs.map((item) => ({ id: item.id, type: 'income', ...item.data() } as TRevenue)));
+        setRevenues(snapshot.docs.filter(item => includeVoided || !item.data().voided).sort((a, b) => (Number(b.data().timestamp) || Date.parse(b.data().date) || 0) - (Number(a.data().timestamp) || Date.parse(a.data().date) || 0)).map((item) => ({ ...item.data(), id: item.id, type: 'income' } as TRevenue)));
         markReady();
       },
       (snapshotError) => {
@@ -286,7 +289,7 @@ export function useFinanceRecords<TExpense, TRevenue>() {
       unsubExpenses();
       unsubRevenues();
     };
-  }, [companyId]);
+  }, [companyId, includeVoided]);
 
   return { expenses, revenues, loading, error, companyId };
 }
@@ -334,7 +337,7 @@ export function useCompanyNotifications<T>() {
     const notificationsQuery = query(
       collection(db, 'notifications'),
       where('companyId', '==', companyId),
-      orderBy('timestamp', 'desc'),
+      // Sort locally so legacy entries without timestamp are not silently omitted.,
       limitQuery(HISTORY_PAGE_SIZE),
     );
     const unsubscribe = onSnapshot(
@@ -374,7 +377,7 @@ export function useCompanyNotifications<T>() {
       const nextPageQuery = query(
         collection(db, 'notifications'),
         where('companyId', '==', companyId),
-        orderBy('timestamp', 'desc'),
+        // Sort locally so legacy entries without timestamp are not silently omitted.,
         startAfter(cursorRef.current),
         limitQuery(HISTORY_PAGE_SIZE),
       );

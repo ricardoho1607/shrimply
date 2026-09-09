@@ -94,12 +94,13 @@ test('reused physical pond identities cannot receive costs from another cycle', 
   assert.equal(result.details.pondRows.reduce((sum, row) => sum + row.total, 0), 0);
 });
 
-test('COGS enables lossless compression without changing other PDF defaults', () => {
+test('financial PDFs enable lossless compression and preserve PNG rendering', () => {
   const exporter = fs.readFileSync(path.join(__dirname, 'mobilePdfExport.ts'), 'utf8');
   const page = fs.readFileSync(path.join(__dirname, '../app/dashboard/reports/financial/page.tsx'), 'utf8');
-  assert.match(exporter, /compress = false/);
+  assert.match(exporter, /compress = true/);
+  assert.match(exporter, /image: \{ type: 'png' \}/);
   assert.match(exporter, /jsPDF: \{\s*compress,/);
-  assert.match(page, /compress: selectedReport === 'cogs'/);
+  assert.match(page, /compress: true/);
 });
 
 

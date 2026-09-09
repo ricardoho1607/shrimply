@@ -30,7 +30,7 @@ import {
   type HarvestType,
 } from '../../../../../shared/harvestCalculations';
 import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
-import { buildHarvestRevenue, financeSyncDocumentId } from '../../../../../shared/financeSync';
+import { buildHarvestRevenue, financeSyncDocumentId, financeSourceEntry } from '../../../../../shared/financeSync';
 import { useCompanyBlocks } from '@/hooks/useDashboardData';
 import {
   filterEnterpriseRecordsForUser,
@@ -262,7 +262,7 @@ export default function HarvestPage() {
             // Load Harvest Records
             const q = query(collection(db, 'companies', cid, 'harvestRecords'), orderBy('date', 'desc'));
             const unsubHarvest = onSnapshot(q, (snapshot) => {
-              setHarvestRecords(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as HarvestRecord)));
+              setHarvestRecords(snapshot.docs.filter(doc => !doc.data().voided).map(doc => ({ id: doc.id, ...doc.data() } as HarvestRecord)));
               setHarvestRecordsResolved(true);
             }, (error) => {
               console.error('Error loading harvest records:', error);
@@ -392,13 +392,14 @@ export default function HarvestPage() {
           });
           return canonicalHarvestPond;
         });
+        const revenue = buildHarvestRevenue({ ...newRecord, ponds: canonicalPonds });
         transaction.set(harvestRef, {
+          financeEntry: { ...financeSourceEntry(revenue), id: financeSyncDocumentId(revenue.reference) },
           ...newRecord,
           ponds: canonicalPonds,
           createdAt: serverTimestamp(),
           createdBy: user.uid,
         });
-        const revenue = buildHarvestRevenue({ ...newRecord, ponds: canonicalPonds });
         if (revenue.amount > 0) {
           transaction.set(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(revenue.reference)), {
             ...revenue,
@@ -445,7 +446,7 @@ export default function HarvestPage() {
   };
 
   const handleDeleteRecord = async (recordId: string) => {
-    if (!companyId || !user || !window.confirm(t.harvestCycle.deleteConfirm)) return;
+    if (!companyId || !user || !window.confirm('Void this harvest? Pond totals will be reversed and the sale excluded from profit reports. The original records and confirmed payments are retained; record any refund separately in Finance.')) return;
     if (!canEditHarvest) return;
     const localRecord = harvestRecords.find((record) => record.id === recordId);
     if (
@@ -457,7 +458,7 @@ export default function HarvestPage() {
       const harvestRef = doc(db, 'companies', companyId, 'harvestRecords', recordId);
       await runTransaction(db, async (transaction) => {
         const harvestSnapshot = await transaction.get(harvestRef);
-        if (!harvestSnapshot.exists()) return;
+        if (!harvestSnapshot.exists() || harvestSnapshot.data().voided) return;
         const record = { id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord;
         const uniquePondIds = Array.from(new Set(record.ponds.map((pond) => pond.pondId)));
         const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', companyId, 'ponds', pondId));
@@ -478,8 +479,10 @@ export default function HarvestPage() {
             updatedBy: user.uid,
           });
         });
-        transaction.delete(harvestRef);
-        transaction.delete(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(`HARVEST-${recordId}`)));
+        const revenue = buildHarvestRevenue(record);
+        const revenueId = financeSyncDocumentId(revenue.reference);
+        transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
+        if (revenue.amount > 0) transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...revenue, companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
       });
     } catch (error) {
       console.error('Error deleting record:', error);

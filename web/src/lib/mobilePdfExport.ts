@@ -47,17 +47,21 @@ export const downloadMobilePdf = async ({
   html,
   filename,
   orientation,
-  compress = false,
+  compress = true,
+  preserveTemplateScale = false,
 }: {
   html: string;
   filename: string;
   orientation: PdfOrientation;
   compress?: boolean;
+  preserveTemplateScale?: boolean;
 }) => {
   const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
   const parsed = new DOMParser().parseFromString(html, 'text/html');
-  const pageWidth = orientation === 'landscape' ? 792 : 612;
-  const pageHeight = orientation === 'landscape' ? 612 : 792;
+  const physicalWidth = orientation === 'landscape' ? 792 : 612;
+  const pageWidth = preserveTemplateScale ? physicalWidth * 4 / 3 : physicalWidth;
+  const physicalHeight = orientation === 'landscape' ? 612 : 792;
+  const pageHeight = preserveTemplateScale ? physicalHeight * 4 / 3 : physicalHeight;
   const element = document.createElement('div');
   element.className = 'mobile-pdf-document';
   element.style.width = `${pageWidth}px`;

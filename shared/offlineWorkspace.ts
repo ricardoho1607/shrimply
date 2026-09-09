@@ -64,6 +64,7 @@ export interface OfflineMutation {
   uploadPath?: string;
   functionCall?: { name: string; payload: Record<string, unknown> };
   inventory?: OfflineInventoryMutationData;
+  settlement?: { id: string; date: string; amount: number };
 }
 
 export interface OfflineMutationQueue {

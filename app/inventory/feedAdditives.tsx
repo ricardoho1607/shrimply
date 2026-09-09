@@ -68,6 +68,7 @@ export default function FeedAdditivesScreen() {
   const [modalType, setModalType] = useState<ModalType>('add');
   const [itemType, setItemType] = useState<ItemType>('feed');
   const [selectedItem, setSelectedItem] = useState<Feed | Additive | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
@@ -113,14 +114,14 @@ export default function FeedAdditivesScreen() {
       const name = 'feedName' in item ? item.feedName : item.additiveName;
       const brand = 'brand' in item ? item.brand || '' : '';
       const searchMatch = !q || name.toLowerCase().includes(q) || brand.toLowerCase().includes(q);
-      return categoryMatch && searchMatch;
+      return categoryMatch && searchMatch && (showArchived || !item.archived);
     });
-  }, [searchQuery, categoryFilter]);
+  }, [searchQuery, categoryFilter, showArchived]);
 
-  const filteredFeeds = useMemo(() => filterItems(store.feeds, 'feedType'), [store.feeds, searchQuery, categoryFilter]);
+  const filteredFeeds = useMemo(() => filterItems(store.feeds, 'feedType'), [store.feeds, searchQuery, categoryFilter, showArchived]);
   const filteredAdditives = useMemo(
     () => filterItems(store.additives.filter(item => item.inventoryKind !== 'treatmentMix'), 'category'),
-    [store.additives, searchQuery, categoryFilter],
+    [store.additives, searchQuery, categoryFilter, showArchived],
   );
 
   const pondUsageSummary = useMemo(() => {
@@ -255,9 +256,10 @@ export default function FeedAdditivesScreen() {
   }, [selectedItem, formData, itemType, store, handleAction, checkAndCreateLowStockNotification, t]);
 
   const handleDelete = useCallback((id: string, type: ItemType) => {
-    Alert.alert(t.inventory.deleteItem, t.inventory.deleteConfirmation, [
+    const item = (type === 'feed' ? store.feeds : store.additives).find(row => row.id === id);
+    Alert.alert(item?.archived ? 'Restore inventory item' : 'Archive inventory item', 'Purchase and usage history will be retained. Only items without remaining stock can be archived.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => handleAction(() => type === 'feed' ? store.deleteFeed(id) : store.deleteAdditive(id), t.inventory.itemDeleted) }
+      { text: item?.archived ? 'Restore' : 'Archive', onPress: () => handleAction(() => type === 'feed' ? store.deleteFeed(id) : store.deleteAdditive(id), 'Inventory visibility updated') }
     ]);
   }, [store, handleAction, t]);
 
@@ -514,6 +516,7 @@ export default function FeedAdditivesScreen() {
                 onChangeText={setSearchQuery}
                 style={[styles.textInput, styles.searchInput, { flex: 1 }]}
               />
+              <TouchableOpacity onPress={() => setShowArchived(value => !value)} style={{ padding: 10 }}><Text>{showArchived ? 'Hide archived' : 'Show archived'}</Text></TouchableOpacity>
               <TouchableOpacity onPress={() => { setCategoryFilter(null); setSearchQuery(''); }} style={{ padding: 12 }}>
                 <Ionicons name="close-circle" size={20} color="#6B7F91" />
               </TouchableOpacity>

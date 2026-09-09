@@ -24,6 +24,9 @@ import {
   type OfflineInventoryMutationData,
 } from '../../shared/offlineWorkspace';
 import { isUsableNetworkState } from '../../shared/offlineSnapshotPolicy';
+import { buildInventoryLedgerEntries, financeSourceEntry } from '../../shared/financeSync';
+import { getUsageReturnCost, appendSettlement } from '../../shared/financeIntegrity';
+import { isDailyFeedUsage } from '../../shared/feedInventoryUsage';
 import { calculateFifoConsumption } from '../../shared/treatmentMix';
 import {
   readProtectedItem,
@@ -272,6 +275,17 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
       const snapshots = await Promise.all(references.map((reference) => transaction.get(reference)));
 
       inventory.adjustments.forEach((adjustment, index) => {
+        if (adjustment.action === 'stockIn' && !(snapshots[index].data()?.stockInHistory || []).some((entry: { id?: string }) => entry.id === adjustment.historyEntry.id)) {
+          const source = snapshots[index].data() || adjustment.createItem || {};
+          const entries = buildInventoryLedgerEntries(adjustment.itemId, { ...source, stockInHistory: [adjustment.historyEntry] } as Parameters<typeof buildInventoryLedgerEntries>[1], inventory.collection === 'feeds' ? 'feed' : 'additive');
+          const financeEntries = { ...(source.financeEntries || {}) };
+          for (const entry of entries) {
+            entry.record.sourceStockIndex = (source.stockInHistory || []).length;
+            financeEntries[entry.id] = financeSourceEntry(entry.record);
+            transaction.set(doc(db, 'companies', mutation.companyId, 'expenses', entry.id), { ...entry.record, companyId: mutation.companyId, addedBy: mutation.userId, addedByName: 'Inventory', timestamp: mutation.createdAt, updatedAt: serverTimestamp() }, { merge: true });
+          }
+          if (entries.length) transaction.set(references[index], { financeEntries }, { merge: true });
+        }
         const snapshot = snapshots[index];
         if (!snapshot.exists()) {
           if (adjustment.action !== 'stockIn' || !adjustment.createItem) {
@@ -322,7 +336,12 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
               adjustment.quantity,
             )
             : null;
-          const unitPrice = fifoCost
+          const returnCost = adjustment.action === 'restore'
+            ? getUsageReturnCost((item.usageHistory || []).filter(usage => adjustment.historyEntry.feedRecordId
+              ? isDailyFeedUsage(usage, String(adjustment.historyEntry.pondId), String(adjustment.historyEntry.date))
+              : usage.pondId === adjustment.historyEntry.pondId && usage.notes === adjustment.historyEntry.notes), adjustment.quantity)
+            : null;
+          const unitPrice = returnCost ? returnCost.unitPrice : fifoCost
             ? fifoCost.unitPrice
             : adjustment.action === 'consume' && !adjustment.useFixedUnitPrice
               ? (currentStock > 0 ? currentCost / currentStock : 0)
@@ -354,6 +373,7 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
 
         transaction.update(references[index], {
           [historyField]: [...history, historyEntry],
+          ...(adjustment.action === 'stockIn' ? { archived: false } : {}),
           totalStock: nextStock,
           totalCost: nextCost,
           lastUpdated: serverTimestamp(),
@@ -363,7 +383,32 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
     return;
   }
   const reference = doc(db, mutation.path[0], ...mutation.path.slice(1));
+  if (mutation.kind === 'set' && !mutation.createOnly && mutation.path[0] === 'companies' && ['feeds', 'additives'].includes(mutation.path[2]) && typeof mutation.data?.archived === 'boolean') {
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists()) throw new Error('Inventory item not found');
+      if (mutation.data?.archived && Number(snapshot.data()?.totalStock) > 0) throw new Error('Use or correct remaining stock before archiving.');
+      transaction.update(reference, { archived: mutation.data!.archived, lastUpdated: serverTimestamp() });
+    });
+    return;
+  }
+  if (mutation.settlement) {
+    await runTransaction(db, async transaction => {
+      const snapshot = await transaction.get(reference);
+      if (!snapshot.exists()) throw new Error('Finance entry was not found');
+      transaction.update(reference, { settlements: appendSettlement(snapshot.data(), mutation.settlement!), updatedAt: serverTimestamp() });
+    });
+    return;
+  }
   if (mutation.kind === 'delete') {
+    if (['feeds', 'additives'].includes(mutation.path[2])) {
+      await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(reference);
+        if ((snapshot.data()?.stockInHistory || []).length || (snapshot.data()?.usageHistory || []).length) throw new Error('Inventory with financial history cannot be deleted');
+        transaction.delete(reference);
+      });
+      return;
+    }
     await deleteDoc(reference);
     return;
   }
@@ -387,6 +432,15 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
   mutation.serverTimestampFields?.forEach((field) => {
     data[field] = serverTimestamp();
   });
+  if (mutation.path[0] === 'companies' && ['feeds', 'additives'].includes(mutation.path[2]) && mutation.createOnly) {
+    await runTransaction(db, async transaction => {
+      if ((await transaction.get(reference)).exists()) return;
+      const entries = buildInventoryLedgerEntries(reference.id, data as Parameters<typeof buildInventoryLedgerEntries>[1], mutation.path[2] === 'feeds' ? 'feed' : 'additive');
+      transaction.set(reference, { ...data, financeEntries: Object.fromEntries(entries.map(entry => [entry.id, financeSourceEntry(entry.record)])) });
+      for (const entry of entries) transaction.set(doc(db, 'companies', mutation.companyId, 'expenses', entry.id), { ...entry.record, companyId: mutation.companyId, addedBy: mutation.userId, addedByName: 'Inventory', timestamp: mutation.createdAt, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    });
+    return;
+  }
   if (mutation.createOnly) {
     await runTransaction(db, async (transaction) => {
       const snapshot = await transaction.get(reference);

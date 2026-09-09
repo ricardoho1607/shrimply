@@ -744,7 +744,8 @@ export default function AssetInventoryPage() {
                   {modalType === 'add' && (
                     <>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Asset Name *')}</label>
+                        <p style={{ color: '#0F4C75', lineHeight: 1.5 }}>Asset purchase and maintenance costs are retained here. Record the matching Equipment or Repairs transaction in Finance once; these entries are not posted automatically.</p>
+                      <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Asset Name *')}</label>
                         <input required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                       </div>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -817,6 +818,7 @@ export default function AssetInventoryPage() {
                       </div>
                       <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <p style={{ color: '#0F4C75', lineHeight: 1.5 }}>Record this cost once in Finance under Repairs. Saving maintenance updates the asset record only.</p>
                           <label style={{ fontSize: '13px', fontWeight: 600 }}>{copy('Cost')} ({currencyConfig.symbol})</label>
                           <input type="number" value={formData.maintCost} onChange={e => setFormData({...formData, maintCost: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }} />
                         </div>

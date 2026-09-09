@@ -1,4 +1,5 @@
 "use client";
+import { requireAvailableStock } from '../../../../../../shared/financeIntegrity';
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
@@ -28,7 +29,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
-import { buildInventoryExpense, financeSyncDocumentId } from '../../../../../../shared/financeSync';
+import { buildInventoryExpense, financeSyncDocumentId, financeSourceEntry } from '../../../../../../shared/financeSync';
 import styles from './InventoryFeeds.module.css';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { buildInventoryProductLabel, type InventoryProductLabel } from '../../../../../../shared/productLabel';
@@ -60,6 +61,7 @@ interface UsageHistory {
 }
 
 interface InventoryItem {
+  archived?: boolean;
   id: string;
   companyId: string;
   itemName: string;
@@ -95,6 +97,7 @@ export default function InventoryFeedsPage() {
   const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
   const additives = useMemo(() => allAdditives.filter((item) => item.inventoryKind !== 'treatmentMix'), [allAdditives]);
 
+  const [showArchived, setShowArchived] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [stockFilter, setStockFilter] = useState<'in' | 'out' | 'all'>('in');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
@@ -236,9 +239,9 @@ export default function InventoryFeedsPage() {
                             (item.brand || '').toLowerCase().includes(normalizedSearch);
       const matchesCategory = !categoryFilter || (activeTab === 'feed' ? (item as any).feedType : (item as any).category) === categoryFilter;
       const matchesStock = stockFilter === 'all' || (stockFilter === 'in' ? item.totalStock > 0 : item.totalStock === 0);
-      return matchesSearch && matchesCategory && matchesStock;
+      return matchesSearch && matchesCategory && (item.archived ? showArchived : matchesStock);
     });
-  }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter, stockFilter]);
+  }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter, stockFilter, showArchived]);
 
   const normalizeItemText = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
   const existingItems = itemType === 'feed' ? feeds : additives;
@@ -375,7 +378,7 @@ export default function InventoryFeedsPage() {
           notes: formData.notes,
         });
         await runTransaction(db, async (tx) => {
-          tx.set(itemRef, itemData);
+          tx.set(itemRef, { ...itemData, financeEntries: { [financeSyncDocumentId(expense.reference)]: financeSourceEntry(expense) } });
           tx.set(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(expense.reference)), {
             ...expense,
             companyId,
@@ -408,11 +411,14 @@ export default function InventoryFeedsPage() {
           const snapshot = await tx.get(ref);
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
+          expense.sourceStockIndex = (data.stockInHistory || []).length;
 
           const newStock = (data.totalStock || 0) + qty;
           const newCost = (data.totalCost || 0) + (qty * price);
 
           tx.update(ref, {
+            archived: false,
+            financeEntries: { ...(data.financeEntries || {}), [financeSyncDocumentId(expense.reference)]: financeSourceEntry(expense) },
             totalStock: newStock,
             totalCost: newCost,
             stockInHistory: arrayUnion({
@@ -451,7 +457,7 @@ export default function InventoryFeedsPage() {
           if (!snapshot.exists()) throw new Error('Item not found');
           const data = snapshot.data();
 
-          const newStock = Math.max(0, (data.totalStock || 0) - qty);
+          const newStock = requireAvailableStock(data.totalStock, qty);
           const currentStock = data.totalStock || 0;
           const currentCost = data.totalCost || 0;
           const unitPrice = currentStock > 0 ? currentCost / currentStock : 0;
@@ -504,7 +510,7 @@ export default function InventoryFeedsPage() {
   };
 
   const handleDeleteItem = async (item: InventoryItem, type: 'feed' | 'additive') => {
-    if (!companyId || !window.confirm(copy('Are you sure you want to delete {item}?', { item: item.itemName }))) return;
+    if (!companyId || !window.confirm(`${item.archived ? 'Restore' : 'Archive'} ${item.itemName}? Purchase and usage history will be retained. Only empty-stock items can be archived.`)) return;
     if (!canEditInventory) return;
     try {
       const collectionName = type === 'feed' ? 'feeds' : 'additives';
@@ -512,16 +518,12 @@ export default function InventoryFeedsPage() {
       await runTransaction(db, async (tx) => {
         const snapshot = await tx.get(itemRef);
         if (!snapshot.exists()) return;
-        const stockHistory = Array.isArray(snapshot.data().stockInHistory) ? snapshot.data().stockInHistory : [];
-        stockHistory.forEach((stock: { id?: string }) => {
-          if (!stock.id) return;
-          const reference = `INVENTORY-${type}-${item.id}-${stock.id}`;
-          tx.delete(doc(db, 'companies', companyId, 'expenses', financeSyncDocumentId(reference)));
-        });
-        tx.delete(itemRef);
+        if (!item.archived && Number(snapshot.data().totalStock) > 0) throw new Error('Use or correct the remaining stock before archiving.');
+        tx.update(itemRef, { archived: !item.archived, lastUpdated: serverTimestamp() });
       });
     } catch (err) {
       console.error('Delete failed:', err);
+      alert(err instanceof Error ? err.message : 'Delete failed');
     }
   };
 
@@ -560,6 +562,7 @@ export default function InventoryFeedsPage() {
           ))}
         </div>
 
+        <button type="button" className="btn-secondary" onClick={() => setShowArchived(value => !value)}>{showArchived ? 'Hide archived' : 'Show archived'}</button>
         {canEditInventory && (
           <div className="pond-detail-record-menu inventory-input-menu" ref={inputMenuRef}>
             <button

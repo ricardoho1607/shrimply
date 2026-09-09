@@ -1,3 +1,5 @@
+import { monetaryValue } from '../../../shared/financeIntegrity';
+import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../../shared/reportingIntegrity';
 import {
   calculatePondMetricsWithHarvest,
   isBaselineSampling,
@@ -52,6 +54,7 @@ export interface CycleReportPondSource extends SharedPond {
 }
 
 export interface CycleReportHarvestRecord {
+  voided?: boolean;
   id: string;
   date: string;
   cycleId?: string;
@@ -70,6 +73,7 @@ export interface CycleReportHarvestRecord {
 }
 
 interface UsageHistory {
+  source?: string;
   pondId?: string;
   cycleId?: string;
   quantity?: number | string;
@@ -82,6 +86,7 @@ export interface CycleReportInventoryItem {
 }
 
 export interface CycleReportExpense {
+  voided?: boolean;
   amount?: number | string;
   category?: string;
   reference?: string;
@@ -126,7 +131,7 @@ export interface WebCycleReport {
   }>;
   notes: {
     severity: 'info' | 'warning';
-    key: 'noPonds' | 'noHarvestRecords' | 'missingFeedCost' | 'missingAdditiveCost' | 'noMbwSampling' | 'cycleNotClosed';
+    key: 'noPonds' | 'noHarvestRecords' | 'missingFeedCost' | 'missingAdditiveCost' | 'noMbwSampling' | 'maintenancePosting' | 'cycleNotClosed';
     pondName?: string;
     message: string;
   }[];
@@ -180,12 +185,7 @@ const daysBetween = (start?: string, end?: string): number => {
   return Math.max(0, Math.floor((endTime - startTime) / (24 * 60 * 60 * 1000)));
 };
 
-const usageCost = (usage: UsageHistory): number => {
-  const savedCost = toFiniteNumber(usage.totalCost);
-  return savedCost > 0
-    ? savedCost
-    : toFiniteNumber(usage.quantity) * toFiniteNumber(usage.unitPrice);
-};
+const usageCost = savedUsageCost;
 
 const getLatestMbw = (pond: CycleReportPondSource): number => {
   const latest = [...(pond.samplings || [])]
@@ -291,14 +291,10 @@ export function buildWebCycleReport({
 }): WebCycleReport {
   const cyclePonds = ponds.filter((pond) => pond.cycleId === cycle.id);
   const cyclePondIds = new Set(cyclePonds.map((pond) => pond.id));
-  const matchedHarvestRecords = harvestRecords.filter((record) => (
-    record.cycleId === cycle.id
-    || record.ponds.some((pond) => pond.cycleId === cycle.id || cyclePondIds.has(pond.pondId))
-  ));
-  const matchesUsage = (usage: UsageHistory) => (
-    usage.cycleId === cycle.id
-    || Boolean(usage.pondId && cyclePondIds.has(usage.pondId))
-  );
+  const matchedHarvestRecords = harvestRecords.filter(record => !record.voided).map(record => ({ ...record,
+    ponds: record.ponds.filter(line => line.cycleId ? line.cycleId === cycle.id : record.cycleId ? record.cycleId === cycle.id : cyclePondIds.has(line.pondId)),
+  })).filter(record => record.ponds.length > 0);
+  const matchesUsage = (usage: UsageHistory) => usage.source !== 'treatmentMixProduction' && (usage.cycleId ? usage.cycleId === cycle.id : Boolean(usage.pondId && cyclePondIds.has(usage.pondId)));
 
   const feedCost = feeds.flatMap((item) => item.usageHistory || [])
     .filter(matchesUsage)
@@ -306,18 +302,10 @@ export function buildWebCycleReport({
   const additiveCost = additives.flatMap((item) => item.usageHistory || [])
     .filter(matchesUsage)
     .reduce((sum, usage) => sum + usageCost(usage), 0);
-  const maintenanceCost = assets.reduce((sum, asset) => (
-    sum + (asset.maintenanceHistory || [])
-      .filter((maintenance) => maintenance.cycleId === cycle.id)
-      .reduce((maintenanceSum, maintenance) => maintenanceSum + toFiniteNumber(maintenance.cost), 0)
-  ), 0);
-  const manualExpenses = expenses
-    .filter((expense) => (
-      expense.cycleId === cycle.id
-      && !expense.reference?.startsWith('INVENTORY-')
-      && expense.category !== 'Maintenance'
-    ))
-    .reduce((sum, expense) => sum + toFiniteNumber(expense.amount), 0);
+  // Finance is the posting source; asset-register entries are retained as supporting history.
+  const operatingExpenses = expenses.filter(expense => expense.cycleId === cycle.id && isCycleOperatingExpense(expense));
+  const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
+  const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 
   let harvestRevenue = 0;
   matchedHarvestRecords.forEach((record) => {
@@ -399,11 +387,12 @@ export function buildWebCycleReport({
   const notes: WebCycleReport['notes'] = [];
   if (cyclePonds.length === 0) notes.push({ severity: 'warning', key: 'noPonds', message: 'No pond documents were found for this cycle.' });
   if (matchedHarvestRecords.length === 0) notes.push({ severity: 'warning', key: 'noHarvestRecords', message: 'No harvest records are linked to this cycle yet.' });
-  if (feeds.flatMap((item) => item.usageHistory || []).filter(matchesUsage).some((usage) => usageCost(usage) <= 0)) notes.push({ severity: 'warning', key: 'missingFeedCost', message: 'Some feed usage records do not have a saved cost.' });
-  if (additives.flatMap((item) => item.usageHistory || []).filter(matchesUsage).some((usage) => usageCost(usage) <= 0)) notes.push({ severity: 'warning', key: 'missingAdditiveCost', message: 'Some additive usage records do not have a saved cost.' });
+  if (feeds.flatMap((item) => item.usageHistory || []).filter(matchesUsage).some((usage) => !Number.isFinite(usageCost(usage)))) notes.push({ severity: 'warning', key: 'missingFeedCost', message: 'Some feed usage records do not have a saved cost.' });
+  if (additives.flatMap((item) => item.usageHistory || []).filter(matchesUsage).some((usage) => !Number.isFinite(usageCost(usage)))) notes.push({ severity: 'warning', key: 'missingAdditiveCost', message: 'Some additive usage records do not have a saved cost.' });
   cyclePonds.filter((pond) => !(pond.samplings || []).some((sampling) => !isBaselineSampling(sampling) && toFiniteNumber(sampling.mbw || sampling.abw) > 0)).forEach((pond) => {
     notes.push({ severity: 'info', key: 'noMbwSampling', pondName: pond.pondName, message: `${pond.pondName} has no MBW sampling records.` });
   });
+  if (assets.some(asset => (asset.maintenanceHistory || []).length > 0)) notes.push({ severity: 'info', key: 'maintenancePosting', message: 'Maintenance is counted from Finance entries only. Check that each asset maintenance cost has been posted once in Finance; asset-register amounts are not added again.' });
   if (cycle.status !== 'closed') notes.push({ severity: 'info', key: 'cycleNotClosed', message: 'This cycle is not closed yet. Final profitability may still change.' });
 
   const result: WebCycleReport = {

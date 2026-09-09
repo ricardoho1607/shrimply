@@ -726,6 +726,7 @@ export default function AssetInventoryScreen() {
                       {renderFormField(t.asset?.serialNumber || 'Serial Number', "SN123456", 
                         formData.serialNumber, v => setFormData(p => ({ ...p, serialNumber: v })))}
                       <View style={{ width: 8 }} />
+                      <Text style={{ color: '#0F4C75', marginBottom: 12 }}>Asset costs stay in the asset register. Record the matching Equipment or Repairs transaction in Finance once; costs are not posted automatically.</Text>
                       {renderFormField(t.asset?.purchaseCost || 'Purchase Cost' + ' ($)', "5000", 
                         formData.purchaseCost, v => setFormData(p => ({ ...p, purchaseCost: v })), { keyboardType: 'numeric' })}
                     </View>
@@ -810,6 +811,7 @@ export default function AssetInventoryScreen() {
                     {renderFormField(t.asset?.description || 'Description' + ' *', t.asset?.maintenanceDescriptionPlaceholder || "What maintenance was performed?", 
                       formData.description2, v => setFormData(p => ({ ...p, description2: v })), { multiline: true, numberOfLines: 3 })}
                     <View style={styles.row}>
+                      <Text style={{ color: '#0F4C75', marginBottom: 12 }}>Record this maintenance cost once in Finance under Repairs. Saving here updates the asset record only.</Text>
                       {renderFormField(t.asset?.cost || 'Cost' + ' ($)', "150.00", 
                         formData.cost, v => setFormData(p => ({ ...p, cost: v })), { keyboardType: 'numeric' })}
                       <View style={{ width: 8 }} />

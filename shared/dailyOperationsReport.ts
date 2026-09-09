@@ -1,4 +1,5 @@
-import type { MortalityObservationType } from './pondCalculations';
+import { buildPondReportSnapshot, type ReportHarvest } from './reportSnapshots.ts';
+import type { MortalityObservationType } from './pondCalculations.ts';
 import { dailyOperationsTranslations, type DailyOperationsLanguage } from './dailyOperationsI18n.ts';
 import { normalizeFarmDateKey } from './farmDate.ts';
 
@@ -15,6 +16,9 @@ export interface DailyOperationsMortalityRecord {
 }
 
 export interface DailyOperationsWaterRecord {
+  doMorning?: string | number | null;
+  doEvening?: string | number | null;
+  ammonia?: string | number | null;
   date?: string | null;
   mbw?: string | number | null;
   abw?: string | number | null;
@@ -44,6 +48,9 @@ export interface DailyOperationsWaterRecord {
 }
 
 export interface DailyOperationsPondSource {
+  cycleId?: string;
+  cycleStartedAt?: string;
+  cycleEndedAt?: string;
   id: string;
   pondName: string;
   blockId?: string | null;
@@ -82,6 +89,9 @@ export interface SiponReportRow {
 }
 
 export interface WaterQualityReportRow {
+  doMorning: string;
+  doEvening: string;
+  ammonia: string;
   pondName: string;
   blockName: string;
   stockingDate: string;
@@ -112,6 +122,7 @@ export interface WaterQualityReportRow {
 }
 
 export interface DailyOperationsReportData {
+  warnings?: string[];
   companyName: string;
   reportDate: string;
   generatedBy: string;
@@ -233,6 +244,7 @@ const buildWaterQualityRow = (
   });
   const dailyRecords = recordsToDate.filter((record) => dateKey(record.date, timeZone) === reportDate);
   const hasDailyReportData = dailyRecords.some((record) => [
+      record.doMorning, record.doEvening, record.ammonia,
       record.phMorning,
       record.phEvening,
       record.temperatureMorning,
@@ -253,7 +265,7 @@ const buildWaterQualityRow = (
     ].some((value) => {
       if (value === null || value === undefined) return false;
       const text = String(value).trim();
-      return Boolean(text && text !== '0' && text !== '-' && text !== 'undefined' && text !== 'null' && text !== 'NaN');
+      return Boolean(text && text !== '-' && text !== 'undefined' && text !== 'null' && text !== 'NaN');
     }));
   if (!hasDailyReportData) return null;
 
@@ -268,6 +280,11 @@ const buildWaterQualityRow = (
     return undefined;
   };
 
+  const exactNumber = (field: keyof DailyOperationsWaterRecord): string => {
+    const values = dailyRecords.map(record => record[field]).filter(value => value !== null && value !== undefined && String(value).trim() !== '');
+    const value = values[values.length - 1];
+    return value !== undefined && Number.isFinite(Number(value)) ? String(value) : 'N/A';
+  };
   const phMorning = latestValue('phMorning');
   const phEvening = latestValue('phEvening');
   const tempMorning = textValue(latestValue('temperatureMorning') ?? latestValue('temperature'));
@@ -309,6 +326,7 @@ const buildWaterQualityRow = (
     stockingDate: dateKey(pond.docStart, timeZone) || 'N/A',
     doc: Number.isFinite(doc) ? doc : 0,
     recordedBy: textValue(latestValue('waterQualityRecordedByName')),
+    doMorning: exactNumber('doMorning'), doEvening: exactNumber('doEvening'), ammonia: exactNumber('ammonia'),
     phMorning: textValue(phMorning),
     phEvening: textValue(phEvening),
     phRange: phRangeValue(phMorning, phEvening),
@@ -339,20 +357,33 @@ export const buildDailyOperationsReport = ({
   reportDate,
   generatedBy,
   ponds,
+  harvests,
   timeZone,
 }: {
   companyName?: string | null;
   reportDate?: string | null;
   generatedBy?: string | null;
   ponds?: DailyOperationsPondSource[] | null;
+  harvests?: ReportHarvest[];
   timeZone?: string;
 }): DailyOperationsReportData => {
-  const safePonds = Array.isArray(ponds) ? ponds : [];
+  const sourcePonds = Array.isArray(ponds) ? ponds : [];
+  const warnings: string[] = [];
   const safeDate = dateKey(reportDate) || String(reportDate || '').trim();
+  const safePonds = sourcePonds.flatMap(pond => {
+    if (!harvests) return [pond];
+    try {
+      return [buildPondReportSnapshot({ ...pond,
+        samplings: (pond.samplings || []).map(record => ({ ...record, date: record.date || undefined })),
+        mortalityRecords: (pond.mortalityRecords || []).map(record => ({ ...record, date: record.date || undefined, observationType: record.observationType || undefined })),
+      }, safeDate, harvests, timeZone)];
+    } catch (error) { warnings.push(`${pond.pondName}: ${error instanceof Error ? error.message : 'Incomplete history'}`); return []; }
+  });
   const safeCompany = String(companyName || '').trim();
   const safeGenerated = String(generatedBy || '').trim();
 
   return {
+    warnings,
     companyName: safeCompany && safeCompany !== 'undefined' && safeCompany !== 'null' ? safeCompany : 'My Farm',
     reportDate: safeDate && safeDate !== 'undefined' && safeDate !== 'null' ? safeDate : '',
     generatedBy: safeGenerated && safeGenerated !== 'undefined' && safeGenerated !== 'null' ? safeGenerated : 'Shrimply user',
@@ -406,7 +437,7 @@ export const generateDailyOperationsReportHTML = (
   const printPageSize = useIosPrintLayout ? '792px 612px' : '11in 8.5in';
   const printPageWidth = useIosPrintLayout ? '100%' : '11in';
   const printPageHeight = useIosPrintLayout ? '100%' : '8.5in';
-  const siponRows = data.siponRows.map((row) => `
+  const renderSiponRows = (rows: SiponReportRow[]) => rows.map((row) => `
     <tr>
       <td>${escapeHtml(row.pondName || 'N/A')}</td><td>${Number.isFinite(row.doc) ? row.doc : 0}</td>
       <td>${formatInteger(row.morningSiphoned)}</td><td>${formatInteger(row.morningMortal)}</td><td>${formatInteger(row.morningTotal)}</td>
@@ -414,14 +445,14 @@ export const generateDailyOperationsReportHTML = (
       <td><strong>${formatInteger(row.dailyTotal)}</strong></td><td>${formatInteger(row.cumulativeTotal)}</td>
       <td>${formatInteger(row.estimatedPopulation)}</td><td>${formatInteger(row.density)}</td>
     </tr>`).join('');
-  const waterRows = data.waterQualityRows.map((row) => `
+  const renderWaterRows = (rows: WaterQualityReportRow[]) => rows.map((row) => `
     <tr><td>${escapeHtml(row.stockingDate || 'N/A')}</td><td>${escapeHtml(row.pondName || 'N/A')}</td><td>${Number.isFinite(row.doc) ? row.doc : 0}</td>
       <td>${escapeHtml(row.recordedBy || 'N/A')}</td><td>${escapeHtml(row.phMorning || 'N/A')}</td><td>${escapeHtml(row.phEvening || 'N/A')}</td><td>${escapeHtml(row.phRange || 'N/A')}</td>
       <td>${escapeHtml(row.temperatureMorning || 'N/A')}</td><td>${escapeHtml(row.temperatureEvening || 'N/A')}</td>
       <td>${escapeHtml(row.waterAppearanceMorning || 'N/A')}</td><td>${escapeHtml(row.waterAppearanceEvening || 'N/A')}</td>
       <td>${escapeHtml(row.waterDepthCmMorning || 'N/A')}</td><td>${escapeHtml(row.waterDepthCmEvening || 'N/A')}</td>
       <td>${escapeHtml(row.transparencyMorning || 'N/A')}</td><td>${escapeHtml(row.transparencyEvening || 'N/A')}</td>
-      <td>${escapeHtml(row.salinity || 'N/A')}</td><td>${escapeHtml(row.alkalinity || 'N/A')}</td><td>${escapeHtml(row.feedIndex || 'N/A')}</td>
+      <td>${escapeHtml(row.salinity || 'N/A')}</td><td>${escapeHtml(row.alkalinity || 'N/A')}</td><td>${escapeHtml(row.doMorning)}</td><td>${escapeHtml(row.doEvening)}</td><td>${escapeHtml(row.ammonia)}</td><td>${escapeHtml(row.feedIndex || 'N/A')}</td>
       <td>${escapeHtml(row.dailyFeedKg || 'N/A')}</td><td>${escapeHtml(row.cumulativeFeedKg || 'N/A')}</td><td>${escapeHtml(row.targetAdg || 'N/A')}</td>
       <td>${row.estimatedPopulation === null || !Number.isFinite(row.estimatedPopulation) ? 'N/A' : formatInteger(row.estimatedPopulation)}</td></tr>`).join('');
   const hasLegacy = data.siponRows.some((row) => row.hasUnclassifiedData);
@@ -438,10 +469,14 @@ export const generateDailyOperationsReportHTML = (
     </div>
     <div class="divider"></div>
   `;
+  const pagesOf = <T,>(rows: T[], size: number): T[][] => rows.length ? Array.from({ length: Math.ceil(rows.length / size) }, (_, index) => rows.slice(index * size, (index + 1) * size)) : [[]];
+  const siponPages = pagesOf(data.siponRows, 12);
+  const waterPages = pagesOf(data.waterQualityRows, 12);
+  const totalPages = siponPages.length + waterPages.length;
   const renderFooter = (pageNumber: number) => `
     <div class="footer">
       <span>Shrimply Aquaculture Management | ${escapeHtml(data.companyName)}</span>
-      <span>${escapeHtml(copy.page)} ${pageNumber} ${escapeHtml(copy.of)} 2</span>
+      <span>${escapeHtml(copy.page)} ${pageNumber} ${escapeHtml(copy.of)} ${totalPages}</span>
     </div>
   `;
 
@@ -485,27 +520,31 @@ export const generateDailyOperationsReportHTML = (
     </style>
   </head>
   <body>
+    ${siponPages.map((pageRows, pageIndex) => `
     <div class="pdf-page">
       <img class="page-bg" src="data:image/png;base64,${assets.backgroundBase64}" alt="" />
       <div class="report-shell">
         ${renderHeader(copy.dailySiponReport, copy.siponDescription)}
         <div class="table-container">
-          ${data.siponRows.length ? `<table><colgroup><col style="width:7%"><col style="width:4%"><col span="6" style="width:7%"><col style="width:8%"><col style="width:9%"><col style="width:18%"><col style="width:12%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th class="group" colspan="3">${escapeHtml(copy.morning)}</th><th class="group" colspan="3">${escapeHtml(copy.evening)}</th><th rowspan="2">${escapeHtml(copy.dailyTotal)}</th><th rowspan="2">${escapeHtml(copy.cumulative)}</th><th rowspan="2">${escapeHtml(copy.estimatedPopulation)}</th><th rowspan="2">${escapeHtml(copy.density)}</th></tr><tr><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th></tr></thead><tbody>${siponRows}</tbody><tfoot><tr><td colspan="2">${escapeHtml(copy.total)}</td><td>${formatInteger(sum(data.siponRows, 'morningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'morningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'morningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningSiphoned'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningMortal'))}</td><td>${formatInteger(sum(data.siponRows, 'eveningTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'dailyTotal'))}</td><td>${formatInteger(sum(data.siponRows, 'cumulativeTotal'))}</td><td colspan="2"></td></tr></tfoot></table>` : `<div class="empty">${escapeHtml(copy.noPonds)}</div>`}
+          ${pageRows.length ? `<table><colgroup><col style="width:7%"><col style="width:4%"><col span="6" style="width:7%"><col style="width:8%"><col style="width:9%"><col style="width:18%"><col style="width:12%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th class="group" colspan="3">${escapeHtml(copy.morning)}</th><th class="group" colspan="3">${escapeHtml(copy.evening)}</th><th rowspan="2">${escapeHtml(copy.dailyTotal)}</th><th rowspan="2">${escapeHtml(copy.cumulative)}</th><th rowspan="2">${escapeHtml(copy.estimatedPopulation)}</th><th rowspan="2">${escapeHtml(copy.density)}</th></tr><tr><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th><th>${escapeHtml(copy.siphoned)}</th><th>${escapeHtml(copy.mortal)}</th><th>${escapeHtml(copy.total)}</th></tr></thead><tbody>${renderSiponRows(pageRows)}</tbody><tfoot><tr><td colspan="2">${escapeHtml(copy.total)}</td><td>${formatInteger(sum(pageRows, 'morningSiphoned'))}</td><td>${formatInteger(sum(pageRows, 'morningMortal'))}</td><td>${formatInteger(sum(pageRows, 'morningTotal'))}</td><td>${formatInteger(sum(pageRows, 'eveningSiphoned'))}</td><td>${formatInteger(sum(pageRows, 'eveningMortal'))}</td><td>${formatInteger(sum(pageRows, 'eveningTotal'))}</td><td>${formatInteger(sum(pageRows, 'dailyTotal'))}</td><td>${formatInteger(sum(pageRows, 'cumulativeTotal'))}</td><td colspan="2"></td></tr></tfoot></table>` : `<div class="empty">${escapeHtml(copy.noPonds)}</div>`}
         </div>
         ${hasLegacy ? `<div class="note">${escapeHtml(copy.legacySiponNote)}</div>` : ''}
-        ${renderFooter(1)}
+        ${renderFooter(pageIndex + 1)}
       </div>
     </div>
+    `).join('')}
+    ${waterPages.map((pageRows, pageIndex) => `
     <div class="pdf-page">
       <img class="page-bg" src="data:image/png;base64,${assets.backgroundBase64}" alt="" />
       <div class="report-shell">
         ${renderHeader(copy.dailyWaterQualityReport, copy.waterDescription)}
         <div class="table-container">
-          ${data.waterQualityRows.length ? `<table class="water-table"><colgroup><col style="width:6%"><col style="width:4%"><col style="width:2.5%"><col style="width:5.5%"><col span="3" style="width:3.5%"><col span="2" style="width:3.5%"><col span="2" style="width:4%"><col span="2" style="width:3.5%"><col span="2" style="width:3.5%"><col style="width:3.5%"><col style="width:3.5%"><col style="width:4%"><col style="width:4.5%"><col style="width:5%"><col style="width:4%"><col style="width:5%"></colgroup><thead><tr><th rowspan="2">${escapeHtml(copy.stockingDate)}</th><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th rowspan="2">${escapeHtml(copy.recordedBy)}</th><th class="group" colspan="3">pH</th><th class="group" colspan="2">${escapeHtml(copy.temperature)}</th><th class="group" colspan="2">${escapeHtml(copy.waterAppearance)}</th><th class="group" colspan="2">${escapeHtml(copy.waterDepth)}</th><th class="group" colspan="2">${escapeHtml(copy.transparency)}</th><th rowspan="2">${escapeHtml(copy.salinity)}</th><th rowspan="2">${escapeHtml(copy.alkalinity)}</th><th class="feed-group" colspan="5">${escapeHtml(copy.feedSection)}</th></tr><tr><th>${escapeHtml(copy.phMorning)}</th><th>${escapeHtml(copy.phEvening)}</th><th>${escapeHtml(copy.phRange)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th class="feed-group">${escapeHtml(copy.feedIndex)}</th><th class="feed-group">${escapeHtml(copy.dailyFeed)}</th><th class="feed-group">${escapeHtml(copy.cumulativeFeed)}</th><th class="feed-group">${escapeHtml(copy.targetAdg)}</th><th class="feed-group">${escapeHtml(copy.estimatedPopulation)}</th></tr></thead><tbody>${waterRows}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
+          ${pageRows.length ? `<table class="water-table"><thead><tr><th rowspan="2">${escapeHtml(copy.stockingDate)}</th><th rowspan="2">${escapeHtml(copy.pond)}</th><th rowspan="2">${escapeHtml(copy.doc)}</th><th rowspan="2">${escapeHtml(copy.recordedBy)}</th><th class="group" colspan="3">pH</th><th class="group" colspan="2">${escapeHtml(copy.temperature)}</th><th class="group" colspan="2">${escapeHtml(copy.waterAppearance)}</th><th class="group" colspan="2">${escapeHtml(copy.waterDepth)}</th><th class="group" colspan="2">${escapeHtml(copy.transparency)}</th><th rowspan="2">${escapeHtml(copy.salinity)}</th><th rowspan="2">${escapeHtml(copy.alkalinity)}</th><th rowspan="2">DO AM<br/>mg/L</th><th rowspan="2">DO PM<br/>mg/L</th><th rowspan="2">Ammonia<br/>mg/L</th><th class="feed-group" colspan="5">${escapeHtml(copy.feedSection)}</th></tr><tr><th>${escapeHtml(copy.phMorning)}</th><th>${escapeHtml(copy.phEvening)}</th><th>${escapeHtml(copy.phRange)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th>${escapeHtml(copy.am)}</th><th>${escapeHtml(copy.pm)}</th><th class="feed-group">${escapeHtml(copy.feedIndex)}</th><th class="feed-group">${escapeHtml(copy.dailyFeed)}</th><th class="feed-group">${escapeHtml(copy.cumulativeFeed)}</th><th class="feed-group">${escapeHtml(copy.targetAdg)}</th><th class="feed-group">${escapeHtml(copy.estimatedPopulation)}</th></tr></thead><tbody>${renderWaterRows(pageRows)}</tbody></table>` : `<div class="empty">${escapeHtml(copy.noWaterRecords)}</div>`}
         </div>
-        ${renderFooter(2)}
+        ${renderFooter(siponPages.length + pageIndex + 1)}
       </div>
     </div>
+    `).join('')}
   </body>
   </html>`;
 };

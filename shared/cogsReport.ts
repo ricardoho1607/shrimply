@@ -1,4 +1,5 @@
 import { isDateKeyInRange } from './farmDate';
+import { NON_PRODUCTION_CATEGORIES, NON_OPERATING_INCOME, isInventoryTransfer } from './financeIntegrity';
 
 export interface CogsPond {
   id: string;
@@ -10,6 +11,7 @@ export interface CogsPond {
 interface Allocation { pondId: string; pondCycleId?: string; amount: number }
 export interface CogsTransaction {
   id?: string;
+  voided?: boolean;
   date?: string;
   amount?: number | string | null;
   category?: string;
@@ -19,9 +21,10 @@ export interface CogsTransaction {
   pondCycleId?: string;
   pondAllocations?: Allocation[];
 }
-export interface CogsUsage extends Omit<CogsTransaction, 'amount'> { totalCost?: number | string | null }
+export interface CogsUsage extends Omit<CogsTransaction, 'amount'> { source?: string; totalCost?: number | string | null }
 export interface CogsHarvest {
   id: string;
+  voided?: boolean;
   date: string;
   cycleId?: string;
   ponds: { pondId?: string; pondCycleId?: string; cycleId?: string; biomass?: number | string; price?: number | string; subBiomass?: number | string; subPrice?: number | string }[];
@@ -60,7 +63,7 @@ const number = (value: unknown): number | null => {
   const result = Number(value);
   return Number.isFinite(result) ? result : null;
 };
-const EXCLUDED = new Set(['Loan Payment', 'Taxes', 'Interest', 'Equipment', 'Property', 'Infrastructure', 'Owner Withdrawal', 'Dividend']);
+const EXCLUDED = new Set(NON_PRODUCTION_CATEGORIES);
 
 export function buildCogsReport(input: {
   ponds: CogsPond[];
@@ -79,7 +82,7 @@ export function buildCogsReport(input: {
   const findPond = (record: { pondId?: string; pondCycleId?: string; cycleId?: string }) => input.ponds.find(pond =>
     (record.pondCycleId ? (pond.pondCycleId || pond.id) === record.pondCycleId : pond.id === record.pondId)
     && (!record.cycleId || pond.cycleId === record.cycleId));
-  const inPeriod = (record: { date?: string }) => Boolean(record.date && isDateKeyInRange(record.date, input.startDateKey, input.endDateKey, input.timeZone));
+  const inPeriod = (record: { date?: string; voided?: boolean }) => Boolean(!record.voided && record.date && isDateKeyInRange(record.date, input.startDateKey, input.endDateKey, input.timeZone));
   const inScope = (record: CogsTransaction) => input.cycleScope === 'all'
     || (record.cycleId || findPond(record)?.cycleId) === input.cycleScope;
   const rows = new Map<string, PondCogsRow>();
@@ -121,7 +124,7 @@ export function buildCogsReport(input: {
   for (const [usages, bucket, category] of [
     [input.feedUsage, 'feed', 'Feed consumed'], [input.additiveUsage, 'additives', 'Additives consumed'],
   ] as const) {
-    for (const usage of usages.filter(record => inPeriod(record) && inScope(record))) {
+    for (const usage of usages.filter(record => !isInventoryTransfer(record) && inPeriod(record) && inScope(record))) {
       const cost = number(usage.totalCost);
       if (cost === null) { details.missingCostCount++; continue; }
       addCost(usage, cost, bucket, category);
@@ -138,7 +141,7 @@ export function buildCogsReport(input: {
     if (amount === null) { details.missingCostCount++; continue; }
     addCost(expense, amount, category === 'Feed' ? 'feed' : category === 'Labor' ? 'labor' : category === 'Pond Additives' ? 'additives' : 'other', category);
   }
-  const revenues = input.revenues.filter(record => inPeriod(record) && inScope(record));
+  const revenues = input.revenues.filter(record => inPeriod(record) && inScope(record) && !NON_OPERATING_INCOME.includes(input.normalizeCategory(record.category || '')));
   const harvests = input.harvests.filter(inPeriod);
   const sale = (pond: CogsHarvest['ponds'][number]) => (number(pond.biomass) ?? 0) * (number(pond.price) ?? 0)
     + (number(pond.subBiomass) ?? 0) * (number(pond.subPrice) ?? 0);

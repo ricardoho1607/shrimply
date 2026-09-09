@@ -17,6 +17,9 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useCompanyBlocks, useCompanyHarvestRecords } from '@/hooks/useDashboardData';
+import { filterEnterpriseRecordsForUser, type FarmBlock } from '../../../../../../shared/enterpriseBlocks';
+import { reportCalculationOptions, buildPondReportSnapshot, type ReportHarvest } from '../../../../../../shared/reportSnapshots';
 import { filterSamplingReportPonds } from './samplingReportScope';
 import {
   DAY_MS,
@@ -53,6 +56,9 @@ interface Sampling {
 }
 
 interface Pond {
+  blockId?: string;
+  blockName?: string;
+  cycleEndedAt?: string;
   id: string;
   pondName: string;
   supplier?: string;
@@ -101,6 +107,7 @@ interface DashboardUser {
 }
 
 interface Company {
+  businessSize?: string;
   id: string;
   companyName?: string;
   timeZone?: string;
@@ -171,7 +178,7 @@ const calculatePondStats = (pond: Pond, timeZone?: string) => {
   // Sort by date ascending to correctly identify latest/previous
   const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const growthSorted = sorted.filter((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
-  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone);
+  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone, pond.cycleEndedAt ? { now: new Date(pond.cycleEndedAt) } : {});
   
   const previousRaw = growthSorted[growthSorted.length - 2] || null;
   const previous = previousRaw ? {
@@ -330,6 +337,8 @@ export default function ShrimpReportsPage() {
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
+  const { data: harvests, loading: harvestsLoading, error: harvestsError } = useCompanyHarvestRecords<ReportHarvest & { id: string }>();
   const [cycleScope, setCycleScope] = useState('active');
   const [selectedPondIds, setSelectedPondIds] = useState<string[] | null>(null);
   const [draftPondIds, setDraftPondIds] = useState<string[]>([]);
@@ -382,7 +391,8 @@ export default function ShrimpReportsPage() {
     return () => unsub();
   }, [company?.id]);
 
-  const scopedPonds = useMemo(() => filterSamplingReportPonds(ponds, cycles, cycleScope), [ponds, cycles, cycleScope]);
+  const accessiblePonds = useMemo(() => filterEnterpriseRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: farmBlocks }), [ponds, company?.businessSize, user?.role, user?.uid, farmBlocks]);
+  const scopedPonds = useMemo(() => filterSamplingReportPonds(accessiblePonds, cycles, cycleScope), [accessiblePonds, cycles, cycleScope]);
   const selectedPonds = useMemo(() => {
     if (selectedPondIds === null) return scopedPonds;
     const selectedIds = new Set(selectedPondIds);
@@ -408,7 +418,7 @@ export default function ShrimpReportsPage() {
   };
 
   const handleGenerateReport = async () => {
-    if (!canExportReports) return;
+    if (!canExportReports || harvestsLoading || harvestsError) return;
     if (selectedPonds.length === 0) return;
     setExportLoading(true);
     try {
@@ -416,24 +426,17 @@ export default function ShrimpReportsPage() {
         const operationalSamplings = (pond.samplings || [])
           .filter((sampling) => !isBaselineSampling(sampling))
           .sort((first, second) => new Date(first.date).getTime() - new Date(second.date).getTime());
-        const allSamplings = [...(pond.samplings || [])]
-          .sort((first, second) => new Date(first.date).getTime() - new Date(second.date).getTime());
         const growthSamplings = operationalSamplings.filter((sampling) => getSamplingMbw(sampling) > 0);
-        const pondMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone);
         const initialPopulation = toFiniteNumber(pond.initialPopulation || pond.initialStock);
 
         const samplingHistory = growthSamplings.map((sampling, index) => {
-          const samplingTime = new Date(sampling.date).getTime();
-          const metricsToDate = calculatePondMetricsWithHarvest({
-            ...pond,
-            samplings: allSamplings.filter((item) => new Date(item.date).getTime() <= samplingTime),
-            mortalityRecords: (pond.mortalityRecords || []).filter((record) => new Date(record.date).getTime() <= samplingTime),
-          }, company?.timeZone);
+          const snapshot = buildPondReportSnapshot(pond, sampling.date, harvests, company?.timeZone);
+          const metricsToDate = calculatePondMetricsWithHarvest(snapshot, company?.timeZone, reportCalculationOptions(snapshot, sampling.date, company?.timeZone));
           const mbw = getSamplingMbw(sampling);
           return {
             samplingNumber: index + 1,
             samplingDate: sampling.date,
-            doc: Math.floor((samplingTime - new Date(pond.docStart).getTime()) / DAY_MS),
+            doc: metricsToDate.doc,
             mbw,
             abw: mbw,
             adg: metricsToDate.adg,
@@ -441,7 +444,7 @@ export default function ShrimpReportsPage() {
             sr: metricsToDate.adjustedSR,
             biomass: metricsToDate.currentBiomass,
             feedCumulative: metricsToDate.totalFeedConsumed,
-            fcr: index === growthSamplings.length - 1 ? pondMetrics.adjustedFCR : metricsToDate.adjustedFCR,
+            fcr: metricsToDate.biomassGainFCR,
             mortality: toFiniteNumber(sampling.mortality),
             mortalityPercentage: initialPopulation > 0 ? (metricsToDate.totalMortality / initialPopulation) * 100 : 0,
           };
@@ -463,7 +466,7 @@ export default function ShrimpReportsPage() {
       });
       const reportData: SamplingReportData = {
         farmName: company?.companyName || 'My Farm',
-        block: 'Main Block',
+        block: [...new Set(selectedPonds.map(pond => pond.blockName).filter(Boolean))].join(', ') || copy('All selected ponds'),
         technician: user?.name || user?.email?.split('@')[0] || 'Unknown',
         reportDate: new Date().toISOString(),
         reportPeriod: cycleScope === 'active' ? copy('Active cycles')
@@ -474,9 +477,10 @@ export default function ShrimpReportsPage() {
       };
       const brandAssets = await loadMobilePdfBrandAssets('landscape');
       const html = generateSamplingReportHTML(reportData, brandAssets, currentLanguage);
-      await downloadMobilePdf({ html, filename: 'Sampling_Report.pdf', orientation: 'landscape' });
+      await downloadMobilePdf({ html, filename: 'Sampling_Report.pdf', orientation: 'landscape', preserveTemplateScale: true });
     } catch (error) {
       console.error('Sampling report export failed:', error);
+      window.alert(error instanceof Error ? error.message : 'Unable to generate the sampling report.');
     } finally {
       setExportLoading(false);
     }
@@ -526,7 +530,8 @@ export default function ShrimpReportsPage() {
             <span>{copy('Select ponds')}</span>
             <span className="sampling-pond-count">{selectedPonds.length}</span>
           </button>
-          <button className="btn-primary" onClick={handleGenerateReport} disabled={exportLoading || !canExportReports || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
+          {harvestsError && <p role="alert">Harvest history could not be loaded. Reload before exporting.</p>}
+          <button className="btn-primary" onClick={handleGenerateReport} disabled={harvestsLoading || Boolean(harvestsError) || exportLoading || !canExportReports || selectedPonds.length === 0} style={{ minHeight: '42px', padding: '0 16px', borderRadius: '12px', fontWeight: 600 }}>
             {exportLoading ? <Loader2 size={19} className="animate-spin" /> : copy('Export Audit PDF')}
           </button>
         </div>

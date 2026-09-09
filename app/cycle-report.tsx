@@ -52,7 +52,11 @@ export default function CycleReportScreen() {
   const { t, currentLanguage } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [loadingFinance, setLoadingFinance] = useState(false);
+  const [loadingFinance, setLoadingFinance] = useState(true);
+  const [financeError, setFinanceError] = useState(false);
+  const inventoryLoading = useFeedAdditiveStore(state => state.loading);
+  const assetsLoading = useAssetStore(state => state.loading);
+  const assetsError = useAssetStore(state => state.error);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [expandedPondIds, setExpandedPondIds] = useState<Set<string>>(() => new Set());
 
@@ -79,10 +83,12 @@ export default function CycleReportScreen() {
     const unsubscribeInventory = initializeFeedInventory(company.id);
     initializeAssets(company.id);
     setLoadingFinance(true);
+    setFinanceError(false);
     financeService.getExpenses(company.id)
       .then(setExpenses)
       .catch((error) => {
         console.error('Failed to load cycle report expenses:', error);
+        setFinanceError(true);
         setExpenses([]);
       })
       .finally(() => setLoadingFinance(false));
@@ -146,7 +152,8 @@ export default function CycleReportScreen() {
   };
 
   const handleExportPdf = async () => {
-    if (!report || !canExportReports || exportingPdf) return;
+    if (!report || !canExportReports || exportingPdf || loadingFinance || inventoryLoading || assetsLoading) return;
+    if (financeError || assetsError || !Object.values(report.totals.costs).every(Number.isFinite)) { Alert.alert('Incomplete report data', 'Reload report sources or correct missing costs before exporting.'); return; }
     try {
       setExportingPdf(true);
       await exportCycleReportPDF({
@@ -350,6 +357,7 @@ export default function CycleReportScreen() {
     return (
       <>
         <Section title={t.cycleReport.sections.costBreakdown}>
+          <Text>Maintenance includes Finance entries only. Post each asset maintenance cost once in Finance.</Text>
           <View style={styles.costCard}>
             <CostRow label={t.cycleReport.costs.feed} value={report.totals.costs.feed} total={total} />
             <CostRow label={t.cycleReport.costs.additives} value={report.totals.costs.additives} total={total} />
@@ -422,7 +430,7 @@ export default function CycleReportScreen() {
       );
     }
 
-    if (loadingFinance && !report) {
+    if (loadingFinance || inventoryLoading || assetsLoading) {
       return (
         <View style={styles.centerState}>
           <ActivityIndicator color="#0d2137" />
@@ -464,7 +472,7 @@ export default function CycleReportScreen() {
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={t.cycleReport.exportPdf}
-                disabled={!report || !canExportReports || exportingPdf}
+                disabled={!report || !canExportReports || exportingPdf || loadingFinance || inventoryLoading || assetsLoading || financeError || Boolean(assetsError)}
                 onPress={handleExportPdf}
                 style={[styles.exportPdfButton, (!report || exportingPdf) && styles.exportPdfButtonDisabled]}
               >

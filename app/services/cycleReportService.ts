@@ -1,3 +1,5 @@
+import { monetaryValue } from '../../shared/financeIntegrity';
+import { savedUsageCost, isCycleOperatingExpense, isMaintenanceExpense } from '../../shared/reportingIntegrity';
 import type { Asset } from '../store/assetStore';
 import type { Additive, Feed, UsageHistory } from '../store/feedAdditiveStore';
 import {
@@ -20,7 +22,7 @@ export type CycleReportNote = {
     | 'missingFeedCost'
     | 'missingAdditiveCost'
     | 'noMbwSampling'
-    | 'cycleNotClosed';
+    | 'maintenancePosting' | 'cycleNotClosed';
   pondName?: string;
   message: string;
 };
@@ -166,15 +168,10 @@ const getPondMortality = (pond: Pond): number =>
   (pond.samplings || []).filter((sampling) => !isBaselineSampling(sampling)).reduce((sum, sampling) => sum + toNumber(sampling.mortality), 0);
 
 const usageMatchesCycle = (usage: UsageHistory, cycleId: string, cyclePondIds: Set<string>): boolean =>
-  usage.cycleId === cycleId ||
-  (cycleId === LEGACY_CYCLE_ID && !usage.cycleId && !!usage.pondId) ||
-  (!!usage.pondId && cyclePondIds.has(usage.pondId));
+  usage.source !== 'treatmentMixProduction' && (usage.cycleId ? usage.cycleId === cycleId :
+    (cycleId === LEGACY_CYCLE_ID && !!usage.pondId) || (!!usage.pondId && cyclePondIds.has(usage.pondId)));
 
-const usageCost = (usage: UsageHistory): number => {
-  const savedCost = toNumber(usage.totalCost);
-  if (savedCost > 0) return savedCost;
-  return toNumber(usage.quantity) * toNumber(usage.unitPrice);
-};
+const usageCost = savedUsageCost;
 
 const harvestPondMatchesCycle = (
   harvest: HarvestRecord,
@@ -368,19 +365,9 @@ export const buildCycleReport = ({
   const feedUsageQty = feedUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
   const additiveUsageQty = additiveUsages.reduce((sum, item) => sum + toNumber(item.usage.quantity), 0);
 
-  const maintenanceCost = assets.reduce((sum, asset) => {
-    return sum + (asset.maintenanceHistory || [])
-      .filter((maintenance) => maintenance.cycleId === cycleId)
-      .reduce((maintenanceSum, maintenance) => maintenanceSum + toNumber(maintenance.cost), 0);
-  }, 0);
-
-  const manualExpenses = expenses
-    .filter((expense) =>
-      expense.cycleId === cycleId &&
-      !expense.reference?.startsWith('INVENTORY-') &&
-      expense.category !== 'Maintenance'
-    )
-    .reduce((sum, expense) => sum + toNumber(expense.amount), 0);
+  const operatingExpenses = expenses.filter(expense => expense.cycleId === cycleId && isCycleOperatingExpense(expense));
+  const maintenanceCost = operatingExpenses.filter(isMaintenanceExpense).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
+  const manualExpenses = operatingExpenses.filter(expense => !isMaintenanceExpense(expense)).reduce((sum, expense) => sum + (monetaryValue(expense.amount) ?? Number.NaN), 0);
 
   const reportPonds: CycleReportPond[] = cyclePonds.map((pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);
@@ -436,11 +423,12 @@ export const buildCycleReport = ({
   const notes: CycleReportNote[] = [];
   if (cyclePonds.length === 0) notes.push({ severity: 'warning', key: 'noPonds', message: 'No pond documents were found for this cycle.' });
   if (matchedHarvestRecords.length === 0) notes.push({ severity: 'warning', key: 'noHarvestRecords', message: 'No harvest records are linked to this cycle yet.' });
-  if (feedUsages.some((item) => usageCost(item.usage) <= 0)) notes.push({ severity: 'warning', key: 'missingFeedCost', message: 'Some feed usage records do not have a saved cost.' });
-  if (additiveUsages.some((item) => usageCost(item.usage) <= 0)) notes.push({ severity: 'warning', key: 'missingAdditiveCost', message: 'Some additive usage records do not have a saved cost.' });
+  if (feedUsages.some((item) => !Number.isFinite(usageCost(item.usage)))) notes.push({ severity: 'warning', key: 'missingFeedCost', message: 'Some feed usage records do not have a saved cost.' });
+  if (additiveUsages.some((item) => !Number.isFinite(usageCost(item.usage)))) notes.push({ severity: 'warning', key: 'missingAdditiveCost', message: 'Some additive usage records do not have a saved cost.' });
   reportPonds
     .filter((pond) => pond.samplingCount === 0)
     .forEach((pond) => notes.push({ severity: 'info', key: 'noMbwSampling', pondName: pond.pondName, message: `${pond.pondName} has no MBW sampling records.` }));
+  if (assets.some(asset => (asset.maintenanceHistory || []).length > 0)) notes.push({ severity: 'info', key: 'maintenancePosting', message: 'Maintenance is counted from Finance entries only. Check that each asset maintenance cost has been posted once in Finance; asset-register amounts are not added again.' });
   if (cycle.status !== 'closed') notes.push({ severity: 'info', key: 'cycleNotClosed', message: 'This cycle is not closed yet. Final profitability may still change.' });
 
   const costs: CycleCostBreakdown = {
