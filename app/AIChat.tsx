@@ -20,6 +20,7 @@ import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
 import ShrimpIcon from './components/icons/ShrimpIcon';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../orson/session';
+import { cleanOrsonResponse } from '../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../orson/responseCompletion';
 import { hasFarmPermission } from '../shared/permissions';
 
@@ -244,7 +245,7 @@ function AIChatSession() {
                     </View>
                   )}
                   <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
-                    {message.message}
+                    {message.type === 'ai' ? cleanOrsonResponse(message.message) : message.message}
                   </Text>
                   {message.retryPrompt && <TouchableOpacity disabled={loading} onPress={() => handleSend(message.retryPrompt, message.id)}><Text>Response interrupted. Retry</Text></TouchableOpacity>}
                 </View>

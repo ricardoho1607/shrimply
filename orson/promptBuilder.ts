@@ -1496,6 +1496,8 @@ export const cleanOrsonResponse = (text: string): string => {
   return text
     .replace(/\*\*/g, '')
     .replace(/^#{1,6}\s+/gm, '')
+    .replace(/^(?:Evidence|Bukti|Sumber):[^\n]*\b(?:dataset|pondCycleId|documentId|recordId|samplings id|read_app_records)\b[^\n]*(?:\n[ \t]*[-*][^\n]*)*/gmi, '')
+    .replace(/\n[ \t]*\n(?:[ \t]*\n)+/g, '\n\n')
     .replace(/\bheavy_rain\b/gi, 'Heavy Rain')
     .replace(/\bsudden_cloud\b/gi, 'Sudden Cloud')
     .replace(/[ \t]+\n/g, '\n')
