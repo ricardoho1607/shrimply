@@ -1,23 +1,81 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import { Download, Loader2 } from 'lucide-react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useState } from 'react';
+import { Loader2 } from 'lucide-react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getManualLabColumns } from '@/lib/manualLabColumns';
 import { selectMineralLabReports, type SavedMineralLabReport } from '@/lib/mineralLabResults';
-import { labMeasurementLabel } from '../../../functions/shared/labMeasurementContract';
+import { dailyOperationsTranslations, type DailyOperationsLanguage } from '../../../shared/dailyOperationsI18n';
 
-export default function MineralLabResults({ companyId, ponds, reportDate, selectedBlock, canExport }: {
+export interface MineralLabResultsHandle {
+  exportPdf: () => Promise<void>;
+  selectedReport: SavedMineralLabReport | null;
+}
+
+export interface MineralLabResultsProps {
   companyId: string;
-  ponds: { id: string; blockName?: string | null }[];
+  ponds: {
+    id: string;
+    blockName?: string | null;
+    pondName?: string;
+    pondCode?: string;
+    cycleStatus?: string | null;
+    docStart?: unknown;
+    stockingDate?: unknown;
+  }[];
   reportDate: string;
   selectedBlock: string;
   canExport: boolean;
-}) {
-  const { t } = useLanguage();
-  const copy = t.dailyOperationsReports;
+  onSelectedReportChange?: (report: SavedMineralLabReport | null) => void;
+  onExportingChange?: (exporting: boolean) => void;
+}
+
+const cellStyle: React.CSSProperties = {
+  padding: '10px 8px',
+  borderBottom: '1px solid var(--border)',
+  textAlign: 'center',
+  whiteSpace: 'nowrap',
+  fontSize: '12px',
+};
+
+const headerCell: React.CSSProperties = {
+  ...cellStyle,
+  background: '#0F4C75',
+  fontWeight: 700,
+  color: '#fff',
+};
+
+const getDocDays = (stockingDate: unknown, reportDate: string): string => {
+  if (!stockingDate) return 'N/A';
+  const startKey = typeof stockingDate === 'string' ? stockingDate.slice(0, 10) : '';
+  if (!startKey) return 'N/A';
+  const start = Date.parse(`${startKey}T00:00:00Z`);
+  const end = Date.parse(`${reportDate}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'N/A';
+  const diff = Math.floor((end - start) / 86_400_000);
+  return diff >= 0 ? String(diff) : 'N/A';
+};
+
+const MineralLabResults = forwardRef<MineralLabResultsHandle, MineralLabResultsProps>(function MineralLabResults(
+  { companyId, ponds, reportDate, selectedBlock, canExport, onSelectedReportChange, onExportingChange },
+  ref,
+) {
+  const { t, currentLanguage } = useLanguage();
+  const langKey = (currentLanguage in dailyOperationsTranslations ? currentLanguage : 'en') as DailyOperationsLanguage;
+  const localeCopy = dailyOperationsTranslations[langKey] || dailyOperationsTranslations.en;
+  const copy = useMemo(() => {
+    const rawContext = (t?.dailyOperationsReports || {}) as Record<string, unknown>;
+    const base = { ...dailyOperationsTranslations.en, ...localeCopy } as Record<string, string>;
+    const merged = { ...base };
+    for (const [key, value] of Object.entries(rawContext)) {
+      if (typeof value === 'string' && value.trim() && value !== 'undefined' && value !== 'null') {
+        merged[key] = value;
+      }
+    }
+    return merged as typeof dailyOperationsTranslations.en;
+  }, [currentLanguage, localeCopy, t?.dailyOperationsReports]);
   const [source, setSource] = useState<{ companyId: string; reports: SavedMineralLabReport[]; error?: boolean } | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [exporting, setExporting] = useState(false);
@@ -25,8 +83,90 @@ export default function MineralLabResults({ companyId, ponds, reportDate, select
     snapshot => setSource({ companyId, reports: snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as SavedMineralLabReport)) }),
     error => { console.error('Failed to load mineral reports:', error); setSource({ companyId, reports: [], error: true }); }), [companyId]);
   const reports = useMemo(() => selectMineralLabReports(source?.companyId === companyId ? source.reports : [], ponds, reportDate, selectedBlock), [companyId, ponds, reportDate, selectedBlock, source]);
-  const selected = reports.find(report => report.id === selectedId) || reports[0];
+  const confirmedReport = reports.find(report => report.id === selectedId) || reports[0];
   const columns = getManualLabColumns('water_quality');
+
+  const activePonds = useMemo(() => {
+    return (ponds || [])
+      .filter(pond => pond.cycleStatus !== 'ended' && (selectedBlock === 'all' || pond.blockName === selectedBlock))
+      .sort((a, b) => (a.pondName || a.pondCode || a.id || '').localeCompare(b.pondName || b.pondCode || b.id || ''));
+  }, [ponds, selectedBlock]);
+
+  const defaultRows = useMemo(() => {
+    return activePonds.map(pond => ({
+      pondId: pond.id,
+      pondCode: pond.pondCode || pond.pondName || pond.id,
+      doc: getDocDays(pond.docStart || pond.stockingDate, reportDate),
+    }));
+  }, [activePonds, reportDate]);
+
+  const selected = useMemo(() => {
+    if (confirmedReport) return confirmedReport;
+    if (defaultRows.length > 0) {
+      return {
+        id: `mineral-${reportDate}`,
+        status: 'confirmed',
+        entryMode: 'manual',
+        reportType: 'water_quality',
+        sampleDate: reportDate,
+        labName: copy.mineralLabResults,
+        pondResults: defaultRows,
+      } as SavedMineralLabReport;
+    }
+    return null;
+  }, [confirmedReport, copy.mineralLabResults, defaultRows, reportDate]);
+
+  const rows = useMemo(() => {
+    if (confirmedReport?.pondResults && confirmedReport.pondResults.length > 0) {
+      const labByPondId = new Map<string, (typeof confirmedReport.pondResults)[0]>();
+      const labByPondCode = new Map<string, (typeof confirmedReport.pondResults)[0]>();
+      for (const row of confirmedReport.pondResults) {
+        if (row.pondId) labByPondId.set(row.pondId, row);
+        if (row.pondCode) labByPondCode.set(row.pondCode.toLowerCase(), row);
+      }
+
+      if (activePonds.length > 0) {
+        const seenLabKeys = new Set<string>();
+        const mapped = activePonds.map(pond => {
+          const labRow = (pond.id ? labByPondId.get(pond.id) : undefined)
+            || (pond.pondCode ? labByPondCode.get(pond.pondCode.toLowerCase()) : undefined)
+            || (pond.pondName ? labByPondCode.get(pond.pondName.toLowerCase()) : undefined);
+          if (labRow) {
+            if (labRow.pondId) seenLabKeys.add(labRow.pondId);
+            if (labRow.pondCode) seenLabKeys.add(labRow.pondCode.toLowerCase());
+            return labRow;
+          }
+          return {
+            pondId: pond.id,
+            pondCode: pond.pondCode || pond.pondName || pond.id,
+            doc: getDocDays(pond.docStart || pond.stockingDate, reportDate),
+          };
+        });
+        const extras = confirmedReport.pondResults.filter(row => {
+          const idMatch = row.pondId && seenLabKeys.has(row.pondId);
+          const codeMatch = row.pondCode && seenLabKeys.has(row.pondCode.toLowerCase());
+          return !idMatch && !codeMatch;
+        });
+        return [...mapped, ...extras];
+      }
+
+      return confirmedReport.pondResults;
+    }
+
+    return defaultRows;
+  }, [activePonds, confirmedReport, defaultRows, reportDate]);
+
+  useEffect(() => {
+    onSelectedReportChange?.(selected || null);
+    return () => {
+      onSelectedReportChange?.(null);
+    };
+  }, [onSelectedReportChange, selected]);
+
+  useEffect(() => {
+    onExportingChange?.(exporting);
+  }, [onExportingChange, exporting]);
+
   const exportPdf = async () => {
     if (!canExport || exporting || !selected) return;
     setExporting(true);
@@ -40,33 +180,111 @@ export default function MineralLabResults({ companyId, ponds, reportDate, select
       window.alert(copy.exportFailedMessage);
     } finally { setExporting(false); }
   };
-  if (source?.companyId !== companyId) return <div style={{ padding: 40, textAlign: 'center' }}><Loader2 className="animate-spin" aria-label={copy.mineralLabResults} /></div>;
-  if (source.error) return <p role="alert" style={{ padding: 24 }}>{copy.mineralLoadFailed}</p>;
-  if (!selected) return <p style={{ padding: 24, color: 'var(--text-muted)' }}>{copy.noMineralReports}</p>;
-  return <section aria-label={copy.mineralLabResults}>
-    <div style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap' }}>
-      <label style={{ display: 'grid', gap: 6, fontSize: 12, color: 'var(--text-muted)' }}>{copy.labReport}
-        <select value={selected.id} onChange={event => setSelectedId(event.target.value)} style={{ maxWidth: '100%', padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)' }}>
-          {reports.map((report, index) => <option key={report.id} value={report.id}>{report.labName || copy.labReport} · {report.sampleDate} · {index + 1}</option>)}
-        </select>
-      </label>
-      <button className="btn-primary" onClick={exportPdf} disabled={!canExport || exporting} style={{ display: 'flex', gap: 8, alignItems: 'center', minHeight: 44 }}>
-        {exporting ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}{exporting ? copy.exporting : copy.downloadMineralPdf}
-      </button>
+
+  useImperativeHandle(ref, () => ({
+    exportPdf,
+    selectedReport: selected || null,
+  }), [exportPdf, selected]);
+
+  if (source?.companyId !== companyId) {
+    return (
+      <div style={{ width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1800px' }}>
+          <thead>
+            <tr>
+              {[copy.pond || 'Pond', ...columns.map(column => column.label.replace(' (unit/basis below)', ''))].map((label, index) => (
+                <th key={label || index} style={headerCell}>{label}</th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+        <div style={{ padding: '42px', display: 'grid', placeItems: 'center' }}>
+          <Loader2 className="animate-spin" aria-label={copy.mineralLabResults} />
+        </div>
+      </div>
+    );
+  }
+
+  if (source.error) {
+    return (
+      <div style={{ width: '100%' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1800px' }}>
+          <thead>
+            <tr>
+              {[copy.pond || 'Pond', ...columns.map(column => column.label.replace(' (unit/basis below)', ''))].map((label, index) => (
+                <th key={label || index} style={headerCell}>{label}</th>
+              ))}
+            </tr>
+          </thead>
+        </table>
+        <div role="alert" style={{ padding: '42px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          {copy.mineralLoadFailed}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ width: '100%' }}>
+      {reports.length > 1 && (
+        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <label style={{ display: 'flex', gap: '8px', alignItems: 'center', fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+            <span>{copy.labReport}:</span>
+            <select
+              value={selected?.id || ''}
+              onChange={event => setSelectedId(event.target.value)}
+              style={{ padding: '6px 10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600 }}
+            >
+              {reports.map((report, index) => (
+                <option key={report.id} value={report.id}>
+                  {report.labName || copy.labReport} · {report.sampleDate} {reports.length > 1 ? `(${index + 1})` : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1800px' }}>
+        <thead>
+          <tr>
+            {[copy.pond || 'Pond', ...columns.map(column => column.label.replace(' (unit/basis below)', ''))].map((label, index) => (
+              <th key={label || index} style={headerCell}>{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={`${row.pondId || index}-${index}`}>
+              <td style={{ ...cellStyle, fontWeight: 700 }}>{row.pondCode || 'N/A'}</td>
+              {columns.map(column => {
+                const [section, key] = column.path;
+                const rawValue = key ? (row as any)[section]?.[key] : (row as any)[section];
+                const valStr = rawValue == null ? '' : String(rawValue).trim();
+                const displayValue = !valStr || valStr === 'undefined' || valStr === 'null' || valStr === 'NaN' || valStr === '-' ? 'N/A' : valStr;
+                return (
+                  <td key={column.path.join('.')} style={cellStyle}>
+                    {displayValue}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={columns.length + 1} style={{ ...cellStyle, padding: '42px', color: 'var(--text-muted)' }}>
+                {copy.noMineralReports}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {!confirmedReport && rows.length > 0 && (
+        <div style={{ padding: '16px 20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', borderTop: '1px solid var(--border)' }}>
+          {copy.noMineralReports}
+        </div>
+      )}
     </div>
-    <div style={{ overflowX: 'auto' }}><table style={{ width: '100%', minWidth: 1800, borderCollapse: 'collapse', fontSize: 12 }}>
-      <thead><tr>{[copy.pond, ...columns.map(column => column.label.replace(' (unit/basis below)', ''))].map((label, index) => <th key={index} style={{ padding: 10, background: '#0F4C75', color: '#fff' }}>{label}</th>)}</tr></thead>
-      <tbody>{selected.pondResults?.map((row, index) => <tr key={`${row.pondId}-${index}`}>
-        <td style={{ padding: 10, textAlign: 'center', fontWeight: 700, borderBottom: '1px solid var(--border)' }}>{row.pondCode}</td>
-        {columns.map(column => {
-          const [section, key] = column.path;
-          const value = key ? row[section as 'waterQuality' | 'microbiology']?.[key] : row[section as 'doc' | 'transparencyCm'];
-          return <td key={column.path.join('.')} style={{ padding: 10, textAlign: 'center', borderBottom: '1px solid var(--border)' }}>
-            {value === null || value === undefined || value === '' ? 'N/A' : value}
-            {section === 'waterQuality' && value !== null && value !== undefined && value !== '' && <small style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)' }}>{labMeasurementLabel(key, row.measurementUnits).replace(/^.*?\(/, '(')}</small>}
-          </td>;
-        })}
-      </tr>)}</tbody>
-    </table></div>
-  </section>;
-}
+  );
+});
+
+export default MineralLabResults;

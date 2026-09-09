@@ -96,3 +96,32 @@ test("mortality diagnostics never reinterpret logged allocation as appetite", ()
   assert.doesNotMatch(instructions, /low-confidence appetite proxy/);
   assert.match(instructions, /allocation alone cannot establish appetite/);
 });
+
+test("treatment questions search and retain alternative stock", () => {
+  for (const question of ["What should I use to increase calcium?", "How do I reduce ammonia?", "What is the dosing formula?"]) {
+    assert.equal(__test.shouldUseOrsonWebLookup("farm_analysis", question), true);
+  }
+  assert.equal(__test.shouldUseOrsonWebLookup("out_of_scope", "recommend a movie"), false);
+  const products = __test.normalizeOrsonProductDocuments([
+    { id: "a", data: { additiveName: "Mineral A", totalStock: 0 } },
+    { id: "b", data: { additiveName: "Mineral B", totalStock: 30 } },
+    { id: "c", data: { additiveName: "Mineral C" } },
+    { id: "d", data: { feedName: "Feed D", totalStock: 5 } },
+  ], "Recommend an alternative to Mineral A");
+  assert.equal(products.length, 4);
+  assert.equal(products[0].current_stock, 0);
+  assert.equal(products[2].current_stock, null);
+  assert.equal(products[3].inventory_kind, "feed");
+});
+
+test("inventory and dosing safeguards apply to farm questions too", () => {
+  const { needsInventoryContext } = require('./shared/orsonInventoryPolicy');
+  assert.equal(needsInventoryContext('farm_analysis', 'increase calcium'), true);
+  assert.equal(needsInventoryContext('inventory_product', 'check my inventory'), true);
+  assert.equal(needsInventoryContext('out_of_scope', 'recommend a movie'), false);
+  const instruction = __test.buildServerOrsonSystemInstruction('standard', 'chat', 'farm_analysis');
+  assert.match(instruction, /product_kg = active_kg \/ active_mass_fraction/);
+  assert.match(instruction, /withhold numeric application doses/);
+  assert.match(instruction, /unknown stock is not zero/);
+  assert.match(instruction, /Never deduct stock/);
+});

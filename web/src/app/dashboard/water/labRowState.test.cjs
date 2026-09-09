@@ -32,3 +32,14 @@ test('deselecting a pond removes every stale duplicate row', () => {
   assert.deepEqual(result.selectedIds, []);
   assert.deepEqual(result.rows, []);
 });
+
+test('compact manual inputs keep standard units and preserve reported bases', () => {
+  const { getManualLabInputUnits } = loadedModule.exports;
+  const { validateLabRow, canonicalLabValue } = require('../../../../../functions/shared/labMeasurementContract');
+  const units = getManualLabInputUnits();
+  assert.deepEqual(units.phosphate, { unit: 'mg/L', basis: 'PO4' });
+  assert.equal(units.tom.basis, 'unspecified');
+  assert.deepEqual(validateLabRow({ waterQuality: { tom: 50, phosphate: 0 }, measurementUnits: units }), []);
+  assert.equal(canonicalLabValue({ waterQuality: { tom: 50 }, measurementUnits: units }, 'tom'), null);
+  assert.deepEqual(getManualLabInputUnits({ phosphate: { unit: 'mg/L', basis: 'P' } }).phosphate, { unit: 'mg/L', basis: 'P' });
+});

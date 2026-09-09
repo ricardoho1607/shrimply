@@ -12,6 +12,12 @@ test('daily operations report owns a top-safe custom header', () => {
   assert.match(source, /<View style=\{styles\.header\}>/);
 });
 
+test('mobile daily report follows the farm date until the user selects a different day', () => {
+  assert.match(source, /const today = useFarmDateKey\(company\?\.timeZone\)/);
+  assert.match(source, /current === previousToday\.current \? today : current/);
+  assert.match(source, /timeZone: company\?\.timeZone/);
+});
+
 test('daily operations labels are wired into every app and web locale', () => {
   const translations = fs.readFileSync(path.join(root, 'shared/dailyOperationsI18n.ts'), 'utf8');
   const appIndex = fs.readFileSync(path.join(root, 'app/translations/index.ts'), 'utf8');

@@ -20,7 +20,7 @@ export const id = {
     system: 'Sistem',
     inventoryFeeds: 'Pakan & Aditif',
     inventoryAssets: 'Aset',
-    marketOverview: 'Ikhtisar Pasar',
+    marketOverview: 'Ringkasan Pasar',
     suppliers: 'Pemasok',
     buyerDashboard: 'Dashboard Pembeli'
   },
@@ -597,7 +597,7 @@ companySetup: {
   },
   finance: {
     title: 'Keuangan',
-    overview: 'Ikhtisar',
+    overview: 'Ringkasan',
     expenses: 'Pengeluaran',
     revenues: 'Pendapatan',
     revenue: 'Pendapatan',

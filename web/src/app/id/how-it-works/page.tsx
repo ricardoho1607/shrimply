@@ -43,7 +43,7 @@ export default function HowItWorksPage() {
       {/* HERO: THE SCALE OF SHRIMPLY */}
       <section className="section" style={{ minHeight: '80vh', display: 'flex', alignItems: 'center', background: 'var(--off-white)' }}>
         <div className="container" style={{ textAlign: 'center' }}>
-          <div className="eyebrow animate-hero" style={{ animationDelay: '0.2s', marginBottom: '16px' }}>Ikhtisar Platform</div>
+          <div className="eyebrow animate-hero" style={{ animationDelay: '0.2s', marginBottom: '16px' }}>Ringkasan Platform</div>
           <h1 className="animate-hero" style={{ animationDelay: '0.4s', marginBottom: '32px' }}>
             Dari Kolam ke Keuntungan.<br /><em>OS skala penuh.</em>
           </h1>

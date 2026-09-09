@@ -15,19 +15,58 @@ export const getOrsonNotificationPriority = (
 };
 
 interface OrsonPriorityNotification {
+  id?: string;
   type: string;
+  message?: string;
   priority: 'high' | 'medium' | 'low';
+  pondId?: unknown;
+  sourceDate?: unknown;
   data?: {
+    pondId?: unknown;
     riskId?: unknown;
     severity?: unknown;
+    sourceDate?: unknown;
+    status?: unknown;
   };
   orsonRiskReport?: {
     findings?: {
       id?: unknown;
       severity?: unknown;
+      eventDate?: unknown;
     }[];
   };
 }
+
+type OrsonNotificationLike = Omit<OrsonPriorityNotification, 'priority'> & { priority?: 'high' | 'medium' | 'low' };
+
+export const getOrsonNotificationSourceDate = (notification: OrsonNotificationLike): string | null => {
+  const riskId = notification.data?.riskId;
+  const reportFinding = notification.orsonRiskReport?.findings?.find((finding) => (
+    typeof riskId !== 'string' || finding.id === riskId
+  ));
+  const candidate = notification.data?.sourceDate
+    ?? notification.sourceDate
+    ?? reportFinding?.eventDate
+    ?? notification.message?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  return typeof candidate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(candidate)
+    ? candidate.slice(0, 10)
+    : null;
+};
+
+export const dedupeOrsonNotifications = <T extends OrsonNotificationLike>(notifications: T[]): T[] => {
+  const seen = new Set<string>();
+  return notifications.filter((notification) => {
+    if (notification.type !== 'orson_risk') return true;
+    const pondId = notification.data?.pondId ?? notification.pondId;
+    const riskId = notification.data?.riskId;
+    const sourceDate = getOrsonNotificationSourceDate(notification);
+    if (typeof pondId !== 'string' || typeof riskId !== 'string' || !sourceDate) return true;
+    const key = `${pondId}:${riskId}:${sourceDate}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
 
 export const getEffectiveNotificationPriority = (
   notification: OrsonPriorityNotification,
@@ -48,10 +87,10 @@ export const getEffectiveNotificationPriority = (
       : 'warning';
   return getOrsonNotificationPriority(severity, riskIds);
 };
-export const getOrsonAlertCaption = (notification: { type: string; message?: string; data?: Record<string, unknown> }, createdText?: string): string | null => {
+export const getOrsonAlertCaption = (notification: OrsonNotificationLike, createdText?: string): string | null => {
   if (notification.type !== 'orson_risk') return null;
-  const sourceDate = notification.data?.sourceDate || notification.message?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  const sourceDate = getOrsonNotificationSourceDate(notification);
   const status = notification.data?.status === 'active' ? 'Active'
     : notification.data?.status === 'resolved' ? 'Resolved' : 'Historical';
-  return `${status} · Event: ${typeof sourceDate === 'string' ? sourceDate : 'date unavailable'}${createdText ? ` · Alert created: ${createdText}` : ''}`;
+  return `${status} · Event: ${sourceDate || 'date unavailable'}${createdText ? ` · Alert created: ${createdText}` : ''}`;
 };

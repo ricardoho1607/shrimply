@@ -17,3 +17,6 @@ output
 .secret.local
 *.jks
 *.keystore
+
+!functions/shared/orsonInventoryPolicy.js
+!functions/shared/orsonInventoryPolicy.d.ts

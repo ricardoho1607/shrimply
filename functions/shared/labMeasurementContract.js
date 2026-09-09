@@ -2,7 +2,7 @@
 const LAB_WATER_FIELDS = {
   phCustomer: { label: 'pH (field)', unit: 'pH', bases: ['pH'], max: 14 },
   phLab: { label: 'pH (lab)', unit: 'pH', bases: ['pH'], max: 14 },
-  salinityCustomer: { label: 'Salinity (field)', unit: 'ppt', bases: ['salinity'], max: 1000 },
+  salinityCustomer: { label: 'Salinity', unit: 'ppt', bases: ['salinity'], max: 1000 },
   salinityLab: { label: 'Salinity (lab)', unit: 'ppt', bases: ['salinity'], max: 1000 },
   tan: { label: 'TAN', unit: 'mg/L', bases: ['N'] },
   nh3: { label: 'NH3', unit: 'mg/L', bases: ['NH3', 'N'] },
@@ -11,8 +11,8 @@ const LAB_WATER_FIELDS = {
   no2: { label: 'NO2', unit: 'mg/L', bases: ['NO2', 'N'] },
   alkalinityTotal: { label: 'Alkalinity', unit: 'mg/L', bases: ['CaCO3'] },
   tom: { label: 'TOM', unit: 'mg/L', bases: ['KMnO4 consumption', 'O2 demand'] },
-  hardnessCa: { label: 'Calcium / Ca hardness', unit: 'mg/L', bases: ['CaCO3', 'Ca'] },
-  hardnessMg: { label: 'Magnesium / Mg hardness', unit: 'mg/L', bases: ['CaCO3', 'Mg'] },
+  hardnessCa: { label: 'Calcium', unit: 'mg/L', bases: ['CaCO3', 'Ca'] },
+  hardnessMg: { label: 'Magnesium', unit: 'mg/L', bases: ['CaCO3', 'Mg'] },
   hardnessTotal: { label: 'Total hardness', unit: 'mg/L', bases: ['CaCO3'] },
 };
 

@@ -23,7 +23,7 @@ export interface ManualLabReport {
 const escape = (value: unknown) => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]!));
 const display = (value: Value | undefined) => value === null || value === undefined || value === '' ? 'N/A' : String(value);
 const shortLabels: Record<string, string> = {
-  transparencyCm: 'Transp.', salinityCustomer: 'Sal. field', salinityLab: 'Sal. lab',
+  transparencyCm: 'Transp.', salinityCustomer: 'Salinity', salinityLab: 'Sal. lab',
   phosphate: 'PO4', alkalinityTotal: 'Alk.', hardnessCa: 'Ca', hardnessMg: 'Mg', hardnessTotal: 'Hardness',
   totalCellPerMl: 'Total plankton', beneficialCellPerMl: 'Good plankton', harmfulCellPerMl: 'Bad plankton',
   chlorophyta: 'Green algae', cyanophyta: 'Blue-green', diatom: 'Diatom', chrysophyta: 'Golden-green',

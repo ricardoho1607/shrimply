@@ -1,7 +1,16 @@
-require('sucrase/register/ts');
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { initializeWaterDraft, isDailyWaterRecord } = require('./waterFormState.ts');
+const fs = require('node:fs');
+const path = require('node:path');
+const ts = require('typescript');
+
+const waterFormSource = fs.readFileSync(path.join(__dirname, 'waterFormState.ts'), 'utf8');
+const compiledWaterForm = ts.transpileModule(waterFormSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const waterFormModule = { exports: {} };
+new Function('module', 'exports', 'require', compiledWaterForm)(waterFormModule, waterFormModule.exports, require);
+const { initializeWaterDraft, isDailyWaterRecord } = waterFormModule.exports;
 
 test('draft is independent of later snapshots and preserves typed salinity and pH', () => {
   const records = [];
@@ -24,4 +33,29 @@ test('correction selects the existing daily record, excludes feed/sampling, and 
   assert.equal(draft.ammonia, '0');
   assert.equal(draft.waterExchangePercent, '0');
   assert.equal(draft.surfaceScum, false);
+});
+
+test('draft initializes morning and evening fields and falls back to legacy single fields', () => {
+  const legacyRecord = {
+    date: '2026-09-04', mbw: 0, feed: 0, mortality: 0,
+    transparency: 35,
+    temperature: 29.5,
+    waterAppearance: 'Brown',
+    waterDepthCm: 140,
+  };
+  const draft = initializeWaterDraft('pond-1', '2026-09-04', [legacyRecord]);
+  assert.equal(draft.transparencyMorning, '35');
+  assert.equal(draft.temperatureMorning, '29.5');
+  assert.equal(draft.waterAppearanceMorning, 'Brown');
+  assert.equal(draft.waterDepthCmMorning, '140');
+
+  const emptyDraft = initializeWaterDraft('pond-1', '2026-09-05', []);
+  assert.equal(emptyDraft.transparencyMorning, '');
+  assert.equal(emptyDraft.transparencyEvening, '');
+  assert.equal(emptyDraft.temperatureMorning, '');
+  assert.equal(emptyDraft.temperatureEvening, '');
+  assert.equal(emptyDraft.waterAppearanceMorning, '');
+  assert.equal(emptyDraft.waterAppearanceEvening, '');
+  assert.equal(emptyDraft.waterDepthCmMorning, '');
+  assert.equal(emptyDraft.waterDepthCmEvening, '');
 });

@@ -4794,6 +4794,25 @@ nav.scrolled {
   font-size: 10px;
 }
 
+.ponds-cycle-switcher .ponds-filter-tab {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.ponds-cycle-switcher .ponds-filter-tab:hover {
+  background: var(--primary-dim);
+  color: var(--primary);
+}
+
+.ponds-cycle-switcher .ponds-filter-tab.is-active {
+  border-color: var(--primary);
+  background: var(--primary-dim);
+  color: var(--primary);
+  font-weight: var(--weight-semibold);
+}
+
 .ponds-view-toggle {
   display: flex;
   align-items: center;

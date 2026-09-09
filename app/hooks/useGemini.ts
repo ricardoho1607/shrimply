@@ -16,6 +16,7 @@ import {
   buildOrsonRequestPrompt,
   cleanOrsonResponse,
   inferOrsonConversationRoute,
+  ORSON_CLIENT_TIMEOUT_MS,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
   ORSON_RESPONSE_TIMEOUT_MS,
@@ -301,13 +302,13 @@ export const useGemini = () => {
       };
       const result = await withOrsonTimeout(
         generateOrsonResponse(requestPayload),
-        ORSON_MODEL_TIMEOUT_MS,
+        ORSON_CLIENT_TIMEOUT_MS,
         'Orson is taking too long to respond. Please try again.',
       );
       assertCurrent();
       const text = cleanOrsonResponse(requireCompleteOrsonResponse(result.data));
       options.onPartialResponse?.(text);
-      void saveCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
+      if (result.data.safeToCache === true) void saveCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
       console.info('orson_client_latency', {
         route: analysis.promptPackage.questionFocus.route,
         promptChars: requestPayload.prompt.length,

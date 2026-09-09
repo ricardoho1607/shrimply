@@ -108,6 +108,7 @@ const readMetaEventStream = async (response, onTextDelta) => {
   return {
     text: finalText || streamedText,
     finishReason: getFinishReason(finalResponse),
+    inputTokens: finalResponse?.usage?.input_tokens ?? null,
     outputTokens: finalResponse?.usage?.output_tokens ?? null,
     sources: getResponseSources(finalResponse),
   };
@@ -158,6 +159,7 @@ const generateMetaModelResponse = async ({
   return {
     text: getResponseText(body),
     finishReason: getFinishReason(body),
+    inputTokens: body.usage?.input_tokens ?? null,
     outputTokens: body.usage?.output_tokens ?? null,
     sources: getResponseSources(body),
   };

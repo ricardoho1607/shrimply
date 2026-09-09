@@ -75,3 +75,18 @@ test('alert identity isolates company, pond, cycle and event date', () => {
   const keys = [eventKey('A', 'P', 'C', finding), eventKey('B', 'P', 'C', finding), eventKey('A', 'Q', 'C', finding), eventKey('A', 'P', 'D', finding), eventKey('A', 'P', 'C', { ...finding, eventDate: '2026-09-02' })];
   assert.equal(new Set(keys).size, 5);
 });
+
+test('legacy alerts deduplicate using pond, event, and a preserved source-record date', async () => {
+  const state = fixture();
+  state.documents.set('notifications/legacy-rain', {
+    companyId: 'test-company',
+    pondId: 'sim-b1',
+    type: 'orson_risk',
+    message: 'Heavy rain and low DO detected.',
+    data: { pondId: 'sim-b1', riskId: 'heavy_rain_low_do' },
+    orsonRiskReport: { findings: [{ id: 'heavy_rain_low_do', eventDate: '2026-09-01' }] },
+  });
+
+  await state.run();
+  assert.equal(state.alerts().filter(alert => alert.data.riskId === 'heavy_rain_low_do').length, 1);
+});

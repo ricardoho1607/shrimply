@@ -11,9 +11,8 @@ export function getManualLabColumns(reportType = 'water_quality'): ManualLabColu
       { label: 'DOC', path: ['doc'] },
     ];
     const mineralColumns: ManualLabColumn[] = [
-      { label: 'Transparency (cm)', path: ['transparencyCm'] },
-      { label: 'Salinity field (ppt)', path: ['waterQuality', 'salinityCustomer'] },
-      { label: 'Salinity lab (ppt)', path: ['waterQuality', 'salinityLab'] },
+      { label: 'Transparency', path: ['transparencyCm'] },
+      { label: 'Salinity', path: ['waterQuality', 'salinityCustomer'] },
       { label: LAB_WATER_FIELDS.tan.label + ' (unit/basis below)', path: ['waterQuality', 'tan'] },
       { label: LAB_WATER_FIELDS.nh3.label + ' (unit/basis below)', path: ['waterQuality', 'nh3'] },
       { label: LAB_WATER_FIELDS.nh4.label + ' (unit/basis below)', path: ['waterQuality', 'nh4'] },

@@ -6,7 +6,29 @@ type WaterRecord = {
   surfaceScum?: boolean | null; shrimpBehaviour?: 'normal' | 'abnormal' | null;
 } & Partial<Record<typeof textFields[number], string | number>>;
 
-const textFields = ['salinity', 'phMorning', 'phEvening', 'doMorning', 'doEvening', 'transparency', 'temperature', 'waterAppearance', 'waterDepthCm', 'alkalinity', 'ammonia', 'operationalNotes', 'waterExchangePercent'] as const;
+const textFields = [
+  'salinity',
+  'phMorning',
+  'phEvening',
+  'doMorning',
+  'doEvening',
+  'transparencyMorning',
+  'transparencyEvening',
+  'transparency',
+  'temperatureMorning',
+  'temperatureEvening',
+  'temperature',
+  'waterAppearanceMorning',
+  'waterAppearanceEvening',
+  'waterAppearance',
+  'waterDepthCmMorning',
+  'waterDepthCmEvening',
+  'waterDepthCm',
+  'alkalinity',
+  'ammonia',
+  'operationalNotes',
+  'waterExchangePercent',
+] as const;
 
 export const isDailyWaterRecord = (record: WaterRecord, date: string) => (
   !record.isBaselineEstimate && record.source !== 'midcycle_onboarding' && !record.feedData && !record.harvestData
@@ -15,7 +37,24 @@ export const isDailyWaterRecord = (record: WaterRecord, date: string) => (
 
 export const initializeWaterDraft = (pondId: string, date: string, records: WaterRecord[]) => {
   const record = records.find(record => isDailyWaterRecord(record, date));
-  const values = Object.fromEntries(textFields.map(field => [field, String(record?.[field] ?? '')])) as Record<typeof textFields[number], string>;
+  const cleanStr = (val: unknown): string => {
+    if (val == null) return '';
+    const text = String(val).trim();
+    return text === 'undefined' || text === 'null' ? '' : text;
+  };
+  const values = Object.fromEntries(textFields.map(field => [field, cleanStr(record?.[field])])) as Record<typeof textFields[number], string>;
+  if (!values.transparencyMorning && !values.transparencyEvening && values.transparency) {
+    values.transparencyMorning = values.transparency;
+  }
+  if (!values.temperatureMorning && !values.temperatureEvening && values.temperature) {
+    values.temperatureMorning = values.temperature;
+  }
+  if (!values.waterAppearanceMorning && !values.waterAppearanceEvening && values.waterAppearance) {
+    values.waterAppearanceMorning = values.waterAppearance;
+  }
+  if (!values.waterDepthCmMorning && !values.waterDepthCmEvening && values.waterDepthCm) {
+    values.waterDepthCmMorning = values.waterDepthCm;
+  }
   return {
     pondId, date, ...values,
     weatherEvent: record?.weatherEvent ?? null,

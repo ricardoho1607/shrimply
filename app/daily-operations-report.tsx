@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,10 +15,15 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { getFarmDateKey } from '../shared/farmDate';
+import { useFarmDateKey } from './hooks/useFarmDateKey';
 import {
   buildDailyOperationsReport,
   type DailyOperationsPondSource,
 } from '../shared/dailyOperationsReport';
+import {
+  dailyOperationsTranslations,
+  type DailyOperationsLanguage,
+} from '../shared/dailyOperationsI18n';
 import { hasFarmPermission } from '../shared/permissions';
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
@@ -39,10 +44,23 @@ export default function DailyOperationsReportScreen() {
   const insets = useSafeAreaInsets();
   const { user, company } = useAuth();
   const { t, currentLanguage } = useLanguage();
-  const copy = t.dailyOperationsReports;
+  const langKey = (currentLanguage in dailyOperationsTranslations ? currentLanguage : 'en') as DailyOperationsLanguage;
+  const localeCopy = dailyOperationsTranslations[langKey] || dailyOperationsTranslations.en;
+  const copy = useMemo(() => {
+    const rawContext = (t?.dailyOperationsReports || {}) as Record<string, unknown>;
+    const base = { ...dailyOperationsTranslations.en, ...localeCopy } as Record<string, string>;
+    const merged = { ...base };
+    for (const [key, value] of Object.entries(rawContext)) {
+      if (typeof value === 'string' && value.trim() && value !== 'undefined' && value !== 'null') {
+        merged[key] = value;
+      }
+    }
+    return merged as typeof dailyOperationsTranslations.en;
+  }, [currentLanguage, localeCopy, t?.dailyOperationsReports]);
   const ponds = usePondStore((state) => state.ponds);
-  const today = getFarmDateKey(new Date(), company?.timeZone);
+  const today = useFarmDateKey(company?.timeZone);
   const [reportDate, setReportDate] = useState(today);
+  const previousToday = useRef(today);
   const [activeTab, setActiveTab] = useState<ReportTab>('sipon');
   const [selectedBlock, setSelectedBlock] = useState('all');
   const [exporting, setExporting] = useState(false);
@@ -52,6 +70,11 @@ export default function DailyOperationsReportScreen() {
     company?.businessSize === 'enterprise' ? company.id : undefined,
     user?.uid,
   );
+
+  useEffect(() => {
+    setReportDate((current) => current === previousToday.current ? today : current);
+    previousToday.current = today;
+  }, [today]);
   const assignedBlockIds = useMemo(
     () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
     [enterpriseBlocks.blocks, user?.uid],
@@ -73,7 +96,8 @@ export default function DailyOperationsReportScreen() {
     reportDate,
     generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
     ponds: selectedPonds as DailyOperationsPondSource[],
-  }), [company?.companyName, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, user?.email, user?.name]);
+    timeZone: company?.timeZone,
+  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, user?.email, user?.name]);
 
   const exportReport = async () => {
     if (!canExportReports || exporting) return;
@@ -151,29 +175,64 @@ export default function DailyOperationsReportScreen() {
             {activeTab === 'sipon' ? (
               <View>
                 <View style={styles.row}>
-                  {[copy.pond, copy.doc, copy.morningSiphoned, copy.morningMortal, copy.morningTotal, copy.eveningSiphoned, copy.eveningMortal, copy.eveningTotal, copy.dailyTotal, copy.cumulative, copy.population, copy.density].map((label) => <Cell key={label} value={label} header width={label === copy.pond ? 78 : 86} />)}
+                  {[
+                    copy.pond || 'Pond',
+                    copy.doc || 'DOC',
+                    copy.morningSiphoned || 'AM Siphoned',
+                    copy.morningMortal || 'AM Mortal',
+                    copy.morningTotal || 'AM Total',
+                    copy.eveningSiphoned || 'PM Siphoned',
+                    copy.eveningMortal || 'PM Mortal',
+                    copy.eveningTotal || 'PM Total',
+                    copy.dailyTotal || 'Daily Total',
+                    copy.cumulative || 'Cumulative',
+                    copy.population || 'Population',
+                    copy.density || 'Density',
+                  ].map((label, index) => <Cell key={label || index} value={label} header width={label === copy.pond ? 78 : 86} />)}
                 </View>
-                {report.siponRows.map((row) => <View key={row.pondName} style={styles.row}>
-                  <Cell value={row.pondName} width={78} /><Cell value={row.doc} />
-                  <Cell value={row.morningSiphoned} /><Cell value={row.morningMortal} /><Cell value={row.morningTotal} />
-                  <Cell value={row.eveningSiphoned} /><Cell value={row.eveningMortal} /><Cell value={row.eveningTotal} />
-                  <Cell value={row.dailyTotal} /><Cell value={row.cumulativeTotal} />
-                  <Cell value={Math.round(row.estimatedPopulation).toLocaleString()} /><Cell value={Math.round(row.density)} />
+                {report.siponRows.map((row, rowIndex) => <View key={row.pondName || rowIndex} style={styles.row}>
+                  <Cell value={row.pondName || 'N/A'} width={78} /><Cell value={row.doc ?? 0} />
+                  <Cell value={row.morningSiphoned ?? 0} /><Cell value={row.morningMortal ?? 0} /><Cell value={row.morningTotal ?? 0} />
+                  <Cell value={row.eveningSiphoned ?? 0} /><Cell value={row.eveningMortal ?? 0} /><Cell value={row.eveningTotal ?? 0} />
+                  <Cell value={row.dailyTotal ?? 0} /><Cell value={row.cumulativeTotal ?? 0} />
+                  <Cell value={Number.isFinite(row.estimatedPopulation) ? Math.round(row.estimatedPopulation).toLocaleString() : 'N/A'} /><Cell value={Number.isFinite(row.density) ? Math.round(row.density) : 'N/A'} />
                 </View>)}
               </View>
             ) : (
               <View>
                 <View style={styles.row}>
-                  {[copy.stocked, copy.pond, copy.doc, copy.recordedBy, copy.phMorning, copy.phEvening, copy.phRange, `${copy.temperature} °C`, copy.waterAppearance, `${copy.waterDepth} cm`, `${copy.transparency} cm`, copy.salinity, copy.alkalinity, copy.feedIndex, `${copy.dailyFeed} kg`, `${copy.cumulativeFeed} kg`, copy.targetAdg, copy.estimatedPopulation].map((label) => <Cell key={label} value={label} header />)}
+                  {[
+                    copy.stocked, copy.pond, copy.doc, copy.recordedBy,
+                    copy.phMorning, copy.phEvening, copy.phRange,
+                    copy.temperatureMorning,
+                    copy.temperatureEvening,
+                    copy.waterAppearanceMorning,
+                    copy.waterAppearanceEvening,
+                    copy.waterDepthMorning,
+                    copy.waterDepthEvening,
+                    copy.transparencyMorning,
+                    copy.transparencyEvening,
+                    copy.salinity,
+                    copy.alkalinity,
+                    copy.feedIndex,
+                    copy.dailyFeed,
+                    copy.cumulativeFeed,
+                    copy.targetAdg,
+                    copy.estimatedPopulation,
+                  ].map((label, index) => <Cell key={label || index} value={label} header />)}
                 </View>
-                {report.waterQualityRows.map((row) => <View key={row.pondName} style={styles.row}>
-                  <Cell value={row.stockingDate || '-'} /><Cell value={row.pondName} /><Cell value={row.doc} /><Cell value={row.recordedBy} />
-                  <Cell value={row.phMorning} /><Cell value={row.phEvening} /><Cell value={row.phRange} /><Cell value={row.temperature} /><Cell value={row.waterAppearance} /><Cell value={row.waterDepthCm} />
-                  <Cell value={row.transparency} /><Cell value={row.salinity} /><Cell value={row.alkalinity} />
-                  <Cell value={row.feedIndex} /><Cell value={row.dailyFeedKg} /><Cell value={row.cumulativeFeedKg} /><Cell value={row.targetAdg} />
-                  <Cell value={row.estimatedPopulation === null ? '-' : Math.round(row.estimatedPopulation).toLocaleString()} />
+                {report.waterQualityRows.map((row, rowIndex) => <View key={row.pondName || rowIndex} style={styles.row}>
+                  <Cell value={row.stockingDate || 'N/A'} /><Cell value={row.pondName || 'N/A'} /><Cell value={row.doc ?? 0} /><Cell value={row.recordedBy || 'N/A'} />
+                  <Cell value={row.phMorning || 'N/A'} /><Cell value={row.phEvening || 'N/A'} /><Cell value={row.phRange || 'N/A'} />
+                  <Cell value={row.temperatureMorning || 'N/A'} /><Cell value={row.temperatureEvening || 'N/A'} />
+                  <Cell value={row.waterAppearanceMorning || 'N/A'} /><Cell value={row.waterAppearanceEvening || 'N/A'} />
+                  <Cell value={row.waterDepthCmMorning || 'N/A'} /><Cell value={row.waterDepthCmEvening || 'N/A'} />
+                  <Cell value={row.transparencyMorning || 'N/A'} /><Cell value={row.transparencyEvening || 'N/A'} />
+                  <Cell value={row.salinity || 'N/A'} /><Cell value={row.alkalinity || 'N/A'} />
+                  <Cell value={row.feedIndex || 'N/A'} /><Cell value={row.dailyFeedKg || 'N/A'} /><Cell value={row.cumulativeFeedKg || 'N/A'} /><Cell value={row.targetAdg || 'N/A'} />
+                  <Cell value={row.estimatedPopulation == null || !Number.isFinite(row.estimatedPopulation) ? 'N/A' : Math.round(row.estimatedPopulation).toLocaleString()} />
                 </View>)}
-                {report.waterQualityRows.length === 0 && <View style={styles.emptyRow}><Text style={styles.emptyText}>{copy.noWaterRecords}</Text></View>}
+                {report.waterQualityRows.length === 0 && <View style={styles.emptyRow}><Text style={styles.emptyText}>{copy.noWaterRecords || 'No water-quality records were saved for this date.'}</Text></View>}
               </View>
             )}
           </ScrollView>

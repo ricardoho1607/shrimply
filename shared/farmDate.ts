@@ -78,8 +78,8 @@ export const normalizeFarmDateKey = (
   if (value === null || value === undefined || value === '') return null;
 
   if (typeof value === 'string') {
-    const dateOnlyValue = value.slice(0, 10);
-    if (DATE_KEY_PATTERN.test(dateOnlyValue)) return dateOnlyValue;
+    const trimmed = value.trim();
+    if (DATE_KEY_PATTERN.test(trimmed)) return trimmed;
   }
 
   const parsed = value instanceof Date ? value : new Date(value as string | number);

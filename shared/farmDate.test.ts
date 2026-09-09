@@ -17,6 +17,7 @@ export const runFarmDateSelfTest = () => {
   assert(getFarmDateKey(instant, 'Asia/Jakarta') === '2026-07-17', 'Jakarta rolls over at its local midnight');
   assert(getFarmDateKey(instant, 'Australia/Melbourne') === '2026-07-17', 'Melbourne uses its local calendar date');
   assert(getFarmDateKey(instant, 'America/Los_Angeles') === '2026-07-16', 'different company timezones can have different farm dates');
+  assert(isDateKeyInRange('2026-07-16T14:30:00.000Z', '2026-07-17', '2026-07-17', 'Australia/Brisbane'), 'converts UTC timestamps to the UTC+10 farm date');
   assert(isValidTimeZone('Asia/Makassar'), 'accepts valid IANA timezones');
   assert(!isValidTimeZone('Indonesia/Central'), 'rejects invalid timezone labels');
   assert(!isDateKeyInRange(null, '2026-07-01', '2026-07-31', 'Asia/Jakarta'), 'does not coerce missing dates to 1970');

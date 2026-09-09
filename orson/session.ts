@@ -8,7 +8,8 @@ export class OrsonSessionChangedError extends Error {
 
 export class OrsonRequestSession {
   private controller = new AbortController();
-  constructor(readonly identity: string | null) {}
+  readonly identity: string | null;
+  constructor(identity: string | null) { this.identity = identity; }
   get signal() { return this.controller.signal; }
   assertCurrent() {
     if (!this.identity || this.signal.aborted) throw new OrsonSessionChangedError();

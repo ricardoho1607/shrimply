@@ -1,5 +1,5 @@
-import { OrsonIncompleteResponseError } from './responseCompletion';
-import { OrsonSessionChangedError } from './session';
+import { OrsonIncompleteResponseError } from './responseCompletion.ts';
+import { OrsonSessionChangedError } from './session.ts';
 
 export type OrsonTextStreamChunk = {
   type: 'text_delta';
@@ -27,10 +27,10 @@ export const consumeOrsonCallableStream = async <Request, Response extends { tex
   const cancel = () => controller.abort();
   if (params.signal?.aborted) throw new OrsonSessionChangedError();
   params.signal?.addEventListener('abort', cancel, { once: true });
-  const timeout = setTimeout(() => controller.abort(), params.timeoutMs);
   let accumulated = '';
+  let timeout: ReturnType<typeof setTimeout>;
 
-  try {
+  const consume = async (): Promise<Response> => {
     const result = await params.callable.stream(params.request, { signal: controller.signal });
     for await (const chunk of result.stream) {
       if (controller.signal.aborted) throw new Error('Stream interrupted');
@@ -42,12 +42,24 @@ export const consumeOrsonCallableStream = async <Request, Response extends { tex
     if (controller.signal.aborted) throw new Error('Stream interrupted');
     if (response.text && response.text !== accumulated) params.onPartialResponse?.(response.text);
     return response;
+  };
+
+  const timedOut = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      controller.abort();
+      reject(new OrsonIncompleteResponseError(accumulated, 'TIMEOUT'));
+    }, params.timeoutMs);
+  });
+
+  try {
+    return await Promise.race([consume(), timedOut]);
   } catch (error) {
     if (params.signal?.aborted) throw new OrsonSessionChangedError();
+    if (error instanceof OrsonIncompleteResponseError) throw error;
     if (accumulated || controller.signal.aborted) throw new OrsonIncompleteResponseError(accumulated, controller.signal.aborted ? 'TIMEOUT' : 'INTERRUPTED');
     throw error;
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timeout!);
     params.signal?.removeEventListener('abort', cancel);
   }
 };

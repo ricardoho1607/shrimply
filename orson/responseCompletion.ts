@@ -1,8 +1,13 @@
-export type OrsonResponse = { text?: string; finishReason?: string | null };
+export type OrsonResponse = { safeToCache?: boolean; text?: string; finishReason?: string | null };
 
 export class OrsonIncompleteResponseError extends Error {
-  constructor(readonly partialText: string, readonly finishReason: string) {
+  readonly partialText: string;
+  readonly finishReason: string;
+
+  constructor(partialText: string, finishReason: string) {
     super('Response interrupted. Retry to get a complete answer.');
+    this.partialText = partialText;
+    this.finishReason = finishReason;
   }
 }
 

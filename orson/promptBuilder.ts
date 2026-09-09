@@ -1,3 +1,4 @@
+import { isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy';
 import {
   ORSON_PRODUCT_PROMISE,
   ORSON_RESPONSE_PRINCIPLES,
@@ -124,6 +125,7 @@ const AQUACULTURE_SCOPE_PATTERNS = [
 ];
 
 const INVENTORY_PRODUCT_PATTERNS = [
+  /\b(inventory|invetory|stock)\b/i,
   /\btreatment\s*mix\b/i,
   /\bproduct\s*label\b/i,
   /\bingredient(s)?\b/i,
@@ -256,6 +258,7 @@ const RECORD_COUNT_WORDS: Record<string, number> = {
 };
 
 export const ORSON_MODEL_TIMEOUT_MS = 155000;
+export const ORSON_CLIENT_TIMEOUT_MS = 55000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
 export const ORSON_PROMPT_TOKEN_BUDGET = 16000;
 const ORSON_CONTEXT_NOTE_MAX_CHARS = 180;
@@ -403,6 +406,7 @@ const normalizeConversationHistory = (
 const inferStandaloneRoute = (question: string): OrsonConversationRoute => {
   if (EXPLICIT_GENERAL.test(question) && AQUACULTURE_SCOPE_PATTERNS.some(pattern => pattern.test(question))) return 'aquaculture_knowledge';
   if (INVENTORY_PRODUCT_PATTERNS.some((pattern) => pattern.test(question))) return 'inventory_product';
+  if (isTreatmentQuestion(question)) return 'farm_analysis';
   if (isFarmSpecificQuestion(question)) return 'farm_analysis';
   if (
     AQUACULTURE_SCOPE_PATTERNS.some((pattern) => pattern.test(question)) ||
@@ -597,7 +601,7 @@ export const buildOrsonCacheKey = (
   question: string,
   payloads: OrsonPromptPondPayload[],
 ): string | null => {
-  if (isFarmSpecificQuestion(question)) return null;
+  if (isTreatmentQuestion(question) || isFarmSpecificQuestion(question)) return null;
   const normalizedQuestion = question.toLowerCase().trim().replace(/\s+/g, ' ');
   const contextHash = hashString(stableStringify(payloads.map((payload) => ({
     pondId: payload.pondId,
@@ -605,7 +609,7 @@ export const buildOrsonCacheKey = (
     findings: payload.findings.map((finding) => finding.id),
     outlook: payload.outlook.direction,
   }))));
-  return `orson_general_v2_${hashString(normalizedQuestion)}_${contextHash}`;
+  return `orson_general_v3_${hashString(normalizedQuestion)}_${contextHash}`;
 };
 
 export const buildOrsonPromptPayload = (
@@ -755,7 +759,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Use short bullets when listing risks.',
     '- Keep routine answers under 5 sentences unless the user asks for detail.',
     '- Prioritize critical and warning findings before watch/info findings.',
-    '- Do not provide exact chemical dose rates unless the app payload includes pond volume, product concentration, and farm protocol.',
+    '- Do not provide exact chemical dose rates unless the app payload includes pond volume and product concentration, and a farm protocol or verified applicable label directions.',
     ...(mode === 'pond_diagnostic' ? [
       '',
       'POND DIAGNOSTIC METHOD:',

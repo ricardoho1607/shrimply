@@ -7,13 +7,9 @@ import {
   Search,
   Box,
   FlaskConical,
-  ArrowDownCircle,
-  ArrowUpCircle,
   AlertCircle,
   X,
   Loader2,
-  Calendar,
-  Waves,
   LayoutDashboard,
   ArrowUpDown
 } from 'lucide-react';
@@ -100,9 +96,11 @@ export default function InventoryFeedsPage() {
   const additives = useMemo(() => allAdditives.filter((item) => item.inventoryKind !== 'treatmentMix'), [allAdditives]);
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [stockFilter, setStockFilter] = useState<'in' | 'out' | 'all'>('in');
   const debouncedSearchTerm = useDebouncedValue(searchTerm);
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
+  const [showAllStockAlerts, setShowAllStockAlerts] = useState(false);
   const [isInputMenuOpen, setInputMenuOpen] = useState(false);
   const [isTransactionFilterOpen, setTransactionFilterOpen] = useState(false);
   const inputMenuRef = useRef<HTMLDivElement>(null);
@@ -184,8 +182,8 @@ export default function InventoryFeedsPage() {
 
     // Low stock count
     const lowStockItems = [
-      ...feeds.filter(f => f.reorderLevel !== undefined && f.totalStock <= (f.reorderLevel || 0)),
-      ...additives.filter(a => a.reorderLevel !== undefined && a.totalStock <= (a.reorderLevel || 0))
+      ...feeds.filter(f => f.totalStock > 0 && f.reorderLevel !== undefined && f.totalStock <= f.reorderLevel),
+      ...additives.filter(a => a.totalStock > 0 && a.reorderLevel !== undefined && a.totalStock <= a.reorderLevel)
     ];
 
     return {
@@ -237,9 +235,19 @@ export default function InventoryFeedsPage() {
                             item.itemName.toLowerCase().includes(normalizedSearch) ||
                             (item.brand || '').toLowerCase().includes(normalizedSearch);
       const matchesCategory = !categoryFilter || (activeTab === 'feed' ? (item as any).feedType : (item as any).category) === categoryFilter;
-      return matchesSearch && matchesCategory;
+      const matchesStock = stockFilter === 'all' || (stockFilter === 'in' ? item.totalStock > 0 : item.totalStock === 0);
+      return matchesSearch && matchesCategory && matchesStock;
     });
-  }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter]);
+  }, [feeds, additives, activeTab, debouncedSearchTerm, categoryFilter, stockFilter]);
+
+  const normalizeItemText = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
+  const existingItems = itemType === 'feed' ? feeds : additives;
+  const itemSuggestions = modalType === 'add' ? existingItems.filter(item => {
+    const name = normalizeItemText(formData.itemName);
+    const brand = normalizeItemText(itemType === 'feed' ? formData.brand : formData.manufacturer);
+    return Boolean(name || brand) && (!name || normalizeItemText(item.itemName).includes(name)) &&
+      (!brand || normalizeItemText(`${item.brand || ''} ${item.productLabel?.manufacturer || ''}`).includes(brand));
+  }).slice(0, 6) : [];
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
     if (!canEditInventory && type !== 'history') return;
@@ -252,6 +260,7 @@ export default function InventoryFeedsPage() {
       setFormData({
         ...formData,
         itemName: item.itemName,
+        brand: item.brand || '',
         category: (item as any).feedType || (item as any).category,
         unit: item.unit || 'kg',
         reorderLevel: String(item.reorderLevel || ''),
@@ -291,6 +300,20 @@ export default function InventoryFeedsPage() {
     e.preventDefault();
     if (!companyId) return;
     if (!canEditInventory) return;
+
+    if (modalType === 'add') {
+      const duplicate = existingItems.find(item =>
+        normalizeItemText(item.itemName) === normalizeItemText(formData.itemName) &&
+        normalizeItemText(itemType === 'feed' ? item.brand || '' : item.productLabel?.manufacturer || item.brand || '') ===
+          normalizeItemText(itemType === 'feed' ? formData.brand : formData.manufacturer) &&
+        (item.feedType || item.category) === formData.category && item.unit === formData.unit
+      );
+      if (duplicate) {
+        alert(copy('This item already exists. Restock the existing item to keep its history together.'));
+        handleOpenModal('stockIn', duplicate, itemType);
+        return;
+      }
+    }
 
     try {
       const qty = Number(formData.quantity);
@@ -601,54 +624,26 @@ export default function InventoryFeedsPage() {
             <div className="dashboard-report-grid inventory-dashboard-split" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(420px, 1fr)' }}>
 
               {/* Critical Alerts Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className={`glass-card ${styles.overviewPanel}`}>
+                <div className={styles.overviewPanelHeader}>
                   <h2 className="inventory-section-heading">{copy('Stock Status Alerts')}</h2>
                   <span className="inventory-alert-count">
                     {metrics.lowStockCount} {copy(metrics.lowStockCount === 1 ? 'Alert' : 'Alerts')}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  {metrics.lowStockItems.map((item, i) => (
-                    <div key={item.id} className="glass-card animate-fade-up" style={{
-                      padding: '24px 28px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      background: 'rgba(231, 76, 60, 0.02)',
-                      border: '1px solid rgba(231, 76, 60, 0.12)',
-                      animationDelay: `${i * 0.05}s`,
-                      boxShadow: '0 10px 28px rgba(231, 76, 60, 0.06)'
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-                        <div style={{
-                          width: '48px', height: '48px', borderRadius: '50%', background: 'white',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c',
-                          boxShadow: '0 8px 20px rgba(231, 76, 60, 0.15)', border: '1px solid #fee2e2'
-                        }}>
-                          <AlertCircle size={24} />
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '16px', color: 'var(--text-primary)' }}>{item.itemName}</div>
-                          <div style={{ fontSize: '13px', fontWeight: 600, color: '#e74c3c', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <Box size={14} />
-                            {copy('Critical:')} {formatQuantity(item.totalStock)} {item.unit} {copy('remaining')}
-                          </div>
-                        </div>
+                <div>
+                  {metrics.lowStockItems.length === 0 && <p className={styles.overviewEmpty}>{copy('No stock alerts')}</p>}
+                  {(showAllStockAlerts ? metrics.lowStockItems : metrics.lowStockItems.slice(0, 5)).map(item => (
+                    <div key={item.id} className={styles.overviewRow}>
+                      <div className={styles.overviewIdentity}>
+                        <strong>{item.itemName}</strong>
+                        <small>{formatQuantity(item.totalStock)} {item.unit} {copy('remaining')}</small>
                       </div>
                       {canEditInventory && (
                         <button
-                          className="btn-primary"
-                          style={{
-                            padding: '12px 20px',
-                            fontSize: '13px',
-                            fontWeight: 600,
-                            background: '#e74c3c',
-                            letterSpacing: '0',
-                            textTransform: 'none',
-                            boxShadow: '0 4px 15px rgba(231, 76, 60, 0.18)'
-                          }}
+                          type="button"
+                          className={styles.inventoryCardSecondaryAction}
                           onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
                         >
                           {copy('Restock now')}
@@ -657,11 +652,16 @@ export default function InventoryFeedsPage() {
                     </div>
                   ))}
                 </div>
+                {metrics.lowStockItems.length > 5 && (
+                  <button type="button" className={styles.overviewExpand} aria-expanded={showAllStockAlerts} onClick={() => setShowAllStockAlerts(value => !value)}>
+                    {copy(showAllStockAlerts ? 'Show less' : 'Show all')} {!showAllStockAlerts && `(${metrics.lowStockItems.length})`}
+                  </button>
+                )}
               </div>
 
               {/* Transaction Ledger */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className={`glass-card ${styles.overviewPanel}`}>
+                <div className={styles.overviewPanelHeader}>
                   <h2 className="inventory-section-heading">{copy('Recent Transactions')}</h2>
                   <div className="pond-detail-record-menu inventory-filter-menu" ref={transactionFilterRef}>
                     <button
@@ -706,30 +706,15 @@ export default function InventoryFeedsPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div>
+                  {!recentTransactions.some(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage')) && <p className={styles.overviewEmpty}>{copy('No transactions to show')}</p>}
                   {recentTransactions
                     .filter(tx => recentActivityFilter === 'all' || (recentActivityFilter === 'stockIn' ? tx.type === 'Stock In' : tx.type === 'Usage'))
-                    .map((tx, i) => (
-                    <div key={tx.id} className="glass-card animate-fade-up" style={{
-                      padding: '16px', display: 'flex', alignItems: 'center', gap: '14px', background: 'white',
-                      animationDelay: `${i * 0.05}s`, transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
-                    }}>
-                      <div style={{
-                        width: '42px', height: '42px', borderRadius: '12px',
-                        background: 'var(--primary-dim)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'var(--primary)',
-                        border: '1px solid var(--border)'
-                      }}>
-                        {tx.type === 'Stock In' ? <ArrowDownCircle size={20} /> : <ArrowUpCircle size={20} />}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: '15px', color: 'var(--text-primary)' }}>{tx.name}</div>
-                        <div style={{ fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <span>{copy(tx.type)}</span>
-                          <span style={{ opacity: 0.3 }}>•</span>
-                          <span>{tx.date}</span>
-                        </div>
+                    .map(tx => (
+                    <div key={tx.id} className={styles.overviewRow}>
+                      <div className={styles.overviewIdentity}>
+                        <strong>{tx.name}</strong>
+                        <small>{copy(tx.type)} · {tx.date}</small>
                       </div>
                       <div style={{ textAlign: 'right' }}>
                         <div style={{ fontWeight: 600, fontSize: '18px', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
@@ -797,16 +782,23 @@ export default function InventoryFeedsPage() {
             </div>
 
             {/* Dynamic Inventory Grid */}
+            <div role="group" aria-label={copy('Stock availability')} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
+              {(['in', 'out', 'all'] as const).map(status => (
+                <button key={status} type="button" aria-pressed={stockFilter === status} onClick={() => setStockFilter(status)} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--border)', background: stockFilter === status ? 'var(--primary)' : 'white', color: stockFilter === status ? 'white' : 'var(--text-muted)' }}>
+                  {copy(status === 'in' ? 'In stock' : status === 'out' ? 'Out of stock' : 'All')} ({(activeTab === 'feed' ? feeds : additives).filter(item => status === 'all' || (status === 'in' ? item.totalStock > 0 : item.totalStock === 0)).length})
+                </button>
+              ))}
+            </div>
             {filteredItems.length === 0 ? (
               <div className="glass-card animate-fade-up" style={{ padding: '56px 28px', background: 'white', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <div style={{ width: '72px', height: '72px', borderRadius: '22px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', marginBottom: '22px', border: '1px solid var(--border)' }}>
                   <Box size={34} />
                 </div>
                 <h2 style={{ fontSize: '20px', lineHeight: '28px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '10px', letterSpacing: '-0.02em' }}>
-                  {activeTab === 'feed' ? t.inventory.noFeedItems : t.inventory.noAdditives}
+                  {copy('No items match these filters')}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', marginBottom: '26px', fontWeight: 600, fontSize: '14px', maxWidth: '400px', lineHeight: 1.6 }}>
-                  {activeTab === 'feed' ? t.inventory.addFeedToStart : t.inventory.addAdditivesToStart}
+                  {copy('Try All to find existing items, or add a new product.')}
                 </p>
                 {canEditInventory && (
                   <button
@@ -815,13 +807,23 @@ export default function InventoryFeedsPage() {
                     style={{ height: '44px', padding: '0 20px', borderRadius: '10px', fontWeight: 500, fontSize: '14px', letterSpacing: 0, textTransform: 'none', boxShadow: 'var(--shadow-glow)' }}
                   >
                     <Plus size={22} />
-                    {copy('Add Your First')} {copy(activeTab === 'feed' ? 'Feed' : 'Additive')}
+                    {copy(activeTab === 'feed' ? 'Add Feed' : 'Add Additive')}
                   </button>
                 )}
               </div>
             ) : (
             <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
                 {filteredItems.map((item, idx) => {
+                  if (item.totalStock === 0) return (
+                    <div key={item.id} className="glass-card" style={{ padding: 18 }}>
+                      <strong>{item.itemName}</strong>
+                      <p>{item.brand || item.productLabel?.manufacturer} · {copy('Out of stock')}</p>
+                      <div style={{ display: 'flex', gap: 16 }}>
+                        {canEditInventory && <button type="button" onClick={() => handleOpenModal('stockIn', item, activeTab)}>{copy('Restock now')}</button>}
+                        <button type="button" onClick={() => handleOpenModal('history', item, activeTab)}>{copy('History')}</button>
+                      </div>
+                    </div>
+                  );
                   const isLow = (item.reorderLevel || 0) > 0 && item.totalStock <= (item.reorderLevel || 0);
                   const averagePrice = item.totalStock > 0 ? item.totalCost / item.totalStock : 0;
                   const totalIn = item.stockInHistory?.reduce((s, h) => s + (h.quantity || 0), 0) || 0;
@@ -885,7 +887,7 @@ export default function InventoryFeedsPage() {
                         </div>
                         <div className={styles.inventoryMetric}>
                           <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{t.inventory.avgPrice}</span>
-                          <span className={styles.inventoryMetricValue}>{formatCurrency(averagePrice)}</span>
+                          <span className={styles.inventoryMetricValue}>{Number.isFinite(averagePrice) && averagePrice > 0 ? formatCurrency(averagePrice) : '—'}</span>
                           <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{copy('per')} {item.unit}</span>
                         </div>
                         <div className={styles.inventoryMetric}>
@@ -990,97 +992,39 @@ export default function InventoryFeedsPage() {
 
             <div className="responsive-modal-body inventory-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {modalType === 'history' && selectedItem ? (
-                <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px' }}>
-                  {/* Stock In Ledger */}
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
-                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(39, 174, 96, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#27ae60' }}>
-                        <ArrowDownCircle size={20} />
-                      </div>
-                      {copy('Stock In Records')}
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {selectedItem.stockInHistory.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
-                          {copy('No stock intake recorded.')}
-                        </div>
-                      ) : (
-                        [...selectedItem.stockInHistory].reverse().map((h) => (
-                          <div key={h.id} className="glass-card" style={{ padding: '20px 24px', background: 'white', border: '1px solid var(--border)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Calendar size={18} color="var(--primary)" />
-                                <span style={{ fontWeight: 600, fontSize: '16px' }}>{formatDate(h.date)}</span>
-                              </div>
-                              <div style={{ fontWeight: 600, fontSize: '18px', color: '#27ae60' }}>
-                                +{formatQuantity(h.quantity)} {selectedItem.unit}
-                              </div>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
-                              <div>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{t.inventory.stockDate}</span>
-                                {formatDate(h.date)}
-                              </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{copy('Unit Price')}</span>
-                                {formatCurrency(h.price)}
-                              </div>
-                            </div>
-                            {h.notes && (
-                              <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-                                {h.notes}
-                              </p>
-                            )}
+                <div className={styles.historySections}>
+                  <section className={styles.historySection}>
+                    <h3>{copy('Stock In Records')} <span>{selectedItem.stockInHistory?.length || 0}</span></h3>
+                    {(selectedItem.stockInHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No stock intake recorded.')}</p>}
+                    {[...(selectedItem.stockInHistory || [])].reverse().map(h => (
+                      <div key={h.id} className={styles.historyRecord}>
+                        <div className={styles.overviewRow}>
+                          <div className={styles.overviewIdentity}>
+                            <strong>{formatDate(h.date)}</strong>
+                            <small>{copy('Unit Price')}: {Number.isFinite(h.price) && h.price > 0 ? formatCurrency(h.price) : '—'}</small>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Usage Ledger */}
-                  <div>
-                    <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)' }}>
-                      <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(231, 76, 60, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#e74c3c' }}>
-                        <ArrowUpCircle size={20} />
-                      </div>
-                      {copy('Usage History')}
-                    </h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                      {selectedItem.usageHistory.length === 0 ? (
-                        <div style={{ padding: '48px', textAlign: 'center', background: 'var(--bg-mid)', borderRadius: '20px', color: 'var(--text-faint)', fontWeight: 600 }}>
-                          {copy('No usage logs found.')}
+                          <strong className={styles.historyQuantity}>+{formatQuantity(h.quantity)} {selectedItem.unit}</strong>
                         </div>
-                      ) : (
-                        [...selectedItem.usageHistory].reverse().map((h) => (
-                          <div key={h.id} className="glass-card" style={{ padding: '20px 24px', background: 'white', border: '1px solid var(--border)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Calendar size={18} color="#e74c3c" />
-                                <span style={{ fontWeight: 600, fontSize: '16px' }}>{formatDate(h.date)}</span>
-                              </div>
-                              <div style={{ fontWeight: 600, fontSize: '18px', color: '#e74c3c' }}>
-                                -{formatQuantity(h.quantity)} {selectedItem.unit}
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px', background: 'var(--bg-mid)', borderRadius: '12px', fontSize: '13px', fontWeight: 600 }}>
-                              <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
-                                <Waves size={16} />
-                              </div>
-                              <div>
-                                <span style={{ color: 'var(--text-faint)', textTransform: 'uppercase', fontSize: '11px', display: 'block' }}>{copy('Applied to')}</span>
-                                {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}
-                              </div>
-                            </div>
-                            {h.notes && (
-                              <p style={{ marginTop: '12px', fontSize: '13px', color: 'var(--text-muted)', fontWeight: 600, borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
-                                {h.notes}
-                              </p>
-                            )}
+                        {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
+                      </div>
+                    ))}
+                  </section>
+                  <section className={styles.historySection}>
+                    <h3>{copy('Usage History')} <span>{selectedItem.usageHistory?.length || 0}</span></h3>
+                    {(selectedItem.usageHistory || []).length === 0 && <p className={styles.overviewEmpty}>{copy('No usage logs found.')}</p>}
+                    {[...(selectedItem.usageHistory || [])].reverse().map(h => (
+                      <div key={h.id} className={styles.historyRecord}>
+                        <div className={styles.overviewRow}>
+                          <div className={styles.overviewIdentity}>
+                            <strong>{formatDate(h.date)}</strong>
+                            <small>{copy('Applied to')}: {h.pondId ? (ponds.find(p => p.id === h.pondId)?.pondName || copy('Unknown Pond')) : copy('General Inventory Usage')}</small>
                           </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
+                          <strong className={styles.historyQuantity}>−{formatQuantity(h.quantity)} {selectedItem.unit}</strong>
+                        </div>
+                        {h.notes && <p className={styles.historyNote}>{h.notes}</p>}
+                      </div>
+                    ))}
+                  </section>
                 </div>
               ) : (
                 <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1094,6 +1038,17 @@ export default function InventoryFeedsPage() {
                         <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '10px' }}>{copy('Brand / Manufacturer')}</label>
                         <input value={itemType === 'feed' ? formData.brand : formData.manufacturer} onChange={e => setFormData({...formData, [itemType === 'feed' ? 'brand' : 'manufacturer']: e.target.value})} placeholder="e.g. Orson Bio" style={{ width: '100%', padding: '18px', borderRadius: '16px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontWeight: 600, fontSize: '16px', outline: 'none' }} />
                       </div>
+                      {itemSuggestions.length > 0 && (
+                        <div className="inventory-full-row" style={{ gridColumn: 'span 2', padding: 14, border: '1px solid var(--border)', borderRadius: 12 }}>
+                          <strong>{copy('Restock an existing item')}</strong>
+                          {itemSuggestions.map(item => (
+                            <button key={item.id} type="button" onClick={() => handleOpenModal('stockIn', item, itemType)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '12px 0', color: 'var(--primary)', borderBottom: '1px solid var(--border)' }}>
+                              {item.itemName} · {item.brand || item.productLabel?.manufacturer || copy('No Brand')} · {copy(item.feedType || item.category)} · {formatQuantity(item.totalStock)} {item.unit}
+                            </button>
+                          ))}
+                          <p style={{ marginTop: 10, fontSize: 13 }}>{copy('Different product? Continue below to create a new item.')}</p>
+                        </div>
+                      )}
                       {itemType === 'additive' && (
                         <>
                           <div className="inventory-full-row" style={{ gridColumn: 'span 2' }}>

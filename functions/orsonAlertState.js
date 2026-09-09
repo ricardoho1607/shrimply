@@ -4,6 +4,13 @@ const eventKey = (companyId, pondId, cycleId, finding) => createHash('sha256')
   .update(JSON.stringify([companyId, pondId, cycleId, finding.id, finding.eventDate]))
   .digest('hex');
 
+const notificationSourceDate = (notification, riskId) => {
+  const reportFinding = notification.orsonRiskReport?.findings?.find(finding => !riskId || finding.id === riskId);
+  const candidate = notification.data?.sourceDate || notification.sourceDate || reportFinding?.eventDate
+    || notification.message?.match(/\d{4}-\d{2}-\d{2}/)?.[0];
+  return typeof candidate === 'string' ? candidate.slice(0, 10) : null;
+};
+
 const syncRiskAlerts = async ({ db, companyId, pondId, calculateRiskReport, timestamp, priority, eventFindings = [] }) => {
   const pondRef = db.collection('companies').doc(companyId).collection('ponds').doc(pondId);
   return db.runTransaction(async transaction => {
@@ -28,7 +35,7 @@ const syncRiskAlerts = async ({ db, companyId, pondId, calculateRiskReport, time
       const previous = relevant.find(snapshot => {
         const value = snapshot.data();
         return value.dedupeKey === key || (!value.dedupeKey && value.data?.riskId === finding.id
-          && (value.data.sourceDate || value.message?.match(/\d{4}-\d{2}-\d{2}/)?.[0]) === finding.eventDate);
+          && notificationSourceDate(value, finding.id) === finding.eventDate);
       });
       if (previous) {
         if (previous.data().dedupeKey === key) transaction.update(previous.ref, {

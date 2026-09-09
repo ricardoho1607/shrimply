@@ -1,6 +1,6 @@
-import { getOrsonAlertCaption } from '../shared/orsonNotification';
+import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../shared/orsonNotification';
 // app/notifications.tsx - Updated with Clear All Button
-import React, { useCallback, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   ActivityIndicator, FlatList, RefreshControl, Alert
@@ -321,11 +321,12 @@ export default function NotificationsScreen() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const filteredNotifications = filter === 'all' 
-    ? notifications 
-    : notifications.filter(n => !n.read);
+  const visibleNotifications = useMemo(() => dedupeOrsonNotifications(notifications), [notifications]);
+  const filteredNotifications = filter === 'all'
+    ? visibleNotifications
+    : visibleNotifications.filter(n => !n.read);
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = visibleNotifications.filter(n => !n.read).length;
 
   return (
     <View style={styles.container}>

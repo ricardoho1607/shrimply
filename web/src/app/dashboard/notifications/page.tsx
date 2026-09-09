@@ -1,6 +1,6 @@
 "use client";
 
-import { getOrsonAlertCaption } from '../../../../../shared/orsonNotification';
+import { dedupeOrsonNotifications, getOrsonAlertCaption } from '../../../../../shared/orsonNotification';
 import React, { useMemo, useState, useTransition } from 'react';
 import { 
   Bell, 
@@ -69,24 +69,25 @@ export default function NotificationsPage() {
   const [filter, setFilter] = useState<'all' | 'unread' | 'orson' | 'high'>('all');
   const [, startTransition] = useTransition();
 
+  const visibleNotifications = useMemo(() => dedupeOrsonNotifications(notifications), [notifications]);
   const filteredNotifications = useMemo(() => {
     if (filter === 'unread') {
-      return notifications.filter(n => !n.read);
+      return visibleNotifications.filter(n => !n.read);
     }
     if (filter === 'orson') {
-      return notifications.filter(n => n.data?.isOrson);
+      return visibleNotifications.filter(n => n.data?.isOrson);
     }
     if (filter === 'high') {
-      return notifications.filter(n => getEffectiveNotificationPriority(n) === 'high');
+      return visibleNotifications.filter(n => getEffectiveNotificationPriority(n) === 'high');
     }
-    return notifications;
-  }, [notifications, filter]);
+    return visibleNotifications;
+  }, [visibleNotifications, filter]);
 
-  const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
-  const orsonCount = useMemo(() => notifications.filter(n => n.data?.isOrson).length, [notifications]);
+  const unreadCount = useMemo(() => visibleNotifications.filter(n => !n.read).length, [visibleNotifications]);
+  const orsonCount = useMemo(() => visibleNotifications.filter(n => n.data?.isOrson).length, [visibleNotifications]);
   const highPriorityCount = useMemo(
-    () => notifications.filter(n => getEffectiveNotificationPriority(n) === 'high').length,
-    [notifications],
+    () => visibleNotifications.filter(n => getEffectiveNotificationPriority(n) === 'high').length,
+    [visibleNotifications],
   );
   const setNotificationFilter = (nextFilter: typeof filter) => startTransition(() => setFilter(nextFilter));
 
@@ -208,7 +209,7 @@ export default function NotificationsPage() {
         <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'all'} aria-pressed={filter === 'all'} onClick={() => setNotificationFilter('all')}>
           <div className="dashboard-summary-content">
             <div className="dashboard-summary-label">{copy('Total alerts')}</div>
-            <div className="dashboard-summary-value">{notifications.length}</div>
+            <div className="dashboard-summary-value">{visibleNotifications.length}</div>
           </div>
         </button>
         <button type="button" className={`dashboard-summary-item ${styles.metricCard}`} data-active={filter === 'unread'} aria-pressed={filter === 'unread'} onClick={() => setNotificationFilter('unread')}>

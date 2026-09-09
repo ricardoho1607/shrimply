@@ -113,9 +113,9 @@ test('leaves the pH range blank unless both daily pH readings exist', () => {
     }],
   });
 
-  assert.equal(report.waterQualityRows[0].phMorning, '-');
+  assert.equal(report.waterQualityRows[0].phMorning, 'N/A');
   assert.equal(report.waterQualityRows[0].phEvening, '8.1');
-  assert.equal(report.waterQualityRows[0].phRange, '-');
+  assert.equal(report.waterQualityRows[0].phRange, 'N/A');
 });
 
 test('includes a pond when the selected day has feed but no water-quality reading', () => {
@@ -134,7 +134,7 @@ test('includes a pond when the selected day has feed but no water-quality readin
 
   assert.equal(report.waterQualityRows.length, 1);
   assert.equal(report.waterQualityRows[0].dailyFeedKg, '12');
-  assert.equal(report.waterQualityRows[0].phMorning, '-');
+  assert.equal(report.waterQualityRows[0].phMorning, 'N/A');
 });
 
 test('renders the exported report in the selected language', () => {
@@ -208,4 +208,112 @@ test('uses the standard Shrimply landscape PDF shell', () => {
   assert.match(html, /class="divider"/);
   assert.match(html, /Page 1 of 2/);
   assert.match(html, /Page 2 of 2/);
+});
+
+test('renders morning and evening temperature, transparency, water appearance, and water depth in the PDF', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'Test Farm',
+    reportDate: '2026-09-02',
+    generatedBy: 'Operator',
+    ponds: [{
+      id: 'pond-1',
+      pondName: 'C1',
+      samplings: [{
+        date: '2026-09-02',
+        temperatureMorning: '27.5',
+        temperatureEvening: '29.2',
+        transparencyMorning: '35',
+        transparencyEvening: '30',
+        waterAppearanceMorning: 'Green',
+        waterAppearanceEvening: 'Dark Green',
+        waterDepthCmMorning: '140',
+        waterDepthCmEvening: '138',
+      }],
+    }],
+  });
+
+  const row = report.waterQualityRows[0];
+  assert.equal(row.temperatureMorning, '27.5');
+  assert.equal(row.temperatureEvening, '29.2');
+  assert.equal(row.transparencyMorning, '35');
+  assert.equal(row.transparencyEvening, '30');
+  assert.equal(row.waterAppearanceMorning, 'Green');
+  assert.equal(row.waterAppearanceEvening, 'Dark Green');
+  assert.equal(row.waterDepthCmMorning, '140');
+  assert.equal(row.waterDepthCmEvening, '138');
+
+  const html = generateDailyOperationsReportHTML(report, { backgroundBase64: '', logoBase64: '' });
+  assert.match(html, />27\.5<\/td>/);
+  assert.match(html, />29\.2<\/td>/);
+  assert.match(html, />35<\/td>/);
+  assert.match(html, />30<\/td>/);
+  assert.match(html, />Green<\/td>/);
+  assert.match(html, />Dark Green<\/td>/);
+  assert.match(html, />140<\/td>/);
+  assert.match(html, />138<\/td>/);
+});
+
+test('sanitizes undefined, null, and empty fields to N/A without rendering literal undefined', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'undefined',
+    reportDate: '2026-09-02',
+    generatedBy: 'null',
+    ponds: [{
+      id: 'pond-undef',
+      pondName: 'P1',
+      docStart: '2026-08-01',
+      samplings: [{
+        date: '2026-09-02',
+        phMorning: '7.8',
+        phEvening: 'undefined',
+        temperatureMorning: 'undefined',
+        temperatureEvening: undefined,
+        waterAppearanceMorning: 'null',
+        waterAppearanceEvening: null,
+        waterDepthCmMorning: 'NaN',
+        transparencyMorning: '',
+        waterQualityRecordedByName: 'undefined',
+      }],
+    }],
+  });
+
+  const row = report.waterQualityRows[0];
+  assert.equal(row.phMorning, '7.8');
+  assert.equal(row.phEvening, 'N/A');
+  assert.equal(row.phRange, 'N/A');
+  assert.equal(row.temperatureMorning, 'N/A');
+  assert.equal(row.temperatureEvening, 'N/A');
+  assert.equal(row.waterAppearanceMorning, 'N/A');
+  assert.equal(row.waterAppearanceEvening, 'N/A');
+  assert.equal(row.waterDepthCmMorning, 'N/A');
+  assert.equal(row.transparencyMorning, 'N/A');
+  assert.equal(row.recordedBy, 'N/A');
+
+  const html = generateDailyOperationsReportHTML(report, { backgroundBase64: '', logoBase64: '' });
+  assert.doesNotMatch(html, />undefined</);
+  assert.doesNotMatch(html, />null</);
+});
+
+test('matches UTC timestamps to the farm calendar date in UTC+10', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'Timezone Farm',
+    reportDate: '2026-09-09',
+    generatedBy: 'Tester',
+    timeZone: 'Australia/Brisbane',
+    ponds: [{
+      id: 'pond-1',
+      pondName: 'SIM-B1',
+      initialPopulation: 100_000,
+      mortalityRecords: [
+        { date: '2026-09-08T14:15:00.000Z', siponShift: 'morning', mortalCount: 8 },
+      ],
+      samplings: [
+        { date: '2026-09-08T14:30:00.000Z', phMorning: 7.8 },
+      ],
+    }],
+  });
+
+  assert.equal(report.siponRows[0].dailyTotal, 8);
+  assert.equal(report.waterQualityRows.length, 1);
+  assert.equal(report.waterQualityRows[0].phMorning, '7.8');
 });

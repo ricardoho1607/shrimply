@@ -1,0 +1,25 @@
+# Orson product evidence gate
+
+Inventory/product questions and detected treatment requests go through a server-side evidence pipeline in `functions/shared/orsonProductVerification.js`. Other farm analysis retains its existing grounding path.
+
+The pipeline searches exact names and brands, requires separate identity/composition/use evidence with provider-returned citations, then performs a second web-enabled review. It renders a fixed answer; model-written application instructions never pass through this path. Search failures, incomplete JSON, missing evidence, source mismatches and rejected reviews withhold dosing. These are AI-assisted evidence checks, not laboratory confirmation or a guarantee that the manufacturer's claims are true.
+
+Company-scoped, server-only verification cache entries expire after seven days. Keys include the product context and question; changed labels invalidate reuse. Existing Firestore default-deny rules protect the new subcollection; no rules deployment is required. Nothing deducts stock or records treatments.
+
+Up to five returned treatment products are checked per request, within a 135-second overall deadline. Partial coverage is disclosed. If no suitable verified stock is available, up to two purchase candidates are researched and subjected to the same gate; ownership is never assumed. Feed stock is reported separately and not treated as a verified water treatment.
+
+Numeric calculations currently support only soluble elemental calcium/magnesium additions from kg products, with verified strength and an applicable single-application label limit. The code calculates `(target - current) * volume_m3 / 1000 / elemental_mass_fraction`, rejects unknown/wrong units and decreases, and refuses amounts above the verified limit. Input extraction must quote supplied context verbatim, and a separate review must confirm pond inputs, dated measurements, target suitability and label constraints. It does not solve pH, ammonia removal, probiotics, liquid products or lime dissolution.
+
+Limitations: pond context remains supplied through the existing client prompt, not newly attested measurements; source interpretation and extraction remain model-assisted. Cache may become stale within seven days. Text detection determines treatment routing; multilingual or ambiguous phrasing requires further coverage. Exact product labels often lack enough information for safe numeric dosing, in which case withholding is expected.
+
+Before production: deploy the callable, then exercise real manufacturer labels, ambiguous brands, no-stock alternatives, unsupported web search, conflicting sources, streaming, and a complete calcium case on mobile and web. Unit tests mock the search provider; they do not establish live provider search quality.
+
+## Dosing bypass corrections — 7 September 2026
+
+- Mobile and web cache only responses explicitly marked safe to cache by the server. Shared treatment detection disables dose-answer cache keys; the general cache version changed to invalidate earlier unchecked entries.
+- The backend independently classifies the current request with conversation context, including non-English and ambiguous follow-ups. A malformed or unavailable classifier routes conservatively through verification. Every ordinary model answer is buffered and checked for application guidance before either streaming or returning it. Failed checks withhold the answer. This adds model calls and delays the first displayed text.
+- Numeric dosing no longer reads pond volume or current readings from the prompt. The server reads the selected company pond and its latest water-quality lab report; only confirmed elemental Ca/Mg results in mg/L are accepted. Saved pond area and recent recorded depth provide the volume calculation, with an additional explicit representative-depth check. Previous-day/current-day farm records are required as a conservative freshness guard, not a biological safety threshold. Missing records, wrong basis, future dates and closed ponds withhold dosing. The target remains user-requested and must pass a separate suitability check.
+- Official source quotes must be present in directly fetched page text. The cache stores source hashes and quotes, and rechecks page content before reuse. Fetching allows bounded HTTPS public-IP connections only, with no redirects; PDF-only, inaccessible or unsupported pages cannot unlock dosing. Explicit label percentage and maximum kg/m3 values must match the proposed numeric inputs; unsupported directions are withheld rather than guessed.
+- Source ownership, biological suitability and semantic classification still use model review. These safeguards do not establish guaranteed clinical accuracy. Production deployment and live tests with actual labels remain necessary. Older installed clients can still display their existing local cache until the client update is installed.
+
+This section supersedes the earlier description of client-extracted calculation inputs and English-only backend routing. No inventory deduction, treatment write or Firestore rules deployment was added.

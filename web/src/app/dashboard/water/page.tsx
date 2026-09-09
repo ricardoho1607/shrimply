@@ -13,11 +13,12 @@ import {
   History,
   Info,
   FileText,
-  AlertTriangle,
   CheckCircle2,
   ClipboardList,
   ChevronDown,
   ExternalLink,
+  Eye,
+  Compass,
   type LucideIcon
 } from 'lucide-react';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -37,10 +38,10 @@ import {
   isEnterpriseOwner,
   type FarmBlock,
 } from '../../../../../shared/enterpriseBlocks';
-import { LAB_WATER_FIELDS, createManualLabUnits, labMeasurementLabel, validateLabRow, type LabMeasurementUnits } from '../../../../../functions/shared/labMeasurementContract';
+import { LAB_WATER_FIELDS, labMeasurementLabel, validateLabRow, type LabMeasurementUnits } from '../../../../../functions/shared/labMeasurementContract';
 import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
 import { getManualLabColumns } from '@/lib/manualLabColumns';
-import { toggleUniqueLabPondRow } from './labRowState';
+import { getManualLabInputUnits, toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
 import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
@@ -53,10 +54,11 @@ interface Sampling {
   isBaselineEstimate?: boolean; source?: string;
   feedData?: { totalDailyFeed?: number | string | null } | null; harvestData?: unknown;
   phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
-  transparency?: string; salinity?: string;
-  temperature?: string;
-  waterAppearance?: string;
-  waterDepthCm?: string;
+  transparencyMorning?: string; transparencyEvening?: string; transparency?: string;
+  salinity?: string;
+  temperatureMorning?: string; temperatureEvening?: string; temperature?: string;
+  waterAppearanceMorning?: string; waterAppearanceEvening?: string; waterAppearance?: string;
+  waterDepthCmMorning?: string; waterDepthCmEvening?: string; waterDepthCm?: string;
   alkalinity?: string;
   waterQualityRecordedByName?: string;
   ammonia?: string;
@@ -216,9 +218,12 @@ const hasSavedValue = (value: unknown): boolean => value !== null && value !== u
 const hasWaterQualityHistory = (sampling: Sampling): boolean => Boolean(
   hasSavedValue(sampling.phMorning) || hasSavedValue(sampling.phEvening) ||
   hasSavedValue(sampling.doMorning) || hasSavedValue(sampling.doEvening) ||
-  hasSavedValue(sampling.transparency) || hasSavedValue(sampling.salinity) ||
-  hasSavedValue(sampling.temperature) || hasSavedValue(sampling.waterAppearance) ||
-  hasSavedValue(sampling.waterDepthCm) || hasSavedValue(sampling.alkalinity) ||
+  hasSavedValue(sampling.transparencyMorning) || hasSavedValue(sampling.transparencyEvening) || hasSavedValue(sampling.transparency) ||
+  hasSavedValue(sampling.salinity) ||
+  hasSavedValue(sampling.temperatureMorning) || hasSavedValue(sampling.temperatureEvening) || hasSavedValue(sampling.temperature) ||
+  hasSavedValue(sampling.waterAppearanceMorning) || hasSavedValue(sampling.waterAppearanceEvening) || hasSavedValue(sampling.waterAppearance) ||
+  hasSavedValue(sampling.waterDepthCmMorning) || hasSavedValue(sampling.waterDepthCmEvening) || hasSavedValue(sampling.waterDepthCm) ||
+  hasSavedValue(sampling.alkalinity) ||
   hasSavedValue(sampling.ammonia) ||
   hasSavedValue(sampling.weatherEvent) || hasSavedValue(sampling.operationalNotes) ||
   hasSavedValue(sampling.waterExchangePercent) || hasSavedValue(sampling.sludgeLoad) ||
@@ -228,7 +233,7 @@ const hasWaterQualityHistory = (sampling: Sampling): boolean => Boolean(
 
 const formatConditionLabel = (value: string | null | undefined): string => value
   ? value.replaceAll('_', ' ').replace(/\b\w/g, (character) => character.toUpperCase())
-  : '-';
+  : 'N/A';
 
 export default function WaterQualityPage() {
   const copy = useDashboardCopy();
@@ -273,10 +278,18 @@ export default function WaterQualityPage() {
     phEvening: '',
     doMorning: '',
     doEvening: '',
+    transparencyMorning: '',
+    transparencyEvening: '',
     transparency: '',
     salinity: '',
+    temperatureMorning: '',
+    temperatureEvening: '',
     temperature: '',
+    waterAppearanceMorning: '',
+    waterAppearanceEvening: '',
     waterAppearance: '',
+    waterDepthCmMorning: '',
+    waterDepthCmEvening: '',
     waterDepthCm: '',
     alkalinity: '',
     ammonia: '',
@@ -391,11 +404,19 @@ export default function WaterQualityPage() {
           phEvening: formData.phEvening,
           doMorning: formData.doMorning,
           doEvening: formData.doEvening,
-          transparency: formData.transparency,
+          transparencyMorning: formData.transparencyMorning,
+          transparencyEvening: formData.transparencyEvening,
+          transparency: formData.transparencyMorning || formData.transparencyEvening || formData.transparency,
           salinity: formData.salinity,
-          temperature: formData.temperature,
-          waterAppearance: formData.waterAppearance,
-          waterDepthCm: formData.waterDepthCm,
+          temperatureMorning: formData.temperatureMorning,
+          temperatureEvening: formData.temperatureEvening,
+          temperature: formData.temperatureMorning || formData.temperatureEvening || formData.temperature,
+          waterAppearanceMorning: formData.waterAppearanceMorning,
+          waterAppearanceEvening: formData.waterAppearanceEvening,
+          waterAppearance: formData.waterAppearanceMorning || formData.waterAppearanceEvening || formData.waterAppearance,
+          waterDepthCmMorning: formData.waterDepthCmMorning,
+          waterDepthCmEvening: formData.waterDepthCmEvening,
+          waterDepthCm: formData.waterDepthCmMorning || formData.waterDepthCmEvening || formData.waterDepthCm,
           alkalinity: formData.alkalinity,
           waterQualityRecordedByName: user.name || (typeof user.email === 'string' ? user.email.split('@')[0] : '') || '',
           ammonia: formData.ammonia,
@@ -438,7 +459,7 @@ export default function WaterQualityPage() {
   const createEmptyLabRow = (pond: Pond): LabPondResult => ({
     pondId: pond.id,
     pondCode: pond.pondName,
-    measurementUnits: createManualLabUnits(),
+    measurementUnits: getManualLabInputUnits(),
     doc: '',
     transparencyCm: '',
     waterQuality: {
@@ -538,7 +559,7 @@ export default function WaterQualityPage() {
     return {
       pondId: row.pondId,
       pondCode: row.pondCode,
-      measurementUnits: row.measurementUnits || {},
+      measurementUnits: labEntryMode === 'manual' ? getManualLabInputUnits(row.measurementUnits) : row.measurementUnits || {},
       doc: toOptionalNumber(row.doc),
       transparencyCm: toOptionalNumber(row.transparencyCm),
       waterQuality: {
@@ -836,7 +857,7 @@ export default function WaterQualityPage() {
     const accessiblePondIds = new Set(accessiblePonds.map((pond) => pond.id));
     const permittedLabRows = labRows.filter((row) => accessiblePondIds.has(row.pondId));
     if (permittedLabRows.length === 0) return;
-    const issues = permittedLabRows.flatMap(row => validateLabRow(row).map(issue => `${row.pondCode}: ${issue}`));
+    const issues = permittedLabRows.flatMap(row => validateLabRow(labEntryMode === 'manual' ? { ...row, measurementUnits: getManualLabInputUnits(row.measurementUnits) } : row).map(issue => `${row.pondCode}: ${issue}`));
     if (issues.length) { alert(issues.join('\n')); return; }
     setLabSubmitting(true);
 
@@ -966,7 +987,10 @@ export default function WaterQualityPage() {
     return logs[0] || null;
   };
 
-  const labGridColumns = useMemo(() => getManualLabColumns(labForm.reportType), [labForm.reportType]);
+  const labGridColumns = useMemo(() => getManualLabColumns(labForm.reportType).map(column => ({
+    ...column,
+    label: column.label.replace(/ \(unit\/basis below\)| \(cm\)| \(ppt\)| %/g, ''),
+  })), [labForm.reportType]);
 
   const mineralPdfActionState = getPdfActionState('water_quality');
   const planktonPdfActionState = getPdfActionState('plankton');
@@ -1088,28 +1112,54 @@ export default function WaterQualityPage() {
                     <span className="wq-label">{copy('pH Level')}</span>
                     <div className="wq-value">
                       <Activity size={16} color="var(--accent)" />
-                      <span>{latest ? `${latest.phMorning || '-'} / ${latest.phEvening || '-'}` : '--'}</span>
+                      <span>{latest ? `${latest.phMorning || 'N/A'} / ${latest.phEvening || 'N/A'}` : 'N/A'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">DO (mg/L)</span>
                     <div className="wq-value">
                       <Wind size={16} color="var(--primary)" />
-                      <span>{latest ? `${latest.doMorning || '-'} / ${latest.doEvening || '-'}` : '--'}</span>
+                      <span>{latest ? `${latest.doMorning || 'N/A'} / ${latest.doEvening || 'N/A'}` : 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="wq-metric">
+                    <span className="wq-label">{copy('Temperature')}</span>
+                    <div className="wq-value">
+                      <Thermometer size={16} color="#ef4444" />
+                      <span>{latest ? (
+                        hasSavedValue(latest.temperatureMorning) || hasSavedValue(latest.temperatureEvening)
+                          ? `${latest.temperatureMorning || 'N/A'} / ${latest.temperatureEvening || 'N/A'} °C`
+                          : hasSavedValue(latest.temperature) ? `${latest.temperature} °C` : 'N/A'
+                      ) : 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="wq-metric">
+                    <span className="wq-label">{copy('Transparency')}</span>
+                    <div className="wq-value">
+                      <Eye size={16} color="#f59e0b" />
+                      <span>{latest ? (
+                        hasSavedValue(latest.transparencyMorning) || hasSavedValue(latest.transparencyEvening)
+                          ? `${latest.transparencyMorning || 'N/A'} / ${latest.transparencyEvening || 'N/A'} CM`
+                          : hasSavedValue(latest.transparency) ? `${latest.transparency} CM` : 'N/A'
+                      ) : 'N/A'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
                     <span className="wq-label">{copy('Salinity')}</span>
                     <div className="wq-value">
                       <Droplets size={16} color="#10b981" />
-                      <span>{latest ? `${latest.salinity || '--'} PPT` : '--'}</span>
+                      <span>{latest && hasSavedValue(latest.salinity) ? `${latest.salinity} PPT` : 'N/A'}</span>
                     </div>
                   </div>
                   <div className="wq-metric">
-                    <span className="wq-label">{copy('Transparency')}</span>
+                    <span className="wq-label">{t.dailyOperationsReports.waterDepth}</span>
                     <div className="wq-value">
-                      <Thermometer size={16} color="#f59e0b" />
-                      <span>{latest ? `${latest.transparency || '--'} CM` : '--'}</span>
+                      <Compass size={16} color="#3b82f6" />
+                      <span>{latest ? (
+                        hasSavedValue(latest.waterDepthCmMorning) || hasSavedValue(latest.waterDepthCmEvening)
+                          ? `${latest.waterDepthCmMorning || 'N/A'} / ${latest.waterDepthCmEvening || 'N/A'} CM`
+                          : hasSavedValue(latest.waterDepthCm) ? `${latest.waterDepthCm} CM` : 'N/A'
+                      ) : 'N/A'}</span>
                     </div>
                   </div>
                 </div>
@@ -1397,27 +1447,39 @@ export default function WaterQualityPage() {
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('pH Levels')}</span>
-                          <span className="wq-val-small">{log.phMorning || '-'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.phEvening || '-'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
+                          <span className="wq-val-small">{log.phMorning || 'N/A'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.phEvening || 'N/A'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Dissolved Oxygen')}</span>
-                          <span className="wq-val-small">{log.doMorning || '-'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.doEvening || '-'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
-                        </div>
-                        <div className="wq-metric-small">
-                          <span className="wq-label-small">{copy('Salinity')}</span>
-                          <span className="wq-val-small">{log.salinity || '-'} PPT</span>
-                        </div>
-                        <div className="wq-metric-small">
-                          <span className="wq-label-small">{copy('Transparency')}</span>
-                          <span className="wq-val-small">{log.transparency || '-'} CM</span>
+                          <span className="wq-val-small">{log.doMorning || 'N/A'} <span style={{ color: 'var(--text-faint)' }}>AM</span> / {log.doEvening || 'N/A'} <span style={{ color: 'var(--text-faint)' }}>PM</span></span>
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Temperature')}</span>
-                          <span className="wq-val-small">{log.temperature || '-'} °C</span>
+                          <span className="wq-val-small">{hasSavedValue(log.temperatureMorning) || hasSavedValue(log.temperatureEvening) ? `${log.temperatureMorning || 'N/A'} AM / ${log.temperatureEvening || 'N/A'} PM °C` : hasSavedValue(log.temperature) ? `${log.temperature} °C` : 'N/A'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">{copy('Transparency')}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.transparencyMorning) || hasSavedValue(log.transparencyEvening) ? `${log.transparencyMorning || 'N/A'} AM / ${log.transparencyEvening || 'N/A'} PM CM` : hasSavedValue(log.transparency) ? `${log.transparency} CM` : 'N/A'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">{copy('Salinity')}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.salinity) ? `${log.salinity} PPT` : 'N/A'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">{t.dailyOperationsReports.waterAppearance}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.waterAppearanceMorning) || hasSavedValue(log.waterAppearanceEvening) ? `${log.waterAppearanceMorning || 'N/A'} AM / ${log.waterAppearanceEvening || 'N/A'} PM` : hasSavedValue(log.waterAppearance) ? log.waterAppearance : 'N/A'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">{t.dailyOperationsReports.waterDepth}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.waterDepthCmMorning) || hasSavedValue(log.waterDepthCmEvening) ? `${log.waterDepthCmMorning || 'N/A'} AM / ${log.waterDepthCmEvening || 'N/A'} PM CM` : hasSavedValue(log.waterDepthCm) ? `${log.waterDepthCm} CM` : 'N/A'}</span>
+                        </div>
+                        <div className="wq-metric-small">
+                          <span className="wq-label-small">{t.dailyOperationsReports.alkalinity}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.alkalinity) ? `${log.alkalinity} PPM` : 'N/A'}</span>
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Ammonia (TAN)')}</span>
-                          <span className="wq-val-small">{log.ammonia || '-'} mg/L</span>
+                          <span className="wq-val-small">{hasSavedValue(log.ammonia) ? `${log.ammonia} mg/L` : 'N/A'}</span>
                         </div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginTop: '14px' }}>
@@ -1427,7 +1489,7 @@ export default function WaterQualityPage() {
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Water Exchange')}</span>
-                          <span className="wq-val-small">{hasSavedValue(log.waterExchangePercent) ? `${log.waterExchangePercent}%` : '-'}</span>
+                          <span className="wq-val-small">{hasSavedValue(log.waterExchangePercent) ? `${log.waterExchangePercent}%` : 'N/A'}</span>
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Sludge Load')}</span>
@@ -1435,7 +1497,7 @@ export default function WaterQualityPage() {
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Surface Scum')}</span>
-                          <span className="wq-val-small">{log.surfaceScum === null || log.surfaceScum === undefined ? '-' : copy(log.surfaceScum ? 'Present' : 'Not observed')}</span>
+                          <span className="wq-val-small">{log.surfaceScum === null || log.surfaceScum === undefined ? 'N/A' : copy(log.surfaceScum ? 'Present' : 'Not observed')}</span>
                         </div>
                         <div className="wq-metric-small">
                           <span className="wq-label-small">{copy('Shrimp Behavior')}</span>
@@ -1653,46 +1715,48 @@ export default function WaterQualityPage() {
 
               {labRows.length > 0 && (
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-                    <AlertTriangle size={18} color="var(--primary)" />
-                    <h3 style={{ fontSize: '1rem', fontWeight: 600 }}>{copy('Bulk Result Grid')}</h3>
-                  </div>
-                  <p>{copy('Enter at least one result per pond. Match each unit and basis to the lab report. N means nitrogen mass; CaCO3 means carbonate-equivalent hardness. Other units and TOM methods are kept as reported and excluded from automated comparisons.')}</p>
                   <div style={{ overflowX: 'auto', border: '1px solid var(--border)', borderRadius: '14px' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: labForm.reportType === 'plankton' ? '2200px' : labForm.reportType === 'combined' ? '2800px' : '1280px' }}>
                       <thead>
                         <tr style={{ background: 'var(--bg-mid)' }}>
                           {['Pond', ...labGridColumns.map(column => column.label)].map(label => (
-                            <th key={label} style={{ padding: '10px 8px', textAlign: 'left', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{copy(label)}</th>
+                            <th key={label} style={{ padding: '10px 8px', textAlign: 'center', verticalAlign: 'middle', fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', borderBottom: '1px solid var(--border)' }}>{copy(label)}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {labRows.map(row => (
                           <tr key={row.pondId}>
-                            <td style={{ padding: '8px', fontWeight: 600, minWidth: 90 }}>{row.pondCode}</td>
+                            <td style={{ padding: '8px', fontWeight: 600, minWidth: 90, textAlign: 'center', verticalAlign: 'middle' }}>{row.pondCode}</td>
                             {labGridColumns.map(({ label, path, inputType = 'number' }) => {
                               const field = path[0] === 'waterQuality' ? LAB_WATER_FIELDS[path[1]] : null;
                               const units = row.measurementUnits?.[path[1]];
+                              const inputUnit = field
+                                ? units?.unit || (labEntryMode === 'manual' ? field.unit : '')
+                                : path[0] === 'transparencyCm' ? 'cm'
+                                : path[1]?.endsWith('Percent') ? '%'
+                                : path[1]?.endsWith('CellPerMl') ? 'cells/mL' : '';
                               const setUnits = (unit: string, basis: string) => setLabRows(previous => previous.map(item => item.pondId !== row.pondId ? item : { ...item, measurementUnits: { ...item.measurementUnits, [path[1]]: { unit, basis } } }));
                               const sectionValue = row[path[0] as keyof LabPondResult];
                               const value = path.length === 1
                                 ? (sectionValue as string | undefined)
                                 : (typeof sectionValue === 'object' && sectionValue ? (sectionValue as Record<string, string | undefined>)[path[1]] : undefined);
                               return (
-                                <td key={path.join('.')} style={{ padding: '6px', borderTop: '1px solid var(--border)' }}>
+                                <td key={path.join('.')} style={{ padding: '6px', borderTop: '1px solid var(--border)', textAlign: 'center', verticalAlign: 'middle' }}>
+                                  <div className="water-lab-value-input" style={{ width: inputType === 'text' ? '170px' : inputUnit === 'cells/mL' ? '112px' : '86px', margin: '0 auto' }}>
                                   <input
                                     type={inputType}
-                                    aria-label={`${row.pondCode} ${label}`}
+                                    aria-label={`${row.pondCode} ${label}${inputUnit ? ` (${inputUnit})` : ''}`}
                                     title={field ? labMeasurementLabel(path[1], row.measurementUnits) : label}
                                     min={inputType === 'number' ? 0 : undefined}
                                     max={field?.max ?? (path[1]?.endsWith('Percent') ? 100 : undefined)}
                                     step={inputType === 'number' ? 'any' : undefined}
                                     value={value || ''}
                                     onChange={e => updateLabRow(row.pondId, path, e.target.value)}
-                                    style={{ width: inputType === 'text' ? '170px' : '86px', padding: '8px', borderRadius: '9px', border: '1px solid var(--border)', fontWeight: 600 }}
                                   />
-                                  {field && <div style={{ display: 'grid', gap: 4, marginTop: 6 }}>
+                                  {inputUnit && <span aria-hidden="true">{inputUnit}</span>}
+                                  </div>
+                                  {field && labEntryMode === 'pdf_upload' && <div style={{ display: 'grid', gap: 4, marginTop: 6, width: inputType === 'text' ? '170px' : inputUnit === 'cells/mL' ? '112px' : '86px', margin: '6px auto 0' }}>
                                     <select aria-label={`${row.pondCode} ${field.label} unit`} value={units?.unit || ''} onChange={e => setUnits(e.target.value, units?.basis || '')}>
                                       <option value="">Select unit</option>
                                       {[...new Set([field.unit, ...(field.unit === 'mg/L' ? ['µg/L', 'ppm'] : []), ...(units?.unit ? [units.unit] : [])])].map(unit => <option key={unit}>{unit}</option>)}
@@ -1715,7 +1779,7 @@ export default function WaterQualityPage() {
 
               <div className="water-lab-form-footer">
                 <button type="button" onClick={() => setLabModalOpen(false)} className="water-lab-cancel-button">{copy('Cancel')}</button>
-                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0 || labRows.some(row => validateLabRow(row).length > 0)} className="water-lab-primary-button water-confirm-lab-button">
+                <button type="submit" disabled={labSubmitting || selectedLabPondIds.length === 0 || labRows.some(row => validateLabRow(labEntryMode === 'manual' ? { ...row, measurementUnits: getManualLabInputUnits(row.measurementUnits) } : row).length > 0)} className="water-lab-primary-button water-confirm-lab-button">
                   {copy(labSubmitting ? 'Saving...' : 'Confirm Lab Report')}
                 </button>
               </div>
@@ -1760,47 +1824,72 @@ export default function WaterQualityPage() {
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('Salinity (PPT)')}</label>
-                  <input type="number" step="0.1" placeholder="0.0" value={formData.salinity} onChange={e => setFormData({...formData, salinity: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.salinity} onChange={e => setFormData({...formData, salinity: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Temperature (Morning) (°C)')}</label>
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.temperatureMorning} onChange={e => setFormData({...formData, temperatureMorning: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Temperature (Evening) (°C)')}</label>
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.temperatureEvening} onChange={e => setFormData({...formData, temperatureEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('pH (Morning)')}</label>
-                  <input type="number" step="0.1" placeholder="0.0" value={formData.phMorning} onChange={e => setFormData({...formData, phMorning: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.phMorning} onChange={e => setFormData({...formData, phMorning: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('pH (Evening)')}</label>
-                  <input type="number" step="0.1" placeholder="0.0" value={formData.phEvening} onChange={e => setFormData({...formData, phEvening: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.phEvening} onChange={e => setFormData({...formData, phEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('DO (Morning) mg/L')}</label>
-                  <input type="number" step="0.1" placeholder="0.0" value={formData.doMorning} onChange={e => setFormData({...formData, doMorning: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.doMorning} onChange={e => setFormData({...formData, doMorning: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('DO (Evening) mg/L')}</label>
-                  <input type="number" step="0.1" placeholder="0.0" value={formData.doEvening} onChange={e => setFormData({...formData, doEvening: e.target.value})} className="form-input" />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
-                  <label className="form-label">{copy('Transparency (CM)')}</label>
-                  <input type="number" placeholder="0" value={formData.transparency} onChange={e => setFormData({...formData, transparency: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.doEvening} onChange={e => setFormData({...formData, doEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">{t.dailyOperationsReports.waterAppearance}</label>
-                  <input type="text" maxLength={40} placeholder="e.g., CH" value={formData.waterAppearance} onChange={e => setFormData({...formData, waterAppearance: e.target.value})} className="form-input" />
+                  <label className="form-label">{copy('Transparency (Morning) (CM)')}</label>
+                  <input type="number" placeholder="N/A" value={formData.transparencyMorning} onChange={e => setFormData({...formData, transparencyMorning: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">{t.dailyOperationsReports.waterDepth} (CM)</label>
-                  <input type="number" min="0" step="0.1" placeholder="150" value={formData.waterDepthCm} onChange={e => setFormData({...formData, waterDepthCm: e.target.value})} className="form-input" />
+                  <label className="form-label">{copy('Transparency (Evening) (CM)')}</label>
+                  <input type="number" placeholder="N/A" value={formData.transparencyEvening} onChange={e => setFormData({...formData, transparencyEvening: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Water Appearance (Morning)')}</label>
+                  <input type="text" maxLength={40} placeholder="N/A" value={formData.waterAppearanceMorning} onChange={e => setFormData({...formData, waterAppearanceMorning: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Water Appearance (Evening)')}</label>
+                  <input type="text" maxLength={40} placeholder="N/A" value={formData.waterAppearanceEvening} onChange={e => setFormData({...formData, waterAppearanceEvening: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Water Depth (Morning) (CM)')}</label>
+                  <input type="number" min="0" step="0.1" placeholder="N/A" value={formData.waterDepthCmMorning} onChange={e => setFormData({...formData, waterDepthCmMorning: e.target.value})} className="form-input" />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+                  <label className="form-label">{copy('Water Depth (Evening) (CM)')}</label>
+                  <input type="number" min="0" step="0.1" placeholder="N/A" value={formData.waterDepthCmEvening} onChange={e => setFormData({...formData, waterDepthCmEvening: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px', gridColumn: 'span 2' }}>
                   <label className="form-label">{t.dailyOperationsReports.alkalinity} (PPM)</label>
-                  <input type="number" min="0" step="0.1" placeholder="204" value={formData.alkalinity} onChange={e => setFormData({...formData, alkalinity: e.target.value})} className="form-input" />
+                  <input type="number" min="0" step="0.1" placeholder="N/A" value={formData.alkalinity} onChange={e => setFormData({...formData, alkalinity: e.target.value})} className="form-input" />
                 </div>
 
                 <div className="water-optional-heading">
@@ -1809,18 +1898,13 @@ export default function WaterQualityPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
-                  <label className="form-label">{copy('Temperature (°C)')}</label>
-                  <input type="number" step="0.1" placeholder="29" value={formData.temperature} onChange={e => setFormData({...formData, temperature: e.target.value})} className="form-input" />
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('Ammonia (TAN) (mg/L)')}</label>
-                  <input type="number" min="0" step="0.01" placeholder="0.00" value={formData.ammonia} onChange={e => setFormData({...formData, ammonia: e.target.value})} className="form-input" />
+                  <input type="number" min="0" step="0.01" placeholder="N/A" value={formData.ammonia} onChange={e => setFormData({...formData, ammonia: e.target.value})} className="form-input" />
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
                   <label className="form-label">{copy('Water Exchange (%)')}</label>
-                  <input type="number" step="0.1" placeholder="10" value={formData.waterExchangePercent} onChange={e => setFormData({...formData, waterExchangePercent: e.target.value})} className="form-input" />
+                  <input type="number" step="0.1" placeholder="N/A" value={formData.waterExchangePercent} onChange={e => setFormData({...formData, waterExchangePercent: e.target.value})} className="form-input" />
                 </div>
 
                 <div className="water-condition-group">
@@ -1905,6 +1989,43 @@ export default function WaterQualityPage() {
       )}
 
       <style jsx>{`
+        .water-lab-value-input {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          min-height: 40px;
+          padding: 0 8px;
+          border: 1px solid var(--border);
+          border-radius: 9px;
+          background: var(--bg-card, #fff);
+        }
+        .water-lab-value-input:focus-within {
+          border-color: var(--primary);
+        }
+        .water-lab-value-input input {
+          width: 100%;
+          min-width: 0;
+          padding: 8px 0;
+          border: 0;
+          outline: 0;
+          background: transparent;
+          color: var(--text-primary);
+          font: inherit;
+          font-weight: 600;
+          appearance: textfield;
+        }
+        .water-lab-value-input input::-webkit-inner-spin-button,
+        .water-lab-value-input input::-webkit-outer-spin-button {
+          -webkit-appearance: none;
+          margin: 0;
+        }
+        .water-lab-value-input span {
+          flex-shrink: 0;
+          color: var(--text-muted);
+          font-size: 11px;
+          pointer-events: none;
+        }
+
         .icon-btn-modern {
           background: #FFF;
           border: 1px solid var(--border);

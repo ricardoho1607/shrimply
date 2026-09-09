@@ -786,7 +786,7 @@ companySetup: {
     pdfExportFailedBody: 'PDF Laporan Siklus tidak dapat dibuat. Silakan coba lagi.',
     archiveMeta: 'Ditutup {{date}} • {{pondCount}} kolam • {{harvestedKg}} kg',
     tabs: {
-      overview: 'Ikhtisar',
+      overview: 'Ringkasan',
       ponds: 'Kolam',
       costs: 'Biaya',
       notes: 'Catatan',
@@ -858,7 +858,7 @@ companySetup: {
   },
   finance: {
     title: 'Keuangan',
-    overview: 'Ikhtisar',
+    overview: 'Ringkasan',
     expenses: 'Pengeluaran',
     revenues: 'Pendapatan',
     revenue: 'Pendapatan',

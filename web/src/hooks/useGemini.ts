@@ -15,6 +15,7 @@ import {
 import {
   cleanOrsonResponse,
   buildOrsonRequestPrompt,
+  ORSON_CLIENT_TIMEOUT_MS,
   ORSON_FALLBACK_RESPONSE,
   ORSON_MODEL_TIMEOUT_MS,
 } from '../../../orson/promptBuilder';
@@ -297,7 +298,7 @@ export const useGemini = () => {
       const resultData = await consumeOrsonCallableStream({
         callable: generateOrsonResponse,
         request: requestPayload,
-        timeoutMs: ORSON_MODEL_TIMEOUT_MS,
+        timeoutMs: ORSON_CLIENT_TIMEOUT_MS,
         signal: session.signal,
         onPartialResponse: (partialText) => {
           assertCurrent();
@@ -318,7 +319,7 @@ export const useGemini = () => {
         totalMs: Date.now() - requestStartedAt,
       });
 
-      saveToCache(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
+      if (resultData.safeToCache === true) saveToCache(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
 
       setChatHistory(prev => {
         if (latestRequestId.current !== requestId) return prev;

@@ -244,6 +244,7 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
   });
   let text = draft.text;
   let status = 'fallback';
+  let reviewInputTokens = null;
   let reviewTokens = null;
   let reviewFinishReason = null;
   let issues = findUnsupportedClaims(text, limits);
@@ -259,6 +260,7 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
         useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 5000,
         timeoutMs: remainingTimeout(45000), onTextDelta: undefined,
       });
+      reviewInputTokens = reviewed.inputTokens;
       reviewTokens = reviewed.outputTokens;
       reviewFinishReason = reviewed.finishReason;
       if (reviewed.finishReason !== 'STOP') throw new Error('incomplete_review');
@@ -281,7 +283,8 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
   if (status === 'fallback') text = buildFactualFallback(limits);
   if (onTextDelta) await onTextDelta(text);
   return { ...draft, text, finishReason: 'STOP', sources: status === 'fallback' ? [] : draft.sources,
-    groundingStatus: status, groundingIssues: [...new Set(issues)], reviewOutputTokens: reviewTokens, reviewFinishReason };
+    groundingStatus: status, groundingIssues: [...new Set(issues)], reviewInputTokens,
+    reviewOutputTokens: reviewTokens, reviewFinishReason };
 };
 
 module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues };

@@ -6,8 +6,14 @@ const test = require('node:test');
 const pageSource = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
 const globalStyles = fs.readFileSync(path.join(__dirname, '../../globals.css'), 'utf8');
 const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/water-quality.tsx'), 'utf8');
-require('sucrase/register/ts');
-const { initializeWaterDraft } = require('./waterFormState.ts');
+const ts = require('typescript');
+const waterFormSource = fs.readFileSync(path.join(__dirname, 'waterFormState.ts'), 'utf8');
+const compiledWaterForm = ts.transpileModule(waterFormSource, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+}).outputText;
+const waterFormModule = { exports: {} };
+new Function('module', 'exports', 'require', compiledWaterForm)(waterFormModule, waterFormModule.exports, require);
+const { initializeWaterDraft } = waterFormModule.exports;
 const pondStore = fs.readFileSync(path.join(__dirname, '../../../../../app/store/pondStore.ts'), 'utf8');
 
 test('water quality uses the compact authenticated layout', () => {
@@ -16,7 +22,6 @@ test('water quality uses the compact authenticated layout', () => {
   assert.match(pageSource, /className="water-pond-grid"/);
   assert.match(pageSource, /className={`glass-card water-pond-card/);
 });
-
 test('water quality controls expose hover and responsive states', () => {
   assert.match(globalStyles, /\.water-view-tabs button:hover/);
   assert.match(globalStyles, /\.water-history-button:hover/);
@@ -79,4 +84,25 @@ test('water quality history displays every saved pond-condition field', () => {
   assert.match(pageSource, /log\.sludgeLoad/);
   assert.match(pageSource, /log\.surfaceScum/);
   assert.match(pageSource, /log\.shrimpBehaviour/);
+});
+
+test('water quality modal includes morning/evening inputs with NA placeholders and moved up temperature', () => {
+  assert.match(pageSource, /copy\('Temperature \(Morning\) \(°C\)'\)/);
+  assert.match(pageSource, /copy\('Temperature \(Evening\) \(°C\)'\)/);
+  assert.match(pageSource, /copy\('Transparency \(Morning\) \(CM\)'\)/);
+  assert.match(pageSource, /copy\('Transparency \(Evening\) \(CM\)'\)/);
+  assert.match(pageSource, /copy\('Water Appearance \(Morning\)'\)/);
+  assert.match(pageSource, /copy\('Water Appearance \(Evening\)'\)/);
+  assert.match(pageSource, /copy\('Water Depth \(Morning\) \(CM\)'\)/);
+  assert.match(pageSource, /copy\('Water Depth \(Evening\) \(CM\)'\)/);
+
+  // Ensure temperature appears before optional heading
+  const tempIndex = pageSource.indexOf("copy('Temperature (Morning) (°C)')");
+  const optionalHeadingIndex = pageSource.indexOf("copy('Optional Pond Conditions')");
+  assert.ok(tempIndex !== -1 && tempIndex < optionalHeadingIndex, 'Temperature should be moved above Optional Pond Conditions');
+
+  // Ensure placeholders use N/A
+  assert.match(pageSource, /placeholder="N\/A" value=\{formData\.temperatureMorning\}/);
+  assert.match(pageSource, /placeholder="N\/A" value=\{formData\.transparencyMorning\}/);
+  assert.match(pageSource, /placeholder="N\/A" value=\{formData\.salinity\}/);
 });
