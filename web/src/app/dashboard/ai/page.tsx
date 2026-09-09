@@ -151,7 +151,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
         timeZone: company?.timeZone,
         conversationHistory: messages
           .filter((message) => message.id !== 'welcome' && !message.retryPrompt && message.id !== retryId)
-          .slice(-10)
+          .slice(-20)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
           if (!isCurrent()) return;

@@ -260,7 +260,7 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     try {
       const reviewed = await generate({
         systemInstruction: REVIEW_INSTRUCTION,
-        prompt: JSON.stringify({ mode, original_request: prompt, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
+        prompt: JSON.stringify({ mode, original_request: prompt, retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
         useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 5000,
         timeoutMs: remainingTimeout(45000), onTextDelta: undefined,
       });

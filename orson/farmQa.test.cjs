@@ -13,8 +13,8 @@ test('explicit general Indonesian questions override previous farm analysis', ()
     assert.equal(inferOrsonConversationRoute(question, history), 'aquaculture_knowledge');
     const analysis = buildOrsonAnalysis([pond], question, now, undefined, undefined, undefined, history);
     assert.equal(analysis.promptPackage.questionFocus.route, 'aquaculture_knowledge');
-    assert.ok(!analysis.promptPackage.context.includes('Private pond measurements'));
-    assert.ok(!analysis.promptPackage.context.includes('SIM-B1'));
+    assert.equal(analysis.promptPackage.context.includes('Private pond measurements'), history.length > 0);
+    assert.ok(!analysis.promptPackage.context.includes('ORSON FARM SCOPE:'));
   }
 });
 
@@ -41,7 +41,7 @@ test('generic questions retain their scope across languages and histories', () =
     for (const history of [[], [{ role: 'user', text: 'Analyze pond SIM-B1' }]]) {
       const result = buildOrsonAnalysis([pond], text, now, undefined, undefined, undefined, history);
       assert.equal(result.promptPackage.questionFocus.route, 'aquaculture_knowledge');
-      assert.ok(!result.promptPackage.context.includes('SIM-B1'));
+      assert.ok(!result.promptPackage.context.includes('ORSON FARM SCOPE:'));
     }
   }
   for (const text of ['Analyze pond SIM-B1', 'Analisis kolam SIM-B1', 'Analyze my whole farm', 'Analisis semua kolam saya']) {

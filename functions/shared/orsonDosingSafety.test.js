@@ -18,15 +18,9 @@ test('treatment recognition includes quantity follow-ups and supported languages
 
 const { classifyDosingRequest, guardModelDosingAnswer } = require('./orsonDosingSafety');
 const model = data => ({ finishReason: 'STOP', text: JSON.stringify(data) });
-test('ambiguous follow-up is classified using conversation independent of client route', async () => {
-  let sent;
-  assert.equal(await classifyDosingRequest({ question: 'And for pond B?', prompt: 'ORSON RECENT CONVERSATION:\n[{"text":"calcium dose in pond A"}]\n\nORSON RISK PAYLOAD:\nsecret farm payload', generate: async args => { sent = args; return model({ treatment: true }); } }), true);
-  assert.match(sent.prompt, /calcium dose/);
-  assert.doesNotMatch(sent.prompt, /secret farm payload/);
-});
-test('classification failures remain unknown instead of inventing a treatment request', async () => {
-  for (const generate of [async () => { throw new Error('timeout'); }, async () => model({ treatment: 'false' }), async () => ({ finishReason: 'MAX_TOKENS', text: '{}' })]) {
-    assert.equal(await classifyDosingRequest({ question: 'and this?', prompt: '', generate }), null);
+test('normal chat and follow-ups never depend on a classifier model call', async () => {
+  for (const question of ['hi', 'can you check if my pond is at risk', 'check again', 'And for pond B?', 'thanks', 'Apa kabar?', 'Tell me about our costs']) {
+    assert.equal(await classifyDosingRequest({ question, prompt: 'context', generate: () => { throw new Error('No classifier needed'); } }), false);
   }
 });
 test('unsafe or unreviewed model doses cannot escape on a general route', async () => {

@@ -170,7 +170,7 @@ function AIChatSession() {
         timeZone: company?.timeZone,
         conversationHistory: messages
           .filter(message => !message.retryPrompt && message.id !== retryId && message.id !== '1')
-          .slice(-10)
+          .slice(-20)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
           if (!isCurrent()) return;
