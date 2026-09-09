@@ -258,7 +258,8 @@ const RECORD_COUNT_WORDS: Record<string, number> = {
 };
 
 export const ORSON_MODEL_TIMEOUT_MS = 155000;
-export const ORSON_CLIENT_TIMEOUT_MS = 55000;
+// Allow the server deadline plus transport overhead on both mobile and web.
+export const ORSON_CLIENT_TIMEOUT_MS = 160000;
 export const ORSON_RESPONSE_TIMEOUT_MS = 8000;
 export const ORSON_PROMPT_TOKEN_BUDGET = 16000;
 const ORSON_CONTEXT_NOTE_MAX_CHARS = 180;

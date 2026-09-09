@@ -204,3 +204,37 @@ test('malformed optional context fields cannot break the factual fallback', asyn
   assert.equal(result.groundingStatus, 'fallback');
   assert.match(result.text, /could not verify/i);
 });
+
+test('draft safety and factual review overlap and reuse approval only for unchanged text', async () => {
+  for (const rewrite of [false, true]) {
+    let calls = 0;
+    let releaseSafety;
+    const safetyStarted = new Promise(resolve => { releaseSafety = resolve; });
+    const result = await generateGroundedOrsonResponse({
+      prompt: promptFor(), mode: 'standard', questionRoute: 'farm_analysis',
+      reviewSafety: async draft => {
+        releaseSafety();
+        return { ...draft, doseSafety: 'no_application_guidance' };
+      },
+      generate: async () => {
+        if (++calls === 1) return reply(safeDraft);
+        // This would deadlock if safety review started after factual review.
+        await safetyStarted;
+        return reply(JSON.stringify(rewrite
+          ? { status: 'rewrite', issues: ['answer_structure'], answer: 'Recorded ADG declined. Please check the next sampling.' }
+          : { status: 'pass', issues: [] }));
+      },
+    });
+    assert.equal(result.doseSafety, rewrite ? undefined : 'no_application_guidance');
+  }
+});
+
+test('failed concurrent safety review never grants clearance', async () => {
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({
+    prompt: promptFor(), mode: 'standard', questionRoute: 'farm_analysis',
+    reviewSafety: async () => { throw new Error('timeout'); },
+    generate: async () => ++calls === 1 ? reply(safeDraft) : reply('{"status":"pass","issues":[]}'),
+  });
+  assert.equal(result.doseSafety, undefined);
+});

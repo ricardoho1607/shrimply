@@ -1,7 +1,7 @@
 'use strict';
 
 const isTreatmentQuestion = (message = '') => /(?:\b(?:dosis|takaran|kapur|kalsium|liều|vôi)\b|ปูน|ปริมาณ|เท่าไหร่|剂量|劑量|石灰|用多少)/iu.test(message) || /\b(?:how much|how many|can i use)\b[^?]{0,80}\b(?:add|apply|use|bags?|sacks?|calcium|magnesium|lime|chemical|probiotic)\b/i.test(message) || /\b(dos(?:e|es|ing|age)|formula|recommend\w*|what\s+should\s+i\s+use|what\s+(?:can|should)\s+i\s+add)\b/i.test(message) || /\b(increase|raise|reduce|lower|decrease|correct|adjust)\b[\s\S]{0,80}\b(calcium|magnesium|alkalinity|hardness|ph|ammonia|nitrite|nitrate|salinity|oxygen|something)\b/i.test(message);
-const needsInventoryContext = (route, message = '') => route !== 'out_of_scope' && (route === 'inventory_product' || route === 'farm_analysis' || isTreatmentQuestion(message) || /\b(inventory|invetory|stock)\b/i.test(message));
+const needsInventoryContext = (route, message = '') => route !== 'out_of_scope' && (route === 'inventory_product' || isTreatmentQuestion(message) || /\b(inventory|invetory|stock)\b/i.test(message));
 
 const INVENTORY_DOSING_RULES = [
   'For inventory and treatment requests, use ORSON SAVED PRODUCT CONTEXT for company stock. Prefer suitable in-stock products only when their verified composition fits the requested change. Never infer ingredients or suitability from a name, category, or past usage.',

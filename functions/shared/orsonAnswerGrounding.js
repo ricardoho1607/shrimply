@@ -231,7 +231,7 @@ const buildFactualFallback = limits => {
     ...(limits.focus.suppress_advice ? [] : [copy[1]])].join('\n\n');
 };
 
-const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, deadlineMs = Date.now() + 140000 }) => {
+const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
   if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
@@ -242,6 +242,10 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     ...settings, timeoutMs: remainingTimeout(settings.timeoutMs),
     onTextDelta: async () => {}, // Buffer private drafts for both mobile and web.
   });
+  // Audit the same private draft concurrently. A rewritten answer must be audited
+  // again; only an unchanged, fact-checked draft can reuse this safety result.
+  const safetyReview = reviewSafety && draft.finishReason === 'STOP' && draft.text?.trim()
+    ? Promise.resolve().then(() => reviewSafety(draft)).catch(() => null) : null;
   let text = draft.text;
   let status = 'fallback';
   let reviewInputTokens = null;
@@ -280,10 +284,13 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
           : ['incomplete_review', 'invalid_review'].includes(error.message) ? error.message : 'review_unavailable');
     }
   }
+  const checkedDraft = safetyReview ? await safetyReview : null;
+  const doseSafety = status === 'passed' && checkedDraft?.text === text && checkedDraft?.doseSafety === 'no_application_guidance'
+    ? 'no_application_guidance' : undefined;
   if (status === 'fallback') text = buildFactualFallback(limits);
   if (onTextDelta) await onTextDelta(text);
   return { ...draft, text, finishReason: 'STOP', sources: status === 'fallback' ? [] : draft.sources,
-    groundingStatus: status, groundingIssues: [...new Set(issues)], reviewInputTokens,
+    doseSafety, groundingStatus: status, groundingIssues: [...new Set(issues)], reviewInputTokens,
     reviewOutputTokens: reviewTokens, reviewFinishReason };
 };
 
