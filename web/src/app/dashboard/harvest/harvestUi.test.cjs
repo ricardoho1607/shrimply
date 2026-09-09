@@ -1,9 +1,40 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS regression test. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-
+const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
+const finance = fs.readFileSync(path.join(__dirname, '../../../../../shared/financeSync.ts'), 'utf8');
+const loaded = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(finance, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS },
+}).outputText)(loaded, loaded.exports);
+
+test('harvest price and biomass inputs accept whole numbers and hundredths', () => {
+  for (const field of ['price', 'subPrice', 'biomass', 'subBiomass']) {
+    const input = source.match(new RegExp('<input[^>]*value=\\{formData\\.' + field + '\\}[^>]*>'))?.[0];
+    assert.ok(input, field);
+    assert.match(input, /min="0.01"/);
+    assert.match(input, /step="0.01"/, field);
+  }
+});
+
+test('displayed harvest revenue handles omitted sub-grade sales and includes recorded sales', () => {
+  const expression = source.match(/\{formatCurrency\(([^\n]+)\)\}/g)
+    .find(value => value.includes('p.') || value.includes('ponds: [p]'));
+  assert.ok(expression);
+  const calculate = new Function('p', 'record', 'buildHarvestRevenue', 'formatCurrency',
+    'return ' + expression.slice(1, -1));
+  const record = { id: 'h1', date: '2026-09-09' };
+  for (const optional of [{}, { subBiomass: '', subPrice: '' }]) {
+    assert.equal(calculate({ biomass: '100', price: '10.50', ...optional }, record,
+      loaded.exports.buildHarvestRevenue, value => value), 1050);
+  }
+  assert.equal(calculate({ biomass: '100', price: '10', subBiomass: '20', subPrice: '5.25' },
+    record, loaded.exports.buildHarvestRevenue, value => value), 1105);
+});
+
 const styles = fs.readFileSync(path.join(__dirname, 'HarvestPage.module.css'), 'utf8');
 
 test('harvest entry uses a compact scrollable modal with persistent actions', () => {
@@ -44,5 +75,5 @@ test('harvest waits for ponds, cycles, and records before showing counts', () =>
   assert.match(source, /const \[cyclesResolved, setCyclesResolved\] = useState\(false\)/);
   assert.match(source, /const \[harvestRecordsResolved, setHarvestRecordsResolved\] = useState\(false\)/);
   assert.match(source, /const loading = !pondsResolved \|\| !cyclesResolved \|\| !harvestRecordsResolved/);
-  assert.match(source, /if \(loading\) \{[\s\S]*?return \([\s\S]*?aria-label="Loading harvest data"/);
+  assert.match(source, /if \(loading\) \{[\s\S]*?return \([\s\S]*?aria-label=\{copy\('Loading harvest data'\)\}/);
 });

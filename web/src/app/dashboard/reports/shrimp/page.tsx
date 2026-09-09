@@ -17,7 +17,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
+import { filterSamplingReportPonds } from './samplingReportScope';
 import {
   DAY_MS,
   calculatePondMetricsWithHarvest,
@@ -87,6 +87,7 @@ interface Pond {
 
 interface FarmCycle {
   id: string;
+  cycleName?: string;
   status?: 'planning' | 'stocking' | 'active' | 'closing' | 'closed';
 }
 
@@ -114,6 +115,7 @@ type GrowthPoint = {
 };
 
 type GrowthSeries = {
+  id: string;
   label: string;
   color: string;
   data: GrowthPoint[];
@@ -138,7 +140,7 @@ const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
       const startTime = getValidDateTime(pond.docStart) || getValidDateTime(pond.baselineDate) || Math.min(...samplingDates);
 
       if (!Number.isFinite(startTime)) {
-        return { label: pond.pondName, color: colors[idx % colors.length], data: [] };
+        return { id: pond.id, label: pond.pondName, color: colors[idx % colors.length], data: [] };
       }
 
       const data = (pond.samplings || [])
@@ -155,6 +157,7 @@ const buildGrowthSeries = (ponds: Pond[]): GrowthSeries[] => {
         .sort((a, b) => a.x - b.x);
 
       return {
+        id: pond.id,
         label: pond.pondName,
         color: colors[idx % colors.length],
         data
@@ -180,6 +183,7 @@ const calculatePondStats = (pond: Pond, timeZone?: string) => {
   const initialPop = pond.initialPopulation || pond.initialStock || 0;
 
   return {
+    pondId: pond.id,
     pondName: pond.pondName,
     hasGrowthSampling: Boolean(getLatestGrowthSampling(pond)),
     doc: biologicalMetrics.doc,
@@ -293,7 +297,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
         {series.map((item) => {
           const path = item.data.map((point) => `${xScale(point.x)},${yScale(point.y)}`).join(' ');
           return (
-            <g key={item.label}>
+            <g key={item.id}>
               {item.data.length > 1 && (
                 <polyline points={path} fill="none" stroke={item.color} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
               )}
@@ -307,7 +311,7 @@ const GrowthTrajectoryChart = ({ series }: { series: GrowthSeries[] }) => {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px 16px', marginTop: '12px' }}>
         {series.map((item) => (
-          <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
+          <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '7px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>
             <span style={{ width: '9px', height: '9px', borderRadius: '999px', background: item.color }} />
             {item.label}
           </div>
@@ -326,6 +330,7 @@ export default function ShrimpReportsPage() {
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
+  const [cycleScope, setCycleScope] = useState('active');
   const [selectedPondIds, setSelectedPondIds] = useState<string[] | null>(null);
   const [draftPondIds, setDraftPondIds] = useState<string[]>([]);
   const [isPondSelectorOpen, setIsPondSelectorOpen] = useState(false);
@@ -377,12 +382,12 @@ export default function ShrimpReportsPage() {
     return () => unsub();
   }, [company?.id]);
 
-  const activePonds = useMemo(() => filterActiveCyclePonds(ponds, cycles), [ponds, cycles]);
+  const scopedPonds = useMemo(() => filterSamplingReportPonds(ponds, cycles, cycleScope), [ponds, cycles, cycleScope]);
   const selectedPonds = useMemo(() => {
-    if (selectedPondIds === null) return activePonds;
+    if (selectedPondIds === null) return scopedPonds;
     const selectedIds = new Set(selectedPondIds);
-    return activePonds.filter((pond) => selectedIds.has(pond.id));
-  }, [activePonds, selectedPondIds]);
+    return scopedPonds.filter((pond) => selectedIds.has(pond.id));
+  }, [scopedPonds, selectedPondIds]);
   const global = useMemo(() => getGlobalAverages(selectedPonds, company?.timeZone), [selectedPonds, company?.timeZone]);
   const growthSeries = useMemo(() => buildGrowthSeries(selectedPonds), [selectedPonds]);
 
@@ -461,7 +466,9 @@ export default function ShrimpReportsPage() {
         block: 'Main Block',
         technician: user?.name || user?.email?.split('@')[0] || 'Unknown',
         reportDate: new Date().toISOString(),
-        reportPeriod: `Culture Cycle ${new Date().getFullYear()}`,
+        reportPeriod: cycleScope === 'active' ? copy('Active cycles')
+          : cycleScope === 'all' ? copy('All cycles')
+          : cycles.find(cycle => cycle.id === cycleScope)?.cycleName || cycleScope,
         companyName: company?.companyName || 'My Company',
         ponds: pondsForReport,
       };
@@ -496,11 +503,26 @@ export default function ShrimpReportsPage() {
           <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '4px' }}>{copy('Reports')}</div>
           <h1 style={{ fontSize: '24px', lineHeight: '32px', fontWeight: 600, marginBottom: '4px', color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{copy('Shrimp Production Audit')}</h1>
           <p style={{ fontSize: '14px', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {copy('Performance analytics for')} {selectedPonds.length} {copy('of')} {activePonds.length} {copy('active production ponds.')}
+            {copy('Performance analytics for')} {selectedPonds.length} {copy('of')} {scopedPonds.length} {copy('production ponds.')}
           </p>
         </div>
         <div className="sampling-report-actions">
-          <button type="button" className="btn-secondary sampling-pond-trigger" onClick={openPondSelector} disabled={activePonds.length === 0}>
+          <select
+            aria-label={copy('Production cycle')}
+            value={cycleScope}
+            onChange={(event) => {
+              setCycleScope(event.target.value);
+              setSelectedPondIds(null);
+              setDraftPondIds([]);
+              setIsPondSelectorOpen(false);
+            }}
+            style={{ minHeight: '42px', maxWidth: '100%', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: '#FFF', color: 'var(--text-primary)' }}
+          >
+            <option value="active">{copy('Active cycles')}</option>
+            <option value="all">{copy('All cycles')}</option>
+            {cycles.map(cycle => <option key={cycle.id} value={cycle.id}>{cycle.cycleName || cycle.id}</option>)}
+          </select>
+          <button type="button" className="btn-secondary sampling-pond-trigger" onClick={openPondSelector} disabled={scopedPonds.length === 0}>
             <span>{copy('Select ponds')}</span>
             <span className="sampling-pond-count">{selectedPonds.length}</span>
           </button>
@@ -535,7 +557,7 @@ export default function ShrimpReportsPage() {
           <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '18px', display: 'flex', alignItems: 'center', gap: '8px' }}><Waves size={20} /> {copy('Pond Status')}</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {global.stats.map((s: PondStats) => (
-              <div key={s.pondName} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
+              <div key={s.pondId} style={{ padding: '14px', borderRadius: '14px', background: 'var(--bg-mid)', border: '1px solid var(--border)' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
                   <div><div style={{ fontSize: '16px', fontWeight: 600 }}>{s.pondName}</div><div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DOC {s.doc} {copy('days')}</div></div>
                   <div style={{ height: 'fit-content', fontSize: '10px', fontWeight: 600, color: !s.hasGrowthSampling ? 'var(--text-muted)' : s.sr >= 85 ? '#27AE60' : '#E74C3C', background: '#FFF', padding: '6px 10px', borderRadius: '999px', border: '1px solid var(--border)' }}>{copy(s.hasGrowthSampling ? (s.sr >= 85 ? 'EXCELLENT' : 'CRITICAL') : 'Awaiting sampling')}</div>
@@ -571,14 +593,14 @@ export default function ShrimpReportsPage() {
 
             <div className="responsive-modal-body sampling-pond-body">
               <div className="sampling-pond-toolbar">
-                <span>{draftPondIds.length} {copy('of')} {activePonds.length} {copy('selected')}</span>
+                <span>{draftPondIds.length} {copy('of')} {scopedPonds.length} {copy('selected')}</span>
                 <div>
-                  <button type="button" onClick={() => setDraftPondIds(activePonds.map((pond) => pond.id))}>{copy('Select all')}</button>
+                  <button type="button" onClick={() => setDraftPondIds(scopedPonds.map((pond) => pond.id))}>{copy('Select all')}</button>
                   <button type="button" onClick={() => setDraftPondIds([])}>{copy('Clear')}</button>
                 </div>
               </div>
               <div className="sampling-pond-list">
-                {activePonds.map((pond) => {
+                {scopedPonds.map((pond) => {
                   const isSelected = draftPondIds.includes(pond.id);
                   return (
                     <label key={pond.id} className={`sampling-pond-option${isSelected ? ' is-selected' : ''}`}>
@@ -604,6 +626,7 @@ export default function ShrimpReportsPage() {
       <style jsx>{`
         .sampling-report-actions {
           display: flex;
+          flex-wrap: wrap;
           align-items: center;
           gap: 10px;
         }

@@ -25,6 +25,7 @@ import AppDatePicker from './components/forms/AppDatePicker';
 import CycleSelector from './components/forms/CycleSelector';
 import { getOpenFinanceCycles } from '../shared/financeCycleAllocation';
 import { hasFarmPermission } from '../shared/permissions';
+import { buildCogsReport } from '../shared/cogsReport';
 
 type ReportTypeId = 'profit-loss' | 'cogs' | 'cash-flow' | 'transaction-history';
 type ReportType = { id: ReportTypeId; name: string; icon: string; color: string; description: string };
@@ -36,7 +37,7 @@ export default function FinancialReportsPage() {
   const { user, company } = useAuth();
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
-  const { cycles } = usePondStore();
+  const { cycles, ponds, harvestRecords } = usePondStore();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
   const feedAdditiveStore = useFeedAdditiveStore();
 
@@ -188,16 +189,16 @@ export default function FinancialReportsPage() {
   const cycleProductionExpenses = filteredExpenses.filter((expense) => (
     Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
   ));
-  const purchases = feedUsageCost + cycleProductionExpenses
-    .filter((expense) => normalizeCategory(expense.category) === 'Feed')
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const directLabor = cycleProductionExpenses
-    .filter((expense) => normalizeCategory(expense.category) === 'Labor')
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const directMaterials = additiveUsageCost + cycleProductionExpenses
-    .filter((expense) => !['Feed', 'Labor'].includes(normalizeCategory(expense.category)))
-    .reduce((sum, expense) => sum + expense.amount, 0);
-  const totalCOGSInventory = openingInventory + purchases + directLabor + directMaterials - closingInventory; // For COGS Report
+  const cogs = buildCogsReport({
+    ponds, expenses, revenues, harvests: harvestRecords,
+    feedUsage: feedAdditiveStore.feeds.flatMap(feed => feed.usageHistory || []),
+    additiveUsage: feedAdditiveStore.additives.flatMap(additive => additive.usageHistory || []),
+    cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || 'All cycles',
+    startDateKey: cogsStartDateKey, endDateKey: cogsEndDateKey, timeZone: company?.timeZone, normalizeCategory,
+  });
+  const { purchases, directLabor, directMaterials } = cogs;
+  const totalCOGSInventory = openingInventory + cogs.totalProductionCost - closingInventory;
+  const cogsGrossProfit = cogs.revenue - totalCOGSInventory;
 
   // P&L Metrics — use English display names in breakdowns so PDF always shows clean labels
   const cogsCategoryBreakdown: { [key: string]: number } = {};
@@ -325,10 +326,10 @@ export default function FinancialReportsPage() {
           company?.companyName || company?.id || 'Company', openingBalance, operating, investing, financing,
           currencyConfig.code, currencyConfig.symbol), currentLanguage);
       } else if (selectedReportType === 'cogs') {
-        await exportCOGSPDF(prepareCOGSData(selectedPeriod, startDate.toISOString(), endDate.toISOString(),
+        await exportCOGSPDF(prepareCOGSData(selectedPeriod, cogsStartDateKey || startDate.toISOString(), cogsEndDateKey,
           company?.companyName || company?.id || 'Company', openingInventory, purchases, directLabor,
-          directMaterials, closingInventory, revenueTotals.total, cogsCategoryBreakdown,
-          currencyConfig.code, currencyConfig.symbol), currentLanguage);
+          directMaterials, closingInventory, cogs.revenue, cogs.categoryBreakdown,
+          currencyConfig.code, currencyConfig.symbol, cogs.details), currentLanguage);
       } else if (selectedReportType === 'transaction-history') {
         await exportTransactionHistoryPDF(prepareTransactionHistoryData(
           selectedPeriod,
@@ -502,14 +503,15 @@ export default function FinancialReportsPage() {
         {selectedReportType === 'cogs' && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t.financialReports?.inventoryValues || 'Inventory Values'}</Text>
+            <Text style={styles.previewSubtitle}>Feed and additives use consumed costs. Enter only production carry-forward, not unused stock. Zero means no adjustment entered.</Text>
             <View style={styles.inventoryInputs}>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{withSelectedCurrency(t.financialReports?.openingInventory || 'Opening Inventory')}</Text>
+                <Text style={styles.dateLabel}>{withSelectedCurrency('Opening production costs (WIP)')}</Text>
                 <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={openingInventory.toString()} onChangeText={(text) => setOpeningInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>
               <View style={styles.dateInputGroup}>
-                <Text style={styles.dateLabel}>{withSelectedCurrency(t.financialReports?.closingInventory || 'Closing Inventory')}</Text>
+                <Text style={styles.dateLabel}>{withSelectedCurrency('Closing production costs (WIP)')}</Text>
                 <TextInput style={styles.dateInput} placeholder="0" placeholderTextColor="#6b8aa0" keyboardType="numeric"
                   value={closingInventory.toString()} onChangeText={(text) => setClosingInventory(Number(text.replace(/[^0-9]/g, '')) || 0)} />
               </View>
@@ -573,11 +575,11 @@ export default function FinancialReportsPage() {
               </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t.financialReports?.openingInventory || 'Opening Inventory'}</Text>
+                <Text style={styles.summaryLabel}>{'Opening production costs (WIP)'}</Text>
                 <Text style={styles.summaryValue}>{formatCurrency(openingInventory)}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t.financialReports?.purchases || 'Add: Purchases (Feed)'}</Text>
+                <Text style={styles.summaryLabel}>{'Feed consumed and direct feed expenses'}</Text>
                 <Text style={styles.summaryValue}>{formatCurrency(purchases)}</Text>
               </View>
               <View style={styles.summaryRow}>
@@ -589,7 +591,7 @@ export default function FinancialReportsPage() {
                 <Text style={styles.summaryValue}>{formatCurrency(directMaterials)}</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>{t.financialReports?.closingInventory || 'Less: Closing Inventory'}</Text>
+                <Text style={styles.summaryLabel}>{'Less: Closing production costs (WIP)'}</Text>
                 <Text style={styles.summaryValue}>({formatCurrency(closingInventory)})</Text>
               </View>
               <View style={styles.previewDivider} />
@@ -597,27 +599,35 @@ export default function FinancialReportsPage() {
                 <Text style={styles.summaryLabelBold}>{t.financialReports?.totalCOGS || 'Total COGS'}</Text>
                 <Text style={[styles.summaryValueBold, styles.expenseColor]}>{formatCurrency(totalCOGSInventory)}</Text>
               </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Harvested shrimp (kg)</Text>
+                <Text style={styles.summaryValue}>{cogs.details.harvestedKg.toLocaleString(undefined, { maximumFractionDigits: 2 })}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabelBold}>COGS per kg</Text>
+                <Text style={styles.summaryValueBold}>{cogs.details.harvestedKg > 0 ? `${formatCurrency(totalCOGSInventory / cogs.details.harvestedKg)} / kg` : 'N/A'}</Text>
+              </View>
               <View style={styles.previewDivider} />
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.revenue || 'Revenue'}</Text>
-                <Text style={styles.summaryValue}>{formatCurrency(revenueTotals.total)}</Text>
+                <Text style={styles.summaryValue}>{formatCurrency(cogs.revenue)}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.lessCOGS || 'Less: COGS'}</Text>
                 <Text style={styles.summaryValue}>({formatCurrency(totalCOGSInventory)})</Text>
               </View>
               <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabelBold}>{t.financialReports?.grossProfit || 'Gross Profit'}</Text>
-                <Text style={[styles.summaryValueBold, grossProfitPL >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(grossProfitPL))}</Text>
+                <Text style={styles.summaryLabelBold}>{cogsGrossProfit >= 0 ? (t.financialReports?.grossProfit || 'Gross Profit') : 'Gross Loss'}</Text>
+                <Text style={[styles.summaryValueBold, cogsGrossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{formatCurrency(Math.abs(cogsGrossProfit))}</Text>
               </View>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>{t.financialReports?.grossProfitMargin || 'Gross Profit Margin'}</Text>
-                <Text style={[styles.summaryValue, grossProfitPL >= 0 ? styles.revenueColor : styles.expenseColor]}>{revenueTotals.total > 0 ? ((grossProfitPL / revenueTotals.total) * 100).toFixed(2) : '0.00'}%</Text>
+                <Text style={[styles.summaryValue, cogsGrossProfit >= 0 ? styles.revenueColor : styles.expenseColor]}>{cogs.revenue > 0 ? `${((cogsGrossProfit / cogs.revenue) * 100).toFixed(2)}%` : 'N/A'}</Text>
               </View>
-              {Object.keys(cogsCategoryBreakdown).length > 0 && (
+              {Object.keys(cogs.categoryBreakdown).length > 0 && (
                 <View style={styles.breakdownPreview}>
                   <Text style={styles.breakdownTitle}>{t.financialReports?.cogsBreakdown || 'COGS Breakdown'}</Text>
-                  {Object.entries(cogsCategoryBreakdown).map(([category, amount]) => (
+                  {Object.entries(cogs.categoryBreakdown).map(([category, amount]) => (
                     <View key={category} style={styles.breakdownRow}>
                       <Text style={styles.breakdownLabel}>{category}</Text>
                       <Text style={styles.breakdownValue}>{formatCurrency(amount)}</Text>

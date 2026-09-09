@@ -42,6 +42,7 @@ import {
   isHistoricalHarvestRecord,
 } from '../../../../../shared/harvestCycleScope';
 import styles from './HarvestPage.module.css';
+import { getHarvestDoc } from './harvestDoc';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 /* --- Types --------------------------------------------------- */
@@ -78,6 +79,9 @@ interface HarvestRecord {
 }
 
 interface Pond {
+  docStart?: string;
+  baselineDate?: string;
+  baselineDoc?: number;
   id: string;
   pondName: string;
   blockId?: string;
@@ -228,6 +232,9 @@ export default function HarvestPage() {
                 .map(doc => ({
                   id: doc.id,
                   pondName: doc.data().pondName,
+                  docStart: doc.data().docStart,
+                  baselineDate: doc.data().baselineDate,
+                  baselineDoc: doc.data().baselineDoc,
                   blockId: doc.data().blockId,
                   blockName: doc.data().blockName,
                   initialPopulation: doc.data().initialPopulation || 0,
@@ -516,11 +523,7 @@ export default function HarvestPage() {
 
   const totalRevenue = useMemo(() => {
     return visibleHarvestRecords.reduce((total, record) => {
-      return total + record.ponds.reduce((pondTotal, p) => {
-        const main = (parseFloat(p.biomass) || 0) * (parseFloat(p.price) || 0);
-        const sub = (parseFloat(p.subBiomass) || 0) * (parseFloat(p.subPrice) || 0);
-        return pondTotal + main + sub;
-      }, 0);
+      return total + buildHarvestRevenue(record).amount;
     }, 0);
   }, [visibleHarvestRecords]);
 
@@ -691,8 +694,15 @@ export default function HarvestPage() {
                   {record.ponds.map((p, idx) => (
                     <div key={idx} style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)' }}>
                       <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>{p.pondName}</div>
-                      <div style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 600, marginBottom: '10px' }}>
-                        {getHarvestTypeLabel(p)}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
+                        <span style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 600 }}>
+                          {getHarvestTypeLabel(p)}
+                        </span>
+                        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-muted)' }}>
+                          DOC {getHarvestDoc(ponds.find(pond => pond.id === p.pondId
+                            && (!(p.cycleId || record.cycleId) || pond.cycleId === (p.cycleId || record.cycleId))
+                            && (!p.pondCycleId || pond.pondCycleId === p.pondCycleId)), record.date, company?.timeZone) ?? '—'}
+                        </span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -706,7 +716,7 @@ export default function HarvestPage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{t.finance.revenue}</span>
                           <span style={{ fontSize: '13px', fontWeight: 600, color: '#27ae60' }}>
-                            {formatCurrency((parseFloat(p.biomass) * parseFloat(p.price)) + (parseFloat(p.subBiomass) * parseFloat(p.subPrice)))}
+                            {formatCurrency(buildHarvestRevenue({ ...record, ponds: [p] }).amount)}
                           </span>
                         </div>
                       </div>
@@ -811,11 +821,11 @@ export default function HarvestPage() {
                   <div className={`responsive-two-column ${styles.primaryMetrics}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>{t.harvestCycle.mainBiomass}</label>
-                      <input required min="0.01" type="number" step="0.1" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required min="0.01" type="number" step="0.01" value={formData.biomass} onChange={e => setFormData({...formData, biomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--primary)' }}>{t.harvestCycle.mainPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
-                      <input required min="0.01" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required min="0.01" step="0.01" type="number" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
 
@@ -824,7 +834,7 @@ export default function HarvestPage() {
                   <div className={`responsive-card-grid ${styles.secondaryMetrics}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '10px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subBiomass}</label>
-                      <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.1" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required={Boolean(formData.subSize || formData.subPrice)} min="0.01" type="number" step="0.01" value={formData.subBiomass} onChange={e => setFormData({...formData, subBiomass: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subSize}</label>
@@ -832,7 +842,7 @@ export default function HarvestPage() {
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                       <label style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-faint)' }}>{t.harvestCycle.subPrice.replace('{{currency}}', currencyConfig.symbol)}</label>
-                      <input required={Boolean(formData.subBiomass || formData.subSize)} min="0.01" type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
+                      <input required={Boolean(formData.subBiomass || formData.subSize)} min="0.01" step="0.01" type="number" value={formData.subPrice} onChange={e => setFormData({...formData, subPrice: e.target.value})} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--border)', background: '#FFF' }} />
                     </div>
                   </div>
                 </div>

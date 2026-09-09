@@ -47,10 +47,12 @@ export const downloadMobilePdf = async ({
   html,
   filename,
   orientation,
+  compress = false,
 }: {
   html: string;
   filename: string;
   orientation: PdfOrientation;
+  compress?: boolean;
 }) => {
   const html2pdf = ((await import('html2pdf.js')) as { default: Html2PdfFactory }).default;
   const parsed = new DOMParser().parseFromString(html, 'text/html');
@@ -102,6 +104,7 @@ export const downloadMobilePdf = async ({
         windowWidth: pageWidth,
       },
       jsPDF: {
+        compress,
         unit: 'pt',
         format: orientation === 'landscape' ? [792, 612] : [612, 792],
         orientation,

@@ -70,6 +70,7 @@ const outputs = {
   }),
   'mobileCogsReport.ts': buildGenerator({
     sourcePath: 'app/services/cogsExportService.ts',
+    extraImports: `import type { CogsReportDetails } from '../../../../shared/cogsReport';`,
     definitionsStart: 'interface PdfBrandAssets',
     logicStart: 'const formatCurrency',
     exportStart: 'export const exportCOGSPDF',

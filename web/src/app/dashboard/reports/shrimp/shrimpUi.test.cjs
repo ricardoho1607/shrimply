@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports -- Node CommonJS regression test. */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -24,9 +25,9 @@ test('sampling reports scope the dashboard and PDF export to selected ponds', ()
   assert.match(source, /getGlobalAverages\(selectedPonds/);
   assert.match(source, /buildGrowthSeries\(selectedPonds\)/);
   assert.match(source, /selectedPonds\.map\(\(pond\)/);
-  assert.match(source, />Select ponds</);
+  assert.match(source, /copy\('Select ponds'\)/);
   assert.match(source, /role="dialog"/);
-  assert.match(source, />Apply selection</);
+  assert.match(source, /copy\('Apply selection'\)/);
 });
 
 test('pond selector has a visible hover highlight', () => {
@@ -57,4 +58,12 @@ test('ponds without a real growth sampling are not performance-rated', () => {
   assert.match(source, /hasGrowthSampling/);
   assert.match(source, /Awaiting sampling/);
   assert.match(source, /hasGrowthSampling \? \(s\.sr >= 85 \? 'EXCELLENT' : 'CRITICAL'\) : 'Awaiting sampling'/);
+});
+
+
+test('sampling reports expose cycle selection instead of restricting reports to the first open cycle', () => {
+  assert.doesNotMatch(source, /filterActiveCyclePonds/);
+  assert.match(source, /aria-label=\{copy\('Production cycle'\)\}/);
+  assert.match(source, /filterSamplingReportPonds\(ponds, cycles, cycleScope\)/);
+  assert.match(source, /setSelectedPondIds\(null\)/);
 });

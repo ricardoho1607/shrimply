@@ -18,6 +18,8 @@ import {
   useCompanyAdditives,
   useCompanyCycles,
   useCompanyFeeds,
+  useCompanyPonds,
+  useCompanyHarvestRecords,
   useFinanceRecords,
 } from '@/hooks/useDashboardData';
 import { generateCashFlowHTML, type CashFlowData } from '@/lib/generated/mobileCashFlowReport';
@@ -35,6 +37,7 @@ import {
 } from '../../../../../../shared/farmDate';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
+import { buildCogsReport, type CogsPond, type CogsHarvest, type CogsUsage } from '../../../../../../shared/cogsReport';
 
 interface Expense {
   id: string;
@@ -48,6 +51,9 @@ interface Expense {
   paymentType?: string;
   reference?: string;
   timestamp?: number;
+  pondId?: string;
+  pondCycleId?: string;
+  pondAllocations?: { pondId: string; pondCycleId?: string; amount: number }[];
 }
 
 interface Revenue {
@@ -62,10 +68,13 @@ interface Revenue {
   paymentType?: string;
   reference?: string;
   timestamp?: number;
+  pondId?: string;
+  pondCycleId?: string;
+  pondAllocations?: { pondId: string; pondCycleId?: string; amount: number }[];
 }
 
 interface FinanceCycle { id: string; cycleName: string; status?: string }
-interface InventoryUsage { date?: string; cycleId?: string; totalCost?: number }
+type InventoryUsage = CogsUsage;
 interface InventoryItem { id: string; usageHistory?: InventoryUsage[] }
 interface CustomDateRange { startDateKey: string; endDateKey: string }
 
@@ -107,8 +116,10 @@ export default function FinancialReportsPage() {
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FinanceCycle>();
   const { data: feeds, loading: feedsLoading } = useCompanyFeeds<InventoryItem>();
   const { data: additives, loading: additivesLoading } = useCompanyAdditives<InventoryItem>();
+  const { data: ponds, loading: pondsLoading } = useCompanyPonds<CogsPond>();
+  const { data: harvests, loading: harvestsLoading } = useCompanyHarvestRecords<CogsHarvest>();
   const activeCycles = useMemo(() => getOpenFinanceCycles(cycles), [cycles]);
-  const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading;
+  const loading = authLoading || financeLoading || cyclesLoading || feedsLoading || additivesLoading || pondsLoading || harvestsLoading;
   const reportTypes = REPORT_TYPES.map((report) => ({
     ...report,
     name: report.id === 'profit-loss'
@@ -211,6 +222,17 @@ export default function FinancialReportsPage() {
   const cycleProductionExpenses = filteredExpenses.filter((expense) => (
     Boolean(expense.cycleId) && !expense.reference?.startsWith('INVENTORY-')
   ));
+
+  const cogs = buildCogsReport({
+    ponds, expenses, revenues, harvests,
+    feedUsage: feeds.flatMap(feed => feed.usageHistory || []),
+    additiveUsage: additives.flatMap(additive => additive.usageHistory || []),
+    cycleScope, scopeLabel: cycles.find(cycle => cycle.id === cycleScope)?.cycleName || copy('All cycles'),
+    startDateKey: dateRange.startDateKey, endDateKey: dateRange.endDateKey,
+    timeZone: company?.timeZone, normalizeCategory,
+  });
+  const cogsTotal = cogs.totalProductionCost + openingInventory - closingInventory;
+  const cogsGrossProfit = cogs.revenue - cogsTotal;
 
   const totalRevenue = filteredRevenues.reduce((sum, revenue) => sum + revenue.amount, 0);
   const totalExpenses = filteredExpenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -335,33 +357,11 @@ export default function FinancialReportsPage() {
         html = generateCashFlowHTML(data, brandAssets, currentLanguage);
         filename = `Cash_Flow_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       } else if (selectedReport === 'cogs') {
-        const purchases = feedUsageCost + cycleProductionExpenses
-          .filter((expense) => normalizeCategory(expense.category) === 'Feed')
-          .reduce((sum, expense) => sum + expense.amount, 0);
-        const directLabor = cycleProductionExpenses
-          .filter((expense) => normalizeCategory(expense.category) === 'Labor')
-          .reduce((sum, expense) => sum + expense.amount, 0);
-        const directMaterials = additiveUsageCost + cycleProductionExpenses
-          .filter((expense) => !['Feed', 'Labor'].includes(normalizeCategory(expense.category)))
-          .reduce((sum, expense) => sum + expense.amount, 0);
-        const cogsBreakdown: Record<string, number> = {};
-        if (feedUsageCost) cogsBreakdown[t.financeCycle.feedUsage] = feedUsageCost;
-        if (additiveUsageCost) cogsBreakdown[t.financeCycle.additiveUsage] = additiveUsageCost;
-        cycleProductionExpenses.forEach((expense) => addBreakdown(cogsBreakdown, expense.category, expense.amount));
         const data = prepareCOGSData(
-          selectedPeriod,
-          startDate,
-          endDate,
-          companyName,
-          openingInventory,
-          purchases,
-          directLabor,
-          directMaterials,
-          closingInventory,
-          totalRevenue,
-          cogsBreakdown,
-          currencyConfig.code,
-          currencyConfig.symbol,
+          selectedPeriod, dateRange.startDateKey || startDate, dateRange.endDateKey || endDate,
+          companyName, openingInventory, cogs.purchases, cogs.directLabor, cogs.directMaterials,
+          closingInventory, cogs.revenue, cogs.categoryBreakdown,
+          currencyConfig.code, currencyConfig.symbol, cogs.details,
         );
         html = generateCOGSHTML(data, brandAssets, currentLanguage);
         filename = `COGS_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
@@ -381,7 +381,7 @@ export default function FinancialReportsPage() {
         filename = `Transaction_Register_${selectedPeriod.replace(/\s+/g, '_')}.pdf`;
       }
 
-      await downloadMobilePdf({ html, filename, orientation: 'portrait' });
+      await downloadMobilePdf({ html, filename, orientation: 'portrait', compress: selectedReport === 'cogs' });
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
@@ -425,9 +425,10 @@ export default function FinancialReportsPage() {
           {selectedReport === 'cogs' ? (
             <div className="glass-card" style={{ padding: '20px', background: '#FFF' }}>
               <h2 style={{ fontSize: '16px', fontWeight: 600, marginBottom: '16px' }}>{t.financeCycle.inventoryAdjustment}</h2>
+              <p style={{ fontSize: '12px', lineHeight: 1.5, color: 'var(--text-muted)', marginBottom: '12px' }}>{copy('Feed and additives use consumed costs. Enter only production costs carried forward, not unused feed or material stock. Zero means no adjustment entered.')}</p>
               <div className="financial-inventory-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', gap: '14px' }}>
-                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Opening Inventory')} ({currencyConfig.symbol})<input type="number" value={openingInventory} onChange={(event) => setOpeningInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
-                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Closing Inventory')} ({currencyConfig.symbol})<input type="number" value={closingInventory} onChange={(event) => setClosingInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
+                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Opening production costs (WIP)')} ({currencyConfig.symbol})<input type="number" min="0" step="0.01" value={openingInventory} onChange={(event) => setOpeningInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
+                <label style={{ minWidth: 0, fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Closing production costs (WIP)')} ({currencyConfig.symbol})<input type="number" min="0" step="0.01" value={closingInventory} onChange={(event) => setClosingInventory(Number(event.target.value))} className="form-input" placeholder="0" style={{ width: '100%', maxWidth: '100%', marginTop: '8px' }} /></label>
               </div>
             </div>
           ) : null}
@@ -443,6 +444,18 @@ export default function FinancialReportsPage() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.moneyIn}</span><span style={{ fontWeight: 600, color: 'var(--success)' }}>{formatCurrency(totalRevenue)}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: '16px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{t.financialReports.moneyOut}</span><span style={{ fontWeight: 600, color: 'var(--error)' }}>{formatCurrency(totalExpenses)}</span></div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: '8px' }}><span style={{ fontWeight: 600 }}>{t.financialReports.netMovement}</span><span style={{ fontWeight: 600, fontSize: '20px', color: previewProfit >= 0 ? 'var(--success)' : 'var(--error)' }}>{formatCurrency(previewProfit)}</span></div>
+                </>
+              ) : selectedReport === 'cogs' ? (
+                <>
+                  {[
+                    { label: 'Revenue', value: formatCurrency(cogs.revenue) },
+                    { label: 'Cost of Goods Sold', value: formatCurrency(cogsTotal) },
+                    { label: 'Harvested shrimp (kg)', value: cogs.details.harvestedKg.toLocaleString(undefined, { maximumFractionDigits: 2 }) },
+                    { label: 'COGS per kg', value: cogs.details.harvestedKg > 0 ? `${formatCurrency(cogsTotal / cogs.details.harvestedKg)} / kg` : 'N/A' },
+                    { label: cogsGrossProfit >= 0 ? 'Gross Profit' : 'Gross Loss', value: formatCurrency(Math.abs(cogsGrossProfit)) },
+                    { label: 'Gross Profit Margin', value: cogs.revenue > 0 ? `${(cogsGrossProfit / cogs.revenue * 100).toFixed(2)}%` : 'N/A' },
+                  ].map(metric => <div key={metric.label} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', paddingBottom: '12px', borderBottom: '1px solid var(--border)' }}><span style={{ color: 'var(--text-muted)' }}>{copy(metric.label)}</span><strong>{metric.value}</strong></div>)}
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{copy('Pond costs and revenue reconciliation are included in the PDF.')}</p>
                 </>
               ) : (
                 <>
