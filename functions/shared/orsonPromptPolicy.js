@@ -1,6 +1,9 @@
 'use strict';
 
+const { ORSON_NITROGEN_SAFETY_RULES } = require('./orsonNitrogenSafety');
+
 const ORSON_EVIDENCE_PROMPT_RULES = [
+  ...ORSON_NITROGEN_SAFETY_RULES,
   'Treat observations, deterministic calculations, risk findings, and diagnostic hypotheses as different evidence types. Do not present an estimate or hypothesis as a measurement.',
   'Use farm dates, source IDs, units, analyte bases, sample counts, comparison windows, and limitations from diagnostic_context when they are available.',
   'For an explicit multi-week request, read diagnostic_context.history.extended_daily when provided. Its dates define the extended window; standard comparisons retain their separately labelled windows.',

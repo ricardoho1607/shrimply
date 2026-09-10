@@ -178,7 +178,7 @@ export const runHarvestCalculationsSelfTest = () => {
     throw new Error('completed-cycle calibration should improve biomass confidence');
   }
 
-  const robustAdg = calculateAdg({
+  const latestIntervalAdg = calculateAdg({
     docStart: '2026-07-01',
     initialWeight: 0.5,
     samplings: [
@@ -188,7 +188,7 @@ export const runHarvestCalculationsSelfTest = () => {
       { date: '2026-08-10', mbw: 16.5 },
     ],
   });
-  assertClose(robustAdg, 0.2, 'ADG uses a robust recent trend instead of one outlier');
+  assertClose(latestIntervalAdg, 1, 'sampling ADG uses the latest interval even when it differs from the older trend');
 
   const taperedMbw = projectMbwWithTapering(8, 0.3, 14, 50);
   if (taperedMbw <= 8 || taperedMbw >= 12.2) {

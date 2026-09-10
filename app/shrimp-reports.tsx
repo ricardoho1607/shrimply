@@ -12,7 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { usePondStore, type Pond, getPondCurrentDoc, getPondPlSupplier, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
-import { DAY_MS, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
+import { DAY_MS, calculateSamplingAdg, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
 import { hasFarmPermission } from '../shared/permissions';
 
 const isAndroid = Platform.OS === 'android';
@@ -69,7 +69,7 @@ export default function ShrimpReportsScreen() {
           doc: samplingDoc,
           mbw: currentMbw,
           abw: currentMbw,
-          adg: metricsToDate.adg,
+          adg: calculateSamplingAdg(snapshot, sampling, company?.timeZone) ?? 0,
           size: currentMbw > 0 ? 1000 / currentMbw : 0,
           sr: metricsToDate.adjustedSR,
           biomass: metricsToDate.currentBiomass,

@@ -12,7 +12,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { usePondStore, type Pond, type Sampling, type MortalityRecord, getActiveFarmCycle, getPhysicalPondKey, getPondCurrentDoc, getPondCycleStatus, getPondPlSupplier, getPondTotalFeedConsumed, isBaselineSampling, isPondCycleActive } from './store/pondStore';
 import { useLanguage } from './../context/LanguageContext';
 import { useAuth } from './../context/AuthContext';
-import { calculatePondMortalityForDate, detectFeedBiomassMismatchInsight, getSamplingMbw, type MortalityObservationType } from '../shared/pondCalculations';
+import { calculateSamplingAdg, calculatePondMortalityForDate, detectFeedBiomassMismatchInsight, getSamplingMbw, type MortalityObservationType } from '../shared/pondCalculations';
 import { 
   collection, 
   query, 
@@ -569,75 +569,11 @@ export default function PondDetails() {
 
     const calculateSize = (mbw: number) => (1000 / mbw).toFixed(0);
 
-    const calculateADG = (
-      currentMBW: number, 
-      previousMBW: number, 
-      daysDiff: number
-    ) => !previousMBW || daysDiff === 0 
-      ? 0 
-      : (currentMBW - previousMBW) / daysDiff;
-
     const getADGData = () => {
-      const pondSampling = getPondSamplingData()
-        .filter((s: Sampling) => 
-          !isBaselineSampling(s) && (Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-        )
-        .sort((a: Sampling, b: Sampling) => 
-          new Date(a.date).getTime() - new Date(b.date).getTime()
-        );
-      const baselineSampling = getPondSamplingData()
-        .filter(isBaselineSampling)
-        .sort((a: Sampling, b: Sampling) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-      
-      if (pondSampling.length === 0) return { last: 0, average: 0 };
-      
-      let totalADG = 0;
-      let adgCount = 0;
-      let lastADG = 0;
-
-      if (pondSampling.length >= 1) {
-        const previousWeight = baselineSampling?.mbw || pond.initialWeight || 0.5;
-        const previousDate = baselineSampling?.date || pond.docStart;
-        const daysDiff = Math.abs(
-          (new Date(pondSampling[0].date).getTime() - 
-           new Date(previousDate).getTime()) / (1000 * 60 * 60 * 24)
-        );
-        
-        if (daysDiff > 0) {
-          const adg = calculateADG(
-            pondSampling[0].mbw, 
-            previousWeight,
-            daysDiff
-          );
-          totalADG += adg;
-          adgCount++;
-          if (pondSampling.length === 1) lastADG = adg;
-        }
-      }
-
-      for (let i = 1; i < pondSampling.length; i++) {
-        const daysDiff = Math.abs(
-          (new Date(pondSampling[i].date).getTime() - 
-           new Date(pondSampling[i - 1].date).getTime()) / 
-           (1000 * 60 * 60 * 24)
-        );
-        
-        if (daysDiff > 0) {
-          const adg = calculateADG(
-            pondSampling[i].mbw, 
-            pondSampling[i - 1].mbw, 
-            daysDiff
-          );
-          totalADG += adg;
-          adgCount++;
-          lastADG = adg;
-        }
-      }
-
-      return {
-        last: lastADG,
-        average: adgCount > 0 ? totalADG / adgCount : 0
-      };
+      const intervals = getPondSamplingData()
+        .map(sampling => calculateSamplingAdg(pond, sampling, company?.timeZone))
+        .filter((adg): adg is number => adg !== null);
+      return { average: intervals.length ? intervals.reduce((sum, adg) => sum + adg, 0) / intervals.length : 0 };
     };
 
     const getTotalFeedData = () => getPondTotalFeedConsumed(pond);

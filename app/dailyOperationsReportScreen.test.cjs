@@ -1,3 +1,4 @@
+/* global __dirname */
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -12,10 +13,10 @@ test('daily operations report owns a top-safe custom header', () => {
   assert.match(source, /<View style=\{styles\.header\}>/);
 });
 
-test('mobile daily report follows the farm date until the user selects a different day', () => {
-  assert.match(source, /const today = useFarmDateKey\(company\?\.timeZone\)/);
-  assert.match(source, /current === previousToday\.current \? today : current/);
-  assert.match(source, /timeZone: company\?\.timeZone/);
+test('mobile daily report defaults in the resolved farm timezone and keeps selected calendar dates', () => {
+  assert.match(source, /const today = useFarmDateKey\(timeZone\)/);
+  assert.match(source, /const reportDate = selectedDate \?\? today/);
+  assert.match(source, /getFarmDateKey\(date, getSystemTimeZone\(\)\)/);
 });
 
 test('daily operations labels are wired into every app and web locale', () => {

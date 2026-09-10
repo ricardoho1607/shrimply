@@ -451,49 +451,54 @@ export const getLatestGrowthSampling = (pond: Pick<SharedPond, 'samplings'>): Sh
     .reverse()
     .find((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
 
-export const calculateAdg = (
-  pond: Pick<SharedPond, 'docStart' | 'initialWeight' | 'baselineMbw' | 'samplings'>,
-): number => {
-  const sorted = sortByDateAsc(pond.samplings || []);
-  const validOperational = sorted.filter((sampling) => !isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0);
+type GrowthPond = Pick<SharedPond, 'docStart' | 'initialWeight' | 'baselineDate' | 'baselineMbw' | 'samplings'>;
 
-  if (!validOperational.length) return 0;
+const datedGrowthSamplings = (pond: GrowthPond, timeZone?: string) => (pond.samplings || [])
+  .flatMap(sampling => {
+    const date = normalizeFarmDateKey(sampling.date, timeZone);
+    return date && getSamplingMbw(sampling) > 0 ? [{ sampling, date }] : [];
+  })
+  .sort((a, b) => a.date.localeCompare(b.date) || (getValidTime(a.sampling.date) ?? 0) - (getValidTime(b.sampling.date) ?? 0));
 
-  const currentSampling = validOperational[validOperational.length - 1];
-  const currentSamplingTime = getValidTime(currentSampling.date);
-  if (currentSamplingTime === null) return 0;
+/** Measured interval ADG for one sampling; daily feed/water logs are not growth samples. */
+export const calculateSamplingAdg = (
+  pond: GrowthPond,
+  sampling: SharedSampling,
+  timeZone?: string,
+): number | null => {
+  const currentDate = normalizeFarmDateKey(sampling.date, timeZone);
+  const currentWeight = getSamplingMbw(sampling);
+  if (!currentDate || currentWeight <= 0 || isBaselineSampling(sampling)) return null;
 
-  if (validOperational.length >= 2) {
-    const recent = validOperational.slice(-5);
-    const intervalGrowth = recent.slice(1).map((sampling, index) => {
-      const previous = recent[index];
-      const currentTime = getValidTime(sampling.date);
-      const previousTime = getValidTime(previous.date);
-      if (currentTime === null || previousTime === null) return null;
-      const daysDiff = (currentTime - previousTime) / DAY_MS;
-      if (daysDiff <= 0) return null;
-      return (getSamplingMbw(sampling) - getSamplingMbw(previous)) / daysDiff;
-    }).filter((growth): growth is number => growth !== null && Number.isFinite(growth));
+  // Use the previous distinct farm date, never another record on the same day.
+  const earlier = datedGrowthSamplings(pond, timeZone).filter(item => item.date < currentDate).reverse();
+  const previous = earlier.find(item => !isBaselineSampling(item.sampling)) || earlier.find(item => isBaselineSampling(item.sampling));
+  const baselineDate = normalizeFarmDateKey(pond.baselineDate, timeZone);
+  const useBaseline = !previous && baselineDate && baselineDate < currentDate && toFiniteNumber(pond.baselineMbw) > 0;
+  const previousDate = previous?.date || (useBaseline ? baselineDate : normalizeFarmDateKey(pond.docStart, timeZone));
+  const previousWeight = previous ? getSamplingMbw(previous.sampling)
+    : useBaseline ? toFiniteNumber(pond.baselineMbw) : Math.max(0, toFiniteNumber(pond.initialWeight)) || 0.5;
+  if (!previousDate) return null;
+  const daysDiff = differenceInFarmCalendarDays(currentDate, previousDate);
+  if (daysDiff <= 0) return null;
+  return (currentWeight - previousWeight) / daysDiff;
+};
 
-    if (intervalGrowth.length) return median(intervalGrowth);
-  }
+/** Current ADG is the latest measured interval, not an average or smoothed trend. */
+export const calculateAdg = (pond: GrowthPond, timeZone?: string): number => {
+  const current = datedGrowthSamplings(pond, timeZone).reverse().find(item => !isBaselineSampling(item.sampling));
+  return current ? calculateSamplingAdg(pond, current.sampling, timeZone) ?? 0 : 0;
+};
 
-  const baselineSampling = [...sorted]
-    .reverse()
-    .find((sampling) => isBaselineSampling(sampling) && getSamplingMbw(sampling) > 0 && (getValidTime(sampling.date) ?? Infinity) < currentSamplingTime);
-  const previousOperational = [...validOperational]
-    .reverse()
-    .find((sampling) => (getValidTime(sampling.date) ?? Infinity) < currentSamplingTime);
-  const previousSampling = previousOperational || baselineSampling;
-  const previousWeight = previousSampling ? getSamplingMbw(previousSampling) : getPondInitialWeight(pond);
-  const previousDate = previousSampling?.date || pond.docStart;
-  const previousTime = getValidTime(previousDate);
-
-  if (previousTime === null) return 0;
-  const daysDiff = (currentSamplingTime - previousTime) / DAY_MS;
-  if (daysDiff <= 0) return 0;
-
-  return (getSamplingMbw(currentSampling) - previousWeight) / daysDiff;
+/** Separate forecast trend; never display this as a sampling's measured ADG. */
+export const calculateSmoothedAdg = (pond: GrowthPond, timeZone?: string): number => {
+  const daily = new Map(datedGrowthSamplings(pond, timeZone)
+    .filter(item => !isBaselineSampling(item.sampling)).map(item => [item.date, item]));
+  const recent = [...daily.values()].slice(-5);
+  const intervals = recent.slice(1).map((current, i) =>
+    (getSamplingMbw(current.sampling) - getSamplingMbw(recent[i].sampling))
+      / differenceInFarmCalendarDays(current.date, recent[i].date));
+  return intervals.length ? median(intervals) : calculateAdg(pond, timeZone);
 };
 
 interface MortalityModel {
@@ -837,7 +842,7 @@ export const calculatePondMetricsWithHarvest = (
     biomassGainFCR: Math.max(0, biomassGainFCR),
     latestMbw,
     size: latestMbw > 0 ? Math.round(1000 / latestMbw) : 0,
-    adg: calculateAdg(pond),
+    adg: calculateAdg(pond, timeZone),
     doc: currentDoc,
     totalMortality,
     totalMortalityWeight,

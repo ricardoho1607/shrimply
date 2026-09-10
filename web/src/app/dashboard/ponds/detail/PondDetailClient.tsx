@@ -48,6 +48,7 @@ import { auth, db } from '@/lib/firebase';
 import { resolveCompanyPhysicalPond } from '@/lib/physicalPondIdentity';
 import { PHYSICAL_POND_LINK_ERROR } from '../../../../../../shared/physicalPondIdentity';
 import {
+  calculateSamplingAdg,
   calculatePondMortalityForDate,
   calculatePondMetricsWithHarvest,
   detectFeedBiomassMismatchInsight,
@@ -1133,16 +1134,7 @@ export default function PondDetailClient() {
                     .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 8)
                     .map((s: any, i: number) => {
-                      const validMbwSamplings = (pond.samplings || [])
-                        .filter((sampling) => getSamplingMbw(sampling) > 0 && new Date(sampling.date).getTime() < new Date(s.date).getTime())
-                        .sort((first, second) => new Date(second.date).getTime() - new Date(first.date).getTime());
-                      const previousSampling = validMbwSamplings[0];
-                      const previousWeight = previousSampling ? getSamplingMbw(previousSampling) : Number(pond.initialWeight || 0.5);
-                      const previousDate = previousSampling?.date || pond.docStart;
-                      const daysDiff = (new Date(s.date).getTime() - new Date(previousDate).getTime()) / (24 * 60 * 60 * 1000);
-                      const samplingAdg = Number(s.mbw) > 0 && daysDiff > 0
-                        ? (Number(s.mbw) - previousWeight) / daysDiff
-                        : null;
+                      const samplingAdg = calculateSamplingAdg(pond, s, company?.timeZone);
 
                       return (
                       <tr key={i} style={{ borderBottom: '1px solid var(--border)', transition: 'all 0.2s' }} className="hover-row">

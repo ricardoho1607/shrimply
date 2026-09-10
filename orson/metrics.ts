@@ -19,6 +19,7 @@ import { buildPondDiagnosticContext, selectDiagnosticRecords } from './diagnosti
 import { shiftDateKey } from '../shared/farmDate';
 import {
   calculateAdg as calculateSharedAdg,
+  calculateSmoothedAdg,
   calculatePondMetricsWithHarvest,
   detectFeedBiomassMismatchInsight,
   getFeedRateFromMbw,
@@ -456,7 +457,7 @@ export const calculatePondMetrics = (
     latestMbwG: hasNumber(latestMbwG) ? round(latestMbwG) : null,
     latestMbwDate: latestMbw?.record.date ?? null,
     adgGPerDay: sharedAdg,
-    smoothedAdgGPerDay: sharedAdg,
+    smoothedAdgGPerDay: hasGrowthInterval ? round(calculateSmoothedAdg(sharedPond)) : null,
     growthConfidence: cleanMbwPoints.length < 2 ? 'low' : mbwOutlierDates.length > 0 || cleanMbwPoints.length < 3 ? 'medium' : 'high',
     growthEvidence,
     mbwOutlierDates,

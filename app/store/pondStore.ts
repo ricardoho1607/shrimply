@@ -91,10 +91,12 @@ export interface Sampling {
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: 'midcycle_onboarding' | string;
   estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
-  phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string; transparency?: string; salinity?: string;
-  temperature?: string;
-  waterAppearance?: string;
-  waterDepthCm?: string;
+  phMorning?: string; phEvening?: string; doMorning?: string; doEvening?: string;
+  transparency?: string; transparencyMorning?: string; transparencyEvening?: string;
+  salinity?: string;
+  temperature?: string; temperatureMorning?: string; temperatureEvening?: string;
+  waterAppearance?: string; waterAppearanceMorning?: string; waterAppearanceEvening?: string;
+  waterDepthCm?: string; waterDepthCmMorning?: string; waterDepthCmEvening?: string;
   alkalinity?: string;
   waterQualityRecordedByName?: string;
   ammonia?: string;

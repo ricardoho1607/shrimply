@@ -2,6 +2,7 @@ const { createOrsonAppDataReader } = require('./shared/orsonAppData');
 const { fetchLabelPage } = require('./shared/orsonLabelEvidence');
 const { loadDosingContext } = require('./shared/orsonDosingContext');
 const { classifyDosingRequest, guardModelDosingAnswer } = require('./shared/orsonDosingSafety');
+const { guardOrsonNitrogenAnswer } = require('./shared/orsonNitrogenSafety');
 const { buildVerifiedInventoryAnswer } = require('./shared/orsonProductVerification');
 const { isTreatmentQuestion, needsInventoryContext, INVENTORY_DOSING_RULES } = require('./shared/orsonInventoryPolicy');
 const { canonicalLabValue, labMeasurementWarnings, validateLabRow } = require('./shared/labMeasurementContract');
@@ -762,6 +763,9 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     }
     const dosingReviewStartedAt = Date.now();
     if (!verificationRequest && generated.doseSafety !== "no_application_guidance") generated = await guardModelDosingAnswer({ answer: generated, question: userMessage, generate: safetyGenerate });
+    // Validate the final text, including editor rewrites and verified inventory answers,
+    // before either streaming chunks or returning a cacheable result.
+    generated = await guardOrsonNitrogenAnswer({ answer: generated, question: userMessage, prompt: groundedPrompt, generate: safetyGenerate });
     const dosingReviewMs = Date.now() - dosingReviewStartedAt;
     let { text } = generated;
     const sources = generated.sources;
@@ -791,6 +795,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       inputTokens: generated.inputTokens,
       outputTokens: generated.outputTokens,
       groundingStatus: generated.groundingStatus,
+      nitrogenSafety: generated.nitrogenSafety,
       groundingIssues: generated.groundingIssues,
       reviewInputTokens: generated.reviewInputTokens,
       reviewOutputTokens: generated.reviewOutputTokens,
@@ -809,7 +814,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     } catch (costError) {
       console.warn("orson_cost_record_failed", { companyId, error: costError.message });
     }
-    return { text, finishReason: generated.finishReason, groundingStatus: generated.groundingStatus, safeToCache: !verificationRequest && !generated.toolEvidence && generated.doseSafety === "no_application_guidance" };
+    return { text, finishReason: generated.finishReason, groundingStatus: generated.groundingStatus, safeToCache: !verificationRequest && !generated.toolEvidence && generated.doseSafety === "no_application_guidance" && generated.nitrogenSafety !== "withheld" };
   } catch (error) {
     console.error("Orson response generation failed:", { error, totalMs: Date.now() - requestStartedAt, route: questionRoute });
     throw new HttpsError("internal", "Orson could not generate a response right now.");

@@ -12,6 +12,7 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
 import { differenceInFarmCalendarDays, getFarmDateKey } from '../../shared/farmDate';
+import { calculateAdg } from '../../shared/pondCalculations';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 import { hasFarmPermission } from '../../shared/permissions';
 import { getEnterpriseStockingDateRange } from '../../shared/enterpriseCycleSetup';
@@ -448,46 +449,8 @@ export default function PondManagementScreen() {
 
   const getLastADG = useCallback((pondId: string): number => {
     const pond = accessiblePonds.find(p => p.id === pondId);
-    if (!pond) return 0;
-    
-    const samples = (pond.samplings || [])
-      .filter((sample) => !isBaselineSampling(sample))
-      .filter((sample) => Number(sample.mbw) > 0)
-      .sort(
-      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-    );
-
-    const baselineSampling = (pond.samplings || [])
-      .filter(isBaselineSampling)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
-
-    if (!samples.length) return 0;
-
-    const getTimeDiff = (date1: string, date2: string) => {
-      const diff = new Date(date1).getTime() - new Date(date2).getTime();
-      return diff / (1000 * 60 * 60 * 24);
-    };
-
-    const currentSampling = samples[samples.length - 1];
-    const currentSamplingTime = new Date(currentSampling.date).getTime();
-    const baselineSamplingTime = baselineSampling ? new Date(baselineSampling.date).getTime() : Number.NaN;
-    const validBaselineSampling = baselineSampling &&
-      Number.isFinite(baselineSamplingTime) &&
-      baselineSamplingTime < currentSamplingTime
-      ? baselineSampling
-      : undefined;
-    const previousSampling = [...samples]
-      .reverse()
-      .find((sample) => new Date(sample.date).getTime() < currentSamplingTime) || validBaselineSampling;
-    const currentWeight = Number(currentSampling.mbw);
-    const previousWeight = Number(previousSampling?.mbw ?? pond.initialWeight ?? 0.5);
-    const previousDate = previousSampling?.date || pond.docStart;
-    const daysDiff = getTimeDiff(currentSampling.date, previousDate);
-    
-    if (isNaN(currentWeight) || isNaN(previousWeight) || daysDiff <= 0) return 0;
-    const adg = (currentWeight - previousWeight) / daysDiff;
-    return isNaN(adg) ? 0 : adg;
-  }, [accessiblePonds]);
+    return pond ? calculateAdg(pond, company?.timeZone) : 0;
+  }, [accessiblePonds, company?.timeZone]);
 
   const calculateMetrics = useCallback((pond: Pond) => {
     const metrics = calculatePondMetricsWithHarvest(pond);

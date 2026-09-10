@@ -32,6 +32,9 @@ test('Vercel includes shared client contracts and excludes backend secrets and c
   const pricingCatalogue = 'functions/shared/companyPlans.js';
   assert.ok(fs.existsSync(path.join(repositoryRoot, pricingCatalogue)));
   assert.equal(excluded.ignores(pricingCatalogue), false, 'The public pricing catalogue must reach the web build');
+  const nitrogenPolicy = 'functions/shared/orsonNitrogenSafety.js';
+  assert.ok(fs.existsSync(path.join(repositoryRoot, nitrogenPolicy)));
+  assert.equal(excluded.ignores(nitrogenPolicy), false, 'The nitrogen dependency of orsonPromptPolicy must reach the web build');
   for (const file of ['.env', '.env.local', 'web/.env.production', '.secret.local', 'functions/.secret.local', 'functions/.env', 'functions/orson.js', 'functions/node_modules/example/index.js', 'functions/shared/metaModelApi.js']) {
     assert.equal(excluded.ignores(file), true, `${file} must stay out of the web deployment`);
   }

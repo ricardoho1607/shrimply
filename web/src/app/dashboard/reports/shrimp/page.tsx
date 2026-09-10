@@ -23,6 +23,7 @@ import { reportCalculationOptions, buildPondReportSnapshot, type ReportHarvest }
 import { filterSamplingReportPonds } from './samplingReportScope';
 import {
   DAY_MS,
+  calculateSamplingAdg,
   calculatePondMetricsWithHarvest,
   getLatestGrowthSampling,
   getSamplingMbw,
@@ -439,7 +440,7 @@ export default function ShrimpReportsPage() {
             doc: metricsToDate.doc,
             mbw,
             abw: mbw,
-            adg: metricsToDate.adg,
+            adg: calculateSamplingAdg(snapshot, sampling, company?.timeZone) ?? 0,
             size: mbw > 0 ? 1000 / mbw : 0,
             sr: metricsToDate.adjustedSR,
             biomass: metricsToDate.currentBiomass,

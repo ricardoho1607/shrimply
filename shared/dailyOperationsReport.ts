@@ -369,7 +369,7 @@ export const buildDailyOperationsReport = ({
 }): DailyOperationsReportData => {
   const sourcePonds = Array.isArray(ponds) ? ponds : [];
   const warnings: string[] = [];
-  const safeDate = dateKey(reportDate) || String(reportDate || '').trim();
+  const safeDate = dateKey(reportDate, timeZone);
   const safePonds = sourcePonds.flatMap(pond => {
     if (!harvests) return [pond];
     try {
@@ -430,8 +430,8 @@ export const generateDailyOperationsReportHTML = (
     vi: 'vi-VN',
     zh: 'zh-CN',
   };
-  const reportDate = new Date(`${data.reportDate}T00:00:00`).toLocaleDateString(localeByLanguage[language], {
-    day: '2-digit', month: 'long', year: 'numeric',
+  const reportDate = new Date(`${data.reportDate}T00:00:00Z`).toLocaleDateString(localeByLanguage[language], {
+    timeZone: 'UTC', day: '2-digit', month: 'long', year: 'numeric',
   });
   const printViewportWidth = useIosPrintLayout ? 1000 : 1056;
   const printPageSize = useIosPrintLayout ? '792px 612px' : '11in 8.5in';

@@ -617,7 +617,7 @@ export const buildOrsonCacheKey = (
     findings: payload.findings.map((finding) => finding.id),
     outlook: payload.outlook.direction,
   }))));
-  return `orson_general_v4_${hashString(normalizedQuestion)}_${contextHash}`;
+  return `orson_general_v5_${hashString(normalizedQuestion)}_${contextHash}`;
 };
 
 export const buildOrsonPromptPayload = (

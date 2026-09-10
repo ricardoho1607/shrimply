@@ -79,11 +79,24 @@ export const normalizeFarmDateKey = (
 
   if (typeof value === 'string') {
     const trimmed = value.trim();
-    if (DATE_KEY_PATTERN.test(trimmed)) return trimmed;
+    if (DATE_KEY_PATTERN.test(trimmed)) {
+      const parsed = new Date(`${trimmed}T00:00:00Z`);
+      return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === trimmed ? trimmed : null;
+    }
   }
 
-  const parsed = value instanceof Date ? value : new Date(value as string | number);
-  return Number.isFinite(parsed.getTime()) ? getFarmDateKey(parsed, timeZone) : null;
+  // Firestore snapshots can contain live Timestamp instances or serialized timestamps.
+  try {
+    let parsed: Date;
+    if (value instanceof Date) parsed = value;
+    else if (typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function') parsed = value.toDate();
+    else if (typeof value === 'object' && 'seconds' in value && typeof value.seconds === 'number') parsed = new Date(value.seconds * 1000);
+    else if (typeof value === 'string' || typeof value === 'number') parsed = new Date(value);
+    else return null;
+    return parsed instanceof Date && Number.isFinite(parsed.getTime()) ? getFarmDateKey(parsed, timeZone) : null;
+  } catch {
+    return null;
+  }
 };
 
 const dateKeyToUtcDay = (dateKey: string): number | null => {

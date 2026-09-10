@@ -1,7 +1,7 @@
 import { pondExistsOnReportDate } from '../shared/reportSnapshots';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -15,7 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
-import { getFarmDateKey } from '../shared/farmDate';
+import { getFarmDateKey, getSystemTimeZone, resolveFarmTimeZone } from '../shared/farmDate';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 import {
   buildDailyOperationsReport,
@@ -60,9 +60,10 @@ export default function DailyOperationsReportScreen() {
   }, [currentLanguage, localeCopy, t?.dailyOperationsReports]);
   const harvests = usePondStore((state) => state.harvestRecords);
   const ponds = usePondStore((state) => state.ponds);
-  const today = useFarmDateKey(company?.timeZone);
-  const [reportDate, setReportDate] = useState(today);
-  const previousToday = useRef(today);
+  const timeZone = resolveFarmTimeZone(company?.timeZone, getSystemTimeZone());
+  const today = useFarmDateKey(timeZone);
+  const [selectedDate, setReportDate] = useState<string | null>(null);
+  const reportDate = selectedDate ?? today;
   const [activeTab, setActiveTab] = useState<ReportTab>('sipon');
   const [selectedBlock, setSelectedBlock] = useState('all');
   const [exporting, setExporting] = useState(false);
@@ -73,21 +74,17 @@ export default function DailyOperationsReportScreen() {
     user?.uid,
   );
 
-  useEffect(() => {
-    setReportDate((current) => current === previousToday.current ? today : current);
-    previousToday.current = today;
-  }, [today]);
   const assignedBlockIds = useMemo(
     () => getAssignedEnterpriseBlockIds(enterpriseBlocks.blocks, user?.uid),
     [enterpriseBlocks.blocks, user?.uid],
   );
 
   const activePonds = useMemo(() => ponds.filter((pond) => (
-    pondExistsOnReportDate(pond, reportDate, company?.timeZone) && (
+    pondExistsOnReportDate(pond, reportDate, timeZone) && (
       company?.businessSize !== 'enterprise' || user?.role !== 'technician' ||
       (typeof pond.blockId === 'string' && assignedBlockIds.has(pond.blockId))
     )
-  )), [assignedBlockIds, company?.businessSize, company?.timeZone, reportDate, ponds, user?.role]);
+  )), [assignedBlockIds, company?.businessSize, timeZone, reportDate, ponds, user?.role]);
   const blocks = useMemo(() => Array.from(new Set(activePonds.map((pond) => pond.blockName).filter(Boolean) as string[])).sort(), [activePonds]);
   const selectedPonds = useMemo(
     () => selectedBlock === 'all' ? activePonds : activePonds.filter((pond) => pond.blockName === selectedBlock),
@@ -98,8 +95,8 @@ export default function DailyOperationsReportScreen() {
     reportDate,
     generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
     ponds: selectedPonds as DailyOperationsPondSource[], harvests,
-    timeZone: company?.timeZone,
-  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, harvests, user?.email, user?.name]);
+    timeZone,
+  }), [company?.companyName, timeZone, copy.myFarm, copy.shrimplyUser, reportDate, selectedPonds, harvests, user?.email, user?.name]);
 
   const exportReport = async () => {
     if (!canExportReports || exporting) return;
@@ -150,7 +147,7 @@ export default function DailyOperationsReportScreen() {
             label={copy.reportDate}
             value={reportDate}
             maximumDate={new Date(`${today}T23:59:59`)}
-            onChange={(date) => setReportDate(getFarmDateKey(date, company?.timeZone))}
+            onChange={(date) => setReportDate(getFarmDateKey(date, getSystemTimeZone()))}
           />
           {blocks.length > 0 && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.blockRow}>
             {['all', ...blocks].map((block) => (

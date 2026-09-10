@@ -18,6 +18,7 @@ import {
   type DailyOperationsLanguage,
 } from '../../../../../../shared/dailyOperationsI18n';
 import { pondExistsOnReportDate, type ReportHarvest } from '../../../../../../shared/reportSnapshots';
+import { getSystemTimeZone, resolveFarmTimeZone } from '../../../../../../shared/farmDate';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import MineralLabResults, { type MineralLabResultsHandle } from '@/components/MineralLabResults';
 import type { SavedMineralLabReport } from '@/lib/mineralLabResults';
@@ -53,9 +54,10 @@ export default function DailyOperationsReportsPage() {
     }
     return merged as typeof dailyOperationsTranslations.en;
   }, [currentLanguage, localeCopy, t?.dailyOperationsReports]);
-  const today = useFarmDateKey(company?.timeZone);
-  const [reportDate, setReportDate] = useState(today);
-  const previousToday = useRef(today);
+  const timeZone = resolveFarmTimeZone(company?.timeZone, getSystemTimeZone());
+  const today = useFarmDateKey(timeZone);
+  const [selectedDate, setReportDate] = useState<string | null>(null);
+  const reportDate = selectedDate ?? today;
   const [activeTab, setActiveTab] = useState<ReportTab>('sipon');
   const [selectedBlock, setSelectedBlock] = useState('all');
   const [ponds, setPonds] = useState<DailyOperationsPondSource[]>([]);
@@ -66,11 +68,6 @@ export default function DailyOperationsReportsPage() {
   const canExportReports = hasPermission('exportReports');
   const { data: harvests, loading: harvestLoading, error: harvestError } = useCompanyHarvestRecords<ReportHarvest & { id: string }>();
   const { data: farmBlocks } = useCompanyBlocks<FarmBlock>('asc');
-
-  useEffect(() => {
-    setReportDate((current) => current === previousToday.current ? today : current);
-    previousToday.current = today;
-  }, [today]);
 
   useEffect(() => {
     if (!company?.id || !canViewReports) return;
@@ -93,7 +90,7 @@ export default function DailyOperationsReportsPage() {
     userId: user?.uid,
     blocks: farmBlocks,
   }), [company?.businessSize, farmBlocks, ponds, user?.role, user?.uid]);
-  const activePonds = useMemo(() => accessiblePonds.filter((pond) => pondExistsOnReportDate(pond, reportDate, company?.timeZone)), [accessiblePonds, reportDate, company?.timeZone]);
+  const activePonds = useMemo(() => accessiblePonds.filter((pond) => pondExistsOnReportDate(pond, reportDate, timeZone)), [accessiblePonds, reportDate, timeZone]);
   const blocks = useMemo(() => Array.from(new Set(activePonds.map((pond) => pond.blockName).filter(Boolean) as string[])).sort(), [activePonds]);
   const filteredPonds = useMemo(
     () => selectedBlock === 'all' ? activePonds : activePonds.filter((pond) => pond.blockName === selectedBlock),
@@ -104,8 +101,8 @@ export default function DailyOperationsReportsPage() {
     reportDate,
     generatedBy: user?.name || user?.email?.split('@')[0] || copy.shrimplyUser,
     ponds: filteredPonds, harvests,
-    timeZone: company?.timeZone,
-  }), [company?.companyName, company?.timeZone, copy.myFarm, copy.shrimplyUser, filteredPonds, harvests, reportDate, user?.email, user?.name]);
+    timeZone,
+  }), [company?.companyName, timeZone, copy.myFarm, copy.shrimplyUser, filteredPonds, harvests, reportDate, user?.email, user?.name]);
 
   const exportPdf = async () => {
     if (!canExportReports || exporting || harvestLoading || harvestError || report.warnings?.length) return;
@@ -165,7 +162,7 @@ export default function DailyOperationsReportsPage() {
       <div className="glass-card" style={{ marginTop: '16px', background: '#fff', border: '1px solid var(--border)', borderRadius: '18px', padding: '16px', display: 'flex', alignItems: 'end', gap: '18px', flexWrap: 'wrap' }}>
         <label className="daily-operations-date-field">
           <span>{copy.reportDate}</span>
-          <input type="date" max={today} value={reportDate} onChange={(event) => setReportDate(event.target.value)} className="daily-operations-date-input" />
+          <input type="date" max={today} value={reportDate} onChange={(event) => setReportDate(event.target.value || null)} className="daily-operations-date-input" />
         </label>
         {blocks.length > 0 && <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {['all', ...blocks].map((block) => {
