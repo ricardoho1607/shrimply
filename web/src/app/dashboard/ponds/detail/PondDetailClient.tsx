@@ -40,12 +40,13 @@ import {
   serverTimestamp,
   arrayUnion,
   addDoc,
-  getDoc,
   getDocs,
   where,
   writeBatch
 } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import { resolveCompanyPhysicalPond } from '@/lib/physicalPondIdentity';
+import { PHYSICAL_POND_LINK_ERROR } from '../../../../../../shared/physicalPondIdentity';
 import {
   calculatePondMortalityForDate,
   calculatePondMetricsWithHarvest,
@@ -124,6 +125,7 @@ type LabReportStatus = {
 };
 
 interface Pond {
+  physicalPondId?: string;
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   blockId?: string;
   blockName?: string;
@@ -729,6 +731,7 @@ export default function PondDetailClient() {
       }
 
       const newCyclePondRef = doc(collection(db, 'companies', companyId, 'ponds'));
+      const physicalPond = await resolveCompanyPhysicalPond(companyId, pond);
       const initialPopulation = Number(pond.pondArea) * Number(startCycleForm.density);
       const initialWeight = parseFloat(startCycleForm.plValue) / 10;
       const activeCycle = cycles.find(isOpenFarmCycle);
@@ -748,30 +751,11 @@ export default function PondDetailClient() {
         cycleForPond = { id: cycleRef.id, cycleName, status: 'stocking', plannedStartDate: startCycleForm.docStart, stockingStartDate: startCycleForm.docStart };
       }
 
-      const physicalPondIdsToActivate = new Set<string>();
-      if (pond.previousCyclePondId) {
-        const physicalPondById = await getDoc(doc(db, 'companies', companyId, 'physicalPonds', pond.previousCyclePondId));
-        const physicalPondData = physicalPondById.exists() ? physicalPondById.data() : null;
-        if (physicalPondData && (!physicalPondData.activePondId || physicalPondData.activePondId === pond.id)) {
-          physicalPondIdsToActivate.add(physicalPondById.id);
-        }
-      }
-
-      const physicalPondsByName = await getDocs(query(
-        collection(db, 'companies', companyId, 'physicalPonds'),
-        where('pondName', '==', pond.pondName)
-      ));
-      physicalPondsByName.docs.forEach((physicalPondDoc) => {
-        const physicalPond = physicalPondDoc.data();
-        if (!physicalPond.activePondId || physicalPond.activePondId === pond.id) {
-          physicalPondIdsToActivate.add(physicalPondDoc.id);
-        }
-      });
-
       const batch = writeBatch(db);
       batch.set(newCyclePondRef, {
         id: newCyclePondRef.id,
-        pondName: pond.pondName,
+        pondName: physicalPond.pondName,
+        physicalPondId: physicalPond.id,
         pondArea: Number(pond.pondArea),
         blockId: pond.blockId,
         blockName: pond.blockName,
@@ -794,20 +778,20 @@ export default function PondDetailClient() {
         createdAt: serverTimestamp(),
         createdBy: auth.currentUser?.uid || '',
       });
-      physicalPondIdsToActivate.forEach((physicalPondId) => {
-        batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPondId), {
+      {
+        batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
           status: 'active',
           activePondId: newCyclePondRef.id,
           updatedAt: serverTimestamp(),
           updatedBy: auth.currentUser?.uid || '',
         });
-      });
+      }
       await batch.commit();
       setStartCycleOpen(false);
       router.push(`/dashboard/ponds/detail?id=${newCyclePondRef.id}`);
     } catch (error) {
       console.error('Error starting cycle:', error);
-      alert(copy.startCycleFailed);
+      alert(error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR ? error.message : copy.startCycleFailed);
     }
   };
 

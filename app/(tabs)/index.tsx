@@ -23,6 +23,8 @@ import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboa
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import ProfileCompletionCard from '../components/onboarding/ProfileCompletionCard';
 import AppDatePicker from '../components/forms/AppDatePicker';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import firebaseApp from '../../config/firebase';
 
 interface FormData {
   pondName: string; 
@@ -519,7 +521,28 @@ export default function PondManagementScreen() {
     setModalVisible(false); 
   }, [resetForm]);
 
-  const handleAddPond = useCallback(() => {
+  const currentCompanyId = company?.id;
+  const createPhysicalPondOnServer = useCallback(async (pond: PhysicalPond) => {
+    if (!currentCompanyId) throw new Error('Company not found.');
+    const createPhysicalPond = httpsCallable<
+      { companyId: string; pondId: string; pond: { pondName: string; pondArea: number; blockId?: string; blockName?: string } },
+      { id: string }
+    >(getFunctions(firebaseApp), 'createCompanyPhysicalPond');
+    const result = await createPhysicalPond({
+      companyId: currentCompanyId,
+      pondId: pond.id,
+      pond: {
+        pondName: pond.pondName,
+        pondArea: pond.pondArea,
+        blockId: pond.blockId,
+        blockName: pond.blockName,
+      },
+    });
+    addPhysicalPond({ ...pond, id: result.data.id }, { sync: false });
+    return result.data.id;
+  }, [addPhysicalPond, currentCompanyId]);
+
+  const handleAddPond = useCallback(async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -562,19 +585,28 @@ export default function PondManagementScreen() {
       return;
     }
 
-    addPhysicalPond({
-      id: Date.now().toString(),
-      pondName,
-      pondArea: Number(pondArea),
-      blockId: selectedBlock?.id,
-      blockName: selectedBlock?.name,
-      status: 'idle',
-    });
-
-    closeModal();
-    setCycleFilter('inactive');
-    Alert.alert(t.messages.success, t.home.pondAddedSuccess);
-  }, [addPhysicalPond, availableEnterpriseBlocks, canManagePonds, closeModal, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
+    try {
+      await createPhysicalPondOnServer({
+        id: Date.now().toString(),
+        pondName,
+        pondArea: Number(pondArea),
+        blockId: selectedBlock?.id,
+        blockName: selectedBlock?.name,
+        status: 'idle',
+      });
+      closeModal();
+      setCycleFilter('inactive');
+      Alert.alert(t.messages.success, t.home.pondAddedSuccess);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to add pond.';
+      Alert.alert(t.messages.error, message.includes('plan allows')
+        ? `${message}\n\nThe company owner can manage the plan on the Shrimply website.`
+        : message);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [availableEnterpriseBlocks, canManagePonds, closeModal, createPhysicalPondOnServer, formData, isEnterpriseFarm, physicalPonds, ponds, t]);
 
   const handleAddCycle = useCallback(() => {
     if (submitLockRef.current) return;
@@ -694,7 +726,7 @@ export default function PondManagementScreen() {
       ...(selectedFarmCycle?.cycleName ? { cycleName: selectedFarmCycle.cycleName } : {}),
     }] : [];
 
-    addPond({
+    const added = addPond({
       id: Date.now().toString(),
       pondName: sourcePond.pondName,
       blockId: sourcePond.blockId,
@@ -728,6 +760,12 @@ export default function PondManagementScreen() {
         baselineSource: 'user_midcycle_estimate',
       }),
     });
+    if (!added) {
+      Alert.alert(t.messages.error, 'Could not start this pond. Sync the farm and check its physical pond link before trying again.');
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+      return;
+    }
     if (selectedFarmCycle && !isCreatingNewCycle) {
       const stockingDates = [selectedFarmCycle.stockingStartDate, selectedFarmCycle.stockingEndDate, docStartString]
         .filter((date): date is string => Boolean(date))
@@ -1148,7 +1186,7 @@ export default function PondManagementScreen() {
         cycleName: cycle.cycleName,
         pondCycleId,
       }] : [];
-      addPond({
+      const added = addPond({
         id: pondCycleId,
         pondName: pond.pondName,
         pondArea: pond.pondArea,
@@ -1183,6 +1221,7 @@ export default function PondManagementScreen() {
           baselineSource: 'user_midcycle_estimate',
         } : {}),
       });
+      if (!added) throw new Error('Could not start this pond. Sync the farm and check its physical pond link before trying again.');
     });
   }, [addFarmCycle, addPond, company?.timeZone, updateFarmCycle]);
 
@@ -1196,15 +1235,16 @@ export default function PondManagementScreen() {
       || ponds.some((pond) => getPhysicalPondKey(pond.pondName) === pondKey);
     if (alreadyExists) throw new Error(`${input.pondName} already exists.`);
 
-    addPhysicalPond({
-      id: Date.now().toString(),
+    const id = Date.now().toString();
+    await createPhysicalPondOnServer({
+      id,
       pondName: input.pondName,
       pondArea: input.pondArea,
       blockId: input.block.id,
       blockName: input.block.name,
       status: 'idle',
     });
-  }, [addPhysicalPond, physicalPonds, ponds]);
+  }, [createPhysicalPondOnServer, physicalPonds, ponds]);
 
   const handleEditEnterpriseCycle = useCallback((cycle: FarmCycle, input: { cycleName: string; blocks: FarmBlock[] }) => {
     updateFarmCycle(cycle.id, {

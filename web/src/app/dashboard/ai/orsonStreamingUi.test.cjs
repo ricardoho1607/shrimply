@@ -32,10 +32,11 @@ test('both Firebase clients allow time for the server claim review', () => {
   }
 });
 
-test('stalled Orson responses time out within one minute and expose retry recovery', () => {
+test('client deadline allows the backend to complete and retains retry recovery', () => {
   const timeoutMatch = promptBuilderSource.match(/ORSON_CLIENT_TIMEOUT_MS\s*=\s*([\d_]+)/);
   assert.ok(timeoutMatch, 'Orson must define a client response timeout');
-  assert.ok(Number(timeoutMatch[1].replaceAll('_', '')) <= 60_000);
+  assert.ok(Number(timeoutMatch[1].replaceAll('_', '')) > 155_000);
+  assert.ok(Number(timeoutMatch[1].replaceAll('_', '')) <= 165_000);
   assert.match(webHookSource, /timeoutMs:\s*ORSON_CLIENT_TIMEOUT_MS/);
   assert.match(webSource, /retryPrompt/);
   assert.match(webSource, />\{copy\('Retry'\)\}<\/button>/);

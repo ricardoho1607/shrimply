@@ -14,6 +14,7 @@ import {
 import { collection, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../../../../../orson/session';
+import { cleanOrsonResponse } from '../../../../../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompletion';
 import { useGemini } from '@/hooks/useGemini';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
@@ -151,7 +152,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
         timeZone: company?.timeZone,
         conversationHistory: messages
           .filter((message) => message.id !== 'welcome' && !message.retryPrompt && message.id !== retryId)
-          .slice(-10)
+          .slice(-20)
           .map((message) => ({ role: message.type === 'ai' ? 'model' : 'user', text: message.message })),
         onPartialResponse: (partialResponse) => {
           if (!isCurrent()) return;
@@ -226,7 +227,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                   </div>
                   <div className="orson-message-stack">
                     <div className="orson-bubble">
-                      {msg.message}
+                      {msg.type === 'ai' ? cleanOrsonResponse(msg.message) : msg.message}
                       {msg.retryPrompt && <div role="status">{copy('Response interrupted.')} <button type="button" disabled={loading || !pondsReady} onClick={() => handleSend(msg.retryPrompt, msg.id)}>{copy('Retry')}</button></div>}
                     </div>
                     <span className="orson-time">

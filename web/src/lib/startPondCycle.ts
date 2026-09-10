@@ -5,6 +5,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { resolveCompanyPhysicalPond } from './physicalPondIdentity';
 
 export type PondCycleStartMode = 'new' | 'midcycle';
 
@@ -25,6 +26,8 @@ export interface StartPondCycleFormValue {
 
 export interface StartablePondCycleRecord {
   id: string;
+  physicalPondId?: string | null;
+  previousCyclePondId?: string | null;
   pondName: string;
   pondArea?: number;
   area?: number;
@@ -122,6 +125,7 @@ export async function startPondCycle({
     && getPhysicalPondKey(activePond.pondName) === getPhysicalPondKey(pond.pondName)
   ));
   if (hasDuplicate) throw new StartPondCycleError('duplicate');
+  const physicalPond = await resolveCompanyPhysicalPond(companyId, pondType === 'physical' ? { ...pond, physicalPondId: pond.id } : pond);
 
   const isCreatingNewCycle = form.cycleTargetMode === 'new' || !activeCycle;
   const assignedBlockIds = (!isCreatingNewCycle && activeCycle?.blockIds?.length)
@@ -132,7 +136,7 @@ export async function startPondCycle({
   if (assignedBlockIds.length > 0 && (!pond.blockId || !assignedBlockIds.includes(pond.blockId))) {
     throw new StartPondCycleError('blockMismatch');
   }
-  if (!isCreatingNewCycle && !activeCycle?.blockIds?.length && activeCycle?.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(pond.id)) {
+  if (!isCreatingNewCycle && !activeCycle?.blockIds?.length && activeCycle?.plannedPondIds?.length && !activeCycle.plannedPondIds.includes(physicalPond.id)) {
     throw new StartPondCycleError('cycleMismatch');
   }
 
@@ -199,14 +203,15 @@ export async function startPondCycle({
     cycleId: targetCycleId,
     cycleName: targetCycleName,
     pondCycleId: pondRef.id,
-    physicalPondId: pond.id,
+    physicalPondId: physicalPond.id,
     ...(baselinePopulation !== undefined ? { estimatedPopulation: baselinePopulation } : {}),
     ...(baselineSurvivalRate !== undefined ? { estimatedSurvivalRate: baselineSurvivalRate } : {}),
     ...(baselineFeed !== undefined ? { cumulativeFeedToDate: baselineFeed } : {}),
   }] : [];
 
   batch.set(pondRef, removeUndefinedFields({
-    pondName: pond.pondName,
+    pondName: physicalPond.pondName,
+    physicalPondId: physicalPond.id,
     blockId: pond.blockId || undefined,
     blockName: pond.blockName || undefined,
     pondArea,
@@ -242,8 +247,8 @@ export async function startPondCycle({
     updatedBy: userId,
   }) as Record<string, unknown>);
 
-  if (pondType === 'physical') {
-    batch.update(doc(db, 'companies', companyId, 'physicalPonds', pond.id), {
+  {
+    batch.update(doc(db, 'companies', companyId, 'physicalPonds', physicalPond.id), {
       status: 'active',
       activePondId: pondRef.id,
       updatedAt: serverTimestamp(),

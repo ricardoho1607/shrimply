@@ -197,7 +197,7 @@ export default function HowItWorksPage() {
             Menutup <em>Kesenjangan Pembeli.</em>
           </h2>
           <p className="r d3" style={{ maxWidth: '600px', margin: '0 auto 60px', fontSize: '1.05rem', fontWeight: 500 }}>
-            Shrimply tidak hanya membantu Anda budidaya. Kami membantu Anda menjual. Kami menghubungkan tambak siap panen dengan harga terbaik di pasar.
+            Jelajahi postingan pembeli dan informasi pasar, lalu terhubung dengan calon pembeli. Midtrans di Shrimply hanya digunakan untuk pembayaran langganan software, bukan transaksi marketplace, escrow, atau pencairan dana penjual. <Link href="/id/pricing">Lihat produk dan harga langganan.</Link>
           </p>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }} className="r d4 mobile-stack-grid-compact">

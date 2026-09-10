@@ -194,3 +194,37 @@ test('search commentary is excluded from final text and streamed chat chunks', a
   assert.equal(streamed.text, 'Final answer.');
   assert.deepEqual(emitted, ['Final answer.']);
 });
+
+test('app tool results are replayed to the model and retained as review evidence', async () => {
+  let requests = 0;
+  const result = await generateMetaModelResponse({
+    apiKey: 'test-key', prompt: 'What feed is in stock?', maxOutputTokens: 2000,
+    tools: [{ type: 'function', name: 'read_app_records' }],
+    executeTool: async (name, args) => { assert.equal(name, 'read_app_records'); assert.equal(args.dataset, 'feeds'); return { stock: 123 }; },
+    fetchImpl: async (_, options) => {
+      const body = JSON.parse(options.body);
+      if (++requests === 1) return jsonResponse({ status: 'completed', output: [{ type: 'function_call', name: 'read_app_records', arguments: '{"dataset":"feeds"}', call_id: 'call1' }] });
+      assert.equal(body.input.at(-1).type, 'function_call_output');
+      assert.equal(body.input.at(-1).call_id, 'call1');
+      assert.equal(body.input.at(-1).output, '{"stock":123}');
+      return jsonResponse({ status: 'completed', output_text: '123 kg saved.' });
+    },
+  });
+  assert.equal(result.text, '123 kg saved.');
+  assert.match(result.toolEvidence, /123/);
+});
+
+test('unadvertised tool names cannot execute and permission failures are unavailable, not empty records', async () => {
+  let executed = false;
+  let requests = 0;
+  await generateMetaModelResponse({
+    apiKey: 'test-key', prompt: 'read data', maxOutputTokens: 2000,
+    tools: [{ type: 'function', name: 'read_app_records' }], executeTool: async () => { executed = true; },
+    fetchImpl: async (_, options) => {
+      if (++requests === 1) return jsonResponse({ status: 'completed', output: [{ type: 'function_call', name: 'delete_records', arguments: '{}', call_id: 'x' }] });
+      assert.match(JSON.parse(options.body).input.at(-1).output, /unavailable or not permitted/);
+      return jsonResponse({ status: 'completed', output_text: 'Unavailable' });
+    },
+  });
+  assert.equal(executed, false);
+});

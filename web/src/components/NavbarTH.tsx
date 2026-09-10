@@ -7,6 +7,7 @@ import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
 const navItems = [
+  { href: '/pricing', label: 'Pricing (EN)' },
   { href: '/th', label: 'หน้าหลัก' },
   { href: '/th/how-it-works', label: 'วิธีใช้งาน' },
   { href: '/th/about', label: 'เกี่ยวกับ' },

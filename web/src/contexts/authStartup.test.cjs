@@ -26,6 +26,29 @@ const firestoreDataModule = { exports: {} };
 new Function('module', 'exports', 'require', compiledFirestoreData)(firestoreDataModule, firestoreDataModule.exports, require);
 const { removeUndefinedFields } = firestoreDataModule.exports;
 
+test('sign-in keeps its translated label in the same element while loading changes', () => {
+  const React = require('react');
+  const { renderToStaticMarkup } = require('react-dom/server');
+  const buttonSource = authPage.match(/<button type="submit"[\s\S]*?<\/button>/)?.[0];
+  assert.ok(buttonSource, 'The login submit button must exist');
+  const compiled = ts.transpileModule(`const Button = ({ loading }) => (${buttonSource});`, {
+    compilerOptions: { jsx: ts.JsxEmit.React, module: ts.ModuleKind.CommonJS },
+  }).outputText;
+  const Button = new Function('React', 't', 'LogIn', `${compiled}; return Button;`)(
+    React, { auth: {} }, () => React.createElement('svg'),
+  );
+
+  for (const loading of [false, true, false]) {
+    const markup = renderToStaticMarkup(React.createElement(Button, { loading }));
+    const label = loading ? 'Authenticating...' : 'Enter Dashboard';
+    // A direct text child beside the icon can be detached by browser translation,
+    // causing React's removeChild operation to crash when loading starts.
+    assert.match(markup, new RegExp(`^<button[^>]*><span>${label}</span>`));
+    assert.equal(markup.includes('<svg'), !loading);
+    assert.equal(markup.includes('disabled=""'), loading);
+  }
+});
+
 test('App Check requires explicit registration before it can block authentication startup', () => {
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED/);
   assert.match(firebaseClient, /NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED/);

@@ -44,3 +44,25 @@ test("enforces per-feature and combined quotas while migrating existing usage do
     used: 25,
   });
 });
+
+test("applies the company plan's daily Orson limits", () => {
+  const freeLimits = { chat: 3, projection: 1, total: 4 };
+  assert.deepEqual(evaluateOrsonQuota({ chat: 3, projection: 0, total: 3 }, "chat", freeLimits), {
+    allowed: false,
+    quota: "chat",
+    limit: 3,
+    used: 3,
+  });
+  assert.deepEqual(evaluateOrsonQuota({ chat: 2, projection: 1, total: 3 }, "projection", freeLimits), {
+    allowed: false,
+    quota: "projection",
+    limit: 1,
+    used: 1,
+  });
+});
+test('explicit null quotas allow lifetime usage while still recording requests', () => {
+  const result = evaluateOrsonQuota({ chat: 9000, projection: 1000, total: 10000 }, 'chat', { chat: null, projection: null, total: null });
+  assert.equal(result.allowed, true);
+  assert.equal(result.next.total, 10001);
+  assert.equal(evaluateOrsonQuota({}, 'chat', {}).allowed, false);
+});

@@ -69,7 +69,7 @@ const CACHE_EXPIRY = 1000 * 60 * 60 * 24 * 7; // 7 Days
 
 const getRemoteOrsonLimit = (error: unknown): {
   aiFunction: OrsonAiFunction;
-  quota: OrsonAiFunction | 'total';
+  quota: OrsonAiFunction | 'total' | 'monthly' | 'weekly-projection';
   limit: number;
   used: number;
 } | null => {
@@ -82,7 +82,9 @@ const getRemoteOrsonLimit = (error: unknown): {
   if (!Number.isFinite(details.limit) || !Number.isFinite(details.used)) return null;
   return {
     aiFunction: details.aiFunction,
-    quota: details.quota === 'total' ? 'total' : details.aiFunction,
+    quota: details.quota === 'total' || details.quota === 'monthly' || details.quota === 'weekly-projection'
+      ? details.quota
+      : details.aiFunction,
     limit: Number(details.limit),
     used: Number(details.used),
   };
@@ -355,6 +357,14 @@ export const useGemini = () => {
 
       const remoteLimit = getRemoteOrsonLimit(err);
       if (remoteLimit) {
+        if (remoteLimit.quota === 'monthly') {
+          if (latestRequestId.current === requestId) setError("Monthly limit reached.");
+          return `This company's monthly Orson limit is full (${remoteLimit.used}/${remoteLimit.limit}). Upgrade the plan or try again next month.`;
+        }
+        if (remoteLimit.quota === 'weekly-projection') {
+          if (latestRequestId.current === requestId) setError("Weekly limit reached.");
+          return `This company's weekly projection limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again next week.`;
+        }
         const label = remoteLimit.quota === 'total'
           ? 'request'
           : remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';

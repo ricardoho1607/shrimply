@@ -269,7 +269,6 @@ service cloud.firestore {
     function validRequiredCompanySetup(data) {
       return validNonEmptyString(data.companyName)
         && validNonEmptyString(data.farmType)
-        && validNonEmptyString(data.businessSize)
         && 'primaryLocation' in data
         && (
           validNonEmptyString(data.primaryLocation)
@@ -979,9 +978,29 @@ service cloud.firestore {
         allow delete: if hasCompanyPermission(companyId, 'manageEnterpriseBlocks') || isFounderAdmin();
       }
 
+      // A production cycle must occupy a counted physical pond in this company.
+      // getAfter allows the cycle and its physical-pond pointer to be saved atomically.
+      function validPhysicalPondCycle(data, pondId) {
+        let physicalId = data.get('physicalPondId', '');
+        return physicalId is string && physicalId.size() > 0 && !physicalId.matches('.*[/].*')
+          && exists(/databases/$(database)/documents/companies/$(companyId)/physicalPonds/$(physicalId))
+          && getAfter(/databases/$(database)/documents/companies/$(companyId)/physicalPonds/$(physicalId)).data.pondName == data.pondName
+          && getAfter(/databases/$(database)/documents/companies/$(companyId)/physicalPonds/$(physicalId)).data.get('blockId', null) == data.get('blockId', null)
+          && (data.get('cycleStatus', 'active') == 'ended'
+            || getAfter(/databases/$(database)/documents/companies/$(companyId)/physicalPonds/$(physicalId)).data.get('activePondId', null) == pondId);
+      }
+
+      function physicalPondCanRelease(data) {
+        let activeId = data.get('activePondId', null);
+        return (activeId == null && data.get('status', 'idle') != 'active')
+          || (activeId is string && activeId.size() > 0
+            && getAfter(/databases/$(database)/documents/companies/$(companyId)/ponds/$(activeId)).data.get('cycleStatus', 'active') == 'ended');
+      }
+
       match /ponds/{pondId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
         allow create: if hasCompanyPermission(companyId, 'managePonds')
+          && validPhysicalPondCycle(request.resource.data, pondId)
           && validEnterprisePondBlock(companyId, request.resource.data)
           && validEnterprisePondCycle(companyId, request.resource.data);
         allow update: if (
@@ -990,9 +1009,16 @@ service cloud.firestore {
               || hasCompanyPermission(companyId, 'manageFeedInventory')) && validPondObservationUpdate())
             || (hasCompanyPermission(companyId, 'manageHarvests') && validHarvestPondImpactUpdate())
           )
+          // Legacy history remains editable; counted pond identities cannot be detached.
+          && request.resource.data.get('physicalPondId', null) == resource.data.get('physicalPondId', null)
+          && request.resource.data.pondName == resource.data.pondName
+          && (request.resource.data.get('cycleStatus', 'active') != 'active'
+            || resource.data.get('cycleStatus', 'active') == 'active'
+            || validPhysicalPondCycle(request.resource.data, pondId))
           && validEnterprisePondBlock(companyId, request.resource.data)
           && validEnterprisePondCycle(companyId, request.resource.data);
         allow delete: if (hasCompanyPermission(companyId, 'managePonds')
+          && resource.data.get('cycleStatus', 'active') == 'ended'
           && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
 
         match /labSummaries/{labReportId} {
@@ -1027,10 +1053,20 @@ service cloud.firestore {
 
       match /physicalPonds/{physicalPondId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create, update: if hasCompanyPermission(companyId, 'managePonds')
+        // Physical pond creation is server-owned so company plan limits cannot be bypassed.
+        allow create: if false;
+        allow update: if hasCompanyPermission(companyId, 'managePonds')
+          && (request.resource.data.get('activePondId', null) == resource.data.get('activePondId', null)
+            || physicalPondCanRelease(resource.data))
           && validEnterprisePondBlock(companyId, request.resource.data);
         allow delete: if (hasCompanyPermission(companyId, 'managePonds')
+          && physicalPondCanRelease(resource.data)
           && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
+      }
+
+      match /subscriptionGrants/{grantId} {
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
+        allow write: if false;
       }
 
       match /cycles/{cycleId} {
@@ -1117,11 +1153,23 @@ service cloud.firestore {
       }
 
       match /billing/{docId} {
-        allow read, write: if isFounderAdmin();
+        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow write: if false;
       }
 
       match /billingPayments/{paymentId} {
-        allow read, write: if isFounderAdmin();
+        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow write: if false;
+      }
+
+      match /entitlements/{docId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
+      }
+
+      match /planUsage/{docId} {
+        allow read: if isFounderAdmin() || isCompanyMember(companyId);
+        allow write: if false;
       }
 
       // Legacy client-visible counters. Existing installed clients still reserve
@@ -1141,6 +1189,21 @@ service cloud.firestore {
       match /orsonUsage/{usageDateId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
         allow write: if isFounderAdmin();
+      }
+
+      match /orsonUsageMonthly/{usageMonthId} {
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
+        allow write: if false;
+      }
+
+      match /orsonUsageWeekly/{usageWeekId} {
+        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'useOrson');
+        allow write: if false;
+      }
+
+      match /orsonCost/{usageMonthId} {
+        allow read: if isFounderAdmin() || isCompanyOwner(companyId);
+        allow write: if false;
       }
 
       match /orsonPredictions/{predictionId} {
@@ -1220,6 +1283,10 @@ service cloud.firestore {
     }
 
     match /securityRateLimits/{limitId} {
+      allow read, write: if false;
+    }
+
+    match /billingOrders/{orderId} {
       allow read, write: if false;
     }
 

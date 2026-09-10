@@ -197,7 +197,7 @@ export default function HowItWorksPage() {
             Closing the <em>Buyer Gap.</em>
           </h2>
           <p className="r d3" style={{ maxWidth: '600px', margin: '0 auto 60px', fontSize: '1.05rem', fontWeight: 500 }}>
-            Shrimply doesn't just help you grow. It helps you sell. We connect ready-to-harvest farms with the market's best prices.
+            Browse buyer posts and market information, then connect with potential buyers. Midtrans payments on Shrimply are exclusively for software subscriptions, not marketplace purchases, escrow, or seller payouts. <Link href="/pricing">View subscription products and prices.</Link>
           </p>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '32px' }} className="r d4 mobile-stack-grid-compact">

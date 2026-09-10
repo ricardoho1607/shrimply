@@ -8,6 +8,7 @@ functions/shared/*
 !functions/shared/orsonPromptPolicy.js
 !functions/shared/orsonPromptPolicy.d.ts
 !functions/shared/permissions.js
+!functions/shared/companyPlans.js
 output
 .codex
 .agents

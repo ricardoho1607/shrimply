@@ -9,6 +9,7 @@ import LanguageToggle from '@/components/LanguageToggle';
 const navItems = [
   { href: '/', label: 'Home' },
   { href: '/how-it-works', label: 'How It Works' },
+  { href: '/pricing', label: 'Pricing' },
   { href: '/resources', label: 'Resources' },
   { href: '/about', label: 'About' },
   { href: GOOGLE_PLAY_URL, label: 'Download App', external: true },

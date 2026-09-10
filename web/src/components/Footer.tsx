@@ -4,6 +4,8 @@ import React from 'react';
 import Link from 'next/link';
 
 const productLinks = [
+  { href: '/pricing', label: 'Pricing & Subscriptions' },
+  { href: '/pricing#support', label: 'Payment Support' },
   { href: '/shrimp-farm-management-software', label: 'Farm Software' },
   { href: '/vannamei-shrimp-farming-app', label: 'Vannamei App' },
 ];

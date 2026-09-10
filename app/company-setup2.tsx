@@ -1,5 +1,5 @@
 // app/company-setup2.tsx - With location coordinates and i18n support
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -58,7 +58,7 @@ export default function CompanySetupScreen() {
     companyName: '',
     primaryLocation: '',
     farmType: '',
-    businessSize: '',
+    businessSize: 'medium',
     description: '',
     contactPhone: '',
     isPublicProfile: false,
@@ -70,14 +70,6 @@ export default function CompanySetupScreen() {
     { ...formData, timeZone: getSystemTimeZone() },
     Boolean(locationCoordinates),
   );
-
-  // Business sizes with translations
-  const businessSizes = useMemo(() => [
-    { id: 'small', label: t.companySetup.smallOperation, description: t.companySetup.smallDescription },
-    { id: 'medium', label: t.companySetup.mediumFarm, description: t.companySetup.mediumDescription },
-    { id: 'large', label: t.companySetup.largeEnterprise, description: t.companySetup.largeDescription },
-    { id: 'enterprise', label: t.companySetup.enterpriseOperation, description: t.companySetup.enterpriseDescription },
-  ], [t]);
 
   // Prefill form in edit mode
   useEffect(() => {
@@ -191,10 +183,6 @@ export default function CompanySetupScreen() {
     }
     if (!formData.farmType.trim()) {
       Alert.alert(t.messages.error, t.onboardingProgress.farmTypeRequired);
-      return false;
-    }
-    if (!formData.businessSize) {
-      Alert.alert(t.messages.error, t.companySetup.businessSizeRequired);
       return false;
     }
     return true;
@@ -376,31 +364,6 @@ export default function CompanySetupScreen() {
     [formData, updateForm, gettingLocation, locationCoordinates, t]
   );
 
-  const BusinessSizeOption = useCallback(
-    ({ option }: { option: typeof businessSizes[0] }) => {
-      const selected = formData.businessSize === option.id;
-      return (
-        <TouchableOpacity
-          style={[styles.sizeOption, selected && styles.sizeOptionSelected]}
-          onPress={() => updateForm('businessSize', option.id)}
-        >
-          <View style={styles.sizeOptionContent}>
-            <Text style={[styles.sizeOptionTitle, selected && styles.sizeOptionTitleSelected]}>
-              {option.label}
-            </Text>
-            <Text style={[styles.sizeOptionDescription, selected && styles.sizeOptionDescriptionSelected]}>
-              {option.description}
-            </Text>
-          </View>
-          <View style={[styles.radioButton, selected && styles.radioButtonSelected]}>
-            {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
-          </View>
-        </TouchableOpacity>
-      );
-    },
-    [formData.businessSize, updateForm]
-  );
-
   if (isEditMode && !company) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
@@ -481,21 +444,6 @@ export default function CompanySetupScreen() {
               t.companySetup.descriptionPlaceholder,
               true
             )}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              {t.companySetup.businessSize} {t.companySetup.required}
-            </Text>
-            <Text style={styles.sectionDescription}>
-              {t.companySetup.businessSizeHelp}
-            </Text>
-            {businessSizes.map(option => (
-              <BusinessSizeOption key={option.id} option={option} />
-            ))}
-            {formData.businessSize === 'enterprise' ? (
-              <Text style={styles.enterpriseHint}>{t.onboardingProgress.enterpriseNext}</Text>
-            ) : null}
           </View>
 
           <View style={styles.section}>

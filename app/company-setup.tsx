@@ -54,7 +54,7 @@ export default function CompanySetupScreen() {
     companyName: '',
     primaryLocation: '',
     farmType: '',
-    businessSize: '',
+    businessSize: 'medium',
     description: '',
     contactPhone: '',
     isPublicProfile: false,
@@ -90,13 +90,6 @@ export default function CompanySetupScreen() {
       }
     }
   }, [isEditMode, company]);
-
-  const businessSizes = [
-    { id: 'small', label: 'Small Operation', description: '1-5 ponds' },
-    { id: 'medium', label: 'Medium Farm', description: '6-20 ponds' },
-    { id: 'large', label: 'Large Farm', description: '20-99 ponds' },
-    { id: 'enterprise', label: 'Enterprise Farm', description: '100+ ponds managed by blocks' },
-  ];
 
   const updateForm = useCallback(
     (key: keyof CompanyData, value: any) => setFormData(prev => ({ ...prev, [key]: value })),
@@ -165,7 +158,6 @@ export default function CompanySetupScreen() {
     if (!formData.companyName.trim()) return Alert.alert('Error', 'Company name is required'), false;
     if (!formData.primaryLocation.trim()) return Alert.alert('Error', 'Primary location is required'), false;
     if (!locationCoordinates) return Alert.alert('Error', 'Select a location from the suggestions or use your current location.'), false;
-    if (!formData.businessSize) return Alert.alert('Error', 'Please select your business size'), false;
     return true;
   }, [formData, locationCoordinates]);
 
@@ -314,31 +306,6 @@ export default function CompanySetupScreen() {
     [formData, updateForm, gettingLocation, locationCoordinates]
   );
 
-  const BusinessSizeOption = useCallback(
-    ({ option }: { option: typeof businessSizes[0] }) => {
-      const selected = formData.businessSize === option.id;
-      return (
-        <TouchableOpacity
-          style={[styles.sizeOption, selected && styles.sizeOptionSelected]}
-          onPress={() => updateForm('businessSize', option.id)}
-        >
-          <View style={styles.sizeOptionContent}>
-            <Text style={[styles.sizeOptionTitle, selected && styles.sizeOptionTitleSelected]}>
-              {option.label}
-            </Text>
-            <Text style={[styles.sizeOptionDescription, selected && styles.sizeOptionDescriptionSelected]}>
-              {option.description}
-            </Text>
-          </View>
-          <View style={[styles.radioButton, selected && styles.radioButtonSelected]}>
-            {selected && <Ionicons name="checkmark" size={16} color="#fff" />}
-          </View>
-        </TouchableOpacity>
-      );
-    },
-    [formData.businessSize, updateForm]
-  );
-
   if (isEditMode && !company) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f4f8fc' }}>
@@ -397,16 +364,6 @@ export default function CompanySetupScreen() {
             />
             {renderInput('Farm Specialization', 'farmType', 'e.g., Vannamei Shrimp, Intensive Culture')}
             {renderInput('Description', 'description', 'Brief description of your operation (optional)', true)}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Business Size *</Text>
-            <Text style={styles.sectionDescription}>
-              This helps us customize features for your operation
-            </Text>
-            {businessSizes.map(option => (
-              <BusinessSizeOption key={option.id} option={option} />
-            ))}
           </View>
 
           <View style={styles.section}>

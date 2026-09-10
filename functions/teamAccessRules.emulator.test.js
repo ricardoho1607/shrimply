@@ -20,6 +20,13 @@ const seed = async (entries) => {
   });
 };
 
+const startRegisteredCycle = (db, companyId, pondId, pondName) => {
+  const batch = writeBatch(db);
+  batch.set(doc(db, `companies/${companyId}/ponds/${pondId}`), { pondName, physicalPondId: 'registered', cycleStatus: 'active' });
+  batch.update(doc(db, `companies/${companyId}/physicalPonds/registered`), { status: 'active', activePondId: pondId });
+  return batch.commit();
+};
+
 if (!process.env.FIRESTORE_EMULATOR_HOST) {
   test("Firestore membership rules require the emulator", { skip: "Run npm run test:team-security:emulator through firebase emulators:exec." }, () => {});
 } else {
@@ -56,6 +63,28 @@ test("a reciprocal company member retains company access", async () => {
   ]);
   const db = testEnvironment.authenticatedContext("member-a", { email: "member@example.com" }).firestore();
   await assertSucceeds(getDoc(doc(db, "companies/company-a")));
+});
+
+test("billing state is server-owned and physical pond limits cannot be bypassed", async () => {
+  await seed([
+    ["users/owner-a", { email: "owner@example.com", companyId: "company-a", role: "owner" }],
+    ["users/member-a", { email: "member@example.com", companyId: "company-a", role: "manager" }],
+    ["companies/company-a", { ownerId: "owner-a", teamMembers: ["owner-a", "member-a"] }],
+    ["companies/company-a/entitlements/current", { planId: "free", pondLimit: 10 }],
+    ["companies/company-a/billing/current", { planId: "free", status: "free" }],
+  ]);
+  const ownerDb = testEnvironment.authenticatedContext("owner-a", { email: "owner@example.com" }).firestore();
+  const memberDb = testEnvironment.authenticatedContext("member-a", { email: "member@example.com" }).firestore();
+
+  await assertSucceeds(getDoc(doc(ownerDb, "companies/company-a/entitlements/current")));
+  await assertSucceeds(getDoc(doc(memberDb, "companies/company-a/entitlements/current")));
+  await assertSucceeds(getDoc(doc(ownerDb, "companies/company-a/billing/current")));
+  await assertFails(getDoc(doc(memberDb, "companies/company-a/billing/current")));
+  await assertFails(updateDoc(doc(ownerDb, "companies/company-a/entitlements/current"), { pondLimit: 100 }));
+  await assertFails(setDoc(doc(ownerDb, "companies/company-a/physicalPonds/pond-a"), {
+    pondName: "Pond A",
+    pondArea: 1000,
+  }));
 });
 
 test("farm members can read but cannot write the server dashboard summary", async () => {
@@ -124,7 +153,6 @@ test("only an unassigned user can create their first company", async () => {
     teamMembers: [ownerId],
     companyName: "New Company",
     farmType: "shrimp",
-    businessSize: "small",
     primaryLocation: "Farm A",
   });
   const freeDb = testEnvironment.authenticatedContext("free-owner", { email: "free@example.com" }).firestore();
@@ -137,6 +165,7 @@ test("only an unassigned user can create their first company", async () => {
 
 test("platform owners can grant a user permission that Firestore enforces", async () => {
   await seed([
+    ["companies/company-a/physicalPonds/registered", { pondName: "Pond A", status: "idle" }],
     ["users/founder-a", { email: "founder@example.com", role: "admin" }],
     ["users/owner-a", { email: "owner@example.com", companyId: "company-a", role: "owner" }],
     ["users/manager-a", { email: "manager@example.com", companyId: "company-a", role: "manager" }],
@@ -155,13 +184,13 @@ test("platform owners can grant a user permission that Firestore enforces", asyn
     platformOwner: true,
   }).firestore();
 
-  await assertFails(setDoc(doc(managerDb, "companies/company-a/ponds/pond-a"), { pondName: "Pond A" }));
+  await assertFails(startRegisteredCycle(managerDb, 'company-a', 'pond-a', 'Pond A'));
   await assertSucceeds(updateDoc(doc(founderDb, "users/manager-a"), {
     permissionOverrides: { managePonds: true },
     permissionsUpdatedAt: serverTimestamp(),
     permissionsUpdatedBy: "founder-a",
   }));
-  await assertSucceeds(setDoc(doc(managerDb, "companies/company-a/ponds/pond-a"), { pondName: "Pond A" }));
+  await assertSucceeds(startRegisteredCycle(managerDb, 'company-a', 'pond-a', 'Pond A'));
 });
 
 test("platform owners cannot remove permissions from the actual company owner", async () => {
@@ -273,6 +302,7 @@ test("admin feeding grants and revocations govern writes without a new login", a
 
 test("platform owners can change active staff roles but cannot change the company owner", async () => {
   await seed([
+    ["companies/role-farm/physicalPonds/registered", { pondName: "Role Pond", status: "idle" }],
     ["users/owner-role", { email: "owner@example.com", companyId: "role-farm", role: "owner" }],
     ["users/member-role", { email: "member@example.com", companyId: "role-farm", role: "manager", permissionOverrides: { manageFeedInventory: true } }],
     ["companies/role-farm", { ownerId: "owner-role", teamMembers: ["owner-role", "member-role"] }],
@@ -281,7 +311,7 @@ test("platform owners can change active staff roles but cannot change the compan
   const founderDb = testEnvironment.authenticatedContext("founder-role", { platformOwner: true }).firestore();
   const memberRef = doc(founderDb, "users/member-role");
 
-  await assertFails(setDoc(doc(memberDb, "companies/role-farm/ponds/pond-role"), { pondName: "Role Pond" }));
+  await assertFails(startRegisteredCycle(memberDb, 'role-farm', 'pond-role', 'Role Pond'));
   const batch = writeBatch(founderDb);
   batch.update(memberRef, {
     role: "technician",
@@ -298,7 +328,7 @@ test("platform owners can change active staff roles but cannot change the compan
   });
   await assertSucceeds(batch.commit());
   assert.equal((await getDoc(doc(memberDb, "users/member-role"))).data().role, "technician");
-  await assertSucceeds(setDoc(doc(memberDb, "companies/role-farm/ponds/pond-role"), { pondName: "Role Pond" }));
+  await assertSucceeds(startRegisteredCycle(memberDb, 'role-farm', 'pond-role', 'Role Pond'));
 
   await assertFails(updateDoc(doc(memberDb, "users/member-role"), {
     role: "manager",

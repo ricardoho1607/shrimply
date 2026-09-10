@@ -180,7 +180,7 @@ interface CompanySetupData {
   companyName: string;
   primaryLocation: Company['primaryLocation'];
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
+  businessSize?: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -522,6 +522,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newCompany = {
         ...(resumableCompany || {}),
         ...companyData,
+        businessSize: companyData.businessSize || resumableCompany?.businessSize || 'medium',
         timeZone: resolveFarmTimeZone(companyData.timeZone, getSystemTimeZone()),
         id: companyRef.id,
         ownerId: user.uid,

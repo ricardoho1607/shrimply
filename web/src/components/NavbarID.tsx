@@ -9,6 +9,7 @@ import LanguageToggle from '@/components/LanguageToggle';
 const navItems = [
   { href: '/id', label: 'Beranda' },
   { href: '/id/how-it-works', label: 'Cara Kerja' },
+  { href: '/id/pricing', label: 'Harga' },
   { href: '/id/about', label: 'Tentang' },
   { href: GOOGLE_PLAY_URL, label: 'Unduh Aplikasi', external: true },
 ];

@@ -7,6 +7,7 @@ import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
 const navItems = [
+  { href: '/pricing', label: 'Pricing (EN)' },
   { href: '/vi', label: 'Trang chủ' },
   { href: '/vi/how-it-works', label: 'Cách hoạt động' },
   { href: '/vi/about', label: 'Về chúng tôi' },

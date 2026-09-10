@@ -383,16 +383,6 @@ export default function CompanyDetailsScreen() {
     );
   }, [cancelCompanyDeletion, loadData, t]);
 
-  const getBusinessSizeText = (size?: string) => {
-    if (!size) return t.companyDetails.notSet;
-    const sizeMap: Record<string, string> = {
-      small: t.companyDetails.small,
-      medium: t.companyDetails.medium,
-      large: t.companyDetails.large
-    };
-    return `${sizeMap[size] || size.charAt(0).toUpperCase() + size.slice(1)} ${t.companyDetails.operation}`;
-  };
-
   return (
     <View style={styles.outerContainer}>
       <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
@@ -441,7 +431,6 @@ export default function CompanyDetailsScreen() {
             <InfoItem label={t.companyDetails.companyName} value={company?.companyName || t.companyDetails.notSet} />
             <InfoItem label={t.companyDetails.location} value={getCompanyLocationString() || t.companyDetails.notSet} />
             <InfoItem label={t.companyDetails.farmType} value={company?.farmType || t.companyDetails.notSpecified} />
-            <InfoItem label={t.companyDetails.businessSize} value={getBusinessSizeText(company?.businessSize)} />
           </View>
           
           {company?.description && (

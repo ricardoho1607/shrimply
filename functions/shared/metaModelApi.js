@@ -1,7 +1,7 @@
 const META_MODEL_API_BASE_URL = process.env.META_MODEL_API_BASE_URL || 'https://api.ai.meta.com/v1';
 const META_MODEL_API_MODEL = 'muse-spark-1.3-contributor';
 const getOrsonGenerationSettings = (mode) => mode === 'standard'
-  ? { reasoningEffort: 'low', maxOutputTokens: 2400, timeoutMs: 45000 }
+  ? { reasoningEffort: 'low', maxOutputTokens: 6000, timeoutMs: 60000 }
   : { reasoningEffort: 'high', maxOutputTokens: 10000, timeoutMs: 90000 };
 
 const getFinishReason = (response) => {
@@ -122,11 +122,18 @@ const generateMetaModelResponse = async ({
   reasoningEffort = 'low',
   useWebLookup = false,
   onTextDelta,
+  tools = [],
+  executeTool,
   timeoutMs = 45000,
   signal = AbortSignal.timeout(timeoutMs),
   fetchImpl = fetch,
 }) => {
-  const streaming = typeof onTextDelta === 'function';
+  const streaming = typeof onTextDelta === 'function' && tools.length === 0;
+  let input = prompt;
+  const evidence = [];
+  let inputTokens = 0;
+  let outputTokens = 0;
+  for (let round = 0; round < 6; round++) {
   const response = await fetchImpl(`${META_MODEL_API_BASE_URL}/responses`, {
     method: 'POST',
     signal,
@@ -138,11 +145,11 @@ const generateMetaModelResponse = async ({
     body: JSON.stringify({
       model: META_MODEL_API_MODEL,
       instructions: systemInstruction,
-      input: prompt,
+      input,
       max_output_tokens: maxOutputTokens,
       reasoning: { effort: reasoningEffort },
       store: false,
-      ...(useWebLookup ? { tools: [{ type: 'web_search' }] } : {}),
+      ...((tools.length || useWebLookup) ? { tools: [...tools, ...(useWebLookup ? [{ type: 'web_search' }] : [])] } : {}),
       ...(streaming ? { stream: true } : {}),
     }),
   });
@@ -156,13 +163,34 @@ const generateMetaModelResponse = async ({
   if (streaming) return readMetaEventStream(response, onTextDelta);
 
   const body = await response.json();
+  inputTokens += body.usage?.input_tokens || 0;
+  outputTokens += body.usage?.output_tokens || 0;
+  const calls = (body.output || []).filter(item => item.type === 'function_call');
+  if (calls.length) {
+    if (!executeTool || !tools.length) throw new Error('Unexpected model tool request.');
+    if (round === 5) throw new Error('Orson data lookup needs a more focused question.');
+    const outputs = await Promise.all(calls.map(async call => {
+      let result;
+      try {
+        if (!tools.some(tool => tool.name === call.name)) throw new Error('Unknown data tool');
+        result = await executeTool(call.name, JSON.parse(call.arguments));
+      } catch (_) { result = { error: 'This record lookup is unavailable or not permitted. Do not invent its contents.' }; }
+      const output = JSON.stringify(result);
+      evidence.push({ tool: call.name, arguments: call.arguments, result });
+      return { type: 'function_call_output', call_id: call.call_id, output };
+    }));
+    input = [...(Array.isArray(input) ? input : [{ role: 'user', content: input }]), ...body.output, ...outputs];
+    continue;
+  }
   return {
     text: getResponseText(body),
     finishReason: getFinishReason(body),
-    inputTokens: body.usage?.input_tokens ?? null,
-    outputTokens: body.usage?.output_tokens ?? null,
+    inputTokens,
+    outputTokens,
+    toolEvidence: evidence.length ? JSON.stringify(evidence) : undefined,
     sources: getResponseSources(body),
   };
+  }
 };
 
 module.exports = {

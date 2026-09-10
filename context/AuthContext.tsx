@@ -181,7 +181,7 @@ interface CompanySetupData {
   primaryLocation: string | LocationData;
   country?: string;
   farmType: string;
-  businessSize: 'small' | 'medium' | 'large' | 'enterprise';
+  businessSize?: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
   contactPhone: string;
   isPublicProfile: boolean;
@@ -781,7 +781,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       primaryLocation: primaryLocation,
       country: companyData.country || (locationData?.country) || '',
       farmType: companyData.farmType,
-      businessSize: companyData.businessSize,
+      businessSize: companyData.businessSize || resumableCompany?.businessSize || 'medium',
       description: companyData.description,
       contactPhone: companyData.contactPhone,
       isPublicProfile: companyData.isPublicProfile,

@@ -4,6 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 
 const productLinks = [
+  { href: '/pricing', label: 'Pricing & Subscriptions (EN)' },
   { href: '/vi/shrimp-farm-management-software', label: 'Phần mềm quản lý trang trại tôm' },
   { href: '/vi/vannamei-shrimp-farming-app', label: 'Ứng dụng nuôi tôm thẻ chân trắng' },
 ];

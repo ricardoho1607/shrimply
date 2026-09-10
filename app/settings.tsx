@@ -13,7 +13,8 @@ import { exportPondReportPDF } from './services/pondReportExportService';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 import { useDataBackup } from './hooks/useDataBackup';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import firebaseApp, { db } from '../config/firebase';
 
 const AVAILABLE_LANGUAGES = [
   { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -26,6 +27,16 @@ const AVAILABLE_LANGUAGES = [
 interface ActivitySummary {
   totalSeconds: number;
   lastSeenAt: Date | null;
+}
+
+interface CompanyPlanSummary {
+  entitlements: {
+    planId: string;
+    planName: string;
+    pondLimit: number | null;
+    orson: { monthlyTotal: number | null };
+  };
+  usage: { physicalPonds: number; orsonMonthly: number };
 }
 
 const ACTIVITY_ACTIVE_WINDOW_MS = 5 * 60 * 1000;
@@ -67,7 +78,31 @@ export default function Settings() {
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
   const [activitySummaries, setActivitySummaries] = useState<ActivitySummary[]>([]);
+  const [planSummary, setPlanSummary] = useState<CompanyPlanSummary | null>(null);
   const farmToday = useFarmDateKey(company?.timeZone);
+  const currentCompanyId = company?.id;
+
+  useEffect(() => {
+    let active = true;
+    if (!currentCompanyId) {
+      queueMicrotask(() => setPlanSummary(null));
+      return () => { active = false; };
+    }
+    const loadPlan = async () => {
+      try {
+        const callable = httpsCallable<{ companyId: string }, CompanyPlanSummary>(
+          getFunctions(firebaseApp),
+          'getCompanyBillingSummary',
+        );
+        const result = await callable({ companyId: currentCompanyId });
+        if (active) setPlanSummary(result.data);
+      } catch (error) {
+        console.log('Failed to load company plan:', error);
+      }
+    };
+    void loadPlan();
+    return () => { active = false; };
+  }, [currentCompanyId]);
 
   useEffect(() => {
     if (!canViewActivity || !company?.id) {
@@ -435,6 +470,22 @@ export default function Settings() {
             </View>
           </View>
 
+          {planSummary && (
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>COMPANY PLAN</Text>
+              <SettingItem
+                icon="card-outline"
+                title={`${planSummary.entitlements.planName} plan`}
+                subtitle={`${planSummary.usage.physicalPonds} / ${planSummary.entitlements.pondLimit ?? 'Unlimited'} ponds · ${planSummary.usage.orsonMonthly} / ${planSummary.entitlements.orson.monthlyTotal ?? 'Unlimited'} Orson requests this month${planSummary.entitlements.planId === 'lifetime' ? ' · No payment or renewal required' : ''}`}
+                showArrow={false}
+              />
+              <View style={styles.planNote}>
+                <Ionicons name="people-outline" size={17} color="#0F4C75" />
+                <Text style={styles.planNoteText}>Unlimited company users. The company owner manages payments on the Shrimply website.</Text>
+              </View>
+            </View>
+          )}
+
           <View style={styles.section}>
             <Text style={styles.sectionHeader}>{t.settings?.notifications || 'NOTIFICATIONS'}</Text>
             <SettingItem
@@ -738,5 +789,21 @@ const styles = StyleSheet.create({
     fontSize: Platform.OS === 'android' ? 12 : 13,
     color: '#856404',
     lineHeight: Platform.OS === 'android' ? 16 : 18,
+  },
+  planNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EAF5FC',
+    padding: Platform.OS === 'android' ? 12 : 14,
+    marginHorizontal: Platform.OS === 'android' ? 14 : 16,
+    marginTop: Platform.OS === 'android' ? 8 : 10,
+    borderRadius: Platform.OS === 'android' ? 9 : 10,
+    gap: Platform.OS === 'android' ? 8 : 10,
+  },
+  planNoteText: {
+    flex: 1,
+    color: '#0F4C75',
+    fontSize: Platform.OS === 'android' ? 12 : 13,
+    lineHeight: Platform.OS === 'android' ? 17 : 19,
   },
 });

@@ -19,8 +19,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { collection, doc, addDoc, serverTimestamp, deleteDoc, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { collection, doc, addDoc, serverTimestamp, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import { app, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import ConfirmationModal from '@/components/ConfirmationModal';
@@ -29,6 +30,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../shared/harvestCalculations';
 import StartPondCycleModal from '@/components/StartPondCycleModal';
+import { PHYSICAL_POND_LINK_ERROR } from '../../../../../shared/physicalPondIdentity';
 import {
   StartPondCycleError,
   startPondCycle,
@@ -52,6 +54,7 @@ interface Sampling {
 }
 
 interface Pond {
+  physicalPondId?: string;
   id: string; pondName: string; pondArea: number; density: number; initialPopulation: number;
   blockId?: string;
   blockName?: string;
@@ -454,18 +457,6 @@ export default function PondsPage() {
         blockName: selectedBlock?.name,
         status: 'idle',
       };
-      const pondData = {
-        pondName,
-        pondArea,
-        blockId: selectedBlock?.id,
-        blockName: selectedBlock?.name,
-        status: 'idle',
-        createdAt: serverTimestamp(),
-        createdBy: user.uid,
-        updatedAt: serverTimestamp(),
-        updatedBy: user.uid,
-      };
-
       setPendingPhysicalPonds((pending) => [...pending, pendingPond]);
       setModalOpen(false);
       setCycleFilter('inactive');
@@ -484,14 +475,30 @@ export default function PondsPage() {
         baselineSurvivalRate: '',
         baselineCumulativeFeed: ''
       });
-      await setDoc(physicalPondRef, removeUndefinedFields(pondData) as Record<string, unknown>);
+      const createPhysicalPond = httpsCallable<
+        { companyId: string; pondId: string; pond: Record<string, unknown> },
+        { id: string }
+      >(getFunctions(app), 'createCompanyPhysicalPond');
+      await createPhysicalPond({
+        companyId,
+        pondId: physicalPondRef.id,
+        pond: removeUndefinedFields({
+          pondName,
+          pondArea,
+          blockId: selectedBlock?.id,
+          blockName: selectedBlock?.name,
+        }) as Record<string, unknown>,
+      });
     } catch (error) {
       console.error('Error adding pond:', error);
       const failedPondKey = getPhysicalPondKey(formData.pondName);
       setPendingPhysicalPonds((pending) =>
         pending.filter((pond) => getPhysicalPondKey(pond.pondName) !== failedPondKey)
       );
-      alert(t.messages.error || 'Failed to add pond. Please check your connection.');
+      const message = error instanceof Error ? error.message : '';
+      alert(message.includes('plan allows')
+        ? `${message}\n\nOpen Settings → Billing & Plans to upgrade.`
+        : t.messages.error || 'Failed to add pond. Please check your connection.');
     }
   };
 
@@ -702,6 +709,10 @@ export default function PondsPage() {
       setCycleFilter('active');
     } catch (error) {
       console.error('Error starting new cycle:', error);
+      if (error instanceof Error && error.message === PHYSICAL_POND_LINK_ERROR) {
+        alert(error.message);
+        return;
+      }
       const errorCode = error instanceof StartPondCycleError ? error.code : 'failed';
       alert(errorCode === 'blockMismatch'
         ? t.enterpriseCycle.pondBlockMismatch

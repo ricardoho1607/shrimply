@@ -7,7 +7,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { OnboardingLoading, useOnboardingGuard } from '@/hooks/useOnboardingGuard';
-import { BUSINESS_SIZES, DEFAULT_COMPANY_SETUP, type BusinessSize } from '@/config/business';
+import { DEFAULT_COMPANY_SETUP } from '@/config/business';
 import { ROUTES } from '@/config/routes';
 import { getSupportedTimeZones, getSystemTimeZone } from '../../../../../shared/farmDate';
 import {
@@ -309,32 +309,6 @@ export default function CompanySetupPage() {
               onChange={e => setFormData({...formData, farmType: e.target.value})}
             />
           </div>
-        </div>
-
-        <div>
-          <label style={labelStyle}>Business Size</label>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(115px, 1fr))', gap: '12px' }}>
-            {BUSINESS_SIZES.map(size => (
-              <button
-                key={size}
-                type="button"
-                className={`business-size-option ${formData.businessSize === size ? 'active' : ''}`}
-                onClick={() => setFormData({...formData, businessSize: size as BusinessSize})}
-              >
-                <span style={{ display: 'block' }}>{size === 'enterprise' ? 'Enterprise' : size}</span>
-                {size === 'enterprise' && (
-                  <span style={{ display: 'block', marginTop: '4px', fontSize: '10px', fontWeight: 600, textTransform: 'none' }}>
-                    100+ ponds • managed by blocks
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-          {formData.businessSize === 'enterprise' && (
-            <p style={{ margin: '12px 2px 0', color: 'var(--primary)', fontSize: '12px', lineHeight: 1.6, fontWeight: 650 }}>
-              {t.onboardingProgress.enterpriseNext}
-            </p>
-          )}
         </div>
 
         <div>

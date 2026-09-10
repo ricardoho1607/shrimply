@@ -761,7 +761,7 @@ export default function PondDetails() {
       return;
     }
 
-    addPond({
+    const added = addPond({
       id: Date.now().toString(),
       pondName: pond.pondName,
       pondArea: pond.pondArea,
@@ -780,7 +780,13 @@ export default function PondDetails() {
       cycleStatus: 'active',
       cycleStartedAt: docStart,
       previousCyclePondId: pond.id,
+      physicalPondId: pond.physicalPondId,
     });
+
+    if (!added) {
+      Alert.alert(t.messages.error, 'Could not start this pond. Sync the farm and check its physical pond link before trying again.');
+      return;
+    }
 
     setStartCycleVisible(false);
     setNewCycleForm({

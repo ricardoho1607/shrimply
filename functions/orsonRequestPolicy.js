@@ -39,23 +39,28 @@ const normalizeOrsonUsage = (value = {}) => {
   };
 };
 
-const evaluateOrsonQuota = (value, aiFunction) => {
+const evaluateOrsonQuota = (value, aiFunction, configuredLimits = ORSON_DAILY_LIMITS) => {
   const usage = normalizeOrsonUsage(value);
   const functionKey = aiFunction === "projection" ? "projection" : "chat";
-  if (usage.total >= ORSON_DAILY_LIMITS.total) {
+  const limits = {
+    chat: configuredLimits.chat === null ? null : nonNegativeInteger(configuredLimits.chat),
+    projection: configuredLimits.projection === null ? null : nonNegativeInteger(configuredLimits.projection),
+    total: configuredLimits.total === null ? null : nonNegativeInteger(configuredLimits.total),
+  };
+  if (limits.total !== null && usage.total >= limits.total) {
     return {
       allowed: false,
       quota: "total",
-      limit: ORSON_DAILY_LIMITS.total,
+      limit: limits.total,
       used: usage.total,
     };
   }
 
-  if (usage[functionKey] >= ORSON_DAILY_LIMITS[functionKey]) {
+  if (limits[functionKey] !== null && usage[functionKey] >= limits[functionKey]) {
     return {
       allowed: false,
       quota: functionKey,
-      limit: ORSON_DAILY_LIMITS[functionKey],
+      limit: limits[functionKey],
       used: usage[functionKey],
     };
   }

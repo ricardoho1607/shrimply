@@ -18,14 +18,9 @@ test('treatment recognition includes quantity follow-ups and supported languages
 
 const { classifyDosingRequest, guardModelDosingAnswer } = require('./orsonDosingSafety');
 const model = data => ({ finishReason: 'STOP', text: JSON.stringify(data) });
-test('ambiguous follow-up is classified using conversation independent of client route', async () => {
-  let sent;
-  assert.equal(await classifyDosingRequest({ question: 'And for pond B?', prompt: 'Previous discussion: calcium dose in pond A', generate: async args => { sent = args; return model({ treatment: true }); } }), true);
-  assert.match(sent.prompt, /calcium dose/);
-});
-test('classification failures and invalid booleans fail closed', async () => {
-  for (const generate of [async () => { throw new Error('timeout'); }, async () => model({ treatment: 'false' }), async () => ({ finishReason: 'MAX_TOKENS', text: '{}' })]) {
-    assert.equal(await classifyDosingRequest({ question: 'and this?', prompt: '', generate }), true);
+test('normal chat and follow-ups never depend on a classifier model call', async () => {
+  for (const question of ['hi', 'can you check if my pond is at risk', 'check again', 'And for pond B?', 'thanks', 'Apa kabar?', 'Tell me about our costs']) {
+    assert.equal(await classifyDosingRequest({ question, prompt: 'context', generate: () => { throw new Error('No classifier needed'); } }), false);
   }
 });
 test('unsafe or unreviewed model doses cannot escape on a general route', async () => {
@@ -41,4 +36,17 @@ test('ordinary measurements and historical feeding remain available', async () =
   const answer = { text: 'Yesterday DO was 5 mg/L and feed was 20 kg.' };
   const result = await guardModelDosingAnswer({ answer, question: 'history', generate: async () => model({ contains_application_guidance: false, safe_to_release: true }) });
   assert.equal(result.text, answer.text);
+});
+
+test('plain pond-risk questions skip classification and inventory reads', async () => {
+  const { needsInventoryContext } = require('./orsonInventoryPolicy');
+  for (const question of ['can u check if there is potential issues on my ponds?', 'can you check if there are potential issues in my ponds?', 'check my ponds', 'analyze my ponds']) {
+    assert.equal(await classifyDosingRequest({ question, prompt: '', generate: async () => { throw new Error('must not call model'); } }), false);
+    assert.equal(needsInventoryContext('farm_analysis', question), false);
+  }
+  assert.equal(needsInventoryContext('inventory_product', 'what is in stock?'), true);
+  assert.equal(needsInventoryContext('farm_analysis', 'How much lime should I add?'), true);
+});
+test('mixed analysis and dosing questions never take the analysis shortcut', async () => {
+  assert.equal(await classifyDosingRequest({ question: 'check my ponds and tell me the dose of lime', prompt: '', generate: async () => { throw new Error('not needed'); } }), true);
 });

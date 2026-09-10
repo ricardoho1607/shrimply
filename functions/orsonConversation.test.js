@@ -60,7 +60,9 @@ test("server instructions keep general knowledge and unrelated questions away fr
   assert.match(knowledge, /every numeric threshold must name the analyte, unit, reporting basis/);
   assert.match(knowledge, /salinity, life stage or shrimp size, and exposure duration/);
   assert.match(knowledge, /Keep operating targets separate from LC\/toxicity-study results/);
-  assert.match(unrelated, /Do not mention or reveal farm data/);
+  assert.match(unrelated, /Converse naturally/);
+  assert.match(unrelated, /read_app_records/);
+  assert.doesNotMatch(unrelated, /Do not answer the unrelated|Do not calculate or provide a structured harvest projection/);
 });
 
 test("server instructions preserve exact-record and no-advice constraints", () => {

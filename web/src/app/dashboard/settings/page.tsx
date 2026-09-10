@@ -34,6 +34,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCompanyMembers } from '@/hooks/useDashboardData';
 import { getSupportedTimeZones, getSystemTimeZone, resolveFarmTimeZone } from '../../../../../shared/farmDate';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
+import CompanyBillingPanel from '@/components/CompanyBillingPanel';
 
 const settingsShellStyle: React.CSSProperties = {
   display: 'flex',
@@ -114,6 +115,12 @@ export default function SettingsPage() {
   const canEditCompany = hasPermission('editCompanySettings');
   const canManageTeam = hasPermission('manageTeam');
   const canManageCompanyDeletion = hasPermission('manageCompanyDeletion');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('tab') === 'billing') {
+      queueMicrotask(() => setActiveTab('billing'));
+    }
+  }, []);
 
   const AVAILABLE_LANGUAGES = [
     { code: 'en', name: 'English', flag: '🇺🇸', nativeName: 'English' },
@@ -497,18 +504,6 @@ export default function SettingsPage() {
                   />
                 </div>
                 <div style={fieldStyle}>
-                  <label style={labelStyle}>{t.companyDetails.businessSize || 'Business Size'}</label>
-                  <select
-                    value={companyForm.businessSize}
-                    onChange={e => setCompanyForm({...companyForm, businessSize: e.target.value})}
-                    style={controlStyle}
-                  >
-                    <option value="small">{t.companyDetails.small || 'Small'} {copy('operation')}</option>
-                    <option value="medium">{t.companyDetails.medium || 'Medium'} {copy('operation')}</option>
-                    <option value="large">{t.companyDetails.large || 'Large'} {copy('operation')}</option>
-                  </select>
-                </div>
-                <div style={fieldStyle}>
                   <label style={labelStyle}>{copy('Farm timezone')}</label>
                   <select
                     value={companyForm.timeZone}
@@ -826,7 +821,11 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {(activeTab === 'notifications' || activeTab === 'billing') && (
+          {activeTab === 'billing' && company?.id && (
+            <CompanyBillingPanel companyId={company.id} />
+          )}
+
+          {activeTab === 'notifications' && (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'var(--bg-mid)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', color: 'var(--text-faint)' }}>
                 <ShieldCheck size={32} />

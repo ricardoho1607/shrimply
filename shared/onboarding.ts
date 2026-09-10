@@ -33,7 +33,6 @@ export const isCompanyProfileComplete = (company?: CompanyProfileLike | null): b
   && hasText(company.companyName)
   && hasCompanyLocation(company.primaryLocation)
   && hasText(company.farmType)
-  && hasText(company.businessSize)
 );
 
 export const getSetupDestination = (role?: OnboardingRole | null): SetupDestination | null => {
@@ -72,7 +71,6 @@ export const getCompanySetupProgress = (
   hasCompanyLocation(draft.primaryLocation),
   locationConfirmed,
   hasText(draft.farmType),
-  hasText(draft.businessSize),
   hasText(draft.timeZone),
 ]);
 
@@ -86,7 +84,6 @@ export const getCompanyProfileCompletion = (company?: CompanyProfileLike | null)
     hasText(company.companyName),
     hasCompanyLocation(company.primaryLocation),
     hasText(company.farmType),
-    hasText(company.businessSize),
     hasText(company.contactPhone),
     hasText(company.description),
     hasText(company.timeZone),

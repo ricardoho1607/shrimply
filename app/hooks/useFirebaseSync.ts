@@ -1,4 +1,5 @@
 import { buildHarvestRevenue, financeSyncDocumentId, financeSourceEntry } from '../../shared/financeSync';
+import { resolvePhysicalPond, PHYSICAL_POND_LINK_ERROR } from '../../shared/physicalPondIdentity';
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
 import { createContext, createElement, ReactNode, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { 
@@ -11,7 +12,8 @@ import {
   orderBy,
   runTransaction,
 } from 'firebase/firestore';
-import { db } from '@/config/firebase';
+import firebaseApp, { db } from '@/config/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { useAuth } from '@/context/AuthContext';
 import { usePondStore, Pond, HarvestRecord, Sampling, FarmCycle, PhysicalPond, MortalityRecord, normalizePondLifecycle } from './../store/pondStore';
 import { AppState, Platform } from 'react-native';
@@ -708,9 +710,16 @@ const useFirebaseSyncController = () => {
             const pondRef = doc(db, 'companies', activeCompanyId, 'ponds', change.data.id);
             
             if (change.action === 'create' || change.action === 'update') {
-              const { samplings: _samplings, mortalityRecords: _mortalityRecords, ...pondFields } = change.data;
+              // Repair pre-upgrade queued creates without inventing a physical pond.
+              const physical = change.action === 'create'
+                ? resolvePhysicalPond(change.data, usePondStore.getState().physicalPonds)
+                : undefined;
+              if (change.action === 'create' && !physical) throw new Error(PHYSICAL_POND_LINK_ERROR);
+              const { samplings: _samplings, mortalityRecords: _mortalityRecords,
+                physicalPondId: _physicalPondId, pondName: _pondName, ...pondFields } = change.data;
               const pondData = {
                 ...removeUndefinedFields(change.action === 'create' ? change.data : pondFields),
+                ...(physical ? { physicalPondId: physical.id, pondName: physical.pondName } : {}),
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid,
                 ...(change.action === 'create' && { 
@@ -719,6 +728,12 @@ const useFirebaseSyncController = () => {
                 })
               };
               batch.set(pondRef, pondData, { merge: change.action === 'update' });
+              if (physical && change.data.cycleStatus !== 'ended') {
+                batch.update(doc(db, 'companies', activeCompanyId, 'physicalPonds', physical.id), {
+                  status: 'active', activePondId: change.data.id,
+                  updatedAt: serverTimestamp(), updatedBy: user.uid,
+                });
+              }
               hasBatchWrites = true;
               didProcess = true;
             } else if (change.action === 'delete') {
@@ -729,17 +744,24 @@ const useFirebaseSyncController = () => {
           } 
           else if (change.type === 'physicalPond') {
             const physicalPondRef = doc(db, 'companies', activeCompanyId, 'physicalPonds', change.data.id);
-            if (change.action === 'create' || change.action === 'update') {
+            if (change.action === 'create') {
+              const createPhysicalPond = httpsCallable<
+                { companyId: string; pondId: string; pond: PhysicalPond },
+                { id: string }
+              >(getFunctions(firebaseApp), 'createCompanyPhysicalPond');
+              await createPhysicalPond({
+                companyId: activeCompanyId,
+                pondId: change.data.id,
+                pond: change.data,
+              });
+              didProcess = true;
+            } else if (change.action === 'update') {
               const physicalPondData = {
                 ...removeUndefinedFields(change.data),
                 updatedAt: serverTimestamp(),
                 updatedBy: user.uid,
-                ...(change.action === 'create' && {
-                  createdAt: serverTimestamp(),
-                  createdBy: user.uid,
-                }),
               };
-              batch.set(physicalPondRef, physicalPondData, { merge: change.action === 'update' });
+              batch.set(physicalPondRef, physicalPondData, { merge: true });
               hasBatchWrites = true;
               didProcess = true;
             } else if (change.action === 'delete') {

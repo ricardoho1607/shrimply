@@ -208,12 +208,11 @@ export default function AuthPage() {
             {success && <div className="auth-alert success" role="status">{success}</div>}
 
             <button type="submit" disabled={loading} className="auth-submit">
-              {loading ? (t.auth.authenticating || 'Authenticating...') : (
-                <>
-                  {t.auth.enterDashboard || 'Enter Dashboard'}
-                  <LogIn size={18} />
-                </>
-              )}
+              {/* Keep translated text inside a stable element during loading changes. */}
+              <span>{loading
+                ? (t.auth.authenticating || 'Authenticating...')
+                : (t.auth.enterDashboard || 'Enter Dashboard')}</span>
+              {!loading && <LogIn size={18} />}
             </button>
           </form>
 

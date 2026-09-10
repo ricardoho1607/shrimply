@@ -33,7 +33,6 @@ interface CompanyProfile {
   primaryLocation?: string | { address?: string };
   location?: string;
   farmType?: string;
-  businessSize?: string;
   description?: string;
   contactPhone?: string;
   isPublicProfile?: boolean;
@@ -86,11 +85,6 @@ const formatLocation = (company: CompanyProfile, copy: (text: string) => string)
   const primaryLocation = company?.primaryLocation;
   if (typeof primaryLocation === 'string') return primaryLocation;
   return company?.location || primaryLocation?.address || copy('Not set');
-};
-
-const formatBusinessSize = (size: string | undefined, copy: (text: string) => string) => {
-  if (!size) return copy('Not set');
-  return `${size.charAt(0).toUpperCase()}${size.slice(1)} ${copy('operation')}`;
 };
 
 const statusColor = (status?: string) => {
@@ -255,11 +249,10 @@ export default function CompanyPage() {
           </div>
         </div>
 
-        <div className="company-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '1px', background: 'var(--shell-border)' }}>
+        <div className="company-info-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '1px', background: 'var(--shell-border)' }}>
           {[
             { label: t.companyDetails?.location || 'Location', value: formatLocation(companyProfile, copy), icon: MapPin },
             { label: t.companyDetails?.farmType || 'Farm Type', value: companyProfile.farmType || copy('Not specified'), icon: Activity },
-            { label: t.companyDetails?.businessSize || 'Business Size', value: formatBusinessSize(companyProfile.businessSize, copy), icon: Building2 },
             { label: t.companyDetails?.members || 'Members', value: `${members.length || companyProfile.teamMembers?.length || 0}`, icon: Users },
           ].map((item) => (
             <div key={item.label} style={{ background: '#fff', padding: '22px', minHeight: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: '14px' }}>
