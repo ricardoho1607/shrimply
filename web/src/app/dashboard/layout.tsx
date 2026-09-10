@@ -120,7 +120,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const [isDesktopNavigation, setDesktopNavigation] = useState(false);
   const [isMobileNavigation, setMobileNavigation] = useState(false);
   const [todayLabel, setTodayLabel] = useState('');
-  const [expandedGroups, setExpandedGroups] = useState<string[]>(['reports', 'inventory']);
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const sidebarRef = useRef<HTMLElement>(null);
   const sidebarTriggerRef = useRef<HTMLButtonElement>(null);
   const isOverlayNavigation = isSidebarOpen && isMobileNavigation;
@@ -164,6 +164,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     business: copy('Business'),
     system: copy('System'),
   };
+
+  const routeExpandedGroup = pathname.startsWith('/dashboard/reports/')
+    ? 'reports'
+    : pathname.startsWith('/dashboard/inventory/')
+      ? 'inventory'
+      : null;
 
   const currentNavMeta = (() => {
     if (pathname === '/dashboard/company') {
@@ -469,13 +475,14 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           transition: background-color 0.16s ease, color 0.16s ease !important;
         }
         .sidebar-link:hover {
-          background: var(--bg-mid) !important;
-          color: var(--text-primary) !important;
+          background: transparent !important;
+          color: var(--primary) !important;
           transform: none !important;
         }
         .sidebar-link.active {
-          background: var(--primary-dim) !important;
+          background: transparent !important;
           color: var(--primary) !important;
+          box-shadow: inset 2px 0 0 var(--primary);
         }
         .dashboard-profile-button {
           transition: background-color 0.16s ease !important;
@@ -556,8 +563,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         inert={!(isDesktopNavigation || isSidebarOpen) ? true : undefined}
         className={`sidebar ${isSidebarOpen ? 'mobile-open' : ''}`}
         style={{
-        width: '280px',
-        padding: '0 16px 24px',
+        width: '264px',
+        padding: '0 12px 16px',
         display: 'flex',
         flexDirection: 'column',
         zIndex: 100,
@@ -572,8 +579,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         boxShadow: '20px 0 80px rgba(15, 76, 117, 0.04)'
       }}>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1, overflowY: 'auto', padding: '12px 4px 0 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto', padding: '10px 2px 0 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Link
               href="/dashboard/company"
               className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
@@ -584,11 +591,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                 gap: '10px',
                 flex: 1,
                 minWidth: 0,
-                minHeight: '40px',
-                padding: '8px 12px',
-                borderRadius: '10px',
+                minHeight: '36px',
+                padding: '6px 8px',
+                borderRadius: 0,
                 color: pathname === '/dashboard/company' ? '#1e293b' : '#64748b',
-                background: pathname === '/dashboard/company' ? '#f1f5f9' : 'transparent',
+                background: 'transparent',
+                boxShadow: pathname === '/dashboard/company' ? 'inset 2px 0 0 var(--primary)' : 'none',
                 textDecoration: 'none',
               }}
             >
@@ -618,14 +626,14 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
-            <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-              <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 10px 6px', fontFamily: 'var(--jakarta)' }}>
+            <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '2px 8px 4px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
               {items.map((item) => {
                 const ItemIcon = item.icon;
                 if (isNavGroup(item)) {
-                  const isExpanded = expandedGroups.includes(item.id);
+                  const isExpanded = expandedGroups.includes(item.id) || routeExpandedGroup === item.id;
                   return (
                     <div key={item.label} style={{ display: 'flex', flexDirection: 'column' }}>
                       <button
@@ -635,12 +643,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'space-between',
-                          minHeight: '40px',
-                          padding: '8px 12px',
+                          minHeight: '36px',
+                          padding: '6px 10px',
                           background: 'transparent',
                           border: 'none',
                           fontSize: '0.8rem',
-                          borderRadius: '10px',
+                          borderRadius: 0,
                           fontWeight: 500,
                           color: '#64748b',
                           cursor: 'pointer',
@@ -657,7 +665,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                       </button>
 
                       {isExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '28px', marginTop: '2px', gap: '2px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '28px', gap: 0 }}>
                           {item.children.map((child) => {
                             const isChildActive = pathname === child.href;
                             return (
@@ -666,14 +674,15 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                                 href={child.href}
                                 className="sidebar-link"
                                 style={{
-                                  minHeight: '34px',
-                                  padding: '7px 12px',
+                                  minHeight: '30px',
+                                  padding: '5px 10px',
                                   fontSize: '0.76rem',
                                   textDecoration: 'none',
-                                  borderRadius: '8px',
+                                  borderRadius: 0,
                                   fontWeight: isChildActive ? 600 : 500,
                                   color: isChildActive ? '#1e293b' : '#64748b',
-                                  background: isChildActive ? '#f1f5f9' : 'transparent',
+                                  background: 'transparent',
+                                  boxShadow: isChildActive ? 'inset 2px 0 0 var(--primary)' : 'none',
                                   transition: 'all 0.2s'
                                 }}
                               >
@@ -697,14 +706,15 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                       display: 'flex',
                       alignItems: 'center',
                       gap: '10px',
-                      minHeight: '40px',
-                      padding: '8px 12px',
+                      minHeight: '36px',
+                      padding: '6px 10px',
                       textDecoration: 'none',
                       fontSize: '0.8rem',
-                      borderRadius: '10px',
+                      borderRadius: 0,
                       fontWeight: isActive ? 600 : 500,
                       color: isActive ? '#1e293b' : '#64748b',
-                      background: isActive ? '#f1f5f9' : 'transparent',
+                      background: 'transparent',
+                      boxShadow: isActive ? 'inset 2px 0 0 var(--primary)' : 'none',
                       transition: 'all 0.2s'
                     }}
                   >
@@ -723,10 +733,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                     alignItems: 'center',
                     gap: '10px',
                     width: '100%',
-                    minHeight: '40px',
-                    padding: '8px 12px',
+                    minHeight: '36px',
+                    padding: '6px 10px',
                     border: 'none',
-                    borderRadius: '10px',
+                    borderRadius: 0,
                     background: 'transparent',
                     color: '#ef4444',
                     cursor: 'pointer',

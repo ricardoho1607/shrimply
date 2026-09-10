@@ -53,6 +53,86 @@ body:has(.ocean-theme)::before { display: none; }
   .ocean-theme .site-footer { padding: 52px 24px 32px !important; }
   .ocean-theme .site-footer-grid { gap: 32px !important; }
 }
+
+/* Mobile navigation is a single, calm surface rather than a stack of cards. */
+@media (max-width: 920px) {
+  .ocean-theme #navbar .mobile-drawer {
+    width: min(340px, 84vw);
+    padding: calc(18px + var(--safe-area-top)) 20px calc(20px + var(--safe-area-bottom));
+  }
+  .ocean-theme #navbar .drawer-header {
+    min-height: 40px;
+    padding-bottom: 12px;
+    border-bottom: 0;
+  }
+  .ocean-theme #navbar .drawer-close {
+    width: auto;
+    min-width: 0;
+    height: 36px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .ocean-theme #navbar .drawer-links {
+    gap: 2px;
+    padding: 8px 0 10px;
+    border: 0;
+  }
+  .ocean-theme #navbar .drawer-link {
+    min-height: 38px !important;
+    padding: 0 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0 !important;
+    line-height: 1.25;
+    text-transform: none !important;
+  }
+  .ocean-theme #navbar .drawer-link.active {
+    color: #0f4c75 !important;
+  }
+  .ocean-theme #navbar .drawer-actions {
+    margin-top: 18px;
+    gap: 6px;
+  }
+  .ocean-theme #navbar .drawer-signin {
+    justify-content: flex-start;
+    min-height: 38px;
+    padding: 0 2px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+  }
+  .ocean-theme #navbar .mobile-lang-toggle {
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 0 2px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+  .ocean-theme #navbar .mobile-lang-options { gap: 0; }
+  .ocean-theme #navbar .mobile-lang-btn {
+    justify-content: flex-start;
+    padding: 6px 0;
+    border-radius: 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    line-height: 1.25;
+  }
+  .ocean-theme #navbar .mobile-lang-btn.active {
+    color: #0f4c75;
+    background: transparent;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .ocean-theme :is(.r, .animate-hero) { opacity: 1; transform: none; animation: none; transition: none; }
 }

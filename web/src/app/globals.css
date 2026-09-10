@@ -127,6 +127,126 @@ body {
   min-width: 0;
 }
 
+/*
+ * Navbar first-paint baseline
+ *
+ * The interactive navbar keeps its detailed component styles, but these
+ * structural rules must be available in the server-rendered stylesheet.
+ * Without them, a cold visit can briefly show the navigation as ungrouped
+ * text while the client-side styled-jsx sheet is loading.
+ */
+#navbar .brand-link {
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  flex-shrink: 0;
+}
+
+#navbar .brand-word {
+  font-family: var(--serif);
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+#navbar .brand-logo {
+  display: none;
+  width: 118px;
+  height: auto;
+  object-fit: contain;
+  object-position: left center;
+}
+
+#navbar .desktop-links {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  gap: clamp(18px, 2.4vw, 32px);
+  align-items: center;
+  min-width: 0;
+  margin: 0 24px;
+}
+
+#navbar .nav-link {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#navbar .desktop-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+#navbar .signin-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  color: var(--blue);
+  font-weight: 500;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+#navbar .get-started-link {
+  padding: 10px 20px;
+  white-space: nowrap;
+}
+
+#navbar .mobile-menu-button,
+#navbar .mobile-backdrop:not(.open),
+#navbar .mobile-drawer:not(.open) {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  #navbar {
+    padding-left: 32px !important;
+    padding-right: 32px !important;
+  }
+
+  #navbar .desktop-links {
+    gap: 18px;
+    margin: 0 16px;
+  }
+
+  #navbar .desktop-actions {
+    gap: 12px;
+  }
+
+  #navbar .get-started-link {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 920px) {
+  #navbar .brand-word,
+  #navbar .desktop-links,
+  #navbar .desktop-actions {
+    display: none;
+  }
+
+  #navbar .brand-logo,
+  #navbar .mobile-menu-button {
+    display: inline-flex;
+  }
+
+  #navbar .mobile-menu-button {
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
 /* Noise Filter */
 body::before {
   content: ''; position: fixed; inset: 0;

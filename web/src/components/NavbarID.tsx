@@ -226,50 +226,18 @@ export default function NavbarID() {
               {item.label}
             </Link>
           ))}
-        </div>
-
-        <div className="drawer-actions">
-          <LanguageToggle isMobile />
           <Link
             href="/auth"
             prefetch={false}
-            className="drawer-signin"
-            style={{
-              minHeight: '54px',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--blue)',
-              fontSize: '0.72rem',
-              fontWeight: 600,
-              letterSpacing: '0.14em',
-              textDecoration: 'none',
-              textTransform: 'uppercase',
-              border: '1px solid var(--slate)',
-              borderRadius: '999px',
-              background: 'rgba(255, 255, 255, 0.72)',
-            }}
+            className="drawer-link drawer-signin"
             onClick={closeMenu}
           >
             Masuk
           </Link>
-          <Link
-            href="/auth/join"
-            prefetch={false}
-            className="btn-primary drawer-primary"
-            style={{
-              width: '100%',
-              minHeight: '54px',
-              padding: '0 24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              textAlign: 'center',
-            }}
-            onClick={closeMenu}
-          >
-            Mulai Gratis
-          </Link>
+        </div>
+
+        <div className="drawer-actions">
+          <LanguageToggle isMobile />
         </div>
       </aside>
 

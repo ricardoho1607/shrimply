@@ -55,6 +55,16 @@ test('dashboard shell follows authenticated spacing and content width', () => {
   assert.match(layout, /calc\(12px \+ var\(--safe-area-right\)\)/);
 });
 
+test('sidebar uses compact flat navigation without card-like active states', () => {
+  assert.match(layout, /const \[expandedGroups, setExpandedGroups\] = useState<string\[\]>\(\[\]\)/);
+  assert.match(layout, /const routeExpandedGroup = pathname\.startsWith\('\/dashboard\/reports\/'\)[\s\S]*?\? 'reports'[\s\S]*?\? 'inventory'/);
+  assert.match(layout, /expandedGroups\.includes\(item\.id\) \|\| routeExpandedGroup === item\.id/);
+  assert.match(layout, /\.sidebar-link\.active\s*{[\s\S]*?background:\s*transparent !important;[\s\S]*?box-shadow:\s*inset 2px 0 0 var\(--primary\);/);
+  assert.match(layout, /width: '264px'/);
+  assert.match(layout, /minHeight: '36px'/);
+  assert.match(layout, /borderRadius: 0/);
+});
+
 test('dashboard form confirmation buttons use the solid navy primary color', () => {
   assert.match(layout, /\.dashboard-saas button\[type="submit"\]\.btn-primary\s*{[\s\S]*?background:\s*#0f4c75;/);
 });
