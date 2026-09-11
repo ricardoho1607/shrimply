@@ -90,3 +90,35 @@ test('legacy alerts deduplicate using pond, event, and a preserved source-record
   await state.run();
   assert.equal(state.alerts().filter(alert => alert.data.riskId === 'heavy_rain_low_do').length, 1);
 });
+
+test('weak-feed creation time survives duplicate evaluation, recovery, reload and ordering', async () => {
+  const state = fixture();
+  state.pond.samplings = [{ date: '2026-09-10', feedData: { feedingResponse: 'weak' } }];
+  let now = 1000;
+  const evaluate = () => state.run({ timestamp: () => now });
+  await state.run({ timestamp: () => now, eventFindings: [{ id: 'weak_feeding_response', eventDate: '2026-09-10', severity: 'warning', title: 'Weak feeding', summary: 'Weak response', recommendation: 'Check response' }] });
+  const original = state.alerts().find(alert => alert.data.riskId === 'weak_feeding_response');
+  assert.ok(original);
+  original.read = true;
+  now = 2000;
+  await evaluate();
+  assert.equal(original.createdAt, 1000);
+  assert.equal(original.updatedAt, 2000);
+  state.pond.samplings.push({ date: '2026-09-11', feedData: { feedingResponse: 'normal' } });
+  now = 3000;
+  await evaluate();
+  assert.equal(original.data.status, 'resolved');
+  assert.equal(original.resolvedAt, 3000);
+  assert.equal(original.createdAt, 1000);
+  assert.equal(original.timestamp, 1000);
+  assert.equal(original.read, true);
+  now = 4000;
+  await evaluate();
+  assert.equal(original.resolvedAt, 3000);
+  const reloaded = JSON.parse(JSON.stringify(state.alerts()));
+  const saved = reloaded.find(alert => alert.data.riskId === 'weak_feeding_response');
+  assert.equal(saved.createdAt, 1000);
+  const ordered = [saved, { timestamp: 2500, createdAt: 2500 }].sort((a, b) => b.timestamp - a.timestamp);
+  assert.equal(ordered[1], saved);
+  assert.equal(state.alerts().filter(alert => alert.data.riskId === 'weak_feeding_response').length, 1);
+});

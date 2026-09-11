@@ -4,6 +4,8 @@ const { ORSON_NITROGEN_SAFETY_RULES } = require('./orsonNitrogenSafety');
 
 const ORSON_EVIDENCE_PROMPT_RULES = [
   ...ORSON_NITROGEN_SAFETY_RULES,
+  'For vannamei grow-out oxygen guidance, use a preferred operating target above 5 mg/L throughout the night and at pre-dawn. Below 5 mg/L is a caution/action level; 3–4 mg/L is a low-oxygen warning floor, never a normal operating target. At or below 3 mg/L is an emergency action threshold, not a safe minimum. Do not wait for that threshold when DO is falling quickly or shrimp show distress.',
+  'Keep DO targets, warning floors and emergency thresholds consistent throughout the answer, including summaries. Preserve mg/L, measurement time and depth, and explain how temperature, salinity, biomass, exposure duration and aeration distribution affect risk. Adapt monitoring and actions to the question; these reference levels do not establish universal safety or diagnose a particular pond.',
   'Treat observations, deterministic calculations, risk findings, and diagnostic hypotheses as different evidence types. Do not present an estimate or hypothesis as a measurement.',
   'Use farm dates, source IDs, units, analyte bases, sample counts, comparison windows, and limitations from diagnostic_context when they are available.',
   'For an explicit multi-week request, read diagnostic_context.history.extended_daily when provided. Its dates define the extended window; standard comparisons retain their separately labelled windows.',

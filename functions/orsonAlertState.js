@@ -39,15 +39,19 @@ const syncRiskAlerts = async ({ db, companyId, pondId, calculateRiskReport, time
       });
       if (previous) {
         if (previous.data().dedupeKey === key) transaction.update(previous.ref, {
-          'data.status': finding.status, 'data.lastEvaluatedDate': latestDate,
+          'data.status': previous.data().data?.status === 'resolved' ? 'resolved' : finding.status,
+          'data.lastEvaluatedDate': latestDate, updatedAt: timestamp(),
+          ...(previous.data().createdAt == null && previous.data().timestamp != null
+            ? { createdAt: previous.data().timestamp } : {}),
         });
         continue;
       }
+      const createdAt = timestamp();
       transaction.set(db.collection('notifications').doc(`orson-${key}`), {
         companyId, pondId, pondName: report.pondName, type: 'orson_risk',
         title: `Orson: ${report.pondName} ${finding.title}`,
         message: `${finding.summary} ${finding.recommendation}`,
-        timestamp: timestamp(), read: false, priority: priority(finding.severity, finding.id),
+        timestamp: createdAt, createdAt, updatedAt: createdAt, read: false, priority: priority(finding.severity, finding.id),
         isOrson: true, icon: 'brain-circuit', dedupeKey: key,
         data: { isOrson: true, pondId, pondName: report.pondName, cycleId, riskId: finding.id,
           severity: finding.severity, sourceDate: finding.eventDate, lastEvaluatedDate: latestDate, status: finding.status },
@@ -56,10 +60,13 @@ const syncRiskAlerts = async ({ db, companyId, pondId, calculateRiskReport, time
     }
     for (const snapshot of relevant) {
       const value = snapshot.data();
-      if (!value.dedupeKey || value.data?.status !== 'active' || keys.has(value.dedupeKey)) continue;
+      if (!value.dedupeKey || !['active', 'historical'].includes(value.data?.status) || keys.has(value.dedupeKey)) continue;
       const recovered = hasRecovery(pond.samplings || [], value.data.riskId, value.data.sourceDate);
       transaction.update(snapshot.ref, {
         'data.status': recovered ? 'resolved' : 'historical', 'data.lastEvaluatedDate': latestDate,
+        updatedAt: timestamp(),
+        ...(value.createdAt == null && value.timestamp != null ? { createdAt: value.timestamp } : {}),
+        ...(recovered && value.resolvedAt == null ? { resolvedAt: timestamp() } : {}),
       });
     }
     return { notified, report };
