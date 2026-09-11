@@ -13,6 +13,7 @@ const companyLinks = [
   { href: '/vi/about', label: 'Về chúng tôi' },
   { href: '/vi/how-it-works', label: 'Cách hoạt động' },
   { href: '/vi/orson', label: 'Orson AI' },
+  { href: '/privacy', label: 'Chính sách bảo mật' },
 ];
 
 export default function FooterVI() {

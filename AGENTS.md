@@ -277,3 +277,9 @@ Safety rules:
 - Stop before production deployment if a required release check fails, and report the failure.
 - Preserve unrelated user changes and do not include them in the release commit.
 - `SHIPALL`/`PUSHALL` does not authorize Firebase deployment, Firestore rule changes, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.
+
+## 13. PUSHWEB Release Shortcut
+
+When the user says `PUSHWEB` (case-insensitive), treat it as explicit authorization to run relevant web checks, commit and push only the intended changes, deploy the web app through Vercel project `out` to production, and verify that `https://www.shrimplytech.com` points to the new successful deployment.
+
+Report the Git commit hash, branch, Vercel production deployment URL, and verified custom domain. `PUSHWEB` does not authorize Expo/EAS updates, Firebase deployment, Firestore rule changes, branch merges, native builds, or app-store submission.

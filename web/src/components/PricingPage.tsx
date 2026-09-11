@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { publicPlanCatalog } from '../../../functions/shared/companyPlans';
 import { GOOGLE_PLAY_URL } from '@/config/site';
 import styles from './PricingPage.module.css';
@@ -22,17 +23,19 @@ export default function PricingPage({ locale = 'en' }: { locale?: 'en' | 'id' })
   const tools = id ? [
     ['Operasional tambak', 'Pencatatan pakan, kualitas air, sampling, mortalitas, dan panen per kolam dan siklus.'],
     ['Persediaan & keuangan', 'Kelola stok pakan dan aset, catat transaksi, serta lihat laporan biaya dan hasil budidaya.'],
-    ['Orson AI', 'Chat dan proyeksi panen berdasarkan data yang Anda catat. Hasil AI perlu ditinjau; bukan jaminan hasil panen.'],
+    ['Orson AI', 'Orson menghubungkan pola pertumbuhan, pakan, kualitas air, dan riwayat kolam untuk membantu Anda melihat perubahan dan potensi risiko lebih awal.'],
     ['Kerja tim', 'Akses web dan aplikasi Android, dengan peran owner, manager, dan technician sesuai izin perusahaan.'],
   ] : [
     ['Farm operations', 'Record feeding, water quality, sampling, mortality and harvest by physical pond and production cycle.'],
     ['Inventory & finance', 'Manage feed and asset inventory, record transactions, and review farm cost and production reports.'],
-    ['Orson AI', 'Chat and harvest projections informed by the records you enter. Review AI output; it does not guarantee harvest results.'],
+    ['Orson AI', 'Orson connects growth, feeding, water quality and pond history to help you spot patterns and potential risks earlier.'],
     ['Team workspace', 'Web and Android access, with owner, manager and technician roles controlled by company permissions.'],
   ];
   return <main className={styles.page} lang={locale}>
     <nav className={styles.nav} aria-label={id ? 'Navigasi utama' : 'Main navigation'}>
-      <Link className={styles.brand} href={id ? '/id' : '/'}>Shrimply<span> FARM INTELLIGENCE</span></Link>
+      <Link className={styles.brand} href={id ? '/id' : '/'} aria-label="Shrimply home">
+        <Image src="/shrimplylogo_v2.webp" width={500} height={160} alt="Shrimply" priority />
+      </Link>
       <div><Link href={id ? '/pricing' : '/id/pricing'}>{id ? 'English' : 'Bahasa Indonesia'}</Link><Link href="/auth">{id ? 'Masuk' : 'Sign in'}</Link></div>
     </nav>
     <header className={styles.hero}>
@@ -48,7 +51,7 @@ export default function PricingPage({ locale = 'en' }: { locale?: 'en' | 'id' })
         <h2>{plan.name}</h2>
         <p className={styles.price}>{money(plan.prices[period])}</p>
         <p className={styles.subprice}>{plan.id === 'free' ? (id ? 'Gratis, tanpa pembayaran' : 'Free, no payment required') : (id ? `per perusahaan / ${duration}` : `per company / ${duration}`)}</p>
-        <div className={styles.capacity}>{plan.pondLimit} {id ? 'kolam fisik' : 'physical ponds'}</div>
+        <div className={styles.capacity}>{id ? 'Hingga' : 'Up to'} {plan.pondLimit} {id ? 'kolam fisik' : 'physical ponds'}</div>
         <ul>
           <li>{id ? 'Anggota tim tanpa batas' : 'Unlimited team members'}</li>
           <li>{id ? 'Seluruh alat manajemen tambak saat ini' : 'All current farm-management tools'}</li>
@@ -57,12 +60,12 @@ export default function PricingPage({ locale = 'en' }: { locale?: 'en' | 'id' })
           <li>{plan.orson.monthlyTotal} {id ? 'total permintaan Orson per bulan' : 'total Orson requests per month'}</li>
           {plan.id === 'pro' && <li>{id ? 'Dukungan prioritas' : 'Priority support'}</li>}
         </ul>
-        <Link className={styles.button} href={plan.id === 'free' ? '/auth/join' : '/dashboard/settings?tab=billing'} prefetch={false}>{plan.id === 'free' ? (id ? 'Mulai gratis' : 'Start free') : (id ? 'Buka billing perusahaan' : 'Open company billing')}</Link>
+        <Link className={styles.button} href="/auth/join" prefetch={false}>{id ? 'Coba Shrimply' : 'Try Shrimply'}</Link>
       </article>)}</div>
       <p className={styles.note}>{id ? 'Batas kolam dan Orson dipakai bersama oleh seluruh perusahaan. Siklus baru pada kolam fisik yang sama tidak menambah hitungan kolam. Chat dan proyeksi berbagi batas bulanan; batas harian/mingguan juga berlaku. Kuota tidak diakumulasi ke periode berikutnya.' : 'Pond and Orson allowances are shared company-wide. A new cycle in an existing physical pond does not count as another pond. Chats and projections share the monthly allowance; daily/weekly limits also apply. Unused quota does not roll over.'}</p>
       <aside className={styles.enterprise}><strong>Enterprise</strong><p>{id ? 'Lebih dari 100 kolam? Hubungi kami untuk kapasitas, dukungan, dan penawaran khusus. Tidak ada harga Enterprise otomatis.' : 'More than 100 ponds? Contact us for custom capacity, support and a quote. Enterprise is not an automatic online purchase.'}</p><a href="mailto:shrimply.tech@gmail.com">shrimply.tech@gmail.com</a></aside>
     </section>
-    <section className={styles.section} id="product"><p className={styles.eyebrow}>{id ? 'PRODUK DIGITAL, BUKAN BARANG FISIK' : 'DIGITAL SOFTWARE, NOT PHYSICAL GOODS'}</p><h2>{id ? 'Apa yang Anda dapatkan' : 'What your subscription includes'}</h2><div className={styles.tools}>{tools.map(([title, body]) => <article key={title}><h3>{title}</h3><p>{body}</p></article>)}</div><p className={styles.note}>{id ? 'Fitur tetap mengikuti hak akses peran pengguna. Paket membedakan kapasitas kolam, kuota Orson, dan tingkat dukungan. Tidak termasuk sensor, perangkat keras, pakan, benur, udang, atau jasa konsultasi lapangan.' : 'Features remain subject to each user’s permissions. Plans differ by pond capacity, Orson quota and support level. Sensors, hardware, feed, shrimp seed, shrimp and on-site consultancy are not included.'}</p><a href={GOOGLE_PLAY_URL}>{id ? 'Lihat aplikasi Android di Google Play' : 'View the Android app on Google Play'} →</a></section>
+    <section className={styles.section} id="product"><p className={styles.eyebrow}>{id ? 'DUKUNGAN LEBIH CERDAS UNTUK SETIAP KOLAM' : 'SMARTER SUPPORT FOR EVERY POND'}</p><h2>{id ? 'Apa yang Anda dapatkan' : 'What your subscription includes'}</h2><div className={styles.tools}>{tools.map(([title, body]) => <article key={title}><h3>{title}</h3><p>{body}</p></article>)}</div><p className={styles.note}>{id ? 'Fitur tetap mengikuti hak akses peran pengguna. Paket membedakan kapasitas kolam, kuota Orson, dan tingkat dukungan. Tidak termasuk sensor, perangkat keras, pakan, benur, udang, atau jasa konsultasi lapangan.' : 'Features remain subject to each user’s permissions. Plans differ by pond capacity, Orson quota and support level. Sensors, hardware, feed, shrimp seed, shrimp and on-site consultancy are not included.'}</p><a href={GOOGLE_PLAY_URL}>{id ? 'Lihat aplikasi Android di Google Play' : 'View the Android app on Google Play'} →</a></section>
     <section className={styles.section} id="payment"><p className={styles.eyebrow}>{id ? 'ALUR TRANSAKSI' : 'PAYMENT FLOW'}</p><h2>{id ? 'Dari pilihan paket ke aktivasi' : 'From plan selection to activation'}</h2><ol className={styles.steps}>
       {(id ? [
         ['Daftar atau masuk', 'Perusahaan baru mulai di Free. Bergabung ke perusahaan yang sudah ada mengikuti persetujuan perusahaan.'],
@@ -77,12 +80,12 @@ export default function PricingPage({ locale = 'en' }: { locale?: 'en' | 'id' })
         ['Check out on Midtrans', 'Select an available payment method and follow Midtrans instructions. Pending payments do not activate a plan.'],
         ['Digital activation', 'Shrimply activates access after verified payment confirmation from Midtrans. Check Billing & Plans for status. No physical delivery is involved.'],
       ]).map(([title, body]) => <li key={title}><h3>{title}</h3><p>{body}</p></li>)}
-    </ol><div className={styles.scope}><h3>{id ? 'Midtrans hanya untuk langganan Shrimply' : 'Midtrans is only for Shrimply subscriptions'}</h3><p>{id ? 'Midtrans tidak digunakan untuk transaksi marketplace, jual beli udang/pakan/benur, pembayaran antar pengguna, escrow, atau pencairan dana ke penjual. Pembayaran di halaman ini hanya membeli akses layanan software Shrimply untuk satu perusahaan.' : 'Midtrans is not used for marketplace transactions, shrimp/feed/seed purchases, payments between users, escrow or seller payouts. Payments here purchase only Shrimply software access for one company.'}</p></div></section>
+    </ol><div className={styles.scope}><h3>{id ? 'Dibuat untuk tumbuh bersama tambak Anda' : 'Built to grow with your farm'}</h3><p>{id ? 'Mulai dari Free, lalu beralih ke Plus atau Pro saat kapasitas kolam bertambah. Tim dan catatan tambak Anda tetap tersimpan dalam satu ruang kerja perusahaan.' : 'Start on Free, then move to Plus or Pro as your pond capacity grows. Your team and farm records stay together in one company workspace.'}</p></div></section>
     <section className={styles.section} id="subscription-terms"><h2>{id ? 'Ketentuan langganan & bantuan' : 'Subscription details & support'}</h2><div className={styles.terms}>
       <div><h3>{id ? 'Periode & perpanjangan' : 'Periods & renewals'}</h3><p>{id ? 'Paket prabayar tidak diperpanjang dengan debit otomatis. Perpanjang manual dari Billing & Plans. Perpanjangan paket yang sama menambah durasi dari akhir periode aktif; perubahan ke paket berbayar lain memulai periode baru saat pembayaran terverifikasi, tanpa prorata otomatis.' : 'Prepaid plans do not auto-debit. Renew manually from Billing & Plans. Renewing the same plan extends the active period; switching to another paid plan starts a new period after verified payment, with no automatic proration.'}</p></div>
       <div><h3>{id ? 'Kembali ke Free' : 'Returning to Free'}</h3><p>{id ? 'Pemilik dapat menjadwalkan Free pada akhir periode berbayar. Tanpa perpanjangan, akses berbayar berakhir setelah masa tenggang 7 hari. Data perusahaan tidak dihapus karena perubahan paket; pembuatan kolam baru dibatasi jika kapasitas paket terlampaui.' : 'The owner can schedule Free at the paid period’s end. Without renewal, paid access expires after a 7-day grace period. Plan changes do not delete company records; new pond creation is blocked when the plan capacity is exceeded.'}</p></div>
       <div id="support"><h3>{id ? 'Pembayaran bermasalah / permintaan refund' : 'Payment issues / refund requests'}</h3><p>{id ? 'Hubungi Shrimply melalui email di bawah dengan ID pesanan, nama perusahaan, tanggal pembayaran, dan penjelasan masalah. Kami akan memeriksa transaksi dan menindaklanjuti permintaan. Jangan kirim kata sandi, OTP, atau detail kartu. Perubahan paket tidak otomatis membuat refund.' : 'Email Shrimply below with the order ID, company name, payment date and issue. We will review the transaction and follow up on your request. Do not send passwords, OTPs or card details. Changing plans does not automatically issue a refund.'}</p><a href="mailto:shrimply.tech@gmail.com">shrimply.tech@gmail.com</a></div>
     </div></section>
-    <footer className={styles.footer}><Link href={id ? '/id' : '/'}>Shrimply</Link><span>© 2026 Shrimply · {id ? 'Langganan software manajemen tambak' : 'Farm-management software subscriptions'}</span><a href="#support">{id ? 'Bantuan pembayaran' : 'Payment support'}</a></footer>
+    <footer className={styles.footer}><Link href={id ? '/id' : '/'}>Shrimply</Link><span>© 2026 Shrimply · {id ? 'Langganan software manajemen tambak' : 'Farm-management software subscriptions'}</span><div className={styles.footerLinks}><a href="#support">{id ? 'Bantuan pembayaran' : 'Payment support'}</a><Link href="/privacy">{id ? 'Kebijakan Privasi' : 'Privacy Policy'}</Link></div></footer>
   </main>;
 }

@@ -443,3 +443,51 @@ final result: passed
 2. Final comparison uses the dashboard sidebar spacing, active state, typography, owner footer, and mobile overlay behavior while preserving the reference workspace hierarchy.
 
 final result: passed
+
+---
+
+# Pricing Page Annotation Design QA — 2026-09-11
+
+- Source visual truth: browser-comment captures supplied for `http://localhost:3000/pricing`, including the three plan CTAs.
+- Implementation: in-app browser captures of `http://localhost:3000/pricing`, `#product`, and `#payment`.
+- Viewport: 1087 × 789 CSS px.
+- Source pixels: 1087 × 789 per annotation capture. Implementation pixels: 1087 × 789 per browser capture. No density normalization required.
+- State: English pricing page with the monthly plan selected.
+
+## Full-view comparison evidence
+
+- The existing page composition, typography, card grid, spacing, and navigation layout remain unchanged outside the annotated elements.
+- The wordmark is now the supplied transparent Shrimply logo asset and is balanced with the language and sign-in links.
+- All three capacity labels use the same “Up to” pattern without changing card sizing.
+- All three plan cards use the same “Try Shrimply” CTA and preserve equal button sizing and alignment.
+
+## Focused-region comparison evidence
+
+- Product section: the eyebrow is benefit-led and the revised Orson copy fits the existing two-column card without overflow or uneven height.
+- Payment section: the blue panel contains a short growth message and uses a uniform soft-blue surface with no left accent bar.
+- The logo remains sharp at its rendered desktop width because the 500 × 160 source asset is scaled down proportionally.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing family, sizes, weights, line heights, and hierarchy are preserved; revised copy wraps cleanly.
+- Spacing and layout rhythm: section spacing, card grid, padding, and radii remain consistent.
+- Colors and visual tokens: existing navy, secondary blue, and off-white palette are preserved.
+- Image quality and asset fidelity: the real Shrimply WebP logo is used at its native aspect ratio; no recreated or placeholder asset is present.
+- Copy and content: English and Indonesian variants convey the same plan limits and product benefits.
+
+## Comparison history
+
+1. Initial implementation replaced the five annotated areas. The first payment-panel capture retained a blue left border.
+2. User feedback identified the left highlight as unwanted (P2 polish mismatch).
+3. Removed the left border while retaining the soft-blue separator background. The post-fix browser capture shows a clean, uniform panel.
+4. Replaced the three mixed plan actions with “Try Shrimply” / “Coba Shrimply” and routed each CTA to the signup flow. The browser capture confirms consistent labels, alignment, and destinations.
+
+## Findings
+
+- No actionable P0, P1, or P2 findings remain.
+
+## Follow-up polish
+
+- None required for the requested scope.
+
+final result: passed

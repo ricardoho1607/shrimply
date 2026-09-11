@@ -13,6 +13,7 @@ const companyLinks = [
   { href: '/th/about', label: 'เกี่ยวกับเรา' },
   { href: '/th/how-it-works', label: 'วิธีใช้งาน' },
   { href: '/th/orson', label: 'Orson AI' },
+  { href: '/privacy', label: 'นโยบายความเป็นส่วนตัว' },
 ];
 
 export default function FooterTH() {

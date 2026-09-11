@@ -51,9 +51,12 @@ test('public prices render the backend catalogue in both languages without compa
       assert.ok(html.includes(String(plan.pondLimit)));
       assert.ok(html.includes(new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(plan.prices.monthly)));
     }
-    assert.match(html, /marketplace/);
+    assert.match(html, locale === 'en' ? /Up to 10 physical ponds/ : /Hingga 10 kolam fisik/);
+    assert.match(html, locale === 'en' ? /Built to grow with your farm/ : /Dibuat untuk tumbuh bersama tambak Anda/);
+    assert.equal((html.match(new RegExp(locale === 'en' ? 'Try Shrimply' : 'Coba Shrimply', 'g')) || []).length, 3);
     assert.match(html, /shrimply\.tech@gmail\.com/);
     assert.match(html, /subscription-terms/);
+    assert.match(html, /href="\/privacy"/);
     assert.doesNotMatch(html, /Mid-server-|Mid-client-/);
   }
 });

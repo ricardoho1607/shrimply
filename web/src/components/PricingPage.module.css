@@ -2,8 +2,8 @@
 .page a { color: #0f4c75; }
 .nav { position: static; width: auto; max-width: 1180px; margin: auto; padding: 25px 28px; display: flex; justify-content: space-between; align-items: center; gap: 20px; }
 .page :is(h1,h2,h3) { font-family: inherit; font-weight: 750; }
-.brand { font-size: 26px; font-weight: 800; text-decoration: none; }
-.brand span { display: block; font-size: 9px; letter-spacing: .18em; }
+.brand { display: inline-flex; align-items: center; text-decoration: none; }
+.brand img { display: block; width: 145px; height: auto; }
 .nav > div { display: flex; gap: 24px; font-size: 14px; font-weight: 600; }
 .hero { max-width: 900px; margin: auto; text-align: center; padding: 65px 24px 32px; }
 .eyebrow { color: #3282b8; letter-spacing: .12em; font-size: 12px; font-weight: 800; }
@@ -38,10 +38,11 @@
 .steps { padding-left: 25px; }
 .steps li { padding-left: 14px; margin: 24px 0; }
 .steps li::marker { font-weight: 800; color: #3282b8; }
-.scope { padding: 26px; border-radius: 16px; background: #e7f1f8; border-left: 4px solid #3282b8; }
+.scope { padding: 26px; border-radius: 16px; background: #e7f1f8; }
 .scope p { margin: 0; font-size: 15px; }
 .terms > div { padding: 6px 0 20px; }
 .footer { max-width: 1180px; margin: 35px auto 0; border-top: 1px solid #dbe4ea; padding: 30px 28px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 20px; font-size: 12px; }
+.footerLinks { display: flex; flex-wrap: wrap; gap: 18px; }
 .page :is(a,button):focus-visible { outline: 3px solid #3282b8; outline-offset: 4px; }
 @media (max-width: 850px) { .cards { grid-template-columns: 1fr; } .card { padding: 28px; } .hero { padding-top: 40px; } .section { padding: 28px 20px; } .price { font-size: 34px; } }
-@media (max-width: 550px) { .tools, .terms { grid-template-columns: 1fr; } .nav { padding: 20px; align-items: flex-start; } .nav > div { flex-direction: column; gap: 4px; align-items: flex-end; font-size: 12px; } .periods button { padding: 9px 18px; } }
+@media (max-width: 550px) { .tools, .terms { grid-template-columns: 1fr; } .nav { padding: 20px; align-items: flex-start; } .brand img { width: 128px; } .nav > div { flex-direction: column; gap: 4px; align-items: flex-end; font-size: 12px; } .periods button { padding: 9px 18px; } }

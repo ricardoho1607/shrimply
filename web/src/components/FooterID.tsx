@@ -14,6 +14,7 @@ const companyLinks = [
   { href: '/id/about', label: 'Tentang' },
   { href: '/id/how-it-works', label: 'Cara Kerja' },
   { href: '/id/orson', label: 'Orson AI' },
+  { href: '/privacy', label: 'Kebijakan Privasi' },
 ];
 
 export default function FooterID() {

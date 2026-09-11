@@ -15,6 +15,7 @@ const companyLinks = [
   { href: '/about', label: 'About' },
   { href: '/how-it-works', label: 'How It Works' },
   { href: '/orson', label: 'Orson AI' },
+  { href: '/privacy', label: 'Privacy Policy' },
 ];
 
 export default function Footer() {
