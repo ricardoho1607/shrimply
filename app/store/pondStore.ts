@@ -246,7 +246,7 @@ interface PondStore {
   addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
-  addFeedData: (pondId: string, record: FeedData, date: string) => void;
+  addFeedData: (pondId: string, record: FeedData, date: string, localOnly?: boolean) => void;
   addHarvestData: (pondId: string, record: HarvestData) => void;
   
   getPondById: (pondId: string) => Pond | undefined; getPondSamplingData: (pondName: string) => Sampling[]; getSamplingDataFlat: () => (Sampling & { pondName: string })[];
@@ -832,7 +832,7 @@ export const usePondStore = create<PondStore>()(
         if (updatedSampling) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
       },
 
-      addFeedData: (pondId, record, date) => {
+      addFeedData: (pondId, record, date, localOnly = false) => {
         const recordDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
           ? date
           : getFarmDateKey(new Date(), get().currentTimeZone);
@@ -867,7 +867,7 @@ export const usePondStore = create<PondStore>()(
         const updatedPond = state.ponds.find(p => p.id === pondId);
         const updatedSampling = updatedPond?.samplings.find((sampling) => sampling.id === existingSamplingId)
           || updatedPond?.samplings.find((sampling) => sampling.date === recordDate && Boolean(sampling.feedData));
-        if (updatedSampling) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
+        if (updatedSampling && !localOnly) state.firebaseSync?.syncSampling(existingSamplingId ? 'update' : 'create', pondId, updatedSampling, updatedSampling.id);
       },
 
       addHarvestData: (pondId, record) => {

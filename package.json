@@ -12,7 +12,8 @@
     "lint": "expo lint",
     "check:android-release": "node ./scripts/check-android-release-integrity.js",
     "test:team-security": "node --test functions/teamAccessPolicy.test.js functions/teamAccessRules.test.js",
-    "test:team-security:emulator": "node --test functions/teamAccessRules.emulator.test.js"
+    "test:team-security:emulator": "node --test functions/teamAccessRules.emulator.test.js",
+    "test": "node scripts/run-tests.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/libre-baskerville": "^0.4.2",
@@ -26,7 +27,7 @@
     "@sentry/react-native": "~7.11.0",
     "base64-js": "^1.5.1",
     "date-fns": "^4.1.0",
-    "expo": "~57.0.20",
+    "expo": "~57.0.21",
     "expo-asset": "~57.0.16",
     "expo-auth-session": "~57.0.11",
     "expo-blur": "~57.0.2",
@@ -43,7 +44,7 @@
     "expo-localization": "~57.0.1",
     "expo-location": "~57.0.16",
     "expo-print": "~57.0.1",
-    "expo-router": "~57.0.19",
+    "expo-router": "~57.0.20",
     "expo-secure-store": "~57.0.3",
     "expo-sharing": "~57.0.18",
     "expo-splash-screen": "~57.0.8",
@@ -77,5 +78,11 @@
     "firebase-tools": "^15.16.0",
     "typescript": "~6.0.3"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "decode-uri-component": "file:vendor/decode-uri-component",
+    "xcode": {
+      "uuid": "11.1.1"
+    }
+  }
 }

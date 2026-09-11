@@ -14,3 +14,5 @@ Object.assign(exports, require("./orsonLearning")({
 Object.assign(exports, require("./adminIntelligence")({ admin }));
 Object.assign(exports, require("./operationalNotifications")({ admin, assertCompanyMemberForCallable }));
 Object.assign(exports, require("./billing"));
+
+Object.assign(exports, require('./diseasePrivacy'));

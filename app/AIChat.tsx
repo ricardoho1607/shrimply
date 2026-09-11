@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -76,10 +76,9 @@ export default function AIChat() {
 }
 
 function AIChatSession() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => [{ id: '1', type: 'ai', message: getWelcomeMessage('en'), timestamp: new Date(), language: 'en' }]);
   const [inputText, setInputText] = useState('');
   const [conversationLanguage, setConversationLanguage] = useState('en');
-  const [isInitialized, setIsInitialized] = useState(false);
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
   
   const { sendMessage, loading, clearChat } = useGemini();
@@ -94,18 +93,7 @@ function AIChatSession() {
   const generation = useRef(0);
   useEffect(() => () => { generation.current += 1; }, []);
 
-  useEffect(() => {
-    if (!isInitialized) {
-      setMessages([{
-        id: '1',
-        type: 'ai',
-        message: getWelcomeMessage('en'),
-        timestamp: new Date(),
-        language: 'en'
-      }]);
-      setIsInitialized(true);
-    }
-  }, [isInitialized]);
+
 
   useEffect(() => {
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
@@ -136,7 +124,7 @@ function AIChatSession() {
     );
   };
 
-  const handleSend = async (retryPrompt?: string, retryId?: string) => {
+  const handleSend = useCallback(async (retryPrompt?: string, retryId?: string) => {
     const userText = (retryPrompt || inputText).trim();
     if (!userText || loading) return;
     const currentGeneration = ++generation.current;
@@ -186,7 +174,7 @@ function AIChatSession() {
     } finally {
       if (isCurrent()) setStreamingReplyId(null);
     }
-  };
+  }, [inputText, loading, conversationLanguage, sendMessage, activePonds, company, messages]);
 
   if (!canUseOrson) return (
     <SafeAreaView style={styles.fullContainer}><View style={[styles.flex, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}><Text>You do not have permission to use Orson AI.</Text></View></SafeAreaView>

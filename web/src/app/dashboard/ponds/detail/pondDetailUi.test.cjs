@@ -60,7 +60,8 @@ test('sampling writes biological data without touching feed inventory', () => {
     component.indexOf('const handleSaveMortality'),
   );
   assert.match(handler, /samplings:/);
-  assert.doesNotMatch(handler, /runTransaction|inventoryFeedId|companies.*feeds/);
+  assert.match(handler, /transaction.get\(reference\)/);
+  assert.doesNotMatch(handler, /inventoryFeedId|companies.*feeds/);
 });
 
 test('pond details use the localized copy instead of hardcoded English labels', () => {

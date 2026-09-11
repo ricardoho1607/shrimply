@@ -11,7 +11,7 @@ test("Firestore denies client-side invite and membership approval mutations", ()
   assert.match(rules, /match \/companyInvites\/\{inviteId\}\s*\{\s*allow read, write: if false;/);
   assert.match(rules, /match \/securityRateLimits\/\{limitId\}\s*\{\s*allow read, write: if false;/);
   assert.match(rules, /match \/joinRequests\/\{requestId\}[\s\S]*?allow create: if false;[\s\S]*?allow update: if false;/);
-  assert.match(rules, /changedKeys\(\)\.hasAny\(\[\s*'ownerId',\s*'teamMembers',\s*'pendingInvites',\s*'isVerified'/);
+  assert.match(rules, /affectedKeys\(\)\.hasAny\(\[\s*'ownerId',\s*'teamMembers',\s*'pendingInvites',\s*'isVerified'/);
 });
 
 test("company membership requires reciprocal company and user records", () => {

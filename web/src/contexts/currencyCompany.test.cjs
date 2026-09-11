@@ -28,7 +28,7 @@ test('company currency is the source of truth for authenticated web displays', (
   assert.match(finance, /formatCurrency\(stats\.totalExpense\)/);
   assert.match(harvest, /formatCurrency\(totalRevenue\)/);
   assert.match(inventory, /unitPrice\} \(\{currencyConfig\.symbol\}\)/);
-  assert.match(assets, /Cost \(\{currencyConfig\.symbol\}\)/);
+  assert.match(assets, /\{copy\('Cost'\)\} \(\{currencyConfig\.symbol\}\)/);
   assert.match(marketplace, /formatCurrency\(price\)/);
   assert.doesNotMatch(`${inventory}\n${assets}`, /\(Rp\)/);
 });

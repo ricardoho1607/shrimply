@@ -1,53 +1,37 @@
 "use client";
-
-import React from 'react';
-import { ShieldAlert, Construction, ArrowLeft } from 'lucide-react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
+type PublicAlert = { id: string; diseaseName?: string; status?: string; severity?: string; reportDate?: { toDate?: () => Date } | string; location?: { address?: string } };
 export default function DiseaseReportPage() {
   const copy = useDashboardCopy();
-  return (
-    <div className="authenticated-compact-page" style={{ maxWidth: '1200px', margin: '0 auto' }}>
-      <div className="glass-card animate-fade-up" style={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        justifyContent: 'center', 
-        minHeight: '60vh', 
-        gap: '24px', 
-        textAlign: 'center',
-        padding: '40px'
-      }}>
-        <div style={{ 
-          width: '80px', 
-          height: '80px', 
-          borderRadius: '24px', 
-          background: 'var(--primary-dim)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          color: 'var(--primary)',
-          border: '1px solid var(--border)'
-        }}>
-          <ShieldAlert size={40} />
-        </div>
-        <p style={{ color: 'var(--text-muted)', maxWidth: '480px', margin: '0 auto', fontSize: '16px', lineHeight: 1.6 }}>
-          {copy('Our AI-powered disease detection and reporting system is currently being optimized for the Orson AI web portal.')}
-          <br />
-          <strong style={{ color: 'var(--primary)' }}>{copy('Please use the mobile app for real-time diagnostic reporting.')}</strong>
-        </p>
-        <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap', justifyContent: 'center' }}>
-          <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-            <button className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px' }}>
-              <ArrowLeft size={18} /> {copy('Back to Dashboard')}
-            </button>
-          </Link>
-          <button className="btn-primary" style={{ padding: '12px 24px', borderRadius: '12px', opacity: 0.7, cursor: 'not-allowed' }}>
-            <Construction size={18} /> {copy('Coming Soon to Web')}
-          </button>
-        </div>
-      </div>
+  const [alerts, setAlerts] = useState<PublicAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  useEffect(() => onSnapshot(query(collection(db, 'publicDiseaseAlerts'), orderBy('reportDate', 'desc')), snapshot => {
+    setAlerts(snapshot.docs.map(item => ({ ...item.data(), id: item.id })));
+    setLoading(false); setError(false);
+  }, () => { setError(true); setLoading(false); }), []);
+  return <div className="authenticated-compact-page" style={{ maxWidth: 1100, margin: '0 auto' }}>
+    <h1>{copy('Disease alerts')}</h1>
+    <p>{copy('Regional alerts show approximate areas. Farm names, precise locations, symptoms and losses remain private.')}</p>
+    <p>{copy('Use the mobile app to submit or manage your farm reports.')}</p>
+    {loading && <p role="status">{copy('Loading alerts…')}</p>}
+    {error && <p role="alert">{copy('Unable to load alerts. Check your connection and reload this page.')}</p>}
+    {!loading && !error && alerts.length === 0 && <p>{copy('No regional alerts are available.')}</p>}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+      {alerts.map(alert => {
+        const value = alert.reportDate;
+        const date = typeof value === 'string' ? new Date(value) : value?.toDate?.();
+        return <article key={alert.id} className="glass-card" style={{ padding: 20 }}>
+          <h2>{alert.diseaseName || copy('Disease alert')}</h2>
+          <p>{alert.location?.address || copy('Approximate region')}</p>
+          <p>{copy('Status')}: {alert.status || copy('Not reported')} · {copy('Severity')}: {alert.severity || copy('Not reported')}</p>
+          <p>{date && Number.isFinite(date.getTime()) ? date.toLocaleDateString() : copy('Date unavailable')}</p>
+        </article>;
+      })}
     </div>
-  );
+  </div>;
 }

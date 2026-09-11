@@ -73,12 +73,7 @@ export default function FeedManagementScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
-  React.useEffect(() => {
-    if (isModalVisible) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
-  }, [isModalVisible]);
+
 
   React.useEffect(() => {
     if (!user?.companyId) return undefined;
@@ -229,9 +224,10 @@ export default function FeedManagementScreen() {
         parsedAllocations,
         pond.id,
         feedDate,
+        feedingResponse,
       );
 
-      addFeedData(pond.id, feedData, feedDate);
+      addFeedData(pond.id, feedData, feedDate, true);
       setSelectedPond(null);
       setFeedAllocations([]);
       setFeedingResponse(null);
@@ -270,6 +266,8 @@ export default function FeedManagementScreen() {
   };
 
   const openModal = () => {
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     const today = getFarmDateKey(new Date(), company?.timeZone);
     setFeedDate(today);
     setIsModalVisible(true);

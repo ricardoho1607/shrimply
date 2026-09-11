@@ -10,6 +10,7 @@ import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
 import { hasWaterQualityData, usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
+import { useCurrentTime } from './hooks/useCurrentTime';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 import { useDataBackup } from './hooks/useDataBackup';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
@@ -61,6 +62,24 @@ const formatActivityHours = (seconds: number): string => {
   return `${Math.max(1, Math.round(seconds / 60))}m`;
 };
 
+const SettingItem = ({ icon, title, subtitle, onPress, showArrow = true, rightComponent }: any) => (
+    <TouchableOpacity style={styles.settingItem} onPress={onPress} disabled={!onPress}>
+      <View style={styles.settingLeft}>
+        <View style={styles.iconContainer}>
+          <Ionicons name={icon as any} size={Platform.OS === 'android' ? 20 : 22} color="#315f57" />
+        </View>
+        <View style={styles.textContainer}>
+          <Text style={styles.settingTitle}>{title}</Text>
+          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
+        </View>
+      </View>
+      <View style={styles.settingRight}>
+        {rightComponent}
+        {showArrow && onPress && <Ionicons name="chevron-forward" size={Platform.OS === 'android' ? 16 : 18} color="#315f57" />}
+      </View>
+    </TouchableOpacity>
+  );
+
 export default function Settings() {
   const router = useRouter();
   const { currentLanguage, setLanguage, t } = useLanguage();
@@ -69,15 +88,14 @@ export default function Settings() {
   const canViewActivity = Platform.OS !== 'web' && ['owner', 'co-owner', 'manager', 'admin'].includes(user?.role || '');
   const [showLanguageOptions, setShowLanguageOptions] = useState(false);
   const [showCurrencyOptions, setShowCurrencyOptions] = useState(false);
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoBackupEnabled, setAutoBackupEnabled] = useState(true);
   const [isChangingLanguage, setIsChangingLanguage] = useState(false);
   const [isChangingCurrency, setIsChangingCurrency] = useState(false);
   const [isMigrating, setIsMigrating] = useState(false);
   const { ponds, calculatePondMetricsWithHarvest } = usePondStore();
   const { manualRestore, isRestoring } = useDataBackup();
   const [isExporting, setIsExporting] = useState(false);
-  const [activitySummaries, setActivitySummaries] = useState<ActivitySummary[]>([]);
+  const [activitySource, setActivitySource] = useState<{ companyId: string; rows: ActivitySummary[] } | null>(null);
+  const activitySummaries = canViewActivity && activitySource && activitySource.companyId === company?.id ? activitySource.rows : [];
   const [planSummary, setPlanSummary] = useState<CompanyPlanSummary | null>(null);
   const farmToday = useFarmDateKey(company?.timeZone);
   const currentCompanyId = company?.id;
@@ -106,7 +124,6 @@ export default function Settings() {
 
   useEffect(() => {
     if (!canViewActivity || !company?.id) {
-      setActivitySummaries([]);
       return;
     }
 
@@ -116,23 +133,23 @@ export default function Settings() {
     );
 
     const unsubscribe = onSnapshot(activityQuery, (snapshot) => {
-      setActivitySummaries(snapshot.docs.map((summaryDoc) => {
+      setActivitySource({ companyId: company.id, rows: snapshot.docs.map((summaryDoc) => {
         const data = summaryDoc.data();
         return {
           totalSeconds: typeof data.totalSeconds === 'number' && Number.isFinite(data.totalSeconds) ? data.totalSeconds : 0,
           lastSeenAt: toActivityDate(data.lastSeenAt),
         };
-      }));
+      }) });
     }, (error) => {
       console.log('Failed to load settings activity summary:', error);
-      setActivitySummaries([]);
+      setActivitySource({ companyId: company.id, rows: [] });
     });
 
     return unsubscribe;
   }, [canViewActivity, company?.id, farmToday]);
 
+  const nowMs = useCurrentTime();
   const activityStatusLine = useMemo(() => {
-    const nowMs = Date.now();
     const totalSeconds = activitySummaries.reduce((sum, summary) => sum + summary.totalSeconds, 0);
     const activeNow = activitySummaries.filter((summary) => {
       const lastSeenMs = summary.lastSeenAt?.getTime() ?? 0;
@@ -141,7 +158,7 @@ export default function Settings() {
 
     if (activitySummaries.length === 0) return t.activityTracker?.noActivityToday || 'No mobile activity tracked today.';
     return `${activeNow} active now · ${formatActivityHours(totalSeconds)} today`;
-  }, [activitySummaries, t.activityTracker?.noActivityToday]);
+  }, [nowMs, activitySummaries, t.activityTracker?.noActivityToday]);
 
   const handleLanguageSelect = async (languageCode: string) => {
     try {
@@ -327,25 +344,9 @@ export default function Settings() {
 
   const currentLangInfo = AVAILABLE_LANGUAGES.find(lang => lang.code === currentLanguage);
 
-  const SettingItem = ({ icon, title, subtitle, onPress, showArrow = true, rightComponent }: any) => (
-    <TouchableOpacity style={styles.settingItem} onPress={onPress} disabled={!onPress}>
-      <View style={styles.settingLeft}>
-        <View style={styles.iconContainer}>
-          <Ionicons name={icon as any} size={Platform.OS === 'android' ? 20 : 22} color="#315f57" />
-        </View>
-        <View style={styles.textContainer}>
-          <Text style={styles.settingTitle}>{title}</Text>
-          {subtitle && <Text style={styles.settingSubtitle}>{subtitle}</Text>}
-        </View>
-      </View>
-      <View style={styles.settingRight}>
-        {rightComponent}
-        {showArrow && onPress && <Ionicons name="chevron-forward" size={Platform.OS === 'android' ? 16 : 18} color="#315f57" />}
-      </View>
-    </TouchableOpacity>
-  );
 
-  const LanguageSelector = () => (
+
+  const renderLanguageSelector = () => (
     <View style={styles.languageSection}>
       <Text style={styles.sectionTitle}>{t.settings?.selectLanguage || 'Select Language'}</Text>
       {AVAILABLE_LANGUAGES.map((lang) => (
@@ -369,7 +370,7 @@ export default function Settings() {
     </View>
   );
 
-  const CurrencySelector = () => (
+  const renderCurrencySelector = () => (
     <View style={styles.languageSection}>
       <Text style={styles.sectionTitle}>{'Select Currency'}</Text>
       {Object.values(CURRENCIES).map((curr) => (
@@ -428,7 +429,7 @@ export default function Settings() {
                 </View>
               }
             />
-            {showLanguageOptions && <LanguageSelector />}
+            {showLanguageOptions && renderLanguageSelector()}
           </View>
 
           <View style={styles.section}>
@@ -445,7 +446,7 @@ export default function Settings() {
                 </View>
               }
             />
-            {showCurrencyOptions && <CurrencySelector />}
+            {showCurrencyOptions && renderCurrencySelector()}
             
             <SettingItem
               icon="sync-outline"
@@ -490,13 +491,9 @@ export default function Settings() {
             <Text style={styles.sectionHeader}>{t.settings?.notifications || 'NOTIFICATIONS'}</Text>
             <SettingItem
               icon="notifications-outline"
-              title={t.settings?.pushNotifications || 'Push Notifications'}
-              subtitle={t.settings?.notificationsSubtitle || 'Receive alerts for pond conditions'}
+              title={t.settings?.notifications || 'Notifications'}
+              subtitle="Review farm alerts in Notifications. Device notification permissions are managed in your phone settings."
               showArrow={false}
-              rightComponent={
-                <Switch value={notificationsEnabled} onValueChange={setNotificationsEnabled}
-                  trackColor={{ false: '#dbe7df', true: '#315f57' }} thumbColor={notificationsEnabled ? '#FFFFFF' : '#f4f8fc'} />
-              }
             />
             {canViewActivity && (
               <SettingItem
@@ -512,13 +509,9 @@ export default function Settings() {
             <Text style={styles.sectionHeader}>{t.settings?.dataBackup || 'DATA & BACKUP'}</Text>
             <SettingItem
               icon="cloud-outline"
-              title={t.settings?.autoBackup || 'Auto Backup'}
-              subtitle={t.settings?.autoBackupSubtitle || 'Automatically sync data to cloud'}
+              title="Cloud synchronization"
+              subtitle="Farm records sync automatically when connected. Pending changes remain on this device until synchronized."
               showArrow={false}
-              rightComponent={
-                <Switch value={autoBackupEnabled} onValueChange={setAutoBackupEnabled}
-                  trackColor={{ false: '#dbe7df', true: '#315f57' }} thumbColor={autoBackupEnabled ? '#FFFFFF' : '#f4f8fc'} />
-              }
             />
             <SettingItem
               icon="document-text-outline"

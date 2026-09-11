@@ -35,7 +35,7 @@ export const uploadImageToStorage = async (uri: string, path: string): Promise<s
  */
 export const uploadProfileImage = async (uri: string, userId: string): Promise<string> => {
   const timestamp = Date.now();
-  const path = `profiles/${userId}/profile_${timestamp}.jpg`;
+  const path = `users/${userId}/profile/profile_${timestamp}.jpg`;
   return uploadImageToStorage(uri, path);
 };
 

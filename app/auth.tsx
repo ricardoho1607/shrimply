@@ -138,10 +138,12 @@ export default function AuthScreen() {
     };
   }, [logoTranslateY, logoOpacity]);
 
-  useEffect(() => {
-    if (!inviteToken) return;
-    setIsLogin(false);
-  }, [inviteToken]);
+  const [previousInviteToken, setPreviousInviteToken] = useState<string | undefined>(undefined);
+  if (previousInviteToken !== inviteToken) {
+    setPreviousInviteToken(inviteToken);
+    if (inviteToken) setIsLogin(false);
+  }
+
 
   const handleAuth = useCallback(async () => {
     if (!isFormValid) return Alert.alert('Error', 'Please fill in all fields');

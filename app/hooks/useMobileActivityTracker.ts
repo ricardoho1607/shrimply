@@ -46,7 +46,7 @@ export const useMobileActivityTracker = () => {
   const getDailySummaryRef = useCallback((date = new Date()) => {
     if (!company?.id || !user?.uid) return null;
     return doc(db, 'companies', company.id, 'userActivityDaily', `${getFarmDateKey(date, company.timeZone)}_${user.uid}`);
-  }, [company?.id, company?.timeZone, user?.uid]);
+  }, [company, user]);
 
   const flushSession = useCallback(async (endSession = false) => {
     if (!sessionRef.current || !company?.id || !user?.uid) return;
@@ -91,7 +91,7 @@ export const useMobileActivityTracker = () => {
     } catch (error) {
       console.log('Activity tracking update failed:', error);
     }
-  }, [company?.id, company?.timeZone, getDailySummaryRef, user?.email, user?.name, user?.role, user?.uid]);
+  }, [getDailySummaryRef, company, user]);
 
   const endCurrentSession = useCallback(async () => {
     clearHeartbeat();
@@ -162,19 +162,7 @@ export const useMobileActivityTracker = () => {
     } catch (error) {
       console.log('Activity tracking start failed:', error);
     }
-  }, [
-    canTrack,
-    clearHeartbeat,
-    company?.id,
-    company?.timeZone,
-    endCurrentSession,
-    flushSession,
-    getDailySummaryRef,
-    user?.email,
-    user?.name,
-    user?.role,
-    user?.uid,
-  ]);
+  }, [canTrack, clearHeartbeat, endCurrentSession, flushSession, getDailySummaryRef, company, user]);
 
   useEffect(() => {
     if (!canTrack) {

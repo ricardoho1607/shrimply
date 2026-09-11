@@ -53,7 +53,7 @@ export default function NotificationsScreen() {
   const { t } = useLanguage();
   
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(Boolean(company?.id && user?.uid));
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const [hasMore, setHasMore] = useState(false);
@@ -61,9 +61,41 @@ export default function NotificationsScreen() {
   const cursorRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
   const olderNotificationsRef = useRef<Notification[]>([]);
 
+  const notificationScope = `${user?.uid ?? ''}:${company?.id ?? ''}`;
+  const [previousNotificationScope, setPreviousNotificationScope] = useState(notificationScope);
+  if (previousNotificationScope !== notificationScope) {
+    setPreviousNotificationScope(notificationScope);
+    setNotifications([]);
+    setLoading(Boolean(company?.id && user?.uid));
+    setHasMore(false);
+    setLoadingMore(false);
+    setRefreshing(false);
+  }
+
+  function getIconForType(type: string, data?: any) {
+    if (data?.isOrson) return 'brain'; // Support for Orson AI icon
+    switch (type) {
+      case 'disease_alert': return 'warning';
+      case 'feed_low_stock': return 'nutrition';
+      case 'asset_overdue': return 'time';
+      case 'team': return 'people';
+      case 'buyer': return 'cart';
+      default: return 'notifications';
+    }
+  }
+
+  function getColorForType(type: string, priority?: string, data?: any) {
+    if (data?.isOrson) return '#315f57'; // Orson's signature Navy
+    if (type === 'disease_alert' || type === 'feed_low_stock' || type === 'asset_overdue') {
+      return priority === 'high' ? '#e74c3c' : '#f39c12';
+    }
+    if (type === 'team') return '#315f57';
+    if (type === 'buyer') return '#27AE60';
+    return '#0d2137';
+  }
+
   useEffect(() => {
     if (!company?.id || !user?.uid) {
-      setLoading(false);
       return;
     }
 
@@ -79,7 +111,6 @@ export default function NotificationsScreen() {
     let snapshotVersion = 0;
     cursorRef.current = null;
     olderNotificationsRef.current = [];
-    setHasMore(false);
     void loadOfflineCollectionWithMutations<Notification>(
       user.uid,
       company.id,
@@ -183,27 +214,9 @@ export default function NotificationsScreen() {
     }
   }, [company?.id, hasMore, loadingMore, notifications, user?.uid]);
 
-  const getIconForType = (type: string, data?: any) => {
-    if (data?.isOrson) return 'brain'; // Support for Orson AI icon
-    switch (type) {
-      case 'disease_alert': return 'warning';
-      case 'feed_low_stock': return 'nutrition';
-      case 'asset_overdue': return 'time';
-      case 'team': return 'people';
-      case 'buyer': return 'cart';
-      default: return 'notifications';
-    }
-  };
+  ;
 
-  const getColorForType = (type: string, priority?: string, data?: any) => {
-    if (data?.isOrson) return '#315f57'; // Orson's signature Navy
-    if (type === 'disease_alert' || type === 'feed_low_stock' || type === 'asset_overdue') {
-      return priority === 'high' ? '#e74c3c' : '#f39c12';
-    }
-    if (type === 'team') return '#315f57';
-    if (type === 'buyer') return '#27AE60';
-    return '#0d2137';
-  };
+  ;
 
   const markAllAsRead = async () => {
     if (!company?.id || !user?.uid) return;
@@ -239,7 +252,7 @@ export default function NotificationsScreen() {
     }
   };
 
-  const markNotificationAsRead = async (notification: Notification) => {
+  const markNotificationAsRead = useCallback(async (notification: Notification) => {
     if (notification.read) return;
     if (!company?.id || !user?.uid) return;
     try {
@@ -261,7 +274,7 @@ export default function NotificationsScreen() {
     } catch (error) {
       console.error('Error marking notification as read:', error);
     }
-  };
+  }, [company, user, notifications]);
 
   // NEW: CLEAR ALL FUNCTION
   const confirmClearAll = () => {

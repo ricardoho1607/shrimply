@@ -1,3 +1,4 @@
+import { reconcileDailyFeedStock, type DailyFeedIntent, type DailyFeedStock } from './dailyFeedTransaction';
 import { toCacheSafeValue } from './farmCache.ts';
 
 export const OFFLINE_WORKSPACE_VERSION = 1;
@@ -64,6 +65,7 @@ export interface OfflineMutation {
   uploadPath?: string;
   functionCall?: { name: string; payload: Record<string, unknown> };
   inventory?: OfflineInventoryMutationData;
+  dailyFeed?: DailyFeedIntent;
   settlement?: { id: string; date: string; amount: number };
 }
 
@@ -134,7 +136,7 @@ const isOfflineMutation = (
     if (!isRecord(value.inventory)
       || (value.inventory.collection !== 'feeds' && value.inventory.collection !== 'additives')
       || !Array.isArray(value.inventory.adjustments)
-      || value.inventory.adjustments.length === 0
+      || (value.inventory.adjustments.length === 0 && !value.dailyFeed)
       || !value.inventory.adjustments.every((adjustment) => (
         isRecord(adjustment)
         && typeof adjustment.itemId === 'string'
@@ -148,6 +150,15 @@ const isOfflineMutation = (
         && typeof adjustment.historyEntry.id === 'string'
       ))) return false;
   }
+  if (value.dailyFeed !== undefined && (
+    value.kind !== 'inventory' || !isRecord(value.dailyFeed)
+    || typeof value.dailyFeed.pondId !== 'string' || !value.dailyFeed.pondId
+    || typeof value.dailyFeed.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value.dailyFeed.date)
+    || !Array.isArray(value.dailyFeed.previousFeedIds) || !value.dailyFeed.previousFeedIds.every(id => typeof id === 'string' && id.length > 0)
+    || !Array.isArray(value.dailyFeed.allocations) || value.dailyFeed.allocations.length === 0
+    || !value.dailyFeed.allocations.every(row => isRecord(row) && typeof row.inventoryFeedId === 'string'
+      && row.inventoryFeedId.length > 0 && typeof row.quantityKg === 'number' && Number.isFinite(row.quantityKg) && row.quantityKg > 0)
+  )) return false;
   if (value.serverTimestampFields !== undefined
     && (!Array.isArray(value.serverTimestampFields)
       || !value.serverTimestampFields.every((field) => typeof field === 'string' && field.length > 0))) return false;
@@ -209,6 +220,25 @@ export const applyOfflineMutationToCollection = <T extends { id: string }>(
   collection: T[],
   mutation: OfflineMutation,
 ): T[] => {
+  if (mutation.dailyFeed) {
+    const intent = mutation.dailyFeed;
+    const desired = new Map(intent.allocations.map(row => [row.inventoryFeedId, row.quantityKg]));
+    const ids = new Set([...intent.previousFeedIds, ...desired.keys()]);
+    return collection.map(item => {
+      if (!ids.has(item.id)) return item;
+      const stock = item as T & DailyFeedStock;
+      const operationId = `${mutation.id}:${item.id}`;
+      if (stock.usageHistory?.some(row => row.id === operationId)) return item;
+      try {
+        const update = reconcileDailyFeedStock(stock, desired.get(item.id) ?? 0, intent, operationId);
+        return update ? { ...item, ...update } : item;
+      } catch {
+        // Keep authoritative stock when an offline intent can no longer be fulfilled.
+        // The outbox retains the intent and reports the transaction failure.
+        return item;
+      }
+    });
+  }
   const documentId = mutation.path[mutation.path.length - 1];
   if (mutation.kind === 'inventory' && mutation.inventory) {
     return mutation.inventory.adjustments.reduce<T[]>((items, adjustment) => {

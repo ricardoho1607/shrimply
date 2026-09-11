@@ -2,10 +2,16 @@
   "functions": {
     "source": "functions",
     "runtime": "nodejs22",
-    "ignore": ["node_modules", ".git", ".env*", ".secret.local"]
+    "ignore": [
+      "node_modules",
+      ".git",
+      ".env*",
+      ".secret.local"
+    ]
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "storage": {
     "rules": "storage.rules"

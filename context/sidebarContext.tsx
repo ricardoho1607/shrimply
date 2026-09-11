@@ -1,5 +1,5 @@
 // context/SidebarContext.tsx
-import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Animated } from 'react-native';
 
 interface SidebarContextType {
@@ -21,7 +21,7 @@ export const SidebarProvider = ({ children }: { children: ReactNode }) => {
   const [sidebarVisible, setSidebarVisible] = useState(false);
   const [reportsExpanded, setReportsExpanded] = useState(false);
   const [inventoryExpanded, setInventoryExpanded] = useState(false);
-  const slideAnimRef = useRef(new Animated.Value(-300)).current;
+  const [slideAnimRef] = useState(() => new Animated.Value(-300));
 
   // Animate sidebar when visibility changes
   React.useEffect(() => {

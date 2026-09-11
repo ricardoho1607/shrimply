@@ -371,7 +371,7 @@ export default function AssetInventoryScreen() {
     );
   };
 
-  const QRViewModal = () => {
+  const renderQRViewModal = () => {
     if (!selectedAsset) return null;
     return (
       <View style={styles.qrViewContainer}>
@@ -394,7 +394,7 @@ export default function AssetInventoryScreen() {
     );
   };
 
-  const QRScanModal = () => {
+  const renderQRScanModal = () => {
     if (hasPermission === null) {
       return (
         <View style={styles.cameraPlaceholder}>
@@ -433,7 +433,7 @@ export default function AssetInventoryScreen() {
     );
   };
 
-  const HistoryModal = () => {
+  const renderHistoryModal = () => {
     if (!selectedAsset) return null;
     const totalCost = selectedAsset.totalMaintenanceCost;
     const frequency = store.getMaintenanceFrequency(selectedAsset.id);
@@ -714,7 +714,7 @@ export default function AssetInventoryScreen() {
               </TouchableOpacity>
             </View>
 
-            {modalType === 'history' ? <HistoryModal /> : modalType === 'qr-view' ? <QRViewModal /> : (
+            {modalType === 'history' ? renderHistoryModal() : modalType === 'qr-view' ? renderQRViewModal() : (
               <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
                 {modalType === 'add' && (
                   <>
@@ -903,7 +903,7 @@ export default function AssetInventoryScreen() {
 
       <Modal visible={modalVisible && modalType === 'qr-scan'} animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'black' }}>
-          <QRScanModal />
+          {renderQRScanModal()}
           <TouchableOpacity onPress={closeModal}
             style={{ position: 'absolute', top: 40, right: 20, backgroundColor: 'rgba(0,0,0,0.6)', 
               padding: 12, borderRadius: 50, zIndex: 10 }}>

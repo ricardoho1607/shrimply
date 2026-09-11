@@ -14,9 +14,9 @@ test('farm cache and offline queue only persist through protected storage', () =
   assert.match(syncHook, /writeProtectedItem/);
 });
 
-test('explicit logout clears all persisted data for the user', () => {
+test('explicit logout clears caches while retaining encrypted pending work', () => {
   const authContext = readSource('context/AuthContext.tsx');
 
-  assert.match(authContext, /await clearUserFarmCaches\(userId\)/);
+  assert.match(authContext, /await clearUserFarmCaches\(userId, true\)/);
   assert.match(authContext, /await firebaseSignOut\(auth\)/);
 });

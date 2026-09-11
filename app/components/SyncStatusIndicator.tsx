@@ -1,12 +1,12 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useDataBackup } from '../hooks/useDataBackup';
 
 export const SyncStatusIndicator = () => {
   const { syncStatus, triggerSync, hasPendingChanges } = useDataBackup();
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  const rotateAnim = useRef(new Animated.Value(0)).current;
+  const [pulseAnim] = useState(() => new Animated.Value(1));
+  const [rotateAnim] = useState(() => new Animated.Value(0));
 
   // Animation for syncing state
   useEffect(() => {
@@ -49,7 +49,7 @@ export const SyncStatusIndicator = () => {
   }, [hasPendingChanges, syncStatus?.isSyncing, pulseAnim]);
 
   const getStatusColor = () => {
-    if (!syncStatus?.isOnline) return '#e74c3c'; // Red for offline
+    if (syncStatus?.error || !syncStatus?.isOnline) return '#e74c3c'; // Red for offline
     if (syncStatus.isSyncing) return '#f39c12'; // Orange for syncing
     if (hasPendingChanges) return '#315f57'; // Pending sync
     return '#27ae60'; // Green for synced
@@ -91,6 +91,10 @@ export const SyncStatusIndicator = () => {
           Alert.alert('Offline', 'Internet connection is unavailable. Changes will sync when you are back online.');
           return;
         }
+        if (syncStatus.error) {
+          Alert.alert('Sync needs attention', syncStatus.error, [{ text: 'Close', style: 'cancel' }, { text: 'Retry', onPress: triggerSync }]);
+          return;
+        }
         triggerSync();
       }}
       disabled={syncStatus.isSyncing}
@@ -111,6 +115,7 @@ export const SyncStatusIndicator = () => {
           color={getStatusColor()} 
         />
       </Animated.View>
+      {syncStatus.error && <Text style={styles.offlineText}>Sync needs attention</Text>}
       {!syncStatus.isOnline && <Text style={styles.offlineText}>Offline</Text>}
     </TouchableOpacity>
   );

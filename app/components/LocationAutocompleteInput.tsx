@@ -55,6 +55,14 @@ export function LocationAutocompleteInput({
     && Number.isFinite(latitude)
     && Number.isFinite(longitude);
 
+  const [searchInputs, setSearchInputs] = useState({ value, hasValidCoordinates });
+  if (searchInputs.value !== value || searchInputs.hasValidCoordinates !== hasValidCoordinates) {
+    setSearchInputs({ value, hasValidCoordinates });
+    if (value.trim().length < 2 || hasValidCoordinates) {
+      setSuggestions([]); setShowNoResults(false); setSearchError(''); setSearching(false);
+    }
+  }
+
   useEffect(() => {
     if (skipNextSearch.current) {
       skipNextSearch.current = false;
@@ -62,12 +70,7 @@ export function LocationAutocompleteInput({
     }
 
     const query = value.trim();
-    if (query.length < 2 || hasValidCoordinates) {
-      setSuggestions([]);
-      setShowNoResults(false);
-      setSearchError('');
-      return;
-    }
+    if (query.length < 2 || hasValidCoordinates) return;
 
     let active = true;
     const timeout = setTimeout(async () => {

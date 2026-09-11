@@ -220,7 +220,9 @@ const MineralLabResults = forwardRef<MineralLabResultsHandle, MineralLabResultsP
               <td style={{ ...cellStyle, fontWeight: 700 }}>{row.pondCode || 'N/A'}</td>
               {columns.map(column => {
                 const [section, key] = column.path;
-                const rawValue = key ? (row as any)[section]?.[key] : (row as any)[section];
+                const sectionValue = (row as unknown as Record<string, unknown>)[section];
+                const rawValue = key && sectionValue && typeof sectionValue === 'object'
+                  ? (sectionValue as Record<string, unknown>)[key] : key ? undefined : sectionValue;
                 const valStr = rawValue == null ? '' : String(rawValue).trim();
                 const displayValue = !valStr || valStr === 'undefined' || valStr === 'null' || valStr === 'NaN' || valStr === '-' ? 'N/A' : valStr;
                 return (

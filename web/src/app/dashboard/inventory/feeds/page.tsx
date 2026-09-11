@@ -25,6 +25,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useAuth } from '@/contexts/AuthContext';
+import { storedDate } from '@/lib/storedDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useDebouncedValue, useInventoryFeeds } from '@/hooks/useDashboardData';
@@ -45,7 +46,7 @@ interface StockHistory {
   notes?: string;
   expiry?: string;
   unit?: string;
-  createdAt: any;
+  createdAt: unknown;
 }
 
 interface UsageHistory {
@@ -57,7 +58,7 @@ interface UsageHistory {
   cycleName?: string;
   pondCycleId?: string;
   notes?: string;
-  createdAt: any;
+  createdAt: unknown;
 }
 
 interface InventoryItem {
@@ -76,8 +77,8 @@ interface InventoryItem {
   usageHistory: UsageHistory[];
   totalStock: number;
   totalCost: number;
-  lastUpdated: any;
-  createdAt: any;
+  lastUpdated: unknown;
+  createdAt: unknown;
 }
 
 const UNITS = ['kg', 'L', 'pack', 'sack'];
@@ -94,7 +95,7 @@ export default function InventoryFeedsPage() {
   const { user, company } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'dashboard' | 'feed' | 'additive'>('dashboard');
-  const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, any>();
+  const { feeds, additives: allAdditives, ponds, loading, companyId } = useInventoryFeeds<InventoryItem, InventoryItem, { id: string; pondName: string; cycleStatus?: string; cycleId?: string; cycleName?: string; pondCycleId?: string }>();
   const additives = useMemo(() => allAdditives.filter((item) => item.inventoryKind !== 'treatmentMix'), [allAdditives]);
 
   const [showArchived, setShowArchived] = useState(false);
@@ -109,7 +110,7 @@ export default function InventoryFeedsPage() {
   const inputMenuRef = useRef<HTMLDivElement>(null);
   const transactionFilterRef = useRef<HTMLDivElement>(null);
   const activePonds = useMemo(
-    () => ponds.filter((pond: any) => pond.cycleStatus !== 'ended'),
+    () => ponds.filter((pond) => pond.cycleStatus !== 'ended'),
     [ponds]
   );
   const hasPermission = useFarmPermissions();
@@ -138,17 +139,9 @@ export default function InventoryFeedsPage() {
     };
   }, [isInputMenuOpen, isTransactionFilterOpen]);
 
-  const formatDate = useCallback((date: any) => {
-    if (!date) return '';
-    if (typeof date === 'string') return date;
-    if (date && typeof date === 'object' && 'seconds' in date) {
-      return new Date(date.seconds * 1000).toLocaleDateString(currentLanguage === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    }
-    try {
-      const d = new Date(date);
-      if (!isNaN(d.getTime())) return d.toLocaleDateString(currentLanguage === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    } catch {}
-    return '';
+  const formatDate = useCallback((value: unknown) => {
+    if (typeof value === 'string') return value;
+    return storedDate(value)?.toLocaleDateString(currentLanguage === 'id' ? 'id-ID' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) ?? '';
   }, [currentLanguage]);
 
   // Modal States
@@ -200,9 +193,9 @@ export default function InventoryFeedsPage() {
   }, [additives, feeds, formatDate]);
 
   const recentTransactions = useMemo(() => {
-    const txs: any[] = [];
+    const txs: { id: string; type: string; itemType: string; name: string; date: string; quantity: number; unit: string; createdAt: number }[] = [];
     [...feeds.map(f => ({ ...f, type: 'feed' })), ...additives.map(a => ({ ...a, type: 'additive' }))].forEach(item => {
-      (item.stockInHistory || []).forEach((h: any) => {
+      (item.stockInHistory || []).forEach((h) => {
         txs.push({
           id: h.id,
           type: 'Stock In',
@@ -211,10 +204,10 @@ export default function InventoryFeedsPage() {
           date: formatDate(h.date),
           quantity: h.quantity,
           unit: item.unit || 'kg',
-          createdAt: h.createdAt?.toMillis?.() || (h.date?.seconds ? h.date.seconds * 1000 : new Date(h.date).getTime())
+          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0
         });
       });
-      (item.usageHistory || []).forEach((h: any) => {
+      (item.usageHistory || []).forEach((h) => {
         txs.push({
           id: h.id,
           type: 'Usage',
@@ -223,7 +216,7 @@ export default function InventoryFeedsPage() {
           date: formatDate(h.date),
           quantity: h.quantity,
           unit: item.unit || 'kg',
-          createdAt: h.createdAt?.toMillis?.() || (h.date?.seconds ? h.date.seconds * 1000 : new Date(h.date).getTime())
+          createdAt: storedDate(h.createdAt)?.getTime() ?? storedDate(h.date)?.getTime() ?? 0
         });
       });
     });
@@ -237,7 +230,7 @@ export default function InventoryFeedsPage() {
       const matchesSearch = !normalizedSearch ||
                             item.itemName.toLowerCase().includes(normalizedSearch) ||
                             (item.brand || '').toLowerCase().includes(normalizedSearch);
-      const matchesCategory = !categoryFilter || (activeTab === 'feed' ? (item as any).feedType : (item as any).category) === categoryFilter;
+      const matchesCategory = !categoryFilter || (activeTab === 'feed' ? item.feedType : item.category) === categoryFilter;
       const matchesStock = stockFilter === 'all' || (stockFilter === 'in' ? item.totalStock > 0 : item.totalStock === 0);
       return matchesSearch && matchesCategory && (item.archived ? showArchived : matchesStock);
     });
@@ -264,7 +257,7 @@ export default function InventoryFeedsPage() {
         ...formData,
         itemName: item.itemName,
         brand: item.brand || '',
-        category: (item as any).feedType || (item as any).category,
+        category: item.feedType || item.category,
         unit: item.unit || 'kg',
         reorderLevel: String(item.reorderLevel || ''),
         quantity: '',
@@ -343,7 +336,7 @@ export default function InventoryFeedsPage() {
           sourceUrl: formData.labelSourceUrl,
           recordedAt: getFarmDateKey(new Date(), company?.timeZone),
         }) : undefined;
-        const itemData: any = {
+        const itemData: Record<string, unknown> = {
           companyId,
           [itemType === 'feed' ? 'feedName' : 'additiveName']: formData.itemName,
           brand: formData.brand || '',
@@ -450,7 +443,7 @@ export default function InventoryFeedsPage() {
         }
         const collectionName = itemType === 'feed' ? 'feeds' : 'additives';
         const ref = doc(db, 'companies', companyId, collectionName, selectedItem.id);
-        const selectedPond = activePonds.find((pond: any) => pond.id === formData.pondId);
+        const selectedPond = activePonds.find((pond) => pond.id === formData.pondId);
 
         await runTransaction(db, async (tx) => {
           const snapshot = await tx.get(ref);
@@ -553,7 +546,7 @@ export default function InventoryFeedsPage() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`inventory-section-tab ${activeTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon size={18} style={{ opacity: activeTab === tab.id ? 1 : 0.6 }} />
@@ -647,7 +640,7 @@ export default function InventoryFeedsPage() {
                         <button
                           type="button"
                           className={styles.inventoryCardSecondaryAction}
-                          onClick={() => handleOpenModal('stockIn', item, (item as any).feedType ? 'feed' : 'additive')}
+                          onClick={() => handleOpenModal('stockIn', item, item.feedType ? 'feed' : 'additive')}
                         >
                           {copy('Restock now')}
                         </button>
@@ -1104,7 +1097,7 @@ export default function InventoryFeedsPage() {
                                 border: '1px solid var(--border)', transition: 'all 0.3s'
                               }}
                             >{copy('General Use')}</button>
-                            {activePonds.map((p: any) => (
+                            {activePonds.map((p) => (
                               <button
                                 key={p.id}
                                 type="button"

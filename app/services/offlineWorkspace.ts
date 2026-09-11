@@ -1,3 +1,4 @@
+import { applyDailyFeedMutation } from './dailyFeedTransaction';
 import NetInfo from '@react-native-community/netinfo';
 import * as FileSystem from 'expo-file-system/legacy';
 import {
@@ -11,7 +12,7 @@ import {
 import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
-import app, { db, storage } from '../../config/firebase';
+import app, { auth, db, storage } from '../../config/firebase';
 import {
   createOfflineCollectionSnapshot,
   createOfflineMutationQueue,
@@ -81,12 +82,18 @@ const uploadMutationLocalFiles = async (mutation: OfflineMutation): Promise<Reco
     if (!isLocalFileUri(value)) return value;
     const response = await fetch(value);
     const blob = await response.blob();
-    const storagePath = mutation.uploadPath && fileIndex === 0
-      ? mutation.uploadPath
-      : `offline-uploads/${mutation.companyId}/${mutation.id}/${fileIndex}`;
+    const assetId = mutation.path[0] === 'assets' ? mutation.path[1] : undefined;
+    const labReportId = mutation.path[2] === 'labReports' ? mutation.path[3] : undefined;
+    const storagePath = assetId
+      ? `companies/${mutation.companyId}/assets/${assetId}/${mutation.data?.maintenanceHistory && !mutation.data?.photos ? 'maintenance' : 'asset'}/${mutation.id}-${fileIndex}.jpg`
+      : labReportId ? `companies/${mutation.companyId}/labReports/${labReportId}/source.pdf` : mutation.uploadPath;
+    if (!storagePath || (!assetId && !labReportId)) throw new Error('Unsupported upload destination');
     fileIndex += 1;
     const storageRef = ref(storage, storagePath);
-    await uploadBytes(storageRef, blob);
+    await uploadBytes(storageRef, blob, {
+      contentType: labReportId ? 'application/pdf' : (blob.type?.startsWith('image/') ? blob.type : 'image/jpeg'),
+      customMetadata: { companyId: mutation.companyId, ...(labReportId ? { labReportId } : { assetId: assetId! }) },
+    });
     return getDownloadURL(storageRef);
   }) as Record<string, unknown>;
 };
@@ -248,7 +255,7 @@ export const enqueueOfflineMutation = async (mutation: OfflineMutation): Promise
     await writeMutationQueue(
       mutation.userId,
       mutation.companyId,
-      [...existing.filter((entry) => entry.id !== mutation.id), mutation],
+      [...existing.filter((entry) => entry.id !== mutation.id && !(mutation.dailyFeed && !entry.dailyFeed && entry.inventory?.adjustments.some(adjustment => adjustment.historyEntry.source === 'daily_feed_record' && adjustment.historyEntry.pondId === mutation.dailyFeed!.pondId && adjustment.historyEntry.date === mutation.dailyFeed!.date))), mutation],
     );
   });
 };
@@ -266,7 +273,11 @@ const removeOfflineMutation = async (mutation: OfflineMutation): Promise<void> =
 };
 
 const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => {
+  if (mutation.dailyFeed) { await applyDailyFeedMutation(mutation); return; }
   if (mutation.kind === 'inventory') {
+    if (mutation.inventory?.adjustments.some(adjustment => adjustment.historyEntry.source === 'daily_feed_record')) {
+      throw new Error('Legacy feed edit needs review. Open Feeding and save this day again to reconcile it.');
+    }
     const inventory = mutation.inventory as OfflineInventoryMutationData;
     await runTransaction(db, async (transaction) => {
       const references = inventory.adjustments.map((adjustment) =>
@@ -275,6 +286,7 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
       const snapshots = await Promise.all(references.map((reference) => transaction.get(reference)));
 
       inventory.adjustments.forEach((adjustment, index) => {
+        let newFinanceEntries: Record<string, unknown> = {};
         if (adjustment.action === 'stockIn' && !(snapshots[index].data()?.stockInHistory || []).some((entry: { id?: string }) => entry.id === adjustment.historyEntry.id)) {
           const source = snapshots[index].data() || adjustment.createItem || {};
           const entries = buildInventoryLedgerEntries(adjustment.itemId, { ...source, stockInHistory: [adjustment.historyEntry] } as Parameters<typeof buildInventoryLedgerEntries>[1], inventory.collection === 'feeds' ? 'feed' : 'additive');
@@ -284,7 +296,8 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
             financeEntries[entry.id] = financeSourceEntry(entry.record);
             transaction.set(doc(db, 'companies', mutation.companyId, 'expenses', entry.id), { ...entry.record, companyId: mutation.companyId, addedBy: mutation.userId, addedByName: 'Inventory', timestamp: mutation.createdAt, updatedAt: serverTimestamp() }, { merge: true });
           }
-          if (entries.length) transaction.set(references[index], { financeEntries }, { merge: true });
+          newFinanceEntries = financeEntries;
+          if (entries.length && snapshots[index].exists()) transaction.set(references[index], { financeEntries }, { merge: true });
         }
         const snapshot = snapshots[index];
         if (!snapshot.exists()) {
@@ -297,6 +310,7 @@ const applyRemoteMutation = async (mutation: OfflineMutation): Promise<void> => 
           transaction.set(references[index], {
             ...restoreFirestoreValues(adjustment.createItem) as Record<string, unknown>,
             id: adjustment.itemId,
+            financeEntries: newFinanceEntries,
             stockInHistory: [historyEntry],
             usageHistory: [],
             totalStock: adjustment.quantity,
@@ -465,13 +479,14 @@ export const flushOfflineMutations = async (
   if (existingFlush) return existingFlush;
 
   const flush = (async () => {
-    if (!await isWorkspaceOnline()) return 0;
+    if (auth.currentUser?.uid !== userId || !await isWorkspaceOnline()) return 0;
     let applied = 0;
     while (true) {
       const mutations = await listOfflineMutations(userId, companyId);
       if (mutations.length === 0) return applied;
       let firstError: unknown;
       for (const mutation of mutations) {
+        if (auth.currentUser?.uid !== userId) return applied;
         try {
           await applyRemoteMutation(mutation);
           await removeOfflineMutation(mutation);

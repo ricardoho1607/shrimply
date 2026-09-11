@@ -179,7 +179,7 @@ export default function WaterQualityScreen() {
   const [isLabActionModalVisible, setIsLabActionModalVisible] = useState(false);
   const [labReports, setLabReports] = useState<MobileLabReport[]>([]);
   const [labPdfUsage, setLabPdfUsage] = useState<LabPdfUsage>({});
-  const [labUsageNowMs, setLabUsageNowMs] = useState(Date.now());
+  const [labUsageNowMs, setLabUsageNowMs] = useState(() => Date.now());
   const [selectedLabReport, setSelectedLabReport] = useState<MobileLabReport | null>(null);
   const [selectedLabPond, setSelectedLabPond] = useState<Pond | null>(null);
   const [expandedReviewRows, setExpandedReviewRows] = useState<Record<string, boolean>>({});
@@ -188,17 +188,15 @@ export default function WaterQualityScreen() {
   const labPickerLockRef = useRef(false);
   const [values, setValues] = useState<WaterQualityValues>(createEmptyWaterQualityValues);
 
-  React.useEffect(() => {
-    if (isModalVisible) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-      setIsOptionalConditionsExpanded(false);
-    }
-  }, [isModalVisible]);
+  const [labScope, setLabScope] = useState({ companyId: company?.id, userId: user?.uid });
+  if (labScope.companyId !== company?.id || labScope.userId !== user?.uid) {
+    setLabScope({ companyId: company?.id, userId: user?.uid });
+    setLabReports([]); setLabPdfUsage({}); setSelectedLabReport(null); setSelectedLabPond(null);
+  }
+
 
   React.useEffect(() => {
     if (!company?.id || !user?.uid) {
-      setLabReports([]);
       return undefined;
     }
 
@@ -241,7 +239,6 @@ export default function WaterQualityScreen() {
 
   React.useEffect(() => {
     if (!company?.id) {
-      setLabPdfUsage({});
       return undefined;
     }
 
@@ -257,13 +254,15 @@ export default function WaterQualityScreen() {
     return () => clearInterval(interval);
   }, []);
 
-  React.useEffect(() => {
-    setExpandedReviewRows({});
-  }, [selectedLabReport?.id]);
+  const [reviewReportId, setReviewReportId] = useState(selectedLabReport?.id);
+  if (reviewReportId !== selectedLabReport?.id) {
+    setReviewReportId(selectedLabReport?.id); setExpandedReviewRows({});
+  }
 
-  React.useEffect(() => {
-    setExpandedLabHistoryDates({});
-  }, [selectedLabPond?.id]);
+  const [historyPondId, setHistoryPondId] = useState(selectedLabPond?.id);
+  if (historyPondId !== selectedLabPond?.id) {
+    setHistoryPondId(selectedLabPond?.id); setExpandedLabHistoryDates({});
+  }
 
   const getColor = useCallback((type: string, value: string) => {
     const num = parseFloat(value);
@@ -587,7 +586,7 @@ export default function WaterQualityScreen() {
       setSelectedLabReport(localReport);
       await persistOfflineCollection(user.uid, company.id, 'lab-reports', nextReports);
       requestOfflineMutationFlush(user.uid, company.id);
-      Alert.alert(t.waterQuality.labUploadCompleteTitle, t.waterQuality.labUploadCompleteMessage);
+      Alert.alert('Report queued', 'Saved on this device. Upload and extraction will continue when connected. A report is ready only when extracted results appear.');
     } catch (error) {
       console.error('Error uploading lab PDF:', error);
       const details = typeof error === 'object' && error && 'details' in error ? error.details as { resetAt?: string } : null;
@@ -798,7 +797,7 @@ export default function WaterQualityScreen() {
     } finally {
       setIsConfirmingLab(false);
     }
-  }, [company?.id, user, selectedLabReport, canManageLabReports, isConfirmingLab, labReports, t]);
+  }, [user, selectedLabReport, canManageLabReports, isConfirmingLab, labReports, t, company]);
 
   const mineralPdfActionState = getPdfActionState('water_quality');
   const planktonPdfActionState = getPdfActionState('plankton');
@@ -1135,7 +1134,7 @@ export default function WaterQualityScreen() {
 
         {canEditPonds && activeView === 'daily' && (
           // UPDATED BUTTON TO MATCH YOUR OTHER PAGE
-          <TouchableOpacity style={styles.floatingButton} onPress={() => setIsModalVisible(true)}>
+          <TouchableOpacity style={styles.floatingButton} onPress={() => { submitLockRef.current = false; setIsSubmitting(false); setIsOptionalConditionsExpanded(false); setIsModalVisible(true); }}>
             <Ionicons name="add" size={28} color="#fff" />
           </TouchableOpacity>
         )}

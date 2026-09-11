@@ -400,7 +400,7 @@ export default function HarvestPage() {
           createdAt: serverTimestamp(),
           createdBy: user.uid,
         });
-        if (revenue.amount > 0) {
+        {
           transaction.set(doc(db, 'companies', companyId, 'revenues', financeSyncDocumentId(revenue.reference)), {
             ...revenue,
             companyId,
@@ -482,7 +482,7 @@ export default function HarvestPage() {
         const revenue = buildHarvestRevenue(record);
         const revenueId = financeSyncDocumentId(revenue.reference);
         transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
-        if (revenue.amount > 0) transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...revenue, companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
+        transaction.set(doc(db, 'companies', companyId, 'revenues', revenueId), { ...revenue, companyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
       });
     } catch (error) {
       console.error('Error deleting record:', error);

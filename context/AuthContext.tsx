@@ -710,13 +710,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userId = user?.uid ?? auth.currentUser?.uid;
     if (userId) {
       try {
-        await updateDoc(doc(db, 'users', userId), { lastActive: serverTimestamp() });
+        // Presence telemetry must never prevent offline sign-out.
+        void updateDoc(doc(db, 'users', userId), { lastActive: serverTimestamp() })
+          .catch(error => console.error('Error updating last active during sign out:', error));
       } catch (error) {
         console.error('Error updating last active during sign out:', error);
       }
     }
     try {
-      if (userId) await clearUserFarmCaches(userId);
+      if (userId) await clearUserFarmCaches(userId, true);
     } catch (error) {
       console.error('[FarmCache] logout cleanup failed:', error);
     }

@@ -151,12 +151,12 @@ export const useGemini = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chatHistory, setChatHistory] = useState<Message[]>([]);
-  useEffect(() => {
-    setChatHistory([]);
-    setLoading(false);
-    setError(null);
-    return () => requestSessionRef.current?.cancel();
-  }, [identity]);
+  const [sessionIdentity, setSessionIdentity] = useState(identity);
+  if (sessionIdentity !== identity) {
+    setSessionIdentity(identity);
+    setChatHistory([]); setLoading(false); setError(null);
+  }
+  useEffect(() => () => requestSessionRef.current?.cancel(), [identity]);
   
   const chatSessionRef = useRef<any>(null);
 

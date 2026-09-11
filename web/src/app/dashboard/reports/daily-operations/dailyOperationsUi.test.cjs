@@ -13,9 +13,9 @@ test('daily report date selector matches authenticated report controls', () => {
 });
 
 test('daily report follows the farm date until the user selects a different day', () => {
-  assert.match(source, /const today = useFarmDateKey\(company\?\.timeZone\)/);
-  assert.match(source, /current === previousToday\.current \? today : current/);
-  assert.match(source, /timeZone: company\?\.timeZone/);
+  assert.match(source, /const today = useFarmDateKey\(timeZone\)/);
+  assert.match(source, /const reportDate = selectedDate \?\? today/);
+  assert.match(source, /resolveFarmTimeZone\(company\?\.timeZone, getSystemTimeZone\(\)\)/);
 });
 
 test('daily operations tables use Shrimply themed headers', () => {

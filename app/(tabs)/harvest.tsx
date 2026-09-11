@@ -148,24 +148,20 @@ export default function HarvestScreen() {
     [accessibleHarvestRecords, activePonds, harvestFilter, historyCycleId, openCycleIds, selectedCycleId, selectedCyclePondIds]
   );
 
-  React.useEffect(() => {
-    if (activeCycles.some((cycle) => cycle.id === selectedCycleId)) return;
-    setSelectedCycleId(activeCycles[0]?.id || '');
-  }, [activeCycles, selectedCycleId]);
+  const fallbackCycleId = activeCycles[0]?.id || '';
+  if (!activeCycles.some((cycle) => cycle.id === selectedCycleId) && selectedCycleId !== fallbackCycleId) {
+    setSelectedCycleId(fallbackCycleId);
+  }
 
-  React.useEffect(() => {
-    if (isModalVisible) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-      setExpandedPondId((currentPondId) =>
-        selectedCyclePonds.some((pond) => pond.id === currentPondId)
-          ? currentPondId
-          : selectedCyclePonds[0]?.id ?? null
-      );
-    }
-  }, [isModalVisible, selectedCyclePonds]);
-
-  React.useEffect(() => { setPondData(initializePondData()); }, [initializePondData]);
+  // Preserve typed harvest values when live pond measurements refresh.
+  const draftScope = JSON.stringify([selectedCycleId, selectedCyclePonds.map(pond => pond.id)]);
+  const [previousDraftScope, setPreviousDraftScope] = useState(draftScope);
+  if (previousDraftScope !== draftScope) {
+    setPreviousDraftScope(draftScope);
+    setPondData(initializePondData());
+    setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
+    setSecondaryPondIds([]);
+  }
 
   const updatePondField = (pondId: string, field: string, value: string | HarvestType) => {
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
@@ -236,7 +232,13 @@ export default function HarvestScreen() {
     };
   };
 
-  const saveHarvestRecords = (pondsWithData: typeof pondData) => {
+  const resetForm = useCallback(() => {
+    setPondData(initializePondData());
+    setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
+    setSecondaryPondIds([]);
+  }, [initializePondData, selectedCyclePonds]);
+
+  const saveHarvestRecords = useCallback((pondsWithData: typeof pondData) => {
     const newHarvest: HarvestRecord = {
       id: Date.now().toString(),
       date: harvestDate,
@@ -258,7 +260,7 @@ export default function HarvestScreen() {
     addHarvestRecord(newHarvest);
     resetForm();
     setIsModalVisible(false);
-  };
+  }, [addHarvestRecord, harvestDate, selectedCycle, selectedCyclePonds, resetForm]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -352,11 +354,7 @@ export default function HarvestScreen() {
     saveHarvestRecords(pondsWithData);
   };
 
-  const resetForm = () => {
-    setPondData(initializePondData());
-    setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
-    setSecondaryPondIds([]);
-  };
+
 
   const handleModalClose = () => {
     resetForm();
@@ -577,6 +575,11 @@ export default function HarvestScreen() {
                 return;
               }
               setHarvestDate(getFarmDateKey(new Date(), company?.timeZone));
+              submitLockRef.current = false;
+              setIsSubmitting(false);
+              setPondData(initializePondData());
+              setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
+              setSecondaryPondIds([]);
               setIsModalVisible(true);
             }}
           >

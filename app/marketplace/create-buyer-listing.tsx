@@ -1,3 +1,4 @@
+import { useCurrentTime } from '../hooks/useCurrentTime';
 // app/marketplace/create-buyer-listing.tsx - Android Optimized
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
@@ -75,7 +76,8 @@ const CreateBuyerListingScreen = () => {
   const { addBuyerListing } = useMarketplaceStore();
   const canManageMarketplace = hasFarmPermission(user, 'manageMarketplace', company?.ownerId);
 
-  const [formData, setFormData] = useState<FormData>({
+  const nowMs = useCurrentTime(60_000);
+  const [formData, setFormData] = useState<FormData>(() => ({
     buyerName: user?.email?.split('@')[0] || '',
     companyName: company?.companyName || '',
     contactPhone: '',
@@ -91,8 +93,8 @@ const CreateBuyerListingScreen = () => {
     paymentMethod: 'cash',
     topDays: 7,
     additionalNotes: '',
-    expiryDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-  });
+    expiryDate: new Date(nowMs + 30 * 24 * 60 * 60 * 1000),
+  }));
 
   const [gettingLocation, setGettingLocation] = useState(false);
 
@@ -263,7 +265,7 @@ const CreateBuyerListingScreen = () => {
     }
   }, [addBuyerListing, canManageMarketplace, company, formData, router, t, validateForm]);
 
-  const maxExpiryDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+  const maxExpiryDate = new Date(nowMs + 30 * 24 * 60 * 60 * 1000);
 
   return (
     <View style={styles.outerContainer}>

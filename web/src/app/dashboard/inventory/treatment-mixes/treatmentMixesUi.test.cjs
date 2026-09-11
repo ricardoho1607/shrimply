@@ -20,7 +20,7 @@ test('treatment mix actions use in-app confirmations and equal modal actions', (
   assert.doesNotMatch(source, /window\.confirm/);
   assert.match(source, /\(showCreate \|\| useMix \|\| batchMix\)/);
   assert.match(source, /role="dialog" aria-modal="true"/);
-  assert.match(source, />Cancel<\/button>/);
+  assert.match(source, />\{copy\('Cancel'\)\}<\/button>/);
   assert.match(styles, /\.modalFooter\s*{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/s);
 });
 
@@ -43,7 +43,7 @@ test('treatment mix creation explicitly selects additive inventory', () => {
   assert.match(source, /const \[selectedIngredientIds, setSelectedIngredientIds\]/);
   assert.match(source, /const selectedAdditives = useMemo/);
   assert.match(source, /const components: TreatmentMixComponent\[\] = selectedAdditives\.flatMap/);
-  assert.match(source, /aria-label="Select treatment mix ingredients"/);
+  assert.match(source, /aria-label=\{copy\('Select treatment mix ingredients'\)\}/);
   assert.match(source, /role="menuitemcheckbox"/);
   assert.match(source, /aria-checked=\{isSelected\}/);
   assert.match(source, /No stocked additives are available/);

@@ -1,3 +1,4 @@
+import { useCurrentTime } from './hooks/useCurrentTime';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   FlatList, View, Text, ScrollView, TouchableOpacity, StyleSheet, StatusBar, 
@@ -56,6 +57,7 @@ const LocationFilterControls = React.memo(({ locationFilter, setLocationFilter, 
     )}
   </View>
 ));
+LocationFilterControls.displayName = 'LocationFilterControls';
 
 const SortButton = React.memo(({ title, value, active, onPress }: any) => (
   <TouchableOpacity 
@@ -66,9 +68,11 @@ const SortButton = React.memo(({ title, value, active, onPress }: any) => (
     <Text style={[styles.sortText, active && styles.sortTextActive]}>{title}</Text>
   </TouchableOpacity>
 ));
+SortButton.displayName = 'SortButton';
 
 const BuyerListingCard = React.memo(({ listing, onPress, responseCount, locationFilter, userLocation, t }: any) => {
-  const daysLeft = Math.ceil((new Date(listing.expiryDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const nowMs = useCurrentTime();
+  const daysLeft = Math.ceil((new Date(listing.expiryDate).getTime() - nowMs) / (1000 * 60 * 60 * 24));
   const urgencyColor = daysLeft <= 3 ? '#e74c3c' : daysLeft <= 7 ? '#f39c12' : '#27ae60';
 
   const distance = useMemo(() => {
@@ -181,6 +185,7 @@ const BuyerListingCard = React.memo(({ listing, onPress, responseCount, location
     prevProps.responseCount === nextProps.responseCount
   );
 });
+BuyerListingCard.displayName = 'BuyerListingCard';
 
 const ListingDetailModal = React.memo(({ visible, listing, onClose, t }: any) => {
   const insets = useSafeAreaInsets();
@@ -283,6 +288,7 @@ const ListingDetailModal = React.memo(({ visible, listing, onClose, t }: any) =>
     </Modal>
   );
 });
+ListingDetailModal.displayName = 'ListingDetailModal';
 
 const MarketplaceScreen = () => {
   const router = useRouter();

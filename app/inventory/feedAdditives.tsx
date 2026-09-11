@@ -159,7 +159,7 @@ export default function FeedAdditivesScreen() {
         console.error('Error creating low stock notification:', error);
       }
     }
-  }, [company?.id]);
+  }, [company]);
 
   const resetForm = useCallback(
     () => setFormData(getEmptyFormData(itemType, getFarmDateKey(new Date(), company?.timeZone))),
@@ -367,7 +367,7 @@ export default function FeedAdditivesScreen() {
     );
   };
 
-  const HistoryModal = () => {
+  const renderHistoryModal = () => {
     if (!selectedItem) return null;
     const stockHistory = [...(selectedItem.stockInHistory || [])].reverse();
     const usageHistory = [...(selectedItem.usageHistory || [])].reverse();
@@ -703,7 +703,7 @@ export default function FeedAdditivesScreen() {
             </View>
 
             {modalType === 'history' ? (
-              <HistoryModal />
+              renderHistoryModal()
             ) : (
               <ScrollView style={styles.form} keyboardShouldPersistTaps="handled">
                 {modalType === 'add' && (

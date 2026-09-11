@@ -168,9 +168,10 @@ export default function BuyerHomeScreen() {
 
   // Load companies when search modal opens
   useEffect(() => {
-    if (searchModalVisible) {
-      fetchPublicCompanies();
-    }
+    if (!searchModalVisible) return;
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) void fetchPublicCompanies(); });
+    return () => { cancelled = true; };
   }, [searchModalVisible, fetchPublicCompanies]);
 
   // Filter search results based on query
@@ -204,7 +205,7 @@ export default function BuyerHomeScreen() {
     } catch (error) {
       console.error('Failed to add company:', error);
     }
-  }, [user?.uid, addMonitoredCompany]);
+  }, [addMonitoredCompany, user]);
 
   const handleDeleteCompany = useCallback((company: MonitoredCompany) => {
     setCompanyToDelete(company);
@@ -217,7 +218,7 @@ export default function BuyerHomeScreen() {
       setDeleteModalVisible(false);
       setCompanyToDelete(null);
     }
-  }, [companyToDelete, removeMonitoredCompany, user?.uid]);
+  }, [companyToDelete, removeMonitoredCompany, user]);
 
   const cancelDeleteCompany = useCallback(() => {
     setDeleteModalVisible(false);

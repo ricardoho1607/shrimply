@@ -199,7 +199,7 @@ service cloud.firestore {
 
     function validMechanicAssetUpdate() {
       return request.resource.data.companyId == resource.data.companyId
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'maintenanceHistory',
           'totalMaintenanceCost',
           'nextMaintenanceDue',
@@ -210,7 +210,7 @@ service cloud.firestore {
     }
 
     function validPondObservationUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'samplings',
         'mortalityRecords',
         'updatedAt',
@@ -219,7 +219,7 @@ service cloud.firestore {
     }
 
     function validHarvestPondImpactUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
         'totalHarvestedBiomass',
         'totalHarvestedPopulation',
         'partialHarvestCount',
@@ -399,7 +399,7 @@ service cloud.firestore {
 
     function validLegacyAiUsageUpdate(data, usageDateId) {
       return validAiUsagePayload(data, usageDateId)
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['functions', 'updatedAt'])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['functions', 'updatedAt'])
         && (
           (
             aiUsageChatCount(data) == aiUsageChatCount(resource.data) + 1
@@ -580,7 +580,7 @@ service cloud.firestore {
     }
 
     function validNotificationReadUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['read'])
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
         && request.resource.data.read is bool;
     }
 
@@ -636,7 +636,7 @@ service cloud.firestore {
     }
 
     function validDiseaseReportStatusUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt'])
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt'])
         && request.resource.data.companyId == resource.data.companyId
         && request.resource.data.status in ['contained', 'resolved']
         && request.resource.data.updatedAt is timestamp;
@@ -678,7 +678,7 @@ service cloud.firestore {
     }
 
     function validPublicMemberCountUpdate(companyId) {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'publicMemberCount',
           'updatedAt'
         ])
@@ -792,7 +792,7 @@ service cloud.firestore {
     }
 
     function validMarketplaceViewCountUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly(['viewCount'])
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['viewCount'])
         && resource.data.viewCount is int
         && request.resource.data.viewCount == resource.data.viewCount + 1;
     }
@@ -845,11 +845,14 @@ service cloud.firestore {
         && isMarketplaceResponseBuyer(resource.data)
         && request.resource.data.listingId == resource.data.listingId
         && request.resource.data.sellerId == resource.data.sellerId
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['status', 'updatedAt']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
     }
 
     match /users/{userId} {
-      allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data);
+      allow create: if signedIn() && request.auth.uid == userId && validUserPayload(request.resource.data)
+        && request.resource.data.get('companyId', null) == null
+        && request.resource.data.get('permissionOverrides', {}).size() == 0
+        && !request.resource.data.keys().hasAny(['permissionsUpdatedAt', 'permissionsUpdatedBy', 'roleUpdatedAt', 'roleUpdatedBy']);
       allow read: if signedIn() && (
         isFounderAdmin()
         || request.auth.uid == userId
@@ -859,7 +862,7 @@ service cloud.firestore {
         (
           request.auth.uid == userId
           && validUserPayload(request.resource.data)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'name',
             'phone',
             'profileImage',
@@ -872,14 +875,14 @@ service cloud.firestore {
         || (
           request.auth.uid == userId
           && validUserPayload(request.resource.data)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['role', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role', 'hasCompletedSetup', 'lastActive'])
           && (!('companyId' in resource.data) || resource.data.companyId == null)
           && (!('companyId' in request.resource.data) || request.resource.data.companyId == null)
         )
         || (
           request.auth.uid == userId
           && validUserPayload(request.resource.data)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['companyId', 'hasCompletedSetup', 'lastActive'])
           && request.resource.data.companyId != null
           && (!('companyId' in resource.data) || resource.data.companyId == null || resource.data.companyId == request.resource.data.companyId)
           && isCompanyOwner(request.resource.data.companyId)
@@ -888,7 +891,7 @@ service cloud.firestore {
         || (
           isFounderAdmin()
           && validPermissionOverrides(request.resource.data)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'permissionOverrides',
             'permissionsUpdatedAt',
             'permissionsUpdatedBy'
@@ -906,7 +909,7 @@ service cloud.firestore {
           isFounderAdmin()
           && validStaffRoleValue(request.resource.data.role)
           && validPermissionOverrides(request.resource.data)
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly([
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
             'role',
             'permissionOverrides',
             'roleUpdatedAt',
@@ -951,7 +954,7 @@ service cloud.firestore {
           && request.resource.data.ownerId == resource.data.ownerId
           && (
             hasCompanyPermission(companyId, 'editCompanySettings')
-            && !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            && !request.resource.data.diff(resource.data).affectedKeys().hasAny([
               'ownerId',
               'teamMembers',
               'pendingInvites',
@@ -1021,6 +1024,15 @@ service cloud.firestore {
           && resource.data.get('cycleStatus', 'active') == 'ended'
           && validEnterprisePondBlock(companyId, resource.data)) || isFounderAdmin();
 
+        match /feedOperations/{operationId} {
+          allow read: if hasCompanyPermission(companyId, 'recordPondData');
+          allow create: if hasCompanyPermission(companyId, 'recordPondData')
+            && hasCompanyPermission(companyId, 'manageFeedInventory')
+            && request.resource.data.keys().hasOnly(['userId', 'createdAt'])
+            && request.resource.data.userId == request.auth.uid
+            && request.resource.data.createdAt == request.time;
+          allow update, delete: if false;
+        }
         match /labSummaries/{labReportId} {
           allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
           allow write: if isFounderAdmin();
@@ -1079,23 +1091,67 @@ service cloud.firestore {
           ));
       }
 
+      function harvestLedgerMatches(companyId, data, harvestId) {
+        let entry = data.financeEntry;
+        let ledger = getAfter(/databases/$(database)/documents/companies/$(companyId)/revenues/$(entry.id)).data;
+        return ledger.sourceKind == 'harvest' && ledger.sourceId == harvestId
+          && ledger.companyId == companyId && ledger.reference == entry.reference
+          && ledger.amount == entry.amount && ledger.date == data.date
+          && ledger.get('voided', false) == data.get('voided', false)
+          && entry.voided == data.get('voided', false);
+      }
       match /harvestRecords/{harvestId} {
         allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageHarvests');
+        allow create: if hasCompanyPermission(companyId, 'manageHarvests')
+          && request.resource.data.id == harvestId && harvestLedgerMatches(companyId, request.resource.data, harvestId);
+        // Harvest correction uses void + replacement; preserve the original source.
+        allow update: if hasCompanyPermission(companyId, 'manageHarvests')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['voided', 'voidedAt', 'voidedBy', 'financeEntry'])
+          && request.resource.data.voided == true
+          && harvestLedgerMatches(companyId, request.resource.data, harvestId);
         allow delete: if false;
       }
 
-      match /feeds/{feedId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
-        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
-          && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0;
+      function validInventorySource(companyId, data, previous, inventoryCollection, inventoryId) {
+        let history = data.get('stockInHistory', []);
+        let oldHistory = previous.get('stockInHistory', []);
+        let entries = data.get('financeEntries', {});
+        let oldEntries = previous.get('financeEntries', {});
+        return (history == oldHistory && entries == oldEntries)
+          || (history.size() == oldHistory.size() + 1
+            && history.removeAll([history[history.size() - 1]]) == oldHistory
+            && validInventoryAppend(companyId, data, previous, inventoryCollection, inventoryId));
       }
-
-      match /additives/{additiveId} {
-        allow read: if isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm');
-        allow create, update: if isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory');
-        allow delete: if (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
+      function validInventoryAppend(companyId, data, previous, inventoryCollection, inventoryId) {
+        let history = data.stockInHistory;
+        let stock = history[history.size() - 1];
+        let entries = data.get('financeEntries', {});
+        let oldEntries = previous.get('financeEntries', {});
+        let added = entries.keys().removeAll(oldEntries.keys());
+        return (data.get('inventoryKind', '') == 'treatmentMix'
+            && stock.get('source', '') == 'treatmentMixProduction' && entries == oldEntries)
+          || (added.size() == 1 && entries.diff(oldEntries).affectedKeys().hasOnly(added)
+            && inventoryAppendLedgerMatches(companyId, data, stock, added[0], inventoryCollection, inventoryId));
+      }
+      function inventoryAppendLedgerMatches(companyId, data, stock, entryId, inventoryCollection, inventoryId) {
+        let ledger = getAfter(/databases/$(database)/documents/companies/$(companyId)/expenses/$(entryId)).data;
+        let entry = data.financeEntries[entryId];
+        return ledger.sourceKind == 'inventory' && ledger.companyId == companyId
+          && ledger.sourceId == inventoryId && ledger.sourceCollection == inventoryCollection && ledger.sourceLineId == stock.id
+          && ledger.sourceCollection in ['feeds', 'additives']
+          && getAfter(/databases/$(database)/documents/companies/$(companyId)/$(ledger.sourceCollection)/$(ledger.sourceId)).data == data
+          && ledger.sourceStockIndex == data.stockInHistory.size() - 1
+          && ledger.amount == stock.quantity * stock.price
+          && ledger.amount == entry.amount && ledger.reference == entry.reference && ledger.date == entry.date;
+      }
+      match /{inventoryCollection}/{inventoryId} {
+        allow read: if inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'viewFarm'));
+        allow create: if inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
+          && validInventorySource(companyId, request.resource.data, {}, inventoryCollection, inventoryId);
+        allow update: if inventoryCollection in ['feeds', 'additives'] && hasCompanyPermission(companyId, 'manageFeedInventory')
+          && validInventorySource(companyId, request.resource.data, resource.data, inventoryCollection, inventoryId)
+          && request.resource.data.get('inventoryKind', '') == resource.data.get('inventoryKind', '');
+        allow delete: if inventoryCollection in ['feeds', 'additives'] && (isFounderAdmin() || hasCompanyPermission(companyId, 'manageFeedInventory'))
           && resource.data.get('stockInHistory', []).size() == 0 && resource.data.get('usageHistory', []).size() == 0;
       }
 
@@ -1304,8 +1360,13 @@ service cloud.firestore {
       allow delete: if signedIn() && isCompanyMember(resource.data.companyId);
     }
 
-    match /diseaseReports/{reportId} {
+    match /publicDiseaseAlerts/{reportId} {
       allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /diseaseReports/{reportId} {
+      allow read: if isFounderAdmin() || hasCompanyPermission(resource.data.companyId, 'viewFarm');
       allow create: if signedIn()
         && hasCompanyPermission(request.resource.data.companyId, 'submitDiseaseReports')
         && validDiseaseReportCreate(request.resource.data);

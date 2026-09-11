@@ -164,10 +164,10 @@ export default function HowItWorksPage() {
           <div>
             <div className="eyebrow r d2" style={{ color: 'var(--sky)', marginBottom: '16px' }}>03 / Biosecurity</div>
             <h2 className="section-title r d3" style={{ marginBottom: '24px' }}>
-              The Community <em>"Vaccine."</em>
+              The Community <em>&quot;Vaccine.&quot;</em>
             </h2>
             <p className="r d4" style={{ marginBottom: '32px', fontSize: '1.05rem', fontWeight: 500 }}>
-              Coast-wide contamination is the industry's biggest threat. Shrimply transforms individual farm safety into a collective defense system.
+              Coast-wide contamination is the industry&apos;s biggest threat. Shrimply transforms individual farm safety into a collective defense system.
             </p>
             <div className="r d5" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
               <div style={{ display: 'flex', gap: '16px' }}>

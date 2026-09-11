@@ -90,10 +90,10 @@ export const RegularSidebar: React.FC = () => {
   }, [company?.id, getTeamMembers]);
 
   useEffect(() => {
-    if (company?.id) {
-      loadTeamStats();
-    }
-  }, [company?.id]);
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled && company?.id) void loadTeamStats(); });
+    return () => { cancelled = true; };
+  }, [company?.id, loadTeamStats]);
 
   useEffect(() => {
     if (sidebarVisible) {
@@ -141,7 +141,7 @@ export const RegularSidebar: React.FC = () => {
 
 
 
-  const InventoryMenuButton = () => (
+  const renderInventoryMenuButton = () => (
     <TouchableOpacity
       style={[styles.menuItem, inventoryExpanded && styles.activeMenuItem]}
       onPress={toggleInventory}
@@ -160,7 +160,7 @@ export const RegularSidebar: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const ReportsMenuButton = () => (
+  const renderReportsMenuButton = () => (
     <TouchableOpacity
       style={[styles.menuItem, reportsExpanded && styles.activeMenuItem]}
       onPress={toggleReports}
@@ -179,7 +179,7 @@ export const RegularSidebar: React.FC = () => {
     </TouchableOpacity>
   );
 
-  const CompanyInfoCard = () => {
+  const renderCompanyInfoCard = () => {
     const isOwner = user?.role === 'owner' || user?.role === 'co-owner';
     const hasCompany = !!company;
 
@@ -331,7 +331,7 @@ export const RegularSidebar: React.FC = () => {
               }}
             >
               <View style={styles.companySection}>
-                <CompanyInfoCard />
+                {renderCompanyInfoCard()}
               </View>
 
               <View style={styles.menuContainer}>
@@ -357,7 +357,7 @@ export const RegularSidebar: React.FC = () => {
                 {canViewReports && (
                   <>
                     <View style={styles.separator} />
-                    <ReportsMenuButton />
+                    {renderReportsMenuButton()}
 
                     {reportsExpanded && (
                       <View style={styles.submenuContainer}>
@@ -391,7 +391,7 @@ export const RegularSidebar: React.FC = () => {
                 )}
 
                 <View style={styles.separator} />
-                <InventoryMenuButton />
+                {renderInventoryMenuButton()}
 
                 {inventoryExpanded && (
                   <View style={styles.submenuContainer}>
@@ -473,7 +473,7 @@ export const BuyerSidebar: React.FC = () => {
 
 
 
-  const BuyerCompanyCard = () => (
+  const renderBuyerCompanyCard = () => (
     <TouchableOpacity style={styles.companyCard} onPress={() => navigateAndClose('/companybuyer')}>
       <View style={styles.cardHeader}>
         <Ionicons name="business" size={20} color="#27AE60" />
@@ -526,7 +526,7 @@ export const BuyerSidebar: React.FC = () => {
               ]}
             >
               <View style={styles.companySection}>
-                <BuyerCompanyCard />
+                {renderBuyerCompanyCard()}
               </View>
 
               <View style={styles.menuContainer}>
@@ -578,7 +578,7 @@ export const StaticSidebar: React.FC = () => {
       }
     ]);
   };
-  const StaticReportsMenuButton = () => (
+  const renderStaticReportsMenuButton = () => (
     <TouchableOpacity
       style={[styles.menuItem, reportsExpanded && styles.activeMenuItem]}
       onPress={toggleReports}
@@ -620,7 +620,7 @@ export const StaticSidebar: React.FC = () => {
           )}
           {canViewReports && (
             <>
-              <StaticReportsMenuButton />
+              {renderStaticReportsMenuButton()}
               {reportsExpanded && (
                 <View style={styles.submenuContainer}>
                   {hasFinanceAccess && <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />}

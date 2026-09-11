@@ -17,6 +17,13 @@ import { hasFarmPermission } from '../shared/permissions';
 
 const isAndroid = Platform.OS === 'android';
 
+const SummaryRow = ({ label, value }: { label: string; value: string }) => (
+    <View style={s.summaryRow}>
+      <Text style={s.summaryLabel}>{label}:</Text>
+      <Text style={s.summaryValue}>{value}</Text>
+    </View>
+  );
+
 export default function ShrimpReportsScreen() {
   const router = useRouter();
   const { user, company } = useAuth();
@@ -33,9 +40,13 @@ export default function ShrimpReportsScreen() {
     [company?.timeZone, company?.businessSize, user?.role, user?.uid, enterpriseBlocks.blocks, ponds]
   );
 
-  useEffect(() => {
-    setSelectedPonds(new Set(activePonds.map(p => p.id)));
-  }, [activePonds]);
+  const pondMembership = activePonds.map(pond => pond.id).sort().join('|');
+  const [previousMembership, setPreviousMembership] = useState('');
+  if (previousMembership !== pondMembership) {
+    const previousIds = new Set(previousMembership.split('|'));
+    setPreviousMembership(pondMembership);
+    setSelectedPonds(previous => new Set(activePonds.filter(pond => previous.has(pond.id) || !previousIds.has(pond.id)).map(pond => pond.id)));
+  }
 
   const togglePondSelection = (pondId: string) => {
     setSelectedPonds(prev => {
@@ -167,12 +178,7 @@ export default function ShrimpReportsScreen() {
     </View>
   );
 
-  const SummaryRow = ({ label, value }: { label: string; value: string }) => (
-    <View style={s.summaryRow}>
-      <Text style={s.summaryLabel}>{label}:</Text>
-      <Text style={s.summaryValue}>{value}</Text>
-    </View>
-  );
+
 
   if (!canViewReports) return (
     <SafeAreaView style={s.container}><View style={s.empty}><Text style={s.emptyTitle}>You do not have permission to view reports.</Text></View></SafeAreaView>

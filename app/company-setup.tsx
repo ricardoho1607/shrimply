@@ -64,7 +64,11 @@ export default function CompanySetupScreen() {
   const [gettingLocation, setGettingLocation] = useState(false);
 
   // Prefill form in edit mode
-  useEffect(() => {
+  const [draftInputs1, setDraftInputs1] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs1 = [isEditMode, company];
+  if (!draftInputs1 || nextDraftInputs1.some((value, index) => !Object.is(value, draftInputs1[index]))) {
+    setDraftInputs1(nextDraftInputs1);
+    (() => {
     if (isEditMode && company) {
       setFormData({
         companyName: company.companyName,
@@ -89,7 +93,9 @@ export default function CompanySetupScreen() {
         });
       }
     }
-  }, [isEditMode, company]);
+
+    })();
+  }
 
   const updateForm = useCallback(
     (key: keyof CompanyData, value: any) => setFormData(prev => ({ ...prev, [key]: value })),
@@ -161,27 +167,7 @@ export default function CompanySetupScreen() {
     return true;
   }, [formData, locationCoordinates]);
 
-  const handleSetupComplete = useCallback(async () => {
-    if (!validateForm()) return;
-
-    try {
-      if (!locationCoordinates) return;
-      await saveCompanyData({
-        address: formData.primaryLocation,
-        latitude: locationCoordinates.latitude,
-        longitude: locationCoordinates.longitude,
-        city: locationCoordinates.city,
-        state: locationCoordinates.state,
-        country: locationCoordinates.country,
-        placeId: locationCoordinates.placeId,
-      });
-    } catch (error: any) {
-      console.error('Company setup failed:', error);
-      Alert.alert('Error', 'Failed to set up your company. Please try again.');
-    }
-  }, [completeCompanySetup, formData, validateForm, isEditMode, company, router, locationCoordinates]);
-
-  const saveCompanyData = async (locationData: LocationCoordinates | string) => {
+  async function saveCompanyData(locationData: LocationCoordinates | string) {
     try {
       const timeZone = typeof locationData === 'object'
         ? await googlePlacesService.getTimeZone(locationData.latitude, locationData.longitude)
@@ -247,7 +233,29 @@ export default function CompanySetupScreen() {
     } catch (error: any) {
       throw error;
     }
-  };
+  }
+
+  const handleSetupComplete = useCallback(async () => {
+    if (!validateForm()) return;
+
+    try {
+      if (!locationCoordinates) return;
+      await saveCompanyData({
+        address: formData.primaryLocation,
+        latitude: locationCoordinates.latitude,
+        longitude: locationCoordinates.longitude,
+        city: locationCoordinates.city,
+        state: locationCoordinates.state,
+        country: locationCoordinates.country,
+        placeId: locationCoordinates.placeId,
+      });
+    } catch (error: any) {
+      console.error('Company setup failed:', error);
+      Alert.alert('Error', 'Failed to set up your company. Please try again.');
+    }
+  }, [completeCompanySetup, formData, validateForm, isEditMode, company, router, locationCoordinates]);
+
+  ;
 
   const renderInput = useCallback(
     (

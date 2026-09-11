@@ -41,7 +41,7 @@ export const useDataBackup = () => {
       console.error('Legacy backup failed:', error);
       throw error;
     }
-  }, [user?.uid, company?.id, pondStore]);
+  }, [user?.uid, pondStore, company]);
 
   // Legacy restore method
   const legacyRestore = useCallback(async () => {
@@ -57,7 +57,7 @@ export const useDataBackup = () => {
       console.error('Legacy restore failed:', error);
       throw error;
     }
-  }, [user?.uid, company?.id]);
+  }, [user?.uid, company]);
 
   // Format last sync time for display
   const getLastSyncDisplay = useCallback(() => {

@@ -163,9 +163,16 @@ export default function AdminCommandCenter() {
   }, [healthPeriod]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'overview') {
       void loadPlatformHealth();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, loadPlatformHealth]);
 
   // 2. User Overview Metrics Loader
@@ -178,7 +185,7 @@ export default function AdminCommandCenter() {
       if (requestId === overviewRequestRef.current) {
         setOverviewMetrics(data);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (requestId === overviewRequestRef.current) {
         console.error('Failed to load overview metrics:', err);
       }
@@ -190,9 +197,16 @@ export default function AdminCommandCenter() {
   }, [access, overviewPeriod, repository]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'user' && !selectedId) {
       void loadOverview();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, selectedId, loadOverview]);
 
   // 3. Farms Fleet Loader
@@ -217,9 +231,16 @@ export default function AdminCommandCenter() {
   }, [access, repository]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'farms') {
       void loadFarms();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, loadFarms]);
 
   // 4. Support Queues Loader
@@ -244,9 +265,16 @@ export default function AdminCommandCenter() {
   }, [access, repository]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'support') {
       void loadSupport();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, loadSupport]);
 
   // 5. Security Telemetry Loader
@@ -271,9 +299,16 @@ export default function AdminCommandCenter() {
   }, [access, repository]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'security') {
       void loadSecurity();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, loadSecurity]);
 
   // 6. Audit Trail Loader
@@ -298,9 +333,16 @@ export default function AdminCommandCenter() {
   }, [access, repository]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access === 'allowed' && activeView === 'audit') {
       void loadAudit();
     }
+
+    });
+    return () => { cancelled = true; };
   }, [access, activeView, loadAudit]);
 
   const resolveRequestedUser = useCallback(() => {
@@ -331,20 +373,26 @@ export default function AdminCommandCenter() {
   }, [access, repository, selectedId]);
 
   useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => {
+      if (cancelled) return;
+
     if (access !== 'allowed') return;
     void loadAccount();
+
+    });
+    return () => { cancelled = true; };
   }, [access, loadAccount]);
 
-  useEffect(() => {
+  const [routeInputs, setRouteInputs] = useState({ requestedUserId, viewParam });
+  if (routeInputs.requestedUserId !== requestedUserId || routeInputs.viewParam !== viewParam) {
+    setRouteInputs({ requestedUserId, viewParam });
     if (requestedUserId !== selectedId) {
       setSelectedId(requestedUserId);
       if (requestedUserId) {
         setActiveView('user');
       }
     }
-  }, [requestedUserId, selectedId]);
-
-  useEffect(() => {
     if (viewParam === 'user' || viewParam === 'users' || viewParam === 'intelligence') {
       setActiveView('user');
     } else if (viewParam === 'overview') {
@@ -363,7 +411,8 @@ export default function AdminCommandCenter() {
       setActiveView('audit');
       if (!requestedUserId) setSelectedId(null);
     }
-  }, [viewParam, requestedUserId]);
+  }
+
 
   const handleNavigate = useCallback(
     (view: AdminViewMode) => {

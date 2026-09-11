@@ -220,12 +220,7 @@ export default function PondManagementScreen() {
     mortalityNotes: '',
   });
 
-  useEffect(() => {
-    if (modalVisible) {
-      submitLockRef.current = false;
-      setIsSubmitting(false);
-    }
-  }, [modalVisible]);
+
 
   const updateForm = useCallback((key: keyof FormData, value: any) => 
     setFormData(prev => ({ ...prev, [key]: value })), 
@@ -428,14 +423,13 @@ export default function PondManagementScreen() {
     [accessiblePonds, activeFarmCycle, cycleFilter, openAccessibleFarmCycles.length]
   );
 
-  useEffect(() => {
+  const [cycleDraftSource, setCycleDraftSource] = useState({ id: activeFarmCycle?.id, name: activeFarmCycle?.cycleName });
+  if (cycleDraftSource.id !== activeFarmCycle?.id || cycleDraftSource.name !== activeFarmCycle?.cycleName) {
+    setCycleDraftSource({ id: activeFarmCycle?.id, name: activeFarmCycle?.cycleName });
     setCycleNameDraft(activeFarmCycle?.cycleName || '');
-  }, [activeFarmCycle?.id, activeFarmCycle?.cycleName]);
+    if (activeFarmCycle && cycleDraftSource.id !== activeFarmCycle.id) setSelectedDashboardCycleId(activeFarmCycle.id);
+  }
 
-  useEffect(() => {
-    if (!activeFarmCycle || activeFarmCycle.id === selectedDashboardCycleId) return;
-    setSelectedDashboardCycleId(activeFarmCycle.id);
-  }, [activeFarmCycle, selectedDashboardCycleId]);
 
   const getLatestSampling = useCallback((pondId: string): Sampling | null => {
     const pond = accessiblePonds.find(p => p.id === pondId);
@@ -874,7 +868,7 @@ export default function PondManagementScreen() {
 
     closeModal();
     Alert.alert(t.messages.success, t.home.mortalitySavedSuccess);
-  }, [activePonds, addMortalityRecord, canRecordPondData, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user?.uid]);
+  }, [activePonds, addMortalityRecord, canRecordPondData, closeModal, company?.timeZone, formData, formatLocalDateKey, t, user]);
 
   const handleEndPondCycle = useCallback((pond: Pond) => {
     if (!canManagePonds) {
@@ -1089,7 +1083,7 @@ export default function PondManagementScreen() {
         },
       ]
     );
-  }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, router, t, user?.role, user?.uid]);
+  }, [activeCyclePonds, activeFarmCycle, canManageFarmCycle, closeFarmCycle, company?.timeZone, currentCyclePonds, harvestRecords, router, t, user]);
 
   const handleSaveEnterpriseProductionCycle = useCallback((input: {
     cycle?: FarmCycle;
@@ -1247,6 +1241,8 @@ export default function PondManagementScreen() {
     }
     setModalType(type); 
     setMenuModalVisible(false); 
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     setModalVisible(true);
   }, [activeFarmCycle?.id, availableEnterpriseBlocks, cycles.length, isEnterpriseFarm, openAccessibleFarmCycles]);
 
@@ -1266,6 +1262,8 @@ export default function PondManagementScreen() {
       baselineCumulativeFeed: String(pond.baselineCumulativeFeed ?? baselineSampling?.cumulativeFeedToDate ?? baselineSampling?.feed ?? ''),
     }));
     setModalType('baseline');
+    submitLockRef.current = false;
+    setIsSubmitting(false);
     setModalVisible(true);
   }, [company?.timeZone, normalizeDateValue]);
 

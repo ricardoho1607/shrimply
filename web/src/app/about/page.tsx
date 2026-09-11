@@ -106,12 +106,12 @@ export default function AboutPage() {
             <div className="feature-card r d2">
               <div style={{ color: 'var(--sky)', marginBottom: '24px' }}><Brain size={28} strokeWidth={1.5} /></div>
               <h3 className="feature-title" style={{ marginBottom: '16px' }}>Biological Intelligence</h3>
-              <p>Orson AI doesn't just store your data. It understands it, turning raw numbers into 72-hour forecasts, trend alerts, and biological insights that keep you ahead of problems before they cost you.</p>
+              <p>Orson AI doesn&apos;t just store your data. It understands it, turning raw numbers into 72-hour forecasts, trend alerts, and biological insights that keep you ahead of problems before they cost you.</p>
             </div>
             <div className="feature-card r d3">
               <div style={{ color: 'var(--sky)', marginBottom: '24px' }}><ShieldCheck size={28} strokeWidth={1.5} /></div>
               <h3 className="feature-title" style={{ marginBottom: '16px' }}>Proactive Disease Defense</h3>
-              <p>Disease doesn't wait for you to notice it. Our real-time outbreak map alerts you when nearby farms report disease activity, giving you the preparation time that saves entire cycles.</p>
+              <p>Disease doesn&apos;t wait for you to notice it. Our real-time outbreak map alerts you when nearby farms report disease activity, giving you the preparation time that saves entire cycles.</p>
             </div>
           </div>
         </div>

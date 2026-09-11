@@ -163,7 +163,7 @@ export default function HowItWorksPageVI() {
           <div>
             <div className="eyebrow r d2" style={{ color: 'var(--sky)', marginBottom: '16px' }}>03 / An toàn sinh học</div>
             <h2 className="section-title r d3" style={{ marginBottom: '24px' }}>
-              "Vắc-xin" <em>cho toàn cộng đồng.</em>
+              &quot;Vắc-xin&quot; <em>cho toàn cộng đồng.</em>
             </h2>
             <p className="r d4" style={{ marginBottom: '32px', fontSize: '1.05rem', fontWeight: 500 }}>
               Sự lây nhiễm chéo dọc theo bờ biển là mối đe dọa lớn nhất của ngành nuôi tôm. Shrimply biến sự an toàn của từng trang trại riêng lẻ thành hệ thống phòng thủ tập thể.

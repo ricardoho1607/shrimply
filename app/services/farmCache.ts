@@ -193,11 +193,11 @@ export const removeFarmCache = async (userId: string, companyId: string): Promis
   await removeProtectedItem(key);
 };
 
-export const clearUserFarmCaches = async (userId: string): Promise<void> => {
+export const clearUserFarmCaches = async (userId: string, preservePendingWork = false): Promise<void> => {
   for (const [key, pending] of pendingWrites) {
     if (pending.userId === userId) clearPendingWrite(key);
   }
-  await clearProtectedStorageForUser(userId);
+  await clearProtectedStorageForUser(userId, preservePendingWork);
 };
 
 export const persistAuthBootstrap = async (

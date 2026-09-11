@@ -7,6 +7,7 @@ const MapView = React.forwardRef(({ children, style }: any, ref) => (
     {children}
   </View>
 ));
+MapView.displayName = 'MapView';
 
 export const Marker = ({ children }: any) => <View>{children}</View>;
 export const Circle = () => <View />;

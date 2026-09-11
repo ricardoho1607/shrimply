@@ -33,6 +33,7 @@ import {
   doc,
   onSnapshot,
   updateDoc,
+  runTransaction,
   deleteDoc,
   query,
   collection,
@@ -199,7 +200,7 @@ const calculateDocFromDates = (startDate: string, baselineDate: string): number 
 
 /* --- Custom SVG Chart --------------------------------------- */
 const GrowthChart = ({ data, emptyMessage }: { data: { x: number, y: number }[]; emptyMessage: string }) => {
-  const [hoveredPoint, setHoveredPoint] = useState<any>(null);
+  const [hoveredPoint, setHoveredPoint] = useState<{ x: number; y: number } | null>(null);
 
   if (!data || data.length < 2) {
     return (
@@ -415,8 +416,8 @@ export default function PondDetailClient() {
             });
 
             const qCycles = query(collection(db, 'companies', cid, 'cycles'), orderBy('createdAt', 'asc'));
-            unsubCycles = onSnapshot(qCycles, (snapshot: any) => {
-              setCycles(snapshot.docs.map((d: any) => ({ id: d.id, ...d.data() } as FarmCycle)));
+            unsubCycles = onSnapshot(qCycles, (snapshot) => {
+              setCycles(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as FarmCycle)));
             });
           } else if (!cid) {
             cleanCompanyListeners();
@@ -498,19 +499,16 @@ export default function PondDetailClient() {
         pondCycleId: pond.pondCycleId || pond.id,
       };
 
-      let updatedSamplings: Sampling[];
-      if (editingSamplingId) {
-        updatedSamplings = (pond.samplings || []).map((sampling) => sampling.id === editingSamplingId
-          ? { ...sampling, ...newSampling }
-          : sampling
-        );
-      } else {
-        updatedSamplings = [...(pond.samplings || []), newSampling];
-      }
-
-      await updateDoc(doc(db, 'companies', companyId, 'ponds', pond.id), {
-        samplings: updatedSamplings,
-        updatedAt: serverTimestamp()
+      const reference = doc(db, 'companies', companyId, 'ponds', pond.id);
+      await runTransaction(db, async transaction => {
+        const snapshot = await transaction.get(reference);
+        if (!snapshot.exists() || snapshot.data().cycleStatus === 'ended') throw new Error('Pond cycle is unavailable');
+        const records = (snapshot.data().samplings || []) as Sampling[];
+        if (editingSamplingId && !records.some(record => record.id === editingSamplingId)) throw new Error('Sampling no longer exists');
+        const updatedSamplings = editingSamplingId
+          ? records.map(record => record.id === editingSamplingId ? { ...record, ...newSampling } : record)
+          : [...records, newSampling];
+        transaction.update(reference, { samplings: updatedSamplings, updatedAt: serverTimestamp() });
       });
       setSamplingModalOpen(false);
       setEditingSamplingId(null);
@@ -1130,10 +1128,10 @@ export default function PondDetailClient() {
                 </thead>
                 <tbody>
                   {(pond.samplings || [])
-                    .filter((s: any) => Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
-                    .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                    .filter((s) => Number(s.mbw) > 0 || Number(s.mortality) > 0 || Number(s.feed) > 0)
+                    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                     .slice(0, 8)
-                    .map((s: any, i: number) => {
+                    .map((s, i) => {
                       const samplingAdg = calculateSamplingAdg(pond, s, company?.timeZone);
 
                       return (
@@ -1681,7 +1679,11 @@ export default function PondDetailClient() {
   );
 }
 
-function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: any) {
+type SamplingForm = { date: string; mbw: string; feed: string; mortality: string };
+function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting, isEditing }: {
+  isOpen: boolean; onClose: () => void; onSubmit: (event: React.FormEvent) => void;
+  form: SamplingForm; setForm: React.Dispatch<React.SetStateAction<SamplingForm>>; isSubmitting: boolean; isEditing: boolean;
+}) {
   const { t } = useLanguage();
   const copy = t.pondDetail;
 

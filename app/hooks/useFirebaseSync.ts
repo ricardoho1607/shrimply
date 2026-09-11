@@ -1,3 +1,4 @@
+import { overlayDailyFeedIntents } from '../../shared/dailyFeedTransaction';
 import { buildHarvestRevenue, financeSyncDocumentId, financeSourceEntry } from '../../shared/financeSync';
 import { resolvePhysicalPond, PHYSICAL_POND_LINK_ERROR } from '../../shared/physicalPondIdentity';
 // hooks/useFirebaseSync.ts - Fixed version with proper account switching
@@ -26,7 +27,7 @@ import {
 import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
 import { readProtectedItem, removeProtectedItem, writeProtectedItem } from '../services/protectedStorage';
-import { requestOfflineMutationFlush } from '../services/offlineWorkspace';
+import { listOfflineMutations, requestOfflineMutationFlush } from '../services/offlineWorkspace';
 import { getPendingSyncKey } from '../../shared/farmCache';
 import {
   getOfflineRetryDelay,
@@ -306,22 +307,12 @@ const useFirebaseSyncController = () => {
     return write;
   }, [activeUserId, pendingStorageKey, pendingStorageReady]);
 
-  useEffect(() => {
-    pendingChangesRef.current = pendingChanges;
-    setSyncStatus(prev => (
-      prev.pendingChanges === pendingChanges.length
-        ? prev
-        : { ...prev, pendingChanges: pendingChanges.length }
-    ));
-  }, [pendingChanges]);
+
 
   useEffect(() => {
     let cancelled = false;
 
     const loadPendingChanges = async () => {
-      setPendingStorageReady(false);
-      pendingChangesRef.current = [];
-      setPendingChanges([]);
 
       if (!pendingStorageKey || !activeUserId) {
         setPendingStorageReady(true);
@@ -354,24 +345,9 @@ const useFirebaseSyncController = () => {
     };
   }, [activeCompanyId, activeUserId, pendingStorageKey]);
 
-  useEffect(() => {
-    setSyncStatus((previous) => ({
-      ...previous,
-      isSyncing: false,
-      lastSync: undefined,
-      pendingChanges: 0,
-      error: undefined,
-    }));
-  }, [activeCompanyId, user?.uid]);
 
-  useEffect(() => {
-    if (!activeUserId || !pendingStorageKey || !pendingStorageReady) return;
 
-    void persistPendingQueue(pendingChanges).catch((error) => {
-        console.error('Error saving pending sync queue:', error);
-        setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
-    });
-  }, [activeUserId, pendingChanges, pendingStorageKey, pendingStorageReady, persistPendingQueue]);
+
 
   const setupRealtimeListeners = useCallback((userId: string, companyId: string) => {
     const newUnsubscribeCallbacks: (() => void)[] = [];
@@ -522,8 +498,10 @@ const useFirebaseSyncController = () => {
         orderBy('createdAt', 'asc')
       );
 
+      let pondSnapshotVersion = 0;
       const unsubscribePonds = onSnapshot(pondsQuery, { includeMetadataChanges: true },
-        (snapshot) => {
+        async (snapshot) => {
+          const version = ++pondSnapshotVersion;
           try {
             if (!isActiveFarmIdentity()) return;
             const serverPonds: Pond[] = [];
@@ -577,7 +555,10 @@ const useFirebaseSyncController = () => {
             });
 
             // Only update if this is the initial load or if we have actual changes
-            const mergedPonds = applyPendingPondChanges(serverPonds, pendingChangesRef.current)
+            const mutations = await listOfflineMutations(userId, companyId);
+            if (!isActiveFarmIdentity() || version !== pondSnapshotVersion) return;
+            const intents = mutations.flatMap(mutation => mutation.dailyFeed ? [mutation.dailyFeed] : []);
+            const mergedPonds = overlayDailyFeedIntents(applyPendingPondChanges(serverPonds, pendingChangesRef.current), intents)
               .map(normalizePondLifecycle);
             const currentPonds = usePondStore.getState().ponds;
             if (!shouldApplyRemoteCollectionSnapshot({
@@ -601,7 +582,7 @@ const useFirebaseSyncController = () => {
             }
             persistCurrentFarmSnapshot(snapshot.metadata.fromCache);
             
-            setSyncStatus(prev => ({ ...prev, lastSync: new Date(), error: undefined }));
+            setSyncStatus(prev => ({ ...prev, lastSync: new Date(), error: pendingChangesRef.current.length ? prev.error : undefined }));
           } catch (error) {
             console.error('Error processing ponds snapshot:', error);
             setSyncStatus(prev => ({ ...prev, error: 'Error processing pond data' }));
@@ -855,7 +836,7 @@ const useFirebaseSyncController = () => {
                   createdAt: serverTimestamp(),
                   createdBy: user.uid,
                 });
-                if (revenue.amount > 0) transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), {
+                transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), {
                   ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, addedByName: user.name || user.email || 'Harvest', timestamp: Date.now(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
                 }, { merge: true });
                 return;
@@ -880,7 +861,7 @@ const useFirebaseSyncController = () => {
               const revenue = buildHarvestRevenue(sourceRecord);
               const revenueId = financeSyncDocumentId(revenue.reference);
               transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
-              if (revenue.amount > 0) transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
+              transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
             });
             didProcess = true;
           }
@@ -892,12 +873,15 @@ const useFirebaseSyncController = () => {
               const pondData = pondDoc.data();
               let samplings = [...(pondData.samplings || [])];
               
+              // Feeding is committed only with its inventory transaction. Old queued
+              // sampling snapshots must never overwrite a newer feed allocation.
+              const { feedData: _queuedFeed, ...samplingFields } = change.data;
               if (change.action === 'create') {
-                if (!samplings.some((sampling) => sampling.id === change.samplingId)) samplings.push(change.data);
+                if (!samplings.some((sampling) => sampling.id === change.samplingId)) samplings.push(removeUndefinedFields(samplingFields));
               } else if (change.action === 'update' && change.samplingId) {
                 const index = samplings.findIndex(s => s.id === change.samplingId);
-                if (index >= 0) samplings[index] = removeUndefinedFields(change.data);
-                else samplings.push(removeUndefinedFields(change.data));
+                if (index >= 0) samplings[index] = removeUndefinedFields({ ...samplingFields, ...(samplings[index].feedData ? { feedData: samplings[index].feedData } : {}) });
+                else samplings.push(removeUndefinedFields(samplingFields));
               } else if (change.action === 'delete' && change.samplingId) {
                 samplings = samplings.filter(s => s.id !== change.samplingId);
               }
@@ -964,12 +948,8 @@ const useFirebaseSyncController = () => {
         })()
       : Promise.resolve();
 
-    if (!isOnlineRef.current) {
-      setSyncStatus(prev => ({ ...prev, error: undefined }));
-      return;
-    }
     void Promise.all([queuePersist, cachePersist]).then(() => {
-      syncPendingChangesRef.current();
+      if (isOnlineRef.current) syncPendingChangesRef.current();
     }).catch((error) => {
       console.error('Unable to protect pending farm change:', error);
       setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
@@ -1007,43 +987,51 @@ const useFirebaseSyncController = () => {
     setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
 
     try {
-      const processedChanges: string[] = [];
+      const blocked = new Set<string>();
+      const failures: string[] = [];
       for (const pendingChange of changesToSync) {
-        const processed = await commitChanges([pendingChange]);
-        if (!processed.includes(pendingChange.id)) {
-          throw new Error(`Pending change ${pendingChange.id} was not applied`);
+        if (usePondStore.getState().currentCompanyId !== activeCompanyId || usePondStore.getState().farmCacheUserId !== user.uid) break;
+        const keys = [pendingChange.pondId || (pendingChange.type === 'pond' ? pendingChange.data?.id || pendingChange.recordId || pendingChange.id : `${pendingChange.type}:${pendingChange.data?.id || pendingChange.recordId || pendingChange.id}`),
+          ...(pendingChange.type === 'harvest' ? (pendingChange.data?.ponds || []).map((pond: { pondId: string }) => pond.pondId) : [])];
+        if (keys.some(key => blocked.has(key))) continue;
+        try {
+          const processed = await commitChanges([pendingChange]);
+          if (!processed.includes(pendingChange.id)) throw new Error('Change was not applied');
+          const remaining = pendingChangesRef.current.filter(change => !processed.includes(change.id));
+          // Acknowledge each success before advancing to another remote operation.
+          pendingChangesRef.current = remaining;
+          setPendingChanges(remaining);
+          try {
+            await persistPendingQueue(remaining);
+          } catch (error) {
+            // Keep changes enqueued during this write, and retain the acknowledged
+            // operation for safe retry if its local acknowledgement failed.
+            pendingChangesRef.current = [...pendingChangesRef.current, pendingChange];
+            setPendingChanges(pendingChangesRef.current);
+            throw error;
+          }
+          setSyncStatus(previous => ({ ...previous, pendingChanges: pendingChangesRef.current.length, lastSync: new Date() }));
+        } catch (error) {
+          keys.forEach(key => blocked.add(key));
+          failures.push(`${pendingChange.type} ${pendingChange.pondId || pendingChange.data?.pondName || pendingChange.id}: ${error instanceof Error ? error.message : 'Could not sync'}`);
         }
-        processedChanges.push(...processed);
       }
-      if (processedChanges.length > 0) {
-        console.log(`Synced ${processedChanges.length} changes to server`);
+      if (failures.length) {
+        setSyncStatus(previous => ({ ...previous, error: `Some changes need attention. ${failures.join('; ')}. Other independent changes have been synchronized. Correct the record or restore access, then retry.` }));
+        scheduleSyncRetry();
+      } else {
+        retryAttemptRef.current = 0;
+        setSyncStatus(previous => ({ ...previous, error: undefined }));
       }
-      
-      const remainingChanges = pendingChangesRef.current.filter(c => !processedChanges.includes(c.id));
-      pendingChangesRef.current = remainingChanges;
-      setPendingChanges(remainingChanges);
-      setSyncStatus(prev => ({ 
-        ...prev, 
-        pendingChanges: Math.max(0, prev.pendingChanges - processedChanges.length),
-        lastSync: new Date(),
-        error: undefined,
-      }));
-      retryAttemptRef.current = 0;
-    } catch {
-      setSyncStatus(prev => ({ 
-        ...prev, 
-        error: 'Sync failed. Please try again.' 
-      }));
-      scheduleSyncRetry();
     } finally {
       syncInProgressRef.current = false;
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
     }
-  }, [activeCompanyId, clearRetryTimer, commitChanges, scheduleSyncRetry, user]);
+  }, [activeCompanyId, clearRetryTimer, commitChanges, persistPendingQueue, scheduleSyncRetry, user]);
 
-  syncPendingChangesRef.current = () => {
-    void syncPendingChanges();
-  };
+  useEffect(() => {
+    syncPendingChangesRef.current = () => { void syncPendingChanges(); };
+  }, [syncPendingChanges]);
 
   // Monitor network status after the sync callback is available.
   useEffect(() => {
@@ -1142,7 +1130,7 @@ const useFirebaseSyncController = () => {
   }, [syncStatus.isOnline, syncStatus.isSyncing, pendingChanges.length, syncPendingChanges]);
 
   return {
-    syncStatus,
+    syncStatus: { ...syncStatus, pendingChanges: pendingChanges.length },
     syncPond,
     syncPhysicalPond,
     syncSampling,
@@ -1159,6 +1147,12 @@ export type FirebaseSyncContextValue = ReturnType<typeof useFirebaseSyncControll
 const FirebaseSyncContext = createContext<FirebaseSyncContextValue | null>(null);
 
 export const FirebaseSyncProvider = ({ children }: { children: ReactNode }) => {
+  const { user, company, isBuyer } = useAuth();
+  const identity = `${user?.uid ?? 'signed-out'}:${isBuyer ? 'buyer' : company?.id ?? 'no-company'}`;
+  return createElement(ScopedFirebaseSyncProvider, { key: identity }, children);
+};
+
+const ScopedFirebaseSyncProvider = ({ children }: { children?: ReactNode }) => {
   const firebaseSync = useFirebaseSyncController();
   const { triggerManualSync } = firebaseSync;
   const { user, company, isBuyer } = useAuth();

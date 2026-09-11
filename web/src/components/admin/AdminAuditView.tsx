@@ -1,5 +1,6 @@
 'use client';
 
+import { useCurrentTime } from '@/hooks/useCurrentTime';
 import {
   ArrowRight,
   Calendar,
@@ -47,10 +48,10 @@ export function AdminAuditView({
   const securityEvents = events.filter((e) => e.action.toLowerCase().includes('security') || e.action.toLowerCase().includes('claim') || e.action.toLowerCase().includes('role')).length;
   const supportEvents = events.filter((e) => e.action.toLowerCase().includes('support') || e.action.toLowerCase().includes('tester') || e.action.toLowerCase().includes('disease')).length;
 
+  const now = useCurrentTime();
   // Filtered Events
   const filteredEvents = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const now = Date.now();
     const DAY_MS = 86_400_000;
 
     return events.filter((evt) => {
@@ -78,7 +79,7 @@ export function AdminAuditView({
 
       return true;
     });
-  }, [events, category, dateRange, search]);
+  }, [events, category, dateRange, search, now]);
 
   const handleExportCsv = () => {
     const headers = ['ID', 'Timestamp', 'Action', 'Actor ID', 'Target ID', 'Reason', 'Metadata'];

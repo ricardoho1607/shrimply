@@ -2576,26 +2576,16 @@ const getNearbyActiveDiseaseReports = async (db, companyId, companyLocation) => 
         diseaseName: report.diseaseName || "Disease report",
         diseaseType: report.diseaseType || "unknown",
         severity: report.severity || "medium",
-        reporterCompany: report.companyName || "Nearby farm",
-        distanceKm: distance,
+        reporterCompany: "Nearby farm",
+        distanceKm: Math.ceil(distance / 25) * 25,
       });
     }
   });
   return nearby.sort((a, b) => a.distanceKm - b.distanceKm);
 };
 
-const diseaseAlertTitle = (diseaseName, distance) => {
-  const roundedDistance = Math.round(distance * 10) / 10;
-  return `Disease Alert: ${diseaseName || "Nearby outbreak"} (${roundedDistance} km away)`;
-};
-
-const diseaseAlertMessage = (report, distance) => {
-  const roundedDistance = Math.round(distance * 10) / 10;
-  const diseaseName = report.diseaseName || "A disease outbreak";
-  const reporterCompany = report.companyName || "A nearby farm";
-  const locationName = report.location?.address || "a nearby area";
-  return `${diseaseName} was reported by ${reporterCompany} near ${locationName}, about ${roundedDistance} km from your farm. Review biosecurity and monitor ponds closely.`;
-};
+const diseaseAlertTitle = (diseaseName) => `Disease Alert: ${diseaseName || "Nearby outbreak"}`;
+const diseaseAlertMessage = (report) => `${report.diseaseName || "A disease outbreak"} was reported in your region. Farm details are private. Review biosecurity and monitor ponds closely.`;
 
 const diseaseAlertPriority = (distance, severity) => {
   if (severity === "critical" || distance <= 10) return "high";
@@ -2640,7 +2630,6 @@ exports.notifyNearbyFarmsOnDiseaseReport = onDocumentCreated("diseaseReports/{re
     if (distance > radiusKm) continue;
 
     const notificationRef = db.collection("notifications").doc();
-    const roundedDistance = Math.round(distance * 10) / 10;
     batch.set(notificationRef, {
       companyId,
       type: "disease_alert",
@@ -2654,10 +2643,8 @@ exports.notifyNearbyFarmsOnDiseaseReport = onDocumentCreated("diseaseReports/{re
         reportId,
         diseaseType: report.diseaseType || "unknown",
         diseaseName: report.diseaseName || "Disease report",
-        distance: roundedDistance,
         severity: report.severity || "medium",
-        location: report.location.address || "",
-        reporterCompany: report.companyName || "Nearby farm",
+        reporterCompany: "Nearby farm",
       },
     });
     batchWrites += 1;

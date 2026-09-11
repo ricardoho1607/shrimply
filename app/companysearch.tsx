@@ -18,7 +18,7 @@ import {
   collection, 
   query, 
   where, 
-  getDocs 
+  onSnapshot
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -58,31 +58,26 @@ export default function CompanySearchScreen() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedCompany, setSelectedCompany] = useState<Company | null>(null);
-  const [selectedRole, setSelectedRole] = useState<Role>('technician');
+  const [roleChoice, setSelectedRole] = useState<Role | null>(null);
+  const selectedRole = roleChoice ?? (user?.role && ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user.role) ? user.role as Role : 'technician');
   const [requestMessage, setRequestMessage] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const [pendingRequestData, setPendingRequest] = useState<any>(null);
+  const pendingRequest = pendingRequestData?.userId === user?.uid ? pendingRequestData : null;
 
   React.useEffect(() => {
-    const checkPending = async () => {
-      if (!user) return;
-      const q = query(collection(db, 'joinRequests'), 
-        where('userId', '==', user.uid), 
-        where('status', '==', 'pending')
-      );
-      const snap = await getDocs(q);
-      if (!snap.empty) {
-        setPendingRequest(snap.docs[0].data());
-      }
-    };
-    checkPending();
-  }, [user]);
+    if (!user?.uid) return;
+    const pendingQuery = query(collection(db, 'joinRequests'),
+      where('userId', '==', user.uid), where('status', '==', 'pending'));
+    return onSnapshot(pendingQuery, snapshot => {
+      setPendingRequest(snapshot.empty ? null : snapshot.docs[0].data());
+    }, error => {
+      console.error('Could not refresh join request:', error);
+      Alert.alert('Connection problem', 'Could not refresh your request. Please reconnect and try again.');
+    });
+  }, [user?.uid]);
 
-  React.useEffect(() => {
-    if (user?.role && ['co-owner', 'manager', 'technician', 'admin', 'mechanic'].includes(user.role)) {
-      setSelectedRole(user.role as Role);
-    }
-  }, [user?.role]);
+
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) {
@@ -213,7 +208,7 @@ export default function CompanySearchScreen() {
                 </View>
                 <View style={styles.detail}>
                   <Text style={styles.detailLabel}>Sent On</Text>
-                  <Text style={styles.detailValue}>{new Date(pendingRequest.requestedAt).toLocaleDateString()}</Text>
+                  <Text style={styles.detailValue}>{(pendingRequest.requestedAt?.toDate?.() ?? new Date(pendingRequest.requestedAt)).toLocaleDateString()}</Text>
                 </View>
               </View>
             </View>

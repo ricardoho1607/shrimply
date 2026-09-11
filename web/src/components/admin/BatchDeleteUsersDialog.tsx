@@ -39,18 +39,16 @@ export function BatchDeleteUsersDialog({
   const isConfirmationValid = confirmation.trim().toUpperCase() === expectedConfirmation || confirmation.trim().toUpperCase() === 'DELETE';
   const canSubmit = users.length > 0 && isReasonValid && isConfirmationValid && !submitting;
 
-  useEffect(() => {
+  const [previousOpen, setPreviousOpen] = useState(open);
+  if (previousOpen !== open) {
+    setPreviousOpen(open);
     if (!open) {
-      setReason('Bulk administrative cleanup');
-      setConfirmation('');
-      setDeleteCompanies(false);
-      setSubmitting(false);
-      setProgressText(null);
-      setProgressPercent(0);
-      setError(null);
-      return;
+      setReason('Bulk administrative cleanup'); setConfirmation(''); setDeleteCompanies(false);
+      setSubmitting(false); setProgressText(null); setProgressPercent(0); setError(null);
     }
-    queueMicrotask(() => closeButtonRef.current?.focus());
+  }
+  useEffect(() => {
+    if (open) closeButtonRef.current?.focus();
   }, [open]);
 
   useEffect(() => {
@@ -93,7 +91,7 @@ export function BatchDeleteUsersDialog({
         onSuccess();
         onClose();
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(err instanceof Error ? err.message : 'Batch deletion failed.');
       setSubmitting(false);
     }

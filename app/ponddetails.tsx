@@ -136,21 +136,33 @@ const EditSamplingModal = ({
   const [mortality, setMortality] = useState('');
   const [feed, setFeed] = useState('');
 
-  useEffect(() => {
+  const [draftInputs1, setDraftInputs1] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs1 = [sample, visible];
+  if (!draftInputs1 || nextDraftInputs1.some((value, index) => !Object.is(value, draftInputs1[index]))) {
+    setDraftInputs1(nextDraftInputs1);
+    (() => {
     if (sample && visible) {
       setMbw(sample.mbw ? sample.mbw.toString() : '0');
       setMortality(sample.mortality ? sample.mortality.toString() : '0');
       setFeed(sample.feed ? sample.feed.toString() : '0');
     }
-  }, [sample, visible]);
 
-  useEffect(() => {
+    })();
+  }
+
+  const [draftInputs2, setDraftInputs2] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs2 = [visible];
+  if (!draftInputs2 || nextDraftInputs2.some((value, index) => !Object.is(value, draftInputs2[index]))) {
+    setDraftInputs2(nextDraftInputs2);
+    (() => {
     if (!visible) {
       setMbw('');
       setMortality('');
       setFeed('');
     }
-  }, [visible]);
+
+    })();
+  }
 
   const handleSave = () => {
     if (!sample || !mbw || !mortality || !feed) return;
@@ -268,7 +280,11 @@ const EditMortalityModal = ({
   const [mortalCount, setMortalCount] = useState('');
   const [notes, setNotes] = useState('');
 
-  useEffect(() => {
+  const [draftInputs3, setDraftInputs3] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs3 = [record, visible];
+  if (!draftInputs3 || nextDraftInputs3.some((value, index) => !Object.is(value, draftInputs3[index]))) {
+    setDraftInputs3(nextDraftInputs3);
+    (() => {
     if (record && visible) {
       setCount(record.observationType === 'none_observed' ? '0' : (record.count !== undefined ? String(record.count) : '0'));
       setObservationType(record.observationType || 'estimated_total');
@@ -277,9 +293,15 @@ const EditMortalityModal = ({
       setMortalCount(record.mortalCount !== undefined ? String(record.mortalCount) : '');
       setNotes(record.notes || '');
     }
-  }, [record, visible]);
 
-  useEffect(() => {
+    })();
+  }
+
+  const [draftInputs4, setDraftInputs4] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs4 = [visible];
+  if (!draftInputs4 || nextDraftInputs4.some((value, index) => !Object.is(value, draftInputs4[index]))) {
+    setDraftInputs4(nextDraftInputs4);
+    (() => {
     if (!visible) {
       setCount('');
       setObservationType('estimated_total');
@@ -288,7 +310,9 @@ const EditMortalityModal = ({
       setMortalCount('');
       setNotes('');
     }
-  }, [visible]);
+
+    })();
+  }
 
   const handleSave = () => {
     if (!record) return;
@@ -520,19 +544,15 @@ export default function PondDetails() {
     plSupplier: '',
   });
 
-  useEffect(() => {
-    if (pondId) {
-      const pondData = getPondById(pondId as string);
-      if (isEnterpriseTechnician && enterpriseBlocks.loading) return;
-      const canAccessPond = !isEnterpriseTechnician
-        || (typeof pondData?.blockId === 'string' && assignedBlockIds.has(pondData.blockId));
-      if (pondData && canAccessPond) {
-        setPond(pondData);
-      } else {
-        setPond(null);
-      }
-    }
-  }, [assignedBlockIds, enterpriseBlocks.loading, getPondById, isEnterpriseTechnician, pondId, ponds]);
+  const nextPondSource = pondId ? getPondById(pondId as string) : undefined;
+  const canAccessCurrentPond = !isEnterpriseTechnician || (!enterpriseBlocks.loading
+    && typeof nextPondSource?.blockId === 'string' && assignedBlockIds.has(nextPondSource.blockId));
+  const accessiblePondSource = canAccessCurrentPond ? nextPondSource ?? null : null;
+  const [previousPondSource, setPreviousPondSource] = useState<typeof accessiblePondSource | undefined>(undefined);
+  if (previousPondSource !== accessiblePondSource) {
+    setPreviousPondSource(accessiblePondSource);
+    setPond(accessiblePondSource);
+  }
 
   useEffect(() => {
     if (company?.id) {

@@ -24,6 +24,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, db } from '@/lib/firebase';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
+import AccessibleDialog from '@/components/AccessibleDialog';
 import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyBlocks, useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
@@ -1121,7 +1122,7 @@ export default function PondsPage() {
 
       {/* -- MODAL --------------------------------------------- */}
       {isModalOpen && (
-        <div className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={t.ponds.addNew || 'Add pond'} onClose={() => setModalOpen(false)} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1136,7 +1137,7 @@ export default function PondsPage() {
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy('Create a physical pond placeholder. Start cycle details are added separately.')}</p>
               </div>
               <button
-                onClick={() => setModalOpen(false)}
+                aria-label={copy('Close')} onClick={() => setModalOpen(false)}
                 style={{
                   background: 'var(--bg-mid)', border: 'none', borderRadius: '12px',
                   padding: '10px', cursor: 'pointer', transition: 'all 0.2s'
@@ -1151,9 +1152,9 @@ export default function PondsPage() {
             <form className="responsive-modal-body" onSubmit={handleAddPond} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '28px' }}>
               <div className="responsive-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
+                  <label htmlFor="add-pond-name" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.pondName || 'Pond Name'}</label>
                   <input
-                    required placeholder={t.ponds.pondNamePlaceholder || "e.g. Pond Alpha 1"}
+                    id="add-pond-name" required placeholder={t.ponds.pondNamePlaceholder || "e.g. Pond Alpha 1"}
                     value={formData.pondName}
                     onChange={e => setFormData({...formData, pondName: e.target.value})}
                     style={{
@@ -1167,9 +1168,9 @@ export default function PondsPage() {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.area || 'Pond Area'} (m²)</label>
+                  <label htmlFor="add-pond-area" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.ponds.area || 'Pond Area'} (m²)</label>
                   <input
-                    required type="number" placeholder="1000"
+                    id="add-pond-area" required type="number" placeholder="1000"
                     value={formData.pondArea}
                     onChange={e => setFormData({...formData, pondArea: e.target.value})}
                     style={{
@@ -1183,9 +1184,9 @@ export default function PondsPage() {
 
                 {isEnterpriseFarm && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', gridColumn: 'span 2' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.enterprise.selectBlock}</label>
+                    <label htmlFor="add-pond-block" style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.enterprise.selectBlock}</label>
                     {availableFarmBlocks.length > 0 ? (
-                      <select
+                      <select id="add-pond-block"
                         required
                         value={formData.blockId}
                         onChange={e => setFormData({ ...formData, blockId: e.target.value })}
@@ -1213,11 +1214,11 @@ export default function PondsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {baselineEditPond && (
-        <div className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={copy('Edit Baseline')} onClose={() => setBaselineEditPond(null)} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1230,7 +1231,7 @@ export default function PondsPage() {
                   {copy('Corrects baseline estimates only. This will not deduct inventory or create normal sampling history.')}
                 </p>
               </div>
-              <button onClick={() => setBaselineEditPond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button aria-label={copy('Close')} onClick={() => setBaselineEditPond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -1261,11 +1262,11 @@ export default function PondsPage() {
               </div>
             </form>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {endCyclePond && (
-        <div className="responsive-modal-overlay" style={{
+        <AccessibleDialog title={copy('End Cycle')} onClose={() => setEndCyclePond(null)} className="responsive-modal-overlay" style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px'
@@ -1276,7 +1277,7 @@ export default function PondsPage() {
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy('End Cycle')}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{endCyclePond.pondName} {copy('history will stay saved.')}</p>
               </div>
-              <button onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button aria-label={copy('Close')} onClick={() => setEndCyclePond(null)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -1300,7 +1301,7 @@ export default function PondsPage() {
               </div>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {startCyclePond && (

@@ -70,10 +70,15 @@ export default function FeedHistoryScreen() {
     weak: t.feed.feedingResponseWeak,
   };
 
+  const [inventoryCompanyId, setInventoryCompanyId] = useState(user?.companyId);
+  if (inventoryCompanyId !== user?.companyId) {
+    setInventoryCompanyId(user?.companyId);
+    setInventoryFeeds([]);
+  }
+
   useEffect(() => {
     if (!user?.companyId) {
       setCurrentCompanyId(null, company?.timeZone);
-      setInventoryFeeds([]);
       return undefined;
     }
 

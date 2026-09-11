@@ -180,6 +180,7 @@ const InfoItem = React.memo(({ label, value, icon }: { label: string; value: str
     <Text style={styles.infoValue}>{value}</Text>
   </View>
 ));
+InfoItem.displayName = 'InfoItem';
 
 const FeatureItem = React.memo(({ icon, text }: { icon: string; text: string }) => (
   <View style={styles.featureItem}>
@@ -187,6 +188,7 @@ const FeatureItem = React.memo(({ icon, text }: { icon: string; text: string }) 
     <Text style={styles.featureText}>{text}</Text>
   </View>
 ));
+FeatureItem.displayName = 'FeatureItem';
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },

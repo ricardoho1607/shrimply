@@ -563,29 +563,32 @@ exports.scheduleCompanyPlanChange = onCall(async (request) => {
 exports.expireCompanyPlans = onSchedule({ schedule: 'every day 01:15', timeZone: 'UTC' }, async () => {
   const db = admin.firestore();
   const now = admin.firestore.Timestamp.now();
-  // Each expired entitlement can use two writes; stay below Firestore's 500-write batch limit.
+  // Bound work per run; each candidate is revalidated transactionally.
   const snapshot = await db.collectionGroup('entitlements').where('graceUntil', '<=', now).limit(200).get();
   if (snapshot.empty) return;
-  const batch = db.batch();
-  snapshot.docs.forEach((document) => {
-    const data = document.data();
-    if (document.id !== 'current' || !['active', 'grace', 'trialing'].includes(data.status) || data.planId === 'free') return;
-    const targetPlanId = normalizePlanId(data.scheduledPlanId || 'free');
-    batch.set(document.ref, {
-      ...buildEntitlements(targetPlanId),
-      companyId: data.companyId || document.ref.parent.parent?.id || null,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    }, { merge: false });
-    const companyRef = document.ref.parent.parent;
-    if (companyRef) {
-      batch.set(companyRef.collection('billing').doc('current'), {
-        planId: targetPlanId,
-        status: targetPlanId === 'free' ? 'expired' : 'active',
+  for (const document of snapshot.docs) {
+    if (document.id !== 'current') continue;
+    await db.runTransaction(async transaction => {
+      const current = await transaction.get(document.ref);
+      if (!current.exists) return;
+      const data = current.data();
+      const companyRef = document.ref.parent.parent;
+      if (!companyRef) return;
+      const grant = await transaction.get(companyRef.collection('subscriptionGrants').doc('current'));
+      if (hasLifetimeGrant(grant.data()) || !['active', 'grace', 'trialing'].includes(data.status)
+        || data.planId === 'free' || timestampMillis(data.graceUntil) <= 0
+        || timestampMillis(data.graceUntil) > timestampMillis(now)) return;
+      const targetPlanId = normalizePlanId(data.scheduledPlanId || 'free');
+      transaction.set(document.ref, {
+        ...buildEntitlements(targetPlanId), companyId: data.companyId || companyRef.id,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: false });
+      transaction.set(companyRef.collection('billing').doc('current'), {
+        planId: targetPlanId, status: targetPlanId === 'free' ? 'expired' : 'active',
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
-    }
-  });
-  await batch.commit();
+    });
+  }
 });
 
 if (process.env.NODE_ENV === 'test') {

@@ -72,7 +72,11 @@ export default function CompanySetupScreen() {
   );
 
   // Prefill form in edit mode
-  useEffect(() => {
+  const [draftInputs1, setDraftInputs1] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs1 = [isEditMode, company, user?.hasCompletedSetup];
+  if (!draftInputs1 || nextDraftInputs1.some((value, index) => !Object.is(value, draftInputs1[index]))) {
+    setDraftInputs1(nextDraftInputs1);
+    (() => {
     if (company && (isEditMode || !user?.hasCompletedSetup)) {
       setFormData({
         companyName: company.companyName,
@@ -103,7 +107,9 @@ export default function CompanySetupScreen() {
         setLocationCoordinates(null);
       }
     }
-  }, [isEditMode, company, user?.hasCompletedSetup]);
+
+    })();
+  }
 
   const updateForm = useCallback(
     (key: keyof CompanyData, value: any) => setFormData(prev => ({ ...prev, [key]: value })),
@@ -188,27 +194,7 @@ export default function CompanySetupScreen() {
     return true;
   }, [formData, locationCoordinates, t]);
 
-  const handleSetupComplete = useCallback(async () => {
-    if (!validateForm()) return;
-
-    try {
-      if (!locationCoordinates) return;
-      await saveCompanyData({
-        address: formData.primaryLocation,
-        latitude: locationCoordinates.latitude,
-        longitude: locationCoordinates.longitude,
-        city: locationCoordinates.city,
-        state: locationCoordinates.state,
-        country: locationCoordinates.country,
-        placeId: locationCoordinates.placeId,
-      });
-    } catch (error: any) {
-      console.error('Company setup failed:', error);
-      Alert.alert(t.messages.error, t.companySetup.saveFailed);
-    }
-  }, [completeCompanySetup, formData, validateForm, isEditMode, company, router, locationCoordinates, refreshUserData, t]);
-
-  const saveCompanyData = async (locationData: LocationCoordinates | string) => {
+  async function saveCompanyData(locationData: LocationCoordinates | string) {
     try {
       const timeZone = typeof locationData === 'object'
         ? await googlePlacesService.getTimeZone(locationData.latitude, locationData.longitude)
@@ -305,7 +291,29 @@ export default function CompanySetupScreen() {
     } catch (error: any) {
       throw error;
     }
-  };
+  }
+
+  const handleSetupComplete = useCallback(async () => {
+    if (!validateForm()) return;
+
+    try {
+      if (!locationCoordinates) return;
+      await saveCompanyData({
+        address: formData.primaryLocation,
+        latitude: locationCoordinates.latitude,
+        longitude: locationCoordinates.longitude,
+        city: locationCoordinates.city,
+        state: locationCoordinates.state,
+        country: locationCoordinates.country,
+        placeId: locationCoordinates.placeId,
+      });
+    } catch (error: any) {
+      console.error('Company setup failed:', error);
+      Alert.alert(t.messages.error, t.companySetup.saveFailed);
+    }
+  }, [completeCompanySetup, formData, validateForm, isEditMode, company, router, locationCoordinates, refreshUserData, t]);
+
+  ;
 
   const renderInput = useCallback(
     (

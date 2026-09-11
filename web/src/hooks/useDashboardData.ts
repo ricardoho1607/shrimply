@@ -337,7 +337,8 @@ export function useCompanyNotifications<T>() {
     const notificationsQuery = query(
       collection(db, 'notifications'),
       where('companyId', '==', companyId),
-      // Sort locally so legacy entries without timestamp are not silently omitted.,
+      // Legacy timestamps are repaired by the notification migration/normalizer.
+      orderBy('timestamp', 'desc'),
       limitQuery(HISTORY_PAGE_SIZE),
     );
     const unsubscribe = onSnapshot(
@@ -377,7 +378,8 @@ export function useCompanyNotifications<T>() {
       const nextPageQuery = query(
         collection(db, 'notifications'),
         where('companyId', '==', companyId),
-        // Sort locally so legacy entries without timestamp are not silently omitted.,
+        // Legacy timestamps are repaired by the notification migration/normalizer.
+      orderBy('timestamp', 'desc'),
         startAfter(cursorRef.current),
         limitQuery(HISTORY_PAGE_SIZE),
       );

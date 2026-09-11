@@ -46,16 +46,14 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
   const [loading, setLoading] = useState(Boolean(companyId));
   const [error, setError] = useState<string | null>(null);
 
+  const [subscriptionScope, setSubscriptionScope] = useState({ companyId, userId });
+  if (subscriptionScope.companyId !== companyId || subscriptionScope.userId !== userId) {
+    setSubscriptionScope({ companyId, userId });
+    setBlocks([]); setTechnicians([]); setLoading(Boolean(companyId)); setError(null);
+  }
   useEffect(() => {
-    if (!companyId) {
-      setBlocks([]);
-      setTechnicians([]);
-      setLoading(false);
-      return undefined;
-    }
-
-    setLoading(true);
-    setError(null);
+    if (!companyId) return undefined;
+    let active = true;
     let blocksSnapshotVersion = 0;
     let techniciansSnapshotVersion = 0;
     if (userId) {
@@ -73,10 +71,12 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
           ['users'],
         ),
       ]).then(([cachedBlocks, cachedTechnicians]) => {
+        if (!active) return;
         if (cachedBlocks.length > 0 && blocksSnapshotVersion === 0) setBlocks(sortFarmBlocks(cachedBlocks));
         if (cachedTechnicians.length > 0 && techniciansSnapshotVersion === 0) setTechnicians(cachedTechnicians);
         setLoading(false);
       }).catch((cacheError) => {
+        if (!active) return;
         console.error('Unable to load cached enterprise data:', cacheError);
         setLoading(false);
       });
@@ -104,11 +104,12 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
         const nextBlocks = userId
           ? await overlayOfflineMutations(remoteBlocks, userId, companyId, ['companies', companyId, 'blocks'])
           : remoteBlocks;
-        if (snapshotVersion !== blocksSnapshotVersion) return;
+        if (!active || snapshotVersion !== blocksSnapshotVersion) return;
         setBlocks(sortFarmBlocks(nextBlocks));
         if (userId) await persistOfflineCollection(userId, companyId, 'enterprise-blocks', nextBlocks);
         setLoading(false);
       })().catch((overlayError) => {
+        if (!active) return;
         console.error('Unable to apply pending block changes:', overlayError);
         if (snapshotVersion === blocksSnapshotVersion) setBlocks(remoteBlocks);
         setLoading(false);
@@ -143,6 +144,7 @@ export const useEnterpriseBlocks = (companyId?: string, userId?: string) => {
     });
 
     return () => {
+      active = false;
       unsubscribeBlocks();
       unsubscribeTechnicians();
     };

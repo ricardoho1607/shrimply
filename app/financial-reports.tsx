@@ -81,29 +81,8 @@ export default function FinancialReportsPage() {
   const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
   const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
-  useEffect(() => {
-    if (!hasFinanceAccess) {
-      Alert.alert(t.financialReports?.accessDenied || 'Access Denied', t.financialReports?.noPermissionReports || 'You do not have permission to view financial reports.');
-      router.back();
-      return;
-    }
-    if (!company?.id) {
-      Alert.alert('Error', t.financialReports?.noCompanyFound || 'No company found. Please set up your company first.');
-      router.back();
-      return;
-    }
-    loadData();
-    feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
-    const stopInventory = feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
-    const onLedgerError = (error: Error) => console.error('Finance listener:', error);
-    const stopExpenses = financeService.subscribe(company.id, setExpenses, onLedgerError, true);
-    const stopRevenues = revenueService.subscribe(company.id, setRevenues, onLedgerError, true);
-    return () => { stopExpenses(); stopRevenues(); stopInventory?.(); };
-  }, [company?.id]);
-
-  const loadData = async () => {
+  async function loadData() {
     if (!company?.id) return;
-    setLoading(true);
     try {
       const [fetchedExpenses, fetchedRevenues] = await Promise.all([
         financeService.getExpenses(company.id, true),
@@ -117,7 +96,30 @@ export default function FinancialReportsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    if (!hasFinanceAccess) {
+      Alert.alert(t.financialReports?.accessDenied || 'Access Denied', t.financialReports?.noPermissionReports || 'You do not have permission to view financial reports.');
+      router.back();
+      return;
+    }
+    if (!company?.id) {
+      Alert.alert('Error', t.financialReports?.noCompanyFound || 'No company found. Please set up your company first.');
+      router.back();
+      return;
+    }
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) void loadData(); });
+    feedAdditiveStore.setCurrentCompanyId(company.id, company.timeZone);
+    const stopInventory = feedAdditiveStore.initializeForCompany(company.id, company.timeZone);
+    const onLedgerError = (error: Error) => console.error('Finance listener:', error);
+    const stopExpenses = financeService.subscribe(company.id, setExpenses, onLedgerError, true);
+    const stopRevenues = revenueService.subscribe(company.id, setRevenues, onLedgerError, true);
+    return () => { cancelled = true; stopExpenses(); stopRevenues(); stopInventory?.(); };
+  }, [company?.id]);
+
+  ;
 
   const getDateRange = () => {
     const now = new Date();

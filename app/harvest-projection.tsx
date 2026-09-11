@@ -137,13 +137,23 @@ export default function HarvestProjectionScreen() {
     return t.harvestProjectionScreen?.reviewDataReason || 'Critical population, MBW, or market-price data is missing.';
   }, [financialComparison, formatCurrency, t.harvestProjectionScreen]);
 
-  useEffect(() => {
-    if (!selectedPondId && activePonds.length > 0) {
-      setSelectedPondId(activePonds[0].id);
-    }
-  }, [activePonds, selectedPondId]);
+  const fallbackPondId = activePonds[0]?.id ?? null;
+  if (!activePonds.some(pond => pond.id === selectedPondId) && selectedPondId !== fallbackPondId) {
+    setSelectedPondId(fallbackPondId);
+  }
+  const [previousCompanyId, setPreviousCompanyId] = useState(company?.id);
+  if (previousCompanyId !== company?.id) {
+    setPreviousCompanyId(company?.id);
+    setCalibration(createDefaultOrsonCalibration());
+    setExpenses([]);
+    setFinanceDataWarning(null);
+  }
 
-  useEffect(() => {
+  const [draftInputs1, setDraftInputs1] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs1 = [company?.id, company?.harvestProjectionMarketPrices];
+  if (!draftInputs1 || nextDraftInputs1.some((value, index) => !Object.is(value, draftInputs1[index]))) {
+    setDraftInputs1(nextDraftInputs1);
+    (() => {
     if (!company?.id) return;
     const normalized = normalizeHarvestMarketPriceInputs(company.harvestProjectionMarketPrices);
     const hasSavedPrices = Object.values(normalized).some((value) => value !== '');
@@ -152,11 +162,12 @@ export default function HarvestProjectionScreen() {
     setIsEditingPrices(!hasSavedPrices);
     setPriceSaveStatus('idle');
     setPriceSaveError(null);
-  }, [company?.id, company?.harvestProjectionMarketPrices]);
+
+    })();
+  }
 
   useEffect(() => {
     if (!company?.id) {
-      setCalibration(createDefaultOrsonCalibration());
       return;
     }
     return onSnapshot(
@@ -177,7 +188,6 @@ export default function HarvestProjectionScreen() {
   useEffect(() => {
     let cancelled = false;
     if (!company?.id) {
-      setExpenses([]);
       return;
     }
     financeService.getExpenses(company.id)
@@ -211,9 +221,15 @@ export default function HarvestProjectionScreen() {
     });
   }, [selectedPond, financialComparison, calibration, company?.timeZone]);
 
-  useEffect(() => {
+  const [draftInputs2, setDraftInputs2] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs2 = [selectedPondId, savedMarketPrices];
+  if (!draftInputs2 || nextDraftInputs2.some((value, index) => !Object.is(value, draftInputs2[index]))) {
+    setDraftInputs2(nextDraftInputs2);
+    (() => {
     setInsight(null);
-  }, [selectedPondId, savedMarketPrices]);
+
+    })();
+  }
 
   const handleSavePrices = async () => {
     if (!company?.id || !user?.uid || !canManagePriceLadder) return;

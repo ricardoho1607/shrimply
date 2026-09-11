@@ -37,6 +37,7 @@ import { auth, db, storage } from '@/lib/firebase';
 import { getDownloadURL, ref as storageRef, uploadBytes } from 'firebase/storage';
 import { useAuth } from '@/contexts/AuthContext';
 import { getFarmDateKey } from '../../../../../../shared/farmDate';
+import { storedDate } from '@/lib/storedDate';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useCurrency } from '@/contexts/CurrencyContext';
@@ -46,7 +47,7 @@ import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 
 interface MaintenanceRecord {
   id: string;
-  date: any;
+  date: unknown;
   cycleId?: string;
   cycleName?: string;
   description: string;
@@ -63,12 +64,12 @@ interface MaintenanceRecord {
 
 interface TransferRecord {
   id: string;
-  date: any;
+  date: unknown;
   from: string;
   to: string;
   purpose?: string;
-  expectedReturn?: any;
-  returned?: any;
+  expectedReturn?: unknown;
+  returned?: unknown;
   notes?: string;
 }
 
@@ -78,20 +79,20 @@ interface Asset {
   name: string;
   description: string;
   category: string;
-  purchaseDate: any;
+  purchaseDate: unknown;
   purchaseCost?: number;
   condition: string;
   currentHolder: string | null;
   photos: string[];
   transferHistory: TransferRecord[];
   maintenanceHistory: MaintenanceRecord[];
-  nextMaintenanceDue?: any;
+  nextMaintenanceDue?: unknown;
   totalMaintenanceCost: number;
   serialNumber?: string;
   manufacturer?: string;
   model?: string;
-  createdAt: any;
-  updatedAt: any;
+  createdAt: unknown;
+  updatedAt: unknown;
 }
 
 interface FarmCycle {
@@ -122,24 +123,17 @@ export default function AssetInventoryPage() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [companyId, setCompanyId] = useState<string | null>(null);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<import('firebase/auth').User | null>(null);
   
   const [assets, setAssets] = useState<Asset[]>([]);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
 
-  const formatDate = (date: any) => {
-    if (!date) return '';
-    if (typeof date === 'string') return date;
-    if (date && typeof date === 'object' && 'seconds' in date) {
-      return getFarmDateKey(new Date(date.seconds * 1000), company?.timeZone);
-    }
-    try {
-      const d = new Date(date);
-      if (!isNaN(d.getTime())) return getFarmDateKey(d, company?.timeZone);
-    } catch (e) {}
-    return '';
+  const formatDate = (value: unknown) => {
+    if (typeof value === 'string') return value;
+    const date = storedDate(value);
+    return date ? getFarmDateKey(date, company?.timeZone) : '';
   };
   
   // Modal States
@@ -187,8 +181,8 @@ export default function AssetInventoryPage() {
               
               // Sort in-memory to avoid requiring a composite index
               data.sort((a, b) => {
-                const timeA = a.createdAt?.seconds || (a.createdAt instanceof Date ? a.createdAt.getTime() / 1000 : 0);
-                const timeB = b.createdAt?.seconds || (b.createdAt instanceof Date ? b.createdAt.getTime() / 1000 : 0);
+                const timeA = storedDate(a.createdAt)?.getTime() ?? 0;
+                const timeB = storedDate(b.createdAt)?.getTime() ?? 0;
                 return timeB - timeA;
               });
 
@@ -219,10 +213,8 @@ export default function AssetInventoryPage() {
     const needsMaintenance = assets.filter(a => {
       if (a.condition === 'Needs Repair') return true;
       if (a.nextMaintenanceDue) {
-        const nextMaintDate = a.nextMaintenanceDue.seconds 
-          ? new Date(a.nextMaintenanceDue.seconds * 1000) 
-          : new Date(a.nextMaintenanceDue);
-        return nextMaintDate <= new Date();
+        const nextMaintDate = storedDate(a.nextMaintenanceDue);
+        return nextMaintDate !== null && nextMaintDate <= new Date();
       }
       return false;
     }).length;
@@ -263,7 +255,7 @@ export default function AssetInventoryPage() {
         to: '',
         purpose: '',
         expectedReturn: '',
-        technician: user?.name || '',
+        technician: user?.displayName || user?.email || '',
         maintType: 'Preventive',
         maintDesc: '',
         maintCost: '',
@@ -453,7 +445,7 @@ export default function AssetInventoryPage() {
           ].map(tab => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as typeof activeTab)}
               className={`dashboard-segmented-tab ${activeTab === tab.id ? 'active' : ''}`}
             >
               <tab.icon size={18} />

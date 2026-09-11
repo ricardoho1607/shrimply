@@ -26,7 +26,7 @@ test("the backend and rules retain installed-client data paths", () => {
 test("Firebase source packaging excludes local credentials and includes the Meta adapter", async () => {
   const { readdirRecursive } = require("firebase-tools/lib/fsAsync");
   const config = JSON.parse(read("firebase.json")).functions;
-  const files = await readdirRecursive({ path: path.join(root, config.source), ignore: config.ignore });
+  const files = await readdirRecursive({ path: path.join(root, config.source), ignore: config.ignore, ignoreStrings: config.ignore });
   const names = files.map((file) => path.relative(root, file.name));
   assert.ok(names.includes("functions/shared/metaModelApi.js"));
   assert.ok(names.includes("functions/shared/orsonAnswerGrounding.js"));

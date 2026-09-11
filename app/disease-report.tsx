@@ -1,5 +1,5 @@
 // app/disease-report.tsx - Complete Fixed Version
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useCallback, useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, StatusBar,
   TextInput, Alert, ActivityIndicator, FlatList, Modal, ScrollView,
@@ -13,9 +13,9 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import * as Location from 'expo-location';
 import { calculateDistance } from './utils/locationUtils';
-import { db } from '../config/firebase';
+import { db } from '@/config/firebase';
 import { 
-  collection, query, onSnapshot, orderBy,
+  collection, query, onSnapshot, orderBy, where,
   Timestamp, doc,
 } from 'firebase/firestore';
 import { hasFarmPermission } from '../shared/permissions';
@@ -32,6 +32,7 @@ const { width, height } = Dimensions.get('window');
 const isSmallDevice = width < 375;
 
 interface DiseaseReport {
+  isPublic?: boolean;
   id: string;
   companyId: string;
   companyName: string;
@@ -131,7 +132,8 @@ export default function DiseaseReportScreen() {
     latitude: -6.2088,  // Jakarta default
     longitude: 106.8456,
   });
-  const [reports, setReports] = useState<DiseaseReport[]>([]);
+  const [storedReports, setReports] = useState<DiseaseReport[]>([]);
+  const reports = user ? storedReports.filter(report => report.isPublic || (report.companyId === company?.id && hasFarmPermission(user, 'viewFarm', company?.ownerId))) : [];
   const [selectedReport, setSelectedReport] = useState<DiseaseReport | null>(null);
   const [loading, setLoading] = useState(false);
   const [mapReady, setMapReady] = useState(false);
@@ -149,31 +151,7 @@ export default function DiseaseReportScreen() {
   const [showStatsModal, setShowStatsModal] = useState(false);
   const [selectedSeverity, setSelectedSeverity] = useState<'critical' | 'high' | 'medium' | null>(null);
 
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    
-    const initialize = async () => {
-      try {
-        await getCurrentLocation();
-        unsubscribe = loadReports();
-      } catch (err) {
-        console.error('Initialization error:', err);
-        setError('Failed to initialize. Please try again.');
-      }
-    };
-    
-    initialize();
-    
-    return () => {
-      if (unsubscribe) {
-        try {
-          unsubscribe();
-        } catch (err) {
-          console.error('Cleanup error:', err);
-        }
-      }
-    };
-  }, []);
+
 
   const requestAndroidLocationPermission = async () => {
     if (Platform.OS !== 'android') return true;
@@ -198,7 +176,7 @@ export default function DiseaseReportScreen() {
 
   const setFallbackLocation = () => {
     console.log('🔄 Setting fallback location...');
-    console.log('Company data:', company);
+
     
     let fallbackLat = -6.2088;  // Jakarta default
     let fallbackLng = 106.8456;
@@ -208,7 +186,7 @@ export default function DiseaseReportScreen() {
       if (company.primaryLocation.latitude && company.primaryLocation.longitude) {
         fallbackLat = company.primaryLocation.latitude;
         fallbackLng = company.primaryLocation.longitude;
-        console.log('✅ Using company location:', fallbackLat, fallbackLng);
+
       }
     }
     
@@ -217,18 +195,14 @@ export default function DiseaseReportScreen() {
       latitude: fallbackLat,
       longitude: fallbackLng,
     });
-    console.log('✅ Fallback location set:', fallbackLat, fallbackLng);
+
   };
 
   const getCurrentLocation = async () => {
     try {
       console.log('🗺️ Requesting location permissions...');
       
-      if (!Location) {
-        throw new Error('Location module not available');
-      }
-      
-      const { status } = await Location.requestForegroundPermissionsAsync();
+      const { status } = await Promise.resolve().then(() => Location.requestForegroundPermissionsAsync());
       console.log('📍 Location permission status:', status);
       
       if (status !== 'granted') {
@@ -264,7 +238,7 @@ export default function DiseaseReportScreen() {
         latitude: location.coords.latitude, 
         longitude: location.coords.longitude 
       };
-      console.log('✅ Location obtained:', userLocation);
+
       setCurrentLocation(userLocation);
       
       setTimeout(() => {
@@ -287,87 +261,48 @@ export default function DiseaseReportScreen() {
   };
 
   const loadReports = (): (() => void) => {
-    setLoading(true);
-    let snapshotVersion = 0;
-    try {
-      if (user?.uid && company?.id) {
-        void loadOfflineCollectionWithMutations<DiseaseReport>(
-          user.uid,
-          company.id,
-          'disease-reports',
-          ['diseaseReports'],
-        ).then((cachedReports) => {
-          if (cachedReports.length > 0 && snapshotVersion === 0) {
-            setReports(cachedReports);
-            setLoading(false);
-          }
-        });
-      }
-      const q = query(
-        collection(db, 'diseaseReports'),
-        orderBy('reportDate', 'desc')
-      );
-      
-      const unsubscribe = onSnapshot(
-        q,
-        { includeMetadataChanges: true },
-        (snapshot) => {
-          try {
-            const reportsData = snapshot.docs.map(doc => {
-              const data = doc.data();
-              return {
-                id: doc.id,
-                ...data,
-                reportDate: data.reportDate?.toDate ? data.reportDate.toDate().toISOString() : data.reportDate,
-              } as DiseaseReport;
-            });
-            if (snapshot.metadata.fromCache && reportsData.length === 0) {
-              setLoading(false);
-              return;
-            }
-            const version = ++snapshotVersion;
-            if (user?.uid && company?.id) {
-              void overlayOfflineMutations(reportsData, user.uid, company.id, ['diseaseReports']).then(async (nextReports) => {
-                if (version !== snapshotVersion) return;
-                setReports(nextReports);
-                setLoading(false);
-                await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
-              }).catch((cacheError) => {
-                console.error('Error applying pending disease reports:', cacheError);
-                if (version === snapshotVersion) setReports(reportsData);
-                setLoading(false);
-              });
-            } else {
-              setReports(reportsData);
-              setLoading(false);
-            }
-          } catch (err) {
-            console.error('Error processing reports:', err);
-            setReports([]);
-            setLoading(false);
-          }
-        }, 
-        (error) => {
-          console.error('Error loading reports:', error);
-          Alert.alert(
-          labels.submitError,
-          labels.failedToLoad
-          );
-          setLoading(false);
-        }
-      );
-      
-      return unsubscribe;
-    } catch (error: any) {
-      console.error('Error setting up reports listener:', error);
-      Alert.alert(
-        labels.submitError,
-        labels.failedToLoad
-      );
+    let active = true;
+    let version = 0;
+    let own: DiseaseReport[] = [];
+    let regional: DiseaseReport[] = [];
+    const publish = async () => {
+      const currentVersion = ++version;
+      const ownIds = new Set(own.map(report => report.id));
+      const combined = [...own, ...regional.filter(report => !ownIds.has(report.id))];
+      const next = user?.uid && company?.id
+        ? await overlayOfflineMutations(combined, user.uid, company.id, ['diseaseReports']) : combined;
+      if (!active || version !== currentVersion) return;
+      setReports(next);
       setLoading(false);
-      return () => {};
+      if (user?.uid && company?.id) await persistOfflineCollection(user.uid, company.id, 'disease-reports-v2', next);
+    };
+    const convert = (snapshot: import('firebase/firestore').QuerySnapshot) => snapshot.docs.map(item => {
+      const data = item.data();
+      return { ...data, id: item.id, reportDate: data.reportDate?.toDate?.().toISOString() ?? data.reportDate } as DiseaseReport;
+    });
+    const failed = (error: Error) => { if (active) { console.error('Could not load disease alerts', error); setLoading(false); } };
+    const refresh = () => { void publish().catch(failed); };
+    const unsubscribePublic = onSnapshot(query(collection(db, 'publicDiseaseAlerts'), orderBy('reportDate', 'desc')), snapshot => {
+      regional = convert(snapshot); refresh();
+    }, failed);
+    const unsubscribeOwn = company?.id && hasFarmPermission(user, 'viewFarm', company.ownerId)
+      ? onSnapshot(query(collection(db, 'diseaseReports'), where('companyId', '==', company.id)), snapshot => {
+        own = convert(snapshot); refresh();
+      }, failed) : () => {};
+    if (user?.uid && company?.id) {
+      void loadOfflineCollectionWithMutations<DiseaseReport>(user.uid, company.id, 'disease-reports-v2', ['diseaseReports'])
+        .then(cached => { if (active && version === 0) { setReports(cached); setLoading(false); } }).catch(failed);
     }
+    return () => { active = false; unsubscribePublic(); unsubscribeOwn(); };
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    queueMicrotask(() => { if (!cancelled) void getCurrentLocation(); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => loadReports(), [user?.uid, company?.id, company?.ownerId, user?.role, user?.permissionOverrides]);
 
   const handleSubmitReport = async () => {
     if (!canSubmitDiseaseReports) return;
@@ -410,7 +345,18 @@ export default function DiseaseReportScreen() {
     );
   };
 
-  const submitReport = async () => {
+  const resetForm = useCallback(() => {
+    setFormData({
+      selectedDisease: '',
+      affectedPonds: '',
+      estimatedLoss: '',
+      symptoms: '',
+      actionsTaken: '',
+      notificationRadius: 50,
+    });
+  }, []);
+
+  const submitReport = useCallback(async () => {
     if (!canSubmitDiseaseReports) return;
     try {
       setLoading(true);
@@ -458,7 +404,7 @@ export default function DiseaseReportScreen() {
         reportDate: reportData.reportDate.toDate().toISOString(),
       } as DiseaseReport, ...reports];
       setReports(nextReports);
-      await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
+      await persistOfflineCollection(user.uid, company.id, 'disease-reports-v2', nextReports);
       requestOfflineMutationFlush(user.uid, company.id);
       Alert.alert(labels.reportSubmitted, labels.reportSubmitted);
       
@@ -486,18 +432,9 @@ export default function DiseaseReportScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canSubmitDiseaseReports, formData, company, currentLocation, labels, reports, mapReady, resetForm, user?.uid]);
 
-  const resetForm = () => {
-    setFormData({
-      selectedDisease: '',
-      affectedPonds: '',
-      estimatedLoss: '',
-      symptoms: '',
-      actionsTaken: '',
-      notificationRadius: 50,
-    });
-  };
+
 
   const handleMarkerPress = (report: DiseaseReport) => {
     try {
@@ -566,7 +503,7 @@ export default function DiseaseReportScreen() {
               }, { deferFlush: true });
               const nextReports = reports.map((report) => report.id === selectedReport.id ? { ...report, status: newStatus } : report);
               setReports(nextReports);
-              await persistOfflineCollection(user.uid, company.id, 'disease-reports', nextReports);
+              await persistOfflineCollection(user.uid, company.id, 'disease-reports-v2', nextReports);
               requestOfflineMutationFlush(user.uid, company.id);
               Alert.alert('Success', `Disease outbreak marked as ${newStatus}.`);
               setShowDetailsModal(false);
@@ -835,7 +772,7 @@ const ReportMarker = React.memo(({ report, onPress, iconName }: any) => {
           latitude: report.location.latitude, 
           longitude: report.location.longitude 
         }}
-        radius={report.notificationRadius * 1000}
+        radius={(report.notificationRadius || 0) * 1000}
         fillColor={`${report.color}20`}
         strokeColor={report.color}
         strokeWidth={2}
@@ -867,24 +804,26 @@ const DetailsModal = React.memo(({
           contentContainerStyle={{ paddingBottom: 40, flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
         >
-          <DetailCard label={labels.farm} value={selectedReport?.companyName} />
+          <DetailCard label={labels.farm} value={selectedReport?.companyName || 'Private farm'} />
           <DetailCard 
             label={labels.location} 
             value={selectedReport?.location.address}
-            extra={currentLocation && selectedReport && (
+            extra={currentLocation && selectedReport && !selectedReport.isPublic && (
               <Text style={styles.distanceText}>
                 {labels.distanceFromYou.replace('{distance}', getDistanceFromUser(selectedReport).toFixed(1))}
               </Text>
             )}
           />
+          {!selectedReport?.isPublic && <>
           <DetailCard 
             label={labels.impact} 
-            value={`${labels.pondsAffected.replace('{count}', selectedReport?.affectedPonds.toString() || '0')} • ${labels.estimatedLossValue.replace('{loss}', selectedReport?.estimatedLoss || '')}`}
+            value={`${labels.pondsAffected.replace('{count}', selectedReport?.affectedPonds?.toString() || 'Not public')} • ${labels.estimatedLossValue.replace('{loss}', selectedReport?.estimatedLoss || '')}`}
           />
           <DetailCard label={labels.symptoms} value={selectedReport?.symptoms} />
           {selectedReport?.actionsTaken && (
             <DetailCard label={labels.actionsTaken} value={selectedReport.actionsTaken} />
           )}
+          </>}
           <DetailCard 
             label={labels.reported} 
             value={selectedReport && getDaysAgo(selectedReport.reportDate) === 0 
@@ -1125,7 +1064,7 @@ const StatsModal = React.memo(({
               <View style={[styles.severityDot, { backgroundColor: report.color }]} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.reportListTitle}>{report.diseaseName}</Text>
-                <Text style={styles.reportListSubtitle}>{report.companyName}</Text>
+                <Text style={styles.reportListSubtitle}>{report.companyName || 'Regional alert'}</Text>
                 <Text style={styles.reportListTime}>
                   {new Date(report.reportDate).toLocaleString()}
                 </Text>

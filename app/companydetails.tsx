@@ -1,3 +1,4 @@
+import { useCurrentTime } from './hooks/useCurrentTime';
 // app/companydetails.tsx - Android Optimized with Safe Area
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, Alert, ActivityIndicator, RefreshControl, StatusBar, Platform, Dimensions } from 'react-native';
@@ -151,16 +152,6 @@ export default function CompanyDetailsScreen() {
       console.error('Failed to load data:', error);
     }
   }, [canManageTeam, company?.id, company?.teamMembers, getTeamMembers, getJoinRequests]);
-
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  useEffect(() => {
-    if (company?.id) {
-      loadData();
-    }
-  }, [company?.id, company?.teamMembers?.length]);
 
   useFocusEffect(
     useCallback(() => {
@@ -673,15 +664,17 @@ const InfoItem = React.memo(({ label, value }: { label: string; value: string })
     <Text style={styles.infoValue}>{value}</Text>
   </View>
 ));
+InfoItem.displayName = 'InfoItem';
 
 const MemberItem = React.memo(({ member, onRemove, isOwner, t }: { member: TeamMember; onRemove: (member: TeamMember) => void; isOwner: boolean; t: any }) => {
+  const nowMs = useCurrentTime();
   const formatLastActive = (lastActive?: string | any) => {
     if (!lastActive) return t.companyDetails.recentlyActive;
     
     try {
       if (typeof lastActive === 'object' && lastActive.toDate) {
         const date = lastActive.toDate();
-        const diffMs = Date.now() - date.getTime();
+        const diffMs = nowMs - date.getTime();
         const diffMins = Math.floor(diffMs / 60000);
         
         if (diffMins < 1) return t.companyDetails.justNow;
@@ -696,7 +689,7 @@ const MemberItem = React.memo(({ member, onRemove, isOwner, t }: { member: TeamM
         const date = new Date(lastActive);
         if (isNaN(date.getTime())) return t.companyDetails.recentlyActive;
         
-        const diffMs = Date.now() - date.getTime();
+        const diffMs = nowMs - date.getTime();
         const diffMins = Math.floor(diffMs / 60000);
         
         if (diffMins < 1) return t.companyDetails.justNow;
@@ -733,6 +726,7 @@ const MemberItem = React.memo(({ member, onRemove, isOwner, t }: { member: TeamM
     </View>
   );
 });
+MemberItem.displayName = 'MemberItem';
 
 const RoleCard = React.memo(({ roleKey, role, filled, members, onRemoveMember, isOwner, t }: { roleKey: RoleKey; role: any; filled: number; members: TeamMember[]; onRemoveMember: (member: TeamMember) => void; isOwner: boolean; t: any }) => (
   <View style={styles.roleCard}>
@@ -767,6 +761,7 @@ const RoleCard = React.memo(({ roleKey, role, filled, members, onRemoveMember, i
     </View>
   </View>
 ));
+RoleCard.displayName = 'RoleCard';
 
 const styles = StyleSheet.create({
   outerContainer: { flex: 1, backgroundColor: '#f4f8fc' },

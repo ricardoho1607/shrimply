@@ -27,7 +27,8 @@ test('every existing public page opts in, while every application page stays out
     const route = '/' + path.relative(app, path.dirname(file)).split(path.sep)
       .filter(segment => segment && !segment.startsWith('(')).join('/');
     const protectedPage = /^\/(dashboard|setup|admin|roleselection)(\/|$)/.test(route);
-    assert.equal(Boolean(publicThemeRoute(route)), !protectedPage, route);
+    const independentlyStyled = ['/pricing', '/id/pricing', '/privacy'].includes(route);
+    assert.equal(Boolean(publicThemeRoute(route)), !protectedPage && !independentlyStyled, route);
   }
   for (const route of [null, '/dashboard-copy', '/auth/settings', '/id/auth', '/unknown', '/features/unknown']) {
     assert.equal(publicThemeRoute(route), null, String(route));

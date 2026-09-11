@@ -80,7 +80,6 @@ const ExpensePieChart = ({ data, width, height }: { data: ExpensePieDatum[]; wid
   const radius = height / 2.5;
   const centerX = width / 4 + 15;
   const centerY = height / 2;
-  let startAngle = 0;
 
   return (
     <Svg
@@ -90,11 +89,11 @@ const ExpensePieChart = ({ data, width, height }: { data: ExpensePieDatum[]; wid
       accessibilityLabel="Expense distribution chart"
       accessibilityRole="image"
     >
-      {data.map((item) => {
+      {data.map((item, index) => {
+        const startAngle = total > 0 ? data.slice(0, index).reduce((sum, previous) => sum + previous.population, 0) / total * 360 : 0;
         const sweepAngle = total > 0 ? (item.population / total) * 360 : 0;
         const endAngle = startAngle + sweepAngle;
         const slicePath = createPieSlicePath(centerX, centerY, radius, startAngle, endAngle);
-        startAngle = endAngle;
         return sweepAngle >= 359.999
           ? <Circle key={item.name} cx={centerX} cy={centerY} r={radius} fill={item.color} />
           : <Path key={item.name} d={slicePath} fill={item.color} />;
@@ -211,7 +210,7 @@ export default function FinancePage() {
     return () => { stopExpenses(); stopRevenues(); stopInventory?.(); };
   }, [company?.id, company?.timeZone]);
 
-  const loadData = async () => {
+  async function loadData() {
     if (!company?.id) return;
     setLoading(true);
     try {

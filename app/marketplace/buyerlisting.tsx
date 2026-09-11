@@ -11,6 +11,7 @@ const SortButton = React.memo(({ title, value, active, onPress }: any) => (
     <Text style={[styles.sortText, active && styles.sortTextActive]}>{title}</Text>
   </TouchableOpacity>
 ));
+SortButton.displayName = 'SortButton';
 
 const MyListingCard = React.memo(({ listing, onViewDetails, onDelete, getSellerResponsesForListing }: any) => {
   const responseCount = getSellerResponsesForListing(listing.id).length;
@@ -94,6 +95,7 @@ const MyListingCard = React.memo(({ listing, onViewDetails, onDelete, getSellerR
     </View>
   );
 });
+MyListingCard.displayName = 'MyListingCard';
 
 const MyListingsScreen = () => {
   const router = useRouter();
@@ -124,7 +126,7 @@ const MyListingsScreen = () => {
         default: return 0;
       }
     });
-  }, [buyerListings, company?.id, sortBy]);
+  }, [buyerListings, sortBy, company]);
 
   const onRefresh = () => {
     setRefreshing(true);

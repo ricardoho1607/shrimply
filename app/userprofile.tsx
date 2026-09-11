@@ -18,13 +18,19 @@ export default function UserProfileScreen() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
+  const [draftInputs1, setDraftInputs1] = useState<readonly unknown[] | null>(null);
+  const nextDraftInputs1 = [user];
+  if (!draftInputs1 || nextDraftInputs1.some((value, index) => !Object.is(value, draftInputs1[index]))) {
+    setDraftInputs1(nextDraftInputs1);
+    (() => {
     if (user) {
       setName(user.name || '');
       setPhone(user.phone || '');
       setProfileImage(user.profileImage || null);
     }
-  }, [user]);
+
+    })();
+  }
 
   const pickImage = async () => {
     try {

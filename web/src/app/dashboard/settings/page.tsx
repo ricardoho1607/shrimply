@@ -83,7 +83,7 @@ const controlStyle: React.CSSProperties = {
   width: '100%',
 };
 
-const getLocationValue = (company: any) => {
+const getLocationValue = (company: { primaryLocation?: { address?: string } | string; location?: string } | null) => {
   const primaryLocation = company?.primaryLocation;
   if (typeof primaryLocation === 'string') return primaryLocation;
   return company?.location || primaryLocation?.address || '';
@@ -92,7 +92,7 @@ const getLocationValue = (company: any) => {
 export default function SettingsPage() {
   const copy = useDashboardCopy();
   const { user, company, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion } = useAuth();
-  const { data: members } = useCompanyMembers<any>();
+  const { data: members } = useCompanyMembers<NonNullable<ReturnType<typeof useAuth>['user']>>();
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
@@ -344,9 +344,9 @@ export default function SettingsPage() {
       }
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error saving settings:', error);
-      alert(`${copy('Failed to save settings:')} ${error.message || copy('Unknown error')}`);
+      alert(`${copy('Failed to save settings:')} ${error instanceof Error ? error.message : copy('Unknown error')}`);
     } finally {
       setSaving(false);
     }
@@ -743,7 +743,7 @@ export default function SettingsPage() {
                   {AVAILABLE_LANGUAGES.map((lang) => (
                     <button
                       key={lang.code}
-                      onClick={() => setLanguage(lang.code as any)}
+                      onClick={() => setLanguage(lang.code as Parameters<typeof setLanguage>[0])}
                       style={{
                         padding: '16px', borderRadius: '16px', border: '1px solid',
                         borderColor: currentLanguage === lang.code ? 'var(--primary)' : 'var(--border)',
@@ -790,7 +790,7 @@ export default function SettingsPage() {
                     <button
                       key={curr.code}
                       disabled={!canEditCompany}
-                      onClick={() => setCurrency(curr.code as any)}
+                      onClick={() => setCurrency(curr.code as Parameters<typeof setCurrency>[0])}
                       style={{
                         padding: '16px', borderRadius: '16px', border: '1px solid',
                         borderColor: currentCurrency === curr.code ? 'var(--primary)' : 'var(--border)',

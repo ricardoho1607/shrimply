@@ -24,5 +24,5 @@ test('enterprise web add menu opens existing pond operations without changing sa
   assert.match(pondDetail, /requestedAction === 'sampling'/);
   assert.match(pondDetail, /requestedAction === 'mortality'/);
   assert.match(pondDetail, /mortalityRecords: arrayUnion\(newRecord\)/);
-  assert.match(pondDetail, /samplings: arrayUnion\(newSampling\)/);
+  assert.match(pondDetail, /transaction\.update\(reference, \{ samplings: updatedSamplings/);
 });

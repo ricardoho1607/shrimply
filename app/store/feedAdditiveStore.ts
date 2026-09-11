@@ -156,7 +156,7 @@ interface FeedAdditiveStore {
   stockInFeed: (feedId: string, quantity: number, price: number, notes?: string, opts?: { stockDate?: string; expiry?: string; unit?: string }) => Promise<void>;
   useFeed: (feedId: string, quantity: number, pondId?: string | null, notes?: string) => Promise<void>;
   adjustFeedUsage: (feedId: string, quantityDelta: number, pondId?: string | null, notes?: string) => Promise<void>;
-  reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string) => Promise<void>;
+  reconcileDailyFeedAllocations: (previousAllocations: FeedAllocation[], nextAllocations: FeedAllocation[], pondId: string, date: string, feedingResponse?: string | null) => Promise<void>;
   deleteDailyFeedRecord: (pondId: string, samplingId: string, date: string, updatedBy: string, candidateFeedIds?: string[]) => Promise<{ missingInventory: boolean }>;
   deleteFeed: (feedId: string) => Promise<void>;
   updateFeed: (feedId: string, patch: Partial<Feed>) => Promise<void>;
@@ -198,6 +198,7 @@ const queueInventoryAdjustments = async <T extends { id: string }>(
   operationPrefix: string,
   items: T[],
   buildAdjustments: (operationId: string) => OfflineInventoryAdjustment[],
+  dailyFeed?: OfflineMutation['dailyFeed'],
 ): Promise<T[]> => {
   const userId = auth.currentUser?.uid;
   if (!userId) throw new Error('No authenticated user');
@@ -208,6 +209,7 @@ const queueInventoryAdjustments = async <T extends { id: string }>(
     companyId,
     createdAt: Date.now(),
     kind: 'inventory',
+    ...(dailyFeed ? { dailyFeed } : {}),
     path: ['companies', companyId],
     inventory: {
       collection: collectionName,
@@ -680,7 +682,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
     set({ feeds });
   },
 
-  reconcileDailyFeedAllocations: async (previousAllocations, nextAllocations, pondId, date) => {
+  reconcileDailyFeedAllocations: async (previousAllocations, nextAllocations, pondId, date, feedingResponse) => {
     const { currentCompanyId } = get();
     if (!currentCompanyId) throw new Error(DAILY_FEED_ERROR_CODES.companyUnavailable);
 
@@ -735,8 +737,6 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
       if (!Number.isFinite(unitPrice) || unitPrice <= 0) throw new Error(DAILY_FEED_ERROR_CODES.missingCost);
       return [{ feed, feedId, quantityDelta, unitPrice }];
     });
-    if (changes.length === 0) return;
-
     const feeds = await queueInventoryAdjustments(
       currentCompanyId,
       'feeds',
@@ -762,6 +762,7 @@ export const useFeedAdditiveStore = create<FeedAdditiveStore>((set, get) => ({
           createdAt: Timestamp.now(),
         },
       })),
+      { pondId, date, allocations: next, previousFeedIds: feedIds, feedingResponse: feedingResponse ?? null },
     );
     set({ feeds });
     const lowStockItems = changes.flatMap(({ feed, feedId, quantityDelta }) => {

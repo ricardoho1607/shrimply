@@ -9,13 +9,14 @@ import {
   isProtectedStorageEnvelope,
   utf8ToBytes,
 } from '../../shared/protectedStorage';
-import { isUserScopedCacheKey } from '../../shared/farmCache';
+import { isUserScopedCacheKey, isUserPendingWorkKey } from '../../shared/farmCache';
 
 const KEY_SIZE = 32;
 const NONCE_SIZE = 24;
 const KEY_PREFIX = 'shrimply.cache-key.v1.';
 
 const blockedUsers = new Set<string>();
+const retainedPendingUsers = new Set<string>();
 const userGenerations = new Map<string, number>();
 const cachedKeys = new Map<string, Uint8Array>();
 const pendingKeys = new Map<string, Promise<Uint8Array | null>>();
@@ -71,7 +72,7 @@ const readOrCreateKey = async (userId: string): Promise<Uint8Array | null> => {
       keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DEVICE_ONLY,
     });
     if (blockedUsers.has(userId)) {
-      await SecureStore.deleteItemAsync(keyName);
+      if (!retainedPendingUsers.has(userId)) await SecureStore.deleteItemAsync(keyName);
       return null;
     }
     cachedKeys.set(userId, key);
@@ -142,7 +143,9 @@ export const removeProtectedItem = async (storageKey: string): Promise<void> => 
   await AsyncStorage.removeItem(storageKey);
 };
 
-export const clearProtectedStorageForUser = async (userId: string): Promise<void> => {
+export const clearProtectedStorageForUser = async (userId: string, preservePendingWork = false): Promise<void> => {
+  if (preservePendingWork) retainedPendingUsers.add(userId);
+  else retainedPendingUsers.delete(userId);
   blockedUsers.add(userId);
   userGenerations.set(userId, getUserGeneration(userId) + 1);
   cachedKeys.delete(userId);
@@ -153,7 +156,7 @@ export const clearProtectedStorageForUser = async (userId: string): Promise<void
 
   let cleanupError: unknown;
   try {
-    if (await isAvailable()) {
+    if (!preservePendingWork && await isAvailable()) {
       await SecureStore.deleteItemAsync(getSecureStoreKey(userId));
     }
   } catch (error) {
@@ -162,7 +165,7 @@ export const clearProtectedStorageForUser = async (userId: string): Promise<void
 
   try {
     const keys = await AsyncStorage.getAllKeys();
-    const userKeys = keys.filter((key) => isUserScopedCacheKey(key, userId));
+    const userKeys = keys.filter((key) => isUserScopedCacheKey(key, userId) && !(preservePendingWork && isUserPendingWorkKey(key, userId)));
     if (userKeys.length > 0) await AsyncStorage.multiRemove(userKeys);
   } catch (error) {
     cleanupError ??= error;

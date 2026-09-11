@@ -393,11 +393,13 @@ export const useAssetStore = create<AssetStore>((set, get) => ({
       
       // Create unique filename
       const timestamp = Date.now();
-      const filename = `${type}/${assetId}/${timestamp}.jpg`;
+      const companyId = get().currentCompanyId;
+      if (!companyId) throw new Error('No company selected');
+      const filename = `companies/${companyId}/assets/${assetId}/${type}/${timestamp}.jpg`;
       const storageRef = ref(storage, filename);
       
       // Upload to Firebase Storage
-      await uploadBytes(storageRef, blob);
+      await uploadBytes(storageRef, blob, { contentType: blob.type?.startsWith('image/') ? blob.type : 'image/jpeg', customMetadata: { companyId, assetId } });
       
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);

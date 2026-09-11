@@ -19,6 +19,10 @@ export const getAuthBindingKey = (userId: string): string =>
 export const getPendingSyncKey = (userId: string, companyId: string): string =>
   `${PENDING_SYNC_PREFIX}:${encodeKeyPart(userId)}:${encodeKeyPart(companyId)}`;
 
+export const isUserPendingWorkKey = (key: string, userId: string): boolean =>
+  key.startsWith(`${PENDING_SYNC_PREFIX}:${encodeKeyPart(userId)}:`)
+  || key.startsWith(`shrimply:offline-mutations:v1:${encodeKeyPart(userId)}:`);
+
 export const isUserScopedCacheKey = (key: string, userId: string): boolean => {
   const encodedUserId = encodeKeyPart(userId);
   return key.startsWith(`${FARM_CACHE_PREFIX}:v${FARM_CACHE_VERSION}:${encodedUserId}:`)

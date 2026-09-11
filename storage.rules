@@ -23,7 +23,8 @@ service firebase.storage {
         && companyDoc(companyId).data != null
         && (
           companyDoc(companyId).data.ownerId == request.auth.uid
-          || request.auth.uid in companyDoc(companyId).data.teamMembers
+          || (request.auth.uid in companyDoc(companyId).data.teamMembers
+            && userBelongsToCompany(companyId))
         );
     }
 
@@ -33,21 +34,19 @@ service firebase.storage {
         && userDoc().data.companyId == companyId;
     }
 
-    function isCompanyOperator(companyId) {
-      return isCompanyMember(companyId)
-        && (
-          companyDoc(companyId).data.ownerId == request.auth.uid
-          || (
-            userBelongsToCompany(companyId)
-            && userDoc().data.role in ['owner', 'co-owner', 'technician']
-          )
-        );
-    }
-
-    function isCompanyAssetWriter(companyId) {
-      return isCompanyMember(companyId)
-        && userBelongsToCompany(companyId)
-        && userDoc().data.role in ['owner', 'co-owner', 'technician', 'mechanic'];
+    function hasCompanyPermission(companyId, permission) {
+      let user = userDoc().data;
+      let overrides = user.get('permissionOverrides', {});
+      let role = user.get('role', null);
+      return isCompanyMember(companyId) && (
+        companyDoc(companyId).data.ownerId == request.auth.uid
+        || (permission in overrides ? overrides[permission] == true : (
+          role in ['owner', 'co-owner']
+          || (role == 'technician' && permission in ['viewFarm', 'viewAssets', 'manageLabReports', 'manageAssets', 'logAssetMaintenance'])
+          || (role in ['manager', 'admin', 'mechanic'] && permission in ['viewFarm', 'viewAssets'])
+          || (role == 'mechanic' && permission == 'logAssetMaintenance')
+        ))
+      );
     }
 
     function canWriteLabReportSource(companyId, labReportId) {
@@ -56,22 +55,31 @@ service firebase.storage {
     }
 
     match /companies/{companyId}/labReports/{labReportId}/source.pdf {
-      allow read: if isCompanyMember(companyId);
-      allow write: if isCompanyOperator(companyId)
+      allow read: if hasCompanyPermission(companyId, 'viewFarm');
+      allow write: if hasCompanyPermission(companyId, 'manageLabReports')
         && canWriteLabReportSource(companyId, labReportId)
-        && request.resource.size < 10 * 1024 * 1024
+        && (request.resource == null || (request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType == 'application/pdf'
         && request.resource.metadata.companyId == companyId
-        && request.resource.metadata.labReportId == labReportId;
+        && request.resource.metadata.labReportId == labReportId));
     }
 
     match /companies/{companyId}/assets/{assetId}/{allPaths=**} {
-      allow read: if isCompanyMember(companyId);
-      allow write: if isCompanyAssetWriter(companyId)
-        && request.resource.size < 10 * 1024 * 1024
+      allow read: if hasCompanyPermission(companyId, 'viewAssets');
+      allow write: if hasCompanyPermission(companyId, 'manageAssets')
+        && (request.resource == null || (request.resource.size < 10 * 1024 * 1024
         && request.resource.contentType.matches('image/.*')
         && request.resource.metadata.companyId == companyId
-        && request.resource.metadata.assetId == assetId;
+        && request.resource.metadata.assetId == assetId));
+    }
+
+    match /companies/{companyId}/assets/{assetId}/maintenance/{fileName} {
+      allow read: if hasCompanyPermission(companyId, 'viewAssets');
+      allow write: if hasCompanyPermission(companyId, 'logAssetMaintenance')
+        && (request.resource == null || (request.resource.size < 10 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*')
+          && request.resource.metadata.companyId == companyId
+          && request.resource.metadata.assetId == assetId));
     }
 
     match /users/{userId}/profile/{fileName} {

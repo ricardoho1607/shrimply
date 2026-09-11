@@ -1,4 +1,4 @@
-require('sucrase/register/ts');
+require('../scripts/register-typescript.cjs');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { buildOrsonAnalysis } = require('./pipeline.ts');

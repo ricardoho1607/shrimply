@@ -169,7 +169,9 @@ const calculateMetrics = (pond: Pond, timeZone?: string) => {
 
 /* --- Sub-components ------------------------------------------- */
 
-function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: any) {
+function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: {
+  label: string; value: React.ReactNode; trend?: string; trendType?: 'up' | 'down'; loading?: boolean; icon?: import('lucide-react').LucideIcon;
+}) {
   return (
     <div className="glass-card" style={{
       padding: '20px',
@@ -220,7 +222,8 @@ function SummaryCard({ label, value, trend, trendType, loading, icon: Icon }: an
   );
 }
 
-function PondCard({ pond, calculateMetrics, timeZone }: any) {
+type PondMetricsCalculator = typeof calculateMetrics;
+function PondCard({ pond, calculateMetrics, timeZone }: { pond: Pond; calculateMetrics: PondMetricsCalculator; timeZone?: string }) {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const m = calculateMetrics(pond, timeZone);
@@ -230,7 +233,7 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
   );
   const today = useFarmDateKey(timeZone);
   const isHarvested = (pond.totalHarvestedPopulation || 0) >= (pond.initialPopulation * 0.9);
-    const todaySampling = pond.samplings?.find((s: any) => s.date === today);
+    const todaySampling = pond.samplings?.find((s) => s.date === today);
     const wqPosted = !!(todaySampling?.phMorning || todaySampling?.phEvening || todaySampling?.doMorning || todaySampling?.doEvening);
     const todayFeedRecord = [...(pond.samplings || [])].reverse().find((sampling: Sampling) => (
       sampling.date === today && (Number(sampling.feed) > 0 || Number(sampling.feedData?.totalDailyFeed) > 0)
@@ -363,11 +366,11 @@ function PondCard({ pond, calculateMetrics, timeZone }: any) {
 
 /* --- Buyer Components ----------------------------------------- */
 
-function BuyerDashboard({ t, user }: any) {
+function BuyerDashboard({ t, user }: { t: ReturnType<typeof useLanguage>['t']; user: ReturnType<typeof useAuth>['user'] }) {
   const copy = useDashboardCopy();
   const { formatCurrency } = useCurrency();
-  const { data: listings } = useMarketplaceListings<any>();
-  const { data: monitoredCompanies, loading } = useMonitoredCompanies<any>();
+  const { data: listings } = useMarketplaceListings<{ id: string; status?: string; priceList?: Partial<Record<'size30' | 'size50' | 'size100', number | string>> }>();
+  const { data: monitoredCompanies, loading } = useMonitoredCompanies<{ id: string; companyName?: string; location?: string; totalBiomass?: number; avgDOC?: number; avgSize?: number }>();
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -378,7 +381,7 @@ function BuyerDashboard({ t, user }: any) {
       size100: [],
     };
 
-    listings.forEach((listing: any) => {
+    listings.forEach((listing) => {
       if (listing.status !== 'active' || !listing.priceList) return;
       if (listing.priceList.size30) prices.size30.push(Number(listing.priceList.size30));
       if (listing.priceList.size50) prices.size50.push(Number(listing.priceList.size50));
@@ -458,9 +461,9 @@ function BuyerDashboard({ t, user }: any) {
 
       <div className="animate-fade-up animate-delay-1 responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
         <SummaryCard label={t.buyer.monitoredSuppliers} value={monitoredCompanies.length.toString()} icon={Users} loading={loading} />
-        <SummaryCard label={t.buyer.totalAvailableBiomass} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.totalBiomass || 0), 0)).toLocaleString()} ${t.common.kg}`} icon={TrendingUp} loading={loading} />
-        <SummaryCard label={t.buyer.avgSupplierDOC} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.avgDOC || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.days}`} icon={Clock} loading={loading} />
-        <SummaryCard label={t.buyer.avgMarketSize} value={`${Math.round(monitoredCompanies.reduce((sum: number, c: any) => sum + (c.avgSize || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.pcsKg}`} icon={Scale} loading={loading} />
+        <SummaryCard label={t.buyer.totalAvailableBiomass} value={`${Math.round(monitoredCompanies.reduce((sum, c) => sum + (c.totalBiomass || 0), 0)).toLocaleString()} ${t.common.kg}`} icon={TrendingUp} loading={loading} />
+        <SummaryCard label={t.buyer.avgSupplierDOC} value={`${Math.round(monitoredCompanies.reduce((sum, c) => sum + (c.avgDOC || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.days}`} icon={Clock} loading={loading} />
+        <SummaryCard label={t.buyer.avgMarketSize} value={`${Math.round(monitoredCompanies.reduce((sum, c) => sum + (c.avgSize || 0), 0) / Math.max(1, monitoredCompanies.length))} ${t.common.pcsKg}`} icon={Scale} loading={loading} />
       </div>
 
       <div className="animate-fade-up animate-delay-2 dashboard-primary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: '40px' }}>

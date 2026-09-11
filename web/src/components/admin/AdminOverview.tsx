@@ -153,9 +153,9 @@ export function AdminOverview({
           deleteCompany: item.deleteCompany,
         });
         successCount++;
-      } catch (err: any) {
+      } catch (err) {
         failureCount++;
-        errors.push(`${item.name}: ${err?.message || 'Failed'}`);
+        errors.push(`${item.name}: ${err instanceof Error ? err.message : 'Failed'}`);
       }
     }
 
@@ -230,7 +230,7 @@ export function AdminOverview({
       }
       return userSortDirection === 'desc' ? -comparison : comparison;
     });
-  }, [metrics?.users, userSearch, userStatusFilter, userSortBy, userSortDirection]);
+  }, [userSearch, userStatusFilter, userSortBy, userSortDirection, metrics]);
 
   const filteredCompanies = useMemo(() => {
     if (!metrics?.companies) return [];
@@ -271,12 +271,12 @@ export function AdminOverview({
       }
       return farmSortDirection === 'desc' ? -comparison : comparison;
     });
-  }, [metrics?.companies, farmSearch, farmStatusFilter, farmSortBy, farmSortDirection]);
+  }, [farmSearch, farmStatusFilter, farmSortBy, farmSortDirection, metrics]);
 
   const selectedUsersList = useMemo(() => {
     if (!metrics?.users) return [];
     return metrics.users.filter((u) => selectedUserIds.has(u.id));
-  }, [metrics?.users, selectedUserIds]);
+  }, [selectedUserIds, metrics]);
 
   if (loading && !metrics) {
     return (
