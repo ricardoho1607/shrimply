@@ -518,7 +518,7 @@ export default function SettingsPage() {
                     ))}
                   </select>
                   <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
-                    {copy('Daily farm records roll over at midnight in this timezone.')}
+                    {copy('DOC and daily Orson limits roll over together at 3:00 AM in this timezone.')}
                   </span>
                 </div>
                 <div style={fieldStyle}>

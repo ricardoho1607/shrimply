@@ -29,6 +29,7 @@ import ConfirmationModal from '@/components/ConfirmationModal';
 import { useCompanyBlocks, useCompanyCycles, useCompanyHarvestRecords, useCompanyPhysicalPonds, useCompanyPonds, useDebouncedValue } from '@/hooks/useDashboardData';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../../shared/farmDate';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../shared/harvestCalculations';
 import StartPondCycleModal from '@/components/StartPondCycleModal';
 import { PHYSICAL_POND_LINK_ERROR } from '../../../../../shared/physicalPondIdentity';
@@ -172,6 +173,7 @@ export default function PondsPage() {
   const { data: cycles, loading: cyclesLoading } = useCompanyCycles<FarmCycle>();
   const { data: harvestRecords } = useCompanyHarvestRecords<HarvestRecord>();
   const today = useFarmDateKey(company?.timeZone);
+  const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const isPondsPageLoading = pondsLoading || physicalPondsLoading || cyclesLoading;
 
   const [isModalOpen, setModalOpen] = useState(false);
@@ -863,9 +865,9 @@ export default function PondsPage() {
   const estimatedPopulationByPondId = useMemo(() => new Map(
     filteredPonds.map((pond) => [
       pond.id,
-      calculatePondMetricsWithHarvest(pond, company?.timeZone, { currentDateKey: today }).currentPopulation,
+      calculatePondMetricsWithHarvest(pond, company?.timeZone, { currentDateKey: operationalToday }).currentPopulation,
     ]),
-  ), [company?.timeZone, filteredPonds, today]);
+  ), [company?.timeZone, filteredPonds, operationalToday]);
 
   if (isPondsPageLoading) {
     return (

@@ -1,6 +1,7 @@
 import {
   differenceInFarmCalendarDays,
   getFarmDateKey,
+  getFarmOperationalDateKey,
   normalizeFarmDateKey,
 } from './farmDate.ts';
 
@@ -361,9 +362,11 @@ export const calculatePopulationFromSampling = (sampling: SharedSampling): numbe
 export const getPondCurrentDoc = (
   pond: Pick<SharedPond, 'docStart' | 'baselineDate' | 'baselineDoc'>,
   timeZone?: string,
-  now: Date = new Date(),
+  now: Date | string = new Date(),
 ): number => {
-  const today = getFarmDateKey(now, timeZone);
+  const today = typeof now === 'string'
+    ? normalizeFarmDateKey(now, timeZone) || getFarmDateKey(new Date(), timeZone)
+    : getFarmOperationalDateKey(now, timeZone);
   const docStartDate = normalizeFarmDateKey(pond.docStart, timeZone);
   const docFromStart = docStartDate === null ? 0 : differenceInFarmCalendarDays(today, docStartDate);
   const baselineDoc = toFiniteNumber(pond.baselineDoc);

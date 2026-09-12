@@ -131,3 +131,37 @@ test('location search uses Places API New and returns selectable city details', 
     'addressComponents',
   ]);
 });
+
+test('farm timezone follows the selected city coordinates', async (t) => {
+  const originalFetch = global.fetch;
+  const originalApiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
+  t.after(() => {
+    global.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
+    else process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY = originalApiKey;
+  });
+
+  process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY = 'timezone-test-key';
+  let requestedUrl = '';
+  global.fetch = async (url) => {
+    requestedUrl = String(url);
+    return {
+      ok: true,
+      async json() {
+        return { status: 'OK', timeZoneId: 'Asia/Makassar' };
+      },
+    };
+  };
+
+  const client = loadGooglePlacesClient();
+  const timeZone = await client.getLocationTimeZone(
+    -5.1477,
+    119.4327,
+    new Date('2026-09-12T00:00:00.000Z'),
+  );
+
+  assert.equal(timeZone, 'Asia/Makassar');
+  assert.match(requestedUrl, /location=-5\.1477,119\.4327/);
+  assert.match(requestedUrl, /timestamp=1789171200/);
+  assert.match(requestedUrl, /key=timezone-test-key/);
+});

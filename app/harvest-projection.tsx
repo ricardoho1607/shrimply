@@ -26,7 +26,7 @@ import { db } from '@/config/firebase';
 import { useFeedAdditiveStore } from './store/feedAdditiveStore';
 import { financeService, type Expense } from './services/financeService';
 import { calculatePondMetricsWithHarvest } from '../shared/pondCalculations';
-import { getFarmDateKey } from '../shared/farmDate';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../shared/farmDate';
 import {
   buildDailyFeedTotalsForPond,
   buildPondProfitabilityCostSnapshot,
@@ -43,6 +43,7 @@ import {
   type HarvestMarketPriceInputs,
 } from '../shared/harvestProjectionSettings';
 import { hasFarmPermission } from '../shared/permissions';
+import { useFarmDateKey } from './hooks/useFarmDateKey';
 
 const totalScenarioCosts = (costs: { feed: number; additives: number; generalExpenses: number; other: number }) =>
   costs.feed + costs.additives + costs.generalExpenses + costs.other;
@@ -55,6 +56,7 @@ export default function HarvestProjectionScreen() {
   const { t } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { company, user } = useAuth();
+  const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const feeds = useFeedAdditiveStore((state) => state.feeds);
   const additives = useFeedAdditiveStore((state) => state.additives);
   const initializeInventory = useFeedAdditiveStore((state) => state.initializeForCompany);
@@ -86,7 +88,7 @@ export default function HarvestProjectionScreen() {
     if (!selectedPond || priceLadder.length === 0) return null;
     const today = getFarmDateKey(new Date(), company?.timeZone);
     const cycleStart = selectedPond.cycleStartedAt || selectedPond.docStart || today;
-    const metrics = calculatePondMetricsWithHarvest(selectedPond, company?.timeZone);
+    const metrics = calculatePondMetricsWithHarvest(selectedPond, company?.timeZone, { currentDateKey: operationalToday });
     const costSnapshot = buildPondProfitabilityCostSnapshot({
       pond: selectedPond,
       ponds,
@@ -121,7 +123,7 @@ export default function HarvestProjectionScreen() {
       timeZone: company?.timeZone,
     });
     return { result, costSnapshot, mortality };
-  }, [selectedPond, priceLadder, company?.timeZone, ponds, feeds, additives, expenses]);
+  }, [selectedPond, priceLadder, company?.timeZone, operationalToday, ponds, feeds, additives, expenses]);
 
   const financialDecisionReason = useMemo(() => {
     if (!financialComparison) return '';

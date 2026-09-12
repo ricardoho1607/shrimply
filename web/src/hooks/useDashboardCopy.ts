@@ -388,6 +388,7 @@ const INDONESIAN_DASHBOARD_COPY: Record<string, string> = {
   'Individual Buyer': 'Pembeli Perorangan',
   'Farm timezone': 'Zona waktu tambak',
   'Daily farm records roll over at midnight in this timezone.': 'Catatan harian tambak berganti pada tengah malam di zona waktu ini.',
+  'DOC and daily Orson limits roll over together at 3:00 AM in this timezone.': 'DOC dan batas harian Orson berganti bersamaan pada pukul 03.00 di zona waktu ini.',
   'Contact Phone': 'Nomor Telepon',
   'Tell buyers and team members about this operation.': 'Ceritakan operasi ini kepada pembeli dan anggota tim.',
   'Team Members': 'Anggota Tim',

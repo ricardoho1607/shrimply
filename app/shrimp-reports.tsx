@@ -14,6 +14,8 @@ import { usePondStore, type Pond, getPondCurrentDoc, getPondPlSupplier, isBaseli
 import { exportSamplingReportPDF, prepareSamplingReportData } from './services/samplingReportExportService';
 import { DAY_MS, calculateSamplingAdg, getSamplingMbw, toFiniteNumber } from '../shared/pondCalculations';
 import { hasFarmPermission } from '../shared/permissions';
+import { useFarmDateKey } from './hooks/useFarmDateKey';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../shared/farmDate';
 
 const isAndroid = Platform.OS === 'android';
 
@@ -27,6 +29,7 @@ const SummaryRow = ({ label, value }: { label: string; value: string }) => (
 export default function ShrimpReportsScreen() {
   const router = useRouter();
   const { user, company } = useAuth();
+  const farmToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const { t, currentLanguage } = useLanguage();
   const { ponds, harvestRecords, calculatePondMetricsWithHarvest } = usePondStore();
   const enterpriseBlocks = useEnterpriseBlocks(company?.businessSize === 'enterprise' ? company.id : undefined, user?.uid);
@@ -36,8 +39,8 @@ export default function ShrimpReportsScreen() {
   const canExportReports = hasFarmPermission(user, 'exportReports', company?.ownerId);
 
   const activePonds = useMemo(
-    () => filterEnterpriseRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: enterpriseBlocks.blocks }).filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone) >= 0),
-    [company?.timeZone, company?.businessSize, user?.role, user?.uid, enterpriseBlocks.blocks, ponds]
+    () => filterEnterpriseRecordsForUser(ponds, { businessSize: company?.businessSize, role: user?.role, userId: user?.uid, blocks: enterpriseBlocks.blocks }).filter(pond => isPondCycleActive(pond) && getPondCurrentDoc(pond, company?.timeZone, farmToday) >= 0),
+    [company?.timeZone, company?.businessSize, user?.role, user?.uid, enterpriseBlocks.blocks, farmToday, ponds]
   );
 
   const pondMembership = activePonds.map(pond => pond.id).sort().join('|');
@@ -130,7 +133,7 @@ export default function ShrimpReportsScreen() {
   };
 
   const getPondStats = (pond: Pond) => {
-    const doc = getPondCurrentDoc(pond, company?.timeZone);
+    const doc = getPondCurrentDoc(pond, company?.timeZone, farmToday);
     const metrics = calculatePondMetricsWithHarvest(pond);
     return {
       doc, currentPopulation: metrics.currentPopulation, biomass: metrics.currentBiomass, sr: metrics.adjustedSR,

@@ -22,6 +22,7 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
 import { syncPublicCompanyMemberCount, syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { removeUndefinedFields } from '@/lib/firestoreData';
+import { getLocationTimeZone } from '@/lib/googlePlacesClient';
 import { getSystemTimeZone, isValidTimeZone, resolveFarmTimeZone } from '../../../shared/farmDate';
 import { isCompanyProfileComplete, isUserOnboardingComplete } from '../../../shared/onboarding';
 import type { FarmPermissionOverrides } from '../../../shared/permissions';
@@ -115,6 +116,10 @@ interface Company {
     postalCode?: string;
     placeId?: string;
   } | string;
+  locationData?: {
+    latitude?: number;
+    longitude?: number;
+  };
   farmType: string;
   businessSize: 'small' | 'medium' | 'large' | 'enterprise';
   description: string;
@@ -274,10 +279,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           && companyData.ownerId === auth.currentUser?.uid
           && !timeZoneMigrationRef.current.has(companyId)) {
           timeZoneMigrationRef.current.add(companyId);
-          void updateDoc(doc(db, 'companies', companyId), {
-            timeZone: getSystemTimeZone(),
-            updatedAt: serverTimestamp(),
-          }).catch((error) => {
+          const location = typeof companyData.primaryLocation === 'object'
+            ? companyData.primaryLocation
+            : companyData.locationData;
+          void (async () => {
+            const fallbackTimeZone = getSystemTimeZone();
+            const detectedTimeZone = location
+              && Number.isFinite(location.latitude)
+              && Number.isFinite(location.longitude)
+              && (location.latitude !== 0 || location.longitude !== 0)
+              ? await getLocationTimeZone(location.latitude as number, location.longitude as number)
+                .catch(() => fallbackTimeZone)
+              : fallbackTimeZone;
+            await updateDoc(doc(db, 'companies', companyId), {
+              timeZone: resolveFarmTimeZone(detectedTimeZone, fallbackTimeZone),
+              updatedAt: serverTimestamp(),
+            });
+          })().catch((error) => {
             timeZoneMigrationRef.current.delete(companyId);
             console.warn('Company timezone migration failed:', error);
           });

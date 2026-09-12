@@ -340,7 +340,7 @@ export const useGemini = () => {
       // Handle Rate Limiting (Free Tier 429)
       if (err.message?.includes("429")) {
         setError("Daily limit reached.");
-        return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
+        return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at 3:00 AM farm time.";
       }
 
       const remoteLimit = getRemoteOrsonLimit(err);
@@ -357,14 +357,14 @@ export const useGemini = () => {
           ? 'request'
           : remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';
         setError("Daily limit reached.");
-        return `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after the daily reset.`;
+        return `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after 3:00 AM farm time.`;
       }
 
       // Keep support for the legacy local error shape during rollout.
       if (isOrsonDailyLimitError(err)) {
         const label = err.aiFunction === 'projection' ? 'projection analysis' : 'chat';
         setError("Daily limit reached.");
-        return `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after the daily reset.`;
+        return `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after 3:00 AM farm time.`;
       }
 
       const localFallback = buildLocalOrsonFallback(analysis);

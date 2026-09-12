@@ -12,6 +12,7 @@ import { ROUTES } from '@/config/routes';
 import { getSupportedTimeZones, getSystemTimeZone } from '../../../../../shared/farmDate';
 import {
   getLocationDetails,
+  getLocationTimeZone,
   searchCityLocations,
   type PlaceSuggestion,
   type SelectedLocation,
@@ -105,11 +106,14 @@ export default function CompanySetupPage() {
     setLocationError('');
     try {
       const location = await getLocationDetails(suggestion.placeId);
+      const detectedTimeZone = await getLocationTimeZone(location.latitude, location.longitude)
+        .catch(() => null);
       setSelectedLocation(location);
       setLocationSuggestions([]);
       setFormData(current => ({
         ...current,
         primaryLocation: location.address,
+        ...(detectedTimeZone ? { timeZone: detectedTimeZone } : {}),
       }));
     } catch {
       setLocationError('Could not load that location. Please try another result.');
@@ -328,7 +332,7 @@ export default function CompanySetupPage() {
             ))}
           </select>
           <p style={{ margin: '8px 4px 0', color: 'var(--text-muted)', fontSize: '12px' }}>
-            Confirm this matches the selected city. Daily farm records roll over at midnight here.
+            Confirm this matches the selected city. DOC and daily Orson limits roll over together at 3:00 AM here.
           </p>
         </div>
 

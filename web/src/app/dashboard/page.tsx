@@ -46,6 +46,7 @@ import {
   type SharedMortalityRecord,
 } from '../../../../shared/pondCalculations';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../shared/farmDate';
 import EnterpriseDashboard from '@/components/EnterpriseCycleDashboard';
 import DashboardOnboardingCard from './DashboardOnboardingCard';
 import styles from './DashboardHome.module.css';
@@ -120,7 +121,7 @@ interface FarmCycle {
 
 /* --- Calculation Utilities ----------------------------------- */
 
-const calculateMetrics = (pond: Pond, timeZone?: string) => {
+const calculateMetrics = (pond: Pond, timeZone?: string, currentDateKey?: string) => {
   const samplings = pond.samplings || [];
   const validSamplings = samplings.filter(s => s.mbw > 0 || s.mortality > 0 || s.feed > 0 || s.feedData);
   const sorted = [...validSamplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -130,7 +131,7 @@ const calculateMetrics = (pond: Pond, timeZone?: string) => {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   const latestEnvironmental = environmentalSamplings[environmentalSamplings.length - 1] || {};
   const latestValid = getLatestValidMbwSampling(pond);
-  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone);
+  const biologicalMetrics = calculatePondMetricsWithHarvest(pond, timeZone, { currentDateKey });
 
     const phM = parseFloat(latestEnvironmental.phMorning || '');
     const phE = parseFloat(latestEnvironmental.phEvening || '');
@@ -226,7 +227,8 @@ type PondMetricsCalculator = typeof calculateMetrics;
 function PondCard({ pond, calculateMetrics, timeZone }: { pond: Pond; calculateMetrics: PondMetricsCalculator; timeZone?: string }) {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
-  const m = calculateMetrics(pond, timeZone);
+  const operationalToday = useFarmDateKey(timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
+  const m = calculateMetrics(pond, timeZone, operationalToday);
   const pondStatus = getEnterprisePondStatus(
     pond as Parameters<typeof getEnterprisePondStatus>[0],
     timeZone,
@@ -585,6 +587,7 @@ export default function DashboardPage() {
   const copy = useDashboardCopy();
   const { t } = useLanguage();
   const { user, company, loading: authLoading, companyLoading } = useAuth();
+  const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const hasPermission = useFarmPermissions();
   const canManageEnterpriseBlocks = hasPermission('manageEnterpriseBlocks');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
@@ -611,7 +614,7 @@ export default function DashboardPage() {
     activePonds.forEach(pond => {
       const samplings = pond.samplings || [];
       const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      const m = calculateMetrics(pond, company?.timeZone);
+      const m = calculateMetrics(pond, company?.timeZone, operationalToday);
       currentBiomass += m.biomass; currentSR += m.sr; currentPop += m.population;
 
       if (sorted.length >= 2) {
@@ -623,7 +626,7 @@ export default function DashboardPage() {
           ...pond,
           samplings: previousSamplings,
           mortalityRecords: previousMortalityRecords,
-        }, company?.timeZone);
+        }, company?.timeZone, { currentDateKey: operationalToday });
         prevBiomass += previousMetrics.currentBiomass;
         prevSR += previousMetrics.adjustedSR;
         prevPop += previousMetrics.currentPopulation;
@@ -641,7 +644,7 @@ export default function DashboardPage() {
     const popTrend = prevPop > 0 ? ((currentPop - prevPop) / prevPop) * 100 : 0;
 
     return { biomass: currentBiomass, population: currentPop, sr: avgSR, activeCount, biomassTrend, srTrend, popTrend };
-  }, [activePonds, company?.timeZone]);
+  }, [activePonds, company?.timeZone, operationalToday]);
 
   const averageActivePondMetric = (selector: (pond: Pond) => number | null | undefined) => {
     const values = activePonds
@@ -854,7 +857,7 @@ export default function DashboardPage() {
                 gap: viewMode === 'grid' ? '16px' : '0'
               }}>
               {activePonds.map((pond, idx) => {
-                const m = calculateMetrics(pond, company?.timeZone);
+                const m = calculateMetrics(pond, company?.timeZone, operationalToday);
                 return viewMode === 'grid' ? (
                   <PondCard key={pond.id} pond={pond} calculateMetrics={calculateMetrics} timeZone={company?.timeZone} />
                 ) : (

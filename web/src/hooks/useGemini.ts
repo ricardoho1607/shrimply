@@ -352,7 +352,7 @@ export const useGemini = () => {
 
       if (errorMessage.includes("429")) {
         setError("Daily limit reached.");
-        return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at midnight.";
+        return "I've shared all my wisdom for today! My daily quota is full, but I'll be refreshed at 3:00 AM farm time.";
       }
 
       const remoteLimit = getRemoteOrsonLimit(err);
@@ -368,7 +368,7 @@ export const useGemini = () => {
         const label = remoteLimit.quota === 'total'
           ? 'request'
           : remoteLimit.aiFunction === 'projection' ? 'projection analysis' : 'chat';
-        const limitMessage = `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after the daily reset.`;
+        const limitMessage = `Today's Orson ${label} limit is full (${remoteLimit.used}/${remoteLimit.limit}). Please try again after 3:00 AM farm time.`;
         if (latestRequestId.current === requestId) {
           setError("Daily limit reached.");
         }
@@ -378,7 +378,7 @@ export const useGemini = () => {
       // Keep support for the legacy local error shape during rollout.
       if (isOrsonDailyLimitError(err)) {
         const label = err.aiFunction === 'projection' ? 'projection analysis' : 'chat';
-        const limitMessage = `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after the daily reset.`;
+        const limitMessage = `Today's Orson ${label} limit is full (${err.used}/${err.limit}). Please try again after 3:00 AM farm time.`;
         if (latestRequestId.current === requestId) {
           setError("Daily limit reached.");
         }

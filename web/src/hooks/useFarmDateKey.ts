@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getFarmDateKey } from '../../../shared/farmDate';
+import { getFarmDateKeyAtRollover } from '../../../shared/farmDate';
 
 const FARM_DATE_REFRESH_MS = 30_000;
 
-export const useFarmDateKey = (timeZone?: string): string => {
-  const [dateKey, setDateKey] = useState(() => getFarmDateKey(new Date(), timeZone));
+export const useFarmDateKey = (timeZone?: string, rolloverHour: number = 0): string => {
+  const [dateKey, setDateKey] = useState(() => getFarmDateKeyAtRollover(new Date(), timeZone, rolloverHour));
 
   useEffect(() => {
-    const refresh = () => setDateKey(getFarmDateKey(new Date(), timeZone));
+    const refresh = () => setDateKey(getFarmDateKeyAtRollover(new Date(), timeZone, rolloverHour));
     refresh();
     window.addEventListener('focus', refresh);
     document.addEventListener('visibilitychange', refresh);
@@ -19,7 +19,7 @@ export const useFarmDateKey = (timeZone?: string): string => {
       window.removeEventListener('focus', refresh);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, [timeZone]);
+  }, [rolloverHour, timeZone]);
 
   return dateKey;
 };

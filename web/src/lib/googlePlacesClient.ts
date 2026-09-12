@@ -180,3 +180,29 @@ export async function getLocationDetails(placeId: string): Promise<SelectedLocat
   placePredictions.clear();
   return selectedLocation;
 }
+
+export async function getLocationTimeZone(
+  latitude: number,
+  longitude: number,
+  date: Date = new Date(),
+): Promise<string> {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    throw new Error('Valid coordinates are required to detect the farm timezone');
+  }
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_PLACES_API_KEY;
+  if (!apiKey) throw new Error('Google Places is not configured');
+
+  const timestamp = Math.floor(date.getTime() / 1000);
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/timezone/json?location=${latitude},${longitude}&timestamp=${timestamp}&key=${encodeURIComponent(apiKey)}`,
+  );
+  if (!response.ok) throw new Error('Timezone detection failed');
+
+  const data = await response.json() as { status?: unknown; timeZoneId?: unknown; errorMessage?: unknown };
+  if (data.status === 'OK' && typeof data.timeZoneId === 'string' && data.timeZoneId.trim()) {
+    return data.timeZoneId.trim();
+  }
+
+  throw new Error(typeof data.errorMessage === 'string' ? data.errorMessage : 'Timezone detection failed');
+}

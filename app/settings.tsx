@@ -8,7 +8,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useCurrency, CURRENCIES, Currency } from '../context/CurrencyContext';
 import { migrateOwnCompany } from './utils/migrateOwnCompany';
 import { useAuth } from '../context/AuthContext';
-import { hasWaterQualityData, usePondStore } from './store/pondStore';
+import { getPondCurrentDoc, hasWaterQualityData, usePondStore } from './store/pondStore';
 import { exportPondReportPDF } from './services/pondReportExportService';
 import { useCurrentTime } from './hooks/useCurrentTime';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
@@ -273,8 +273,7 @@ export default function Settings() {
       
       const reportPonds = ponds.map(pond => {
         const metrics = calculatePondMetricsWithHarvest(pond);
-        const diffTime = new Date().getTime() - new Date(pond.docStart).getTime();
-        const doc = Math.max(0, Math.floor(diffTime / (1000 * 60 * 60 * 24)));
+        const doc = getPondCurrentDoc(pond, company?.timeZone);
         
         // Get latest water quality record
         const latestWQ = pond.samplings

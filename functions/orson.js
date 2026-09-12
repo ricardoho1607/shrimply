@@ -25,6 +25,7 @@ const {
 } = require("./orsonRequestPolicy");
 const { assertCompanyMemberForCallable } = require("./shared/companyAccess");
 const { resolveEntitlements } = require("./shared/companyEntitlements");
+const { farmDateKey, shiftDateKey } = require("./farmDate");
 const {
   buildStoredOverwatch,
   evaluatePondPlanktonOverwatch,
@@ -127,25 +128,6 @@ const compactStrings = (value, limit = 5, maxLength = 240) => (
     ? value.filter((item) => typeof item === "string" && item.trim()).slice(0, limit).map((item) => item.trim().slice(0, maxLength))
     : []
 );
-
-const farmDateKey = (timeZone) => {
-  try {
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: timeZone || "UTC",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).format(new Date());
-  } catch (_error) {
-    return new Date().toISOString().slice(0, 10);
-  }
-};
-
-const shiftDateKey = (dateKey, days) => {
-  const date = new Date(`${dateKey}T00:00:00.000Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-};
 
 const loadOrsonMortalityContext = async (db, company, companyId, pondId, requestedEndDate) => {
   const pondRef = db.collection("companies").doc(companyId).collection("ponds").doc(pondId);

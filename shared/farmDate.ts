@@ -1,4 +1,5 @@
 export const DEFAULT_FARM_TIME_ZONE = 'UTC';
+export const FARM_OPERATIONAL_DAY_ROLLOVER_HOUR = 3;
 
 export type CompanyTimeZoneSource = {
   timeZone?: unknown;
@@ -120,6 +121,34 @@ export const shiftDateKey = (dateKey: string, days: number): string => {
   if (utcDay === null || !Number.isFinite(days)) return dateKey;
   return new Date(utcDay + Math.trunc(days) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 };
+
+export const getFarmDateKeyAtRollover = (
+  date: Date = new Date(),
+  timeZone?: unknown,
+  rolloverHour: number = 0,
+): string => {
+  const safeDate = date instanceof Date && Number.isFinite(date.getTime()) ? date : new Date();
+  const calendarDateKey = getFarmDateKey(safeDate, timeZone);
+  const safeRolloverHour = Number.isInteger(rolloverHour)
+    ? Math.min(23, Math.max(0, rolloverHour))
+    : 0;
+  if (safeRolloverHour === 0) return calendarDateKey;
+
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: resolveFarmTimeZone(timeZone),
+    hour: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(safeDate);
+  const localHour = Number(parts.find((part) => part.type === 'hour')?.value);
+  return Number.isFinite(localHour) && localHour < safeRolloverHour
+    ? shiftDateKey(calendarDateKey, -1)
+    : calendarDateKey;
+};
+
+export const getFarmOperationalDateKey = (
+  date: Date = new Date(),
+  timeZone?: unknown,
+): string => getFarmDateKeyAtRollover(date, timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
 
 export const getFarmPeriodDateKeys = (
   period: 'today' | 'week' | 'month' | 'year' | 'all',

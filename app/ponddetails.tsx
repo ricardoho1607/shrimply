@@ -20,12 +20,13 @@ import {
   onSnapshot 
 } from 'firebase/firestore';
 import { db } from '@/config/firebase';
-import { getFarmDateKey } from '../shared/farmDate';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../shared/farmDate';
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
 import PlanktonOverwatchCard from './components/PlanktonOverwatchCard';
 import { hasFarmPermission } from '../shared/permissions';
+import { useFarmDateKey } from './hooks/useFarmDateKey';
 
 const InputField = React.memo(({ 
   label, 
@@ -501,6 +502,8 @@ export default function PondDetails() {
   const { pondId } = useLocalSearchParams();
   const { t } = useLanguage();
   const { user, company } = useAuth();
+  const calendarToday = useFarmDateKey(company?.timeZone);
+  const farmToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const insets = useSafeAreaInsets();
   
   const canManagePonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
@@ -599,11 +602,11 @@ export default function PondDetails() {
     const getTotalFeedData = () => getPondTotalFeedConsumed(pond);
 
     const latestSampling = getLatestSamplingData();
-    const doc = getPondCurrentDoc(pond, company?.timeZone);
+    const doc = getPondCurrentDoc(pond, company?.timeZone, farmToday);
     const totalMortality = harvestAdjustedMetrics.totalMortality;
     const todayMortality = calculatePondMortalityForDate(
       pond,
-      getFarmDateKey(new Date(), company?.timeZone),
+      calendarToday,
       company?.timeZone,
     );
     
@@ -656,7 +659,7 @@ export default function PondDetails() {
       pondSamplingData,
       feedBiomassInsight
     };
-  }, [company?.timeZone, pond, calculatePondMetricsWithHarvest]);
+  }, [calendarToday, company?.timeZone, farmToday, pond, calculatePondMetricsWithHarvest]);
 
   const currentCycleMortalityRecords = useMemo(() => {
     if (!pond) return [];

@@ -61,6 +61,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useFarmDateKey } from '@/hooks/useFarmDateKey';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR } from '../../../../../../shared/farmDate';
 import { hasFinalHarvestForPondCycle, type HarvestType } from '../../../../../../shared/harvestCalculations';
 import { useCompanyBlocks } from '@/hooks/useDashboardData';
 import {
@@ -315,6 +316,7 @@ export default function PondDetailClient() {
   const [companyId, setCompanyId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | undefined>();
   const today = useFarmDateKey(company?.timeZone);
+  const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [isSamplingModalOpen, setSamplingModalOpen] = useState(requestedAction === 'sampling');
   const [isMortalityModalOpen, setMortalityModalOpen] = useState(requestedAction === 'mortality');
@@ -881,7 +883,7 @@ export default function PondDetailClient() {
     const sorted = [...samplings].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const latest = sorted[sorted.length - 1] || { mbw: 0, mortality: 0, feed: 0 };
     const docStart = new Date(pond.docStart);
-    const biologicalMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone);
+    const biologicalMetrics = calculatePondMetricsWithHarvest(pond, company?.timeZone, { currentDateKey: operationalToday });
     const todayMortality = calculatePondMortalityForDate(pond, today, company?.timeZone);
     const feedBiomassInsight = detectFeedBiomassMismatchInsight(pond);
 
@@ -910,7 +912,7 @@ export default function PondDetailClient() {
       fcr: biologicalMetrics.biomassGainFCR,
       feedBiomassInsight
     };
-  }, [company?.timeZone, pond, today]);
+  }, [company?.timeZone, operationalToday, pond, today]);
 
   const currentCycleMortalityRecords = useMemo(() => {
     if (!pond) return [];

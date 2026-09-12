@@ -31,7 +31,7 @@ import { createDefaultOrsonCalibration, normalizeOrsonCalibration } from '../../
 import type { OrsonCalibrationProfile } from '../../../../../orson/types';
 import { filterActiveCyclePonds } from '@/lib/pondLifecycle';
 import { calculatePondMetricsWithHarvest } from '../../../../../shared/pondCalculations';
-import { getFarmDateKey } from '../../../../../shared/farmDate';
+import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../../../../../shared/farmDate';
 import { escapeReportText } from '../../../../../shared/reportingIntegrity';
 import {
   formatPdfDate,
@@ -55,6 +55,7 @@ import {
   type HarvestMarketPriceInputs,
 } from '../../../../../shared/harvestProjectionSettings';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
+import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import styles from './ProjectionsPage.module.css';
 
@@ -169,6 +170,7 @@ export default function HarvestProjectionsPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<DashboardUser | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
+  const operationalToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const [cycles, setCycles] = useState<FarmCycle[]>([]);
   const [feeds, setFeeds] = useState<InventoryItemWithUsage[]>([]);
   const [additives, setAdditives] = useState<InventoryItemWithUsage[]>([]);
@@ -330,7 +332,7 @@ export default function HarvestProjectionsPage() {
     if (!selectedPond || priceLadder.length === 0) return null;
     const today = getFarmDateKey(new Date(), company?.timeZone);
     const cycleStart = selectedPond.cycleStartedAt || selectedPond.docStart || today;
-    const metrics = calculatePondMetricsWithHarvest(selectedPond, company?.timeZone);
+    const metrics = calculatePondMetricsWithHarvest(selectedPond, company?.timeZone, { currentDateKey: operationalToday });
     const costSnapshot = buildPondProfitabilityCostSnapshot({
       pond: selectedPond,
       ponds,
@@ -364,7 +366,7 @@ export default function HarvestProjectionsPage() {
       timeZone: company?.timeZone,
     });
     return { result, costSnapshot, mortality };
-  }, [selectedPond, priceLadder, company?.timeZone, ponds, feeds, additives, expenses]);
+  }, [selectedPond, priceLadder, company?.timeZone, operationalToday, ponds, feeds, additives, expenses]);
 
   const financialDecisionReason = useMemo(() => {
     if (!financialComparison) return '';

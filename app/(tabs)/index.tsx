@@ -11,7 +11,7 @@ import { usePondStore, type FarmCycle, type Pond, type Sampling, type PondCycleE
 import { useLanguage } from '../../context/LanguageContext';
 import { useAuth } from '../../context/AuthContext';
 import ShrimpIcon from '../components/icons/ShrimpIcon';
-import { differenceInFarmCalendarDays, getFarmDateKey } from '../../shared/farmDate';
+import { differenceInFarmCalendarDays, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../../shared/farmDate';
 import { calculateAdg } from '../../shared/pondCalculations';
 import { hasFinalHarvestForPondCycle } from '../../shared/harvestCalculations';
 import { hasFarmPermission } from '../../shared/permissions';
@@ -24,6 +24,7 @@ import EnterpriseDashboard from '../components/enterprise/EnterpriseCycleDashboa
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import ProfileCompletionCard from '../components/onboarding/ProfileCompletionCard';
 import AppDatePicker from '../components/forms/AppDatePicker';
+import { useFarmDateKey } from '../hooks/useFarmDateKey';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import firebaseApp from '../../config/firebase';
 
@@ -151,6 +152,7 @@ export default function PondManagementScreen() {
   const router = useRouter();
   const { t } = useLanguage();
   const { user, company } = useAuth();
+  const farmToday = useFarmDateKey(company?.timeZone, FARM_OPERATIONAL_DAY_ROLLOVER_HOUR);
   const canManagePonds = hasFarmPermission(user, 'managePonds', company?.ownerId);
   const canRecordPondData = hasFarmPermission(user, 'recordPondData', company?.ownerId);
   const canEditPonds = canManagePonds || canRecordPondData;
@@ -455,7 +457,7 @@ export default function PondManagementScreen() {
       : '0';
       
     return {
-      doc: getPondCurrentDoc(pond, company?.timeZone),
+      doc: getPondCurrentDoc(pond, company?.timeZone, farmToday),
       totalBiomass: metrics.currentBiomass,
       sr: metrics.adjustedSR.toFixed(1), 
       size,
@@ -463,7 +465,7 @@ export default function PondManagementScreen() {
       latestSampling,
       fcr: metrics.adjustedFCR.toFixed(2),
     };
-  }, [calculatePondMetricsWithHarvest, company?.timeZone, getLatestSampling]);
+  }, [calculatePondMetricsWithHarvest, company?.timeZone, farmToday, getLatestSampling]);
 
   const getDOCColor = useCallback((doc: number): string => {
     if (doc < 30) return '#0d2137';
