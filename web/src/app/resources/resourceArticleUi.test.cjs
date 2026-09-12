@@ -37,3 +37,16 @@ test('Vannamei water-quality guide uses contextual ranges and a dedicated image'
   assert.doesNotMatch(resourceLibrary, /Shrimply automatically calculates toxic un-ionized NH₃/);
   assert.doesNotMatch(resourceLibrary, /molasses \(5–10 kg\/ha\)/);
 });
+
+test('resource articles place author & editorial review at bottom of article before related pages', () => {
+  const sourcesIdx = articlePage.indexOf('Sources and Further Reading');
+  const authorIdx = articlePage.indexOf('Author & Editorial Review');
+  const relatedIdx = articlePage.indexOf('Related Shrimply Pages');
+
+  assert.ok(sourcesIdx !== -1, 'Sources section exists');
+  assert.ok(authorIdx !== -1, 'Author & Editorial Review section exists');
+  assert.ok(relatedIdx !== -1, 'Related Shrimply Pages section exists');
+  assert.ok(authorIdx > sourcesIdx, 'Author section must be located after sources');
+  assert.ok(authorIdx < relatedIdx, 'Author section must be located before related pages');
+});
+

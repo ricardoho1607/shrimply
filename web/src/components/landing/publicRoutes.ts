@@ -4,6 +4,9 @@ export type LandingLocale = typeof LANDING_LOCALES[number];
 const PUBLIC_PAGES = new Set([
   '/', '/about', '/how-it-works', '/orson', '/download',
   '/shrimp-farm-management-software', '/vannamei-shrimp-farming-app',
+  '/shrimp-feed-management-software',
+  '/shrimp-water-quality-monitoring-software',
+  '/shrimp-growth-sampling-software',
 ]);
 const FEATURES = new Set([
   'shrimp-harvest-tracking', 'disease-alerts', 'feed-inventory',

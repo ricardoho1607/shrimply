@@ -75,6 +75,9 @@ const renderInlineLinks = (text: string): React.ReactNode => {
 const relatedFeatureLabels: Record<string, string> = {
   "/shrimp-farm-management-software": "Shrimp farm management software",
   "/vannamei-shrimp-farming-app": "Vannamei shrimp farming app",
+  "/shrimp-feed-management-software": "Shrimp feed management software",
+  "/shrimp-water-quality-monitoring-software": "Shrimp water quality monitoring software",
+  "/shrimp-growth-sampling-software": "Shrimp growth and sampling software",
   "/features/feed-inventory": "Shrimp feed inventory tracking",
   "/features/water-quality-monitoring": "Shrimp pond water quality monitoring",
   "/features/growth-sampling": "Shrimp growth sampling and MBW tracking",
@@ -200,10 +203,16 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
     description: article.description,
     url: canonicalUrl(`/resources/${article.slug}`),
     author: {
-      "@type": "Organization",
-      name: SITE_CONFIG.name,
-      url: SITE_CONFIG.url,
+      "@type": "Person",
+      name: article.author?.name ?? "Shrimply Technical Operations Team",
+      jobTitle: article.author?.role ?? "Aquaculture Specialists",
     },
+    editor: article.reviewer ? {
+      "@type": "Person",
+      name: article.reviewer.name,
+      jobTitle: article.reviewer.role,
+      description: article.reviewer.credentials,
+    } : undefined,
     publisher: {
       "@type": "Organization",
       name: SITE_CONFIG.name,
@@ -343,6 +352,21 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
               <span className="eyebrow" style={{ color: "var(--blue)" }}>{article.readTime}</span>
               <span style={{ color: "var(--fog)" }}>/</span>
               <span className="eyebrow" style={{ color: "var(--blue)" }}>Farm management guide</span>
+              {article.updatedAt ? (
+                <>
+                  <span style={{ color: "var(--fog)" }}>/</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--primary)", fontWeight: 700 }}>
+                    Updated: {article.updatedAt}
+                  </span>
+                </>
+              ) : article.publishedAt ? (
+                <>
+                  <span style={{ color: "var(--fog)" }}>/</span>
+                  <span style={{ fontSize: "0.85rem", color: "var(--ocean)", fontWeight: 600 }}>
+                    Published: {article.publishedAt}
+                  </span>
+                </>
+              ) : null}
             </div>
             {article.slug === "vannamei-stocking-density" ? (
               <div style={{ marginTop: "28px" }}>
@@ -555,6 +579,58 @@ export default async function ResourceArticlePage({ params }: ResourcePageProps)
                         <span className="eyebrow" style={{ display: "block", marginTop: "6px" }}>{source.publisher}</span>
                       </a>
                     ))}
+                  </div>
+                </section>
+
+                <section style={{ marginTop: "64px", background: "var(--off-white)", border: "1px solid var(--slate)", borderRadius: "18px", padding: "32px" }}>
+                  <div className="eyebrow" style={{ marginBottom: "20px" }}>Author & Editorial Review</div>
+                  <div style={{ display: "grid", gap: "24px" }}>
+                    <div style={{ display: "flex", gap: "18px", alignItems: "flex-start" }}>
+                      <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "var(--sky)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "var(--navy)", fontSize: "1.15rem", flexShrink: 0 }}>
+                        {(article.author?.name || "S").charAt(0)}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--navy)" }}>
+                            Written by {article.author?.name ?? "Shrimply Technical Operations Team"}
+                          </span>
+                          <span style={{ fontSize: "0.85rem", color: "var(--ocean)", fontWeight: 600 }}>
+                            • {article.author?.role ?? "Aquaculture Specialists"}
+                          </span>
+                        </div>
+                        <p style={{ fontSize: "0.95rem", color: "var(--ocean)", lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
+                          {article.author?.bio ?? "Experienced vannamei shrimp farm practitioners and technical systems engineers dedicated to data-driven farm management, water quality precision, and biological yield optimization."}
+                        </p>
+                      </div>
+                    </div>
+
+                    {article.reviewer ? (
+                      <div style={{ display: "flex", gap: "18px", alignItems: "flex-start", borderTop: "1px solid var(--slate)", paddingTop: "22px" }}>
+                        <div style={{ width: "50px", height: "50px", borderRadius: "50%", background: "rgba(15, 76, 117, 0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: "var(--primary)", fontSize: "1.15rem", flexShrink: 0 }}>
+                          ✓
+                        </div>
+                        <div>
+                          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "8px", marginBottom: "6px" }}>
+                            <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--navy)" }}>
+                              Technical Review: {article.reviewer.name}
+                            </span>
+                            <span style={{ fontSize: "0.85rem", color: "var(--ocean)", fontWeight: 600 }}>
+                              • {article.reviewer.role}
+                            </span>
+                          </div>
+                          <p style={{ fontSize: "0.95rem", color: "var(--ocean)", lineHeight: 1.6, fontWeight: 500, margin: 0 }}>
+                            {article.reviewer.credentials}
+                          </p>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {(article.publishedAt || article.updatedAt) ? (
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", borderTop: "1px solid var(--slate)", paddingTop: "18px", fontSize: "0.84rem", color: "var(--ocean)", fontWeight: 600 }}>
+                        {article.publishedAt ? <span>Published: {article.publishedAt}</span> : null}
+                        {article.updatedAt ? <span>Last updated: {article.updatedAt}</span> : null}
+                      </div>
+                    ) : null}
                   </div>
                 </section>
 

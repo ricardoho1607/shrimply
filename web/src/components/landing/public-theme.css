@@ -19,7 +19,7 @@ body:has(.ocean-theme)::before { display: none; }
 .ocean-theme:not([data-public-page="auth"]) .lucide { display: none; }
 .ocean-theme .scroll-invitation .lucide { display: block; }
 .ocean-theme #navbar { background: rgba(248, 250, 251, .97) !important; border-bottom: 1px solid #dce5ea; box-shadow: none !important; backdrop-filter: none !important; }
-.ocean-theme[data-public-page="home"] #navbar { position: relative !important; min-height: 96px; padding-block: 22px !important; }
+.ocean-theme:is([data-public-page="home"], [data-public-page$="-software"], [data-public-page^="shrimp-"], [data-public-page="features"]) #navbar { position: relative !important; min-height: 96px; padding-block: 22px !important; }
 .ocean-theme #navbar .brand-word { display: none; }
 .ocean-theme #navbar .brand-logo { display: block; width: 145px; height: auto; }
 .ocean-theme #navbar :is(.nav-link, .signin-link) { font-family: var(--sans); color: #526e80; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
@@ -48,7 +48,7 @@ body:has(.ocean-theme)::before { display: none; }
 .ocean-theme[data-public-page="auth"] .auth-submit { border-radius: 7px; font-family: var(--sans); }
 .ocean-theme[data-public-page="auth"] .auth-form-panel .form-heading h2 { font-family: var(--serif); font-size: 36px; font-weight: 500; }
 @media (max-width: 800px) {
-  .ocean-theme[data-public-page="home"] #navbar { min-height: 78px; padding-block: 16px !important; }
+  .ocean-theme:is([data-public-page="home"], [data-public-page$="-software"], [data-public-page^="shrimp-"], [data-public-page="features"]) #navbar { min-height: 78px; padding-block: 16px !important; }
   .ocean-theme #navbar .brand-logo { width: 128px; }
   .ocean-theme .site-footer { padding: 52px 24px 32px !important; }
   .ocean-theme .site-footer-grid { gap: 32px !important; }

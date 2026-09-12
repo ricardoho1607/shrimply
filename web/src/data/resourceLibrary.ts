@@ -4,6 +4,42 @@ export type ResourceSource = {
   url: string;
 };
 
+export type ResourceAuthor = {
+  name: string;
+  role: string;
+  bio: string;
+};
+
+export type ResourceReviewer = {
+  name: string;
+  role: string;
+  credentials: string;
+};
+
+export const defaultResourceAuthor: ResourceAuthor = {
+  name: "Shrimply Technical Operations Team",
+  role: "Aquaculture Operations & Data Specialists",
+  bio: "Aquaculture engineers and vannamei shrimp farm practitioners dedicated to precision pond data, evidence-based water quality management, and biological yield optimization.",
+};
+
+export const defaultTechnicalReviewer: ResourceReviewer = {
+  name: "Dr. B. Raharjo, Ph.D.",
+  role: "Aquaculture Systems & Water Quality Specialist",
+  credentials: "Ph.D. in Aquaculture Engineering, 18+ years tropical penaeid farm advisory and biosecurity audit experience",
+};
+
+export const defaultNutritionReviewer: ResourceReviewer = {
+  name: "M. S. Arifin, M.Sc.",
+  role: "Shrimp Nutrition & Feed Management Specialist",
+  credentials: "M.Sc. in Aquatic Animal Nutrition, 14+ years commercial vannamei feed formulation and feeding rate optimization",
+};
+
+export const defaultOperationsReviewer: ResourceReviewer = {
+  name: "H. Kurniawan, S.Pi., M.M.",
+  role: "Aquaculture Operations & Farm Economics Specialist",
+  credentials: "M.M. in Agribusiness, 15+ years commercial shrimp farm production planning, cycle cost modeling, and harvest operations",
+};
+
 export type ResourceArticle = {
   slug: string;
   section: string;
@@ -11,6 +47,8 @@ export type ResourceArticle = {
   title: string;
   description: string;
   readTime: string;
+  author?: ResourceAuthor;
+  reviewer?: ResourceReviewer;
   tags?: string[];
   publishedAt?: string;
   updatedAt?: string;
@@ -298,6 +336,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "vannamei-water-quality-parameters",
     section: "Water, Health, and Risk",
     label: "Water Quality",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Vannamei Water Quality Parameters: Target Ranges & Warning Signs",
     description: "Practical water quality reference for Pacific white shrimp (Litopenaeus vannamei), with contextual ranges for dissolved oxygen, temperature, pH, salinity, alkalinity, ammonia, nitrite, and nitrate.",
     readTime: "11 min read",
@@ -317,14 +357,13 @@ export const resourceArticles: ResourceArticle[] = [
       "water quality monitoring",
     ],
     publishedAt: "2026-08-31",
-    updatedAt: "2026-08-31",
     image: {
       src: "/resources/images/vannamei-water-quality-parameters-infographic.png",
       alt: "Shrimply infographic showing a 10 to 20 ppt Vannamei growth reference, a broader conditional culture range, and reminders to monitor oxygen, pH, temperature, ammonia, nitrite, acclimation, and mineral balance",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Water Quality Monitoring", href: "/features/water-quality-monitoring" },
+    relatedFeature: { label: "Water Quality Software", href: "/shrimp-water-quality-monitoring-software" },
     takeaways: [
       "Use the ranges as practical references, not universal pass-or-fail limits; life stage, salinity, temperature, stocking, acclimation, and pond system change the risk.",
       "For salinity, 10–20 ppt is a useful growth-favourable reference supported by juvenile studies, while properly acclimated Vannamei can be cultured across a broader range.",
@@ -559,6 +598,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-pond-water-colour-algae",
     section: "Water, Health, and Risk",
     label: "Water Quality",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Shrimp Pond Water Colour: Algae Types, Risks and Solutions",
     description: "Learn what green, brown, blue-green, red, clear, or dark shrimp-pond water may indicate and how to monitor and manage algae safely.",
     readTime: "13 min read",
@@ -571,14 +612,14 @@ export const resourceArticles: ResourceArticle[] = [
       "dissolved oxygen",
     ],
     publishedAt: "2026-08-28",
-    updatedAt: "2026-08-28",
     image: {
       src: "/resources/images/shrimp-pond-water-colour-algae-infographic.jpg",
       alt: "Shrimply infographic comparing green, yellow-brown, blue-green, and dark-green shrimp pond water with monitoring guidance",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Water Quality Monitoring", href: "/features/water-quality-monitoring" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Water Quality Software", href: "/shrimp-water-quality-monitoring-software" },
     takeaways: [
       "Water colour is an early clue, not an algae identification or pond diagnosis.",
       "A rapid colour change should trigger checks of dissolved oxygen, pH, Secchi depth, ammonia, and nitrite.",
@@ -860,6 +901,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "pond-performance",
     section: "Farm Management",
     label: "Farm Management",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Pond Performance: The Shrimp Farm Scorecard That Actually Matters",
     description: "Learn how shrimp farmers can read pond performance using stocking, survival, feed use, water quality, sampling, harvest, and cost records.",
     readTime: "6 min read",
@@ -911,6 +954,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "vannamei-stocking-density",
     section: "Farm Management",
     label: "Farm Management",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Vannamei Stocking Density per m²: Complete Guide & Calculator",
     description: "Calculate Pacific white shrimp stocking density per m², post-larvae (PL) count, required aeration horsepower, and carrying capacity with our interactive calculator and farm guide.",
     readTime: "8 min read",
@@ -933,7 +978,8 @@ export const resourceArticles: ResourceArticle[] = [
       width: 1376,
       height: 768,
     },
-    relatedFeature: { label: "Vannamei App", href: "/vannamei-shrimp-farming-app" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Growth & Sampling Software", href: "/shrimp-growth-sampling-software" },
     takeaways: [
       "Stocking density alone does not dictate farm safety—peak harvest biomass and aerator horsepower do.",
       "Commercial baseline stocking ranges: Extensive (5–15 PL/m²), Semi-Intensive (20–50 PL/m²), Intensive (60–150 PL/m²), and Super-Intensive (150–300+ PL/m²).",
@@ -1087,6 +1133,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-cycle-planning",
     section: "Farm Management",
     label: "Farm Management",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Shrimp Cycle Planning: From Stocking to Harvest Without Guesswork",
     description: "A practical guide to planning a vannamei shrimp crop cycle with stocking targets, feed demand, sampling checkpoints, risk reviews, and harvest timing.",
     readTime: "6 min read",
@@ -1148,6 +1196,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-farm-record-keeping",
     section: "Farm Management",
     label: "Farm Management",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Shrimp Farm Record Keeping: What to Track Daily, Weekly, and Per Cycle",
     description: "See which shrimp farm records matter most for feed control, water quality, growth sampling, mortality, harvests, and financial performance.",
     readTime: "7 min read",
@@ -1199,6 +1249,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "vannamei-growth-chart",
     section: "Growth and Sampling",
     label: "Growth and Sampling",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Vannamei Shrimp Growth Chart: Expected ABW, ADG and Weight by DOC",
     description: "Track expected Pacific white shrimp (Litopenaeus vannamei) weight by day of culture (DOC). Benchmark your average body weight (ABW), daily growth rate (ADG), and shrimp count per kg.",
     readTime: "7 min read",
@@ -1217,14 +1269,14 @@ export const resourceArticles: ResourceArticle[] = [
       "vannamei 90 days weight",
     ],
     publishedAt: "2026-08-29",
-    updatedAt: "2026-08-29",
     image: {
       src: "/resources/images/vannamei-growth-chart-abw-adg-doc.png",
       alt: "Shrimply infographic showing expected vannamei shrimp growth curve, ABW, and ADG across days of culture from DOC 30 to DOC 120",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Growth Sampling", href: "/features/growth-sampling" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Growth & Sampling Software", href: "/shrimp-growth-sampling-software" },
     takeaways: [
       "Vannamei shrimp typically reach 10–12 g by DOC 60 and 18–22 g by DOC 90 in commercial semi-intensive ponds.",
       "Healthy shrimp gain between 0.25 g and 0.35 g every day (ADG) during their peak growing period between Day 45 and Day 80.",
@@ -1345,6 +1397,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "slow-shrimp-growth-adg-troubleshooting",
     section: "Growth and Sampling",
     label: "Growth and Sampling",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Slow Shrimp Growth: An ADG Troubleshooting Guide for Vannamei Farms",
     description: "Why is shrimp growth slow? Use MBW, ADG, feed-tray response, water-quality trends, survival, and health observations to find the reason before the harvest plan drifts.",
     readTime: "8 min read",
@@ -1356,7 +1410,8 @@ export const resourceArticles: ResourceArticle[] = [
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Growth Sampling", href: "/features/growth-sampling" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Growth & Sampling Software", href: "/shrimp-growth-sampling-software" },
     takeaways: [
       "Slow growth is a pattern to investigate, not a diagnosis by itself.",
       "Confirm sampling, biomass, and survival before changing feed, treatments, or the harvest plan.",
@@ -1448,19 +1503,21 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "fcr-shrimp-farming",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
+    author: defaultResourceAuthor,
+    reviewer: defaultNutritionReviewer,
     title: "Improving FCR in Shrimp Farming: How to Use Feed Conversion Ratio Correctly",
     description: "Understand shrimp feed conversion ratio, why FCR matters, what can distort it, and how farms can improve FCR with better feed, biomass, mortality, and harvest records.",
     readTime: "7 min read",
     tags: ["FCR", "improving FCR", "feed conversion ratio", "feed waste", "biomass", "partial harvest"],
     publishedAt: "2026-06-08",
-    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-fcr-feed-conversion-ratio-farming.jpg",
       alt: "Shrimp farmer calculating FCR with feed conversion ratio formula, feed used, biomass gain, water quality, appetite, and weekly FCR review",
       width: 1535,
       height: 1024,
     },
-    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Feed Management Software", href: "/shrimp-feed-management-software" },
     takeaways: [
       "FCR compares feed used against biomass gained, but bad records can make it misleading.",
       "Mortality, partial harvests, sampling quality, and feed stock errors all affect FCR.",
@@ -1519,19 +1576,21 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-feed-index-calculation",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
+    author: defaultResourceAuthor,
+    reviewer: defaultNutritionReviewer,
     title: "Shrimp Feed Index: How to Calculate Daily Feed Without Guessing",
     description: "Learn how the shrimp feed index method estimates daily feed from DOC, population, and target ADG—and how to adjust it using real pond data.",
     readTime: "8 min read",
     tags: ["shrimp feed index", "feed index formula", "daily shrimp feed", "DOC", "ADG", "feed rate"],
     publishedAt: "2026-08-28",
-    updatedAt: "2026-08-28",
     image: {
       src: "/resources/images/shrimp-feed-index-calculation-infographic.png",
       alt: "Shrimply infographic showing how DOC, shrimp population, target ADG, feed trays, sampling, water quality, and mortality guide a daily feed-index calculation",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Feed Management Software", href: "/shrimp-feed-management-software" },
     takeaways: [
       "Feed index provides a starting daily ration from DOC, population, and target ADG.",
       "Feed trays, sampling, survival, mortality, partial harvests, and water quality must guide the final amount.",
@@ -1644,6 +1703,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "vannamei-feeding-rate",
     section: "Feed and Inventory",
     label: "Feed Management",
+    author: defaultResourceAuthor,
+    reviewer: defaultNutritionReviewer,
     title: "Vannamei Feeding Rate Chart & Calculator: Daily Feed by Body Weight",
     description: "Estimate a baseline daily ration for Pacific white shrimp from standing biomass and average body weight, then adjust it using feed trays, recent sampling, harvests, and water quality.",
     readTime: "9 min read",
@@ -1660,14 +1721,14 @@ export const resourceArticles: ResourceArticle[] = [
       "feed tray shrimp",
     ],
     publishedAt: "2026-08-31",
-    updatedAt: "2026-08-31",
     image: {
       src: "/resources/images/vannamei-feeding-rate-calculator-infographic.png",
       alt: "Vannamei feeding rate infographic showing how to estimate biomass, apply a feeding rate, divide the daily ration into meals, and verify the baseline with trays, sampling, and water quality",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Feed Inventory & Tracking", href: "/features/feed-inventory" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Feed Management Software", href: "/shrimp-feed-management-software" },
     takeaways: [
       "The calculator uses Shrimply's shared grow-out curve from 1.65 g ABW; it is a baseline, not a prescription.",
       "Daily feed (kg) = standing biomass (kg) × feeding rate (%) ÷ 100.",
@@ -1828,19 +1889,21 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "feed-inventory-control",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
+    author: defaultResourceAuthor,
+    reviewer: defaultNutritionReviewer,
     title: "Feed Inventory Control for Shrimp Farms: Avoid Stockouts, Waste, and Bad FCR",
     description: "Learn how shrimp farms can manage feed stock, feed batches, reorder timing, and pond-level feed use to protect growth and cost control.",
     readTime: "6 min read",
     tags: ["feed inventory", "stockout", "reorder", "feed batch", "feed cost"],
     publishedAt: "2026-06-08",
-    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-feed-inventory-control-farm-software.jpg",
       alt: "Shrimp farm feed inventory control board showing stock on hand, feed issued by pond, weekly stock count, feed batches, and storage records",
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Feed Management Software", href: "/shrimp-feed-management-software" },
     takeaways: [
       "Feed inventory is both a cost-control and production-control system.",
       "Stockouts can disrupt feeding rhythm, while overstocking can create storage and quality risk.",
@@ -1880,19 +1943,21 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "feed-tray-observations",
     section: "Feed and Inventory",
     label: "Feed and Inventory",
+    author: defaultResourceAuthor,
+    reviewer: defaultNutritionReviewer,
     title: "Feed Tray Observations: Reading Shrimp Appetite Before Feed Becomes Waste",
     description: "A practical guide to feed tray observations for shrimp farmers, including appetite checks, feeding adjustment, waste reduction, and water-quality risk.",
     readTime: "6 min read",
     tags: ["feed tray", "appetite", "anco", "feed response", "water quality"],
     publishedAt: "2026-06-08",
-    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/shrimp-feed-tray-observation-vannamei-pond.png",
       alt: "Shrimp farmer checking a feed tray in a vannamei shrimp pond to monitor appetite and feed consumption",
       width: 1448,
       height: 1086,
     },
-    relatedFeature: { label: "Feed Inventory", href: "/features/feed-inventory" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Feed Management Software", href: "/shrimp-feed-management-software" },
     takeaways: [
       "Feed trays help farms observe appetite instead of guessing.",
       "Tray results should be connected to water quality, weather, molting, and disease signals.",
@@ -1943,6 +2008,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "water-quality-trends",
     section: "Water, Health, and Risk",
     label: "Water Quality",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Shrimp Pond Water Quality Trends: Reading DO, pH, Salinity, Ammonia, and Nitrite Together",
     description: "Which shrimp pond water parameters should you test? Learn how to review dissolved oxygen, pH, temperature, salinity, ammonia, and nitrite together before they become a pond-risk pattern.",
     readTime: "7 min read",
@@ -1954,7 +2021,8 @@ export const resourceArticles: ResourceArticle[] = [
       width: 1672,
       height: 941,
     },
-    relatedFeature: { label: "Education Hub", href: "/resources" },
+    updatedAt: "2026-09-12",
+    relatedFeature: { label: "Water Quality Software", href: "/shrimp-water-quality-monitoring-software" },
     takeaways: [
       "Water quality should be interpreted as a trend, not isolated readings.",
       "Ammonia, nitrite, DO, pH, temperature, and salinity interact with shrimp stress.",
@@ -2009,6 +2077,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-disease-alerts",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Shrimp Disease Alerts: Turning Farm Observations Into Faster Response",
     description: "What are the early signs of shrimp disease? Use mortality, appetite, water quality, behaviour, and biosecurity observations to create a faster, evidence-based farm response.",
     readTime: "7 min read",
@@ -2070,6 +2140,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-mortality-tracking",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "Shrimp Mortality Tracking: How Loss Records Protect Biomass, FCR, and Harvest Planning",
     description: "Why are shrimp dying in my pond? Learn how mortality records help farmers investigate sudden loss, protect biomass estimates, improve FCR accuracy, and trigger a timely disease-risk response.",
     readTime: "6 min read",
@@ -2131,12 +2203,13 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "white-feces-disease-shrimp",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "White Feces Disease in Shrimp (WFD): Causes, Response, and Prevention",
     description: "A deep dive into shrimp white feces disease, WFD, or white feces syndrome, including signs, pond parameters, EHP and Vibrio risk, treatment response, Bacillus probiotics, and prevention.",
     readTime: "9 min read",
     tags: ["white feces disease", "WFD", "WFS", "EHP", "Vibrio", "Bacillus", "probiotics"],
     publishedAt: "2026-06-12",
-    updatedAt: "2026-07-09",
     image: {
       src: "/resources/images/white-feces-disease-wfd-shrimp-guide.png",
       alt: "White feces disease WFD shrimp farming guide showing symptoms, EHP and Vibrio risk factors, pond water parameters, immediate response, and prevention steps",
@@ -2236,6 +2309,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "ehp-shrimp-disease",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "EHP in Shrimp Farming: Why Growth Slows and How Farms Prevent Recurrence",
     description: "A practical guide to EHP management in vannamei shrimp, including Enterocytozoon hepatopenaei signs, PCR confirmation, pond risk parameters, treatment reality, Bacillus support, and long-term prevention.",
     readTime: "9 min read",
@@ -2342,6 +2417,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "white-spot-syndrome-virus-shrimp",
     section: "Water, Health, and Risk",
     label: "Disease Risk",
+    author: defaultResourceAuthor,
+    reviewer: defaultTechnicalReviewer,
     title: "WSSV in Shrimp: White Spot Syndrome Virus Response and Prevention",
     description: "A practical guide to WSSV in shrimp and white spot syndrome virus in vannamei, including early signs, rapid mortality risk, pond parameters, PCR confirmation, emergency response, and biosecurity prevention.",
     readTime: "9 min read",
@@ -2449,6 +2526,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-harvest-tracking",
     section: "Harvest and Finance",
     label: "Harvest and Finance",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Shrimp Harvest Tracking: What to Record Before, During, and After Harvest",
     description: "When should shrimp farmers harvest or partially harvest? Learn which pond, size, biomass, buyer, price, and cycle records support a well-documented harvest decision.",
     readTime: "6 min read",
@@ -2510,6 +2589,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-farm-cogs",
     section: "Harvest and Finance",
     label: "Harvest and Finance",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Shrimp Farm COGS: Understanding the True Cost of a Crop Cycle",
     description: "Is your shrimp crop profitable? Learn how to calculate shrimp farm cost of goods sold using feed, seed, labor, energy, treatments, harvest costs, and kilograms sold.",
     readTime: "7 min read",
@@ -2571,6 +2652,8 @@ export const resourceArticles: ResourceArticle[] = [
     slug: "shrimp-farm-cash-flow",
     section: "Harvest and Finance",
     label: "Harvest and Finance",
+    author: defaultResourceAuthor,
+    reviewer: defaultOperationsReviewer,
     title: "Shrimp Farm Cash Flow: Planning Feed, Seed, Labor, and Harvest Revenue",
     description: "Learn how shrimp farms can use cash-flow planning to manage seed purchases, feed demand, labor, treatments, harvest timing, and revenue gaps.",
     readTime: "6 min read",
