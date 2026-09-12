@@ -14,8 +14,27 @@ const ISSUE_CODES = new Set([
 ]);
 const asArray = value => Array.isArray(value) ? value : [];
 
+const REQUESTED_CONCEPTS = [
+  { id: 'TAN', question: /\btan\b/i, answer: /\btan\b/i },
+  { id: 'NH3', question: /\bnh3\b/i, answer: /\bnh3\b/i },
+  { id: 'NH4', question: /\bnh4\b/i, answer: /\bnh4\b/i },
+  { id: 'nitrite', question: /\b(?:nitrite|nitrit|no2)\b/i, answer: /\b(?:nitrite|nitrit|no2)\b/i },
+  { id: 'nitrate', question: /\b(?:nitrate|nitrat|no3)\b/i, answer: /\b(?:nitrate|nitrat|no3)\b/i },
+  { id: 'pH', question: /\bph\b/i, answer: /\bph\b/i },
+  { id: 'temperature', question: /\b(?:temperature|suhu|nhiệt độ)\b|อุณหภูมิ|温度/u, answer: /\b(?:temperature|suhu|nhiệt độ)\b|อุณหภูมิ|温度/u },
+];
+const normalizeChemistryText = value => String(value || '').normalize('NFKC').replace(/[−–—]/g, '-');
+const requestedConcepts = question => REQUESTED_CONCEPTS.filter(concept => concept.question.test(normalizeChemistryText(question)));
+const requiresRequestedItemCoverage = question => requestedConcepts(question).length >= 2;
+const requestedItemCoverageIssues = (text, question) => {
+  const requested = requestedConcepts(question);
+  if (requested.length < 2) return [];
+  const answer = normalizeChemistryText(text);
+  return requested.some(concept => !concept.answer.test(answer)) ? ['scope_or_language'] : [];
+};
+
 const isNitrogenThresholdGuidance = question => (
-  /\b(?:nitrite|nitrate|nitrit|nitrat|no2|no3)\b/i.test(String(question))
+  /\b(?:nitrogen|nitrite|nitrate|nitrit|nitrat|ammonia|amonia|tan|nh3|nh4|no2|no3)\b/i.test(String(question))
   && /\b(?:best|safe|target|range|level|limit|threshold|risk|toxic|lethal|worry|recommended|aman|target|rentang|kadar|batas|risiko|toksik|mematikan|khawatir|rekomendasi)\b/i.test(String(question))
 );
 
@@ -124,7 +143,7 @@ const getClaimLimits = (prompt) => {
 };
 
 const findUnsupportedClaims = (text, limits) => {
-  const issues = new Set(nitrogenGuidanceIssues(text, limits.question));
+  const issues = new Set([...nitrogenGuidanceIssues(text, limits.question), ...requestedItemCoverageIssues(text, limits.question)]);
   const plain = String(text).replace(/[*_`]/g, '').replace(/^#{1,6}\s*/gm, '').replace(/[—–]/g, '-');
   const sentences = plain.split(/\n|(?<=[.!?])\s+(?=[A-Z])|;\s*|,?\s+(?:but|although|however)\s+/);
   for (const sentence of sentences) {
@@ -170,6 +189,7 @@ const REVIEW_INSTRUCTION = [
   'A plausible mechanism is not a farm finding. Preserve low-risk conditional actions without inventing a diagnosis, chemical dose, antibiotic, automatic feed percentage, or measured consumption.',
   'For pond_diagnostic keep the five requested sections, at most three supported hypotheses with evidence and missing evidence, at most three focused checks, and target 250-350 words unless the user requested a full dated list. Each cause has exactly one confidence label: low or moderate, never a range. Do not force any causes when none are supported.',
   'Preserve exact-record scope, suppressed advice, units, dates, comparison bases, user-reported attribution and the language requested by the user. Keep mortality timeline format when requested.',
+  'Address every analyte, metric, pond, comparison and sub-question explicitly requested by the user. A concise answer may still be complete.',
   'Treat any deterministic_issues as mandatory corrections. Review all other claims too, including arithmetic, timing, missing data, nitrogen units, confidence and unsupported causes.',
   `Return only JSON. Allowed issue codes: ${[...ISSUE_CODES].join(', ')}.`,
   'If the entire draft meets these rules, return {"status":"pass","issues":[]}. Otherwise return {"status":"rewrite","issues":["issue_code"],"answer":"the complete corrected answer in the requested language"}.',
@@ -199,8 +219,8 @@ const buildFactualFallback = limits => {
   const copy = FALLBACK_COPY[language];
   if (isNitrogenThresholdGuidance(limits.question)) {
     return language === 'id'
-      ? 'Saya belum dapat memverifikasi satu batas nitrogen yang aman untuk semua tambak. Pastikan hasil uji menyebut NO2-N atau ion NO2, atau NO3-N atau ion NO3, lalu gunakan panduan setempat yang sesuai dengan salinitas, ukuran udang, dan lama paparan.'
-      : 'I could not verify one nitrogen threshold that is safe for every pond. Confirm whether the test reports NO2-N or NO2 ion, or NO3-N or NO3 ion, then use local guidance for the pond salinity, shrimp size, and exposure duration.';
+      ? 'Saya belum dapat memverifikasi satu batas nitrogen yang aman untuk semua tambak. Pastikan hasil uji menyebut TAN, NH3, NH3-N, NH4, NO2-N atau ion NO2, atau NO3-N atau ion NO3, beserta satuannya; lalu gunakan panduan yang sesuai dengan pH, suhu, salinitas, ukuran udang, dan lama paparan.'
+      : 'I could not verify one nitrogen threshold that is safe for every pond. Confirm whether the test reports TAN, NH3, NH3-N, NH4, NO2-N or NO2 ion, or NO3-N or NO3 ion, with units; then use guidance matching pH, temperature, salinity, shrimp size, and exposure duration.';
   }
   const facts = [];
   if (limits.focus.exact_record_lookup && Array.isArray(limits.exactRecords?.records)) {
@@ -234,7 +254,7 @@ const buildFactualFallback = limits => {
 
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
-  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)) {
+  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question) && !requiresRequestedItemCoverage(limits.question)) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }
   const settings = getOrsonGenerationSettings(mode);
@@ -295,4 +315,4 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     reviewOutputTokens: reviewTokens, reviewFinishReason };
 };
 
-module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues };
+module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues, requiresRequestedItemCoverage, requestedItemCoverageIssues };

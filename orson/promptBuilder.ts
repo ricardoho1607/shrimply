@@ -1,4 +1,4 @@
-import { isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy';
+import { getOrsonRequestConstraints, isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy';
 import {
   ORSON_PRODUCT_PROMISE,
   ORSON_RESPONSE_PRINCIPLES,
@@ -39,7 +39,7 @@ const FARM_SPECIFIC_PATTERNS = [
   /\b(kolam|tambak)\s+(saya|kami|ini|semua|sim-[a-z0-9-]+)\b/i,
   /\b(analisis|periksa)\b/i,
   /\b(seluruh|semua)\s+(kolam|tambak)\b/i,
-  /\bmy\s+(pond|farm|shrimp|feed|water|harvest|stock|stocking|biomass)\b/i,
+  /\bmy\s+(ponds?|farm|shrimp|feed|water|harvest|stock|stocking|biomass)\b/i,
   /\b(this|that|the)\s+(pond|farm|projection|harvest|feed|water)\b/i,
   /\bpond\s+[a-z0-9-]+\b/i,
   /\bhow\s+(is|are)\s+(my|the|this)\b/i,
@@ -104,6 +104,7 @@ const AQUACULTURE_SCOPE_PATTERNS = [
   /\bhepatopancreas\b/i,
   /\bgill(s)?\b/i,
   /\bammonia\b/i,
+  /\bnitrogen\b/i,
   /\bnitrite\b/i,
   /\bnitrate\b/i,
   /\bsalinity\b/i,
@@ -207,7 +208,7 @@ const SUMMARY_PATTERNS = [
 
 const COMPARISON_PATTERNS = [
   /\bcompar(e|ison|ing)\b/i,
-  /\bwhich\s+(pond|one)\b/i,
+  /\bwhich\s+(ponds?|one)\b/i,
   /\brank(\s+my)?\s+ponds\b/i,
   /\bbest\s+pond\b/i,
   /\bworst\s+pond\b/i,
@@ -222,7 +223,7 @@ const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
   { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
   { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i, /\bincrease\s+feed\b/i, /\bdecrease\s+feed\b/i, /\bcut\s+feed\b/i] },
   { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
-  { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bammonia\b/i, /\bnitrite\b/i, /\bnitrate\b/i, /\bphosphate\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
+  { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bammonia\b/i, /\bnitrogen\b/i, /\bnitrite\b/i, /\bnitrate\b/i, /\bphosphate\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
   { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
   { intent: 'biomass', patterns: [/\bbiomass\b/i, /\bpopulation\b/i, /\bstock(ing)?\b/i] },
   { intent: 'survival', patterns: [/\bsurvival\b/i, /\bmortality\b/i, /\bdead\b/i] },
@@ -504,6 +505,7 @@ export const buildOrsonQuestionFocus = (
   payloads: OrsonPromptPondPayload[],
   conversationHistory: OrsonConversationMessage[] = [],
 ): OrsonQuestionFocus => {
+  const requestConstraints = getOrsonRequestConstraints(question);
   const normalizedQuestion = normalizeSearchText(question);
   const mentionedPayloads = payloads.filter((payload) => {
     return includesSearchTerm(normalizedQuestion, payload.pondName) ||
@@ -554,6 +556,8 @@ export const buildOrsonQuestionFocus = (
     requestedFields,
     requestedRecordCount,
     suppressAdvice: NO_ADVICE_PATTERN.test(question),
+    suppressTreatmentAdvice: requestConstraints.suppressTreatmentAdvice,
+    suppressPondAnalysis: requestConstraints.suppressPondAnalysis,
     isPondSpecific: focusedPayload !== null,
     isComparison,
     comparedPondNames: mentionedPayloads.map((p) => p.pondName),
@@ -582,8 +586,9 @@ const orderPayloadsForQuestion = (
   if (focus.isComparison) {
     const compared = payloads.filter((p) => focus.comparedPondNames?.includes(p.pondName));
     if (compared.length > 0) return compared.slice(0, 10);
-    const others = payloads.filter((p) => !focus.comparedPondNames?.includes(p.pondName));
-    return [...compared, ...others].slice(0, 10);
+    return [...payloads]
+      .sort((a, b) => getHighestPayloadSeverity(b) - getHighestPayloadSeverity(a))
+      .slice(0, 10);
   }
 
   if (!focus.isPondSpecific) {
@@ -733,6 +738,9 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '',
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
+    '- The suggested route is advisory. Use one coherent answer path and choose authorized app-data tools from the actual request; never replace a general educational answer with an inventory or treatment response merely because treatment terminology is mentioned.',
+    '- Respect explicit exclusions in the current question. If ORSON QUESTION FOCUS sets suppress_treatment_advice, do not recommend products, calculate doses, load inventory for treatment selection, or ask for dosing inputs. If it sets suppress_pond_analysis, do not analyze or retrieve a specific pond.',
+    '- Address every explicitly requested analyte, metric, pond, comparison, or sub-question before adding optional context.',
     '- If ORSON QUESTION FOCUS sets suppress_advice to true, do not provide advice, recommendations, treatments, actions, warnings, or next steps.',
     '- If ORSON QUESTION FOCUS sets exact_record_lookup to true, compare only the requested dated records. Do not interpret the word compare as a request for a multi-pond ranking.',
     '- Follow the actual question and conversation. ORSON QUESTION FOCUS helps select context but does not restrict the conversation. Retrieve additional authorized app records when needed.',
@@ -777,6 +785,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
       '',
       'MORTALITY DIAGNOSTIC SAFETY:',
       '- Use ORSON MORTALITY TRACE to explain the dated sequence across the previous 14 farm-calendar days.',
+      '- For a reported sudden change, use an authorized pond-timeline lookup for a 30-day baseline unless the supplied trace already contains an equally complete or longer window. Present only recorded points and never interpolate missing days.',
       '- Rank environmental, operational, and biological contributors by evidence; timing alone does not prove causation.',
       '- A change in logged feed allocation alone cannot establish appetite; use direct tray or feeding-response observations when available.',
       '- Account for partial harvest before interpreting lower feed, biomass, population, survival, or mortality rate.',
@@ -1088,6 +1097,8 @@ export const buildOrsonPromptContext = (
         requested_record_count: questionFocus.requestedRecordCount,
         requested_fields: questionFocus.requestedFields,
         suppress_advice: questionFocus.suppressAdvice,
+        suppress_treatment_advice: questionFocus.suppressTreatmentAdvice,
+        suppress_pond_analysis: questionFocus.suppressPondAnalysis,
         exact_record_lookup: true,
       }, null, 2),
       '',
@@ -1347,6 +1358,8 @@ export const buildOrsonPromptContext = (
       requested_dates: questionFocus.requestedDates,
       requested_fields: questionFocus.requestedFields,
       suppress_advice: questionFocus.suppressAdvice,
+      suppress_treatment_advice: questionFocus.suppressTreatmentAdvice,
+      suppress_pond_analysis: questionFocus.suppressPondAnalysis,
       is_pond_specific: questionFocus.isPondSpecific,
       detailed_history_included: questionFocus.requiresDetailedHistory,
       should_summarize: questionFocus.shouldSummarize,

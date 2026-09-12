@@ -19,7 +19,7 @@ const MORTALITY_PATTERNS = [
 
 const INVESTIGATION_PATTERNS = [
   /\bwhy\b/i, /\bcause[ds]?\b/i, /\breasons?\b/i, /\binvestigat(e|ion)\b/i, /\bdiagnos(e|is|tic)\b/i,
-  /\btrace(?: back)?\b/i, /\blook back\b/i, /\bpinpoint\b/i, /\bwhat (?:has )?happened\b/i, /\bwhat might happen\b/i,
+  /\btrace(?: back)?\b/i, /\blook back\b/i, /\btake a look\b/i, /\bpinpoint\b/i, /\bwhat (?:has )?happened\b/i, /\bwhat went wrong\b/i, /\bwhat might happen\b/i,
   /\bkenapa\b/i, /\bmengapa\b/i, /\bpenyebab\b/i, /\btelusuri\b/i, /tại sao/i, /nguyên nhân/i,
   /điều tra/i, /ทำไม/u, /สาเหตุ/u, /ตรวจสอบ/u, /为什么/u, /為什麼/u, /原因/u, /调查/u, /調查/u,
 ];

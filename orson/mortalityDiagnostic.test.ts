@@ -8,6 +8,7 @@ const assert = (condition: unknown, message: string) => {
 
 export const runMortalityDiagnosticSelfTest = () => {
   assert(isMortalityDiagnosticQuestion('Mortality is high in A1. Can you pinpoint why?'), 'detects mortality investigation');
+  assert(isMortalityDiagnosticQuestion('I have a sudden fluctuation of mortality. Can you take a look at Pond A to see what went wrong?'), 'detects natural mortality timeline requests');
   assert(!isMortalityDiagnosticQuestion('What is the mortality in A1?'), 'does not activate for a factual mortality question');
 
   const pond = {

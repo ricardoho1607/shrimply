@@ -715,6 +715,8 @@ export interface OrsonQuestionFocus {
   requestedFields: string[];
   requestedRecordCount: number | null;
   suppressAdvice: boolean;
+  suppressTreatmentAdvice: boolean;
+  suppressPondAnalysis: boolean;
   isPondSpecific: boolean;
   isComparison?: boolean;
   comparedPondNames?: string[];

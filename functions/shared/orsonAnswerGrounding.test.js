@@ -146,6 +146,22 @@ test('general knowledge retains streaming with one model call', async () => {
   assert.equal(result.groundingStatus, 'not_required');
 });
 
+test('multi-analyte education is reviewed and cannot omit requested concepts', async () => {
+  const question = 'Secara umum, jelaskan TAN, NH3, NH4, nitrit, pH, dan suhu. Jangan memberi dosis perlakuan.';
+  const prompt = `ORSON QUESTION FOCUS:\n{"route":"aquaculture_knowledge","suppress_treatment_advice":true}\n\nUSER QUESTION:\n${question}`;
+  const responses = [
+    reply('TAN adalah total ammonia nitrogen.'),
+    reply(JSON.stringify({ status: 'rewrite', issues: ['scope_or_language'], answer: 'TAN mencakup bentuk nitrogen amonia; NH3 adalah amonia tak terionisasi; NH4 adalah amonium; nitrit adalah produk oksidasi nitrogen berikutnya. pH dan suhu memengaruhi fraksi NH3. Tidak ada dosis perlakuan.' })),
+  ];
+  const result = await generateGroundedOrsonResponse({
+    prompt, mode: 'standard', questionRoute: 'aquaculture_knowledge',
+    generate: async () => responses.shift(),
+  });
+
+  assert.equal(result.groundingStatus, 'revised');
+  for (const concept of ['TAN', 'NH3', 'NH4', 'nitrit', 'pH', 'suhu']) assert.match(result.text, new RegExp(concept, 'i'));
+});
+
 test('nitrogen guidance rejects missing bases and conflicting threshold purposes', () => {
   const question = 'What is a safe nitrite level and when does it become lethal?';
   const unsafe = 'Salinity, shrimp size, and exposure duration change risk. Safe nitrite is 0.25 mg/L as NO2-N. Nitrite above 0.1 mg/L can be lethal.';

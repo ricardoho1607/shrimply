@@ -52,6 +52,24 @@ test("product context rejects unsafe label links", () => {
   assert.equal(products[0].product_label.source_url, null);
 });
 
+test("product context removes floating-point artifacts before Muse sees inventory", () => {
+  const [product] = __test.normalizeOrsonProductDocuments([{
+    id: "mineral",
+    data: () => ({
+      additiveName: "Mineral blend",
+      totalStock: 6415.800000000001,
+      usageHistory: [{ date: "2026-09-12", quantity: 1.2000000000000002, ppm: 2.5000000000000004 }],
+      treatmentMixRecipe: { yieldLiters: 100.00000000000001, components: [{ additiveName: "A", quantity: 3.3000000000000003, unit: "kg" }] },
+    }),
+  }], "What is in stock?");
+
+  assert.equal(product.current_stock, 6415.8);
+  assert.equal(product.recent_usage[0].quantity, 1.2);
+  assert.equal(product.recent_usage[0].ppm, 2.5);
+  assert.equal(product.treatment_mix_recipe.yield_liters, 100);
+  assert.equal(product.treatment_mix_recipe.components[0].quantity, 3.3);
+});
+
 test("server instructions keep general knowledge and unrelated questions away from pond summaries", () => {
   const knowledge = __test.buildServerOrsonSystemInstruction("standard", "chat", "aquaculture_knowledge");
   const unrelated = __test.buildServerOrsonSystemInstruction("standard", "chat", "out_of_scope");
@@ -71,6 +89,10 @@ test("server instructions preserve exact-record and no-advice constraints", () =
   assert.match(instructions, /If ORSON EXACT RECORDS is present/);
   assert.match(instructions, /suppress_advice to true/);
   assert.match(instructions, /Do not interpret the word compare as a request for a multi-pond ranking/);
+  assert.match(instructions, /suggested route is advisory/);
+  assert.match(instructions, /suppress_treatment_advice/);
+  assert.match(instructions, /Address every explicitly requested analyte/);
+  assert.match(instructions, /read_pond_timeline/);
 });
 
 test("server pond diagnostics rank evidence and keep actions conditional", () => {
@@ -97,6 +119,8 @@ test("mortality diagnostics never reinterpret logged allocation as appetite", ()
   const instructions = __test.buildServerOrsonSystemInstruction("mortality_diagnostic", "chat", "farm_analysis");
   assert.doesNotMatch(instructions, /low-confidence appetite proxy/);
   assert.match(instructions, /allocation alone cannot establish appetite/);
+  assert.match(instructions, /read_pond_timeline for a 30-day baseline/);
+  assert.match(instructions, /lineSeries/);
 });
 
 test("treatment questions search and retain alternative stock", () => {

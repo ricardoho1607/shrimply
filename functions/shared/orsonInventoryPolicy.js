@@ -1,6 +1,35 @@
 'use strict';
 
-const isTreatmentQuestion = (message = '') => /(?:\b(?:dosis|takaran|kapur|kalsium|liều|vôi)\b|ปูน|ปริมาณ|เท่าไหร่|剂量|劑量|石灰|用多少)/iu.test(message) || /\b(?:how much|how many|can i use)\b[^?]{0,80}\b(?:add|apply|use|bags?|sacks?|calcium|magnesium|lime|chemical|probiotic)\b/i.test(message) || /\b(dos(?:e|es|ing|age)|formula|recommend\w*|what\s+should\s+i\s+use|what\s+(?:can|should)\s+i\s+add)\b/i.test(message) || /\b(increase|raise|reduce|lower|decrease|correct|adjust)\b[\s\S]{0,80}\b(calcium|magnesium|alkalinity|hardness|ph|ammonia|nitrite|nitrate|salinity|oxygen|something)\b/i.test(message);
+const TREATMENT_OPT_OUT_PATTERNS = [
+  /\b(?:do\s+not|don't|without|no)\b[^.!?\n]{0,120}\b(?:dos(?:e|age|ing)|treatment|application amount|product recommendation)\b/i,
+  /\b(?:jangan|tanpa|tidak\s+perlu|tidak\s+usah)\b[^.!?\n]{0,120}\b(?:dosis|takaran|perlakuan|pengobatan|rekomendasi produk)\b/iu,
+  /\b(?:không|đừng)\b[^.!?\n]{0,120}\b(?:liều|điều trị)\b/iu,
+  /(?:ไม่ต้อง|ห้าม)[^.!?\n]{0,120}(?:ปริมาณ|การรักษา)/u,
+  /(?:不要|无需|不需要)[^.!?\n]{0,120}(?:剂量|劑量|治疗|治療|用药|用藥)/u,
+];
+
+const POND_ANALYSIS_OPT_OUT_PATTERNS = [
+  /\b(?:do\s+not|don't|without|no|not\s+(?:a\s+)?)\b[^.!?\n]{0,100}\b(?:pond|farm)(?:-specific)?\s+(?:analysis|assessment)\b/i,
+  /\b(?:do\s+not|don't)\b[^.!?\n]{0,60}\banaly[sz]e\b[^.!?\n]{0,60}\b(?:pond|farm)\b/i,
+  /\b(?:jangan|tanpa|bukan)\b[^.!?\n]{0,100}\b(?:analisis|menganalisis)\s+(?:kolam|tambak)\b/iu,
+  /\b(?:không|đừng)\b[^.!?\n]{0,100}\b(?:phân tích)\s+(?:ao|trại)\b/iu,
+  /(?:ไม่ต้อง|ห้าม)[^.!?\n]{0,100}(?:วิเคราะห์)(?:บ่อ|ฟาร์ม)/u,
+  /(?:不要|无需|不需要)[^.!?\n]{0,100}(?:分析)(?:池塘|养殖场|養殖場)/u,
+];
+
+const getOrsonRequestConstraints = (message = '') => ({
+  suppressTreatmentAdvice: TREATMENT_OPT_OUT_PATTERNS.some((pattern) => pattern.test(String(message))),
+  suppressPondAnalysis: POND_ANALYSIS_OPT_OUT_PATTERNS.some((pattern) => pattern.test(String(message))),
+});
+
+const isTreatmentQuestion = (message = '') => {
+  const text = String(message);
+  if (getOrsonRequestConstraints(text).suppressTreatmentAdvice) return false;
+  return /(?:\b(?:dosis|takaran|kapur|kalsium|liều|vôi)\b|ปูน|ปริมาณ|เท่าไหร่|剂量|劑量|石灰|用多少)/iu.test(text)
+    || /\b(?:how much|how many|can i use)\b[^?]{0,80}\b(?:add|apply|use|bags?|sacks?|calcium|magnesium|lime|chemical|probiotic)\b/i.test(text)
+    || /\b(dos(?:e|es|ing|age)|formula|recommend\w*|what\s+should\s+i\s+use|what\s+(?:can|should)\s+i\s+add)\b/i.test(text)
+    || /\b(increase|raise|reduce|lower|decrease|correct|adjust)\b[\s\S]{0,80}\b(calcium|magnesium|alkalinity|hardness|ph|ammonia|nitrite|nitrate|salinity|oxygen|something)\b/i.test(text);
+};
 const needsInventoryContext = (route, message = '') => route !== 'out_of_scope' && (route === 'inventory_product' || isTreatmentQuestion(message) || /\b(inventory|invetory|stock)\b/i.test(message));
 
 const INVENTORY_DOSING_RULES = [
@@ -12,4 +41,4 @@ const INVENTORY_DOSING_RULES = [
   'This mass-balance formula is a theoretical addition, not proof of a safe or effective field dose. Never use it for lowering a parameter, pH adjustment, lime dissolution, probiotics, ammonia or nitrite removal without a separately verified applicable method. Do not promise a product removes a measured amount. Consider salinity, pH, alkalinity, oxygen, shrimp stage and recent treatments, label limits, staged application and retesting; withhold dosing when suitability is uncertain.',
   'Compare required product amount against current stock only in compatible verified units. Show required, available and shortfall when calculable; unknown stock is not zero. Never deduct stock or record a treatment from advice alone.',
 ];
-module.exports = { isTreatmentQuestion, needsInventoryContext, INVENTORY_DOSING_RULES };
+module.exports = { getOrsonRequestConstraints, isTreatmentQuestion, needsInventoryContext, INVENTORY_DOSING_RULES };

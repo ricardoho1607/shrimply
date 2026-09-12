@@ -22,6 +22,7 @@ test('data tool enforces permissions and cannot read another company or arbitrar
   for (const args of [{ dataset: 'expenses' }, { dataset: '../users' }, { dataset: 'ponds', documentId: '../other' }, { dataset: 'ponds', after: 'other/path' }]) {
     await assert.rejects(reader.execute('read_app_records', args));
   }
+  await assert.rejects(reader.execute('read_pond_timeline', { pondId: '../other', days: 30 }));
   assert.deepEqual(reader.paths, []);
   assert.ok(!reader.tools[0].parameters.properties.dataset.enum.includes('expenses'));
 });
@@ -53,4 +54,30 @@ test('top-level assets require company ownership even for an exact ID', async ()
   await assert.rejects(reader.execute('read_app_records', { dataset: 'assets', documentId: 'asset' }));
   await reader.execute('read_app_records', { dataset: 'assets' });
   assert.ok(reader.paths.some(item => item.value === 'company' && item.field === 'companyId'));
+});
+
+test('pond timeline returns date-aligned chart series without inventing missing mortality', async () => {
+  const reader = fixture('technician', {
+    pondName: 'Pond A', pondCycleId: 'cycle-a',
+    samplings: [
+      { date: '2026-09-08', pondCycleId: 'cycle-a', mortality: 7, mbw: 0 },
+      { date: '2026-09-09', pondCycleId: 'cycle-a', doMorning: '5.2', doEvening: '6.1', phMorning: '7.8', phEvening: '8.2', feedData: { totalDailyFeed: 20, feedingResponse: 'normal' } },
+      { date: '2026-09-10', pondCycleId: 'old-cycle', doMorning: '1.2' },
+      { date: '2026-09-11', pondCycleId: 'cycle-a', doMorning: '4.1', doEvening: '5.4', weatherEvent: 'heavy_rain', mbw: 8.4 },
+    ],
+    mortalityRecords: [
+      { date: '2026-09-09', pondCycleId: 'cycle-a', observationType: 'none_observed', count: 0 },
+      { date: '2026-09-11', pondCycleId: 'cycle-a', observationType: 'observed_recovered', count: 118 },
+    ],
+  });
+  const result = await reader.execute('read_pond_timeline', { pondId: 'pond-a', days: 7, endDate: '2026-09-12' });
+
+  assert.deepEqual(result.lineSeries.mortalityCount, [{ date: '2026-09-08', value: 7 }, { date: '2026-09-09', value: 0 }, { date: '2026-09-11', value: 118 }]);
+  assert.deepEqual(result.lineSeries.doMinimumMgL, [{ date: '2026-09-09', value: 5.2 }, { date: '2026-09-11', value: 4.1 }]);
+  assert.equal(result.timeline.some(day => day.date === '2026-09-10'), false);
+  assert.equal(result.lineSeries.mbwG.some(point => point.date === '2026-09-08'), false);
+  assert.equal(result.coverage.missingDatesAreUnknown, true);
+  assert.ok(reader.tools.some(item => item.name === 'read_pond_timeline'));
+  await assert.rejects(reader.execute('read_pond_timeline', { pondId: 'pond-a', days: 91, endDate: '2026-09-12' }));
+  await assert.rejects(reader.execute('read_pond_timeline', { pondId: 'pond-a', days: 30, endDate: '2026-02-31' }));
 });

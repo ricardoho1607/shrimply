@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const ts = require('typescript');
 require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, file);
 const { buildOrsonCacheKey } = require('../../orson/promptBuilder.ts');
-const { isTreatmentQuestion } = require('./orsonInventoryPolicy');
+const { getOrsonRequestConstraints, isTreatmentQuestion, needsInventoryContext } = require('./orsonInventoryPolicy');
 
 test('treatment answers never receive a client cache key', () => {
   for (const question of ['How much calcium should I add?', 'What should I use to increase calcium?', 'Berapa dosis kapur?', 'ใช้ปูนเท่าไหร่', '用多少石灰', 'Liều lượng vôi bao nhiêu?']) {
@@ -49,4 +49,20 @@ test('plain pond-risk questions skip classification and inventory reads', async 
 });
 test('mixed analysis and dosing questions never take the analysis shortcut', async () => {
   assert.equal(await classifyDosingRequest({ question: 'check my ponds and tell me the dose of lime', prompt: '', generate: async () => { throw new Error('not needed'); } }), true);
+});
+
+test('explicit no-treatment instructions cannot divert general lab education into inventory dosing', async () => {
+  const question = 'Secara umum, apa perbedaan TAN, NH3, NH4, dan nitrit pada tambak vaname, dan mengapa pH serta suhu penting saat membaca hasil lab? Jangan menganalisis kolam tertentu atau memberi dosis perlakuan.';
+  const { inferOrsonConversationRoute, buildOrsonQuestionFocus } = require('../../orson/promptBuilder.ts');
+  const constraints = getOrsonRequestConstraints(question);
+  const focus = buildOrsonQuestionFocus(question, []);
+
+  assert.equal(inferOrsonConversationRoute(question), 'aquaculture_knowledge');
+  assert.equal(focus.route, 'aquaculture_knowledge');
+  assert.equal(focus.suppressTreatmentAdvice, true);
+  assert.equal(focus.suppressPondAnalysis, true);
+  assert.deepEqual(constraints, { suppressTreatmentAdvice: true, suppressPondAnalysis: true });
+  assert.equal(isTreatmentQuestion(question), false);
+  assert.equal(await classifyDosingRequest({ question }), false);
+  assert.equal(needsInventoryContext(focus.route, question), false);
 });
