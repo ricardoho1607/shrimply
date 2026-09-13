@@ -29,10 +29,11 @@ export default function LanguageToggle({ isMobile = false }: { isMobile?: boolea
       : pathname.replace(/^\/id/, "")
     : pathname;
 
+  const isResourcesPath = basePath === "/resources" || basePath.startsWith("/resources/");
   const enHref = basePath === "/" ? "/" : basePath;
   const idHref = basePath === "/" ? "/id" : `/id${basePath}`;
-  const thHref = basePath === "/" ? "/th" : `/th${basePath}`;
-  const viHref = basePath === "/" ? "/vi" : `/vi${basePath}`;
+  const thHref = isResourcesPath ? "/th" : (basePath === "/" ? "/th" : `/th${basePath}`);
+  const viHref = isResourcesPath ? "/vi" : (basePath === "/" ? "/vi" : `/vi${basePath}`);
   const languages = [
     { code: "EN", name: "English", href: enHref, active: isEnglish, ariaLabel: "Switch to English" },
     { code: "ID", name: "Bahasa Indonesia", href: idHref, active: isIndonesian, ariaLabel: "Ganti ke Bahasa Indonesia" },

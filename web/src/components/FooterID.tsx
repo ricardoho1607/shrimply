@@ -11,6 +11,7 @@ const productLinks = [
 ];
 
 const companyLinks = [
+  { href: '/id/resources', label: 'Pusat Panduan' },
   { href: '/id/about', label: 'Tentang' },
   { href: '/id/how-it-works', label: 'Cara Kerja' },
   { href: '/id/orson', label: 'Orson AI' },

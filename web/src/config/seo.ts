@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SITE_CONFIG } from "@/config/site";
 import { resourceArticles } from "@/data/resourceLibrary";
+import { resourceArticlesID } from "@/data/resourceLibraryID";
 
 export type SeoPage = {
   path: string;
@@ -449,6 +450,14 @@ export const coreSeoPages_id: SeoPage[] = [
     changeFrequency: "weekly",
     lastModified: ID_LAST_MODIFIED,
   },
+  {
+    path: "/id/resources",
+    title: "Panduan Budidaya Udang | Pusat Edukasi & Operasional Vannamei | Shrimply",
+    description: "Baca panduan praktis Shrimply untuk manajemen tambak udang vannamei: FCR, MBW, kualitas air, inventaris pakan, sampling pertumbuhan, panen, keuangan, dan peringatan penyakit.",
+    priority: 0.9,
+    changeFrequency: "weekly",
+    lastModified: ID_LAST_MODIFIED,
+  },
 ];
 
 export const featureSeoPages_id: SeoPage[] = [
@@ -517,6 +526,15 @@ export const featureSeoPages_id: SeoPage[] = [
     lastModified: ID_LAST_MODIFIED,
   },
 ];
+
+export const resourceSeoPages_id: SeoPage[] = resourceArticlesID.map(article => ({
+  path: `/id/resources/${article.slug}`,
+  title: `${article.title} | Panduan Shrimply`,
+  description: article.description,
+  priority: 0.72,
+  changeFrequency: "monthly",
+  lastModified: article.updatedAt ?? article.publishedAt ?? ID_LAST_MODIFIED,
+}));
 
 /* ── Thai (th) SEO pages ─────────────────────────────────────────── */
 
@@ -752,6 +770,7 @@ export const sitemapPages = [
   ...resourceSeoPages,
   ...coreSeoPages_id,
   ...featureSeoPages_id,
+  ...resourceSeoPages_id,
   ...coreSeoPages_th,
   ...featureSeoPages_th,
   ...coreSeoPages_vi,

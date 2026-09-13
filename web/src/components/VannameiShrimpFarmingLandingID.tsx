@@ -290,7 +290,7 @@ export default function VannameiShrimpFarmingLandingID() {
           </p>
           <div className="mobile-cta-row">
             <Link href="/auth/join" prefetch={false} className="btn-primary">Mulai Gratis</Link>
-            <Link href="/resources" className="btn-outline">Pusat Edukasi</Link>
+            <Link href="/id/resources" className="btn-outline">Pusat Edukasi</Link>
           </div>
         </div>
       </section>

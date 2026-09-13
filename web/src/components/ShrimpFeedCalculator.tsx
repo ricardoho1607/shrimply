@@ -55,7 +55,8 @@ export const getTrayCheckWindow = (abw: number): string => {
   return "1.0–1.5 hours";
 };
 
-export default function ShrimpFeedCalculator() {
+export default function ShrimpFeedCalculator({ locale = "en" }: { locale?: "en" | "id" } = {}) {
+  const isId = locale === "id";
   const [calcMode, setCalcMode] = useState<"biomass" | "population">("biomass");
   const [biomassKg, setBiomassKg] = useState<number>(2000);
   const [population, setPopulation] = useState<number>(150000);
@@ -152,13 +153,15 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
         <div>
           <span className="eyebrow" style={{ color: "var(--blue)", marginBottom: "8px", display: "inline-block" }}>
-            Interactive Farm Tool
+            {isId ? "Alat Bantu Tambak Interaktif" : "Interactive Farm Tool"}
           </span>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--navy)", margin: 0, lineHeight: 1.2 }}>
-            Vannamei Shrimp Feed Calculator
+            {isId ? "Kalkulator Pakan Udang Vannamei" : "Vannamei Shrimp Feed Calculator"}
           </h2>
           <p style={{ margin: "6px 0 0 0", color: "var(--ocean)", fontSize: "0.95rem", fontWeight: 500, maxWidth: "680px" }}>
-            Calculate a baseline daily ration, per-meal amount, and feed-tray allocation from standing biomass and average body weight.
+            {isId
+              ? "Hitung estimasi ransum pakan harian, pembagian porsi per waktu makan, dan alokasi anco berdasarkan standing biomass serta bobot rata-rata udang."
+              : "Calculate a baseline daily ration, per-meal amount, and feed-tray allocation from standing biomass and average body weight."}
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -181,7 +184,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
             }}
           >
             <RotateCcw size={14} />
-            Reset
+            {isId ? "Reset" : "Reset"}
           </button>
           <button
             type="button"
@@ -202,7 +205,9 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
             }}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? "Copied to Clipboard!" : "Copy Feed Ration"}
+            {copied
+              ? (isId ? "Tersalin ke Clipboard!" : "Copied to Clipboard!")
+              : (isId ? "Salin Ransum Pakan" : "Copy Feed Ration")}
           </button>
         </div>
       </div>
@@ -210,7 +215,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
       {/* Mode Switcher */}
       <div style={{ marginBottom: "24px" }}>
         <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "8px" }}>
-          1. Select Calculation Basis
+          {isId ? "1. Pilih Dasar Perhitungan" : "1. Select Calculation Basis"}
         </div>
         <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
           <button
@@ -227,7 +232,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
               cursor: "pointer",
             }}
           >
-            A. Known Standing Biomass (kg)
+            {isId ? "A. Estimasi Standing Biomassa (kg)" : "A. Known Standing Biomass (kg)"}
           </button>
           <button
             type="button"
@@ -243,7 +248,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
               cursor: "pointer",
             }}
           >
-            B. Population & Survival Rate (%)
+            {isId ? "B. Populasi & Kelangsungan Hidup / SR (%)" : "B. Population & Survival Rate (%)"}
           </button>
         </div>
       </div>

@@ -59,8 +59,8 @@ export default function ShrimpHarvestTrackingPageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Lihat bagaimana hasil panen melengkapi catatan produksi kolam secara menyeluruh." },
         { href: "/id/features/shrimp-farm-finance", label: "Pelacakan keuangan tambak udang", description: "Hubungkan berat panen, pendapatan, biaya produksi, dan evaluasi profitabilitas." },
         { href: "/id/features/growth-sampling", label: "Sampling pertumbuhan dan pelacakan biomassa", description: "Gunakan konteks MBW, biomassa, populasi, dan mortalitas sebelum merencanakan panen." },
-        { href: "/resources/shrimp-harvest-tracking", label: "Panduan pelacakan panen udang", description: "Pelajari panduan untuk berat panen, size, panen parsial, dan hasil siklus." },
-        { href: "/resources/pond-performance", label: "Panduan performa kolam", description: "Pahami perbandingan hasil akhir dengan data tebar benur, pakan, kualitas air, dan mortalitas." },
+        { href: "/id/resources/shrimp-harvest-tracking", label: "Panduan pelacakan panen udang", description: "Pelajari panduan untuk berat panen, size, panen parsial, dan hasil siklus." },
+        { href: "/id/resources/pond-performance", label: "Panduan performa kolam", description: "Pahami perbandingan hasil akhir dengan data tebar benur, pakan, kualitas air, dan mortalitas." },
         { href: "/id/how-it-works", label: "Cara kerja Shrimply", description: "Ikuti alur bagaimana pencatatan lapangan menjadi bahan evaluasi manajer, laporan, dan riwayat produksi." },
       ]}
     />

@@ -18,7 +18,8 @@ const PRESETS: CulturePreset[] = [
 
 const AREA_PRESETS = [1000, 2500, 5000, 10000];
 
-export default function StockingDensityCalculator() {
+export default function StockingDensityCalculator({ locale = "en" }: { locale?: "en" | "id" } = {}) {
+  const isId = locale === "id";
   const [pondArea, setPondArea] = useState<number>(2500);
   const [density, setDensity] = useState<number>(100);
   const [survival, setSurvival] = useState<number>(75);
@@ -137,13 +138,15 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
         <div>
           <span className="eyebrow" style={{ color: "var(--blue)", marginBottom: "8px", display: "inline-block" }}>
-            Interactive Farm Tool
+            {isId ? "Alat Bantu Tambak Interaktif" : "Interactive Farm Tool"}
           </span>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--navy)", margin: 0, lineHeight: 1.2 }}>
-            Vannamei Stocking & Biomass Calculator
+            {isId ? "Kalkulator Padat Tebar & Biomassa Vannamei" : "Vannamei Stocking & Biomass Calculator"}
           </h2>
           <p style={{ margin: "6px 0 0 0", color: "var(--ocean)", fontSize: "0.95rem", fontWeight: 500, maxWidth: "680px" }}>
-            Test your pond area, target density, survival rate, and harvest size to see exact seed requirements, peak aeration demand, and carrying capacity safety.
+            {isId
+              ? "Simulasikan luas kolam, target padat tebar, tingkat kelangsungan hidup (SR), dan target bobot panen untuk menghitung kebutuhan benur, daya dukung kolam, dan kebutuhan kincir air."
+              : "Test your pond area, target density, survival rate, and harvest size to see exact seed requirements, peak aeration demand, and carrying capacity safety."}
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -166,7 +169,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
             }}
           >
             <RotateCcw size={14} />
-            Reset
+            {isId ? "Reset" : "Reset"}
           </button>
           <button
             type="button"
@@ -187,7 +190,9 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
             }}
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
-            {copied ? "Copied to Clipboard!" : "Copy Summary"}
+            {copied
+              ? (isId ? "Tersalin ke Clipboard!" : "Copied to Clipboard!")
+              : (isId ? "Salin Ringkasan" : "Copy Summary")}
           </button>
         </div>
       </div>
@@ -195,7 +200,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
       {/* Preset Buttons */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "8px" }}>
-          Quick Culture System Presets
+          {isId ? "Preset Cepat Sistem Budidaya" : "Quick Culture System Presets"}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px" }}>
           {PRESETS.map((preset) => {

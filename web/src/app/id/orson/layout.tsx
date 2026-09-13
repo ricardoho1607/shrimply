@@ -8,10 +8,10 @@ const page = coreSeoPages_id.find(item => item.path === "/id/orson");
 export const metadata = seoMetadataID(page!, "/orson");
 
 const relatedOrsonPages = [
-  "/resources/fcr-shrimp-farming",
-  "/resources/feed-tray-observations",
-  "/resources/water-quality-trends",
-  "/resources/white-spot-syndrome-virus-shrimp",
+  "/id/resources/fcr-shrimp-farming",
+  "/id/resources/feed-tray-observations",
+  "/id/resources/water-quality-trends",
+  "/id/resources/white-spot-syndrome-virus-shrimp",
   "/id/features/disease-alerts",
 ].map(path => canonicalUrl(path));
 

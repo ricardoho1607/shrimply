@@ -59,8 +59,8 @@ export default function DiseaseAlertsPageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Lihat bagaimana visibilitas risiko penyakit terintegrasi dalam operasional dan laporan kolam." },
         { href: "/id/features/water-quality-monitoring", label: "Monitoring kualitas air", description: "Tinjau kondisi kolam yang dapat memperkuat analisis stres dan risiko penyakit udang." },
         { href: "/id/features/growth-sampling", label: "Sampling pertumbuhan dan pelacakan mortalitas", description: "Hubungkan peringatan penyakit dengan dinamika pertumbuhan, nafsu makan, dan catatan kematian." },
-        { href: "/resources/shrimp-disease-alerts", label: "Panduan peringatan penyakit udang", description: "Pelajari bagaimana konteks peringatan mendukung respons cepat tambak dan evaluasi biosekuriti." },
-        { href: "/resources/white-feces-disease-shrimp", label: "Panduan penyakit berak putih (WFD)", description: "Pahami bagaimana gejala, respons pakan, dan catatan kolam membantu evaluasi penyakit." },
+        { href: "/id/resources/shrimp-disease-alerts", label: "Panduan peringatan penyakit udang", description: "Pelajari bagaimana konteks peringatan mendukung respons cepat tambak dan evaluasi biosekuriti." },
+        { href: "/id/resources/white-feces-disease-shrimp", label: "Panduan penyakit berak putih (WFD)", description: "Pahami bagaimana gejala, respons pakan, dan catatan kolam membantu evaluasi penyakit." },
         { href: "/id/orson", label: "Orson AI untuk analisis risiko", description: "Lihat bagaimana Orson memanfaatkan data kolam terkini untuk menginterpretasikan sinyal pakan, air, dan penyakit." },
       ]}
     />

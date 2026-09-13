@@ -155,22 +155,22 @@ export default function OrsonPageID() {
           <div className="resource-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
             {[
               {
-                href: '/resources/fcr-shrimp-farming',
+                href: '/id/resources/fcr-shrimp-farming',
                 title: 'Meningkatkan FCR dalam budidaya udang',
                 body: 'Gunakan catatan pakan, biomassa, mortalitas, dan panen untuk menginterpretasikan feed conversion ratio secara lebih akurat.',
               },
               {
-                href: '/resources/feed-tray-observations',
+                href: '/id/resources/feed-tray-observations',
                 title: 'Pengamatan anco pakan',
                 body: 'Evaluasi sinyal nafsu makan sebelum pakan tak termakan menjadi masalah kualitas air dan FCR.',
               },
               {
-                href: '/resources/water-quality-trends',
+                href: '/id/resources/water-quality-trends',
                 title: 'Tren kualitas air',
                 body: 'Pantau DO, pH, salinitas, amonia, dan nitrit secara bersamaan daripada memperlakukan pembacaan sebagai angka terpisah.',
               },
               {
-                href: '/resources/white-spot-syndrome-virus-shrimp',
+                href: '/id/resources/white-spot-syndrome-virus-shrimp',
                 title: 'Respon dan pencegahan WSSV',
                 body: 'Hubungkan mortalitas, nafsu makan, pergerakan kolam, dan tindakan biosekuriti saat WSSV dicurigai.',
               },

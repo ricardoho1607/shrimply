@@ -59,8 +59,8 @@ export default function WaterQualityMonitoringPageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Lihat bagaimana kualitas air terintegrasi dalam performa kolam, laporan, dan tinjauan operasional." },
         { href: "/id/features/disease-alerts", label: "Peringatan penyakit udang", description: "Hubungkan kondisi kolam abnormal dengan visibilitas risiko penyakit dan biosekuriti." },
         { href: "/id/features/growth-sampling", label: "Sampling pertumbuhan dan pelacakan MBW", description: "Gunakan riwayat kualitas air untuk menjelaskan variasi pertumbuhan antar catatan sampling." },
-        { href: "/resources/water-quality-trends", label: "Panduan tren kualitas air", description: "Baca panduan mengenai tinjauan DO, pH, salinitas, amonia, dan arah tren parameter air." },
-        { href: "/resources/shrimp-disease-alerts", label: "Panduan peringatan penyakit", description: "Pelajari bagaimana sistem peringatan dini menjadi lebih efektif saat terhubung dengan data kolam." },
+        { href: "/id/resources/water-quality-trends", label: "Panduan tren kualitas air", description: "Baca panduan mengenai tinjauan DO, pH, salinitas, amonia, dan arah tren parameter air." },
+        { href: "/id/resources/shrimp-disease-alerts", label: "Panduan peringatan penyakit", description: "Pelajari bagaimana sistem peringatan dini menjadi lebih efektif saat terhubung dengan data kolam." },
         { href: "/id/orson", label: "Orson AI untuk inteligensi kolam", description: "Lihat bagaimana riwayat kualitas air terkini memperkaya konteks AI untuk analisis kolam." },
       ]}
     />

@@ -8,9 +8,8 @@ import type { ResourceArticle } from "@/data/resourceLibrary";
 
 type ResourcesHubProps = {
   articles: ResourceArticle[];
+  locale?: "en" | "id";
 };
-
-const allCategory = "All";
 
 const searchableText = (article: ResourceArticle) => [
   article.title,
@@ -24,7 +23,11 @@ const searchableText = (article: ResourceArticle) => [
   ...article.sections.flatMap(section => [section.heading, ...section.body]),
 ].join(" ").toLowerCase();
 
-export default function ResourcesHub({ articles }: ResourcesHubProps) {
+export default function ResourcesHub({ articles, locale = "en" }: ResourcesHubProps) {
+  const isId = locale === "id";
+  const allCategory = isId ? "Semua" : "All";
+  const baseHref = isId ? "/id/resources" : "/resources";
+
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState(allCategory);
 
@@ -39,7 +42,7 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
 
   const categories = useMemo(
     () => [allCategory, ...Array.from(new Set(sortedArticles.map(article => article.section)))],
-    [sortedArticles]
+    [allCategory, sortedArticles]
   );
 
   const filteredArticles = useMemo(() => {
@@ -58,12 +61,16 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
       <div className="container">
         <div style={{ marginBottom: "28px", display: "grid", gap: "18px" }}>
           <div>
-            <div className="eyebrow" style={{ marginBottom: "16px" }}>Article Library</div>
+            <div className="eyebrow" style={{ marginBottom: "16px" }}>
+              {isId ? "Koleksi Panduan" : "Article Library"}
+            </div>
             <h2 className="section-title" style={{ maxWidth: "760px", marginBottom: "18px" }}>
-              Search shrimp farming guides.
+              {isId ? "Cari panduan budidaya udang." : "Search shrimp farming guides."}
             </h2>
             <p style={{ maxWidth: "700px", fontWeight: 500 }}>
-              Try keywords like Vibrio, AHPND, FCR, ammonia, MBW, feed tray, mortality, harvest, or cash flow.
+              {isId
+                ? "Coba kata kunci seperti Vibrio, AHPND, FCR, amonia, MBW, anco, mortalitas, panen, atau arus kas."
+                : "Try keywords like Vibrio, AHPND, FCR, ammonia, MBW, feed tray, mortality, harvest, or cash flow."}
             </p>
           </div>
           <input
@@ -72,7 +79,11 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
             value={query}
             onChange={handleSearchInput}
             onInput={handleSearchInput}
-            placeholder="Search Vibrio, AHPND, FCR, ammonia, MBW..."
+            placeholder={
+              isId
+                ? "Cari Vibrio, AHPND, FCR, amonia, MBW, anco..."
+                : "Search Vibrio, AHPND, FCR, ammonia, MBW..."
+            }
             style={{
               width: "100%",
               border: "1px solid var(--slate)",
@@ -116,15 +127,15 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
         </div>
 
         <p aria-live="polite" style={{ marginBottom: "26px", color: "var(--ocean)", fontWeight: 700 }}>
-          Showing {filteredArticles.length} of {sortedArticles.length} guides
-          {query.trim() ? ` for "${query.trim()}"` : ""}
-          {category !== allCategory ? ` in ${category}` : ""}.
+          {isId
+            ? `Menampilkan ${filteredArticles.length} dari ${sortedArticles.length} panduan${query.trim() ? ` untuk "${query.trim()}"` : ""}${category !== allCategory ? ` dalam ${category}` : ""}.`
+            : `Showing ${filteredArticles.length} of ${sortedArticles.length} guides${query.trim() ? ` for "${query.trim()}"` : ""}${category !== allCategory ? ` in ${category}` : ""}.`}
         </p>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "18px" }} className="resource-card-grid">
           {filteredArticles.map(article => (
             <Link
-              href={`/resources/${article.slug}`}
+              href={`${baseHref}/${article.slug}`}
               key={article.slug}
               style={{
                 display: "flex",
@@ -174,8 +185,14 @@ export default function ResourcesHub({ articles }: ResourcesHubProps) {
 
         {filteredArticles.length === 0 ? (
           <div style={{ marginTop: "28px", background: "var(--white)", border: "1px solid var(--slate)", borderRadius: "16px", padding: "28px" }}>
-            <h3 className="feature-title" style={{ marginBottom: "10px" }}>No matching guides yet.</h3>
-            <p style={{ fontWeight: 500 }}>Try another keyword or category. New farm topics can be added as the library grows.</p>
+            <h3 className="feature-title" style={{ marginBottom: "10px" }}>
+              {isId ? "Belum ada panduan yang cocok." : "No matching guides yet."}
+            </h3>
+            <p style={{ fontWeight: 500 }}>
+              {isId
+                ? "Coba kata kunci atau kategori lain. Topik panduan tambak baru akan terus ditambahkan."
+                : "Try another keyword or category. New farm topics can be added as the library grows."}
+            </p>
           </div>
         ) : null}
       </div>

@@ -59,8 +59,8 @@ export default function ShrimpFarmFinancePageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Lihat bagaimana keuangan terhubung dengan catatan kolam, inventaris, laporan, dan hasil produksi." },
         { href: "/id/features/feed-inventory", label: "Inventaris pakan dan pelacakan biaya", description: "Lacak stok dan pergerakan pakan agar nilai inventaris mendukung evaluasi biaya tambak." },
         { href: "/id/features/shrimp-harvest-tracking", label: "Pelacakan panen udang", description: "Hubungkan berat panen dan penjualan dengan pendapatan serta profitabilitas siklus." },
-        { href: "/resources/shrimp-farm-cogs", label: "Panduan COGS tambak udang", description: "Pelajari bagaimana biaya produksi harus dipisahkan dari waktu arus kas dan proyeksi." },
-        { href: "/resources/shrimp-farm-cash-flow", label: "Panduan arus kas tambak udang", description: "Pahami mengapa pergerakan kas dan pelaporan laba menjawab kebutuhan evaluasi tambak yang berbeda." },
+        { href: "/id/resources/shrimp-farm-cogs", label: "Panduan COGS tambak udang", description: "Pelajari bagaimana biaya produksi harus dipisahkan dari waktu arus kas dan proyeksi." },
+        { href: "/id/resources/shrimp-farm-cash-flow", label: "Panduan arus kas tambak udang", description: "Pahami mengapa pergerakan kas dan pelaporan laba menjawab kebutuhan evaluasi tambak yang berbeda." },
         { href: "/id/how-it-works", label: "Cara kerja Shrimply", description: "Ikuti alur operasional dari pencatatan lapangan hingga laporan keuangan dan evaluasi pemilik." },
       ]}
     />

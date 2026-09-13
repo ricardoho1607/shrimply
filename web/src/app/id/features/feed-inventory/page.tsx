@@ -59,8 +59,8 @@ export default function FeedInventoryPageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Lihat bagaimana stok pakan terhubung dengan alur kerja kolam, keuangan, panen, dan pelaporan." },
         { href: "/id/vannamei-shrimp-farming-app", label: "Aplikasi budidaya udang vannamei", description: "Tinjau konteks aplikasi mobile dan web untuk pencatatan harian tambak vannamei." },
         { href: "/id/features/growth-sampling", label: "Sampling pertumbuhan dan pelacakan FCR", description: "Hubungkan akurasi penggunaan pakan dengan interpretasi MBW, biomassa, ADG, dan FCR." },
-        { href: "/resources/feed-inventory-control", label: "Panduan kontrol inventaris pakan", description: "Baca panduan praktis untuk pergerakan stok, visibilitas pemesanan ulang, dan akuntabilitas pakan." },
-        { href: "/resources/fcr-shrimp-farming", label: "FCR dalam budidaya udang", description: "Pahami mengapa catatan pakan yang andal sangat penting untuk menginterpretasikan feed conversion ratio." },
+        { href: "/id/resources/feed-inventory-control", label: "Panduan kontrol inventaris pakan", description: "Baca panduan praktis untuk pergerakan stok, visibilitas pemesanan ulang, dan akuntabilitas pakan." },
+        { href: "/id/resources/fcr-shrimp-farming", label: "FCR dalam budidaya udang", description: "Pahami mengapa catatan pakan yang andal sangat penting untuk menginterpretasikan feed conversion ratio." },
         { href: "/id/how-it-works", label: "Cara kerja Shrimply", description: "Ikuti alur operasional dari pencatatan lapangan hingga tinjauan manajer dan laporan." },
       ]}
     />

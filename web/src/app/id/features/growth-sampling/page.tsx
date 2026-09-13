@@ -60,8 +60,8 @@ export default function GrowthSamplingPageID() {
         { href: "/id/shrimp-farm-management-software", label: "Software manajemen tambak udang", description: "Tinjau bagaimana sampling mendukung performa kolam, laporan, keuangan, dan perencanaan panen." },
         { href: "/id/features/feed-inventory", label: "Pelacakan inventaris pakan", description: "Pisahkan pergerakan stok pakan aktual dari observasi pakan saat sampling." },
         { href: "/id/features/water-quality-monitoring", label: "Monitoring kualitas air", description: "Bandingkan hasil sampling dengan tren kualitas air terkini dan sinyal stres pada kolam." },
-        { href: "/resources/pond-performance", label: "Panduan performa kolam", description: "Pelajari bagaimana catatan sampling, pakan, mortalitas, dan panen menjelaskan performa siklus." },
-        { href: "/resources/shrimp-cycle-planning", label: "Panduan perencanaan siklus udang", description: "Gunakan catatan pertumbuhan untuk merencanakan tebar benur, pakan, proyeksi, dan jadwal panen." },
+        { href: "/id/resources/pond-performance", label: "Panduan performa kolam", description: "Pelajari bagaimana catatan sampling, pakan, mortalitas, dan panen menjelaskan performa siklus." },
+        { href: "/id/resources/shrimp-cycle-planning", label: "Panduan perencanaan siklus udang", description: "Gunakan catatan pertumbuhan untuk merencanakan tebar benur, pakan, proyeksi, dan jadwal panen." },
       ]}
     />
   );

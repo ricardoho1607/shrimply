@@ -1,4 +1,5 @@
 import { resourceArticles } from "@/data/resourceLibrary";
+import { resourceArticlesID } from "@/data/resourceLibraryID";
 import { getSetupDestination, type OnboardingRole } from "../../../shared/onboarding";
 
 export const ROUTES = {
@@ -34,6 +35,8 @@ export const ROUTES = {
     "/features/shrimp-farm-finance",
     "/features/disease-alerts",
     ...resourceArticles.map(article => `/resources/${article.slug}`),
+    "/id/resources",
+    ...resourceArticlesID.map(article => `/id/resources/${article.slug}`),
   ],
   privatePrefixes: ["/dashboard", "/roleselection", "/setup"],
 } as const;

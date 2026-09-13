@@ -10,6 +10,7 @@ const navItems = [
   { href: '/id', label: 'Beranda' },
   { href: '/id/how-it-works', label: 'Cara Kerja' },
   { href: '/id/pricing', label: 'Harga' },
+  { href: '/id/resources', label: 'Panduan' },
   { href: '/id/about', label: 'Tentang' },
   { href: GOOGLE_PLAY_URL, label: 'Unduh Aplikasi', external: true },
 ];
@@ -98,6 +99,7 @@ export default function NavbarID() {
 
   const isActive = (href: string) => {
     if (href === '/id') return pathname === '/id';
+    if (href === '/id/resources') return pathname === '/id/resources' || pathname?.startsWith('/id/resources/');
     return pathname === href;
   };
 

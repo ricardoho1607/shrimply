@@ -99,6 +99,7 @@ export default function Navbar() {
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
+    if (href === '/resources') return pathname === '/resources' || pathname?.startsWith('/resources/');
     return pathname === href;
   };
 
