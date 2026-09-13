@@ -397,7 +397,7 @@
   line-height: 1.8;
   font-weight: 700;
   letter-spacing: 1.6px;
-  color: #718390
+  color: #526e80
 }
 
 .ocean-home .foundation>div {
@@ -743,7 +743,7 @@
 
 .ocean-home .feature-number {
   font-size: 12px;
-  color: #6c8393;
+  color: #526e80;
   letter-spacing: 1.5px;
   font-weight: 650
 }
@@ -760,7 +760,7 @@
 .ocean-home .feature-copy>p {
   font-size: 16px;
   line-height: 1.85;
-  color: #5e7484;
+  color: #526e80;
   max-width: 430px
 }
 
@@ -824,7 +824,7 @@
 
 .ocean-home .example {
   font-size: 12px;
-  color: #6a808d;
+  color: #526e80;
   background: #f1f5f7;
   border: 1px solid #e5edf1;
   border-radius: 4px;
@@ -846,7 +846,7 @@
 }
 
 .ocean-home .panel-metrics small {
-  color: #6b8191;
+  color: #526e80;
   font-size: 12px;
   line-height: 1.7
 }
@@ -861,7 +861,7 @@
 
 .ocean-home .panel-metrics strong>span {
   font-size: 15px;
-  color: #6b8191;
+  color: #526e80;
   font-weight: 450;
   letter-spacing: 0
 }
@@ -894,7 +894,7 @@
 .ocean-home .chart-heading>span {
   font-size: 12px;
   font-weight: 450;
-  color: #8496a2;
+  color: #526e80;
   letter-spacing: 0
 }
 
@@ -928,7 +928,7 @@
 
 .ocean-home .bar-column small {
   font-size: 12px;
-  color: #7c8f9d;
+  color: #526e80;
   white-space: nowrap;
   background: #fff;
   width: 100%;
@@ -941,7 +941,7 @@
   padding-top: 13px;
   margin-top: 17px;
   font-size: 12px;
-  color: #738996;
+  color: #526e80;
   display: flex;
   align-items: center;
   gap: 7px
@@ -951,7 +951,7 @@
   display: block;
   text-align: center;
   font-size: 12px;
-  color: #6f8797;
+  color: #526e80;
   margin-top: 15px
 }
 
@@ -982,7 +982,7 @@
 .ocean-home .capabilities p {
   font-size: 14px;
   line-height: 1.8;
-  color: #657a89;
+  color: #526e80;
   margin: 0 0 18px;
   max-width: 260px
 }
@@ -1107,7 +1107,7 @@
 .ocean-home .conversation-head small {
   display: block;
   font-size: 12px;
-  color: #7c909e;
+  color: #526e80;
   margin-top: 3px
 }
 
@@ -1162,7 +1162,7 @@
 
 .ocean-home .insight-pair small {
   font-size: 12px;
-  color: #6e8797;
+  color: #526e80;
   display: block
 }
 
@@ -1175,7 +1175,7 @@
 
 .ocean-home .insight-pair strong span {
   font-size: 12px;
-  color: #6e8797;
+  color: #526e80;
   font-weight: 450
 }
 
@@ -1229,7 +1229,7 @@
 
 .ocean-home .step-top>span {
   font-size: 13px;
-  color: #7a91a1;
+  color: #526e80;
   font-weight: 500
 }
 
@@ -1243,7 +1243,7 @@
 .ocean-home .steps p {
   font-size: 15px;
   line-height: 1.85;
-  color: #627a8b;
+  color: #526e80;
   margin-bottom: 22px
 }
 
@@ -1298,7 +1298,7 @@
 }
 
 .ocean-home .final-cta p {
-  color: #637e90;
+  color: #526e80;
   font-size: 15px;
   margin: 0
 }
@@ -1312,7 +1312,7 @@
 
 .ocean-home .final-actions>span {
   font-size: 12px;
-  color: #6d8596
+  color: #526e80
 }
 
 .ocean-home .footer nav {
@@ -1330,7 +1330,7 @@
   display: flex;
   justify-content: space-between;
   gap: 20px;
-  color: #7c909e;
+  color: #526e80;
   font-size: 12px;
   padding: 15px 0 32px
 }
@@ -1988,7 +1988,7 @@
   font-family: var(--font-dm-mono),monospace;
   font-size: 12px;
   margin-right: 7px;
-  opacity: .6
+  opacity: 1
 }
 
 .ocean-home .pond-navigation button[aria-current=step] {

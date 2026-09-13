@@ -21,7 +21,7 @@ body:has(.ocean-theme)::before { display: none; }
 .ocean-theme #navbar { background: rgba(248, 250, 251, .97) !important; border-bottom: 1px solid #dce5ea; box-shadow: none !important; backdrop-filter: none !important; }
 .ocean-theme:is([data-public-page="home"], [data-public-page$="-software"], [data-public-page^="shrimp-"], [data-public-page="features"]) #navbar { position: relative !important; min-height: 96px; padding-block: 22px !important; }
 .ocean-theme #navbar .brand-word { display: none; }
-.ocean-theme #navbar .brand-logo { display: block; width: 145px; height: auto; }
+.ocean-theme #navbar .brand-logo { display: block; width: 145px; }
 .ocean-theme #navbar :is(.nav-link, .signin-link) { font-family: var(--sans); color: #526e80; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .ocean-theme #navbar .signin-link { color: #0f4c75; }
 .ocean-theme #navbar :is(.mobile-menu-button, .drawer-close) { width: auto; min-width: 64px; padding-inline: 12px; border-radius: 7px; font-family: var(--sans); font-size: 13px; color: #0f4c75; }

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import "./globals.css";
+import "./homepage-base.css";
 import "@/components/landing/public-theme.css";
 import "@/components/landing/ocean-home.css";
 import PublicTheme from "@/components/landing/PublicTheme";

@@ -1,11 +1,25 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export default function ScrollConversation({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const [interactive, setInteractive] = useState(false);
 
   useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setInteractive(true);
+      observer.disconnect();
+    }, { rootMargin: '600px 0px' });
+    observer.observe(root);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!interactive) return;
     const root = rootRef.current;
     const stage = root?.querySelector<HTMLElement>('.conversation');
     const body = root?.querySelector<HTMLElement>('.conversation-body');
@@ -50,7 +64,7 @@ export default function ScrollConversation({ children }: { children: ReactNode }
       window.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, []);
+  }, [interactive]);
 
   return <div className="conversation-journey" ref={rootRef}>{children}</div>;
 }

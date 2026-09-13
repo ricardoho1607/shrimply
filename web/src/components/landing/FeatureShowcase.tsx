@@ -7,11 +7,25 @@ import { landingPath, type LandingLocale } from './publicRoutes';
 
 export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy; locale: LandingLocale }) {
   const [active, setActive] = useState(0);
+  const [interactive, setInteractive] = useState(false);
   const showcaseRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const panelsRef = useRef<(HTMLDivElement | null)[]>([]);
 
   useEffect(() => {
+    const showcase = showcaseRef.current;
+    if (!showcase) return;
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      setInteractive(true);
+      observer.disconnect();
+    }, { rootMargin: '600px 0px' });
+    observer.observe(showcase);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!interactive) return;
     const showcase = showcaseRef.current;
     const stage = stageRef.current;
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -72,7 +86,7 @@ export default function FeatureShowcase({ copy: c, locale }: { copy: LandingCopy
       window.removeEventListener('resize', scheduleUpdate);
       reducedMotion.removeEventListener('change', scheduleUpdate);
     };
-  }, [c.features]);
+  }, [c.features, interactive]);
 
   return <div className="showcase" ref={showcaseRef}>
     <div className="feature-scroll-stage" ref={stageRef}>

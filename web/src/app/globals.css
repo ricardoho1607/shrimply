@@ -154,9 +154,12 @@ body {
 #navbar .brand-logo {
   display: none;
   width: 118px;
-  height: auto;
-  object-fit: contain;
-  object-position: left center;
+  aspect-ratio: 500 / 160;
+  background: url('/shrimplylogo-mobile-1x.webp') left center / contain no-repeat;
+  background-image: image-set(
+    url('/shrimplylogo-mobile-1x.webp') 1x,
+    url('/shrimplylogo-mobile.webp') 2x
+  );
 }
 
 #navbar .desktop-links {

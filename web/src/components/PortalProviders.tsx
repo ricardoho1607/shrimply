@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
-import AppProviders from "@/components/AppProviders";
+
+const AppProviders = dynamic(() => import("@/components/AppProviders"));
 
 const PROVIDER_ROUTES = [
   "/auth",

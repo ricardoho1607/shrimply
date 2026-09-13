@@ -1,3 +1,4 @@
+import "@/app/globals.css";
 import type { ReactNode } from "react";
 import Script from "next/script";
 import { canonicalUrl, coreSeoPages_id, seoMetadataID } from "@/config/seo";

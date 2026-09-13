@@ -1,0 +1,207 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400;1,500;1,700&family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+:root {
+  --safe-area-top: env(safe-area-inset-top, 0px);
+  --safe-area-right: env(safe-area-inset-right, 0px);
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-area-left: env(safe-area-inset-left, 0px);
+  --navy: #0d2137;
+  --ocean: #1a3a5c;
+  --blue: #1e6fa8;
+  --mid: #2985c8;
+  --sky: #1ab8e8;
+  --sky-light: rgba(26, 184, 232, 0.12);
+  --sky-mid: rgba(26, 184, 232, 0.28);
+  --cyan-glow: rgba(26, 184, 232, 0.06);
+  --white: #fff;
+  --off-white: #f4f8fc;
+  --ice: #e8f2f9;
+  --slate: #dce8f2;
+  --fog: #b0c8dc;
+  --muted: #6b8aa0;
+  --deep: #0a1c2b;
+  --ink: #071420;
+  --serif: 'Cormorant Garamond', Georgia, serif;
+  --sans: 'DM Sans', sans-serif;
+  --mono: 'DM Mono', monospace;
+  --jakarta: 'Plus Jakarta Sans', sans-serif;
+}
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  width: 100%;
+  min-width: 0;
+}
+
+body {
+  width: 100%;
+  min-width: 0;
+  min-height: 100svh;
+  color: var(--muted);
+  background: var(--off-white);
+  font-family: var(--sans);
+  font-size: .94rem;
+  line-height: 1.85;
+  overflow-x: clip;
+}
+
+.main-container {
+  width: 100%;
+  min-width: 0;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--sans);
+}
+
+:where(a, button, input, select, textarea, [role='button'], [tabindex]):focus-visible {
+  outline: 3px solid rgba(26, 184, 232, .65);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(26, 184, 232, .16);
+}
+
+:where(input, select, textarea):focus-visible {
+  outline-offset: 2px;
+}
+
+button:disabled,
+[aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+#navbar .brand-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  color: var(--ink);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+#navbar .brand-word {
+  font-family: var(--serif);
+  font-size: 1.65rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+#navbar .brand-logo {
+  display: none;
+  width: 118px;
+  aspect-ratio: 500 / 160;
+  background: url('/shrimplylogo-mobile-1x.webp') left center / contain no-repeat;
+  background-image: image-set(
+    url('/shrimplylogo-mobile-1x.webp') 1x,
+    url('/shrimplylogo-mobile.webp') 2x
+  );
+}
+
+#navbar .desktop-links {
+  display: flex;
+  flex: 1;
+  justify-content: center;
+  align-items: center;
+  gap: clamp(18px, 2.4vw, 32px);
+  min-width: 0;
+  margin: 0 24px;
+}
+
+#navbar .nav-link {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+#navbar .desktop-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-shrink: 0;
+}
+
+#navbar .signin-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  color: var(--blue);
+  font-size: .72rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#navbar .get-started-link {
+  padding: 10px 20px;
+  white-space: nowrap;
+}
+
+#navbar .mobile-menu-button,
+#navbar .mobile-backdrop:not(.open),
+#navbar .mobile-drawer:not(.open) {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  #navbar {
+    padding-right: 32px !important;
+    padding-left: 32px !important;
+  }
+
+  #navbar .desktop-links {
+    gap: 18px;
+    margin: 0 16px;
+  }
+
+  #navbar .desktop-actions {
+    gap: 12px;
+  }
+
+  #navbar .get-started-link {
+    padding-inline: 16px;
+  }
+}
+
+@media (max-width: 920px) {
+  #navbar .brand-word,
+  #navbar .desktop-links,
+  #navbar .desktop-actions {
+    display: none;
+  }
+
+  #navbar .brand-logo,
+  #navbar .mobile-menu-button {
+    display: inline-flex;
+  }
+
+  #navbar .mobile-menu-button {
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}

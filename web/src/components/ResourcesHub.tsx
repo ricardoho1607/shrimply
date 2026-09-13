@@ -1,5 +1,6 @@
 "use client";
 
+import "@/app/globals.css";
 import { useMemo, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import Image from "next/image";

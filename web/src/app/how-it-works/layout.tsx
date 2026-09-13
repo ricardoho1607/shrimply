@@ -1,3 +1,4 @@
+import "@/app/globals.css";
 import type { ReactNode } from "react";
 import { coreSeoPages, seoMetadata } from "@/config/seo";
 

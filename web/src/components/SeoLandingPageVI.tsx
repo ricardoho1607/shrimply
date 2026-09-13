@@ -1,3 +1,4 @@
+import "@/app/globals.css";
 import Link from "next/link";
 import Cursor from "@/components/Cursor";
 import FooterVI from "@/components/FooterVI";

@@ -4,36 +4,36 @@ Shrimply is shrimp farm management software for vannamei farms and aquaculture t
 
 ## Key Pages
 
-- Homepage: https://www.shrimplytech.com/
-- About Shrimply: https://www.shrimplytech.com/about
-- How Shrimply works: https://www.shrimplytech.com/how-it-works
-- Download Shrimply Android app: https://www.shrimplytech.com/download
-- Shrimp farm management software: https://www.shrimplytech.com/shrimp-farm-management-software
-- Vannamei shrimp farming app: https://www.shrimplytech.com/vannamei-shrimp-farming-app
-- Feed inventory: https://www.shrimplytech.com/features/feed-inventory
-- Water quality monitoring: https://www.shrimplytech.com/features/water-quality-monitoring
-- Growth sampling: https://www.shrimplytech.com/features/growth-sampling
-- Harvest tracking: https://www.shrimplytech.com/features/shrimp-harvest-tracking
-- Shrimp farm finance: https://www.shrimplytech.com/features/shrimp-farm-finance
-- Disease alerts: https://www.shrimplytech.com/features/disease-alerts
-- Resources library: https://www.shrimplytech.com/resources
-- Pond performance: https://www.shrimplytech.com/resources/pond-performance
-- Shrimp cycle planning: https://www.shrimplytech.com/resources/shrimp-cycle-planning
-- Shrimp farm record keeping: https://www.shrimplytech.com/resources/shrimp-farm-record-keeping
-- Slow shrimp growth and ADG troubleshooting: https://www.shrimplytech.com/resources/slow-shrimp-growth-adg-troubleshooting
-- Improving FCR in shrimp farming: https://www.shrimplytech.com/resources/fcr-shrimp-farming
-- Feed inventory control: https://www.shrimplytech.com/resources/feed-inventory-control
-- Feed tray observations: https://www.shrimplytech.com/resources/feed-tray-observations
-- Water quality trends: https://www.shrimplytech.com/resources/water-quality-trends
-- Shrimp disease alerts: https://www.shrimplytech.com/resources/shrimp-disease-alerts
-- Shrimp mortality tracking: https://www.shrimplytech.com/resources/shrimp-mortality-tracking
-- White feces disease in shrimp (WFD): https://www.shrimplytech.com/resources/white-feces-disease-shrimp
-- EHP in shrimp farming: https://www.shrimplytech.com/resources/ehp-shrimp-disease
-- WSSV in shrimp: https://www.shrimplytech.com/resources/white-spot-syndrome-virus-shrimp
-- Shrimp harvest tracking: https://www.shrimplytech.com/resources/shrimp-harvest-tracking
-- Shrimp farm COGS: https://www.shrimplytech.com/resources/shrimp-farm-cogs
-- Shrimp farm cash flow: https://www.shrimplytech.com/resources/shrimp-farm-cash-flow
-- Orson AI: https://www.shrimplytech.com/orson
+- [Homepage](https://www.shrimplytech.com/)
+- [About Shrimply](https://www.shrimplytech.com/about)
+- [How Shrimply works](https://www.shrimplytech.com/how-it-works)
+- [Download Shrimply Android app](https://www.shrimplytech.com/download)
+- [Shrimp farm management software](https://www.shrimplytech.com/shrimp-farm-management-software)
+- [Vannamei shrimp farming app](https://www.shrimplytech.com/vannamei-shrimp-farming-app)
+- [Feed inventory](https://www.shrimplytech.com/features/feed-inventory)
+- [Water quality monitoring](https://www.shrimplytech.com/features/water-quality-monitoring)
+- [Growth sampling](https://www.shrimplytech.com/features/growth-sampling)
+- [Harvest tracking](https://www.shrimplytech.com/features/shrimp-harvest-tracking)
+- [Shrimp farm finance](https://www.shrimplytech.com/features/shrimp-farm-finance)
+- [Disease alerts](https://www.shrimplytech.com/features/disease-alerts)
+- [Resources library](https://www.shrimplytech.com/resources)
+- [Pond performance](https://www.shrimplytech.com/resources/pond-performance)
+- [Shrimp cycle planning](https://www.shrimplytech.com/resources/shrimp-cycle-planning)
+- [Shrimp farm record keeping](https://www.shrimplytech.com/resources/shrimp-farm-record-keeping)
+- [Slow shrimp growth and ADG troubleshooting](https://www.shrimplytech.com/resources/slow-shrimp-growth-adg-troubleshooting)
+- [Improving FCR in shrimp farming](https://www.shrimplytech.com/resources/fcr-shrimp-farming)
+- [Feed inventory control](https://www.shrimplytech.com/resources/feed-inventory-control)
+- [Feed tray observations](https://www.shrimplytech.com/resources/feed-tray-observations)
+- [Water quality trends](https://www.shrimplytech.com/resources/water-quality-trends)
+- [Shrimp disease alerts](https://www.shrimplytech.com/resources/shrimp-disease-alerts)
+- [Shrimp mortality tracking](https://www.shrimplytech.com/resources/shrimp-mortality-tracking)
+- [White feces disease in shrimp (WFD)](https://www.shrimplytech.com/resources/white-feces-disease-shrimp)
+- [EHP in shrimp farming](https://www.shrimplytech.com/resources/ehp-shrimp-disease)
+- [WSSV in shrimp](https://www.shrimplytech.com/resources/white-spot-syndrome-virus-shrimp)
+- [Shrimp harvest tracking](https://www.shrimplytech.com/resources/shrimp-harvest-tracking)
+- [Shrimp farm COGS](https://www.shrimplytech.com/resources/shrimp-farm-cogs)
+- [Shrimp farm cash flow](https://www.shrimplytech.com/resources/shrimp-farm-cash-flow)
+- [Orson AI](https://www.shrimplytech.com/orson)
 
 ## Audience
 

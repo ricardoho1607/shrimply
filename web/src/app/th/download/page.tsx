@@ -1,3 +1,4 @@
+import "@/app/globals.css";
 import { canonicalUrl, coreSeoPages_th, seoMetadataTH } from "@/config/seo";
 import { GOOGLE_PLAY_URL, SITE_CONFIG } from "@/config/site";
 import DownloadPageContentTH from "./DownloadPageContentTH";

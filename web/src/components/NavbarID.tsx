@@ -29,7 +29,7 @@ export default function NavbarID() {
     };
 
     handleScroll();
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -130,7 +130,7 @@ export default function NavbarID() {
     >
       <Link href="/id" className="brand-link" aria-label="Shrimply beranda">
         <span className="brand-word">Shrimply</span>
-        <img className="brand-logo" src="/shrimplylogo_v2.webp" width="500" height="160" alt="" aria-hidden="true" />
+        <span className="brand-logo" aria-hidden="true" />
       </Link>
 
       <div className="desktop-links">
@@ -139,7 +139,7 @@ export default function NavbarID() {
             key={item.href}
             href={item.href}
             className="nav-link"
-            style={isActive(item.href) ? { color: 'var(--sky)' } : {}}
+            style={isActive(item.href) ? { color: 'var(--navy)' } : {}}
             target={item.external ? '_blank' : undefined}
             rel={item.external ? 'noopener noreferrer' : undefined}
           >
@@ -206,7 +206,7 @@ export default function NavbarID() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                color: isActive(item.href) ? 'var(--sky)' : 'var(--ink)',
+                color: isActive(item.href) ? 'var(--navy)' : 'var(--ink)',
                 fontSize: '0.84rem',
                 fontWeight: 600,
                 letterSpacing: '0.16em',

@@ -22,7 +22,7 @@ export function publicThemeRoute(pathname: string | null) {
   const path = `/${segments.join('/')}`;
   const isPublic = PUBLIC_PAGES.has(path)
     || (segments.length === 2 && segments[0] === 'features' && FEATURES.has(segments[1]))
-    || (locale === 'en' && (path === '/resources' || (segments.length === 2 && segments[0] === 'resources')))
+    || (path === '/resources' || (segments.length === 2 && segments[0] === 'resources'))
     || (locale === 'en' && (path === '/auth' || path === '/auth/join'));
   return isPublic ? { locale, page: segments[0] || 'home', path } : null;
 }

@@ -32,6 +32,7 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
       const distance = Math.max(1, section.offsetHeight - stage.offsetHeight);
       const progress = Math.max(0, Math.min(1, -section.getBoundingClientRect().top / distance));
       progressRef.current = progress;
+      window.dispatchEvent(new Event('shrimply:water-progress'));
       const travel = progress * 2;
       const selected = Math.round(travel);
       setActive(previous => previous === selected ? previous : selected);
@@ -105,7 +106,7 @@ export default function UnderwaterHero({ copy: c }: { copy: LandingCopy }) {
           </article>)}
         </div><a className="journey-orson" href="#orson"><span>{c.heroOrson}</span></a></div>
       </div>
-      <div className="journey-bottom wrap"><div className="scroll-invitation"><ArrowDown size={18}/><span>{active === 2 ? c.scrollEnd : c.scroll}</span></div><nav className="pond-navigation" aria-label={c.jumpLabel}>{ponds.map((pond, index) => <button type="button" key={pond.id} onClick={() => visit(index)} aria-current={index === active ? 'step' : undefined} aria-label={`${c.pond} ${pond.id}`}><span>0{index + 1}</span> {c.pond} {pond.id}</button>)}</nav><span className="journey-counter">0{active + 1}<span> / 03</span></span></div>
+      <div className="journey-bottom wrap"><div className="scroll-invitation"><ArrowDown size={18}/><span>{active === 2 ? c.scrollEnd : c.scroll}</span></div><nav className="pond-navigation" aria-label={c.jumpLabel}>{ponds.map((pond, index) => <button type="button" key={pond.id} onClick={() => visit(index)} aria-current={index === active ? 'step' : undefined}><span>0{index + 1}</span> {c.pond} {pond.id}</button>)}</nav><span className="journey-counter">0{active + 1}<span> / 03</span></span></div>
       <div className="journey-progress" aria-hidden="true"><span/></div>
     </div>
   </section>;

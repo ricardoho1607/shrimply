@@ -9,7 +9,7 @@ const navbarSources = componentNames.map((name) => ({
   source: fs.readFileSync(path.join(__dirname, name), 'utf8'),
 }));
 const languageToggle = fs.readFileSync(path.join(__dirname, 'LanguageToggle.tsx'), 'utf8');
-const globals = fs.readFileSync(path.join(__dirname, '../app/globals.css'), 'utf8');
+const homepageBase = fs.readFileSync(path.join(__dirname, '../app/homepage-base.css'), 'utf8');
 const publicTheme = fs.readFileSync(path.join(__dirname, 'landing/public-theme.css'), 'utf8');
 
 test('desktop language control shows one current locale and opens a menu', () => {
@@ -28,10 +28,10 @@ test('localized desktop navbars keep links and actions on one centered line', ()
 });
 
 test('navbar layout is available in the server-rendered stylesheet for the first paint', () => {
-  assert.match(globals, /#navbar \.desktop-links\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*center;/s);
-  assert.match(globals, /#navbar \.desktop-actions\s*\{[^}]*display:\s*flex;/s);
-  assert.match(globals, /#navbar \.nav-link\s*\{[^}]*white-space:\s*nowrap;/s);
-  assert.match(globals, /#navbar \.mobile-menu-button,[\s\S]*?#navbar \.mobile-drawer:not\(\.open\)\s*\{\s*display:\s*none;/s);
+  assert.match(homepageBase, /#navbar \.desktop-links\s*\{[^}]*display:\s*flex;[^}]*justify-content:\s*center;/s);
+  assert.match(homepageBase, /#navbar \.desktop-actions\s*\{[^}]*display:\s*flex;/s);
+  assert.match(homepageBase, /#navbar \.nav-link\s*\{[^}]*white-space:\s*nowrap;/s);
+  assert.match(homepageBase, /#navbar \.mobile-menu-button,[\s\S]*?#navbar \.mobile-drawer:not\(\.open\)\s*\{\s*display:\s*none;/s);
 });
 
 test('public mobile navigation uses a flat list instead of individual link containers', () => {
