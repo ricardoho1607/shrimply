@@ -102,6 +102,16 @@ export const runPromptBuilderSelfTest = () => {
     reports: [report],
     outlooks: [outlook],
   });
+  const generalFeedPackage = buildOrsonPromptPackage({
+    userMessage: 'Secara umum, kapan kenaikan pakan harian sebaiknya ditahan meskipun udang tampak aktif, dan data apa yang perlu dikonfirmasi terlebih dahulu? Jangan menganalisis kolam tertentu atau memberi dosis perlakuan.',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+    conversationHistory: [
+      { role: 'user', text: 'Apa perbedaan TAN, NH3, dan nitrit?' },
+      { role: 'model', text: 'TAN, NH3, dan nitrit memiliki basis analit yang berbeda.' },
+    ],
+  });
   const additivePackage = buildOrsonPromptPackage({
     userMessage: 'What ingredients are inside BioPlus probiotic?',
     metrics: [metrics],
@@ -145,6 +155,10 @@ export const runPromptBuilderSelfTest = () => {
   assert(farmPackage.cacheKey === null, 'does not cache farm-specific answers by default');
   assert(generalPackage.cacheKey !== null, 'allows general answers to be cached');
   assert(generalPackage.questionFocus.route === 'aquaculture_knowledge', 'routes general aquaculture knowledge separately');
+  assert(generalFeedPackage.questionFocus.route === 'aquaculture_knowledge', 'keeps general Indonesian feed management in aquaculture scope');
+  assert(generalFeedPackage.questionFocus.intent === 'feed', 'recognizes Indonesian feed-management intent');
+  assert(generalFeedPackage.context.includes('feed_control'), 'selects feed-control knowledge for Indonesian feed-management questions');
+  assert(!generalFeedPackage.context.includes('ORSON RECENT CONVERSATION'), 'does not carry an earlier nitrogen topic into an explicit standalone general question');
   assert(!generalPackage.context.includes('ORSON RISK PAYLOAD'), 'does not attach pond risk data to general aquaculture questions');
   assert(!generalPackage.context.includes('feed_pressure_ratio'), 'does not inject feed pressure into general aquaculture questions');
   assert(additivePackage.questionFocus.route === 'inventory_product', 'routes additive ingredient questions to product context');

@@ -1,8 +1,3 @@
-import { collection, getDocs } from 'firebase/firestore';
-import { db } from '@/config/firebase';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
-import { reconcileFinanceSources } from '../shared/financeReconciliation';
 import { isSourceLinkedFinance, monetaryValue } from '../shared/financeIntegrity';
 // app/finance.tsx - Optimized with consistent Android styles
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -444,20 +439,6 @@ export default function FinancePage() {
 
   const expensePieChartData = createPieChartData(expenseTotals.byCategory);
 
-  const shareReconciliation = async () => {
-    if (!company?.id || !canManageFinance) return;
-    try {
-      const snapshots = await Promise.all(['harvestRecords', 'feeds', 'additives', 'expenses', 'revenues'].map(name => getDocs(collection(db, 'companies', company.id, name))));
-      const [harvests, feeds, additives, expenses, revenues] = snapshots.map(snapshot => snapshot.docs.map(row => ({ ...row.data(), id: row.id })));
-      const result = reconcileFinanceSources({ harvests, feeds, additives, expenses, revenues } as Parameters<typeof reconcileFinanceSources>[0]);
-      if (!FileSystem.cacheDirectory || !await Sharing.isAvailableAsync()) throw new Error('File sharing is unavailable on this device. Use Finance on web to download reconciliation.');
-      const uri = `${FileSystem.cacheDirectory}finance-reconciliation.json`;
-      await FileSystem.writeAsStringAsync(uri, JSON.stringify(result, null, 2));
-      await Sharing.shareAsync(uri, { mimeType: 'application/json' });
-      Alert.alert('Reconciliation complete', `${result.issues.length} issues found. No records were changed.`);
-    } catch (error) { Alert.alert('Reconciliation unavailable', error instanceof Error ? error.message : 'Try again online'); }
-  };
-
   const savePayment = async () => {
     if (!company?.id || !paymentTarget || !canManageFinance || savingPayment) return;
     setSavingPayment(true);
@@ -549,10 +530,7 @@ export default function FinancePage() {
             <Ionicons name="arrow-back" size={24} color="#2C3E50" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t.finance?.title || 'Finance'}</Text>
-          <Text style={{ color: '#52677a', fontSize: 12 }}>Recorded balance compares income with purchases and expenses. Use P&amp;L for profit and Cash Flow for confirmed payments. Confirm payments separately.</Text>
-          {[...expenses, ...revenues].some(row => monetaryValue(row.amount) === null) && <Text style={{ color: '#e74c3c' }}>Some amounts are invalid. Reconcile entries before relying on totals.</Text>}
           {canManageFinance && <View style={styles.headerActions}>
-            <TouchableOpacity onPress={shareReconciliation}><Text style={{ color: '#0F4C75' }}>Reconcile</Text></TouchableOpacity>
             <TouchableOpacity onPress={() => {
                 resetForm();
                 setFormType('revenue');
@@ -616,6 +594,7 @@ export default function FinancePage() {
               {formatCurrency(Math.abs(profit))}
             </Text>
           </View>
+          {[...expenses, ...revenues].some(row => monetaryValue(row.amount) === null) && <Text style={styles.balanceWarning}>Some amounts are invalid. Review entries before relying on totals.</Text>}
         </View>
 
         <View style={styles.tabContainer}>
@@ -1031,6 +1010,7 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12 },
   summaryRowLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#7F8C8D', textTransform: 'uppercase', letterSpacing: 0.5 },
   summaryRowAmount: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: '700' },
+  balanceWarning: { color: '#e74c3c', fontSize: 14, lineHeight: 21, marginTop: 8 },
   summaryDivider: { height: 1, backgroundColor: '#ECF0F1' },
   tabContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 7 : 8, gap: Platform.OS === 'android' ? 5 : 6 },

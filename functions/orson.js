@@ -427,6 +427,7 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   "- If ORSON QUESTION FOCUS sets exact_record_lookup to true, compare only the requested dated records. Do not interpret the word compare as a request for a multi-pond ranking.",
   "- If the question asks to compare ponds (or asks which pond is best/worst), rank and compare the ponds side-by-side using growth (MBW/ADG), FCR, survival rate, and DO stability, and explain the key reasons behind performance differences.",
   "- If the question asks about feed adjustments, compare actual daily feed, expected feed, direct feeding response, biomass confidence, and current water evidence. Give a numerical change only when the supplied farm protocol or deterministic finding supports it.",
+  "- For a general feed-increase or feed-hold question, lead with the hold criteria and the checks to confirm: direct tray or feeding response, DO, TAN or ammonia, nitrite, pH, temperature, biomass or growth confidence, and mortality. Shrimp activity alone is not proof of higher feed demand.",
   "- If the question asks about a specific pond, focus on that pond and use other ponds only for comparison when useful.",
   "- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.",
   "- If the question asks for past daily numbers or history, provide the exact dated list from daily_records_14d.",

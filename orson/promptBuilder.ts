@@ -221,7 +221,7 @@ const COMPARISON_PATTERNS = [
 
 const TOPIC_PATTERNS: { intent: OrsonQuestionIntent; patterns: RegExp[] }[] = [
   { intent: 'lab', patterns: [/\blab\b/i, /\blab\s+report\b/i, /\bplankton\b/i, /\bpathogen\b/i] },
-  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i, /\bincrease\s+feed\b/i, /\bdecrease\s+feed\b/i, /\bcut\s+feed\b/i] },
+  { intent: 'feed', patterns: [/\bfeed(ing)?\b/i, /\btray\b/i, /\bappetite\b/i, /\bleftover\b/i, /\bfcr\b/i, /\bration\b/i, /\bschedule\b/i, /\bincrease\s+feed\b/i, /\bdecrease\s+feed\b/i, /\bcut\s+feed\b/i, /\bpakan\b/i, /\bransum\b/i, /\banco\b/i, /\bnafsu makan\b/i, /\brespons pakan\b/i, /\bsisa pakan\b/i] },
   { intent: 'growth', patterns: [/\bgrowth\b/i, /\bmbw\b/i, /\babw\b/i, /\badg\b/i, /\bweight\b/i] },
   { intent: 'water_quality', patterns: [/\bwater\b/i, /\bD\.?O\.?\b/, /\bdissolved\s+oxygen\b/i, /\boxygen\b/i, /\bph\b/i, /\bammonia\b/i, /\bnitrogen\b/i, /\bnitrite\b/i, /\bnitrate\b/i, /\bphosphate\b/i, /\bsalinity\b/i, /\balkalinity\b/i] },
   { intent: 'harvest', patterns: [/\bharvest\b/i, /\bmarket\s*size\b/i, /\bsell\b/i] },
@@ -480,9 +480,9 @@ const detectRequestedRecordFields = (question: string): string[] => {
     add('do_morning_mg_l', 'do_evening_mg_l');
   }
   if (/\bammonia\b|\bnh3\b|\bnh4\b|\btan\b/i.test(question)) add('ammonia_mg_l');
-  if (/\bfeed(?:ing)?\s+response\b|\bappetite\b|\btray\b/i.test(question)) {
+  if (/\bfeed(?:ing)?\s+response\b|\bappetite\b|\btray\b|\brespons pakan\b|\bnafsu makan\b|\banco\b|\bsisa pakan\b/i.test(question)) {
     add('feed_kg', 'feeding_response');
-  } else if (/\bfeed(?:ing)?\b|\bdaily\s+totals?\b/i.test(question)) {
+  } else if (/\bfeed(?:ing)?\b|\bdaily\s+totals?\b|\bpakan\b|\bransum\b/i.test(question)) {
     add('feed_kg');
   }
   if (/\bph\b/i.test(question)) add('ph_morning', 'ph_evening');
@@ -493,7 +493,7 @@ const detectRequestedRecordFields = (question: string): string[] => {
   if (/\bwater\s+exchange\b|\bexchange\s+(?:rate|percent|percentage)\b/i.test(question)) add('water_exchange_pct');
   if (/\bsludge\b/i.test(question)) add('sludge_load');
   if (/\bscum\b|\bsurface\s+(?:film|mat)\b/i.test(question)) add('surface_scum');
-  if (/\bbehaviou?r\b|\bshrimp\s+activity\b/i.test(question)) add('shrimp_behaviour');
+  if (/\bbehaviou?r\b|\bshrimp\s+activity\b|\b(?:perilaku|aktivitas)\s+udang\b|\budang\s+tampak\s+aktif\b/i.test(question)) add('shrimp_behaviour');
   if (/\bmortality\b|\bdead\b|\bdeaths?\b/i.test(question)) add('mortality');
   if (/\bmbw\b|\babw\b|\bweight\b/i.test(question)) add('mbw_g');
 
@@ -746,6 +746,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- Follow the actual question and conversation. ORSON QUESTION FOCUS helps select context but does not restrict the conversation. Retrieve additional authorized app records when needed.',
     '- If the question asks to compare ponds (or asks which pond is best/worst), rank and compare the ponds side-by-side using growth (MBW/ADG), FCR, survival rate, and DO stability, and explain the key reasons behind performance differences.',
     '- If the question asks about feed adjustments, compare actual daily feed, expected feed, direct feeding response, biomass confidence, and current water evidence. Give a numerical change only when the supplied farm protocol or deterministic finding supports it.',
+    '- For a general feed-increase or feed-hold question, lead with the hold criteria and the checks to confirm: direct tray or feeding response, DO, TAN or ammonia, nitrite, pH, temperature, biomass or growth confidence, and mortality. Shrimp activity alone is not proof of higher feed demand.',
     '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
     '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
     '- If the question asks for past daily numbers or history, provide the exact dated list available in daily_records_14d and state that it is the latest bounded record set.',
@@ -1451,7 +1452,7 @@ export const buildOrsonPromptPackage = (params: {
     params.outlooks[index],
   ));
   const detectedFocus = buildOrsonQuestionFocus(userMessage, payloads, conversationHistory);
-  const relevantConversationHistory = conversationHistory;
+  const relevantConversationHistory = EXPLICIT_GENERAL.test(userMessage) ? [] : conversationHistory;
   const questionFocus = params.mortalityTrace
     ? {
         ...detectedFocus,

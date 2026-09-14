@@ -10,7 +10,7 @@ const ISSUE_CODES = new Set([
   'unsupported_cause', 'invented_fact', 'missing_as_normal', 'feed_as_consumption', 'date_mismatch',
   'unverified_nitrogen_basis', 'ambiguous_nitrogen_threshold', 'missing_nitrogen_context',
   'conflicting_nitrogen_thresholds', 'mixed_nitrogen_threshold_purposes',
-  'unmatched_calculation_basis', 'scope_or_language', 'unsupported_action', 'answer_structure',
+  'unmatched_calculation_basis', 'scope_or_language', 'missing_feed_management', 'unsupported_action', 'answer_structure',
 ]);
 const asArray = value => Array.isArray(value) ? value : [];
 
@@ -31,6 +31,28 @@ const requestedItemCoverageIssues = (text, question) => {
   if (requested.length < 2) return [];
   const answer = normalizeChemistryText(text);
   return requested.some(concept => !concept.answer.test(answer)) ? ['scope_or_language'] : [];
+};
+
+const isFeedManagementQuestion = question => (
+  /\b(?:feed(?:ing)?|ration|pakan|ransum)\b/i.test(String(question))
+  && /\b(?:when|before|criteria|increase|raise|hold|pause|reduce|cut|adjust|kapan|sebelum|kenaikan|naikkan|menaikkan|ditahan|menahan|tunda|menunda|kurangi|mengurangi|konfirmasi)\b/i.test(String(question))
+);
+
+const feedManagementCoverageIssues = (text, question) => {
+  if (!isFeedManagementQuestion(question)) return [];
+  const answer = String(text);
+  const requirements = [
+    /\b(?:hold|pause|delay|avoid|do not increase|tahan|ditahan|tunda|jangan (?:naikkan|menaikkan))\b/i,
+    /\b(?:feeding response|appetite|feed tray|leftover|respons pakan|nafsu makan|anco|sisa pakan)\b/i,
+    /\b(?:D\.?O\.?|dissolved oxygen|oxygen|oksigen)\b/i,
+    /\b(?:TAN|ammonia|amonia)\b/i,
+    /\b(?:nitrite|nitrit|NO2)\b/i,
+    /\bpH\b/i,
+    /\b(?:temperature|suhu)\b/i,
+    /\b(?:biomass|biomassa|MBW|ABW|growth|pertumbuhan)\b/i,
+    /\b(?:mortality|mortalitas|deaths?|dead|kematian)\b/i,
+  ];
+  return requirements.every(pattern => pattern.test(answer)) ? [] : ['missing_feed_management'];
 };
 
 const isNitrogenThresholdGuidance = question => (
@@ -143,7 +165,11 @@ const getClaimLimits = (prompt) => {
 };
 
 const findUnsupportedClaims = (text, limits) => {
-  const issues = new Set([...nitrogenGuidanceIssues(text, limits.question), ...requestedItemCoverageIssues(text, limits.question)]);
+  const issues = new Set([
+    ...nitrogenGuidanceIssues(text, limits.question),
+    ...requestedItemCoverageIssues(text, limits.question),
+    ...feedManagementCoverageIssues(text, limits.question),
+  ]);
   const plain = String(text).replace(/[*_`]/g, '').replace(/^#{1,6}\s*/gm, '').replace(/[—–]/g, '-');
   const sentences = plain.split(/\n|(?<=[.!?])\s+(?=[A-Z])|;\s*|,?\s+(?:but|although|however)\s+/);
   for (const sentence of sentences) {
@@ -190,6 +216,7 @@ const REVIEW_INSTRUCTION = [
   'For pond_diagnostic keep the five requested sections, at most three supported hypotheses with evidence and missing evidence, at most three focused checks, and target 250-350 words unless the user requested a full dated list. Each cause has exactly one confidence label: low or moderate, never a range. Do not force any causes when none are supported.',
   'Preserve exact-record scope, suppressed advice, units, dates, comparison bases, user-reported attribution and the language requested by the user. Keep mortality timeline format when requested.',
   'Address every analyte, metric, pond, comparison and sub-question explicitly requested by the user. A concise answer may still be complete.',
+  'For a general feed-increase or feed-hold question, directly state when to hold the increase and cover direct feeding response or tray evidence, DO, TAN or ammonia, nitrite, pH, temperature, biomass or growth confidence, and mortality. Shrimp activity alone is not proof of feed demand. Do not replace the answer with nitrogen definitions or treatment doses.',
   'Treat any deterministic_issues as mandatory corrections. Review all other claims too, including arithmetic, timing, missing data, nitrogen units, confidence and unsupported causes.',
   `Return only JSON. Allowed issue codes: ${[...ISSUE_CODES].join(', ')}.`,
   'If the entire draft meets these rules, return {"status":"pass","issues":[]}. Otherwise return {"status":"rewrite","issues":["issue_code"],"answer":"the complete corrected answer in the requested language"}.',
@@ -217,6 +244,11 @@ const METRIC_LABELS = { adg_interval_change: 'ADG', adg: 'ADG', daily_feed: 'Fee
 const buildFactualFallback = limits => {
   const language = languageFor(limits.question);
   const copy = FALLBACK_COPY[language];
+  if (isFeedManagementQuestion(limits.question)) {
+    return language === 'id'
+      ? 'Secara umum, tahan kenaikan pakan bila respons pakan atau sisa di anco belum konsisten, DO menurun, TAN atau nitrit meningkat, pH atau suhu tidak stabil, tren MBW atau biomassa belum meyakinkan, atau mortalitas naik. Konfirmasi respons pakan langsung, DO terutama menjelang subuh, TAN, nitrit, pH, suhu, tren pertumbuhan dan asumsi populasi, serta mortalitas sebelum menaikkan alokasi. Udang yang tampak aktif saja tidak membuktikan kebutuhan pakan meningkat.'
+      : 'In general, hold a feed increase when direct feeding response or tray clearance is uncertain, DO is declining, TAN or nitrite is rising, pH or temperature is unstable, MBW or biomass evidence is weak, or mortality is increasing. Confirm direct feed response, especially pre-dawn DO, TAN, nitrite, pH, temperature, growth and population assumptions, and mortality before increasing allocation. Active-looking shrimp alone do not prove higher feed demand.';
+  }
   if (isNitrogenThresholdGuidance(limits.question)) {
     return language === 'id'
       ? 'Saya belum dapat memverifikasi satu batas nitrogen yang aman untuk semua tambak. Pastikan hasil uji menyebut TAN, NH3, NH3-N, NH4, NO2-N atau ion NO2, atau NO3-N atau ion NO3, beserta satuannya; lalu gunakan panduan yang sesuai dengan pH, suhu, salinitas, ukuran udang, dan lama paparan.'
@@ -254,7 +286,8 @@ const buildFactualFallback = limits => {
 
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
-  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question) && !requiresRequestedItemCoverage(limits.question)) {
+  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
+    && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question)) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }
   const settings = getOrsonGenerationSettings(mode);
@@ -315,4 +348,5 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     reviewOutputTokens: reviewTokens, reviewFinishReason };
 };
 
-module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues, requiresRequestedItemCoverage, requestedItemCoverageIssues };
+module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues,
+  isFeedManagementQuestion, feedManagementCoverageIssues, requiresRequestedItemCoverage, requestedItemCoverageIssues };

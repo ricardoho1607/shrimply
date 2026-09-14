@@ -146,6 +146,41 @@ test('general knowledge retains streaming with one model call', async () => {
   assert.equal(result.groundingStatus, 'not_required');
 });
 
+test('general feed-management questions cannot be replaced by nitrogen terminology', async () => {
+  const question = 'Secara umum, kapan kenaikan pakan harian sebaiknya ditahan meskipun udang tampak aktif, dan data apa yang perlu dikonfirmasi terlebih dahulu? Jangan menganalisis kolam tertentu atau memberi dosis perlakuan.';
+  const prompt = `ORSON QUESTION FOCUS:\n{"route":"aquaculture_knowledge","intent":"feed","suppress_treatment_advice":true,"suppress_pond_analysis":true}\n\nUSER QUESTION:\n${question}`;
+  const corrected = 'Tahan kenaikan pakan bila respons pakan di anco belum konsisten, DO menurun, TAN atau nitrit meningkat, pH atau suhu tidak stabil, tren biomassa belum meyakinkan, atau mortalitas naik. Konfirmasi respons pakan dan sisa pakan, DO terutama menjelang subuh, TAN, nitrit, pH, suhu, MBW atau biomassa dengan asumsi populasi, serta mortalitas. Udang yang tampak aktif saja tidak membuktikan kebutuhan pakan meningkat.';
+  const responses = [
+    reply('TAN adalah total ammonia nitrogen, sedangkan NH3 dan nitrit adalah analit nitrogen yang berbeda.'),
+    reply(JSON.stringify({ status: 'rewrite', issues: ['missing_feed_management'], answer: corrected })),
+  ];
+  const result = await generateGroundedOrsonResponse({
+    prompt, mode: 'standard', questionRoute: 'aquaculture_knowledge',
+    generate: async () => responses.shift(),
+  });
+
+  assert.equal(result.groundingStatus, 'revised');
+  assert.equal(result.text, corrected);
+  assert.ok(result.groundingIssues.includes('missing_feed_management'));
+});
+
+test('feed-management fallback stays relevant when editorial review is unavailable', async () => {
+  const question = 'Secara umum, kapan kenaikan pakan harian sebaiknya ditahan dan data apa yang perlu dikonfirmasi terlebih dahulu?';
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({
+    prompt: `USER QUESTION:\n${question}`, mode: 'standard', questionRoute: 'aquaculture_knowledge',
+    generate: async () => {
+      if (++calls === 1) return reply('TAN, NH3, dan NO2 adalah bentuk nitrogen yang berbeda.');
+      throw new Error('review unavailable');
+    },
+  });
+
+  assert.equal(result.groundingStatus, 'fallback');
+  for (const concept of ['pakan', 'DO', 'TAN', 'nitrit', 'pH', 'suhu', 'biomassa', 'mortalitas']) {
+    assert.match(result.text, new RegExp(concept, 'i'));
+  }
+});
+
 test('multi-analyte education is reviewed and cannot omit requested concepts', async () => {
   const question = 'Secara umum, jelaskan TAN, NH3, NH4, nitrit, pH, dan suhu. Jangan memberi dosis perlakuan.';
   const prompt = `ORSON QUESTION FOCUS:\n{"route":"aquaculture_knowledge","suppress_treatment_advice":true}\n\nUSER QUESTION:\n${question}`;
