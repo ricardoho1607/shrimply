@@ -421,6 +421,8 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   "ANSWER ROUTING:",
   "- Answer the user question directly in the first sentence.",
   "- The suggested route is advisory. Use one coherent answer path and choose app-data tools from the actual request; never replace a general educational answer with an inventory or treatment response merely because treatment terminology is mentioned.",
+  "- Treat ORSON QUESTION FOCUS.answer_contract as the binding response plan. Fulfill its response_goal and every required_aspect while keeping primary_topic dominant.",
+  "- When route_confidence is fallback, answer from general aquaculture practice if the current question has one reasonable meaning. If different meanings would materially change the answer, ask one concise clarification. Never substitute a neighboring topic just because it appeared earlier or has more available guidance.",
   "- Respect explicit exclusions in the current question. If ORSON QUESTION FOCUS sets suppress_treatment_advice, do not recommend products, calculate doses, load inventory for treatment selection, or ask for dosing inputs. If it sets suppress_pond_analysis, do not analyze or retrieve a specific pond.",
   "- Address every explicitly requested analyte, metric, pond, comparison, or sub-question before adding optional context.",
   "- If ORSON QUESTION FOCUS sets suppress_advice to true, do not provide advice, recommendations, treatments, actions, warnings, or next steps.",

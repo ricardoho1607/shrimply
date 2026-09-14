@@ -500,6 +500,52 @@ const detectRequestedRecordFields = (question: string): string[] => {
   return fields;
 };
 
+const detectRequiredAnswerAspects = (question: string): string[] => {
+  const aspects = ['direct_answer'];
+  const add = (aspect: string) => { if (!aspects.includes(aspect)) aspects.push(aspect); };
+  if (/\b(?:when|kapan|timing|conditions?|condition|criteria|syarat)\b/i.test(question)) add('conditions_or_timing');
+  if (/\b(?:what|which)\s+(?:data|records?|measurements?|checks?)\b|\bdata\s+apa\b|\bapa\b[^.!?]{0,60}\b(?:perlu|harus)\s+(?:dikonfirmasi|dicek|diperiksa)\b/i.test(question)) add('evidence_to_confirm');
+  if (/\b(?:why|mengapa|kenapa|reason|cause|penyebab)\b/i.test(question)) add('reasoning');
+  if (/\b(?:how|bagaimana|method|cara)\b/i.test(question)) add('method');
+  if (COMPARISON_PATTERNS.some((pattern) => pattern.test(question))) add('comparison');
+  return aspects;
+};
+
+const buildOrsonAnswerContract = (
+  question: string,
+  route: OrsonConversationRoute,
+  intent: OrsonQuestionIntent,
+  suppressTreatmentAdvice: boolean,
+  suppressPondAnalysis: boolean,
+): OrsonQuestionFocus['answerContract'] => {
+  const conversational = CONVERSATIONAL_PATTERNS.some((pattern) => pattern.test(question));
+  const fallbackIntent = intent === 'general' && (route === 'aquaculture_knowledge' || route === 'farm_analysis') && !conversational;
+  const needsFarmData = route === 'farm_analysis' && !suppressPondAnalysis;
+  const excludedWorkflows = [
+    ...(!needsFarmData ? ['saved_farm_data'] : []),
+    ...(route !== 'inventory_product' ? ['inventory_product'] : []),
+    ...(suppressTreatmentAdvice ? ['treatment_or_dosing'] : []),
+    ...(suppressPondAnalysis ? ['pond_analysis'] : []),
+  ];
+  const primaryTopic = conversational
+    ? 'conversation'
+    : fallbackIntent ? (route === 'farm_analysis' ? 'farm_general' : 'aquaculture_general') : intent;
+  const responseGoal = conversational
+    ? 'respond_conversationally'
+    : route === 'out_of_scope' ? 'state_scope'
+      : fallbackIntent ? 'answer_as_general_aquaculture_practice_or_clarify'
+        : route === 'farm_analysis' ? 'analyze_saved_farm_evidence'
+          : route === 'inventory_product' ? 'answer_product_or_inventory_request' : 'answer_topic_directly';
+  return {
+    primaryTopic,
+    routeConfidence: fallbackIntent ? 'fallback' : 'high',
+    responseGoal,
+    requiredAspects: detectRequiredAnswerAspects(question),
+    needsFarmData,
+    excludedWorkflows,
+  };
+};
+
 export const buildOrsonQuestionFocus = (
   question: string,
   payloads: OrsonPromptPondPayload[],
@@ -565,6 +611,7 @@ export const buildOrsonQuestionFocus = (
     usesConversationHistory,
     shouldSummarize: intent === 'summary' || isComparison || /\banaly[sz]e\b/i.test(question),
     containsUserReportedMeasurements,
+    answerContract: buildOrsonAnswerContract(question, route, isComparison ? 'comparison' : intent, requestConstraints.suppressTreatmentAdvice, requestConstraints.suppressPondAnalysis),
   };
 };
 
@@ -739,6 +786,8 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
     '- The suggested route is advisory. Use one coherent answer path and choose authorized app-data tools from the actual request; never replace a general educational answer with an inventory or treatment response merely because treatment terminology is mentioned.',
+    '- Treat ORSON QUESTION FOCUS.answer_contract as the binding response plan. Fulfill its response_goal and every required_aspect while keeping primary_topic dominant.',
+    '- When route_confidence is fallback, answer from general aquaculture practice if the current question has one reasonable meaning. If different meanings would materially change the answer, ask one concise clarification. Never substitute a neighboring topic just because it appeared earlier or has more available guidance.',
     '- Respect explicit exclusions in the current question. If ORSON QUESTION FOCUS sets suppress_treatment_advice, do not recommend products, calculate doses, load inventory for treatment selection, or ask for dosing inputs. If it sets suppress_pond_analysis, do not analyze or retrieve a specific pond.',
     '- Address every explicitly requested analyte, metric, pond, comparison, or sub-question before adding optional context.',
     '- If ORSON QUESTION FOCUS sets suppress_advice to true, do not provide advice, recommendations, treatments, actions, warnings, or next steps.',
@@ -1100,6 +1149,14 @@ export const buildOrsonPromptContext = (
         suppress_advice: questionFocus.suppressAdvice,
         suppress_treatment_advice: questionFocus.suppressTreatmentAdvice,
         suppress_pond_analysis: questionFocus.suppressPondAnalysis,
+        answer_contract: {
+          primary_topic: questionFocus.answerContract.primaryTopic,
+          route_confidence: questionFocus.answerContract.routeConfidence,
+          response_goal: questionFocus.answerContract.responseGoal,
+          required_aspects: questionFocus.answerContract.requiredAspects,
+          needs_farm_data: questionFocus.answerContract.needsFarmData,
+          excluded_workflows: questionFocus.answerContract.excludedWorkflows,
+        },
         exact_record_lookup: true,
       }, null, 2),
       '',
@@ -1365,6 +1422,14 @@ export const buildOrsonPromptContext = (
       detailed_history_included: questionFocus.requiresDetailedHistory,
       should_summarize: questionFocus.shouldSummarize,
       user_question_measurements: questionFocus.containsUserReportedMeasurements ? 'user_reported_unverified' : 'none_detected',
+      answer_contract: {
+        primary_topic: questionFocus.answerContract.primaryTopic,
+        route_confidence: questionFocus.answerContract.routeConfidence,
+        response_goal: questionFocus.answerContract.responseGoal,
+        required_aspects: questionFocus.answerContract.requiredAspects,
+        needs_farm_data: questionFocus.answerContract.needsFarmData,
+        excluded_workflows: questionFocus.answerContract.excludedWorkflows,
+      },
       ...(questionFocus.analysisMode !== 'standard' ? { analysis_mode: questionFocus.analysisMode } : {}),
     }, null, 2),
     '',

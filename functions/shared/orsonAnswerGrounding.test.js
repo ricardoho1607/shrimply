@@ -146,6 +146,25 @@ test('general knowledge retains streaming with one model call', async () => {
   assert.equal(result.groundingStatus, 'not_required');
 });
 
+test('unrecognized aquaculture intent receives a semantic relevance review', async () => {
+  const question = 'Secara umum, kapan kualitas dasar tambak perlu dievaluasi dan data apa yang perlu dikonfirmasi?';
+  const prompt = `ORSON QUESTION FOCUS:\n{"route":"aquaculture_knowledge","intent":"general","answer_contract":{"primary_topic":"aquaculture_general","route_confidence":"fallback","response_goal":"answer_as_general_aquaculture_practice_or_clarify","required_aspects":["conditions_or_timing","evidence_to_confirm"],"needs_farm_data":false}}\n\nUSER QUESTION:\n${question}`;
+  const corrected = 'Secara umum, evaluasi kondisi dasar tambak sebelum perubahan operasional besar dan ketika tren pengamatan mulai bergeser. Konfirmasi tujuan evaluasi, catatan kualitas air, kondisi dasar dan bahan organik, respons udang, serta perubahan operasional terbaru; bila yang dimaksud berbeda, sebutkan fokusnya agar praktik terbaiknya tepat.';
+  const responses = [
+    reply('TAN adalah total ammonia nitrogen dan NH3 adalah amonia tak terionisasi.'),
+    reply(JSON.stringify({ status: 'rewrite', issues: ['scope_or_language'], answer: corrected })),
+  ];
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({
+    prompt, mode: 'standard', questionRoute: 'aquaculture_knowledge',
+    generate: async () => { calls += 1; return responses.shift(); },
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(result.groundingStatus, 'revised');
+  assert.equal(result.text, corrected);
+});
+
 test('general feed-management questions cannot be replaced by nitrogen terminology', async () => {
   const question = 'Secara umum, kapan kenaikan pakan harian sebaiknya ditahan meskipun udang tampak aktif, dan data apa yang perlu dikonfirmasi terlebih dahulu? Jangan menganalisis kolam tertentu atau memberi dosis perlakuan.';
   const prompt = `ORSON QUESTION FOCUS:\n{"route":"aquaculture_knowledge","intent":"feed","suppress_treatment_advice":true,"suppress_pond_analysis":true}\n\nUSER QUESTION:\n${question}`;

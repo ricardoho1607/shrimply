@@ -703,6 +703,15 @@ export interface OrsonConversationMessage {
   text: string;
 }
 
+export interface OrsonAnswerContract {
+  primaryTopic: OrsonQuestionIntent | 'aquaculture_general' | 'farm_general' | 'conversation';
+  routeConfidence: 'high' | 'fallback';
+  responseGoal: 'answer_topic_directly' | 'answer_as_general_aquaculture_practice_or_clarify' | 'analyze_saved_farm_evidence' | 'answer_product_or_inventory_request' | 'respond_conversationally' | 'state_scope';
+  requiredAspects: string[];
+  needsFarmData: boolean;
+  excludedWorkflows: string[];
+}
+
 export interface OrsonQuestionFocus {
   analysisMode: OrsonAnalysisMode;
   route: OrsonConversationRoute;
@@ -724,6 +733,7 @@ export interface OrsonQuestionFocus {
   usesConversationHistory: boolean;
   shouldSummarize: boolean;
   containsUserReportedMeasurements: boolean;
+  answerContract: OrsonAnswerContract;
 }
 
 export interface OrsonDiagnosticLabRecord {

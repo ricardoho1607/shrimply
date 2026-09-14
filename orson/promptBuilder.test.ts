@@ -112,6 +112,12 @@ export const runPromptBuilderSelfTest = () => {
       { role: 'model', text: 'TAN, NH3, dan nitrit memiliki basis analit yang berbeda.' },
     ],
   });
+  const fallbackAquaculturePackage = buildOrsonPromptPackage({
+    userMessage: 'Secara umum, kapan kualitas dasar tambak perlu dievaluasi dan data apa yang perlu dikonfirmasi?',
+    metrics: [metrics],
+    reports: [report],
+    outlooks: [outlook],
+  });
   const additivePackage = buildOrsonPromptPackage({
     userMessage: 'What ingredients are inside BioPlus probiotic?',
     metrics: [metrics],
@@ -159,6 +165,12 @@ export const runPromptBuilderSelfTest = () => {
   assert(generalFeedPackage.questionFocus.intent === 'feed', 'recognizes Indonesian feed-management intent');
   assert(generalFeedPackage.context.includes('feed_control'), 'selects feed-control knowledge for Indonesian feed-management questions');
   assert(!generalFeedPackage.context.includes('ORSON RECENT CONVERSATION'), 'does not carry an earlier nitrogen topic into an explicit standalone general question');
+  assert(fallbackAquaculturePackage.questionFocus.answerContract.primaryTopic === 'aquaculture_general', 'uses the general aquaculture fallback when a specific intent is not recognized');
+  assert(fallbackAquaculturePackage.questionFocus.answerContract.routeConfidence === 'fallback', 'marks unrecognized aquaculture intent as low confidence');
+  assert(fallbackAquaculturePackage.questionFocus.answerContract.requiredAspects.includes('conditions_or_timing'), 'retains when or timing obligations');
+  assert(fallbackAquaculturePackage.questionFocus.answerContract.requiredAspects.includes('evidence_to_confirm'), 'retains requested evidence obligations');
+  assert(fallbackAquaculturePackage.questionFocus.answerContract.needsFarmData === false, 'does not load farm data for a general fallback');
+  assert(fallbackAquaculturePackage.context.includes('answer_contract'), 'sends the answer contract to Muse');
   assert(!generalPackage.context.includes('ORSON RISK PAYLOAD'), 'does not attach pond risk data to general aquaculture questions');
   assert(!generalPackage.context.includes('feed_pressure_ratio'), 'does not inject feed pressure into general aquaculture questions');
   assert(additivePackage.questionFocus.route === 'inventory_product', 'routes additive ingredient questions to product context');

@@ -10,7 +10,7 @@ const ISSUE_CODES = new Set([
   'unsupported_cause', 'invented_fact', 'missing_as_normal', 'feed_as_consumption', 'date_mismatch',
   'unverified_nitrogen_basis', 'ambiguous_nitrogen_threshold', 'missing_nitrogen_context',
   'conflicting_nitrogen_thresholds', 'mixed_nitrogen_threshold_purposes',
-  'unmatched_calculation_basis', 'scope_or_language', 'missing_feed_management', 'unsupported_action', 'answer_structure',
+  'unmatched_calculation_basis', 'scope_or_language', 'off_topic', 'missing_feed_management', 'unsupported_action', 'answer_structure',
 ]);
 const asArray = value => Array.isArray(value) ? value : [];
 
@@ -134,6 +134,7 @@ const getClaimLimits = (prompt) => {
   const question = boundary < 0 ? prompt : prompt.slice(boundary).replace(/^\s*USER QUESTION:\n/, '');
   const payload = readSection(context, 'ORSON RISK PAYLOAD');
   const ponds = Array.isArray(payload) ? payload.filter(pond => pond && typeof pond === 'object') : [];
+  const focus = readSection(context, 'ORSON QUESTION FOCUS') || {};
   const biomassComparisons = ponds.map(pond => pond.diagnostic_context?.comparisons?.estimated_biomass);
   const hasComparableIncrease = comparison => Number.isFinite(comparison?.previous?.value)
     && Number.isFinite(comparison?.current?.value)
@@ -142,10 +143,11 @@ const getClaimLimits = (prompt) => {
     && comparison.previous.farm_date < comparison.current.farm_date
     && comparison.current.value > comparison.previous.value;
   return {
-    question, ponds, focus: readSection(context, 'ORSON QUESTION FOCUS') || {},
+    question, ponds, focus,
     exactRecords: readSection(context, 'ORSON EXACT RECORDS'),
     userComparisons: readSection(context, 'ORSON USER-REPORTED COMPARISONS'),
     contract: {
+      answer_contract: focus.answer_contract || null,
       biomass_increase_supported_for_all_included_ponds: ponds.length > 0 && biomassComparisons.every(hasComparableIncrease),
       biomass_comparisons: ponds.map((pond, index) => ({ pond: pond.pond, comparison: biomassComparisons[index] ?? null,
         interpretation: biomassComparisons[index] ? 'Comparison exists: read both values. Flat estimates do not mean missing estimates.' : 'No comparable saved estimates supplied.' })),
@@ -216,6 +218,8 @@ const REVIEW_INSTRUCTION = [
   'For pond_diagnostic keep the five requested sections, at most three supported hypotheses with evidence and missing evidence, at most three focused checks, and target 250-350 words unless the user requested a full dated list. Each cause has exactly one confidence label: low or moderate, never a range. Do not force any causes when none are supported.',
   'Preserve exact-record scope, suppressed advice, units, dates, comparison bases, user-reported attribution and the language requested by the user. Keep mortality timeline format when requested.',
   'Address every analyte, metric, pond, comparison and sub-question explicitly requested by the user. A concise answer may still be complete.',
+  'Treat answer_contract as binding when present. Keep primary_topic dominant, fulfill response_goal, and explicitly address every required_aspect. An answer that mainly discusses a neighboring topic is off_topic even if its facts are correct.',
+  'When route_confidence is fallback, use the current question rather than an earlier conversation topic. If it has one reasonable aquaculture meaning, answer with bounded general best practice and state relevant uncertainty. If multiple meanings would materially change the answer, ask one concise clarification instead of guessing.',
   'For a general feed-increase or feed-hold question, directly state when to hold the increase and cover direct feeding response or tray evidence, DO, TAN or ammonia, nitrite, pH, temperature, biomass or growth confidence, and mortality. Shrimp activity alone is not proof of feed demand. Do not replace the answer with nitrogen definitions or treatment doses.',
   'Treat any deterministic_issues as mandatory corrections. Review all other claims too, including arithmetic, timing, missing data, nitrogen units, confidence and unsupported causes.',
   `Return only JSON. Allowed issue codes: ${[...ISSUE_CODES].join(', ')}.`,
@@ -232,7 +236,7 @@ const FALLBACK_COPY = {
 };
 const languageFor = question => {
   if (/\b(?:answer|reply|respond)\s+(?:in\s+)?english\b/i.test(question)) return 'en';
-  if (/bahasa indonesia|\b(?:jawab|mengapa|bagaimana|pakan|kolam)\b/i.test(question)) return 'id';
+  if (/bahasa indonesia|\b(?:jawab|mengapa|bagaimana|pakan|kolam|tambak|udang|kapan)\b/i.test(question)) return 'id';
   if (/tiếng việt|vietnamese|[ạảấầẩẫậắằẳẵặẹẻẽếềểễệịỉọỏốồổỗộớờởỡợụủứừửữựỳỵỷỹ]/i.test(question)) return 'vi';
   if (/ภาษาไทย|\bthai\b|[\u0E00-\u0E7F]/.test(question)) return 'th';
   if (/中文|汉语|chinese|[\u4E00-\u9FFF]/i.test(question)) return 'zh';
@@ -248,6 +252,12 @@ const buildFactualFallback = limits => {
     return language === 'id'
       ? 'Secara umum, tahan kenaikan pakan bila respons pakan atau sisa di anco belum konsisten, DO menurun, TAN atau nitrit meningkat, pH atau suhu tidak stabil, tren MBW atau biomassa belum meyakinkan, atau mortalitas naik. Konfirmasi respons pakan langsung, DO terutama menjelang subuh, TAN, nitrit, pH, suhu, tren pertumbuhan dan asumsi populasi, serta mortalitas sebelum menaikkan alokasi. Udang yang tampak aktif saja tidak membuktikan kebutuhan pakan meningkat.'
       : 'In general, hold a feed increase when direct feeding response or tray clearance is uncertain, DO is declining, TAN or nitrite is rising, pH or temperature is unstable, MBW or biomass evidence is weak, or mortality is increasing. Confirm direct feed response, especially pre-dawn DO, TAN, nitrite, pH, temperature, growth and population assumptions, and mortality before increasing allocation. Active-looking shrimp alone do not prove higher feed demand.';
+  }
+  if (limits.focus?.answer_contract?.route_confidence === 'fallback'
+    && ['aquaculture_general', 'farm_general'].includes(limits.focus.answer_contract.primary_topic)) {
+    return language === 'id'
+      ? 'Saya memahami ini sebagai pertanyaan akuakultur, tetapi topik utamanya belum cukup jelas untuk memberi praktik terbaik yang tepat. Mohon sebutkan apakah fokusnya pakan, kualitas air, pertumbuhan atau biomassa, kesehatan atau mortalitas, hasil lab, panen, atau operasional tambak.'
+      : 'I understand this as an aquaculture question, but the main topic is not clear enough for a reliable best-practice answer. Please clarify whether you mean feeding, water quality, growth or biomass, health or mortality, lab results, harvest, or pond operations.';
   }
   if (isNitrogenThresholdGuidance(limits.question)) {
     return language === 'id'
@@ -286,8 +296,12 @@ const buildFactualFallback = limits => {
 
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
+  const conversational = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening)\b/i.test(limits.question);
+  const requiresFallbackRelevanceReview = !conversational && questionRoute === 'aquaculture_knowledge'
+    && (limits.focus?.answer_contract?.route_confidence === 'fallback'
+      || (!limits.focus?.answer_contract && limits.focus?.route === 'aquaculture_knowledge' && limits.focus?.intent === 'general'));
   if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
-    && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question)) {
+    && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question) && !requiresFallbackRelevanceReview) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }
   const settings = getOrsonGenerationSettings(mode);
@@ -314,7 +328,8 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
     try {
       const reviewed = await generate({
         systemInstruction: REVIEW_INSTRUCTION,
-        prompt: JSON.stringify({ mode, original_request: prompt, retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
+        prompt: JSON.stringify({ mode, original_request: prompt, answer_contract: limits.focus?.answer_contract || null,
+          retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
         useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 5000,
         timeoutMs: remainingTimeout(45000), onTextDelta: undefined,
       });
