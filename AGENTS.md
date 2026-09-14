@@ -266,17 +266,18 @@ Final response should include:
 
 ## 12. SHIPALL / PUSHALL Release Shortcut
 
-When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to execute this 3-step production release workflow:
+When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to execute this production release workflow:
 
 1. **Commit to Git:** Run relevant checks, commit changes with a clear message, and push the branch to GitHub.
 2. **Deploy Production Vercel:** Deploy the web app through the Vercel project `out`, verify that `https://www.shrimplytech.com` points to the new production deployment, and confirm the live URL returns successfully. A preview URL or the separate `web` project does not complete `SHIPALL`/`PUSHALL`.
-3. **Push Android OTA Update:** Publish an Expo/EAS OTA update to the production channel for Android only and verify it points to the new release. Do not publish an iOS OTA during `SHIPALL`/`PUSHALL` unless the user explicitly requests iOS.
-4. Report the Git commit hash, branch, Vercel production URL, and Expo update URL.
+3. **Deploy Changed Firebase Targets:** If the committed release changes Firebase runtime or configuration files, deploy only the affected targets and verify the deployment. This includes Firebase Functions, Firestore rules or indexes, Storage rules, Hosting, and relevant `firebase.json` configuration. Skip Firebase when the release has no Firebase-related changes.
+4. **Push Android OTA Update:** Publish an Expo/EAS OTA update to the production channel for Android only and verify it points to the new release. Do not publish an iOS OTA during `SHIPALL`/`PUSHALL` unless the user explicitly requests iOS.
+5. Report the Git commit hash, branch, Vercel production URL, Firebase targets deployed or skipped, and Expo update URL.
 
 Safety rules:
 - Stop before production deployment if a required release check fails, and report the failure.
 - Preserve unrelated user changes and do not include them in the release commit.
-- `SHIPALL`/`PUSHALL` does not authorize Firebase deployment, Firestore rule changes, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.
+- `SHIPALL`/`PUSHALL` authorizes deployment of Firebase targets changed by the release. It does not authorize unrelated Firebase data mutations, branch merges, native EAS/store builds, or app-store submission unless the user explicitly requests them.
 
 ## 13. PUSHWEB Release Shortcut
 
