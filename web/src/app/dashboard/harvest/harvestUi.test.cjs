@@ -5,6 +5,7 @@ const path = require('node:path');
 const test = require('node:test');
 const ts = require('typescript');
 const source = fs.readFileSync(path.join(__dirname, 'page.tsx'), 'utf8');
+const mobileSource = fs.readFileSync(path.join(__dirname, '../../../../../app/(tabs)/harvest.tsx'), 'utf8');
 const finance = fs.readFileSync(path.join(__dirname, '../../../../../shared/financeSync.ts'), 'utf8');
 const loaded = { exports: {} };
 new Function('module', 'exports', ts.transpileModule(finance, {
@@ -76,4 +77,21 @@ test('harvest waits for ponds, cycles, and records before showing counts', () =>
   assert.match(source, /const \[harvestRecordsResolved, setHarvestRecordsResolved\] = useState\(false\)/);
   assert.match(source, /const loading = !pondsResolved \|\| !cyclesResolved \|\| !harvestRecordsResolved/);
   assert.match(source, /if \(loading\) \{[\s\S]*?return \([\s\S]*?aria-label=\{copy\('Loading harvest data'\)\}/);
+});
+
+test('saved harvest ponds can open a prefilled editor on web and mobile', () => {
+  assert.match(source, /const openEditRecord = \(record: HarvestRecord, pondId\?: string\)/);
+  assert.match(source, /onClick=.*openEditRecord\(record\)/);
+  assert.match(source, /openEditRecord\(record, p\.pondId\)/);
+  assert.match(source, /setFormData\(entries\[entries\.length - 1\]\)/);
+  assert.match(mobileSource, /const handleEditHarvest = \(record: HarvestRecord\)/);
+  assert.match(mobileSource, /onPress=\{\(\) => handleEditHarvest\(harvest\)\}/);
+  assert.match(mobileSource, /setPondData\(record\.ponds\.map/);
+});
+
+test('editing uses an auditable void and replacement correction', () => {
+  assert.match(source, /correctedFromHarvestId: previousRecord\.id/);
+  assert.match(source, /transaction\.update\(previousHarvestRef/);
+  assert.match(source, /voided:\s*true/);
+  assert.match(mobileSource, /updateHarvestRecord\(editingHarvest\.id, newHarvest\)/);
 });

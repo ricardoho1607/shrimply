@@ -10,6 +10,7 @@ import {
   X,
   Loader2,
   Calendar,
+  Pencil,
   Trash2,
   History
 } from 'lucide-react';
@@ -124,7 +125,7 @@ interface DashboardUser {
   companyId?: string;
 }
 
-type HarvestFormEntry = Omit<HarvestPond, 'pondName'> & { date: string };
+type HarvestFormEntry = Omit<HarvestPond, 'pondName' | 'harvestType'> & { date: string; harvestType: HarvestType };
 
 export default function HarvestPage() {
   const copy = useDashboardCopy();
@@ -143,6 +144,7 @@ export default function HarvestPage() {
   const loading = !pondsResolved || !cyclesResolved || !harvestRecordsResolved;
 
   const [isModalOpen, setModalOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<HarvestRecord | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [harvestFilter, setHarvestFilter] = useState<'current' | 'history'>('current');
   const [selectedCycleId, setSelectedCycleId] = useState('');
@@ -213,6 +215,16 @@ export default function HarvestPage() {
     () => new Set(accessiblePonds.map((pond) => pond.id)),
     [accessiblePonds],
   );
+  const formPonds = useMemo(() => editingRecord
+    ? editingRecord.ponds
+        .map((harvestPond) => accessiblePonds.find((pond) => pond.id === harvestPond.pondId))
+        .filter(Boolean) as Pond[]
+    : selectedCyclePonds,
+  [accessiblePonds, editingRecord, selectedCyclePonds]);
+  const formCycle = useMemo(() => editingRecord
+    ? cycles.find((cycle) => cycle.id === editingRecord.cycleId)
+    : selectedCycle,
+  [cycles, editingRecord, selectedCycle]);
 
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
@@ -326,12 +338,14 @@ export default function HarvestPage() {
 
     try {
       const entries = [...harvestBatch, formData];
-      const selectedPonds = entries.map((entry) => selectedCyclePonds.find((pond) => pond.id === entry.pondId));
+      const selectedPonds = entries.map((entry) => formPonds.find((pond) => pond.id === entry.pondId));
       if (selectedPonds.some((pond) => !pond)) return;
       for (let index = 0; index < entries.length; index += 1) {
         const selectedPond = selectedPonds[index]!;
         const removal = calculateHarvestRemoval(entries[index]);
-        const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass;
+        const previousHarvestPond = editingRecord?.ponds.find((pond) => pond.pondId === entries[index].pondId);
+        const estimatedBiomass = calculatePondMetricsWithHarvest(selectedPond).currentBiomass
+          + (previousHarvestPond ? calculateHarvestRemoval(previousHarvestPond).biomass : 0);
         if (estimatedBiomass > 0 && removal.biomass > estimatedBiomass * 1.1 && !window.confirm(
           `${selectedPond.pondName}: recorded harvest (${removal.biomass.toFixed(1)} kg) is higher than estimated pond biomass (${estimatedBiomass.toFixed(1)} kg). This can happen when sampling underestimates stock or MBW. Continue saving?`
         )) return;
@@ -342,10 +356,10 @@ export default function HarvestPage() {
       const newRecord: HarvestRecord = {
         id: harvestRef.id,
         date: formData.date,
-        cycleId: firstPond.cycleId || selectedCycle?.id,
-        cycleName: firstPond.cycleName || selectedCycle?.cycleName,
-        blockId: firstPond.blockId || selectedCycle?.blockId,
-        blockName: firstPond.blockName || selectedCycle?.blockName || selectedCycle?.blockNames?.[0],
+        cycleId: editingRecord?.cycleId || firstPond.cycleId || formCycle?.id,
+        cycleName: editingRecord?.cycleName || firstPond.cycleName || formCycle?.cycleName,
+        blockId: editingRecord?.blockId || firstPond.blockId || formCycle?.blockId,
+        blockName: editingRecord?.blockName || firstPond.blockName || formCycle?.blockName || formCycle?.blockNames?.[0],
         ponds: entries.map((entry, index) => {
           return {
             pondId: entry.pondId,
@@ -357,8 +371,8 @@ export default function HarvestPage() {
             subSize: entry.subSize,
             subPrice: entry.subPrice,
             pondName: selectedPonds[index]!.pondName,
-            cycleId: selectedPonds[index]!.cycleId || selectedCycle?.id,
-            cycleName: selectedPonds[index]!.cycleName || selectedCycle?.cycleName,
+            cycleId: selectedPonds[index]!.cycleId || editingRecord?.cycleId || formCycle?.id,
+            cycleName: selectedPonds[index]!.cycleName || editingRecord?.cycleName || formCycle?.cycleName,
             pondCycleId: selectedPonds[index]!.pondCycleId || selectedPonds[index]!.id,
             blockId: selectedPonds[index]!.blockId,
             blockName: selectedPonds[index]!.blockName,
@@ -367,16 +381,52 @@ export default function HarvestPage() {
       };
 
       await runTransaction(db, async (transaction) => {
-        const pondRefs = selectedPonds.map((pond) => doc(db, 'companies', companyId, 'ponds', pond!.id));
+        const previousHarvestRef = editingRecord
+          ? doc(db, 'companies', companyId, 'harvestRecords', editingRecord.id)
+          : null;
+        const previousHarvestSnapshot = previousHarvestRef
+          ? await transaction.get(previousHarvestRef)
+          : null;
+        if (editingRecord && (!previousHarvestSnapshot?.exists() || previousHarvestSnapshot.data().voided)) {
+          throw new Error('The original harvest is no longer available to edit');
+        }
+        const previousRecord = previousHarvestSnapshot?.exists()
+          ? ({ id: previousHarvestSnapshot.id, ...previousHarvestSnapshot.data() } as HarvestRecord)
+          : null;
+        const uniquePondIds = Array.from(new Set([
+          ...(previousRecord?.ponds.map((pond) => pond.pondId) || []),
+          ...selectedPonds.map((pond) => pond!.id),
+        ]));
+        const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', companyId, 'ponds', pondId));
         const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
-        if (pondSnapshots.some((snapshot) => !snapshot.exists())) throw new Error('A selected pond was not found');
+        const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
+        if (selectedPonds.some((pond) => !pondSnapshotsById.get(pond!.id)?.exists())) throw new Error('A selected pond was not found');
 
-        const canonicalPonds = pondSnapshots.map((pondSnapshot, index) => {
-          const serverPond = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
-          const harvestPond = newRecord.ponds[index];
-          const partialHarvestNumber = harvestPond.harvestType === 'partial' ? getNextPartialHarvestNumber(serverPond) : undefined;
+        const updatedPondsById = new Map<string, Pond>();
+        pondSnapshots.forEach((pondSnapshot) => {
+          if (pondSnapshot.exists()) updatedPondsById.set(pondSnapshot.id, { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond);
+        });
+        previousRecord?.ponds.forEach((harvestPond) => {
+          const pond = updatedPondsById.get(harvestPond.pondId);
+          if (pond) updatedPondsById.set(harvestPond.pondId, reverseHarvestImpactOnPond(pond, harvestPond));
+        });
+
+        const canonicalPonds = newRecord.ponds.map((harvestPond) => {
+          const serverPond = updatedPondsById.get(harvestPond.pondId)!;
+          const previousHarvestPond = previousRecord?.ponds.find((pond) => pond.pondId === harvestPond.pondId);
+          const partialHarvestNumber = harvestPond.harvestType === 'partial'
+            ? harvestPond.partialHarvestNumber
+              || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
+              || getNextPartialHarvestNumber(serverPond)
+            : undefined;
           const canonicalHarvestPond = withHarvestReference(serverPond, { ...harvestPond, partialHarvestNumber });
           const updatedPond = applyHarvestImpactToPond(serverPond, canonicalHarvestPond, newRecord.date, partialHarvestNumber);
+          updatedPondsById.set(harvestPond.pondId, updatedPond);
+          return canonicalHarvestPond;
+        });
+        pondSnapshots.forEach((pondSnapshot) => {
+          if (!pondSnapshot.exists()) return;
+          const updatedPond = updatedPondsById.get(pondSnapshot.id)!;
           transaction.update(pondSnapshot.ref, {
             totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
             totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
@@ -390,13 +440,13 @@ export default function HarvestPage() {
             updatedAt: serverTimestamp(),
             updatedBy: user.uid,
           });
-          return canonicalHarvestPond;
         });
         const revenue = buildHarvestRevenue({ ...newRecord, ponds: canonicalPonds });
         transaction.set(harvestRef, {
           financeEntry: { ...financeSourceEntry(revenue), id: financeSyncDocumentId(revenue.reference) },
           ...newRecord,
           ponds: canonicalPonds,
+          ...(previousRecord ? { correctedFromHarvestId: previousRecord.id } : {}),
           createdAt: serverTimestamp(),
           createdBy: user.uid,
         });
@@ -411,9 +461,29 @@ export default function HarvestPage() {
             updatedAt: serverTimestamp(),
           }, { merge: true });
         }
+        if (previousRecord && previousHarvestRef) {
+          const previousRevenue = buildHarvestRevenue(previousRecord);
+          const previousRevenueId = financeSyncDocumentId(previousRevenue.reference);
+          transaction.update(previousHarvestRef, {
+            voided: true,
+            voidedAt: serverTimestamp(),
+            voidedBy: user.uid,
+            financeEntry: { ...financeSourceEntry(previousRevenue), id: previousRevenueId, voided: true },
+          });
+          transaction.set(doc(db, 'companies', companyId, 'revenues', previousRevenueId), {
+            ...previousRevenue,
+            companyId,
+            addedBy: user.uid,
+            timestamp: Date.now(),
+            voided: true,
+            voidedAt: serverTimestamp(),
+            voidedBy: user.uid,
+          }, { merge: true });
+        }
       });
 
       setModalOpen(false);
+      setEditingRecord(null);
       setHarvestBatch([]);
       setFormData({
         date: today,
@@ -427,7 +497,7 @@ export default function HarvestPage() {
         subPrice: ''
       });
     } catch (error) {
-      console.error('Error adding harvest record:', error);
+      console.error('Error saving harvest record:', error);
       alert(t.harvestCycle.saveFailed);
     }
   };
@@ -443,6 +513,73 @@ export default function HarvestPage() {
       ...current,
       pondId: '', biomass: '', size: '', price: '', subBiomass: '', subSize: '', subPrice: '',
     }));
+  };
+
+  const closeHarvestModal = () => {
+    setModalOpen(false);
+    setEditingRecord(null);
+    setHarvestBatch([]);
+    setFormData({
+      date: today,
+      pondId: '',
+      harvestType: 'partial',
+      biomass: '',
+      size: '',
+      price: '',
+      subBiomass: '',
+      subSize: '',
+      subPrice: '',
+    });
+  };
+
+  const openCreateHarvest = () => {
+    setEditingRecord(null);
+    setHarvestBatch([]);
+    setFormData({
+      date: today,
+      pondId: '',
+      harvestType: 'partial',
+      biomass: '',
+      size: '',
+      price: '',
+      subBiomass: '',
+      subSize: '',
+      subPrice: '',
+    });
+    setModalOpen(true);
+  };
+
+  const openEditRecord = (record: HarvestRecord, pondId?: string) => {
+    if (!canEditHarvest || !canModifyHarvestRecord(record.id)) return;
+    const targetPond = record.ponds.find((pond) => pond.pondId === pondId) || record.ponds[record.ponds.length - 1];
+    const orderedPonds = targetPond
+      ? [...record.ponds.filter((pond) => pond.pondId !== targetPond.pondId), targetPond]
+      : record.ponds;
+    const entries: HarvestFormEntry[] = orderedPonds.map((pond) => ({
+      date: record.date,
+      pondId: pond.pondId,
+      cycleId: pond.cycleId,
+      cycleName: pond.cycleName,
+      pondCycleId: pond.pondCycleId,
+      blockId: pond.blockId,
+      blockName: pond.blockName,
+      harvestType: pond.harvestType || 'partial',
+      partialHarvestNumber: pond.partialHarvestNumber,
+      harvestReferenceSamplingId: pond.harvestReferenceSamplingId,
+      harvestReferenceSamplingDate: pond.harvestReferenceSamplingDate,
+      harvestReferenceMbw: pond.harvestReferenceMbw,
+      biomass: pond.biomass || '',
+      size: pond.size || '',
+      price: pond.price || '',
+      subBiomass: pond.subBiomass || '',
+      subSize: pond.subSize || '',
+      subPrice: pond.subPrice || '',
+    }));
+    if (entries.length === 0) return;
+    setEditingRecord(record);
+    setHarvestBatch(entries.slice(0, -1));
+    setFormData(entries[entries.length - 1]);
+    setModalOpen(true);
   };
 
   const handleDeleteRecord = async (recordId: string) => {
@@ -570,10 +707,8 @@ export default function HarvestPage() {
           <button
             className="dashboard-action dashboard-action-primary"
             disabled={selectedCyclePonds.length === 0}
-            onClick={() => {
-            setFormData(prev => ({ ...prev, date: today, pondId: '' }));
-            setModalOpen(true);
-          }} style={selectedCyclePonds.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+            onClick={openCreateHarvest}
+            style={selectedCyclePonds.length === 0 ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
             <Plus size={20} />
             <span>{t.harvestCycle.logHarvest}</span>
           </button>
@@ -689,13 +824,25 @@ export default function HarvestPage() {
                     </div>
                   </div>
                   {canEditHarvest && canModifyHarvestRecord(record.id) ? (
-                    <button onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer' }}><Trash2 size={18} /></button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <button aria-label={`${t.actions.edit} ${t.harvest.harvest}`} onClick={() => openEditRecord(record)} style={{ background: '#EAF6FD', border: '1px solid #BBE1FA', borderRadius: '8px', color: '#0F4C75', padding: '7px', cursor: 'pointer' }}><Pencil size={17} /></button>
+                      <button aria-label={`${t.actions.delete} ${t.harvest.harvest}`} onClick={() => handleDeleteRecord(record.id)} style={{ background: 'transparent', border: 'none', color: '#ef4444', opacity: 0.5, cursor: 'pointer', padding: '7px' }}><Trash2 size={18} /></button>
+                    </div>
                   ) : null}
                 </div>
 
                 <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
                   {record.ponds.map((p, idx) => (
-                    <div key={idx} style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)' }}>
+                    <div
+                      key={idx}
+                      role={canEditHarvest && canModifyHarvestRecord(record.id) ? 'button' : undefined}
+                      tabIndex={canEditHarvest && canModifyHarvestRecord(record.id) ? 0 : undefined}
+                      onClick={canEditHarvest && canModifyHarvestRecord(record.id) ? () => openEditRecord(record, p.pondId) : undefined}
+                      onKeyDown={canEditHarvest && canModifyHarvestRecord(record.id) ? (event) => {
+                        if (event.key === 'Enter' || event.key === ' ') openEditRecord(record, p.pondId);
+                      } : undefined}
+                      style={{ padding: '14px', borderRadius: '12px', background: 'var(--bg-mid)', cursor: canEditHarvest && canModifyHarvestRecord(record.id) ? 'pointer' : 'default' }}
+                    >
                       <div style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px' }}>{p.pondName}</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
                         <span style={{ display: 'inline-flex', padding: '4px 9px', borderRadius: '999px', background: '#BBE1FA', color: '#0F4C75', fontSize: '11px', fontWeight: 600 }}>
@@ -738,10 +885,12 @@ export default function HarvestPage() {
           <div className={`glass-card responsive-modal ${styles.harvestModal}`} style={{ width: '100%', maxWidth: '700px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
             <div className={`responsive-modal-header ${styles.harvestHeader}`} style={{ padding: '18px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h2 className={styles.harvestTitle} style={{ fontSize: '20px', fontWeight: 600 }}>{t.harvestCycle.logHarvest}</h2>
+                <h2 className={styles.harvestTitle} style={{ fontSize: '20px', fontWeight: 600 }}>
+                  {editingRecord ? `${t.actions.edit} ${t.harvest.harvest}` : t.harvestCycle.logHarvest}
+                </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '14px', marginTop: '4px' }}>{t.harvest.recordHarvestDescription}</p>
               </div>
-              <button className={styles.closeButton} aria-label={copy('Close')} onClick={() => setModalOpen(false)} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
+              <button className={styles.closeButton} aria-label={copy('Close')} onClick={closeHarvestModal} style={{ border: 'none', padding: '8px', cursor: 'pointer' }}>
                 <X size={20} />
               </button>
             </div>
@@ -750,11 +899,11 @@ export default function HarvestPage() {
               <div className={styles.harvestFormScroll}>
               <div className={styles.cycleSummary} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', padding: '12px', borderRadius: '14px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>{selectedCycle?.cycleName}</div>
-                  <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>{selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockNotAssigned}</div>
+                  <div style={{ color: 'var(--text-primary)', fontSize: '16px', fontWeight: 600 }}>{editingRecord?.cycleName || formCycle?.cycleName}</div>
+                  <div style={{ marginTop: '3px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600 }}>{editingRecord?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName || t.harvestCycle.blockNotAssigned}</div>
                 </div>
                 <div style={{ flexShrink: 0, alignSelf: 'center', padding: '7px 10px', borderRadius: '999px', background: '#EAF6FD', color: '#0F4C75', fontSize: '11px', fontWeight: 600 }}>
-                  {selectedCyclePonds.length} {t.harvest.pond}
+                  {formPonds.length} {t.harvest.pond}
                 </div>
               </div>
               <div className={`responsive-form-grid ${styles.harvestGrid}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
@@ -762,12 +911,13 @@ export default function HarvestPage() {
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.harvestCycle.selectPond}</label>
                   <select
                     required
+                    disabled={Boolean(editingRecord)}
                     value={formData.pondId}
                     onChange={e => setFormData({...formData, pondId: e.target.value})}
                     style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}
                   >
                     <option value="">{t.harvestCycle.choosePond}</option>
-                    {selectedCyclePonds
+                    {formPonds
                       .filter((pond) => !harvestBatch.some((entry) => entry.pondId === pond.id))
                       .map(p => <option key={p.id} value={p.id}>{p.pondName}</option>)}
                   </select>
@@ -777,8 +927,8 @@ export default function HarvestPage() {
                   <div style={{ gridColumn: 'span 2', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                     {harvestBatch.map((entry) => (
                       <div key={entry.pondId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', borderRadius: '10px', background: '#EAF6FD' }}>
-                        <span style={{ fontWeight: 600 }}>{selectedCyclePonds.find((pond) => pond.id === entry.pondId)?.pondName} · {entry.biomass} kg</span>
-                        <button type="button" onClick={() => setHarvestBatch((current) => current.filter((item) => item.pondId !== entry.pondId))} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#e74c3c' }} aria-label={copy('Remove pond from harvest batch')}><Trash2 size={16} /></button>
+                        <span style={{ fontWeight: 600 }}>{formPonds.find((pond) => pond.id === entry.pondId)?.pondName} · {entry.biomass} kg</span>
+                        {!editingRecord && <button type="button" onClick={() => setHarvestBatch((current) => current.filter((item) => item.pondId !== entry.pondId))} style={{ border: 0, background: 'transparent', cursor: 'pointer', color: '#e74c3c' }} aria-label={copy('Remove pond from harvest batch')}><Trash2 size={16} /></button>}
                       </div>
                     ))}
                   </div>
@@ -849,7 +999,7 @@ export default function HarvestPage() {
                     </div>
                   </div>
                 </div>
-                {selectedCyclePonds.length > harvestBatch.length + 1 && (
+                {!editingRecord && formPonds.length > harvestBatch.length + 1 && (
                   <button type="button" onClick={addPondToBatch} style={{ gridColumn: 'span 2', minHeight: '40px', borderRadius: '10px', border: '1px solid #0F4C75', color: '#0F4C75', background: '#FFFFFF', fontWeight: 600, cursor: 'pointer' }}>
                     <Plus size={16} style={{ verticalAlign: 'middle', marginRight: '6px' }} /> {copy('Add another pond to this harvest')}
                   </button>
@@ -858,7 +1008,7 @@ export default function HarvestPage() {
               </div>
 
               <div className={`responsive-modal-footer ${styles.harvestFooter}`} style={{ display: 'flex', gap: '10px' }}>
-                <button type="button" onClick={() => setModalOpen(false)} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
+                <button type="button" onClick={closeHarvestModal} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{t.actions.cancel}</button>
                 <button type="submit" className={`btn-primary ${styles.saveButton}`} style={{ flex: 1, minHeight: '40px', padding: '0 12px', borderRadius: '12px', fontWeight: 600 }}>{t.actions.save} {t.harvest.harvest}</button>
               </div>
             </form>

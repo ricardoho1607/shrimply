@@ -234,7 +234,7 @@ export type FarmCacheStatus = 'idle' | 'hydrating' | 'ready' | 'miss';
 
 interface PondStore {
   ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'delete', harvestRecord: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
+  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
@@ -243,7 +243,7 @@ interface PondStore {
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   deletePhysicalPond: (pondId: string) => void;
   addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
-  addHarvestRecord: (record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
+  addHarvestRecord: (record: HarvestRecord) => void; updateHarvestRecord: (harvestId: string, record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
   addFeedData: (pondId: string, record: FeedData, date: string, localOnly?: boolean) => void;
@@ -606,6 +606,58 @@ export const usePondStore = create<PondStore>()(
           }),
         }));
         get().firebaseSync?.syncHarvestRecord('create', recordWithCycle);
+      },
+
+      updateHarvestRecord: (harvestId, record) => {
+        const state = get();
+        const previousRecord = state.harvestRecords.find((item) => item.id === harvestId);
+        if (!previousRecord) return;
+        const resolvedCycleId = record.cycleId || previousRecord.cycleId;
+        if (resolvedCycleId && !harvestPondsBelongToCycle(record.ponds, resolvedCycleId)) {
+          console.warn('Skipped harvest update: all ponds must belong to the same production cycle.');
+          return;
+        }
+
+        const affectedPondIds = new Set([
+          ...previousRecord.ponds.map((pond) => pond.pondId),
+          ...record.ponds.map((pond) => pond.pondId),
+        ]);
+        const nextPonds = state.ponds.map((pond) => {
+          if (!affectedPondIds.has(pond.id)) return pond;
+          const previousHarvestPond = previousRecord.ponds.find((item) => item.pondId === pond.id);
+          const nextHarvestPond = record.ponds.find((item) => item.pondId === pond.id);
+          const revertedPond = previousHarvestPond
+            ? reverseHarvestImpactOnPond(pond, previousHarvestPond)
+            : pond;
+          return nextHarvestPond
+            ? applyHarvestImpactToPond(
+                revertedPond,
+                nextHarvestPond,
+                record.date,
+                nextHarvestPond.partialHarvestNumber,
+              )
+            : revertedPond;
+        });
+        const replacementRecord: HarvestRecord = {
+          ...record,
+          cycleId: resolvedCycleId,
+          ponds: record.ponds.map((harvestPond) => {
+            const pond = nextPonds.find((item) => item.id === harvestPond.pondId);
+            const previousHarvestPond = previousRecord.ponds.find((item) => item.pondId === harvestPond.pondId);
+            const partialHarvestNumber = harvestPond.harvestType === 'partial'
+              ? harvestPond.partialHarvestNumber
+                || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
+                || (pond ? getNextPartialHarvestNumber(pond) : 1)
+              : undefined;
+            return withHarvestReference(pond || {}, { ...harvestPond, partialHarvestNumber });
+          }),
+        };
+
+        set({
+          harvestRecords: [replacementRecord, ...state.harvestRecords.filter((item) => item.id !== harvestId)],
+          ponds: nextPonds,
+        });
+        state.firebaseSync?.syncHarvestRecord('update', replacementRecord, previousRecord);
       },
 
       removeHarvestRecord: (harvestId) => {

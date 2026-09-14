@@ -46,7 +46,7 @@ export default function HarvestScreen() {
   const { t, currentLanguage } = useLanguage();
   const { formatCurrency, currencyConfig } = useCurrency();
   const { user, company } = useAuth();
-  const { ponds, cycles, harvestRecords, addHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
+  const { ponds, cycles, harvestRecords, addHarvestRecord, updateHarvestRecord, removeHarvestRecord, calculatePondMetricsWithHarvest } = usePondStore();
   const enterpriseBlocks = useEnterpriseBlocks(
     company?.businessSize === 'enterprise' ? company?.id : undefined,
     user?.uid,
@@ -101,6 +101,7 @@ export default function HarvestScreen() {
   }, [accessiblePondIds, company?.businessSize, harvestRecords, user?.role]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [editingHarvest, setEditingHarvest] = useState<HarvestRecord | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [harvestToDelete, setHarvestToDelete] = useState<string | null>(null);
 
@@ -111,6 +112,16 @@ export default function HarvestScreen() {
   const selectedCyclePonds = React.useMemo(() => activePonds.filter((pond) => (
     pond.cycleId === selectedCycleId || (!pond.cycleId && activeCycles.length === 1)
   )), [activeCycles.length, activePonds, selectedCycleId]);
+  const formPonds = React.useMemo(() => editingHarvest
+    ? editingHarvest.ponds
+        .map((harvestPond) => accessiblePonds.find((pond) => pond.id === harvestPond.pondId))
+        .filter(Boolean) as typeof accessiblePonds
+    : selectedCyclePonds,
+  [accessiblePonds, editingHarvest, selectedCyclePonds]);
+  const formCycle = React.useMemo(() => editingHarvest
+    ? cycles.find((cycle) => cycle.id === editingHarvest.cycleId)
+    : selectedCycle,
+  [cycles, editingHarvest, selectedCycle]);
   const selectedCyclePondIds = React.useMemo(
     () => new Set(selectedCyclePonds.map((pond) => pond.id)),
     [selectedCyclePonds],
@@ -127,7 +138,7 @@ export default function HarvestScreen() {
     biomass: "", size: "", price: "", subBiomass: "", subSize: "", subPrice: "",
   })), [selectedCycle?.cycleName, selectedCycleId, selectedCyclePonds]);
 
-  const [pondData, setPondData] = useState(initializePondData());
+  const [pondData, setPondData] = useState<HarvestRecord['ponds']>(initializePondData());
   const [expandedPondId, setExpandedPondId] = useState<string | null>(selectedCyclePonds[0]?.id ?? null);
   const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -204,8 +215,8 @@ export default function HarvestScreen() {
   };
 
   const openNextPond = (pondId: string) => {
-    const currentIndex = selectedCyclePonds.findIndex((pond) => pond.id === pondId);
-    setExpandedPondId(selectedCyclePonds[currentIndex + 1]?.id ?? null);
+    const currentIndex = formPonds.findIndex((pond) => pond.id === pondId);
+    setExpandedPondId(formPonds[currentIndex + 1]?.id ?? null);
   };
 
   const getHarvestBiomass = (pond: { biomass: string; subBiomass: string }) =>
@@ -213,17 +224,22 @@ export default function HarvestScreen() {
 
   const getExcessHarvestWarning = (pondsWithData: typeof pondData) => {
     const warningPond = pondsWithData.find((harvestPond) => {
-      const pond = selectedCyclePonds.find((item) => item.id === harvestPond.pondId);
+      const pond = formPonds.find((item) => item.id === harvestPond.pondId);
       if (!pond) return false;
 
-      const estimatedBiomass = calculatePondMetricsWithHarvest(pond).currentBiomass;
+      const previousHarvestPond = editingHarvest?.ponds.find((item) => item.pondId === harvestPond.pondId);
+      const estimatedBiomass = calculatePondMetricsWithHarvest(pond).currentBiomass
+        + (previousHarvestPond ? getHarvestBiomass(previousHarvestPond) : 0);
       return estimatedBiomass > 0 && getHarvestBiomass(harvestPond) > estimatedBiomass * 1.1;
     });
 
     if (!warningPond) return null;
 
-    const pond = selectedCyclePonds.find((item) => item.id === warningPond.pondId);
-    const estimatedBiomass = pond ? calculatePondMetricsWithHarvest(pond).currentBiomass : 0;
+    const pond = formPonds.find((item) => item.id === warningPond.pondId);
+    const previousHarvestPond = editingHarvest?.ponds.find((item) => item.pondId === warningPond.pondId);
+    const estimatedBiomass = pond
+      ? calculatePondMetricsWithHarvest(pond).currentBiomass + (previousHarvestPond ? getHarvestBiomass(previousHarvestPond) : 0)
+      : 0;
 
     return {
       pondName: warningPond.pondName,
@@ -242,10 +258,10 @@ export default function HarvestScreen() {
     const newHarvest: HarvestRecord = {
       id: Date.now().toString(),
       date: harvestDate,
-      cycleId: selectedCycle?.id,
-      cycleName: selectedCycle?.cycleName,
-      blockId: selectedCycle?.blockId || selectedCyclePonds[0]?.blockId,
-      blockName: selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName,
+      cycleId: editingHarvest?.cycleId || formCycle?.id,
+      cycleName: editingHarvest?.cycleName || formCycle?.cycleName,
+      blockId: editingHarvest?.blockId || formCycle?.blockId || formPonds[0]?.blockId,
+      blockName: editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName,
       ponds: pondsWithData.map((pond) => ({
         ...pond,
         biomass: pond.biomass.trim(),
@@ -257,10 +273,12 @@ export default function HarvestScreen() {
       })),
     };
 
-    addHarvestRecord(newHarvest);
+    if (editingHarvest) updateHarvestRecord(editingHarvest.id, newHarvest);
+    else addHarvestRecord(newHarvest);
     resetForm();
+    setEditingHarvest(null);
     setIsModalVisible(false);
-  }, [addHarvestRecord, harvestDate, selectedCycle, selectedCyclePonds, resetForm]);
+  }, [addHarvestRecord, editingHarvest, formCycle, formPonds, harvestDate, resetForm, updateHarvestRecord]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -277,7 +295,8 @@ export default function HarvestScreen() {
     const pondsWithData = pondData.filter(pond =>
       pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
 
-    if (!selectedCycle || selectedCyclePonds.length === 0) {
+    const formCycleId = editingHarvest?.cycleId || formCycle?.id;
+    if (!formCycleId || formPonds.length === 0) {
       Alert.alert(t.messages.error, t.harvest.noActivePonds);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -290,7 +309,7 @@ export default function HarvestScreen() {
       return;
     }
 
-    if (!harvestPondsBelongToCycle(pondsWithData, selectedCycle.id)) {
+    if (!harvestPondsBelongToCycle(pondsWithData, formCycleId)) {
       Alert.alert(t.messages.error, t.harvestCycle.sameCycleRequired);
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -358,9 +377,41 @@ export default function HarvestScreen() {
 
   const handleModalClose = () => {
     resetForm();
+    setEditingHarvest(null);
     submitLockRef.current = false;
     setIsSubmitting(false);
     setIsModalVisible(false);
+  };
+
+  const handleEditHarvest = (record: HarvestRecord) => {
+    if (!canEditHarvest || !canModifyHarvestRecord(record.id)) {
+      Alert.alert(t.harvest.permissionDenied, t.harvest.permissionMessage);
+      return;
+    }
+    setEditingHarvest(record);
+    setHarvestDate(record.date);
+    setPondData(record.ponds.map((pond) => ({
+      ...pond,
+      cycleId: pond.cycleId || record.cycleId || '',
+      cycleName: pond.cycleName || record.cycleName,
+      pondCycleId: pond.pondCycleId || pond.pondId,
+      blockId: pond.blockId || record.blockId,
+      blockName: pond.blockName || record.blockName,
+      harvestType: pond.harvestType || 'partial',
+      biomass: pond.biomass || '',
+      size: pond.size || '',
+      price: pond.price || '',
+      subBiomass: pond.subBiomass || '',
+      subSize: pond.subSize || '',
+      subPrice: pond.subPrice || '',
+    })));
+    setExpandedPondId(record.ponds[0]?.pondId ?? null);
+    setSecondaryPondIds(record.ponds
+      .filter((pond) => Boolean(pond.subBiomass || pond.subSize || pond.subPrice))
+      .map((pond) => pond.pondId));
+    submitLockRef.current = false;
+    setIsSubmitting(false);
+    setIsModalVisible(true);
   };
 
   const handleDeleteHarvest = (harvestId: string) => {
@@ -541,10 +592,20 @@ export default function HarvestScreen() {
                       </Text>
                     </TouchableOpacity>
                     {canEditHarvest && canModifyHarvestRecord(harvest.id) && (
-                      <TouchableOpacity style={styles.deleteButton}
-                        onPress={() => handleDeleteHarvest(harvest.id)}>
-                        <Ionicons name="trash-outline" size={20} color="#e74c3c" />
-                      </TouchableOpacity>
+                      <View style={styles.cardActions}>
+                        <TouchableOpacity
+                          style={styles.editButton}
+                          onPress={() => handleEditHarvest(harvest)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${t.actions.edit} ${t.harvest.harvest}`}
+                        >
+                          <Ionicons name="pencil-outline" size={20} color="#0F4C75" />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.deleteButton}
+                          onPress={() => handleDeleteHarvest(harvest.id)}>
+                          <Ionicons name="trash-outline" size={20} color="#e74c3c" />
+                        </TouchableOpacity>
+                      </View>
                     )}
                   </View>
                   <TouchableOpacity onPress={() => handleHarvestCardClick(harvest.id, harvest.date)}>
@@ -575,6 +636,7 @@ export default function HarvestScreen() {
                 return;
               }
               setHarvestDate(getFarmDateKey(new Date(), company?.timeZone));
+              setEditingHarvest(null);
               submitLockRef.current = false;
               setIsSubmitting(false);
               setPondData(initializePondData());
@@ -594,7 +656,9 @@ export default function HarvestScreen() {
           >
             <View style={styles.modalContent}>
               <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>{t.harvest.addRecord}</Text>
+                <Text style={styles.modalTitle}>
+                  {editingHarvest ? `${t.actions.edit} ${t.harvest.harvest}` : t.harvest.addRecord}
+                </Text>
                 <TouchableOpacity
                   onPress={handleModalClose}
                   style={styles.closeButton}
@@ -615,9 +679,9 @@ export default function HarvestScreen() {
               >
                 <View style={styles.harvestContextCard}>
                   <View style={styles.harvestContextCopy}>
-                    <Text style={styles.harvestContextValue}>{selectedCycle?.cycleName}</Text>
+                    <Text style={styles.harvestContextValue}>{editingHarvest?.cycleName || formCycle?.cycleName}</Text>
                     <Text style={styles.harvestContextMeta}>
-                      {selectedCycle?.blockName || selectedCycle?.blockNames?.[0] || selectedCyclePonds[0]?.blockName || t.harvestCycle.blockNotAssigned}
+                      {editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName || t.harvestCycle.blockNotAssigned}
                     </Text>
                   </View>
                   <View style={styles.harvestDateField}>
@@ -638,20 +702,20 @@ export default function HarvestScreen() {
                     <Text style={styles.progressCount}>
                       {t.harvest.pondsCompleted
                         .replace('{{completed}}', String(completedPondCount))
-                        .replace('{{total}}', String(selectedCyclePonds.length))}
+                        .replace('{{total}}', String(formPonds.length))}
                     </Text>
                   </View>
                   <View style={styles.progressTrack}>
                     <View
                       style={[
                         styles.progressFill,
-                        { width: `${selectedCyclePonds.length > 0 ? (completedPondCount / selectedCyclePonds.length) * 100 : 0}%` },
+                        { width: `${formPonds.length > 0 ? (completedPondCount / formPonds.length) * 100 : 0}%` },
                       ]}
                     />
                   </View>
                 </View>
 
-                {selectedCyclePonds.map((pond) => {
+                {formPonds.map((pond) => {
                   const currentPondData = pondData.find(p => p.pondId === pond.id);
                   if (!currentPondData) return null;
                   const isExpanded = expandedPondId === pond.id;
@@ -793,12 +857,12 @@ export default function HarvestScreen() {
                         accessibilityRole="button"
                       >
                         <Text style={[styles.nextPondButtonText, !isComplete && styles.nextPondButtonTextDisabled]}>
-                          {selectedCyclePonds[selectedCyclePonds.length - 1]?.id === pond.id
+                          {formPonds[formPonds.length - 1]?.id === pond.id
                             ? t.harvest.finishPondEntry
                             : t.harvest.nextPond}
                         </Text>
                         <Ionicons
-                          name={selectedCyclePonds[selectedCyclePonds.length - 1]?.id === pond.id ? "checkmark" : "arrow-forward"}
+                          name={formPonds[formPonds.length - 1]?.id === pond.id ? "checkmark" : "arrow-forward"}
                           size={18}
                           color={isComplete ? "#FFFFFF" : "#8ba2b3"}
                         />
@@ -887,11 +951,13 @@ const styles = StyleSheet.create({
   recordCard: { backgroundColor: '#FFFFFF', padding: 20, borderRadius: 16, marginBottom: 16, borderWidth: 1, borderColor: '#e8f2f9', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
   cardContent: { flex: 1 },
+  cardActions: { flexDirection: 'row', gap: 6, marginLeft: 8 },
+  editButton: { padding: 8, backgroundColor: 'rgba(15, 76, 117, 0.08)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(15, 76, 117, 0.22)' },
   harvestTitle: { fontSize: 20, fontWeight: 'bold', color: '#0d2137' },
   dateText: { color: '#0d2137', fontSize: 12, marginTop: 4 },
   recordCycleText: { color: '#6b8aa0', fontSize: 11, fontWeight: '700', marginTop: 4 },
   harvestTypeSummary: { color: '#315f57', fontSize: 12, fontWeight: '700', marginTop: 6 },
-  deleteButton: { padding: 8, marginLeft: 8, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(231, 76, 60, 0.3)' },
+  deleteButton: { padding: 8, backgroundColor: 'rgba(231, 76, 60, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(231, 76, 60, 0.3)' },
   parametersContainer: { gap: 12 },
   parameterRow: { flexDirection: 'row', justifyContent: 'space-between' },
   summaryItem: { flex: 1, flexDirection: 'row', alignItems: 'center', marginHorizontal: 4, minWidth: 0 },

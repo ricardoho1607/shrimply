@@ -46,8 +46,15 @@ test('harvest creation and void preserve source and ledger while forbidding deta
   await assertFails(updateDoc(ref, { date: '2026-09-10' }));
   await assertFails(updateDoc(ref, { voided: true, financeEntry: { ...entry, voided: true } }));
   await assertFails(deleteDoc(ref)); await assertFails(deleteDoc(ledger));
-  const cancel = writeBatch(db); cancel.update(ref, { voided: true, financeEntry: { ...entry, voided: true } }); cancel.update(ledger, { voided: true });
-  await assertSucceeds(cancel.commit());
+  const replacementRef = doc(db, 'companies/farm/harvestRecords/h2');
+  const replacementLedger = doc(db, 'companies/farm/revenues/sync_HARVEST-h2');
+  const replacementEntry = { id: 'sync_HARVEST-h2', reference: 'HARVEST-h2', date: '2026-09-10', amount: 72, voided: false };
+  const correction = writeBatch(db);
+  correction.update(ref, { voided: true, financeEntry: { ...entry, voided: true } });
+  correction.update(ledger, { voided: true });
+  correction.set(replacementRef, { id: 'h2', correctedFromHarvestId: 'h1', date: replacementEntry.date, ponds: [{ biomass: 12, price: 6 }], financeEntry: replacementEntry });
+  correction.set(replacementLedger, { ...replacementEntry, companyId: 'farm', sourceKind: 'harvest', sourceId: 'h2' });
+  await assertSucceeds(correction.commit());
 });
 test('manual entries remain editable by finance managers and operators cannot alter payments', async () => {
   const db = dbFor('owner'); const ref = doc(db, 'companies/farm/expenses/manual');

@@ -72,6 +72,7 @@ interface PendingChange {
   type: 'pond' | 'physicalPond' | 'sampling' | 'mortality' | 'harvest' | 'cycle';
   action: 'create' | 'update' | 'delete';
   data: any;
+  previousData?: any;
   timestamp: number;
   pondId?: string;
   samplingId?: string;
@@ -88,6 +89,29 @@ const removeUndefinedFields = (value: any): any => {
     }
     return cleaned;
   }, {} as Record<string, any>);
+};
+
+const applyPendingHarvestChanges = (
+  serverRecords: HarvestRecord[],
+  pendingChanges: PendingChange[],
+): HarvestRecord[] => {
+  const merged = new Map(serverRecords.map((record) => [record.id, record]));
+  pendingChanges
+    .filter((change) => change.type === 'harvest')
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .forEach((change) => {
+      const record = change.data as HarvestRecord | undefined;
+      if (!record?.id) return;
+      if (change.action === 'delete') {
+        merged.delete(record.id);
+        return;
+      }
+      if (change.action === 'update' && change.previousData?.id) {
+        merged.delete(change.previousData.id);
+      }
+      merged.set(record.id, record);
+    });
+  return Array.from(merged.values());
 };
 
 const applyPendingPhysicalPondChanges = (
@@ -261,6 +285,24 @@ const replayPendingFarmChanges = (
           const harvestPond = existing.ponds.find((item) => item.pondId === pond.id);
           return harvestPond ? reverseHarvestImpactOnPond(pond, harvestPond) : pond;
         });
+      } else if (change.action === 'update') {
+        const previousRecord = change.previousData as HarvestRecord | undefined;
+        const previousExists = previousRecord
+          ? harvestRecords.some((item) => item.id === previousRecord.id)
+          : false;
+        if (previousRecord && previousExists && !existing) {
+          ponds = ponds.map((pond) => {
+            const previousHarvestPond = previousRecord.ponds.find((item) => item.pondId === pond.id);
+            const nextHarvestPond = record.ponds.find((item) => item.pondId === pond.id);
+            const revertedPond = previousHarvestPond
+              ? reverseHarvestImpactOnPond(pond, previousHarvestPond)
+              : pond;
+            return nextHarvestPond
+              ? applyHarvestImpactToPond(revertedPond, nextHarvestPond, record.date, nextHarvestPond.partialHarvestNumber)
+              : revertedPond;
+          });
+        }
+        harvestRecords = applyPendingHarvestChanges(harvestRecords, [change]);
       }
     }
   });
@@ -627,7 +669,7 @@ const useFirebaseSyncController = () => {
             })) return;
 
             usePondStore.setState({
-              harvestRecords: applyPendingEntityChanges(serverHarvestRecords, pendingChangesRef.current, 'harvest'),
+              harvestRecords: applyPendingHarvestChanges(serverHarvestRecords, pendingChangesRef.current),
               farmCacheStatus: 'ready',
               lastFarmCacheUpdate: snapshot.metadata.fromCache
                 ? usePondStore.getState().lastFarmCacheUpdate
@@ -773,31 +815,66 @@ const useFirebaseSyncController = () => {
             }
           }
           else if (change.type === 'harvest') {
-            const harvestRef = change.data.id ? 
-              doc(db, 'companies', activeCompanyId, 'harvestRecords', change.data.id) :
-              doc(collection(db, 'companies', activeCompanyId, 'harvestRecords'));
+            const harvestRef = change.data.id
+              ? doc(db, 'companies', activeCompanyId, 'harvestRecords', change.data.id)
+              : doc(collection(db, 'companies', activeCompanyId, 'harvestRecords'));
+            const previousHarvestRef = change.action === 'update' && change.previousData?.id
+              ? doc(db, 'companies', activeCompanyId, 'harvestRecords', change.previousData.id)
+              : harvestRef;
 
             await runTransaction(db, async (transaction) => {
-              const harvestSnapshot = await transaction.get(harvestRef);
+              const [harvestSnapshot, previousHarvestSnapshot] = await Promise.all([
+                transaction.get(harvestRef),
+                previousHarvestRef.path === harvestRef.path
+                  ? transaction.get(harvestRef)
+                  : transaction.get(previousHarvestRef),
+              ]);
 
               if (change.action === 'create' && harvestSnapshot.exists()) return;
               if (change.action === 'delete' && (!harvestSnapshot.exists() || harvestSnapshot.data()?.voided)) return;
+              if (change.action === 'update' && (
+                harvestSnapshot.exists()
+                || !previousHarvestSnapshot.exists()
+                || previousHarvestSnapshot.data()?.voided
+              )) return;
 
+              const previousRecord = change.action === 'create'
+                ? undefined
+                : ({ id: previousHarvestSnapshot.id, ...previousHarvestSnapshot.data() } as HarvestRecord);
               const sourceRecord = change.action === 'delete'
-                ? ({ id: harvestSnapshot.id, ...harvestSnapshot.data() } as HarvestRecord)
+                ? previousRecord!
                 : (change.data as HarvestRecord);
-              const uniquePondIds = Array.from(new Set(sourceRecord.ponds.map((pond) => pond.pondId)));
+              const uniquePondIds = Array.from(new Set([
+                ...(previousRecord?.ponds.map((pond) => pond.pondId) || []),
+                ...sourceRecord.ponds.map((pond) => pond.pondId),
+              ]));
               const pondRefs = uniquePondIds.map((pondId) => doc(db, 'companies', activeCompanyId, 'ponds', pondId));
               const pondSnapshots = await Promise.all(pondRefs.map((pondRef) => transaction.get(pondRef)));
               const pondSnapshotsById = new Map(pondSnapshots.map((snapshot) => [snapshot.id, snapshot]));
 
-              if (change.action === 'create') {
+              if (change.action === 'create' || change.action === 'update') {
+                const updatedPondsById = new Map<string, Pond>();
+                pondSnapshots.forEach((pondSnapshot) => {
+                  if (!pondSnapshot.exists()) throw new Error(`Pond ${pondSnapshot.id} was not found`);
+                  updatedPondsById.set(pondSnapshot.id, { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond);
+                });
+                previousRecord?.ponds.forEach((previousHarvestPond) => {
+                  const pondData = updatedPondsById.get(previousHarvestPond.pondId);
+                  if (pondData) updatedPondsById.set(
+                    previousHarvestPond.pondId,
+                    reverseHarvestImpactOnPond(pondData, previousHarvestPond),
+                  );
+                });
+
                 const canonicalPonds = sourceRecord.ponds.map((harvestPond) => {
                   const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
                   if (!pondSnapshot?.exists()) throw new Error(`Pond ${harvestPond.pondId} was not found`);
-                  const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
+                  const pondData = updatedPondsById.get(harvestPond.pondId)!;
+                  const previousHarvestPond = previousRecord?.ponds.find((pond) => pond.pondId === harvestPond.pondId);
                   const partialHarvestNumber = harvestPond.harvestType === 'partial'
-                    ? getNextPartialHarvestNumber(pondData)
+                    ? harvestPond.partialHarvestNumber
+                      || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
+                      || getNextPartialHarvestNumber(pondData)
                     : undefined;
                   const canonicalHarvestPond = withHarvestReference(pondData, { ...harvestPond, partialHarvestNumber });
                   const updatedPond = applyHarvestImpactToPond(
@@ -806,7 +883,12 @@ const useFirebaseSyncController = () => {
                     sourceRecord.date,
                     partialHarvestNumber,
                   );
+                  updatedPondsById.set(harvestPond.pondId, updatedPond);
+                  return canonicalHarvestPond;
+                });
 
+                pondSnapshots.forEach((pondSnapshot) => {
+                  const updatedPond = updatedPondsById.get(pondSnapshot.id)!;
                   transaction.update(pondSnapshot.ref, {
                     ...removeUndefinedFields({
                       totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
@@ -822,8 +904,6 @@ const useFirebaseSyncController = () => {
                     updatedAt: serverTimestamp(),
                     updatedBy: user.uid,
                   });
-
-                  return canonicalHarvestPond;
                 });
 
                 const revenue = buildHarvestRevenue({ ...sourceRecord, id: harvestRef.id, ponds: canonicalPonds });
@@ -833,16 +913,31 @@ const useFirebaseSyncController = () => {
                   ...removeUndefinedFields(sourceRecord),
                   id: harvestRef.id,
                   ponds: canonicalPonds.map(removeUndefinedFields),
+                  ...(previousRecord ? { correctedFromHarvestId: previousRecord.id } : {}),
                   createdAt: serverTimestamp(),
                   createdBy: user.uid,
                 });
                 transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), {
                   ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, addedByName: user.name || user.email || 'Harvest', timestamp: Date.now(), createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
                 }, { merge: true });
+
+                if (previousRecord) {
+                  const previousRevenue = buildHarvestRevenue(previousRecord);
+                  const previousRevenueId = financeSyncDocumentId(previousRevenue.reference);
+                  transaction.update(previousHarvestRef, {
+                    voided: true,
+                    voidedAt: serverTimestamp(),
+                    voidedBy: user.uid,
+                    financeEntry: { ...financeSourceEntry(previousRevenue), id: previousRevenueId, voided: true },
+                  });
+                  transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', previousRevenueId), {
+                    ...removeUndefinedFields(previousRevenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid,
+                  }, { merge: true });
+                }
                 return;
               }
 
-              sourceRecord.ponds.forEach((harvestPond) => {
+              previousRecord!.ponds.forEach((harvestPond) => {
                 const pondSnapshot = pondSnapshotsById.get(harvestPond.pondId);
                 if (!pondSnapshot?.exists()) return;
                 const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
@@ -858,7 +953,7 @@ const useFirebaseSyncController = () => {
                   updatedBy: user.uid,
                 });
               });
-              const revenue = buildHarvestRevenue(sourceRecord);
+              const revenue = buildHarvestRevenue(previousRecord!);
               const revenueId = financeSyncDocumentId(revenue.reference);
               transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
               transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
@@ -1094,12 +1189,13 @@ const useFirebaseSyncController = () => {
     });
   }, [addPendingChange]);
 
-  const syncHarvestRecord = useCallback((action: 'create' | 'delete', harvestRecord: HarvestRecord) => {
+  const syncHarvestRecord = useCallback((action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord) => {
     addPendingChange({
       id: `harvest-${harvestRecord.id}-${Date.now()}`,
       type: 'harvest',
       action,
-      data: harvestRecord
+      data: harvestRecord,
+      previousData: previousRecord,
     });
   }, [addPendingChange]);
 
