@@ -1,0 +1,504 @@
+.financePage {
+  gap: 18px;
+  padding-bottom: 40px;
+}
+
+.workspaceNav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+  scrollbar-width: none;
+}
+
+.workspaceNav::-webkit-scrollbar {
+  display: none;
+}
+
+.workspaceNav button,
+.workspaceNav a {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.workspaceNav button::after,
+.workspaceNav a::after {
+  position: absolute;
+  right: 10px;
+  bottom: -1px;
+  left: 10px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: transparent;
+  content: '';
+}
+
+.workspaceNav button:hover,
+.workspaceNav a:hover,
+.workspaceNavActive {
+  color: var(--primary) !important;
+}
+
+.workspaceNav button:hover,
+.workspaceNav a:hover {
+  outline: none !important;
+}
+
+.workspaceNav button:focus-visible,
+.workspaceNav a:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid #3282b8 !important;
+  outline-offset: -2px;
+}
+
+.workspaceNavActive::after {
+  background: var(--primary) !important;
+}
+
+.financePage :global(.finance-input-toolbar) {
+  min-height: 58px;
+  border-radius: 14px !important;
+  box-shadow: none;
+}
+
+.balanceNote,
+.dataWarning {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.dataWarning {
+  border-left: 3px solid #e74c3c;
+  padding: 8px 12px;
+  background: #fff7f7;
+  color: #9f1239;
+}
+
+.summaryGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.summaryCard {
+  display: flex !important;
+  min-height: 96px !important;
+  flex-direction: column;
+  justify-content: center;
+  padding: 18px 20px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.summaryCard + .summaryCard {
+  border-left: 1px solid var(--border) !important;
+}
+
+.summaryLabel {
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  margin-top: 5px;
+  color: var(--text-primary) !important;
+  font-size: clamp(20px, 2.1vw, 28px) !important;
+  font-weight: 600;
+  line-height: 1.3 !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.incomeCard .summaryValue {
+  color: #087f5b !important;
+}
+
+.expenseCard .summaryValue {
+  color: #c92a2a !important;
+}
+
+.overviewGrid {
+  grid-template-columns: minmax(0, 2fr) minmax(280px, 0.92fr) !important;
+  gap: 16px !important;
+}
+
+.monthlyPanel,
+.healthPanel,
+.recentPanel,
+.ledgerPanel {
+  border: 1px solid var(--border) !important;
+  border-radius: 16px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.monthlyPanel,
+.healthPanel {
+  padding: 24px !important;
+}
+
+.monthlyPanel h3,
+.recentPanel h3 {
+  margin: 0 0 18px !important;
+  color: var(--text-primary);
+}
+
+.monthlyChart {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  height: 230px;
+  padding: 8px 2px 0;
+}
+
+.monthGroup {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 18px;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.barArea {
+  display: flex;
+  width: 100%;
+  flex: 1;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  border-bottom: 1px solid #d9e4eb;
+}
+
+.incomeBar,
+.expenseBar {
+  width: min(10px, 38%);
+  min-height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+
+.incomeBar {
+  background: #36c99a;
+}
+
+.expenseBar {
+  background: #fa8790;
+}
+
+.monthGroup small {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.monthlyDetails {
+  display: none !important;
+}
+
+.sideStack {
+  gap: 16px !important;
+}
+
+.healthPanel {
+  flex: 1;
+}
+
+.healthPanel h4 {
+  margin: 0 0 20px !important;
+  font-size: 16px !important;
+}
+
+.recentPanel {
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.recentPanel > h3 {
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.recentList {
+  display: flex;
+  flex-direction: column;
+}
+
+.recentRow {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.8fr) minmax(130px, 0.9fr) minmax(180px, 1.7fr) minmax(140px, auto);
+  align-items: center;
+  gap: 16px;
+  min-height: 54px;
+  padding: 10px 22px;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.recentRow:last-child {
+  border-bottom: 0;
+}
+
+.recentRow time,
+.recentRow span {
+  color: var(--text-muted);
+}
+
+.recentRow strong {
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentRow em {
+  justify-self: end;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.incomeValue {
+  color: #087f5b !important;
+}
+
+.expenseValue {
+  color: #c92a2a !important;
+}
+
+.emptyState {
+  margin: 0;
+  padding: 28px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ledgerPanel {
+  overflow: hidden;
+}
+
+.searchRow {
+  padding: 16px 20px !important;
+  background: #fff !important;
+}
+
+.tableScroll table {
+  min-width: 960px;
+}
+
+.tableScroll tbody tr:hover {
+  background: #f8fbfd;
+}
+
+.mobileLedgerList {
+  display: none;
+}
+
+@media (max-width: 1200px) {
+  .summaryCard {
+    padding: 16px !important;
+  }
+
+  .summaryValue {
+    font-size: 23px !important;
+  }
+
+  .summaryCard:nth-child(3) .summaryValue {
+    font-size: 20px !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .overviewGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .sideStack {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .financePage {
+    gap: 12px;
+  }
+
+  .workspaceNav {
+    padding: 0 2px;
+  }
+
+  .workspaceNav button,
+  .workspaceNav a {
+    min-height: 48px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .financePage :global(.finance-input-toolbar) {
+    min-height: 54px;
+  }
+
+  .financePage :global(.finance-input-toolbar) :global(.finance-cycle-control) {
+    flex: 1 1 auto !important;
+  }
+
+  .financePage :global(.finance-input-toolbar) :global(.finance-cycle-control) label {
+    display: none;
+  }
+
+  .summaryGrid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .summaryCard {
+    min-height: 82px !important;
+    padding: 12px 14px !important;
+  }
+
+  .summaryCard + .summaryCard {
+    border-top: 1px solid var(--border) !important;
+    border-left: 0 !important;
+  }
+
+  .summaryValue {
+    font-size: 21px !important;
+  }
+
+  .monthlyPanel,
+  .healthPanel {
+    padding: 18px !important;
+  }
+
+  .monthlyChart {
+    height: 190px;
+    gap: 4px;
+  }
+
+  .monthGroup:nth-child(-n + 4) {
+    display: none;
+  }
+
+  .sideStack {
+    display: flex !important;
+  }
+
+  .recentRow {
+    grid-template-columns: 1fr auto;
+    gap: 5px 12px;
+    padding: 12px 16px;
+  }
+
+  .recentRow span {
+    display: none;
+  }
+
+  .recentRow strong {
+    grid-column: 1;
+  }
+
+  .recentRow em {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .tableScroll {
+    display: none;
+  }
+
+  .mobileLedgerList {
+    display: block;
+  }
+
+  .mobileLedgerRow {
+    padding: 15px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .mobileLedgerMeta,
+  .mobileLedgerMain,
+  .mobileLedgerActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .mobileLedgerMeta {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .mobileLedgerMeta span {
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  .mobileLedgerMain {
+    align-items: flex-start;
+    margin-top: 8px;
+  }
+
+  .mobileLedgerMain h3,
+  .mobileLedgerMain p {
+    margin: 0;
+  }
+
+  .mobileLedgerMain h3 {
+    color: var(--text-primary);
+    font-size: 14px;
+  }
+
+  .mobileLedgerMain p {
+    margin-top: 4px;
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .mobileLedgerMain strong {
+    flex: 0 0 auto;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  .mobileLedgerActions {
+    justify-content: flex-end;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+  }
+
+  .mobileLedgerActions button {
+    min-height: 36px;
+    border: 0;
+    background: transparent;
+    color: var(--primary);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+  }
+}

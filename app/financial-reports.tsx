@@ -31,7 +31,7 @@ import { hasFarmPermission } from '../shared/permissions';
 import { buildCogsReport } from '../shared/cogsReport';
 
 type ReportTypeId = 'profit-loss' | 'cogs' | 'cash-flow' | 'transaction-history';
-type ReportType = { id: ReportTypeId; name: string; icon: string; color: string; description: string };
+type ReportType = { id: ReportTypeId; name: string; description: string };
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom', 'All Time'] as const;
 
 export default function FinancialReportsPage() {
@@ -46,10 +46,10 @@ export default function FinancialReportsPage() {
   const feedAdditiveStore = useFeedAdditiveStore();
 
   const REPORT_TYPES: ReportType[] = [
-    { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', icon: 'trending-up', color: '#3498DB', description: t.financialReports?.profitLossStatement || 'Income statement' },
-    { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', icon: 'calculator', color: '#27AE60', description: t.financialReports?.cogsStatement || 'Cost of production' },
-    { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', icon: 'cash', color: '#9B59B6', description: t.financialReports?.cashFlowStatement || 'Liquidity analysis' },
-    { id: 'transaction-history', name: t.financialReports?.transactionHistory || 'Transaction History', icon: 'receipt', color: '#0F4C75', description: t.financialReports?.transactionHistoryDescription || 'Money in and money out' },
+    { id: 'profit-loss', name: t.financialReports?.profitLoss || 'Profit & Loss', description: t.financialReports?.profitLossStatement || 'Income statement' },
+    { id: 'cogs', name: t.financialReports?.cogs || 'COGS Report', description: t.financialReports?.cogsStatement || 'Cost of production' },
+    { id: 'cash-flow', name: t.financialReports?.cashFlow || 'Cash Flow', description: t.financialReports?.cashFlowStatement || 'Liquidity analysis' },
+    { id: 'transaction-history', name: t.financialReports?.transactionHistory || 'Transaction History', description: t.financialReports?.transactionHistoryDescription || 'Money in and money out' },
   ];
 
   const getTranslatedPeriod = (period: typeof PERIOD_OPTIONS[number]) => {
@@ -300,9 +300,6 @@ export default function FinancialReportsPage() {
             accessibilityRole="button"
             accessibilityLabel={`${t.financialReports?.reportType || 'Report Type'}: ${selectedReport.name}`}
           >
-            <View style={[styles.reportSelectorIcon, { backgroundColor: `${selectedReport.color}18` }]}>
-              <Ionicons name={selectedReport.icon as any} size={22} color={selectedReport.color} />
-            </View>
             <View style={styles.reportSelectorCopy}>
               <Text style={styles.reportSelectorValue}>{selectedReport.name}</Text>
               <Text style={styles.reportSelectorDescription}>{selectedReport.description}</Text>
@@ -336,9 +333,6 @@ export default function FinancialReportsPage() {
                           setReportSelectorOpen(false);
                         }}
                       >
-                        <View style={[styles.reportSelectorIcon, { backgroundColor: `${type.color}18` }]}>
-                          <Ionicons name={type.icon as any} size={21} color={type.color} />
-                        </View>
                         <View style={styles.reportSelectorCopy}>
                           <Text style={styles.reportSelectorValue}>{type.name}</Text>
                           <Text style={styles.reportSelectorDescription}>{type.description}</Text>
@@ -434,7 +428,6 @@ export default function FinancialReportsPage() {
           {selectedReportType === 'profit-loss' ? (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
-                <Ionicons name="document-text" size={24} color="#3498DB" />
                 <View style={styles.previewHeaderText}>
                   <Text style={styles.previewTitle}>{t.financialReports?.profitLossStatement || 'Profit & Loss Statement'}</Text>
                   <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
@@ -476,7 +469,6 @@ export default function FinancialReportsPage() {
           ) : selectedReportType === 'cogs' ? (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
-                <Ionicons name="calculator" size={24} color="#27AE60" />
                 <View style={styles.previewHeaderText}>
                   <Text style={styles.previewTitle}>{t.financialReports?.cogsStatement || 'Cost of Goods Sold Statement'}</Text>
                   <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
@@ -548,7 +540,6 @@ export default function FinancialReportsPage() {
           ) : selectedReportType === 'transaction-history' ? (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
-                <Ionicons name="receipt" size={24} color="#0F4C75" />
                 <View style={styles.previewHeaderText}>
                   <Text style={styles.previewTitle}>{t.financialReports?.transactionRegister || 'Transaction Register'}</Text>
                   <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
@@ -577,7 +568,6 @@ export default function FinancialReportsPage() {
           ) : (
             <View style={styles.previewCard}>
               <View style={styles.previewHeader}>
-                <Ionicons name="cash" size={24} color="#9B59B6" />
                 <View style={styles.previewHeaderText}>
                   <Text style={styles.previewTitle}>{t.financialReports?.cashFlowStatement || 'Cash Flow Statement'}</Text>
                   <Text style={styles.previewSubtitle}>{formatDateRange()}</Text>
@@ -692,7 +682,6 @@ const styles = StyleSheet.create({
   section: { marginHorizontal: Platform.OS === 'android' ? 16 : 20, marginTop: Platform.OS === 'android' ? 16 : 20, marginBottom: 8 },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   reportSelectorTrigger: { minHeight: 68, borderRadius: 14, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#FFFFFF', paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  reportSelectorIcon: { width: 42, height: 42, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   reportSelectorCopy: { flex: 1, minWidth: 0 },
   reportSelectorValue: { color: '#102F46', fontSize: 14, fontWeight: '800' },
   reportSelectorDescription: { marginTop: 2, color: '#78909C', fontSize: 11, fontWeight: '600' },

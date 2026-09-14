@@ -26,6 +26,13 @@ test('financial reports use a compact report dropdown with transaction history',
   assert.doesNotMatch(source, /financial-report-type-card/);
 });
 
+test('financial report choices and preview use text without report logos', () => {
+  assert.doesNotMatch(source, /financial-report-selector-icon/);
+  assert.doesNotMatch(source, /SelectedReportIcon/);
+  assert.doesNotMatch(source, /icon: (TrendingUp|Calculator|CircleDollarSign|ReceiptText)/);
+  assert.doesNotMatch(source, /<FileText/);
+});
+
 test('transaction history exports through the shared branded PDF generator', () => {
   assert.match(source, /prepareTransactionHistoryData/);
   assert.match(source, /generateTransactionHistoryHTML/);

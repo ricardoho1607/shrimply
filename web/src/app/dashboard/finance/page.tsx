@@ -1,11 +1,9 @@
 "use client";
 
 import { isSourceLinkedFinance, appendSettlement, monetaryValue } from '../../../../../shared/financeIntegrity';
-import { reconcileFinanceSources } from '../../../../../shared/financeReconciliation';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { 
-  Wallet, 
-  TrendingUp, 
   Search, 
   Calendar, 
   Trash2, 
@@ -15,14 +13,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   BarChart3,
-  TrendingDown,
   Plus,
+  FileText,
 } from 'lucide-react';
 import { 
   collection, 
   doc, 
   addDoc, 
-  getDocs,
   runTransaction,
   deleteDoc, 
   serverTimestamp 
@@ -45,6 +42,7 @@ import {
 } from '../../../../../shared/financeCycleAllocation';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { getOperatingMarginDisplay } from '../../../../../shared/financeMetrics';
+import styles from './finance.module.css';
 
 /* --- Types --------------------------------------------------- */
 interface Transaction {
@@ -66,6 +64,11 @@ interface Transaction {
 
 interface FinanceCycle { id: string; cycleName: string; status?: string; blockName?: string; blockNames?: string[] }
 interface FinancePond { id: string; pondName: string; cycleId?: string; pondCycleId?: string }
+
+const conciseFinanceDescription = (value: string) => value
+  .replace(/\s*\(Batch:[^)]+\)/gi, '')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 export default function FinancePage() {
   const copy = useDashboardCopy();
@@ -155,6 +158,47 @@ export default function FinancePage() {
   }, [scopedExpenses, scopedIncome]);
   const operatingMarginDisplay = getOperatingMarginDisplay(stats.totalIncome, stats.profit);
 
+  const monthlyPerformance = useMemo(() => {
+    const totalsByMonth = new Map<string, { income: number; expenses: number }>();
+    const addRecord = (record: Transaction, field: 'income' | 'expenses') => {
+      const date = new Date(record.date);
+      if (Number.isNaN(date.getTime())) return;
+      const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const current = totalsByMonth.get(key) || { income: 0, expenses: 0 };
+      const amount = monetaryValue(record.amount);
+      if (amount !== null) current[field] += amount;
+      totalsByMonth.set(key, current);
+    };
+
+    scopedIncome.forEach((record) => addRecord(record, 'income'));
+    scopedExpenses.forEach((record) => addRecord(record, 'expenses'));
+
+    return [...totalsByMonth.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .slice(-12)
+      .map(([key, totals]) => ({
+        key,
+        label: new Date(`${key}-01T00:00:00`).toLocaleDateString(undefined, { month: 'short' }),
+        ...totals,
+      }));
+  }, [scopedExpenses, scopedIncome]);
+
+  const monthlyScale = Math.max(
+    1,
+    ...monthlyPerformance.flatMap((month) => [month.income, month.expenses]),
+  );
+
+  const recentTransactions = useMemo(() => [
+    ...scopedExpenses.map((record) => ({ ...record, type: 'expense' as const })),
+    ...scopedIncome.map((record) => ({ ...record, type: 'income' as const })),
+  ]
+    .sort((left, right) => {
+      const leftTime = left.timestamp || new Date(left.date).getTime();
+      const rightTime = right.timestamp || new Date(right.date).getTime();
+      return rightTime - leftTime;
+    })
+    .slice(0, 5), [scopedExpenses, scopedIncome]);
+
   const filteredTransactions = useMemo(() => {
     const target = activeTab === 'expenses' ? scopedExpenses : scopedIncome;
     const normalizedSearch = debouncedSearchQuery.trim().toLowerCase();
@@ -214,18 +258,6 @@ export default function FinancePage() {
     });
   };
 
-  const downloadReconciliation = async () => {
-    if (!company?.id || !canManageFinance) return;
-    try {
-      const [harvests, feeds, additives, expenses, revenues] = await Promise.all(['harvestRecords', 'feeds', 'additives', 'expenses', 'revenues'].map(name => getDocs(collection(db, 'companies', company.id, name))));
-      const rows = (snapshot: typeof harvests) => snapshot.docs.map(row => ({ ...row.data(), id: row.id }));
-      const report = reconcileFinanceSources({ harvests: rows(harvests), feeds: rows(feeds), additives: rows(additives), expenses: rows(expenses), revenues: rows(revenues) } as Parameters<typeof reconcileFinanceSources>[0]);
-      const url = URL.createObjectURL(new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' }));
-      const link = document.createElement('a'); link.href = url; link.download = `finance-reconciliation-${today}.json`; link.click(); URL.revokeObjectURL(url);
-      alert(`${report.issues.length} issues found. The downloaded report lists them; no records were changed.`);
-    } catch (error) { alert(error instanceof Error ? error.message : 'Reconciliation failed'); }
-  };
-
   const recordPayment = async (record: Transaction, type: 'expense' | 'income') => {
     if (!company?.id || !canManageFinance) return;
     const outstanding = (monetaryValue(record.amount) ?? 0) - (record.settlements || []).reduce((sum, payment) => sum + payment.amount, 0);
@@ -271,7 +303,29 @@ export default function FinancePage() {
   if (loading || cyclesLoading || pondsLoading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '100px' }}><Loader2 className="animate-spin" size={40} color="var(--primary)" /></div>;
 
   return (
-    <div className="dashboard-page authenticated-compact-page business-dashboard-page">
+    <div className={`dashboard-page authenticated-compact-page business-dashboard-page ${styles.financePage}`}>
+      <div className={styles.workspaceNav} role="navigation" aria-label={t.finance.title}>
+        {([
+          { id: 'overview', label: t.finance.overview, icon: BarChart3 },
+          { id: 'income', label: t.finance.revenues, icon: ArrowUpRight },
+          { id: 'expenses', label: t.finance.expenses, icon: ArrowDownRight },
+        ] as const).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={activeTab === item.id ? styles.workspaceNavActive : undefined}
+            aria-pressed={activeTab === item.id}
+            onClick={() => setActiveTab(item.id)}
+          >
+            <item.icon size={18} aria-hidden="true" />
+            <span>{item.label}</span>
+          </button>
+        ))}
+        <Link href="/dashboard/reports/financial">
+          <FileText size={18} aria-hidden="true" />
+          <span>{t.nav.reports}</span>
+        </Link>
+      </div>
       <div className="finance-input-toolbar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', padding: '8px 10px', background: 'var(--bg-mid)', border: '1px solid var(--border)', borderRadius: '14px' }}>
         <div className="finance-cycle-control" style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '0 1 440px', minWidth: 0 }}>
           <label htmlFor="finance-cycle-filter" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{t.financeCycle.cycle}</label>
@@ -325,34 +379,21 @@ export default function FinancePage() {
         </div>}
       </div>
 
-      {canManageFinance && <button type="button" onClick={downloadReconciliation} className="btn-secondary">Download finance reconciliation</button>}
-      {[...expenses, ...income].some(row => monetaryValue(row.amount) === null) && <p role="alert">Some finance amounts are missing or invalid. Totals are unavailable until these entries are corrected.</p>}
-      <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>Recorded balance compares income with purchases and expenses. Use the P&amp;L report for profit and Cash Flow for confirmed payments. New entries require a separate payment confirmation.</p>
+      <p className={styles.balanceNote}>Recorded balance compares income with purchases and expenses. Use the P&amp;L report for profit and Cash Flow for confirmed payments. New entries require a separate payment confirmation.</p>
+      {[...expenses, ...income].some(row => monetaryValue(row.amount) === null) && <p className={styles.dataWarning} role="alert">Some finance amounts are missing or invalid. Totals are unavailable until these entries are corrected.</p>}
       {/* Summary Cards */}
-      <div className="responsive-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-        <div className="glass-card animate-fade-up" style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', color: '#065F46', border: '1px solid #A7F3D0' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(6, 95, 70, 0.1)' }}>
-              <ArrowUpRight size={20} />
-            </div>
-            <TrendingUp size={20} style={{ opacity: 0.6 }} />
-          </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.revenues}</div>
-          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.totalIncome)}</div>
+      <div className={`responsive-card-grid ${styles.summaryGrid}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
+        <div className={`glass-card animate-fade-up ${styles.summaryCard} ${styles.incomeCard}`} style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)', color: '#065F46', border: '1px solid #A7F3D0' }}>
+          <div className={styles.summaryLabel}>{t.finance.revenues}</div>
+          <div className={styles.summaryValue}>{formatCurrency(stats.totalIncome)}</div>
         </div>
 
-        <div className="glass-card animate-fade-up" style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)', color: '#991B1B', border: '1px solid #FECACA', animationDelay: '0.1s' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(153, 27, 27, 0.1)' }}>
-              <ArrowDownRight size={20} />
-            </div>
-            <TrendingDown size={20} style={{ opacity: 0.6 }} />
-          </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t.finance.expenses}</div>
-          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.totalExpense)}</div>
+        <div className={`glass-card animate-fade-up ${styles.summaryCard} ${styles.expenseCard}`} style={{ padding: '20px', minHeight: '144px', background: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)', color: '#991B1B', border: '1px solid #FECACA', animationDelay: '0.1s' }}>
+          <div className={styles.summaryLabel}>{t.finance.expenses}</div>
+          <div className={styles.summaryValue}>{formatCurrency(stats.totalExpense)}</div>
         </div>
 
-        <div className="glass-card animate-fade-up" style={{ 
+        <div className={`glass-card animate-fade-up ${styles.summaryCard} ${stats.profit >= 0 ? styles.incomeCard : styles.expenseCard}`} style={{
           padding: '20px',
           minHeight: '144px',
           background: stats.profit >= 0 ? 'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)' : 'linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%)', 
@@ -360,60 +401,34 @@ export default function FinancePage() {
           border: stats.profit >= 0 ? '1px solid #BBF7D0' : '1px solid #FECDD3',
           animationDelay: '0.2s'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'rgba(255,255,255,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(22, 101, 52, 0.1)' }}>
-              <Wallet size={20} />
-            </div>
-            <div style={{ fontSize: '11px', fontWeight: 600, color: '#FFF', background: stats.profit >= 0 ? '#27AE60' : '#ef4444', padding: '4px 10px', borderRadius: '8px', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-              {stats.profit >= 0 ? copy('Recorded balance') : copy('Recorded deficit')}
-            </div>
-          </div>
-          <div style={{ fontSize: '13px', fontWeight: 600, opacity: 0.8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy('Recorded balance')}</div>
-          <div style={{ fontSize: '28px', lineHeight: '36px', fontWeight: 600, whiteSpace: 'nowrap' }}>{formatCurrency(stats.profit)}</div>
+          <div className={styles.summaryLabel}>{copy('Recorded balance')}</div>
+          <div className={styles.summaryValue}>{formatCurrency(stats.profit)}</div>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: 'flex', gap: '32px', borderBottom: '1px solid var(--border)', padding: '0 8px', overflowX: 'auto' }}>
-        {([
-          { id: 'overview', label: t.finance.overview, icon: BarChart3 },
-          { id: 'income', label: t.finance.revenues, icon: ArrowUpRight },
-          { id: 'expenses', label: t.finance.expenses, icon: ArrowDownRight }
-        ] as const).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            style={{
-              padding: '16px 4px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              background: 'none',
-              border: 'none',
-              borderBottom: activeTab === tab.id ? '3px solid var(--primary)' : '3px solid transparent',
-              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',
-              fontSize: '14px',
-              fontWeight: 500,
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            <tab.icon size={18} />
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {activeTab === 'overview' ? (
-        <div className="responsive-two-column" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+        <>
+        <div className={`responsive-two-column ${styles.overviewGrid}`} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
           
           {/* Monthly P&L Table */}
-          <div className="glass-card" style={{ padding: '32px' }}>
+          <div className={`glass-card ${styles.monthlyPanel}`} style={{ padding: '32px' }}>
             <h3 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Calendar size={20} color="var(--primary)" /> {t.finance.monthlyPerformance}
             </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {monthlyPerformance.length ? (
+              <div className={styles.monthlyChart} role="img" aria-label={t.finance.monthlyPerformance}>
+                {monthlyPerformance.map((month) => (
+                  <div className={styles.monthGroup} key={month.key}>
+                    <div className={styles.barArea}>
+                      <span className={styles.incomeBar} style={{ height: `${Math.max(3, month.income / monthlyScale * 100)}%` }} title={`${t.finance.revenues}: ${formatCurrency(month.income)}`} />
+                      <span className={styles.expenseBar} style={{ height: `${Math.max(3, month.expenses / monthlyScale * 100)}%` }} title={`${t.finance.expenses}: ${formatCurrency(month.expenses)}`} />
+                    </div>
+                    <small>{month.label}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className={styles.monthlyDetails} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ padding: '16px 20px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', justifyContent: 'space-between', border: '1px solid var(--border)' }}>
                 <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{t.finance.revenues}</span>
                 <span style={{ fontWeight: 600, color: '#27AE60' }}>{formatCurrency(stats.totalIncome)}</span>
@@ -438,8 +453,8 @@ export default function FinancePage() {
           </div>
 
           {/* Quick Actions / Tips */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-            <div className="glass-card" style={{ padding: '32px' }}>
+          <div className={styles.sideStack} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className={`glass-card ${styles.healthPanel}`} style={{ padding: '32px' }}>
               <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '20px', color: 'var(--text-primary)' }}>{copy('Financial Health')}</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ fontSize: '14px', display: 'flex', justifyContent: 'space-between', fontWeight: 600 }}>
@@ -455,28 +470,30 @@ export default function FinancePage() {
                 </div>
               </div>
             </div>
-            
-            <div style={{ padding: '32px', borderRadius: '24px', background: 'var(--primary-dim)', border: '1px solid var(--border)', display: 'flex', gap: '16px', alignItems: 'flex-start' }}>
-              <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', flexShrink: 0, boxShadow: '0 4px 12px rgba(15, 76, 117, 0.1)' }}>
-                <TrendingUp size={20} />
-              </div>
-              <div>
-                <h4 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '6px', color: 'var(--primary)' }}>{copy('Orson AI Optimization Tip')}</h4>
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)', lineHeight: 1.6, fontWeight: 600 }}>
-                  {stats.totalIncome > 0
-                    ? <>{copy('Try to keep your feed costs below 60% of your total revenue for optimal farm profitability. Based on your current data, your margin is')} <strong style={{color: 'var(--primary)'}}>{operatingMarginDisplay}</strong>.</>
-                    : copy('Revenue is zero, so there is insufficient revenue data to calculate a margin.')}
-                </p>
-              </div>
-            </div>
           </div>
 
         </div>
+        <section className={`glass-card ${styles.recentPanel}`}>
+          <h3>{copy('Recent Transactions')}</h3>
+          {recentTransactions.length ? (
+            <div className={styles.recentList}>
+              {recentTransactions.map((transaction) => (
+                <div className={styles.recentRow} key={`${transaction.type}-${transaction.id}`}>
+                  <time>{new Date(transaction.date).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}</time>
+                  <span>{transaction.category}</span>
+                  <strong title={transaction.item}>{conciseFinanceDescription(transaction.item)}</strong>
+                  <em className={transaction.type === 'income' ? styles.incomeValue : styles.expenseValue}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</em>
+                </div>
+              ))}
+            </div>
+          ) : <p className={styles.emptyState}>{t.finance.noDataMonthly}</p>}
+        </section>
+        </>
       ) : (
-        <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
+        <div className={`glass-card ${styles.ledgerPanel}`} style={{ padding: '0', overflow: 'hidden' }}>
           
           {/* Table Search */}
-          <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
+          <div className={styles.searchRow} style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
             <div style={{ position: 'relative', width: '100%', maxWidth: '400px' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-faint)' }} />
               <input 
@@ -489,7 +506,7 @@ export default function FinancePage() {
           </div>
 
           {/* Table */}
-          <div style={{ overflowX: 'auto' }}>
+          <div className={styles.tableScroll} style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr style={{ textAlign: 'left', background: 'var(--bg-mid)', borderBottom: '1px solid var(--border)' }}>
@@ -515,8 +532,7 @@ export default function FinancePage() {
                       </span>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
-                      <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{t.item}</div>
-                      {t.notes && <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600, marginTop: '2px' }}>{t.notes}</div>}
+                      <div title={t.item} style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>{conciseFinanceDescription(t.item)}</div>
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '16px', fontWeight: 600, color: t.type === 'income' ? '#27AE60' : '#ef4444' }}>
@@ -525,7 +541,7 @@ export default function FinancePage() {
                     </td>
                     <td style={{ padding: '20px 32px' }}>
                       <div style={{ fontSize: '13px', fontWeight: 600 }}>{t.paymentType}</div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>{t.reference || copy('No Ref')} · Confirmed: {formatCurrency((t.settlements || []).reduce((sum, payment) => sum + payment.amount, 0))}</div>
+                      <div style={{ fontSize: '11px', color: 'var(--text-faint)', fontWeight: 600 }}>Confirmed: {formatCurrency((t.settlements || []).reduce((sum, payment) => sum + payment.amount, 0))}</div>
                     </td>
                     <td style={{ padding: '20px 32px', fontSize: '13px', fontWeight: 600 }}>{t.cycleName || generalCategoryLabel}</td>
                     <td style={{ padding: '20px 32px', textAlign: 'right' }}>
@@ -545,6 +561,24 @@ export default function FinancePage() {
                 ))}
               </tbody>
             </table>
+          </div>
+          <div className={styles.mobileLedgerList}>
+            {filteredTransactions.map((transaction) => (
+              <article className={styles.mobileLedgerRow} key={`mobile-${transaction.id}`}>
+                <div className={styles.mobileLedgerMeta}>
+                  <span>{transaction.category}</span>
+                  <time>{new Date(transaction.date).toLocaleDateString()}</time>
+                </div>
+                <div className={styles.mobileLedgerMain}>
+                  <div>
+                    <h3 title={transaction.item}>{conciseFinanceDescription(transaction.item)}</h3>
+                    <p>{transaction.paymentType} · {transaction.cycleName || generalCategoryLabel}</p>
+                  </div>
+                  <strong className={transaction.type === 'income' ? styles.incomeValue : styles.expenseValue}>{transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}</strong>
+                </div>
+                {canManageFinance ? <div className={styles.mobileLedgerActions}><button type="button" onClick={() => recordPayment(transaction, transaction.type)}>Record payment</button>{!isSourceLinkedFinance(transaction) ? <button type="button" aria-label={t.actions.delete} onClick={() => handleDelete(transaction.id, transaction.type)}><Trash2 size={17} /></button> : null}</div> : null}
+              </article>
+            ))}
           </div>
         </div>
       )}

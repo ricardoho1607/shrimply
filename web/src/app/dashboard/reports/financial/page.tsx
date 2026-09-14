@@ -5,13 +5,8 @@ import { monetaryValue, NON_OPERATING_INCOME } from '../../../../../../shared/fi
 import { transactionOpeningPosition } from '../../../../../../shared/reportingIntegrity';
 import React, { useMemo, useState } from 'react';
 import {
-  Calculator,
-  CircleDollarSign,
   Download,
-  FileText,
   Loader2,
-  ReceiptText,
-  TrendingUp,
   X,
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -86,10 +81,10 @@ interface CustomDateRange { startDateKey: string; endDateKey: string }
 
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'This Year', 'Custom'];
 const REPORT_TYPES = [
-  { id: 'profit-loss', name: 'Profit & Loss', icon: TrendingUp, color: '#3498DB', desc: 'Income Statement' },
-  { id: 'cogs', name: 'COGS Report', icon: Calculator, color: '#27AE60', desc: 'Cost of Production' },
-  { id: 'cash-flow', name: 'Cash Flow', icon: CircleDollarSign, color: '#9B59B6', desc: 'Liquidity Analysis' },
-  { id: 'transaction-history', name: 'Transaction History', icon: ReceiptText, color: '#0F4C75', desc: 'Money In and Money Out' },
+  { id: 'profit-loss', name: 'Profit & Loss', desc: 'Income Statement' },
+  { id: 'cogs', name: 'COGS Report', desc: 'Cost of Production' },
+  { id: 'cash-flow', name: 'Cash Flow', desc: 'Liquidity Analysis' },
+  { id: 'transaction-history', name: 'Transaction History', desc: 'Money In and Money Out' },
 ];
 
 const addBreakdown = (target: Record<string, number>, category: string, amount: number) => {
@@ -141,7 +136,6 @@ export default function FinancialReportsPage() {
       : report.desc,
   }));
   const selectedReportMeta = reportTypes.find((report) => report.id === selectedReport) || reportTypes[0];
-  const SelectedReportIcon = selectedReportMeta.icon;
 
   const openCustomRange = () => {
     const now = new Date();
@@ -333,7 +327,6 @@ export default function FinancialReportsPage() {
           <div>
             <h2 style={{ fontSize: '18px', lineHeight: '26px', fontWeight: 600, marginBottom: '14px' }}>{t.financialReports.reportType}</h2>
             <div className="glass-card financial-report-selector">
-              <span className="financial-report-selector-icon" style={{ background: `${selectedReportMeta.color}15` }}><SelectedReportIcon size={21} color={selectedReportMeta.color} /></span>
               <div className="financial-report-selector-copy">
                 <label htmlFor="financial-report-type">{t.financialReports.selectReport}</label>
                 <select id="financial-report-type" value={selectedReport} onChange={(event) => setSelectedReport(event.target.value)}>
@@ -370,7 +363,7 @@ export default function FinancialReportsPage() {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <div className="glass-card" style={{ background: '#FFF', padding: '22px', position: 'sticky', top: '24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}><FileText size={21} color="var(--primary)" /><h2 style={{ fontSize: '18px', fontWeight: 600 }}>{copy('Report Preview')}</h2></div>
+            <h2 style={{ fontSize: '18px', fontWeight: 600, marginBottom: '20px' }}>{copy('Report Preview')}</h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {selectedReport === 'transaction-history' ? (
                 <>
@@ -469,15 +462,6 @@ export default function FinancialReportsPage() {
           background: #fff;
           border: 1px solid var(--border);
           border-radius: 14px;
-        }
-
-        .financial-report-selector-icon {
-          width: 44px;
-          height: 44px;
-          flex: 0 0 auto;
-          border-radius: 12px;
-          display: grid;
-          place-items: center;
         }
 
         .financial-report-selector-copy {

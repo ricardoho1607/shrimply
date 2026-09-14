@@ -27,6 +27,10 @@ import { hasFarmPermission } from '../shared/permissions';
 
 const PAYMENT_TYPES = ['Cash', 'Bank Transfer', 'Mobile Payment'];
 const PERIOD_OPTIONS = ['Today', 'This Week', 'This Month', 'All Time'] as const;
+const conciseFinanceDescription = (value: string) => value
+  .replace(/\s*\(Batch:[^)]+\)/gi, '')
+  .replace(/\s+/g, ' ')
+  .trim();
 
 const COLORS: Record<string, string> = {
   General: '#607D8B',
@@ -452,8 +456,6 @@ export default function FinancePage() {
   };
 
   const renderLedgerItem = (item: Expense | Revenue, type: 'expense' | 'revenue') => {
-    const isHarvestSynced = type === 'revenue' && item.reference?.startsWith('HARVEST-');
-    const isInventorySynced = type === 'expense' && item.reference?.startsWith('INVENTORY-');
     const isSynced = isSourceLinkedFinance(item);
     
     return (
@@ -463,13 +465,7 @@ export default function FinancePage() {
             <View style={[styles.categoryPill, type === 'revenue' ? styles.revenuePill : styles.expensePill]}>
               <Text style={styles.categoryPillText}>{item.category}</Text>
             </View>
-            {isSynced && (
-              <View style={styles.syncBadge}>
-                <Ionicons name="sync" size={10} color={isHarvestSynced ? "#27AE60" : "#3498DB"} />
-                <Text style={[styles.syncBadgeText, isInventorySynced && { color: '#3498DB' }]}>Auto</Text>
-              </View>
-            )}
-            <Text style={styles.ledgerItemName}>{item.item}</Text>
+            <Text style={styles.ledgerItemName} numberOfLines={2}>{conciseFinanceDescription(item.item)}</Text>
           </View>
           <Text style={[styles.ledgerAmount, type === 'revenue' ? styles.revenueColor : styles.expenseColor]}>
             {formatCurrency(item.amount)}
@@ -487,7 +483,6 @@ export default function FinancePage() {
           </Text>
         </View>
         {item.reference && !isSynced && <Text style={styles.ledgerReference}>Ref: {item.reference}</Text>}
-        {item.notes && <Text style={styles.ledgerNotes}>{item.notes}</Text>}
         <View style={styles.ledgerFooter}>
           <Text style={styles.ledgerAddedBy}>{item.addedByName}</Text>
           {canManageFinance && <View style={styles.ledgerActions}>
@@ -517,7 +512,7 @@ export default function FinancePage() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
         <View style={styles.header}>
           <TouchableOpacity
@@ -550,6 +545,35 @@ export default function FinancePage() {
           </View>}
         </View>
       </SafeAreaView>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.workspaceNavScroll}
+        contentContainerStyle={styles.workspaceNav}
+        accessibilityRole="tablist"
+      >
+        {[
+          { key: 'overview', label: t.finance?.overview || 'Overview', icon: 'stats-chart-outline' },
+          { key: 'revenues', label: t.finance?.revenues || 'Revenue', icon: 'arrow-up-outline' },
+          { key: 'expenses', label: t.finance?.expenses || 'Expenses', icon: 'arrow-down-outline' },
+          { key: 'reports', label: t.sidebar?.financialReports || 'Financial Reports', icon: 'document-text-outline' },
+        ].map(({ key, label, icon }) => {
+          const isActive = key !== 'reports' && activeTab === key;
+          return (
+            <TouchableOpacity
+              key={key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              style={[styles.workspaceNavItem, isActive && styles.workspaceNavItemActive]}
+              onPress={() => key === 'reports' ? router.push('/financial-reports') : setActiveTab(key as 'overview' | 'expenses' | 'revenues')}
+            >
+              <Ionicons name={icon as any} size={18} color={isActive ? '#0F4C75' : '#6B7F8E'} />
+              <Text style={[styles.workspaceNavText, isActive && styles.workspaceNavTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.periodContainer, styles.datePeriodContainer]}>
@@ -595,21 +619,6 @@ export default function FinancePage() {
             </Text>
           </View>
           {[...expenses, ...revenues].some(row => monetaryValue(row.amount) === null) && <Text style={styles.balanceWarning}>Some amounts are invalid. Review entries before relying on totals.</Text>}
-        </View>
-
-        <View style={styles.tabContainer}>
-          {[
-            { key: 'overview', label: t.finance?.overview || 'Overview', icon: 'pie-chart-outline' },
-            { key: 'expenses', label: t.finance?.expenses || 'Expenses', icon: 'receipt-outline' },
-            { key: 'revenues', label: t.finance?.revenue || 'Revenue', icon: 'cash-outline' },
-          ].map(({ key, label, icon }) => (
-            <TouchableOpacity key={key}
-              style={[styles.tab, activeTab === key && styles.tabActive]}
-              onPress={() => setActiveTab(key as any)}>
-              <Ionicons name={icon as any} size={20} color={activeTab === key ? '#3498DB' : '#95A5A6'} />
-              <Text style={[styles.tabText, activeTab === key && styles.tabTextActive]}>{label}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         {activeTab === 'overview' && (
@@ -731,7 +740,7 @@ export default function FinancePage() {
                       <Text style={styles.topRankText}>{index + 1}</Text>
                     </View>
                     <View style={styles.topInfo}>
-                      <Text style={styles.topName}>{expense.item}</Text>
+                      <Text style={styles.topName} numberOfLines={2}>{conciseFinanceDescription(expense.item)}</Text>
                       <Text style={styles.topCategory}>{expense.category}</Text>
                     </View>
                     <Text style={styles.topAmount}>{formatCurrency(expense.amount)}</Text>
@@ -764,17 +773,6 @@ export default function FinancePage() {
 
         {activeTab === 'expenses' && (
           <View style={styles.ledgerSection}>
-            <View style={styles.syncToggleContainer}>
-              <View style={styles.syncToggleLeft}>
-                <Ionicons name="sync" size={20} color="#3498DB" />
-                <View style={styles.syncToggleTextContainer}>
-                  <Text style={styles.syncToggleLabel}>{t.finance?.autoSyncInventory || 'Auto-sync Inventory'}</Text>
-                  <Text style={styles.syncToggleSubtext}>{'Purchases post with inventory saves. Linked history is protected.'}</Text>
-                </View>
-              </View>
-              <Ionicons name="checkmark-circle" size={22} color="#0F4C75" />
-            </View>
-
             <View style={styles.ledgerHeader}>
               <Text style={styles.ledgerTitle}>{t.finance?.expenseLedger || 'Expense Ledger'}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
@@ -806,17 +804,6 @@ export default function FinancePage() {
 
         {activeTab === 'revenues' && (
           <View style={styles.ledgerSection}>
-            <View style={styles.syncToggleContainer}>
-              <View style={styles.syncToggleLeft}>
-                <Ionicons name="sync" size={20} color="#27AE60" />
-                <View style={styles.syncToggleTextContainer}>
-                  <Text style={styles.syncToggleLabel}>{t.finance?.autoSyncHarvest || 'Auto-sync Harvest'}</Text>
-                  <Text style={styles.syncToggleSubtext}>{'Sales post with harvest saves, including offline replay.'}</Text>
-                </View>
-              </View>
-              <Ionicons name="checkmark-circle" size={22} color="#0F4C75" />
-            </View>
-
             <Text style={styles.ledgerTitle}>{t.finance?.revenueLedger || 'Revenue Ledger'}</Text>
             {getFilteredRevenues().length === 0 ? (
               <View style={styles.emptyState}>
@@ -984,31 +971,32 @@ export default function FinancePage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F5F7FA' },
-  safeArea: { backgroundColor: '#dce8f2' },
+  container: { flex: 1, backgroundColor: '#F7F9FB' },
+  safeArea: { backgroundColor: '#FFFFFF' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F5F7FA' },
   loadingText: { marginTop: Platform.OS === 'android' ? 14 : 16, fontSize: Platform.OS === 'android' ? 14 : 15, color: '#7F8C8D', fontWeight: '500' },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#dce8f2', borderBottomWidth: 1, borderBottomColor: '#ECF0F1' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Platform.OS === 'android' ? 18 : 20, paddingTop: Platform.OS === 'android' ? 14 : 16, paddingBottom: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFFFFF' },
   headerButton: { padding: Platform.OS === 'android' ? 7 : 8 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: '700', color: '#2C3E50', flex: 1, textAlign: 'center', marginHorizontal: Platform.OS === 'android' ? 14 : 16 },
   headerActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12 },
   addButtonIcon: { padding: 4 },
-  syncToggleContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 14 : 16, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-  syncToggleLeft: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12, flex: 1 },
-  syncToggleTextContainer: { flex: 1 },
-  syncToggleLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#2C3E50', marginBottom: 2 },
-  syncToggleSubtext: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#7F8C8D' },
+  workspaceNavScroll: { flexGrow: 0, backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#DCE6EC' },
+  workspaceNav: { paddingHorizontal: Platform.OS === 'android' ? 12 : 14, gap: 6 },
+  workspaceNavItem: { minHeight: 50, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderBottomWidth: 3, borderBottomColor: 'transparent' },
+  workspaceNavItemActive: { borderBottomColor: '#0F4C75' },
+  workspaceNavText: { color: '#6B7F8E', fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600' },
+  workspaceNavTextActive: { color: '#0F4C75' },
   content: { flex: 1 },
-  periodContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  periodContainer: { flexDirection: 'row', marginHorizontal: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: 4, borderWidth: 1, borderColor: '#DCE6EC' },
   datePeriodContainer: { marginTop: Platform.OS === 'android' ? 12 : 14, marginBottom: 6 },
   periodTab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 9 : 10, alignItems: 'center', justifyContent: 'center', borderRadius: Platform.OS === 'android' ? 7 : 8 },
-  periodTabActive: { backgroundColor: '#3498DB' },
+  periodTabActive: { backgroundColor: '#0F4C75' },
   periodTabText: { fontSize: Platform.OS === 'android' ? 13 : 14, lineHeight: Platform.OS === 'android' ? 17 : 19, fontWeight: '600', color: '#7F8C8D', textAlign: 'center' },
   periodTabTextActive: { color: '#FFFFFF' },
   cycleFilterContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 12 : 14 },
-  summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  summaryContainer: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 16 : 18, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, paddingHorizontal: Platform.OS === 'android' ? 16 : 18, paddingVertical: Platform.OS === 'android' ? 8 : 10, borderWidth: 1, borderColor: '#DCE6EC' },
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: Platform.OS === 'android' ? 10 : 12 },
-  summaryRowLabel: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#7F8C8D', textTransform: 'uppercase', letterSpacing: 0.5 },
+  summaryRowLabel: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '700', color: '#6B7F8E', textTransform: 'uppercase', letterSpacing: 0.5 },
   summaryRowAmount: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: '700' },
   balanceWarning: { color: '#e74c3c', fontSize: 14, lineHeight: 21, marginTop: 8 },
   summaryDivider: { height: 1, backgroundColor: '#ECF0F1' },
@@ -1017,7 +1005,7 @@ const styles = StyleSheet.create({
   tabActive: { backgroundColor: '#EBF5FB' },
   tabText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#95A5A6' },
   tabTextActive: { color: '#3498DB' },
-  chartCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  chartCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, borderWidth: 1, borderColor: '#DCE6EC' },
   chartTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   monthlyCardsScroll: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
   monthlyCardsContainer: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12, paddingRight: Platform.OS === 'android' ? 18 : 20 },
@@ -1052,7 +1040,7 @@ const styles = StyleSheet.create({
   legendDot: { width: Platform.OS === 'android' ? 10 : 12, height: Platform.OS === 'android' ? 10 : 12, borderRadius: 6 },
   legendLabel: { flex: 1, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#34495E', fontWeight: '500' },
   legendValue: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#7F8C8D', fontWeight: '600' },
-  sectionCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 3 },
+  sectionCard: { marginHorizontal: Platform.OS === 'android' ? 18 : 20, marginBottom: Platform.OS === 'android' ? 14 : 16, backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 18 : 20, borderWidth: 1, borderColor: '#DCE6EC' },
   sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '700', color: '#2C3E50', marginBottom: Platform.OS === 'android' ? 14 : 16 },
   topItem: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#F8FAFB', borderRadius: Platform.OS === 'android' ? 9 : 10 },
   topRank: { width: Platform.OS === 'android' ? 30 : 32, height: Platform.OS === 'android' ? 30 : 32, borderRadius: 16, backgroundColor: '#3498DB', justifyContent: 'center', alignItems: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
@@ -1075,14 +1063,12 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: '#3498DB', borderColor: '#3498DB' },
   filterPillText: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', color: '#7F8C8D' },
   filterPillTextActive: { color: '#FFFFFF' },
-  ledgerItem: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, shadowColor: '#dce8f2', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  ledgerItem: { backgroundColor: '#FFFFFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#DCE6EC' },
   ledgerLeft: { flex: 1, marginRight: Platform.OS === 'android' ? 10 : 12, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Platform.OS === 'android' ? 5 : 6 },
   categoryPill: { alignSelf: 'flex-start', paddingHorizontal: Platform.OS === 'android' ? 9 : 10, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 5 : 6 },
   expensePill: { backgroundColor: '#FADBD8' },
   revenuePill: { backgroundColor: '#D5F4E6' },
   categoryPillText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#2C3E50', textTransform: 'uppercase', letterSpacing: 0.5 },
-  syncBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#D5F4E6', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 3, borderRadius: Platform.OS === 'android' ? 5 : 6, borderWidth: 1, borderColor: '#27AE60' },
-  syncBadgeText: { fontSize: Platform.OS === 'android' ? 8 : 9, fontWeight: '700', color: '#27AE60', textTransform: 'uppercase' },
   ledgerItemName: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#2C3E50', width: '100%', marginTop: 4 },
   ledgerAmount: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: '700' },
   expenseColor: { color: '#E74C3C' },
@@ -1090,7 +1076,6 @@ const styles = StyleSheet.create({
   ledgerMeta: { flexDirection: 'row', gap: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 7 : 8, marginTop: Platform.OS === 'android' ? 7 : 8 },
   ledgerMetaText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#95A5A6', fontWeight: '500' },
   ledgerReference: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#7F8C8D', fontStyle: 'italic', marginBottom: 4 },
-  ledgerNotes: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#34495E', lineHeight: Platform.OS === 'android' ? 16 : 18, marginBottom: Platform.OS === 'android' ? 7 : 8 },
   ledgerFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Platform.OS === 'android' ? 7 : 8, paddingTop: Platform.OS === 'android' ? 10 : 12, borderTopWidth: 1, borderTopColor: '#ECF0F1' },
   ledgerAddedBy: { fontSize: Platform.OS === 'android' ? 10 : 11, color: '#95A5A6', fontWeight: '500' },
   ledgerActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 10 : 12 },

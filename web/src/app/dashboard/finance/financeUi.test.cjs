@@ -39,3 +39,28 @@ test('finance transaction modal uses a clean shared header and balanced actions'
   assert.match(source, /className="btn-primary"[\s\S]*?background: 'var\(--primary\)'/);
   assert.doesNotMatch(source, /background: formType === 'income' \? '#27AE60' : '#ef4444'/);
 });
+
+test('finance provides a dedicated workspace navigation using existing translated labels', () => {
+  assert.match(source, /aria-label=\{t\.finance\.title\}/);
+  assert.match(source, /label: t\.finance\.overview/);
+  assert.match(source, /label: t\.finance\.revenues/);
+  assert.match(source, /label: t\.finance\.expenses/);
+  assert.match(source, /href="\/dashboard\/reports\/financial"/);
+  assert.match(source, /<span>\{t\.nav\.reports\}<\/span>/);
+});
+
+test('finance presents historical performance and recent transactions from scoped live records', () => {
+  assert.match(source, /const monthlyPerformance = useMemo/);
+  assert.match(source, /scopedIncome\.forEach/);
+  assert.match(source, /scopedExpenses\.forEach/);
+  assert.match(source, /const recentTransactions = useMemo/);
+  assert.match(source, /styles\.mobileLedger/);
+});
+
+test('finance keeps the overview and expense descriptions concise', () => {
+  assert.match(source, /const conciseFinanceDescription/);
+  assert.doesNotMatch(source, /Download finance reconciliation/);
+  assert.doesNotMatch(source, /Orson AI Optimization Tip/);
+  assert.doesNotMatch(source, /t\.notes &&/);
+  assert.doesNotMatch(source, /<Wallet|<TrendingUp|<TrendingDown/);
+});
