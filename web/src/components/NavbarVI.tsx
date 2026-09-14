@@ -9,6 +9,7 @@ import LanguageToggle from '@/components/LanguageToggle';
 const navItems = [
   { href: '/pricing', label: 'Pricing (EN)' },
   { href: '/vi', label: 'Trang chủ' },
+  { href: '/vi/resources', label: 'Cẩm nang' },
   { href: '/vi/how-it-works', label: 'Cách hoạt động' },
   { href: '/vi/about', label: 'Về chúng tôi' },
   { href: GOOGLE_PLAY_URL, label: 'Tải ứng dụng', external: true },
@@ -98,6 +99,7 @@ export default function NavbarVI() {
 
   const isActive = (href: string) => {
     if (href === '/vi') return pathname === '/vi';
+    if (href === '/vi/resources') return pathname === '/vi/resources' || pathname?.startsWith('/vi/resources/');
     return pathname === href;
   };
 

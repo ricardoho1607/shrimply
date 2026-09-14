@@ -155,22 +155,22 @@ export default function OrsonPageTH() {
           <div className="resource-card-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '16px' }}>
             {[
               {
-                href: '/resources/fcr-shrimp-farming',
+                href: '/th/resources/fcr-shrimp-farming',
                 title: 'การปรับปรุงค่า FCR ในการเลี้ยงกุ้ง',
                 body: 'ใช้บันทึกอาหาร มวลชีวภาพ อัตราการตาย และการเก็บเกี่ยวเพื่อแปลผล Feed Conversion Ratio ได้อย่างแม่นยำยิ่งขึ้น',
               },
               {
-                href: '/resources/feed-tray-observations',
+                href: '/th/resources/feed-tray-observations',
                 title: 'การสังเกตและเช็กยออาหาร',
                 body: 'ประเมินสัญญาณความอยากอาหารก่อนที่อาหารเหลือจะกลายเป็นปัญหาคุณภาพน้ำและค่า FCR',
               },
               {
-                href: '/resources/water-quality-trends',
+                href: '/th/resources/water-quality-trends',
                 title: 'แนวโน้มคุณภาพน้ำ',
                 body: 'อ่านค่า DO, pH, ความเค็ม, แอมโมเนีย และไนไตรท์ร่วมกัน แทนที่จะดูค่าแต่ละตัวแยกจากกัน',
               },
               {
-                href: '/resources/white-spot-syndrome-virus-shrimp',
+                href: '/th/resources/white-spot-syndrome-virus-shrimp',
                 title: 'การรับมือและป้องกันโรคตัวแดงดวงขาว (WSSV)',
                 body: 'เชื่อมโยงอัตราการตาย ความอยากอาหาร การเคลื่อนไหวของน้ำในบ่อ และมาตรการความปลอดภัยทางชีวภาพเมื่อสงสัยว่าเกิด WSSV',
               },

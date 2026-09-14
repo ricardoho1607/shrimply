@@ -8,10 +8,10 @@ const page = coreSeoPages_th.find(item => item.path === "/th/orson");
 export const metadata = seoMetadataTH(page!, "/orson");
 
 const relatedOrsonPages = [
-  "/resources/fcr-shrimp-farming",
-  "/resources/feed-tray-observations",
-  "/resources/water-quality-trends",
-  "/resources/white-spot-syndrome-virus-shrimp",
+  "/th/resources/fcr-shrimp-farming",
+  "/th/resources/feed-tray-observations",
+  "/th/resources/water-quality-trends",
+  "/th/resources/white-spot-syndrome-virus-shrimp",
   "/th/features/disease-alerts",
 ].map(path => canonicalUrl(path));
 

@@ -55,8 +55,10 @@ export const getTrayCheckWindow = (abw: number): string => {
   return "1.0–1.5 hours";
 };
 
-export default function ShrimpFeedCalculator({ locale = "en" }: { locale?: "en" | "id" } = {}) {
+export default function ShrimpFeedCalculator({ locale = "en" }: { locale?: "en" | "id" | "th" | "vi" } = {}) {
   const isId = locale === "id";
+  const isTh = locale === "th";
+  const isVi = locale === "vi";
   const [calcMode, setCalcMode] = useState<"biomass" | "population">("biomass");
   const [biomassKg, setBiomassKg] = useState<number>(2000);
   const [population, setPopulation] = useState<number>(150000);
@@ -153,15 +155,19 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
         <div>
           <span className="eyebrow" style={{ color: "var(--blue)", marginBottom: "8px", display: "inline-block" }}>
-            {isId ? "Alat Bantu Tambak Interaktif" : "Interactive Farm Tool"}
+            {isId ? "Alat Bantu Tambak Interaktif" : isTh ? "เครื่องมือจำลองการเลี้ยงกุ้ง" : isVi ? "Công cụ trang trại tương tác" : "Interactive Farm Tool"}
           </span>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--navy)", margin: 0, lineHeight: 1.2 }}>
-            {isId ? "Kalkulator Pakan Udang Vannamei" : "Vannamei Shrimp Feed Calculator"}
+            {isId ? "Kalkulator Pakan Udang Vannamei" : isTh ? "เครื่องคำนวณอาหารกุ้งขาวแวนนาไม" : isVi ? "Công cụ tính lượng thức ăn tôm thẻ chân trắng" : "Vannamei Shrimp Feed Calculator"}
           </h2>
           <p style={{ margin: "6px 0 0 0", color: "var(--ocean)", fontSize: "0.95rem", fontWeight: 500, maxWidth: "680px" }}>
             {isId
-              ? "Hitung estimasi ransum pakan harian, pembagian porsi per waktu makan, dan alokasi anco berdasarkan standing biomass serta bobot rata-rata udang."
-              : "Calculate a baseline daily ration, per-meal amount, and feed-tray allocation from standing biomass and average body weight."}
+              ? "Hitung feeding rate harian (% biomassa), pembagian porsi per jam makan, dan takaran pakan anco berdasarkan bobot udang (ABW/MBW) dan standing biomassa kolam."
+              : isTh
+              ? "คำนวณอัตราการให้อาหารประจำวัน (% ของชีวมวล), การแบ่งมื้ออาหารต่อวัน และปริมาณอาหารลงยอตามขนาดน้ำหนักกุ้ง (ABW) และชีวมวลในบ่อ"
+              : isVi
+              ? "Tính toán tỷ lệ cho ăn hàng ngày (% sinh khối), phân bổ khẩu phần theo cữ ăn và lượng thức ăn trên nhá dựa trên trọng lượng tôm (ABW/MBW) và sinh khối hiện tại."
+              : "Calculate baseline feeding rate (% biomass), meal-by-meal splits, and starting tray rations based on current ABW and standing biomass."}
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -184,7 +190,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
             }}
           >
             <RotateCcw size={14} />
-            {isId ? "Reset" : "Reset"}
+            {isId ? "Reset" : isTh ? "รีเซ็ต" : isVi ? "Đặt lại" : "Reset"}
           </button>
           <button
             type="button"
@@ -206,23 +212,22 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-feeding-rate)`;
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied
-              ? (isId ? "Tersalin ke Clipboard!" : "Copied to Clipboard!")
-              : (isId ? "Salin Ransum Pakan" : "Copy Feed Ration")}
+              ? (isId ? "Tersalin ke Clipboard!" : isTh ? "คัดลอกลงคลิปบอร์ดแล้ว!" : isVi ? "Đã sao chép vào bộ nhớ tạm!" : "Copied to Clipboard!")
+              : (isId ? "Salin Ransum Pakan" : isTh ? "คัดลอกแผนการให้อาหาร" : isVi ? "Sao chép khẩu phần ăn" : "Copy Feed Ration")}
           </button>
         </div>
       </div>
 
-      {/* Mode Switcher */}
-      <div style={{ marginBottom: "24px" }}>
+      {/* Mode Selection */}
+      <div style={{ marginBottom: "28px" }}>
         <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "8px" }}>
-          {isId ? "1. Pilih Dasar Perhitungan" : "1. Select Calculation Basis"}
+          {isId ? "1. Pilih Dasar Perhitungan" : isTh ? "1. เลือกวิธีคำนวณ" : isVi ? "1. Chọn phương pháp tính" : "1. Select Calculation Basis"}
         </div>
-        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "12px" }}>
           <button
             type="button"
             onClick={() => setCalcMode("biomass")}
             style={{
-              padding: "10px 18px",
               borderRadius: "10px",
               border: calcMode === "biomass" ? "2px solid var(--blue)" : "1px solid var(--slate)",
               background: calcMode === "biomass" ? "var(--ice)" : "var(--off-white)",

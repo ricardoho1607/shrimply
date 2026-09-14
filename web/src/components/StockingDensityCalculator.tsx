@@ -18,8 +18,10 @@ const PRESETS: CulturePreset[] = [
 
 const AREA_PRESETS = [1000, 2500, 5000, 10000];
 
-export default function StockingDensityCalculator({ locale = "en" }: { locale?: "en" | "id" } = {}) {
+export default function StockingDensityCalculator({ locale = "en" }: { locale?: "en" | "id" | "th" | "vi" } = {}) {
   const isId = locale === "id";
+  const isTh = locale === "th";
+  const isVi = locale === "vi";
   const [pondArea, setPondArea] = useState<number>(2500);
   const [density, setDensity] = useState<number>(100);
   const [survival, setSurvival] = useState<number>(75);
@@ -138,14 +140,18 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "16px", marginBottom: "24px" }}>
         <div>
           <span className="eyebrow" style={{ color: "var(--blue)", marginBottom: "8px", display: "inline-block" }}>
-            {isId ? "Alat Bantu Tambak Interaktif" : "Interactive Farm Tool"}
+            {isId ? "Alat Bantu Tambak Interaktif" : isTh ? "เครื่องมือจำลองการเลี้ยงกุ้ง" : isVi ? "Công cụ trang trại tương tác" : "Interactive Farm Tool"}
           </span>
           <h2 style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--navy)", margin: 0, lineHeight: 1.2 }}>
-            {isId ? "Kalkulator Padat Tebar & Biomassa Vannamei" : "Vannamei Stocking & Biomass Calculator"}
+            {isId ? "Kalkulator Padat Tebar & Biomassa Vannamei" : isTh ? "เครื่องคำนวณความหนาแน่นและชีวมวลกุ้งแวนนาไม" : isVi ? "Công cụ tính mật độ thả giống & sinh khối tôm thẻ" : "Vannamei Stocking & Biomass Calculator"}
           </h2>
           <p style={{ margin: "6px 0 0 0", color: "var(--ocean)", fontSize: "0.95rem", fontWeight: 500, maxWidth: "680px" }}>
             {isId
               ? "Simulasikan luas kolam, target padat tebar, tingkat kelangsungan hidup (SR), dan target bobot panen untuk menghitung kebutuhan benur, daya dukung kolam, dan kebutuhan kincir air."
+              : isTh
+              ? "ทดลองปรับขนาดบ่อ, ความหนาแน่นลูกกุ้งที่ต้องการ, อัตรารอด (SR) และขนาดกุ้งเป้าหมาย เพื่อคำนวณจำนวนลูกกุ้งที่ต้องปล่อย, แรงม้ากังหันตีน้ำ และความปลอดภัยของบ่อ"
+              : isVi
+              ? "Mô phỏng diện tích ao, mật độ thả giống mục tiêu, tỷ lệ sống (SR) và kích cỡ tôm thu hoạch để tính nhu cầu con giống PL, sức tải sinh học của ao và công suất quạt nước."
               : "Test your pond area, target density, survival rate, and harvest size to see exact seed requirements, peak aeration demand, and carrying capacity safety."}
           </p>
         </div>
@@ -169,7 +175,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
             }}
           >
             <RotateCcw size={14} />
-            {isId ? "Reset" : "Reset"}
+            {isId ? "Reset" : isTh ? "รีเซ็ต" : isVi ? "Đặt lại" : "Reset"}
           </button>
           <button
             type="button"
@@ -191,8 +197,8 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
           >
             {copied ? <Check size={14} /> : <Copy size={14} />}
             {copied
-              ? (isId ? "Tersalin ke Clipboard!" : "Copied to Clipboard!")
-              : (isId ? "Salin Ringkasan" : "Copy Summary")}
+              ? (isId ? "Tersalin ke Clipboard!" : isTh ? "คัดลอกลงคลิปบอร์ดแล้ว!" : isVi ? "Đã sao chép vào bộ nhớ tạm!" : "Copied to Clipboard!")
+              : (isId ? "Salin Ringkasan" : isTh ? "คัดลอกสรุปผล" : isVi ? "Sao chép tóm tắt" : "Copy Summary")}
           </button>
         </div>
       </div>
@@ -200,7 +206,7 @@ Calculated via Shrimply (shrimplytech.com/resources/vannamei-stocking-density)`;
       {/* Preset Buttons */}
       <div style={{ marginBottom: "28px" }}>
         <div style={{ fontSize: "0.82rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--muted)", marginBottom: "8px" }}>
-          {isId ? "Preset Cepat Sistem Budidaya" : "Quick Culture System Presets"}
+          {isId ? "Preset Cepat Sistem Budidaya" : isTh ? "ระบบการเลี้ยงกุ้งสำเร็จรูป" : isVi ? "Cấu hình nhanh hệ thống nuôi" : "Quick Culture System Presets"}
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px" }}>
           {PRESETS.map((preset) => {

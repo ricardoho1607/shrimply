@@ -7,34 +7,17 @@
 Shrimply is an aquaculture management platform for shrimp farms.
 
 Tech stack:
-- Mobile: React Native with Expo SDK 54
-- Web: Next.js 14+ App Router
+- Mobile: React Native with Expo; use `package.json` for current versions.
+- Web: Next.js App Router; use `web/package.json` for current versions.
 - Backend: Firebase Firestore
 - Sync: Firestore is the source of truth
 - Mobile offline sync: `app/hooks/useFirebaseSync.ts`
 
-Main domains:
-- ponds
-- sampling
-- feeding
-- inventory
-- finance reports
-- PDF reports
-- company setup
-- roles and approvals
-- Orson AI
+## 2. Project Engineering Rules
 
-## 2. Core Engineering Rules
-
-- Make minimal, targeted changes.
-- Do not rewrite unrelated files.
-- Do not remove existing features.
-- Do not use hardcoded dummy data when live Firebase data exists.
-- Search the existing codebase before creating new logic.
 - Preserve mobile and web parity where the same feature exists.
+- Use live Firebase data rather than dummy data.
 - Use TypeScript-safe code with strict null handling.
-- Do not add new packages unless necessary.
-- Explain files changed and verification performed.
 
 ## 3. Firebase and Data Rules
 
@@ -53,42 +36,9 @@ Required Firestore imports when adding Firestore logic:
 
 ## 4. Feeding vs Sampling Rule
 
-This is critical.
-
-Feeding deducts inventory.
-
-Sampling does not deduct inventory.
-
-### Feeding
-
-Purpose:
-- Actual inventory action
-- Deducts feed stock from Firestore
-
-Relevant areas:
-- `inventory/assetInventory`
-- `index.tsx` feeding section
-
-Rules:
-- Use `inventoryFeedId` to identify the feed brand.
-- Use atomic deductions via `runTransaction` or `increment`.
-- Do not duplicate deductions.
-
-### Sampling
-
-Purpose:
-- Biological observation
-- Tracks MBW, mortality, feed amount for FCR/projection
-
-Relevant areas:
-- Mobile: `app/(tabs)/index.tsx` dashboard modal
-- Web: `web/src/app/dashboard/ponds/[id]/page.tsx` sampling modal
-
-Rules:
-- Sampling must not deduct inventory.
-- Sampling feed amount is for FCR/projection only.
-- Store `feed` and `mbw` as numbers.
-- Do not trigger inventory transactions from sampling.
+- Feeding deducts Firestore inventory once, using `inventoryFeedId` and atomic `runTransaction` or `increment` writes. Relevant areas: `inventory/assetInventory` and the feeding section in `app/(tabs)/index.tsx`.
+- Sampling is a biological observation: its feed amount supports FCR/projections and must never trigger inventory deductions. Store `feed` and `mbw` as numbers.
+- Sampling UI: `app/(tabs)/index.tsx` and `web/src/app/dashboard/ponds/detail/PondDetailClient.tsx`.
 
 ## 5. Biological Calculation Rules
 
@@ -215,54 +165,15 @@ Rules:
 - Financial projections must be assumption-based, not presented as guarantees.
 - Finance reports must clearly separate cash flow, COGS, P&L, and projections.
 
-For report content upgrades, use the Shrimply Report Content Director skill.
-
 ## 10. Skill Improvement Rule
 
-Codex may suggest improvements to Shrimply skills when a task reveals:
-- a repeated mistake
-- a missing instruction
-- a safer workflow
-- a better verification step
-- a useful project convention
+Propose guidance changes only for repeated mistakes, meaningful safety gaps, or reusable project conventions. Show the smallest exact diff and its purpose; edit or commit skills only when the user approves. Existing explicit approval is sufficient.
 
-Rules:
-1. Do not automatically edit, apply, or commit skill updates without approval.
-2. Propose the smallest useful change only.
-3. Show the exact diff for the relevant `SKILL.md`.
-4. Explain why the update is needed.
-5. Prefer `AGENTS.md` for permanent repo-wide rules.
-6. Prefer skills for repeatable workflows.
-7. Do not create new skills unless the workflow is repeated often enough to justify it.
-8. Do not add vague, bloated, or one-off instructions to skills.
+Prefer `AGENTS.md` for permanent project rules and skills for recurring workflows. Keep one-off details in tests; do not create skills for them.
 
 ## 11. Verification
 
-After coding, run the most relevant checks available in the repo:
-- TypeScript check
-- lint
-- tests
-- Expo doctor for Expo/package issues
-- build/config checks if app config or dependencies changed
-
-If a command is unavailable, say so.
-
-Final response should include:
-1. Root cause or task summary
-2. Files changed
-3. What changed
-4. Verification run
-5. Remaining risk or manual testing required
-
-### Response Style
-
-- Role & Tone: Expert communicator who explains complex ideas in very simple, everyday English.
-- Explain everything so simply that a 5-year-old child can easily understand.
-- Do NOT use technical jargon, buzzwords, or complicated terms.
-- Keep answers as short and concise as possible (maximum 2 to 3 sentences or quick bullet points).
-- Use simple real-world metaphors (like toys, playgrounds, or animals) when explaining hard concepts.
-- Skip conversational filler, fluff, introductions, or repeated context; get straight to the point.
-- Final task summaries should strictly focus on: what changed, files modified, and verification status.
+Run checks relevant to the change and risk: affected tests, TypeScript/lint for changed code, Expo doctor for Expo/package issues, and build/config checks for configuration or dependency changes. Report unavailable checks and remaining manual verification. Do not repeat passing checks without a new change or unresolved concern.
 
 ## 12. SHIPALL / PUSHALL Release Shortcut
 

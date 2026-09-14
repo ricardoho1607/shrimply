@@ -59,8 +59,8 @@ export default function WaterQualityMonitoringPageTH() {
         { href: "/th/shrimp-farm-management-software", label: "ซอฟต์แวร์จัดการฟาร์มกุ้ง", description: "ดูว่าการตรวจวัดคุณภาพน้ำเชื่อมโยงกับประสิทธิภาพของบ่อ รายงาน และการปฏิบัติงานอย่างไร" },
         { href: "/th/features/disease-alerts", label: "การแจ้งเตือนโรคกุ้ง", description: "เชื่อมโยงสภาพบ่อที่ผิดปกติกับความเสี่ยงการเกิดโรคและความปลอดภัยทางชีวภาพ" },
         { href: "/th/features/growth-sampling", label: "การสุ่มตัวอย่างการเติบโตและการติดตาม MBW", description: "ใช้ประวัติคุณภาพน้ำเพื่ออธิบายความผันแปรของการเติบโตระหว่างการสุ่มตัวอย่าง" },
-        { href: "/resources/water-quality-trends", label: "คู่มือแนวโน้มคุณภาพน้ำ", description: "อ่านแนวทางวิเคราะห์ DO, pH, ความเค็ม, ความเป็นด่าง, แอมโมเนีย และทิศทางแนวโน้ม" },
-        { href: "/resources/shrimp-disease-alerts", label: "คู่มือการแจ้งเตือนโรค", description: "เรียนรู้วิธีเพิ่มประสิทธิภาพการแจ้งเตือนเมื่อเชื่อมต่อกับบันทึกข้อมูลบ่อ" },
+        { href: "/th/resources/water-quality-trends", label: "คู่มือแนวโน้มคุณภาพน้ำ", description: "อ่านแนวทางวิเคราะห์ DO, pH, ความเค็ม, ความเป็นด่าง, แอมโมเนีย และทิศทางแนวโน้ม" },
+        { href: "/th/resources/shrimp-disease-alerts", label: "คู่มือการแจ้งเตือนโรค", description: "เรียนรู้วิธีเพิ่มประสิทธิภาพการแจ้งเตือนเมื่อเชื่อมต่อกับบันทึกข้อมูลบ่อ" },
         { href: "/th/orson", label: "Orson AI สำหรับการวิเคราะห์บ่อ", description: "ดูว่าประวัติคุณภาพน้ำล่าสุดช่วยเพิ่มบริบทให้ AI วิเคราะห์สภาวะบ่อได้อย่างไร" },
       ]}
     />

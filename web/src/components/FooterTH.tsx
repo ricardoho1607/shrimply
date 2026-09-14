@@ -10,6 +10,7 @@ const productLinks = [
 ];
 
 const companyLinks = [
+  { href: '/th/resources', label: 'ศูนย์รวมคู่มือ' },
   { href: '/th/about', label: 'เกี่ยวกับเรา' },
   { href: '/th/how-it-works', label: 'วิธีใช้งาน' },
   { href: '/th/orson', label: 'Orson AI' },

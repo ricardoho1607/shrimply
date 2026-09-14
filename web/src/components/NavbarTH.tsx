@@ -7,9 +7,10 @@ import { GOOGLE_PLAY_URL } from '@/config/site';
 import LanguageToggle from '@/components/LanguageToggle';
 
 const navItems = [
-  { href: '/pricing', label: 'Pricing (EN)' },
   { href: '/th', label: 'หน้าหลัก' },
   { href: '/th/how-it-works', label: 'วิธีใช้งาน' },
+  { href: '/pricing', label: 'Pricing (EN)' },
+  { href: '/th/resources', label: 'คู่มือ' },
   { href: '/th/about', label: 'เกี่ยวกับ' },
   { href: GOOGLE_PLAY_URL, label: 'ดาวน์โหลดแอป', external: true },
 ];
@@ -98,6 +99,7 @@ export default function NavbarTH() {
 
   const isActive = (href: string) => {
     if (href === '/th') return pathname === '/th';
+    if (href === '/th/resources') return pathname === '/th/resources' || pathname?.startsWith('/th/resources/');
     return pathname === href;
   };
 

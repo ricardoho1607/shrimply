@@ -10,6 +10,7 @@ const productLinks = [
 ];
 
 const companyLinks = [
+  { href: '/vi/resources', label: 'Cẩm nang nuôi tôm' },
   { href: '/vi/about', label: 'Về chúng tôi' },
   { href: '/vi/how-it-works', label: 'Cách hoạt động' },
   { href: '/vi/orson', label: 'Orson AI' },

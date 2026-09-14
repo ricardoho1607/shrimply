@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { SITE_CONFIG } from "@/config/site";
 import { resourceArticles } from "@/data/resourceLibrary";
 import { resourceArticlesID } from "@/data/resourceLibraryID";
+import { resourceArticlesTH } from "@/data/resourceLibraryTH";
+import { resourceArticlesVI } from "@/data/resourceLibraryVI";
 
 export type SeoPage = {
   path: string;
@@ -581,6 +583,14 @@ export const coreSeoPages_th: SeoPage[] = [
     changeFrequency: "weekly",
     lastModified: TH_LAST_MODIFIED,
   },
+  {
+    path: "/th/resources",
+    title: "ศูนย์รวมคู่มือการเลี้ยงกุ้ง & แหล่งความรู้ Shrimply",
+    description: "คู่มือปฏิบัติการเลี้ยงกุ้งขาวแวนนาไมสำหรับการจัดการอาหาร คุณภาพน้ำ การสุ่มตัวอย่าง การป้องกันโรค การวางแผนจับกุ้ง และการเงินฟาร์ม",
+    priority: 0.88,
+    changeFrequency: "weekly",
+    lastModified: TH_LAST_MODIFIED,
+  },
 ];
 
 export const featureSeoPages_th: SeoPage[] = [
@@ -650,6 +660,15 @@ export const featureSeoPages_th: SeoPage[] = [
   },
 ];
 
+export const resourceSeoPages_th: SeoPage[] = resourceArticlesTH.map(article => ({
+  path: `/th/resources/${article.slug}`,
+  title: `${article.title} | คู่มือ Shrimply`,
+  description: article.description,
+  priority: 0.72,
+  changeFrequency: "monthly",
+  lastModified: article.updatedAt ?? article.publishedAt ?? TH_LAST_MODIFIED,
+}));
+
 /* ── Vietnamese (vi) SEO pages ───────────────────────────────────── */
 
 const VI_LAST_MODIFIED = "2026-08-23";
@@ -692,6 +711,14 @@ export const coreSeoPages_vi: SeoPage[] = [
     title: "Tải Shrimply cho Android | Google Play",
     description: "Tải ứng dụng quản lý trang trại tôm Shrimply cho Android trên Google Play hoặc thêm ứng dụng web Shrimply vào màn hình chính iPhone.",
     priority: 0.86,
+    changeFrequency: "weekly",
+    lastModified: VI_LAST_MODIFIED,
+  },
+  {
+    path: "/vi/resources",
+    title: "Cẩm nang nuôi tôm & Trung tâm kiến thức Shrimply",
+    description: "Cẩm nang thực hành nuôi tôm thẻ chân trắng về quản lý thức ăn, chất lượng nước, thu mẫu tăng trưởng, cảnh báo dịch bệnh, kế hoạch thu hoạch và tài chính trang trại.",
+    priority: 0.88,
     changeFrequency: "weekly",
     lastModified: VI_LAST_MODIFIED,
   },
@@ -764,6 +791,15 @@ export const featureSeoPages_vi: SeoPage[] = [
   },
 ];
 
+export const resourceSeoPages_vi: SeoPage[] = resourceArticlesVI.map(article => ({
+  path: `/vi/resources/${article.slug}`,
+  title: `${article.title} | Cẩm nang Shrimply`,
+  description: article.description,
+  priority: 0.72,
+  changeFrequency: "monthly",
+  lastModified: article.updatedAt ?? article.publishedAt ?? VI_LAST_MODIFIED,
+}));
+
 export const sitemapPages = [
   ...coreSeoPages,
   ...featureSeoPages,
@@ -773,8 +809,10 @@ export const sitemapPages = [
   ...resourceSeoPages_id,
   ...coreSeoPages_th,
   ...featureSeoPages_th,
+  ...resourceSeoPages_th,
   ...coreSeoPages_vi,
   ...featureSeoPages_vi,
+  ...resourceSeoPages_vi,
 ];
 
 
