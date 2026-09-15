@@ -11,6 +11,7 @@ import {
 import { getFarmDateKey, resolveFarmTimeZone } from '../../shared/farmDate';
 import {
   applyHarvestImpactToPond,
+  getHarvestDateSampling,
   getNextPartialHarvestNumber,
   reverseHarvestImpactOnPond,
   withHarvestReference,
@@ -87,7 +88,8 @@ export interface PhysicalPond {
 }
 
 export interface Sampling {
-  id: string; date: string; mbw: number; mortality: number; feed: number;
+  id: string; date: string; mbw: number; mortality: number; feed?: number;
+  feedEntryStatus?: 'not_recorded' | 'fasted' | 'recorded';
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   isBaselineEstimate?: boolean; source?: 'midcycle_onboarding' | string;
   estimatedPopulation?: number; estimatedSurvivalRate?: number; cumulativeFeedToDate?: number;
@@ -561,6 +563,14 @@ export const usePondStore = create<PondStore>()(
 
       addHarvestRecord: (record) => {
         const ponds = get().ponds;
+        const pondWithoutSampling = record.ponds.find((harvestPond) => {
+          const pond = ponds.find((item) => item.id === harvestPond.pondId);
+          return !pond || !getHarvestDateSampling(pond, record.date);
+        });
+        if (pondWithoutSampling) {
+          console.warn('Skipped harvest record: every pond requires a positive-MBW sampling on the harvest date.');
+          return;
+        }
         const firstPond = ponds.find((pond) => record.ponds.some((item) => item.pondId === pond.id));
         const resolvedCycleId = record.cycleId || firstPond?.cycleId;
         const resolvedHarvestPonds = record.ponds.map((harvestPond) => ({
@@ -888,9 +898,17 @@ export const usePondStore = create<PondStore>()(
         const recordDate = /^\d{4}-\d{2}-\d{2}$/.test(date)
           ? date
           : getFarmDateKey(new Date(), get().currentTimeZone);
-        const existingSamplingId = get().ponds.find((pond) => pond.id === pondId)?.samplings.find((sampling) => (
-          !isBaselineSampling(sampling) && Boolean(sampling.feedData) && sampling.date === recordDate
-        ))?.id;
+        const pondSamplings = get().ponds.find((pond) => pond.id === pondId)?.samplings || [];
+        const existingSamplingId = (
+          pondSamplings.find((sampling) => (
+            !isBaselineSampling(sampling) && Boolean(sampling.feedData) && sampling.date === recordDate
+          ))
+          || pondSamplings.find((sampling) => (
+            !isBaselineSampling(sampling)
+            && sampling.date === recordDate
+            && (sampling.feedEntryStatus === 'not_recorded' || sampling.feedEntryStatus === 'fasted')
+          ))
+        )?.id;
         
         set((state) => ({
           ponds: state.ponds.map((p) => {
@@ -898,17 +916,24 @@ export const usePondStore = create<PondStore>()(
             const cycleFields = { cycleId: p.cycleId, cycleName: p.cycleName, pondCycleId: p.pondCycleId || p.id };
             const feedRecord = { ...record, ...cycleFields };
             
-            const existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === recordDate);
+            let existingIndex = p.samplings.findIndex(s => !isBaselineSampling(s) && s.feedData && s.date === recordDate);
+            if (existingIndex < 0) {
+              existingIndex = p.samplings.findIndex(s => (
+                !isBaselineSampling(s)
+                && s.date === recordDate
+                && (s.feedEntryStatus === 'not_recorded' || s.feedEntryStatus === 'fasted')
+              ));
+            }
             
             let updatedSamplings;
             if (existingIndex >= 0) {
               updatedSamplings = p.samplings.map((s, index) => 
                 index === existingIndex 
-                  ? { ...s, ...cycleFields, feedData: { ...(s.feedData || {}), ...feedRecord } } 
+                  ? { ...s, ...cycleFields, feedEntryStatus: 'recorded' as const, feedData: { ...(s.feedData || {}), ...feedRecord } }
                   : s
               );
             } else {
-              updatedSamplings = [...p.samplings, { id: `feed-${Date.now()}`, date: recordDate, mbw: 0, mortality: 0, feed: 0, ...cycleFields, feedData: feedRecord }];
+              updatedSamplings = [...p.samplings, { id: `feed-${Date.now()}`, date: recordDate, mbw: 0, mortality: 0, feed: 0, feedEntryStatus: 'recorded' as const, ...cycleFields, feedData: feedRecord }];
             }
             
             return { ...p, samplings: updatedSamplings };
