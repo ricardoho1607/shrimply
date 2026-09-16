@@ -303,18 +303,27 @@ const isWaterQualityConcept = question => (
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
   const conversational = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening)\b/i.test(limits.question);
-  const hasPondTelemetry = limits.ponds.length > 0 || (Array.isArray(limits.exactRecords?.records) && limits.exactRecords.records.length > 0);
-  const isGeneralKnowledge = !hasPondTelemetry && (
+  const isConceptDefinition = isWaterQualityConcept(limits.question);
+  const mentionsSpecificPond = limits.ponds.some(p => p.pond && new RegExp(`\\b${String(p.pond).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, 'i').test(limits.question));
+  const isFarmAnalysisQuery = !isConceptDefinition && (
+    questionRoute === 'farm_analysis'
+    || limits.focus?.route === 'farm_analysis'
+    || /\b(?:why did|what caused|investigate|troubleshoot|trend|crash|spike|loss|drop in|died|dying|mortality)\b/i.test(limits.question)
+  );
+
+  const isGeneralKnowledge = isConceptDefinition || (!isFarmAnalysisQuery && !mentionsSpecificPond && (
     questionRoute === 'aquaculture_knowledge'
     || limits.focus?.route === 'aquaculture_knowledge'
-    || (questionRoute !== 'farm_analysis' && limits.focus?.route !== 'farm_analysis')
-    || isWaterQualityConcept(limits.question)
-  );
+    || (!limits.focus?.route && questionRoute !== 'farm_analysis')
+  ));
   const requiresFallbackRelevanceReview = !conversational && isGeneralKnowledge
     && limits.focus?.answer_contract?.route_confidence === 'fallback';
 
+  const isDosingRequest = isTreatmentQuestion(limits.question)
+    && /\b(?:dos(?:e|age|ing)|dosis|how much|how many|bags?|sacks?|berapa|takar)\b|剂量|劑量|用多少|เท่าไหร่|liều/iu.test(limits.question);
+
   if (isGeneralKnowledge && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
-    && !isTreatmentQuestion(limits.question)
+    && !isDosingRequest
     && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question) && !requiresFallbackRelevanceReview) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }

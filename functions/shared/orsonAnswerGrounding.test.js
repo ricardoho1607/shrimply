@@ -313,13 +313,15 @@ test('general aquaculture queries like Ca:Mg ratio and water quality definitions
   const queries = [
     { question: 'What is the ideal Ca:Mg ratio for vannamei shrimp?', route: 'aquaculture_knowledge' },
     { question: 'What is alkalinity in shrimp farming?', route: 'farm_analysis' }, // no pond telemetry in prompt
+    { question: 'What is the recommended alkalinity range and ideal Ca:Mg ratio for Litopenaeus vannamei at 20 ppt salinity?', route: 'aquaculture_knowledge', withPonds: true },
   ];
 
-  for (const { question, route } of queries) {
+  for (const { question, route, withPonds } of queries) {
     const chunks = [];
     let calls = 0;
+    const prompt = withPonds ? promptFor(null, question) : `USER QUESTION:\n${question}`;
     const result = await generateGroundedOrsonResponse({
-      prompt: `USER QUESTION:\n${question}`,
+      prompt,
       mode: 'standard',
       questionRoute: route,
       onTextDelta: async (delta) => chunks.push(delta),
