@@ -21,7 +21,7 @@ test('diagnostic requests send high reasoning while routine requests stay low', 
       fetchImpl: async (_url, options) => {
         const body = JSON.parse(options.body);
         assert.equal(body.reasoning.effort, mode === 'standard' ? 'low' : 'high');
-        assert.ok(body.max_output_tokens >= (mode === 'standard' ? 2400 : 6000));
+        assert.ok(body.max_output_tokens >= (mode === 'standard' ? 1000 : 6000));
         return jsonResponse({ status: 'completed', output_text: 'Complete' });
       },
     });
@@ -227,4 +227,50 @@ test('unadvertised tool names cannot execute and permission failures are unavail
     },
   });
   assert.equal(executed, false);
+});
+
+test('passing tools with onTextDelta enables streaming and streams tokens', async () => {
+  const events = [
+    { type: 'response.output_text.delta', delta: 'Pond ' },
+    { type: 'response.output_text.delta', delta: 'DO is 5.5 mg/L.' },
+    {
+      type: 'response.completed',
+      response: {
+        status: 'completed',
+        usage: { input_tokens: 20, output_tokens: 10 },
+        output: [{
+          type: 'message',
+          content: [{
+            type: 'output_text',
+            text: 'Pond DO is 5.5 mg/L.',
+          }],
+        }],
+      },
+    },
+  ];
+  const stream = `${events.map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`).join('')}data: [DONE]\n\n`;
+  const emitted = [];
+  let requestBody;
+
+  const result = await generateMetaModelResponse({
+    apiKey: 'test-key',
+    systemInstruction: 'system rules',
+    prompt: 'How is pond DO?',
+    maxOutputTokens: 1200,
+    tools: [{ type: 'function', name: 'read_app_records' }],
+    onTextDelta: async (text) => emitted.push(text),
+    fetchImpl: async (_url, options) => {
+      requestBody = JSON.parse(options.body);
+      return new Response(stream, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      });
+    },
+  });
+
+  assert.equal(requestBody.stream, true);
+  assert.equal(requestBody.tools.length, 1);
+  assert.deepEqual(emitted, ['Pond ', 'DO is 5.5 mg/L.']);
+  assert.equal(result.text, 'Pond DO is 5.5 mg/L.');
+  assert.equal(result.outputTokens, 10);
 });

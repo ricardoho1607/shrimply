@@ -13,7 +13,12 @@
     "check:android-release": "node ./scripts/check-android-release-integrity.js",
     "test:team-security": "node --test functions/teamAccessPolicy.test.js functions/teamAccessRules.test.js",
     "test:team-security:emulator": "node --test functions/teamAccessRules.emulator.test.js",
-    "test": "node scripts/run-tests.cjs"
+    "test": "node scripts/run-tests.cjs",
+    "qa:daily": "node scripts/qa-bot/run.mjs --mode=all",
+    "qa:morning": "node scripts/qa-bot/run.mjs --mode=morning",
+    "qa:evening": "node scripts/qa-bot/run.mjs --mode=evening",
+    "qa:orson": "node scripts/qa-bot/run.mjs --mode=orson",
+    "qa:headed": "node scripts/qa-bot/run.mjs --headless=false"
   },
   "dependencies": {
     "@expo-google-fonts/libre-baskerville": "^0.4.2",
@@ -76,6 +81,7 @@
     "eslint": "^9.25.0",
     "eslint-config-expo": "~57.0.2",
     "firebase-tools": "^15.16.0",
+    "playwright": "^1.63.0",
     "typescript": "~6.0.3"
   },
   "private": true,

@@ -445,8 +445,7 @@ const buildServerOrsonSystemInstruction = (mode = "standard", aiFunction = "chat
   "- If the user mixes languages, use the language that carries the main request.",
   "- Keep scientific names, pond names, units, and exact field values unchanged.",
   "- If the question has no detectable language, reply in English.",
-  "- Use plain text and short bullets where useful.",
-  "- Keep routine answers concise unless the user asks for detail.",
+  "- Produce concise, structured 200-350 word executive summaries rather than exhaustive dissertations. Lead immediately with the core answer and key actionable findings, using clear sections or bullet points where appropriate, unless the user explicitly requests an in-depth or full historical breakdown.",
   "- Show pond-data evidence behind important conclusions and give a practical next action when risk is identified.",
   "- State confidence and missing data when they materially affect the conclusion.",
   "- Prioritize critical and warning findings before watch/info findings.",
@@ -717,10 +716,17 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     const modelStartedAt = Date.now();
     let firstChunkMs = null;
     let emittedText = false;
+    const sendStreamChunk = request.acceptsStreaming ? async (delta) => {
+      if (!delta) return;
+      emittedText = true;
+      if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
+      return callableResponse.sendChunk({ type: "text_delta", text: delta });
+    } : undefined;
     const generate = (withWebLookup) => generateGroundedOrsonResponse({
       prompt: groundedPrompt,
       mode,
       questionRoute,
+      onTextDelta: sendStreamChunk,
       reviewSafety: (answer) => guardModelDosingAnswer({ answer, question: userMessage, generate: safetyGenerate }),
       deadlineMs: requestStartedAt + 125000,
       generate: (overrides) => generateMetaModelResponse({
@@ -774,7 +780,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
         text = "I could not verify treatment guidance against internet sources for this request, so I cannot give a verified product recommendation or application dose yet. Please provide the exact product label, selected pond and water volume, and current and target readings with units so the calculation can be checked.";
       }
     }
-    if (request.acceptsStreaming) {
+    if (request.acceptsStreaming && !emittedText) {
       emittedText = true;
       firstChunkMs = Date.now() - requestStartedAt;
       await callableResponse.sendChunk({ type: "text_delta", text });

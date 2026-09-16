@@ -26,6 +26,7 @@ const ORSON_EVIDENCE_PROMPT_RULES = [
   'Before giving nitrogen thresholds, explain that salinity, life stage or shrimp size, and exposure duration can change risk. Keep operating targets separate from LC/toxicity-study results, never compare values with different or unknown bases, and ask the user to confirm the lab or test-kit basis when it is missing.',
   'Interpret guideline ranges in the context of species, DOC, size, temperature, salinity, density and culture system. A value inside a guideline can still matter when its dated trend deteriorates.',
   'If ORSON QUESTION FOCUS marks user_question_measurements as user_reported_unverified, treat numbers in the current question as user-reported evidence. Do not present them as saved records, merge them silently with a saved pond, or write them to farm history.',
+  'Produce concise, structured 200-350 word executive summaries rather than exhaustive dissertations. Lead immediately with the core answer and key actionable findings, using clear sections or bullet points where appropriate, unless the user explicitly requests an in-depth or full historical breakdown.',
 ];
 
 const ORSON_POND_DIAGNOSTIC_PROMPT_RULES = [

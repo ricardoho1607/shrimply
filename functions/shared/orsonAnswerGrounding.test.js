@@ -308,3 +308,53 @@ test('failed concurrent safety review never grants clearance', async () => {
   });
   assert.equal(result.doseSafety, undefined);
 });
+
+test('general aquaculture queries like Ca:Mg ratio and water quality definitions bypass review pass and stream directly', async () => {
+  const queries = [
+    { question: 'What is the ideal Ca:Mg ratio for vannamei shrimp?', route: 'aquaculture_knowledge' },
+    { question: 'What is alkalinity in shrimp farming?', route: 'farm_analysis' }, // no pond telemetry in prompt
+  ];
+
+  for (const { question, route } of queries) {
+    const chunks = [];
+    let calls = 0;
+    const result = await generateGroundedOrsonResponse({
+      prompt: `USER QUESTION:\n${question}`,
+      mode: 'standard',
+      questionRoute: route,
+      onTextDelta: async (delta) => chunks.push(delta),
+      generate: async (options) => {
+        calls++;
+        await options.onTextDelta?.('Answer to: ' + question);
+        return reply('Answer to: ' + question);
+      },
+    });
+
+    assert.equal(calls, 1, `Expected 1 call for "${question}", got ${calls}`);
+    assert.equal(result.groundingStatus, 'not_required');
+    assert.deepEqual(chunks, ['Answer to: ' + question]);
+  }
+});
+
+test('Pass 2 review uses lightweight bounded settings (maxOutputTokens: 1200, timeout <= 20000ms)', async () => {
+  let calls = 0;
+  let reviewOptions = null;
+  const result = await generateGroundedOrsonResponse({
+    prompt: promptFor(),
+    mode: 'pond_diagnostic',
+    questionRoute: 'farm_analysis',
+    generate: async (options) => {
+      calls++;
+      if (calls === 1) return reply(safeDraft);
+      reviewOptions = options;
+      return reply('{"status":"pass","issues":[]}');
+    },
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(result.groundingStatus, 'passed');
+  assert.ok(reviewOptions, 'Expected review pass options to be captured');
+  assert.equal(reviewOptions.maxOutputTokens, 1200);
+  assert.ok(reviewOptions.timeoutMs <= 20000, `Expected timeoutMs <= 20000, got ${reviewOptions.timeoutMs}`);
+});
+

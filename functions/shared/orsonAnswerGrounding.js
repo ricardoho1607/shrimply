@@ -215,7 +215,7 @@ const REVIEW_INSTRUCTION = [
   'If comparable biomass records are present but flat, say the estimates stayed flat; never rewrite this as no comparable biomass evidence. For calculated FCR use the exact limitation: available recorded feed and estimated biomass, with complete cycle feed coverage unverified. Do not change unverified into partial or incomplete.',
   'ADG is individual weight gain, not pond biomass gain. A recorded FCR rise may overlap an ADG decline, but never say the ADG decline mathematically explains that FCR change. Require matching feed and biomass-gain windows and population/harvest accounting before a numerical or causal FCR explanation.',
   'A plausible mechanism is not a farm finding. Preserve low-risk conditional actions without inventing a diagnosis, chemical dose, antibiotic, automatic feed percentage, or measured consumption.',
-  'For pond_diagnostic keep the five requested sections, at most three supported hypotheses with evidence and missing evidence, at most three focused checks, and target 250-350 words unless the user requested a full dated list. Each cause has exactly one confidence label: low or moderate, never a range. Do not force any causes when none are supported.',
+  'For pond_diagnostic keep the five requested sections, at most three supported hypotheses with evidence and missing evidence, at most three focused checks, and target 200-350 words unless the user requested a full dated list. Each cause has exactly one confidence label: low or moderate, never a range. Do not force any causes when none are supported.',
   'Preserve exact-record scope, suppressed advice, units, dates, comparison bases, user-reported attribution and the language requested by the user. Keep mortality timeline format when requested.',
   'Address every analyte, metric, pond, comparison and sub-question explicitly requested by the user. A concise answer may still be complete.',
   'Treat answer_contract as binding when present. Keep primary_topic dominant, fulfill response_goal, and explicitly address every required_aspect. An answer that mainly discusses a neighboring topic is off_topic even if its facts are correct.',
@@ -224,7 +224,7 @@ const REVIEW_INSTRUCTION = [
   'Treat any deterministic_issues as mandatory corrections. Review all other claims too, including arithmetic, timing, missing data, nitrogen units, confidence and unsupported causes.',
   `Return only JSON. Allowed issue codes: ${[...ISSUE_CODES].join(', ')}.`,
   'If the entire draft meets these rules, return {"status":"pass","issues":[]}. Otherwise return {"status":"rewrite","issues":["issue_code"],"answer":"the complete corrected answer in the requested language"}.',
-  'For a rewrite, remove the false claims wherever they occur; adding a disclaimer is insufficient. Do not mention the review process in a corrected answer. Do not output markdown fences or your analysis.',
+  'For a rewrite, remove the false claims wherever they occur and keep the corrected answer concise (200-350 words); adding a disclaimer is insufficient. Do not mention the review process in a corrected answer. Do not output markdown fences or your analysis.',
 ].join('\n');
 
 const FALLBACK_COPY = {
@@ -297,10 +297,14 @@ const buildFactualFallback = limits => {
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
   const conversational = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening)\b/i.test(limits.question);
-  const requiresFallbackRelevanceReview = !conversational && questionRoute === 'aquaculture_knowledge'
-    && (limits.focus?.answer_contract?.route_confidence === 'fallback'
-      || (!limits.focus?.answer_contract && limits.focus?.route === 'aquaculture_knowledge' && limits.focus?.intent === 'general'));
-  if (questionRoute !== 'farm_analysis' && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
+  const hasPondTelemetry = limits.ponds.length > 0 || (Array.isArray(limits.exactRecords?.records) && limits.exactRecords.records.length > 0);
+  const isGeneralKnowledge = questionRoute === 'aquaculture_knowledge'
+    || limits.focus?.route === 'aquaculture_knowledge'
+    || !hasPondTelemetry;
+  const requiresFallbackRelevanceReview = !conversational && isGeneralKnowledge
+    && limits.focus?.answer_contract?.route_confidence === 'fallback';
+
+  if (isGeneralKnowledge && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
     && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question) && !requiresFallbackRelevanceReview) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }
@@ -330,8 +334,8 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
         systemInstruction: REVIEW_INSTRUCTION,
         prompt: JSON.stringify({ mode, original_request: prompt, answer_contract: limits.focus?.answer_contract || null,
           retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
-        useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 5000,
-        timeoutMs: remainingTimeout(45000), onTextDelta: undefined,
+        useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 1200,
+        timeoutMs: remainingTimeout(20000), onTextDelta: undefined,
       });
       reviewInputTokens = reviewed.inputTokens;
       reviewTokens = reviewed.outputTokens;
