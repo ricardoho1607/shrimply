@@ -2,6 +2,7 @@
 
 const { getOrsonGenerationSettings } = require('./metaModelApi');
 const { ORSON_EVIDENCE_PROMPT_RULES } = require('./orsonPromptPolicy');
+const { isTreatmentQuestion } = require('./orsonInventoryPolicy');
 
 const ISSUE_CODES = new Set([
   'unsupported_biomass_trend', 'unsupported_estimate_direction', 'unsupported_causal_confidence',
@@ -294,17 +295,26 @@ const buildFactualFallback = limits => {
     ...(limits.focus.suppress_advice ? [] : [copy[1]])].join('\n\n');
 };
 
+const isWaterQualityConcept = question => (
+  /\b(?:what is|jelaskan|apa itu|definition|meaning of|apa yang dimaksud|explain)\b/i.test(String(question))
+  && /\b(?:alkalinity|alkalinitas|dissolved oxygen|morning do|dawn do|do|ph|salinity|salinitas|temperature|suhu|hardness|ca:?mg|calcium|magnesium)\b/i.test(String(question))
+);
+
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
   const conversational = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening)\b/i.test(limits.question);
   const hasPondTelemetry = limits.ponds.length > 0 || (Array.isArray(limits.exactRecords?.records) && limits.exactRecords.records.length > 0);
-  const isGeneralKnowledge = questionRoute === 'aquaculture_knowledge'
+  const isGeneralKnowledge = !hasPondTelemetry && (
+    questionRoute === 'aquaculture_knowledge'
     || limits.focus?.route === 'aquaculture_knowledge'
-    || !hasPondTelemetry;
+    || (questionRoute !== 'farm_analysis' && limits.focus?.route !== 'farm_analysis')
+    || isWaterQualityConcept(limits.question)
+  );
   const requiresFallbackRelevanceReview = !conversational && isGeneralKnowledge
     && limits.focus?.answer_contract?.route_confidence === 'fallback';
 
   if (isGeneralKnowledge && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
+    && !isTreatmentQuestion(limits.question)
     && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question) && !requiresFallbackRelevanceReview) {
     return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
   }

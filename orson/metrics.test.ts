@@ -223,6 +223,7 @@ export const runUnifiedBiomassParitySelfTest = () => {
     timeZone: 'Australia/Melbourne',
   });
   const sharedMidnightMetrics = calculatePondMetricsWithHarvest(midnightPond, 'Australia/Melbourne', {
+    currentDoc: normalizedMidnightPond.currentDoc ?? undefined,
     now: midnightNow,
   });
   const orsonMidnightMetrics = calculatePondMetrics(normalizedMidnightPond);

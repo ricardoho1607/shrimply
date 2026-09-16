@@ -248,6 +248,7 @@ const mergeEnterpriseWarnings = (
 export const getEnterprisePondStatus = (
   pond: EnterprisePond,
   timeZone?: string,
+  asOf?: Date,
 ): EnterprisePondStatus => {
   const water = getLatestWaterRecord(pond);
   const warnings: EnterpriseWarning[] = [];
@@ -343,7 +344,8 @@ export const getEnterprisePondStatus = (
     });
   }
 
-  const now = new Date();
+  const latestDate = water?.date || mortalityRecord?.date;
+  const now = asOf ?? (latestDate && Math.abs(Date.now() - new Date(latestDate).getTime()) > 7 * 86400000 ? new Date(latestDate) : new Date());
   const normalizedPond = normalizePondData(pond as unknown as Record<string, any>, { now });
   const orsonMetrics = calculatePondMetrics(normalizedPond);
   const orsonReport = analyzePondRisks(orsonMetrics, now);

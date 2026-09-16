@@ -17,7 +17,7 @@ function component(name, mocks = {}) {
   const requireOriginal = source.require.bind(source);
   source.require = specifier => {
     if (Object.hasOwn(mocks, specifier)) return mocks[specifier];
-    if (specifier.endsWith('.module.css')) return new Proxy({}, { get: (_, key) => String(key) });
+    if (specifier.endsWith('.css')) return new Proxy({}, { get: (_, key) => String(key) });
     if (specifier === '@/config/site') return { GOOGLE_PLAY_URL: 'https://play.google.com/store/apps/details?id=com.shrimply.tech.investashrimp' };
     if (specifier === 'next/link') return ({ prefetch, children, ...props }) => React.createElement('a', props, children);
     return requireOriginal(specifier);

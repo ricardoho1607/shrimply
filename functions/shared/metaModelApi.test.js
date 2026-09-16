@@ -274,3 +274,50 @@ test('passing tools with onTextDelta enables streaming and streams tokens', asyn
   assert.equal(result.text, 'Pond DO is 5.5 mg/L.');
   assert.equal(result.outputTokens, 10);
 });
+
+test('streaming with tool calls executes tool exactly once without duplicate calls and streams final response', async () => {
+  let calls = 0;
+  let toolExecuted = 0;
+  const emitted = [];
+
+  const toolCallStream = [
+    `data: ${JSON.stringify({ type: 'response.output_item.added', output_index: 0, item: { id: 'call_1', type: 'function_call', name: 'read_app_records', arguments: '{"dataset":"feeds"}' } })}\n\n`,
+    `data: ${JSON.stringify({ type: 'response.output_item.done', output_index: 0, item: { id: 'call_1', type: 'function_call', name: 'read_app_records', arguments: '{"dataset":"feeds"}' } })}\n\n`,
+    `data: [DONE]\n\n`,
+  ].join('');
+
+  const answerStream = [
+    `data: ${JSON.stringify({ type: 'response.output_item.added', output_index: 0, item: { id: 'msg_1', type: 'message' } })}\n\n`,
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', output_index: 0, item_id: 'msg_1', delta: '123 kg ' })}\n\n`,
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', output_index: 0, item_id: 'msg_1', delta: 'available.' })}\n\n`,
+    `data: ${JSON.stringify({ type: 'response.completed', response: { status: 'completed', output_text: '123 kg available.' } })}\n\n`,
+    `data: [DONE]\n\n`,
+  ].join('');
+
+  const result = await generateMetaModelResponse({
+    apiKey: 'test-key',
+    systemInstruction: 'system rules',
+    prompt: 'Check stock',
+    maxOutputTokens: 1200,
+    tools: [{ type: 'function', name: 'read_app_records' }],
+    executeTool: async (name, args) => {
+      toolExecuted++;
+      assert.equal(name, 'read_app_records');
+      return { stock: 123 };
+    },
+    onTextDelta: async (delta) => emitted.push(delta),
+    fetchImpl: async () => {
+      calls++;
+      if (calls === 1) {
+        return new Response(toolCallStream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+      }
+      return new Response(answerStream, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+    },
+  });
+
+  assert.equal(toolExecuted, 1, 'Tool must be executed exactly once without duplicates');
+  assert.equal(calls, 2);
+  assert.deepEqual(emitted, ['123 kg ', 'available.']);
+  assert.equal(result.text, '123 kg available.');
+});
+

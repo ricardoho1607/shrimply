@@ -358,3 +358,38 @@ test('Pass 2 review uses lightweight bounded settings (maxOutputTokens: 1200, ti
   assert.ok(reviewOptions.timeoutMs <= 20000, `Expected timeoutMs <= 20000, got ${reviewOptions.timeoutMs}`);
 });
 
+test('farm analysis questions without preloaded telemetry do not bypass review pass', async () => {
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({
+    prompt: 'USER QUESTION:\nWhy did my harvest revenue drop?',
+    mode: 'standard',
+    questionRoute: 'farm_analysis',
+    generate: async () => {
+      calls++;
+      if (calls === 1) return reply(safeDraft);
+      return reply('{"status":"pass","issues":[]}');
+    },
+  });
+
+  assert.equal(calls, 2, 'Farm analysis query must undergo grounding review pass');
+  assert.equal(result.groundingStatus, 'passed');
+});
+
+test('chemical dosing questions do not bypass review pass even without pond telemetry', async () => {
+  let calls = 0;
+  const result = await generateGroundedOrsonResponse({
+    prompt: 'USER QUESTION:\nHow much lime should I dose to increase alkalinity?',
+    mode: 'standard',
+    questionRoute: 'aquaculture_knowledge',
+    generate: async () => {
+      calls++;
+      if (calls === 1) return reply(safeDraft);
+      return reply('{"status":"pass","issues":[]}');
+    },
+  });
+
+  assert.equal(calls, 2, 'Chemical dosing query must not bypass review pass');
+  assert.equal(result.groundingStatus, 'passed');
+});
+
+

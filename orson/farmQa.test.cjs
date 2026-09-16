@@ -13,7 +13,7 @@ test('explicit general Indonesian questions override previous farm analysis', ()
     assert.equal(inferOrsonConversationRoute(question, history), 'aquaculture_knowledge');
     const analysis = buildOrsonAnalysis([pond], question, now, undefined, undefined, undefined, history);
     assert.equal(analysis.promptPackage.questionFocus.route, 'aquaculture_knowledge');
-    assert.equal(analysis.promptPackage.context.includes('Private pond measurements'), history.length > 0);
+    assert.ok(!analysis.promptPackage.context.includes('Private pond measurements'));
     assert.ok(!analysis.promptPackage.context.includes('ORSON FARM SCOPE:'));
   }
 });

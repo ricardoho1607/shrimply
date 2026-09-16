@@ -57,7 +57,8 @@ const readMetaEventStream = async (response, onTextDelta) => {
   let streamedText = '';
   let finalResponse = null;
   let finishedReading = false;
-  const outputItems = new Map();
+  const outputById = new Map();
+  const outputByIndex = new Map();
 
   const processBlock = async (block) => {
     const data = block
@@ -73,10 +74,10 @@ const readMetaEventStream = async (response, onTextDelta) => {
       throw new Error('Meta Model API returned an invalid stream event.');
     }
     if (['response.output_item.added', 'response.output_item.done'].includes(event.type) && event.item) {
-      if (event.item.id) outputItems.set(event.item.id, event.item);
-      if (event.output_index !== undefined) outputItems.set(event.output_index, event.item);
+      if (event.item.id) outputById.set(event.item.id, event.item);
+      if (event.output_index !== undefined) outputByIndex.set(event.output_index, event.item);
     } else if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
-      const item = outputItems.get(event.item_id) || outputItems.get(event.output_index);
+      const item = (event.item_id ? outputById.get(event.item_id) : null) || (event.output_index !== undefined ? outputByIndex.get(event.output_index) : null);
       if (item?.phase === 'commentary') return;
       streamedText += event.delta;
       await onTextDelta(event.delta);
@@ -103,9 +104,12 @@ const readMetaEventStream = async (response, onTextDelta) => {
     reader.releaseLock();
   }
 
+  const fallbackOutput = outputByIndex.size
+    ? Array.from(outputByIndex.entries()).sort(([a], [b]) => a - b).map(([, item]) => item)
+    : Array.from(outputById.values());
   const output = Array.isArray(finalResponse?.output) && finalResponse.output.length
     ? finalResponse.output
-    : Array.from(outputItems.values());
+    : fallbackOutput;
   const calls = output.filter(item => item?.type === 'function_call');
 
   const finalText = getResponseText(finalResponse);
@@ -205,7 +209,7 @@ const generateMetaModelResponse = async ({
         } catch (_) { result = { error: 'This record lookup is unavailable or not permitted. Do not invent its contents.' }; }
         const output = JSON.stringify(result);
         evidence.push({ tool: call.name, arguments: call.arguments, result });
-        return { type: 'function_call_output', call_id: call.call_id, output };
+        return { type: 'function_call_output', call_id: call.call_id || call.id, output };
       }));
       input = [...(Array.isArray(input) ? input : [{ role: 'user', content: input }]), ...outputList, ...outputs];
       continue;
