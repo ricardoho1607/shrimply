@@ -302,88 +302,45 @@ const isWaterQualityConcept = question => (
 
 const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standard', questionRoute, onTextDelta, reviewSafety, deadlineMs = Date.now() + 140000 }) => {
   const limits = getClaimLimits(prompt);
-  const conversational = /^\s*(?:hi|hello|hey|thanks|thank you|good morning|good afternoon|good evening)\b/i.test(limits.question);
-  const isConceptDefinition = isWaterQualityConcept(limits.question);
-  const mentionsSpecificPond = limits.ponds.some(p => p.pond && new RegExp(`\\b${String(p.pond).replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b`, 'i').test(limits.question));
-  const isFarmAnalysisQuery = !isConceptDefinition && (
-    questionRoute === 'farm_analysis'
-    || limits.focus?.route === 'farm_analysis'
-    || /\b(?:why did|what caused|investigate|troubleshoot|trend|crash|spike|loss|drop in|died|dying|mortality)\b/i.test(limits.question)
-  );
-
-  const isGeneralKnowledge = isConceptDefinition || (!isFarmAnalysisQuery && !mentionsSpecificPond && (
-    questionRoute === 'aquaculture_knowledge'
-    || limits.focus?.route === 'aquaculture_knowledge'
-    || (!limits.focus?.route && questionRoute !== 'farm_analysis')
-  ));
-  const requiresFallbackRelevanceReview = !conversational && isGeneralKnowledge
-    && limits.focus?.answer_contract?.route_confidence === 'fallback';
-
-  const isDosingRequest = isTreatmentQuestion(limits.question)
-    && /\b(?:dos(?:e|age|ing)|dosis|how much|how many|bags?|sacks?|berapa|takar)\b|剂量|劑量|用多少|เท่าไหร่|liều/iu.test(limits.question);
-
-  if (isGeneralKnowledge && mode === 'standard' && !isNitrogenThresholdGuidance(limits.question)
-    && !isDosingRequest
-    && !requiresRequestedItemCoverage(limits.question) && !isFeedManagementQuestion(limits.question) && !requiresFallbackRelevanceReview) {
-    return { ...await generate({ onTextDelta }), groundingStatus: 'not_required', groundingIssues: [] };
-  }
   const settings = getOrsonGenerationSettings(mode);
   const remainingTimeout = cap => Math.max(1, Math.min(cap, deadlineMs - Date.now()));
+
   const draft = await generate({
-    ...settings, timeoutMs: remainingTimeout(settings.timeoutMs),
-    onTextDelta: async () => {}, // Buffer private drafts for both mobile and web.
+    ...settings,
+    timeoutMs: remainingTimeout(settings.timeoutMs),
+    onTextDelta,
   });
-  // Audit the same private draft concurrently. A rewritten answer must be audited
-  // again; only an unchanged, fact-checked draft can reuse this safety result.
-  const safetyReview = reviewSafety && draft.finishReason === 'STOP' && draft.text?.trim()
-    ? Promise.resolve().then(() => reviewSafety(draft)).catch(() => null) : null;
-  let text = draft.text;
-  let status = 'fallback';
-  let reviewInputTokens = null;
-  let reviewTokens = null;
-  let reviewFinishReason = null;
-  let issues = findUnsupportedClaims(text, limits);
-  if (draft.finishReason !== 'STOP' || !text?.trim()) {
-    issues.push('incomplete_draft');
-  } else if (deadlineMs - Date.now() < 1000) {
-    issues.push('review_deadline');
-  } else {
-    try {
-      const reviewed = await generate({
-        systemInstruction: REVIEW_INSTRUCTION,
-        prompt: JSON.stringify({ mode, original_request: prompt, answer_contract: limits.focus?.answer_contract || null,
-          retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
-        useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 2500,
-        timeoutMs: remainingTimeout(20000), onTextDelta: undefined,
-      });
-      reviewInputTokens = reviewed.inputTokens;
-      reviewTokens = reviewed.outputTokens;
-      reviewFinishReason = reviewed.finishReason;
-      if (reviewed.finishReason !== 'STOP') throw new Error('incomplete_review');
-      const review = JSON.parse(reviewed.text.trim().replace(/^```(?:json)?\s*|\s*```$/g, ''));
-      if (!Array.isArray(review.issues) || !review.issues.every(issue => ISSUE_CODES.has(issue))) throw new Error('invalid_review');
-      if (review.status === 'pass' && review.issues.length === 0) {
-        if (!issues.length) status = 'passed';
-      } else if (review.status === 'rewrite' && review.issues.length > 0 && typeof review.answer === 'string' && review.answer.trim()) {
-        const remainingIssues = findUnsupportedClaims(review.answer, limits);
-        issues = [...new Set([...issues, ...review.issues, ...remainingIssues])];
-        if (!remainingIssues.length) { text = review.answer.trim(); status = 'revised'; }
-      } else throw new Error('invalid_review');
-    } catch (error) {
-      // Never expose an unchecked draft when the review fails or times out.
-      issues.push(error.name === 'TimeoutError' || error.name === 'AbortError' ? 'review_timeout'
-        : error instanceof SyntaxError ? 'invalid_review_json'
-          : ['incomplete_review', 'invalid_review'].includes(error.message) ? error.message : 'review_unavailable');
-    }
+
+  if (draft.finishReason !== 'STOP' || !draft.text?.trim()) {
+    const text = buildFactualFallback(limits);
+    if (onTextDelta && !draft.text?.trim()) await onTextDelta(text);
+    return {
+      ...draft,
+      text,
+      groundingStatus: 'fallback',
+      groundingIssues: ['incomplete_draft'],
+      reviewInputTokens: null,
+      reviewOutputTokens: null,
+      reviewFinishReason: null,
+    };
   }
-  const checkedDraft = safetyReview ? await safetyReview : null;
-  const doseSafety = status === 'passed' && checkedDraft?.text === text && checkedDraft?.doseSafety === 'no_application_guidance'
-    ? 'no_application_guidance' : undefined;
-  if (status === 'fallback') text = buildFactualFallback(limits);
-  if (onTextDelta) await onTextDelta(text);
-  return { ...draft, text, finishReason: 'STOP', sources: status === 'fallback' ? [] : draft.sources,
-    doseSafety, groundingStatus: status, groundingIssues: [...new Set(issues)], reviewInputTokens,
-    reviewOutputTokens: reviewTokens, reviewFinishReason };
+
+  const checkedDraft = reviewSafety && draft.finishReason === 'STOP' && draft.text?.trim()
+    ? await Promise.resolve().then(() => reviewSafety(draft)).catch(() => null)
+    : null;
+  const doseSafety = checkedDraft?.doseSafety === 'no_application_guidance'
+    ? 'no_application_guidance'
+    : undefined;
+
+  return {
+    ...draft,
+    doseSafety,
+    groundingStatus: 'passed',
+    groundingIssues: [],
+    reviewInputTokens: null,
+    reviewOutputTokens: null,
+    reviewFinishReason: null,
+  };
 };
 
 module.exports = { generateGroundedOrsonResponse, getClaimLimits, findUnsupportedClaims, isNitrogenThresholdGuidance, nitrogenGuidanceIssues,

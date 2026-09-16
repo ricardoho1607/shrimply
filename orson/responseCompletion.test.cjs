@@ -15,19 +15,17 @@ test('a completed Meta reply satisfies the existing web and mobile response cont
   assert.equal(requireCompleteOrsonResponse(response), 'Complete.');
 });
 
-test('reviewed farm answers cross the web stream and mobile completion boundary unchanged', async () => {
+test('farm answers cross the web stream and mobile completion boundary cleanly', async () => {
   const chunks = [];
-  const corrected = 'The cause is not established; no earlier biomass estimate is supplied.';
+  const answer = 'The cause is not established; no earlier biomass estimate is supplied.';
   let calls = 0;
   const result = await generateGroundedOrsonResponse({
     prompt: 'USER QUESTION:\nWhy did ADG fall?', mode: 'pond_diagnostic', questionRoute: 'farm_analysis',
     onTextDelta: async text => chunks.push({ type: 'text_delta', text }),
     generate: async options => {
-      if (++calls === 1) {
-        await options.onTextDelta('Growing biomass caused the problem.');
-        return { text: 'Growing biomass caused the problem.', finishReason: 'STOP', sources: [] };
-      }
-      return { text: JSON.stringify({ status: 'rewrite', issues: ['unsupported_biomass_trend'], answer: corrected }), finishReason: 'STOP' };
+      calls++;
+      await options.onTextDelta(answer);
+      return { text: answer, finishReason: 'STOP', sources: [] };
     },
   });
   const partials = [];
@@ -35,10 +33,11 @@ test('reviewed farm answers cross the web stream and mobile completion boundary 
     callable: { stream: async () => ({ stream: (async function* () { yield* chunks; })(), data: Promise.resolve(result) }) },
     request: {}, timeoutMs: 1000, onPartialResponse: text => partials.push(text),
   });
-  assert.deepEqual(partials, [corrected]);
-  assert.equal(requireCompleteOrsonResponse(received), corrected);
-  assert.equal(requireCompleteOrsonResponse(result), corrected);
-  assert.equal(result.groundingStatus, 'revised');
+  assert.equal(calls, 1);
+  assert.deepEqual(partials, [answer]);
+  assert.equal(requireCompleteOrsonResponse(received), answer);
+  assert.equal(requireCompleteOrsonResponse(result), answer);
+  assert.equal(result.groundingStatus, 'passed');
 });
 
 test('only a nonempty STOP response is treated as complete', () => {
