@@ -1,7 +1,7 @@
 const META_MODEL_API_BASE_URL = process.env.META_MODEL_API_BASE_URL || 'https://api.ai.meta.com/v1';
 const META_MODEL_API_MODEL = 'muse-spark-1.3-contributor';
 const getOrsonGenerationSettings = (mode) => mode === 'standard'
-  ? { reasoningEffort: 'low', maxOutputTokens: 1200, timeoutMs: 45000 }
+  ? { reasoningEffort: 'low', maxOutputTokens: 2500, timeoutMs: 45000 }
   : { reasoningEffort: 'high', maxOutputTokens: 10000, timeoutMs: 90000 };
 
 const getFinishReason = (response) => {

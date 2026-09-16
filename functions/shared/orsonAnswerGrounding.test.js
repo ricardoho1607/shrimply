@@ -338,7 +338,7 @@ test('general aquaculture queries like Ca:Mg ratio and water quality definitions
   }
 });
 
-test('Pass 2 review uses lightweight bounded settings (maxOutputTokens: 1200, timeout <= 20000ms)', async () => {
+test('Pass 2 review uses lightweight bounded settings (maxOutputTokens <= 2500, timeout <= 20000ms)', async () => {
   let calls = 0;
   let reviewOptions = null;
   const result = await generateGroundedOrsonResponse({
@@ -356,7 +356,7 @@ test('Pass 2 review uses lightweight bounded settings (maxOutputTokens: 1200, ti
   assert.equal(calls, 2);
   assert.equal(result.groundingStatus, 'passed');
   assert.ok(reviewOptions, 'Expected review pass options to be captured');
-  assert.equal(reviewOptions.maxOutputTokens, 1200);
+  assert.equal(reviewOptions.maxOutputTokens, 2500);
   assert.ok(reviewOptions.timeoutMs <= 20000, `Expected timeoutMs <= 20000, got ${reviewOptions.timeoutMs}`);
 });
 

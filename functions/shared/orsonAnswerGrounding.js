@@ -353,7 +353,7 @@ const generateGroundedOrsonResponse = async ({ generate, prompt, mode = 'standar
         systemInstruction: REVIEW_INSTRUCTION,
         prompt: JSON.stringify({ mode, original_request: prompt, answer_contract: limits.focus?.answer_contract || null,
           retrieved_app_records: draft.toolEvidence, claim_contract: limits.contract, deterministic_issues: issues, draft: text }),
-        useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 1200,
+        useWebLookup: false, reasoningEffort: 'low', maxOutputTokens: 2500,
         timeoutMs: remainingTimeout(20000), onTextDelta: undefined,
       });
       reviewInputTokens = reviewed.inputTokens;

@@ -27,7 +27,7 @@ const isTreatmentQuestion = (message = '') => {
   if (getOrsonRequestConstraints(text).suppressTreatmentAdvice) return false;
   return /(?:\b(?:dosis|takaran|kapur|kalsium|liều|vôi)\b|ปูน|ปริมาณ|เท่าไหร่|剂量|劑量|石灰|用多少)/iu.test(text)
     || /\b(?:how much|how many|can i use)\b[^?]{0,80}\b(?:add|apply|use|bags?|sacks?|calcium|magnesium|lime|chemical|probiotic)\b/i.test(text)
-    || /\b(dos(?:e|es|ing|age)|formula|recommend\w*|what\s+should\s+i\s+use|what\s+(?:can|should)\s+i\s+add)\b/i.test(text)
+    || /\b(dos(?:e|es|ing|age)|formula|recommend\w*(?:\s+(?:an?\s+)?(?:alternative|treatment|product|chemical|medicine|probiotic|dose|additive)|\s+to\s+(?:treat|dose|apply|add))|what\s+should\s+i\s+use|what\s+(?:can|should)\s+i\s+add)\b/i.test(text)
     || /\b(increase|raise|reduce|lower|decrease|correct|adjust)\b[\s\S]{0,80}\b(calcium|magnesium|alkalinity|hardness|ph|ammonia|nitrite|nitrate|salinity|oxygen|something)\b/i.test(text);
 };
 const needsInventoryContext = (route, message = '') => route !== 'out_of_scope' && (route === 'inventory_product' || isTreatmentQuestion(message) || /\b(inventory|invetory|stock)\b/i.test(message));
