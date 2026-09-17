@@ -92,9 +92,21 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
   });
   const [inputText, setInputText] = useState('');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
+  const [analyzingDots, setAnalyzingDots] = useState('.');
 
   const { sendMessage, loading, clearChat, error } = useGemini();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!loading || streamingReplyId) {
+      setAnalyzingDots('.');
+      return;
+    }
+    const interval = setInterval(() => {
+      setAnalyzingDots((prev) => (prev.length >= 3 ? '.' : prev + '.'));
+    }, 450);
+    return () => clearInterval(interval);
+  }, [loading, streamingReplyId]);
 
   useEffect(() => {
     sessionStorage.removeItem('orson_messages');
@@ -245,7 +257,8 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                   </div>
                   <div className="orson-message-stack">
                     <div className="orson-bubble is-thinking">
-                      {copy('Orson is analyzing farm metrics...')}
+                      {copy('Orson is analyzing farm metrics...').replace(/\.{1,3}$/, '')}
+                      <span className="orson-loading-dots">{analyzingDots}</span>
                     </div>
                   </div>
                 </div>

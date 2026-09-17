@@ -2,6 +2,11 @@ process.env.NODE_ENV = "test";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const ts = require("typescript");
+if (!require.extensions['.ts']) {
+  require.extensions['.ts'] = (module, file) => module._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText, file);
+}
 const { __test } = require("./orson");
 
 test("product context preserves recorded label ingredients and recipes", () => {
@@ -151,3 +156,33 @@ test("inventory and dosing safeguards apply to farm questions too", () => {
   assert.match(instruction, /unknown stock is not zero/);
   assert.match(instruction, /Never deduct stock/);
 });
+
+test("multi-turn pond selection inherits previous parameter and topic without resetting to generic farm summary", () => {
+  const { buildOrsonQuestionFocus } = require('../orson/promptBuilder.ts');
+  const mockPayloads = [{
+    pondId: 'pond-c1',
+    pondName: 'C1',
+    areaM2: 1000,
+    dailyRecords: [],
+    recentSamplings: [],
+    recentWaterQuality: [],
+  }];
+  const conversationHistory = [
+    { role: 'user', text: 'Berapa kisaran fluktuasi pH harian yang aman?' },
+    { role: 'model', text: 'Fluktuasi pH harian yang aman adalah 0.3 - 0.5. Apakah Anda ingin saya cek tren ayunan pH 14 hari untuk salah satu kolam C1 atau C2?' },
+  ];
+
+  const focus = buildOrsonQuestionFocus('coba cek kolam c1', mockPayloads, conversationHistory);
+
+  assert.equal(focus.focusedPondName, 'C1');
+  assert.equal(focus.requestedParameter, 'ph');
+  assert.equal(focus.intent, 'water_quality');
+  assert.equal(focus.answerContract.primaryTopic, 'water_quality');
+  assert.equal(focus.shouldSummarize, false);
+  assert.equal(focus.usesConversationHistory, true);
+
+  const serverInstructions = __test.buildServerOrsonSystemInstruction('standard', 'chat', 'farm_analysis');
+  assert.match(serverInstructions, /ORSON QUESTION FOCUS is advisory context/);
+  assert.match(serverInstructions, /Prioritize natural conversation continuity/);
+});
+

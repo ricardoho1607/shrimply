@@ -1,4 +1,4 @@
-import { getOrsonRequestConstraints, isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy';
+import { getOrsonRequestConstraints, isTreatmentQuestion } from '../functions/shared/orsonInventoryPolicy.js';
 import {
   ORSON_PRODUCT_PROMISE,
   ORSON_RESPONSE_PRINCIPLES,
@@ -12,7 +12,7 @@ import { isMortalityDiagnosticQuestion } from './mortalityDiagnostic';
 import {
   ORSON_EVIDENCE_PROMPT_RULES,
   ORSON_POND_DIAGNOSTIC_PROMPT_RULES,
-} from '../functions/shared/orsonPromptPolicy';
+} from '../functions/shared/orsonPromptPolicy.js';
 import type {
   OrsonAnalysisMode,
   OrsonConversationMessage,
@@ -151,6 +151,8 @@ const FOLLOW_UP_PATTERNS = [
   /^\s*(and|also|then)\b/i,
   /^\s*(why(\s+is\s+that)?|how\s+so|tell\s+me\s+more|explain\s+more)[?.!]*\s*$/i,
   /\b(that|this|it|those|these|they|them)\b/i,
+  /^\s*(?:coba\s+)?(?:cek\s+|check\s+)?(?:kolam\s+|pond\s+)?[a-z0-9_-]+\s*$/i,
+  /^\s*(?:coba|cek|check|ya|yes|boleh|sure|ok|okay|tolong|bagaimana\s+dengan)\b/i,
 ];
 
 const DETAILED_HISTORY_PATTERNS = [
@@ -440,10 +442,19 @@ export const inferOrsonConversationRoute = (
   return inferStandaloneRoute(question);
 };
 
-const isConversationFollowUpQuestion = (question: string): boolean => (
-  !EXPLICIT_GENERAL.test(question) &&
-  question.trim().length <= 80 && FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))
-);
+const isConversationFollowUpQuestion = (
+  question: string,
+  history: OrsonConversationMessage[] = [],
+): boolean => {
+  if (EXPLICIT_GENERAL.test(question)) return false;
+  if (question.trim().length > 100) return false;
+  if (FOLLOW_UP_PATTERNS.some((pattern) => pattern.test(question))) return true;
+  if (history.length > 0) {
+    const lastMessage = history[history.length - 1];
+    if (lastMessage?.role === 'model') return true;
+  }
+  return false;
+};
 
 const detectRequestedParameter = (question: string): string | null => {
   const match = PARAMETER_PATTERNS.find((parameter) => parameter.patterns.some((pattern) => pattern.test(question)));
@@ -557,7 +568,7 @@ export const buildOrsonQuestionFocus = (
     return includesSearchTerm(normalizedQuestion, payload.pondName) ||
       includesSearchTerm(normalizedQuestion, payload.pondId);
   });
-  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question);
+  const usesConversationHistory = conversationHistory.length > 0 && isConversationFollowUpQuestion(question, conversationHistory);
   const previousFocusedPayload = usesConversationHistory
     ? [...conversationHistory].reverse().flatMap((message) => {
         if (message.role !== 'user') return [];
@@ -569,14 +580,38 @@ export const buildOrsonQuestionFocus = (
         return matches.length === 1 ? matches : [];
       })[0] ?? null
     : null;
-  const intent = inferOrsonQuestionIntent(question);
+  let intent = inferOrsonQuestionIntent(question);
   const isComparison = intent === 'comparison' || mentionedPayloads.length >= 2;
   const focusedPayload = mentionedPayloads.length === 1 ? mentionedPayloads[0] : previousFocusedPayload;
-  const requestedParameter = detectRequestedParameter(question);
+  let requestedParameter = detectRequestedParameter(question);
   const requestedDirection = detectRequestedDirection(question);
   const requestedDates = detectRequestedDates(question);
-  const requestedFields = detectRequestedRecordFields(question);
+  let requestedFields = detectRequestedRecordFields(question);
   const requestedRecordCount = detectRequestedRecordCount(question);
+
+  if (!requestedParameter && conversationHistory.length > 0 && !EXPLICIT_GENERAL.test(question)) {
+    for (let i = conversationHistory.length - 1; i >= 0; i--) {
+      const prevMessage = conversationHistory[i];
+      if (!prevMessage?.text) continue;
+      const prevParam = detectRequestedParameter(prevMessage.text);
+      if (prevParam) {
+        requestedParameter = prevParam;
+        if (requestedFields.length === 0) {
+          requestedFields = detectRequestedRecordFields(prevMessage.text);
+        }
+        break;
+      }
+    }
+  }
+
+  if (intent === 'general' && requestedParameter) {
+    if (requestedParameter === 'ph' || requestedParameter === 'dissolved_oxygen' || requestedParameter === 'ammonia' || requestedParameter === 'nitrite' || requestedParameter === 'nitrate' || requestedParameter === 'salinity' || requestedParameter === 'alkalinity' || requestedParameter === 'plankton_transparency') {
+      intent = 'water_quality';
+    } else if (requestedParameter === 'feed') {
+      intent = 'feed';
+    }
+  }
+
   const inferredRoute = inferOrsonConversationRoute(question, conversationHistory);
   const containsUserReportedMeasurements = requestedDates.length === 0 && USER_REPORTED_MEASUREMENT_PATTERN.test(question);
   const route = !EXPLICIT_GENERAL.test(question)
@@ -609,7 +644,7 @@ export const buildOrsonQuestionFocus = (
     comparedPondNames: mentionedPayloads.map((p) => p.pondName),
     requiresDetailedHistory: analysisMode !== 'standard' || DETAILED_HISTORY_PATTERNS.some((pattern) => pattern.test(question)),
     usesConversationHistory,
-    shouldSummarize: intent === 'summary' || isComparison || /\banaly[sz]e\b/i.test(question),
+    shouldSummarize: (intent === 'summary' && !requestedParameter) || isComparison || /\banaly[sz]e\b/i.test(question),
     containsUserReportedMeasurements,
     answerContract: buildOrsonAnswerContract(question, route, isComparison ? 'comparison' : intent, requestConstraints.suppressTreatmentAdvice, requestConstraints.suppressPondAnalysis),
   };
@@ -786,7 +821,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     'ANSWER ROUTING:',
     '- Answer the user question directly in the first sentence.',
     '- The suggested route is advisory. Use one coherent answer path and choose authorized app-data tools from the actual request; never replace a general educational answer with an inventory or treatment response merely because treatment terminology is mentioned.',
-    '- Treat ORSON QUESTION FOCUS.answer_contract as the binding response plan. Fulfill its response_goal and every required_aspect while keeping primary_topic dominant.',
+    '- ORSON QUESTION FOCUS is advisory context. Prioritize natural conversation continuity, context, and follow-ups. If the previous turn discussed or offered a specific topic (e.g. pH swing for candidate ponds) and the user selects a pond, address that topic directly for the selected pond rather than resetting to a general farm audit.',
     '- When route_confidence is fallback, answer from general aquaculture practice if the current question has one reasonable meaning. If different meanings would materially change the answer, ask one concise clarification. Never substitute a neighboring topic just because it appeared earlier or has more available guidance.',
     '- Respect explicit exclusions in the current question. If ORSON QUESTION FOCUS sets suppress_treatment_advice, do not recommend products, calculate doses, load inventory for treatment selection, or ask for dosing inputs. If it sets suppress_pond_analysis, do not analyze or retrieve a specific pond.',
     '- Address every explicitly requested analyte, metric, pond, comparison, or sub-question before adding optional context.',
@@ -801,7 +836,7 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- If the question asks for past daily numbers or history, provide the exact dated list available in daily_records_14d and state that it is the latest bounded record set.',
     '- If ORSON SELECTED KNOWLEDGE is present, use it to give practical farm actions, not generic definitions.',
     '- For parameter-control questions, structure the answer as: immediate action, why it works, what to monitor next, and safety caution.',
-    '- Do not repeat the pond summary unless the user asks for overview, status, summary, report, or analysis.',
+    '- Do not repeat the pond summary unless the user asks for overview, status, summary, report, or analysis. When the user specifies a pond as a conversational follow-up, answer the active topic or offered metric directly instead of outputting an unrequested farm summary.',
     '- If the available payload cannot answer the exact question, say what is missing and give the closest supported answer.',
     '',
     'LANGUAGE:',

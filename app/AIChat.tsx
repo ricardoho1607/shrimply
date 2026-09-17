@@ -80,8 +80,20 @@ function AIChatSession() {
   const [inputText, setInputText] = useState('');
   const [conversationLanguage, setConversationLanguage] = useState('en');
   const [streamingReplyId, setStreamingReplyId] = useState<string | null>(null);
+  const [analyzingDots, setAnalyzingDots] = useState('.');
   
   const { sendMessage, loading, clearChat } = useGemini();
+
+  useEffect(() => {
+    if (!loading || streamingReplyId) {
+      setAnalyzingDots('.');
+      return;
+    }
+    const interval = setInterval(() => {
+      setAnalyzingDots((prev) => (prev.length >= 3 ? '.' : prev + '.'));
+    }, 450);
+    return () => clearInterval(interval);
+  }, [loading, streamingReplyId]);
   const { ponds } = usePondStore(); 
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { user, company } = useAuth();
@@ -245,7 +257,7 @@ function AIChatSession() {
           {loading && !streamingReplyId && (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="small" color="#315f57" />
-              <Text style={styles.loadingText}>Orson is checking water data...</Text>
+              <Text style={styles.loadingText}>Orson is checking water data{analyzingDots}</Text>
             </View>
           )}
         </ScrollView>

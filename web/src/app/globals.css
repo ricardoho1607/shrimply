@@ -452,7 +452,9 @@ nav.scrolled {
 
 @keyframes fup { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes appSlide { from { opacity: 0; transform: translateY(20px) translate(-50%, -50%); } to { opacity: 1; transform: translateY(0) translate(-50%, -50%); } }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .animate-hero { animation: fup 1s forwards; opacity: 0; }
+.animate-spin { animation: spin 1s linear infinite; }
 
 /* --- Dashboard Unified Styles ---------------------------- */
 .glass { background: var(--glass-bg); backdrop-filter: var(--glass-blur); border: 1px solid var(--border); }
@@ -1697,6 +1699,17 @@ nav.scrolled {
 
 .orson-avatar.is-loading {
   background: var(--primary-dim);
+}
+
+.orson-avatar.is-loading svg {
+  animation: spin 1s linear infinite;
+}
+
+.orson-loading-dots {
+  display: inline-block;
+  min-width: 18px;
+  text-align: left;
+  letter-spacing: 1px;
 }
 
 .orson-message-stack {
