@@ -39,6 +39,16 @@ test('keeps billing return URLs on trusted hosts', () => {
   );
 });
 
+test('selects the Midtrans endpoint that matches the server key', () => {
+  assert.equal(__test.resolveMidtransEnvironment('Mid-server-production-key'), 'production');
+  assert.equal(__test.resolveMidtransEnvironment('SB-Mid-server-sandbox-key'), 'sandbox');
+  assert.equal(__test.resolveMidtransEnvironment('Mid-server-production-key', 'true'), 'production');
+  assert.throws(
+    () => __test.resolveMidtransEnvironment('Mid-server-production-key', 'false'),
+    /does not match the configured sandbox environment/,
+  );
+});
+
 test('treats only settled or accepted capture notifications as paid', () => {
   assert.equal(__test.isPaidNotification({ transaction_status: 'settlement', status_code: '200' }), true);
   assert.equal(__test.isPaidNotification({ transaction_status: 'capture', fraud_status: 'accept', status_code: '200' }), true);

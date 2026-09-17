@@ -32,6 +32,30 @@ const getMidtransServerKey = () => {
   }
 };
 
+const resolveMidtransEnvironment = (serverKey, configuredValue = process.env.MIDTRANS_IS_PRODUCTION) => {
+  const keyEnvironment = serverKey.startsWith('SB-Mid-server-')
+    ? 'sandbox'
+    : serverKey.startsWith('Mid-server-')
+      ? 'production'
+      : null;
+  if (!keyEnvironment) {
+    throw new HttpsError('failed-precondition', 'MIDTRANS_SERVER_KEY is not a valid Midtrans server key.');
+  }
+
+  const configuredEnvironment = configuredValue === 'true'
+    ? 'production'
+    : configuredValue === 'false'
+      ? 'sandbox'
+      : null;
+  if (configuredEnvironment && configuredEnvironment !== keyEnvironment) {
+    throw new HttpsError(
+      'failed-precondition',
+      `The Midtrans ${keyEnvironment} server key does not match the configured ${configuredEnvironment} environment.`,
+    );
+  }
+  return configuredEnvironment || keyEnvironment;
+};
+
 const timestampOrNull = (value) => {
   const millis = timestampMillis(value);
   return millis > 0 ? new Date(millis).toISOString() : null;
@@ -329,7 +353,7 @@ exports.createMidtransPlanPayment = onCall({ timeoutSeconds: 30, secrets: [midtr
 
   const serverKey = getMidtransServerKey();
   if (!serverKey) throw new HttpsError('failed-precondition', 'Midtrans billing is not configured yet.');
-  const environment = process.env.MIDTRANS_IS_PRODUCTION === 'true' ? 'production' : 'sandbox';
+  const environment = resolveMidtransEnvironment(serverKey);
   const endpoint = environment === 'production'
     ? 'https://app.midtrans.com/snap/v1/transactions'
     : 'https://app.sandbox.midtrans.com/snap/v1/transactions';
@@ -598,6 +622,7 @@ if (process.env.NODE_ENV === 'test') {
     isPaidNotification,
     isValidMidtransSignature,
     normalizeReturnUrl,
+    resolveMidtransEnvironment,
     serializeEntitlements,
   };
 }
