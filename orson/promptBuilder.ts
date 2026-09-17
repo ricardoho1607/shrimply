@@ -545,7 +545,7 @@ const buildOrsonAnswerContract = (
     ? 'respond_conversationally'
     : route === 'out_of_scope' ? 'state_scope'
       : fallbackIntent ? 'answer_as_general_aquaculture_practice_or_clarify'
-        : route === 'farm_analysis' ? 'analyze_saved_farm_evidence'
+        : (route === 'farm_analysis' && (intent === 'summary' || fallbackIntent)) ? 'analyze_saved_farm_evidence'
           : route === 'inventory_product' ? 'answer_product_or_inventory_request' : 'answer_topic_directly';
   return {
     primaryTopic,
@@ -832,7 +832,8 @@ export const buildOrsonSystemInstruction = (mode: OrsonAnalysisMode = 'standard'
     '- If the question asks about feed adjustments, compare actual daily feed, expected feed, direct feeding response, biomass confidence, and current water evidence. Give a numerical change only when the supplied farm protocol or deterministic finding supports it.',
     '- For a general feed-increase or feed-hold question, lead with the hold criteria and the checks to confirm: direct tray or feeding response, DO, TAN or ammonia, nitrite, pH, temperature, biomass or growth confidence, and mortality. Shrimp activity alone is not proof of higher feed demand.',
     '- If the question asks about a specific pond, focus on the focused pond and use other ponds only for comparison when useful.',
-    '- If the question asks about feed, growth, water quality, lab, harvest, biomass, or survival, lead with that topic instead of giving a full pond summary.',
+    '- If the question or conversational follow-up focuses on a specific topic or metric (such as pH, water quality, feed, growth, DO, ammonia), answer that specific topic directly and exclusively. Do NOT lead with or dump the general 72-hour outlook, feed pressure, FCR, or other unrelated pond metrics unless the user explicitly requested a full overview or general status.',
+    '- When requested_parameter is set or the question is topic-specific, answer that parameter or topic directly. Do not recite or quote the pond\'s overall 72-hour outlook summary or topReason unless the user explicitly asks for the general outlook or status.',
     '- If the question asks for past daily numbers or history, provide the exact dated list available in daily_records_14d and state that it is the latest bounded record set.',
     '- If ORSON SELECTED KNOWLEDGE is present, use it to give practical farm actions, not generic definitions.',
     '- For parameter-control questions, structure the answer as: immediate action, why it works, what to monitor next, and safety caution.',
@@ -1412,9 +1413,15 @@ export const buildOrsonPromptContext = (
     } : null,
     outlook: {
       ...payload.outlook,
-      summary: trimPromptText(payload.outlook.summary, ORSON_CONTEXT_NOTE_MAX_CHARS),
-      topReason: trimPromptText(payload.outlook.topReason, ORSON_CONTEXT_NOTE_MAX_CHARS),
-      nextAction: trimPromptText(payload.outlook.nextAction, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      summary: (questionFocus.requestedParameter && !questionFocus.shouldSummarize)
+        ? null
+        : trimPromptText(payload.outlook.summary, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      topReason: (questionFocus.requestedParameter && !questionFocus.shouldSummarize)
+        ? null
+        : trimPromptText(payload.outlook.topReason, ORSON_CONTEXT_NOTE_MAX_CHARS),
+      nextAction: (questionFocus.requestedParameter && !questionFocus.shouldSummarize)
+        ? null
+        : trimPromptText(payload.outlook.nextAction, ORSON_CONTEXT_NOTE_MAX_CHARS),
     },
     findings: payload.findings.map((finding) => ({
       ...finding,
