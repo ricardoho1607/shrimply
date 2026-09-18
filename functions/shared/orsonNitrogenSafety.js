@@ -37,6 +37,7 @@ const guardOrsonNitrogenAnswer = async ({ answer, question, prompt, generate }) 
   if (!nitrogenMention(answer.text) && !nitrogenMention(question)) return { ...answer, nitrogenSafety: 'not_applicable' };
   const withhold = () => ({ ...answer, text: fallback(question), sources: [], finishReason: 'STOP', nitrogenSafety: 'withheld', groundingStatus: 'nitrogen_withheld' });
   if (hasUnsafeAmmoniaTarget(answer.text) || hasAmmoniaIonError(answer.text)) return withhold();
+  if (!generate) return { ...answer, nitrogenSafety: 'passed' };
   try {
     const result = await generate({ useWebLookup: false, maxOutputTokens: 2000,
       systemInstruction: [

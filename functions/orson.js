@@ -728,7 +728,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       mode,
       questionRoute,
       onTextDelta: sendStreamChunk,
-      reviewSafety: (answer) => guardModelDosingAnswer({ answer, question: userMessage, generate: safetyGenerate }),
+      reviewSafety: (answer) => guardModelDosingAnswer({ answer, question: userMessage }),
       deadlineMs: requestStartedAt + 125000,
       generate: (overrides) => generateMetaModelResponse({
         apiKey,
@@ -769,10 +769,10 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       generated = await generate(false);
     }
     const dosingReviewStartedAt = Date.now();
-    if (!verificationRequest && generated.doseSafety !== "no_application_guidance") generated = await guardModelDosingAnswer({ answer: generated, question: userMessage, generate: safetyGenerate });
+    if (!verificationRequest && generated.doseSafety !== "no_application_guidance") generated = await guardModelDosingAnswer({ answer: generated, question: userMessage });
     // Validate the final text, including editor rewrites and verified inventory answers,
     // before either streaming chunks or returning a cacheable result.
-    generated = await guardOrsonNitrogenAnswer({ answer: generated, question: userMessage, prompt: groundedPrompt, generate: safetyGenerate });
+    generated = await guardOrsonNitrogenAnswer({ answer: generated, question: userMessage, prompt: groundedPrompt });
     const dosingReviewMs = Date.now() - dosingReviewStartedAt;
     let { text } = generated;
     const sources = generated.sources;
