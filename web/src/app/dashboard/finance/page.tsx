@@ -39,6 +39,7 @@ import { useFarmDateKey } from '@/hooks/useFarmDateKey';
 import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
+  isCompanyWideExpenseCategory,
 } from '../../../../../shared/financeCycleAllocation';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { getOperatingMarginDisplay } from '../../../../../shared/financeMetrics';
@@ -111,6 +112,7 @@ export default function FinancePage() {
     notes: '',
     cycleId: activeCycles[0]?.id || '',
   });
+  const isCompanyWideExpense = formType === 'expense' && isCompanyWideExpenseCategory(formData.category);
 
   useEffect(() => {
     if (!isInputMenuOpen) return;
@@ -215,9 +217,9 @@ export default function FinancePage() {
     setIsSubmitting(true);
 
     const collectionName = formType === 'expense' ? 'expenses' : 'revenues';
-    const selectedCycle = activeCycles.find((cycle) => cycle.id === formData.cycleId);
+    const selectedCycle = isCompanyWideExpense ? undefined : activeCycles.find((cycle) => cycle.id === formData.cycleId);
     const amount = Number(formData.amount);
-    if (!selectedCycle) {
+    if (!isCompanyWideExpense && !selectedCycle) {
       alert(t.financeCycle.selectCycleMessage);
       setIsSubmitting(false);
       return;
@@ -227,11 +229,11 @@ export default function FinancePage() {
       await addDoc(collection(db, 'companies', company.id, collectionName), {
         ...formData,
         amount,
-        cycleId: selectedCycle?.id || '',
-        cycleName: selectedCycle?.cycleName || '',
+        cycleId: isCompanyWideExpense ? '' : selectedCycle?.id || '',
+        cycleName: isCompanyWideExpense ? '' : selectedCycle?.cycleName || '',
         ...(formType === 'expense' ? {
-          allocationMethod: selectedCycle ? 'equal_per_pond' : null,
-          pondAllocations: allocateExpenseAcrossCyclePonds(amount, selectedCycle?.id, ponds),
+          allocationMethod: isCompanyWideExpense ? null : 'equal_per_pond',
+          pondAllocations: isCompanyWideExpense ? [] : allocateExpenseAcrossCyclePonds(amount, selectedCycle?.id, ponds),
         } : {}),
         addedBy: user.uid,
         addedByName: user.name || 'Unknown',
@@ -607,12 +609,13 @@ export default function FinancePage() {
                   </select>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', gridColumn: 'span 2' }}>
-                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.financeCycle.allocateToCycle}</label>
-                  <select required value={formData.cycleId} onChange={e => setFormData({...formData, cycleId: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
+                  <label style={{ fontSize: '13px', fontWeight: 600 }}>{isCompanyWideExpense ? generalCategoryLabel : t.financeCycle.allocateToCycle}</label>
+                  <select required={!isCompanyWideExpense} disabled={isCompanyWideExpense} value={isCompanyWideExpense ? '' : formData.cycleId} onChange={e => setFormData({...formData, cycleId: e.target.value})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: isCompanyWideExpense ? '#edf3f8' : 'var(--bg-mid)', outline: 'none', color: 'var(--text-primary)', fontWeight: 600 }}>
                     <option value="" disabled>{t.financeCycle.selectCycle}</option>
                     {activeCycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.cycleName}</option>)}
                   </select>
-                  {formType === 'expense' && formData.cycleId ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  {isCompanyWideExpense ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>{t.financeCycle.companyWideHint}</span> : null}
+                  {!isCompanyWideExpense && formType === 'expense' && formData.cycleId ? <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: 600 }}>
                     {t.financeCycle.splitAcrossPonds
                       .replace('{{count}}', String(ponds.filter((pond) => pond.cycleId === formData.cycleId).length))
                       .replace('{{cycleName}}', activeCycles.find((cycle) => cycle.id === formData.cycleId)?.cycleName || t.financeCycle.cycle)}

@@ -29,6 +29,7 @@ interface CycleSelectorProps {
   sheetEyebrow?: string;
   sheetTitle?: string;
   emptyLabel?: string;
+  disabled?: boolean;
 }
 
 const getCycleSubtitle = (cycle: CycleSelectorOption) => (
@@ -46,6 +47,7 @@ export default function CycleSelector({
   sheetEyebrow,
   sheetTitle,
   emptyLabel,
+  disabled = false,
 }: CycleSelectorProps) {
   const { t } = useLanguage();
   const resolvedPlaceholder = placeholder || t.financeCycle.selectCycle;
@@ -71,7 +73,8 @@ export default function CycleSelector({
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <TouchableOpacity
-        style={styles.trigger}
+        style={[styles.trigger, disabled && styles.triggerDisabled]}
+        disabled={disabled}
         onPress={() => setVisible(true)}
         accessibilityRole="button"
         accessibilityLabel={`${label || t.financeCycle.cycle}: ${displayValue}`}
@@ -140,6 +143,7 @@ const styles = StyleSheet.create({
   container: { gap: 5 },
   label: { color: '#60798A', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
   trigger: { minHeight: 48, borderRadius: 11, borderWidth: 1, borderColor: '#D8E7F0', backgroundColor: '#F8FBFD', paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center', gap: 10, overflow: 'hidden' },
+  triggerDisabled: { opacity: 0.72 },
   triggerCopy: { flex: 1, minWidth: 0, overflow: 'hidden' },
   triggerValue: { color: '#102F46', fontSize: 14, fontWeight: '800' },
   triggerSubtitle: { marginTop: 2, color: '#78909C', fontSize: 10, fontWeight: '600' },

@@ -19,6 +19,18 @@ export interface PondCostAllocation {
   share: number;
 }
 
+const COMPANY_WIDE_EXPENSE_LABELS = new Set([
+  'general', 'company-wide', 'company wide', 'company-wide expense',
+  'umum', 'perusahaan', 'biaya perusahaan',
+  'ทั้งบริษัท', 'ทั่วไป', 'ค่าใช้จ่ายระดับบริษัท',
+  '一般', '公司范围', '公司费用',
+  'chung', 'toàn công ty', 'chi phí toàn công ty',
+]);
+
+export const isCompanyWideExpenseCategory = (category: unknown): boolean => (
+  COMPANY_WIDE_EXPENSE_LABELS.has(String(category ?? '').trim().toLowerCase())
+);
+
 export const getOpenFinanceCycles = <T extends FinanceCycleRecord>(cycles: T[]): T[] => cycles
   .filter((cycle) => ['planning', 'stocking', 'active'].includes(cycle.status || ''))
   .sort((first, second) => first.cycleName.localeCompare(second.cycleName, undefined, { numeric: true }));

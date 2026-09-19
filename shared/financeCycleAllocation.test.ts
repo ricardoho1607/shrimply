@@ -3,7 +3,19 @@ import test from 'node:test';
 import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
+  isCompanyWideExpenseCategory,
 } from './financeCycleAllocation.ts';
+
+test('recognises current and legacy company-wide expense labels', () => {
+  for (const label of [
+    'Company-wide expense', 'Biaya perusahaan', 'ค่าใช้จ่ายระดับบริษัท',
+    '公司费用', 'Chi phí toàn công ty',
+  ]) {
+    assert.equal(isCompanyWideExpenseCategory(label), true, label);
+  }
+  assert.equal(isCompanyWideExpenseCategory('General'), true);
+  assert.equal(isCompanyWideExpenseCategory('Utilities'), false);
+});
 
 test('returns every open cycle and excludes closing or closed cycles', () => {
   const cycles = getOpenFinanceCycles([

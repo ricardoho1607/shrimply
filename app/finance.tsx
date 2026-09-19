@@ -22,6 +22,7 @@ import CycleSelector from './components/forms/CycleSelector';
 import {
   allocateExpenseAcrossCyclePonds,
   getOpenFinanceCycles,
+  isCompanyWideExpenseCategory,
 } from '../shared/financeCycleAllocation';
 import { hasFarmPermission } from '../shared/permissions';
 
@@ -175,6 +176,7 @@ export default function FinancePage() {
   const selectedFormCyclePonds = selectedFormCycle
     ? ponds.filter((pond) => pond.cycleId === selectedFormCycle.id)
     : [];
+  const isCompanyWideExpense = formType === 'expense' && isCompanyWideExpenseCategory(formData.category);
 
   const hasFinanceAccess = hasFarmPermission(user, 'viewFinance', company?.ownerId);
   const canManageFinance = hasFarmPermission(user, 'manageFinance', company?.ownerId);
@@ -246,8 +248,8 @@ export default function FinancePage() {
       return;
     }
 
-    const selectedCycle = cycles.find((cycle) => cycle.id === formData.cycleId);
-    if (!selectedCycle) {
+    const selectedCycle = isCompanyWideExpense ? undefined : cycles.find((cycle) => cycle.id === formData.cycleId);
+    if (!isCompanyWideExpense && !selectedCycle) {
       Alert.alert(t.financeCycle.selectCycleTitle, t.financeCycle.selectCycleMessage);
       return;
     }
@@ -257,8 +259,8 @@ export default function FinancePage() {
       const baseData = {
         date: formData.date, category: formData.category, item: formData.item, amount,
         paymentType: formData.paymentType, reference: formData.reference, notes: formData.notes,
-        cycleId: selectedCycle?.id || '',
-        cycleName: selectedCycle?.cycleName || '',
+        cycleId: isCompanyWideExpense ? '' : selectedCycle?.id || '',
+        cycleName: isCompanyWideExpense ? '' : selectedCycle?.cycleName || '',
       };
 
       if (formType === 'expense') {
@@ -266,8 +268,8 @@ export default function FinancePage() {
         const expenseData: ExpenseInput = {
           ...baseData,
           linkedInventory: formData.linkedInventory,
-          allocationMethod: selectedCycle ? 'equal_per_pond' : null,
-          pondAllocations,
+          allocationMethod: isCompanyWideExpense ? null : 'equal_per_pond',
+          pondAllocations: isCompanyWideExpense ? [] : pondAllocations,
         };
         if (editingExpense) {
           await financeService.updateExpense(company.id, editingExpense.id, expenseData);
@@ -866,15 +868,17 @@ export default function FinancePage() {
 
               <View style={styles.formGroup}>
                 <CycleSelector
-                  label={t.financeCycle.allocateToCycle}
-                  value={formData.cycleId}
+                  label={isCompanyWideExpense ? t.financeCycle.general : t.financeCycle.allocateToCycle}
+                  value={isCompanyWideExpense ? '' : formData.cycleId}
                   options={formCycleOptions}
                   onChange={(cycleId) => setFormData((current) => ({ ...current, cycleId }))}
-                  placeholder={t.financeCycle.selectCycle}
+                  placeholder={isCompanyWideExpense ? t.financeCycle.general : t.financeCycle.selectCycle}
+                  disabled={isCompanyWideExpense}
                   sheetEyebrow={t.financeCycle.cycle}
                   sheetTitle={t.financeCycle.selectCycle}
                 />
-                {formType === 'expense' && selectedFormCycle ? (
+                {isCompanyWideExpense ? <Text style={styles.allocationHint}>{t.financeCycle.companyWideHint}</Text> : null}
+                {!isCompanyWideExpense && formType === 'expense' && selectedFormCycle ? (
                   <Text style={styles.allocationHint}>
                     {t.financeCycle.splitAcrossPonds
                       .replace('{{count}}', String(selectedFormCyclePonds.length))
