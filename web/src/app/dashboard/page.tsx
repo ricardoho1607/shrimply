@@ -422,8 +422,8 @@ function BuyerDashboard({ t, user }: { t: ReturnType<typeof useLanguage>['t']; u
       
       {/* Confirmation Modal */}
       {confirmDelete && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(27, 38, 44, 0.4)', backdropFilter: 'blur(10px)' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '400px', background: '#FFF', padding: '48px', textAlign: 'center', borderRadius: 'var(--radius-xl)' }}>
+        <div className="responsive-modal-overlay dashboard-confirm-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(27, 38, 44, 0.4)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card animate-fade-up responsive-modal dashboard-confirm-modal" style={{ width: '400px', background: '#FFF', padding: '48px', textAlign: 'center', borderRadius: 'var(--radius-xl)' }}>
             <div style={{ width: '72px', height: '72px', borderRadius: '50%', background: '#fee2e2', color: '#ef4444', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 28px' }}>
               <Minus size={36} />
             </div>
@@ -431,7 +431,7 @@ function BuyerDashboard({ t, user }: { t: ReturnType<typeof useLanguage>['t']; u
             <p style={{ color: 'var(--text-muted)', fontSize: '15px', lineHeight: 1.6, marginBottom: '40px' }}>
               {t.buyer.stopMonitoringDescription}
             </p>
-            <div style={{ display: 'flex', gap: '16px' }}>
+            <div className="dashboard-confirm-actions" style={{ display: 'flex', gap: '16px' }}>
               <button onClick={() => setConfirmDelete(null)} className="btn-secondary" style={{ flex: 1 }} disabled={isDeleting}>
                 {t.actions.cancel}
               </button>

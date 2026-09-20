@@ -43,7 +43,6 @@ import { initializeWaterDraft, isDailyWaterRecord } from './waterFormState';
 import { getManualLabColumns } from '@/lib/manualLabColumns';
 import { getManualLabInputUnits, toggleUniqueLabPondRow } from './labRowState';
 import type { PlanktonOverwatchSnapshot } from '../../../../../shared/planktonOverwatch';
-import PlanktonOverwatchCard from '@/components/PlanktonOverwatchCard';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 
@@ -1105,8 +1104,6 @@ export default function WaterQualityPage() {
                   </div>
                 )}
 
-                <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} compact />
-
                 <div className="water-metric-grid">
                   <div className="wq-metric">
                     <span className="wq-label">{copy('pH Level')}</span>
@@ -1417,7 +1414,7 @@ export default function WaterQualityPage() {
 
       {/* -- HISTORY DRAWER ------------------------------ */}
       {selectedPondForHistory && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'flex-end' }}>
+        <div className="responsive-side-drawer-overlay water-history-overlay" style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', display: 'flex', justifyContent: 'flex-end' }}>
           <div className="drawer-content responsive-side-drawer water-history-drawer animate-slide-left">
             <div className="responsive-modal-header" style={{ padding: '26px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-mid)' }}>
               <div>
@@ -1433,7 +1430,7 @@ export default function WaterQualityPage() {
               </button>
             </div>
 
-            <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+            <div className="responsive-modal-body water-history-body" style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {selectedPondForHistory.samplings
                   .filter(hasWaterQualityHistory)
@@ -2075,8 +2072,8 @@ export default function WaterQualityPage() {
         }
         @media (max-width: 640px) {
           .water-history-drawer {
-            width: min(300px, 78vw) !important;
-            max-width: 78vw !important;
+            width: 100% !important;
+            max-width: 100% !important;
           }
         }
         .animate-slide-left {

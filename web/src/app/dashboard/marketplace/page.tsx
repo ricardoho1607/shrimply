@@ -515,10 +515,10 @@ export default function MarketplacePage() {
 
       {/* Post Listing Modal */}
       {isPostModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)', padding: '40px' }}>
-          <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '800px', maxHeight: '90vh', background: '#FFF', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <div className="responsive-modal-overlay marketplace-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(8px)' }}>
+          <div className="glass-card responsive-modal animate-fade-up marketplace-post-modal" style={{ width: '100%', maxWidth: '800px', maxHeight: '90vh', background: '#FFF', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             
-            <div style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="responsive-modal-header marketplace-modal-header" style={{ padding: '24px 32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                   <Plus size={24} />
@@ -528,10 +528,10 @@ export default function MarketplacePage() {
               <button onClick={() => { setPostModalOpen(false); setEditingId(null); }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={24} /></button>
             </div>
 
-            <form onSubmit={handlePostListing} style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <form className="responsive-modal-body marketplace-post-form" onSubmit={handlePostListing} style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
               
               {/* Basic Info */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="marketplace-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.companyName}</label>
                   <input required value={newListing.buyerName} onChange={e => setNewListing({...newListing, buyerName: e.target.value})} placeholder={t.CreateBuyerListingScreen.yourCompanyName} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }} />
@@ -563,7 +563,7 @@ export default function MarketplacePage() {
               </div>
 
               {/* Payment Terms */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="marketplace-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <label style={{ fontSize: '13px', fontWeight: 600 }}>{t.CreateBuyerListingScreen.paymentMethod}</label>
                   <select value={newListing.paymentMethod} onChange={e => setNewListing({...newListing, paymentMethod: e.target.value as 'cash' | 'top'})} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none' }}>
@@ -584,7 +584,7 @@ export default function MarketplacePage() {
                 <h3 style={{ fontSize: '15px', fontWeight: 600, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Tag size={18} color="var(--primary)" /> {t.CreateBuyerListingScreen.buyingPriceList}
                 </h3>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+                <div className="marketplace-price-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
                   {[30, 40, 50, 60, 70, 80, 90, 100].map(size => (
                     <div key={size} style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                       <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-faint)' }}>{copy('Size')} {size}</label>
@@ -612,7 +612,7 @@ export default function MarketplacePage() {
                 <textarea value={newListing.additionalNotes} onChange={e => setNewListing({...newListing, additionalNotes: e.target.value})} placeholder={t.CreateBuyerListingScreen.notesPlaceholder} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)', outline: 'none', minHeight: '80px', resize: 'none' }} />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
+              <div className="responsive-modal-footer marketplace-modal-footer" style={{ display: 'flex', justifyContent: 'flex-end', gap: '16px', borderTop: '1px solid var(--border)', paddingTop: '24px' }}>
                 <button type="button" onClick={() => setPostModalOpen(false)} className="btn-secondary" style={{ padding: '12px 24px', borderRadius: '12px' }}>{t.actions.cancel}</button>
                 <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ padding: '12px 32px', borderRadius: '12px' }}>
                   {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : (editingId ? t.CreateBuyerListingScreen.updateListing : t.CreateBuyerListingScreen.publishRequirement)}
@@ -625,11 +625,11 @@ export default function MarketplacePage() {
 
       {/* Listing Detail Drawer/Modal */}
       {selectedListing && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)' }}>
-          <div className="animate-fade-up" style={{ width: '560px', height: '100%', background: '#FFF', boxShadow: '-20px 0 50px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
+        <div className="responsive-side-drawer-overlay marketplace-detail-overlay" style={{ position: 'fixed', inset: 0, zIndex: 100, display: 'flex', justifyContent: 'flex-end', background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(4px)' }}>
+          <div className="responsive-side-drawer marketplace-detail-drawer animate-fade-up" style={{ width: '560px', height: '100%', background: '#FFF', boxShadow: '-20px 0 50px rgba(0,0,0,0.1)', display: 'flex', flexDirection: 'column' }}>
             
             {/* Drawer Header */}
-            <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="responsive-modal-header marketplace-detail-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <div style={{ width: '48px', height: '48px', borderRadius: '14px', background: 'var(--primary-dim)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
                   <Store size={28} />
@@ -645,10 +645,10 @@ export default function MarketplacePage() {
             </div>
 
             {/* Drawer Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+            <div className="responsive-modal-body marketplace-detail-body" style={{ flex: 1, overflowY: 'auto', padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
               
               {/* Specs Grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+              <div className="marketplace-detail-specs" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
                 <div style={{ padding: '16px', borderRadius: '16px', background: 'var(--bg-mid)', display: 'flex', gap: '12px', alignItems: 'center' }}>
                   <MapPin size={20} color="var(--primary)" />
                   <div>
@@ -712,7 +712,7 @@ export default function MarketplacePage() {
             </div>
 
             {/* Drawer Footer */}
-            <div style={{ padding: '32px', borderTop: '1px solid var(--border)', background: '#F8FAFC', display: 'flex', gap: '16px' }}>
+            <div className="responsive-modal-footer marketplace-detail-footer" style={{ padding: '32px', borderTop: '1px solid var(--border)', background: '#F8FAFC', display: 'flex', gap: '16px' }}>
               {(selectedListing.companyId === company?.id || selectedListing.userId === user?.uid) ? (
                 <>
                   <button 

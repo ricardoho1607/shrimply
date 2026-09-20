@@ -1569,17 +1569,6 @@ nav.scrolled {
   gap: 12px;
 }
 
-.orson-mark {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  background: #eaf5fb;
-  color: var(--primary);
-  border: 1px solid rgba(15, 76, 117, 0.1);
-}
-
 .orson-title {
   margin: 2px 0 0;
   color: var(--text-primary);
@@ -1641,8 +1630,7 @@ nav.scrolled {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .orson-chat-card {
@@ -1669,40 +1657,12 @@ nav.scrolled {
 
 .orson-message-row {
   display: flex;
-  gap: 12px;
   max-width: min(780px, 88%);
   align-self: flex-start;
 }
 
 .orson-message-row.is-user {
   align-self: flex-end;
-  flex-direction: row-reverse;
-}
-
-.orson-avatar {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: #eaf5fb;
-  color: var(--primary);
-  font-size: 0.76rem;
-  font-weight: var(--weight-semibold);
-}
-
-.orson-message-row.is-user .orson-avatar {
-  background: var(--primary);
-  color: #fff;
-}
-
-.orson-avatar.is-loading {
-  background: var(--primary-dim);
-}
-
-.orson-avatar.is-loading svg {
-  animation: spin 1s linear infinite;
 }
 
 .orson-loading-dots {
@@ -1726,9 +1686,9 @@ nav.scrolled {
 
 .orson-bubble {
   max-width: 100%;
-  padding: 14px 16px;
-  border-radius: 4px 16px 16px;
-  background: var(--bg-mid);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
   color: var(--text-primary);
   font-size: 0.92rem;
   line-height: 1.55;
@@ -1737,6 +1697,7 @@ nav.scrolled {
 }
 
 .orson-message-row.is-user .orson-bubble {
+  padding: 14px 16px;
   border-radius: 16px 4px 16px 16px;
   background: var(--primary);
   color: #fff;
@@ -1824,125 +1785,6 @@ nav.scrolled {
   box-shadow: none;
 }
 
-.orson-side {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.orson-panel {
-  padding: 18px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: var(--shadow-card);
-}
-
-.orson-panel h4 {
-  margin: 0 0 14px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-primary);
-  font-size: 0.92rem;
-  font-weight: var(--weight-semibold);
-}
-
-.orson-panel h4 svg {
-  color: var(--primary);
-}
-
-.orson-suggestion-list,
-.orson-pond-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.orson-suggestion {
-  width: 100%;
-  min-height: 40px;
-  padding: 10px 11px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--text-muted);
-  text-align: left;
-  font-size: 0.78rem;
-  font-weight: var(--weight-medium);
-  line-height: 1.35;
-  cursor: pointer;
-}
-
-.orson-suggestion:hover:not(:disabled) {
-  border-color: var(--primary);
-  background: var(--primary-dim);
-  color: var(--primary);
-}
-
-.orson-suggestion:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-
-.orson-empty {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.83rem;
-  line-height: 1.5;
-}
-
-.orson-pond-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 30px;
-}
-
-.orson-pond-name {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.orson-pond-name span {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 999px;
-  background: #22c55e;
-}
-
-.orson-pond-name strong {
-  min-width: 0;
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  font-weight: var(--weight-semibold);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.orson-pond-row em {
-  flex: 0 1 auto;
-  color: var(--text-faint);
-  font-size: 0.7rem;
-  font-style: normal;
-  font-weight: var(--weight-regular);
-  white-space: nowrap;
-}
-
-.orson-more {
-  margin-top: 4px;
-  color: var(--text-faint);
-  font-size: 0.7rem;
-  font-weight: var(--weight-regular);
-  text-align: center;
-}
-
 @media (max-width: 1120px) {
   .orson-shell {
     height: auto;
@@ -1957,10 +1799,6 @@ nav.scrolled {
     min-height: 620px;
   }
 
-  .orson-side {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 @media (max-width: 720px) {
@@ -1996,10 +1834,6 @@ nav.scrolled {
 
   .orson-message-row {
     max-width: 100%;
-  }
-
-  .orson-side {
-    grid-template-columns: 1fr;
   }
 
   .orson-composer {
@@ -3153,8 +2987,33 @@ nav.scrolled {
     padding: 10px 12px !important;
   }
 
+  .dashboard-saas .responsive-modal-header h2,
+  .dashboard-saas .responsive-modal-header h3 {
+    font-size: 16px !important;
+    line-height: 21px !important;
+  }
+
   .dashboard-saas .responsive-modal-body {
     padding: 12px !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-saas .responsive-modal-body label {
+    font-size: 11px !important;
+    line-height: 15px !important;
+  }
+
+  .dashboard-saas .responsive-modal-body input:not([type='file']),
+  .dashboard-saas .responsive-modal-body select,
+  .dashboard-saas .responsive-modal-body textarea {
+    min-height: 40px;
+    padding: 8px 10px !important;
+    border-radius: 9px !important;
+  }
+
+  .dashboard-saas .responsive-modal-footer {
+    padding: 8px 10px calc(8px + var(--safe-area-bottom)) !important;
+    gap: 10px !important;
   }
 
   .dashboard-saas :where(table) {
@@ -3170,6 +3029,166 @@ nav.scrolled {
   .dashboard-saas .dashboard-kpi-card {
     min-height: auto;
     padding: 12px;
+  }
+}
+
+/* Keep marketplace form and listing drawers aligned with the compact dashboard modal treatment. */
+.marketplace-modal-overlay {
+  padding: 18px;
+  align-items: center;
+  justify-content: center;
+}
+
+.marketplace-post-modal,
+.marketplace-detail-drawer {
+  transform: none;
+}
+
+.marketplace-post-form {
+  min-height: 0;
+}
+
+.marketplace-form-grid {
+  min-width: 0;
+}
+
+.marketplace-detail-drawer {
+  max-width: min(560px, 100%);
+}
+
+.dashboard-confirm-modal {
+  box-sizing: border-box;
+}
+
+.dashboard-confirm-actions {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .marketplace-modal-overlay {
+    padding: 8px !important;
+  }
+
+  .marketplace-post-modal {
+    max-height: calc(100dvh - 16px) !important;
+    border-radius: 14px !important;
+  }
+
+  .marketplace-post-form {
+    padding: 10px !important;
+    gap: 14px !important;
+  }
+
+  .marketplace-form-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .marketplace-form-grid > [style*='grid-column'] {
+    grid-column: auto !important;
+  }
+
+  .marketplace-price-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+  }
+
+  .marketplace-modal-footer,
+  .marketplace-detail-footer {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 8px 10px calc(8px + var(--safe-area-bottom)) !important;
+    gap: 8px !important;
+  }
+
+  .marketplace-modal-footer button,
+  .marketplace-detail-footer button {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 10px !important;
+    font-size: 12px;
+  }
+
+  .marketplace-detail-drawer {
+    width: 100% !important;
+    max-width: none !important;
+    border-radius: 0 !important;
+  }
+
+  .marketplace-detail-header {
+    padding: 10px 12px !important;
+  }
+
+  .marketplace-detail-header > div:first-child {
+    min-width: 0;
+  }
+
+  .marketplace-detail-header > div:first-child > div:first-child {
+    width: 36px !important;
+    height: 36px !important;
+    flex: 0 0 36px;
+  }
+
+  .marketplace-detail-body {
+    padding: 10px !important;
+    gap: 14px !important;
+  }
+
+  .marketplace-detail-specs {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .marketplace-detail-specs > [style*='grid-column'] {
+    grid-column: auto !important;
+  }
+
+  .dashboard-confirm-overlay {
+    padding: 8px !important;
+  }
+
+  .dashboard-confirm-modal {
+    width: 100% !important;
+    max-width: 420px !important;
+    padding: 20px !important;
+    border-radius: 14px !important;
+  }
+
+  .dashboard-confirm-modal > div:first-child {
+    width: 52px !important;
+    height: 52px !important;
+    margin-bottom: 14px !important;
+  }
+
+  .dashboard-confirm-modal h2,
+  .dashboard-confirm-modal h3 {
+    font-size: 18px !important;
+    line-height: 24px !important;
+  }
+
+  .dashboard-confirm-modal p {
+    margin-bottom: 18px !important;
+    font-size: 13px !important;
+  }
+
+  .dashboard-confirm-actions {
+    gap: 8px !important;
+  }
+
+  .dashboard-confirm-actions button {
+    min-width: 0;
+    min-height: 42px;
+    padding-inline: 10px !important;
+    font-size: 12px;
+  }
+
+  .water-history-drawer {
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .water-history-body {
+    padding: 10px !important;
   }
 }
 
@@ -3671,6 +3690,102 @@ nav.scrolled {
   background: #0b3f63;
 }
 
+/* Pond detail record forms use the same compact surface as Add Feed. */
+.pond-detail-form-modal-overlay {
+  padding: 18px !important;
+}
+
+.pond-detail-form-modal {
+  max-height: calc(100dvh - 36px);
+}
+
+.pond-detail-form-modal-header {
+  min-height: 66px;
+  padding: 12px 14px !important;
+  background: var(--bg-mid);
+}
+
+.pond-detail-form-modal-header > div {
+  min-width: 0;
+}
+
+.pond-detail-form-modal-header h2,
+.pond-detail-form-modal-header h3 {
+  overflow: hidden;
+  color: var(--text-primary);
+  font-size: 16px !important;
+  font-weight: var(--weight-semibold) !important;
+  line-height: 21px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pond-detail-form-modal-header p {
+  margin: 1px 0 0 !important;
+  color: var(--text-muted) !important;
+  font-size: 11px !important;
+  font-weight: var(--weight-medium) !important;
+  line-height: 15px;
+}
+
+.pond-detail-form-modal-header .feed-modal-close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.pond-detail-form-modal-form {
+  max-height: calc(100dvh - 102px);
+  padding: 14px !important;
+  gap: 14px !important;
+}
+
+.pond-detail-form-modal-form label {
+  color: var(--text-primary) !important;
+  font-size: 11px !important;
+  font-weight: var(--weight-medium) !important;
+  line-height: 15px;
+}
+
+.pond-detail-form-modal-form input,
+.pond-detail-form-modal-form select,
+.pond-detail-form-modal-form textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 11px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+  line-height: normal;
+}
+
+.pond-detail-form-modal-form textarea {
+  min-height: 76px;
+  padding: 10px 11px !important;
+}
+
+.pond-detail-form-grid {
+  gap: 12px !important;
+}
+
+.pond-detail-form-grid > div,
+.pond-detail-form-grid > label {
+  gap: 5px !important;
+}
+
+.pond-detail-form-actions {
+  bottom: -14px;
+  margin: 0 -14px -14px !important;
+  gap: 10px !important;
+}
+
+.pond-detail-form-actions button {
+  min-height: 44px;
+  height: 44px;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  font-size: 12px;
+}
+
 @media (max-width: 640px) {
   .feed-page {
     gap: 12px;
@@ -3751,6 +3866,43 @@ nav.scrolled {
     bottom: -10px;
     margin: 0 -10px -10px;
     padding: 8px 10px 10px;
+  }
+
+  .pond-detail-form-modal-overlay {
+    padding: 8px !important;
+  }
+
+  .pond-detail-form-modal {
+    max-height: calc(100dvh - 16px);
+    border-radius: 14px;
+  }
+
+  .pond-detail-form-modal-header {
+    min-height: 58px;
+    padding: 9px 11px !important;
+  }
+
+  .pond-detail-form-modal-form {
+    max-height: calc(100dvh - 74px);
+    padding: 10px !important;
+    gap: 10px !important;
+  }
+
+  .pond-detail-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 9px 8px !important;
+  }
+
+  .pond-detail-form-actions {
+    bottom: -10px;
+    margin: 0 -10px -10px !important;
+    padding: 8px 10px 10px !important;
+  }
+
+  .pond-detail-form-actions button {
+    min-height: 44px;
+    height: 44px;
+    padding: 0 12px !important;
   }
 }
 

@@ -14,6 +14,16 @@ import { useLanguage } from '../../context/LanguageContext';
 import { useSidebar } from '../../context/sidebarContext';
 import { useDataBackup } from '../hooks/useDataBackup';
 import { hasFarmPermission } from '../../shared/permissions';
+import DashboardIcon, { type DashboardIconName } from './icons/DashboardIcon';
+
+const DASHBOARD_ICON_NAMES: Record<string, DashboardIconName> = {
+  'company-details': 'company-details', home: 'home', ponds: 'ponds', 'water-quality': 'water-quality', feed: 'feed',
+  harvest: 'harvest', marketplace: 'marketplace', 'disease-report': 'disease-report', 'orson-ai': 'orson-ai',
+  'harvest-projections': 'harvest-projections', notifications: 'notifications', finance: 'finance', reports: 'reports',
+  'financial-reports': 'financial-reports', 'sampling-reports': 'sampling-reports', 'daily-operations': 'daily-operations',
+  'cycle-reports': 'cycle-reports', inventory: 'inventory', 'feeds-additives': 'feeds-additives',
+  'treatment-mixes': 'treatment-mixes', assets: 'assets', settings: 'settings', logout: 'logout',
+};
 
 interface MenuButtonProps {
   icon: string;
@@ -26,27 +36,36 @@ interface MenuButtonProps {
   badge?: number;
 }
 
-export const MenuButton = ({ icon, text, onPress, color = "#0d2137", active = false, disabled = false, loading = false, badge }: MenuButtonProps) => (
-  <TouchableOpacity
-    style={[styles.menuItem, active && styles.activeMenuItem, disabled && styles.disabledMenuItem]}
-    onPress={onPress}
-    disabled={disabled}
-    activeOpacity={0.7}
-  >
-    <View style={styles.menuIconContainer}>
-      <Ionicons name={icon as any} size={22} color={disabled ? "#dbe7df" : color} />
-      {badge !== undefined && badge > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{badge}</Text>
-        </View>
-      )}
-    </View>
-    <Text style={[styles.menuText, { color: disabled ? "#dbe7df" : (active ? "#0d2137" : color) }]}>
-      {text}
-    </Text>
-    {loading && <ActivityIndicator size="small" color="#dce8f2" />}
-  </TouchableOpacity>
-);
+export const MenuButton = ({ icon, text, onPress, color = "#0d2137", active = false, disabled = false, loading = false, badge }: MenuButtonProps) => {
+  const dashboardIconName = DASHBOARD_ICON_NAMES[icon];
+  const iconColor = disabled ? '#dbe7df' : color;
+
+  return (
+    <TouchableOpacity
+      style={[styles.menuItem, active && styles.activeMenuItem, disabled && styles.disabledMenuItem]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <View style={styles.menuIconContainer}>
+        {dashboardIconName ? (
+          <DashboardIcon name={dashboardIconName} size={22} color={iconColor} />
+        ) : (
+          <Ionicons name={icon as any} size={22} color={iconColor} />
+        )}
+        {badge !== undefined && badge > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge}</Text>
+          </View>
+        )}
+      </View>
+      <Text style={[styles.menuText, { color: disabled ? '#dbe7df' : (active ? '#0d2137' : color) }]}>
+        {text}
+      </Text>
+      {loading && <ActivityIndicator size="small" color="#dce8f2" />}
+    </TouchableOpacity>
+  );
+};
 
 export const RegularSidebar: React.FC = () => {
   const [teamMemberCount, setTeamMemberCount] = useState(0);
@@ -148,7 +167,7 @@ export const RegularSidebar: React.FC = () => {
       activeOpacity={0.7}
     >
       <View style={styles.menuIconContainer}>
-        <Ionicons name="cube-outline" size={22} color="#0d2137" />
+        <DashboardIcon name="inventory" size={22} color="#0d2137" />
       </View>
       <Text style={[styles.menuText, { color: '#0d2137' }]}>{t.sidebar.inventory}</Text>
       <Ionicons
@@ -167,7 +186,7 @@ export const RegularSidebar: React.FC = () => {
       activeOpacity={0.7}
     >
       <View style={styles.menuIconContainer}>
-        <Ionicons name="document-text-outline" size={22} color="#9B59B6" />
+        <DashboardIcon name="reports" size={22} color="#9B59B6" />
       </View>
       <Text style={[styles.menuText, { color: '#9B59B6' }]}>{t.sidebar.reports}</Text>
       <Ionicons
@@ -187,7 +206,7 @@ export const RegularSidebar: React.FC = () => {
       return (
         <TouchableOpacity style={styles.companyCard} onPress={() => navigateAndClose('/companydetails')}>
           <View style={styles.cardHeader}>
-            <Ionicons name="business" size={20} color="#0d2137" />
+            <DashboardIcon name="company-details" size={20} color="#0d2137" />
             <View style={styles.cardInfo}>
               <Text style={styles.cardTitle} numberOfLines={1}>{company.companyName}</Text>
               <Text style={styles.cardSubtitle} numberOfLines={1}>
@@ -231,7 +250,7 @@ export const RegularSidebar: React.FC = () => {
       return (
         <View style={styles.companyCard}>
           <View style={styles.cardHeader}>
-            <Ionicons name="business" size={20} color="#0d2137" />
+            <DashboardIcon name="company-details" size={20} color="#0d2137" />
             <View style={styles.cardInfo}>
               <Text style={styles.cardTitle} numberOfLines={1}>{company.companyName}</Text>
               <Text style={styles.cardSubtitle} numberOfLines={1}>{getCompanyLocationString()}</Text>
@@ -336,17 +355,17 @@ export const RegularSidebar: React.FC = () => {
 
               <View style={styles.menuContainer}>
                 <MenuButton icon="home" text={t.nav.home} onPress={() => navigateAndClose('/')} active />
-                <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
-                <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
-                {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
-                {canUseOrson && hasFinanceAccess && <MenuButton icon="analytics-outline" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateAndClose('/harvest-projection')} color="#0F4C75" />}
-                <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
+                <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
+                <MenuButton icon="disease-report" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
+                {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
+                {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateAndClose('/harvest-projection')} color="#0F4C75" />}
+                <MenuButton icon="notifications" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 {hasFinanceAccess && (
                   <>
                     <View style={styles.separator} />
                     <MenuButton
-                      icon="wallet-outline"
+                      icon="finance"
                       text={t.sidebar.finance}
                       onPress={() => navigateAndClose('/finance')}
                       color="#27AE60"
@@ -362,25 +381,25 @@ export const RegularSidebar: React.FC = () => {
                     {reportsExpanded && (
                       <View style={styles.submenuContainer}>
                         {hasFinanceAccess && <MenuButton
-                          icon="stats-chart-outline"
+                          icon="financial-reports"
                           text={t.sidebar.financialReports}
                           onPress={() => navigateAndClose('/financial-reports')}
                           color="#9B59B6"
                         />}
                         <MenuButton
-                          icon="bar-chart-outline"
+                          icon="sampling-reports"
                           text={t.sidebar.shrimpReports}
                           onPress={() => navigateAndClose('/shrimp-reports')}
                           color="#9B59B6"
                         />
                         <MenuButton
-                          icon="clipboard-outline"
+                          icon="daily-operations"
                           text={t.dailyOperationsReports.menuLabel}
                           onPress={() => navigateAndClose('/daily-operations-report')}
                           color="#9B59B6"
                         />
                         {hasFinanceAccess && <MenuButton
-                          icon="file-tray-full-outline"
+                          icon="cycle-reports"
                           text={t.sidebar.cycleReports}
                           onPress={() => navigateAndClose('/cycle-report')}
                           color="#9B59B6"
@@ -397,14 +416,14 @@ export const RegularSidebar: React.FC = () => {
                   <View style={styles.submenuContainer}>
                     {user?.role !== 'mechanic' && (
                       <MenuButton
-                        icon="fish-outline"
+                        icon="feeds-additives"
                         text={t.sidebar.feedsAdditives}
                         onPress={() => navigateAndClose('/inventory/feedAdditives')}
                         color="#315f57"
                       />
                     )}
                     <MenuButton
-                      icon="construct-outline"
+                      icon="assets"
                       text={t.sidebar.assets}
                       onPress={() => navigateAndClose('/inventory/assetInventory')}
                       color="#315f57"
@@ -427,9 +446,9 @@ export const RegularSidebar: React.FC = () => {
                 )}
 
                 <View style={styles.separator} />
-                <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateAndClose('/settings')} color="#0d2137" />
+                <MenuButton icon="settings" text={t.nav.settings} onPress={() => navigateAndClose('/settings')} color="#0d2137" />
                 <MenuButton icon="help-circle-outline" text={t.sidebar.helpSupport} onPress={() => navigateAndClose('/help-support')} color="#0d2137" />
-                <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
+                <MenuButton icon="logout" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
               </View>
             </ScrollView>
           </View>
@@ -531,15 +550,15 @@ export const BuyerSidebar: React.FC = () => {
 
               <View style={styles.menuContainer}>
                 <MenuButton icon="business" text="Suppliers" onPress={() => navigateAndClose('/indexbuyer')} active />
-                <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
-                <MenuButton icon="map-outline" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
+                <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
+                <MenuButton icon="disease-report" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 <MenuButton icon="document-text-outline" text="My Listings" onPress={() => navigateAndClose('/marketplace/buyerlisting')} />
-                <MenuButton icon="notifications-outline" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
+                <MenuButton icon="notifications" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 <View style={styles.separator} />
-                <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateAndClose('/settings')} color="#0d2137" />
+                <MenuButton icon="settings" text={t.nav.settings} onPress={() => navigateAndClose('/settings')} color="#0d2137" />
                 <MenuButton icon="help-circle-outline" text={t.sidebar.helpSupport} onPress={() => navigateAndClose('/help-support')} color="#0d2137" />
-                <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
+                <MenuButton icon="logout" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
               </View>
             </ScrollView>
           </View>
@@ -585,7 +604,7 @@ export const StaticSidebar: React.FC = () => {
       activeOpacity={0.7}
     >
       <View style={styles.menuIconContainer}>
-        <Ionicons name="document-text-outline" size={22} color="#9B59B6" />
+        <DashboardIcon name="reports" size={22} color="#9B59B6" />
       </View>
       <Text style={[styles.menuText, { color: '#9B59B6' }]}>{t.sidebar.reports}</Text>
       <Ionicons
@@ -609,13 +628,13 @@ export const StaticSidebar: React.FC = () => {
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.menuContainer}>
           <MenuButton icon="home" text={t.nav.home} onPress={() => navigateTo('/')} active />
-          <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
-          {canUseOrson && <MenuButton icon="sparkles-outline" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
-          {canUseOrson && hasFinanceAccess && <MenuButton icon="analytics-outline" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} color="#0F4C75" />}
+          <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
+          {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
+          {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} color="#0F4C75" />}
           {hasFinanceAccess && (
             <>
               <View style={styles.separator} />
-              <MenuButton icon="wallet-outline" text={t.sidebar.finance} onPress={() => navigateTo('/finance')} color="#27AE60" />
+              <MenuButton icon="finance" text={t.sidebar.finance} onPress={() => navigateTo('/finance')} color="#27AE60" />
             </>
           )}
           {canViewReports && (
@@ -623,17 +642,17 @@ export const StaticSidebar: React.FC = () => {
               {renderStaticReportsMenuButton()}
               {reportsExpanded && (
                 <View style={styles.submenuContainer}>
-                  {hasFinanceAccess && <MenuButton icon="stats-chart-outline" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />}
-                  <MenuButton icon="bar-chart-outline" text={t.sidebar.shrimpReports} onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
-                  <MenuButton icon="clipboard-outline" text={t.dailyOperationsReports.menuLabel} onPress={() => navigateTo('/daily-operations-report')} color="#9B59B6" />
-                  {hasFinanceAccess && <MenuButton icon="file-tray-full-outline" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />}
+                  {hasFinanceAccess && <MenuButton icon="financial-reports" text={t.sidebar.financialReports} onPress={() => navigateTo('/financial-reports')} color="#9B59B6" />}
+                  <MenuButton icon="sampling-reports" text={t.sidebar.shrimpReports} onPress={() => navigateTo('/shrimp-reports')} color="#9B59B6" />
+                  <MenuButton icon="daily-operations" text={t.dailyOperationsReports.menuLabel} onPress={() => navigateTo('/daily-operations-report')} color="#9B59B6" />
+                  {hasFinanceAccess && <MenuButton icon="cycle-reports" text={t.sidebar.cycleReports} onPress={() => navigateTo('/cycle-report')} color="#9B59B6" />}
                 </View>
               )}
             </>
           )}
           <View style={styles.separator} />
-          <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
-          <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
+          <MenuButton icon="settings" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
+          <MenuButton icon="logout" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
         </View>
       </ScrollView>
     </View>
@@ -675,10 +694,10 @@ export const StaticBuyerSidebar: React.FC = () => {
       <ScrollView style={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.menuContainer}>
           <MenuButton icon="business" text="Suppliers" onPress={() => navigateTo('/indexbuyer')} active color="#27AE60" />
-          <MenuButton icon="storefront-outline" text="Marketplace" onPress={() => navigateTo('/marketplace')} color="#27AE60" />
+          <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateTo('/marketplace')} color="#27AE60" />
           <View style={styles.separator} />
-          <MenuButton icon="settings-outline" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
-          <MenuButton icon="log-out-outline" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
+          <MenuButton icon="settings" text={t.nav.settings} onPress={() => navigateTo('/settings')} color="#0d2137" />
+          <MenuButton icon="logout" text={t.sidebar.signOut} onPress={handleSignOut} color="#ff3b30" />
         </View>
       </ScrollView>
     </View>

@@ -4,12 +4,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Send,
   Trash2,
-  Loader2,
-  BrainCircuit,
-  MessageSquare,
-  AlertCircle,
-  TrendingUp,
-  Shrimp
+  AlertCircle
 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
@@ -73,12 +68,6 @@ export default function OrsonAIPage() {
 
 function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: string; uid: string }) {
   const copy = useDashboardCopy();
-  const suggestedPrompts = [
-    copy("Analyze today's 72-hour outlook"),
-    copy('How do I lower ammonia in A1?'),
-    copy('Check overfeeding and biomass risk'),
-    copy('What is limiting growth?'),
-  ];
   const { company } = useAuth();
   const hasPermission = useFarmPermissions();
   const canUseOrson = hasPermission('useOrson');
@@ -99,7 +88,6 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
   useEffect(() => {
     if (!loading || streamingReplyId) {
-      setAnalyzingDots('.');
       return;
     }
     const interval = setInterval(() => {
@@ -147,6 +135,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
     if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    setAnalyzingDots('.');
     const replyId = retryId || `orson-${replyTimestamp.getTime()}-${currentGeneration}`;
     const upsertReply = (message: string, retryPrompt?: string) => {
       if (!isCurrent()) return;
@@ -201,9 +190,6 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
       <div className="orson-shell">
         <div className="orson-hero">
           <div className="orson-hero-main">
-            <div className="orson-mark">
-              <BrainCircuit size={20} />
-            </div>
             <div>
               <div className="section-eyebrow">Orson AI</div>
               <h2 className="orson-title">{copy('Aquaculture assistant')}</h2>
@@ -234,9 +220,6 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                 const msg = storedMessage.id === 'welcome' ? createWelcomeMessage(copy) : storedMessage;
                 return (
                 <div key={msg.id} className={`orson-message-row ${msg.type === 'user' ? 'is-user' : 'is-ai'}`}>
-                  <div className="orson-avatar">
-                    {msg.type === 'user' ? 'U' : <Shrimp size={18} />}
-                  </div>
                   <div className="orson-message-stack">
                     <div className="orson-bubble">
                       {msg.type === 'ai' ? cleanOrsonResponse(msg.message) : msg.message}
@@ -252,9 +235,6 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
               {loading && !streamingReplyId && (
                 <div className="orson-message-row is-ai">
-                  <div className="orson-avatar is-loading">
-                    <Loader2 className="animate-spin" size={18} />
-                  </div>
                   <div className="orson-message-stack">
                     <div className="orson-bubble is-thinking">
                       {copy('Orson is analyzing farm metrics...').replace(/\.{1,3}$/, '')}
@@ -299,47 +279,6 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
             </div>
           </section>
 
-          <aside className="orson-side">
-            <div className="orson-panel">
-              <h4>
-                <MessageSquare size={16} /> {copy('Suggested queries')}
-              </h4>
-              <div className="orson-suggestion-list">
-                {suggestedPrompts.map(p => (
-                  <button
-                    key={p}
-                    onClick={() => handleSend(p)}
-                    disabled={loading || !pondsReady}
-                    className="orson-suggestion"
-                  >
-                    {p}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="orson-panel">
-              <h4>
-                <TrendingUp size={16} /> {copy('Analyzed ponds')}
-              </h4>
-              {ponds.length === 0 ? (
-                <p className="orson-empty">{copy('Connect pond records to give Orson live biological context before asking for analysis.')}</p>
-              ) : (
-                <div className="orson-pond-list">
-                  {ponds.slice(0, 5).map(p => (
-                    <div key={p.id} className="orson-pond-row">
-                      <div className="orson-pond-name">
-                        <span />
-                        <strong>{p.pondName || copy('Unnamed pond')}</strong>
-                      </div>
-                      <em>{p.plSupplier || p.supplier || 'N/A'}</em>
-                    </div>
-                  ))}
-                  {ponds.length > 5 && <div className="orson-more">+ {ponds.length - 5} {copy('more ponds synced')}</div>}
-                </div>
-              )}
-            </div>
-          </aside>
         </div>
       </div>
     </div>

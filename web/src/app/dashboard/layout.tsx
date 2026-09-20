@@ -12,28 +12,13 @@ import { getRequiredSetupRoute } from '@/config/routes';
 import { useNotificationChecker } from '@/hooks/useNotificationChecker';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import {
-  LayoutDashboard,
-  Waves,
-  BrainCircuit,
-  History,
-  Settings,
-  LogOut,
   Menu,
-  Bell,
-  Search,
-  Droplets,
-  Store,
-  Map,
-  Wallet,
-  FileText,
-  Box,
   ChevronDown,
-  CalendarDays,
   PanelLeft,
-  TrendingUp,
-  type LucideIcon,
+  CalendarDays,
 } from 'lucide-react';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
+import { DashboardIcon, type DashboardIconName } from '@/components/DashboardIcon';
 
 /* --- Navigation Config --------------------------------------- */
 
@@ -48,10 +33,10 @@ type DashboardTranslations = {
   nav: TranslationSection;
   sidebar: TranslationSection;
 };
-type NavChild = { label: string; href: string };
+type NavChild = { label: string; href: string; icon: DashboardIconName };
 type BaseNavItem = {
   label: string;
-  icon: LucideIcon;
+  icon: DashboardIconName;
 };
 type NavLinkItem = BaseNavItem & { href: string; id?: never; children?: never };
 type NavGroupItem = BaseNavItem & { id: string; children: NavChild[]; href?: never };
@@ -68,45 +53,45 @@ const formatDashboardDate = (date: Date) => new Intl.DateTimeFormat(undefined, {
 
 const NAV_STRUCTURE = (t: DashboardTranslations, copy: (text: string) => string): NavigationGroups => ({
   management: [
-    { label: getString(t.nav.home, 'Home'), icon: LayoutDashboard, href: '/dashboard' },
-    { label: getString(t.nav.ponds, 'Ponds'), icon: Waves, href: '/dashboard/ponds' },
-    { label: getString(t.nav.waterQuality, 'Water Quality'), icon: Droplets, href: '/dashboard/water' },
-    { label: getString(t.nav.feed, 'Feed'), icon: History, href: '/dashboard/feed' },
-    { label: getString(t.nav.harvest, 'Harvest'), icon: Wallet, href: '/dashboard/harvest' },
+    { label: getString(t.nav.home, 'Home'), icon: 'home', href: '/dashboard' },
+    { label: getString(t.nav.ponds, 'Ponds'), icon: 'ponds', href: '/dashboard/ponds' },
+    { label: getString(t.nav.waterQuality, 'Water Quality'), icon: 'water-quality', href: '/dashboard/water' },
+    { label: getString(t.nav.feed, 'Feed'), icon: 'feed', href: '/dashboard/feed' },
+    { label: getString(t.nav.harvest, 'Harvest'), icon: 'harvest', href: '/dashboard/harvest' },
   ],
   appServices: [
-    { label: getString(t.nav.marketplace, 'Marketplace'), icon: Store, href: '/dashboard/marketplace' },
-    { label: getString(t.nav.diseaseReport, 'Disease Report'), icon: Map, href: '/dashboard/disease' },
-    { label: getString(t.sidebar.aiAssistant, 'Orson AI'), icon: BrainCircuit, href: '/dashboard/ai' },
-    { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), icon: TrendingUp, href: '/dashboard/projections' },
-    { label: getString(t.nav.notifications, 'Notifications'), icon: Bell, href: '/dashboard/notifications' },
+    { label: getString(t.nav.marketplace, 'Marketplace'), icon: 'marketplace', href: '/dashboard/marketplace' },
+    { label: getString(t.nav.diseaseReport, 'Disease Report'), icon: 'disease-report', href: '/dashboard/disease' },
+    { label: getString(t.sidebar.aiAssistant, 'Orson AI'), icon: 'orson-ai', href: '/dashboard/ai' },
+    { label: getString(t.financialReports.harvestProjection, 'Harvest Projections'), icon: 'harvest-projections', href: '/dashboard/projections' },
+    { label: getString(t.nav.notifications, 'Notifications'), icon: 'notifications', href: '/dashboard/notifications' },
   ],
   business: [
-    { label: getString(t.finance.title, 'Finance'), icon: Wallet, href: '/dashboard/finance' },
+    { label: getString(t.finance.title, 'Finance'), icon: 'finance', href: '/dashboard/finance' },
     {
       label: copy('Reports'),
-      icon: FileText,
+      icon: 'reports',
       id: 'reports',
       children: [
-        { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial' },
-        { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp' },
-        { label: getString(t.dailyOperationsReports.menuLabel, 'Daily Operations'), href: '/dashboard/reports/daily-operations' },
-        { label: getString(t.cycleReport.archiveTitle, 'Cycle Reports'), href: '/dashboard/reports/cycles' },
+        { label: getString(t.financialReports.title, 'Financial Reports'), href: '/dashboard/reports/financial', icon: 'financial-reports' },
+        { label: getString(t.nav.shrimpReports, 'Sampling Reports'), href: '/dashboard/reports/shrimp', icon: 'sampling-reports' },
+        { label: getString(t.dailyOperationsReports.menuLabel, 'Daily Operations'), href: '/dashboard/reports/daily-operations', icon: 'daily-operations' },
+        { label: getString(t.cycleReport.archiveTitle, 'Cycle Reports'), href: '/dashboard/reports/cycles', icon: 'cycle-reports' },
       ]
     },
     {
       label: copy('Inventory'),
-      icon: Box,
+      icon: 'inventory',
       id: 'inventory',
       children: [
-        { label: getString(t.nav.inventoryFeeds, 'Feeds & Additives'), href: '/dashboard/inventory/feeds' },
-        { label: copy('Treatment Mixes'), href: '/dashboard/inventory/treatment-mixes' },
-        { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets' },
+        { label: getString(t.nav.inventoryFeeds, 'Feeds & Additives'), href: '/dashboard/inventory/feeds', icon: 'feeds-additives' },
+        { label: copy('Treatment Mixes'), href: '/dashboard/inventory/treatment-mixes', icon: 'treatment-mixes' },
+        { label: getString(t.nav.inventoryAssets, 'Assets'), href: '/dashboard/inventory/assets', icon: 'assets' },
       ]
     },
   ],
   system: [
-    { label: getString(t.nav.settings, 'Settings'), icon: Settings, href: '/dashboard/settings' },
+    { label: getString(t.nav.settings, 'Settings'), icon: 'settings', href: '/dashboard/settings' },
   ]
 });
 
@@ -118,7 +103,6 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setSidebarOpen] = useState(false);
-  const [isDesktopNavigation, setDesktopNavigation] = useState(false);
   const [isMobileNavigation, setMobileNavigation] = useState(false);
   const [todayLabel, setTodayLabel] = useState('');
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
@@ -254,7 +238,6 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     const mediaQuery = window.matchMedia('(min-width: 1024px)');
     const mobileMediaQuery = window.matchMedia('(max-width: 767px)');
     const syncNavigationMode = () => {
-      setDesktopNavigation(mediaQuery.matches);
       setMobileNavigation(mobileMediaQuery.matches);
       if (mediaQuery.matches) setSidebarOpen(false);
     };
@@ -307,7 +290,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
     return () => {
       document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleKeyDown);
-      sidebarTrigger?.focus();
+      if (isOverlayNavigation) sidebarTrigger?.focus();
     };
   }, [isOverlayNavigation, isSidebarOpen]);
 
@@ -325,7 +308,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="dashboard-saas" style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
+      <div className={`dashboard-saas ${isSidebarOpen ? 'sidebar-expanded' : 'sidebar-collapsed'}`} style={{ display: 'flex', height: '100dvh', overflow: 'hidden', background: 'var(--bg-dark)', position: 'relative' }}>
       <style jsx global>{`
         .dashboard-saas,
         .dashboard-saas :where(h1, h2, h3, h4, h5, h6, p, span, a, button, input, select, textarea, label, div) {
@@ -442,24 +425,67 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
           .mobile-trigger {
             display: none !important;
           }
-          #dashboard-navigation .sidebar-toggle {
+          .dashboard-saas.sidebar-collapsed .mobile-trigger {
+            display: inline-flex !important;
+          }
+          #dashboard-navigation.sidebar {
+            flex: 0 0 64px;
+            width: 64px !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+          }
+          #dashboard-navigation.sidebar.mobile-open {
+            flex: 0 0 264px;
+            width: 264px !important;
+            padding-left: 12px !important;
+            padding-right: 12px !important;
+          }
+        }
+        @media (min-width: 768px) {
+          .dashboard-saas.sidebar-collapsed .dashboard-app-header {
+            padding-left: 24px !important;
+          }
+          .dashboard-saas.sidebar-collapsed .dashboard-header-left {
+            gap: 8px !important;
+          }
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-company-row,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-link,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-group-content {
+            justify-content: center !important;
+          }
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-company-copy,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-company-search,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-section-label,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-item-label,
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-group-chevron {
+            display: none !important;
+          }
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-link {
+            gap: 0 !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+          }
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-children {
+            padding-left: 0 !important;
+          }
+          #dashboard-navigation.sidebar:not(.mobile-open) .sidebar-toggle {
             display: none !important;
           }
         }
         @media (min-width: 768px) and (max-width: 1023px) {
           #dashboard-navigation.sidebar {
             position: relative !important;
-            flex: 0 0 0;
-            width: 0 !important;
+            flex: 0 0 64px;
+            width: 64px !important;
             min-width: 0;
             height: 100dvh !important;
             left: auto !important;
             top: auto !important;
             bottom: auto !important;
             transform: none !important;
-            padding-left: 0 !important;
-            padding-right: 0 !important;
-            border-right-width: 0 !important;
+            padding-left: 8px !important;
+            padding-right: 8px !important;
+            border-right-width: 1px !important;
             box-shadow: none !important;
             overflow: hidden;
             transition: flex-basis 240ms ease, width 240ms ease, padding 240ms ease !important;
@@ -503,6 +529,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         @media (max-width: 1023px) {
           .mobile-trigger-hide {
             display: none !important;
+          }
+          .dashboard-app-header {
+            padding: 12px 16px !important;
+          }
+          .dashboard-header-left {
+            gap: 12px !important;
           }
           .dashboard-main-scroll {
             padding: var(--space-6) var(--space-8) var(--space-10) !important;
@@ -560,8 +592,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
         role={isOverlayNavigation ? 'dialog' : 'navigation'}
         aria-modal={isOverlayNavigation ? true : undefined}
         aria-label={copy('Dashboard navigation')}
-        aria-hidden={!(isDesktopNavigation || isSidebarOpen)}
-        inert={!(isDesktopNavigation || isSidebarOpen) ? true : undefined}
+        aria-hidden={isMobileNavigation && !isSidebarOpen ? true : undefined}
+        inert={isMobileNavigation && !isSidebarOpen ? true : undefined}
         className={`sidebar ${isSidebarOpen ? 'mobile-open' : ''}`}
         style={{
         width: '264px',
@@ -581,7 +613,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       }}>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1, overflowY: 'auto', padding: '10px 2px 0 0' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div className="sidebar-company-row" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <Link
               href="/dashboard/company"
               className={`sidebar-link ${pathname === '/dashboard/company' ? 'active' : ''}`}
@@ -601,8 +633,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                 textDecoration: 'none',
               }}
             >
-              <Waves size={18} color={pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8'} strokeWidth={pathname === '/dashboard/company' ? 2.5 : 2} />
-              <div style={{ flex: 1, minWidth: 0 }}>
+              <span style={{ color: pathname === '/dashboard/company' ? '#1e293b' : '#94a3b8', display: 'inline-flex' }}>
+                <DashboardIcon name="company-details" />
+              </span>
+              <div className="sidebar-company-copy" style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ overflow: 'hidden', color: 'inherit', fontSize: '0.8rem', fontWeight: pathname === '/dashboard/company' ? 600 : 500, lineHeight: 1.2, textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {company?.companyName || copy('Company Details')}
                 </div>
@@ -610,13 +644,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   {company?.farmType || copy('Company Details')}
                 </div>
               </div>
-              <Search size={14} color="#94a3b8" aria-hidden="true" />
             </Link>
             <button
               type="button"
               data-sidebar-toggle
               className="sidebar-toggle"
-              aria-label={copy('Close dashboard navigation')}
+              aria-label={copy(isSidebarOpen ? 'Close dashboard navigation' : 'Expand dashboard navigation')}
               aria-controls="dashboard-navigation"
               aria-expanded={isSidebarOpen}
               onClick={toggleSidebar}
@@ -628,17 +661,18 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
 
           {Object.entries(visibleNavigation).map(([groupKey, items]) => (
             <div key={groupKey} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-              <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '2px 8px 4px', fontFamily: 'var(--jakarta)' }}>
+              <div className="sidebar-section-label" style={{ fontSize: '0.62rem', fontWeight: 600, color: '#94a3b8', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '2px 8px 4px', fontFamily: 'var(--jakarta)' }}>
                 {sectionLabels[groupKey] || groupKey.replace(/([A-Z])/g, ' $1').trim()}
               </div>
               {items.map((item) => {
-                const ItemIcon = item.icon;
                 if (isNavGroup(item)) {
                   const isExpanded = expandedGroups.includes(item.id) || routeExpandedGroup === item.id;
                   return (
                     <div key={item.label} style={{ display: 'flex', flexDirection: 'column' }}>
                       <button
                         className="sidebar-link"
+                        aria-label={item.label}
+                        title={item.label}
                         onClick={() => toggleGroup(item.id)}
                         style={{
                           display: 'flex',
@@ -658,15 +692,17 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                           textAlign: 'left'
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <ItemIcon size={18} color="#94a3b8" strokeWidth={2} />
-                          <span>{item.label}</span>
+                        <div className="sidebar-group-content" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                          <span style={{ color: '#94a3b8', display: 'inline-flex' }}>
+                            <DashboardIcon name={item.icon} />
+                          </span>
+                          <span className="sidebar-item-label">{item.label}</span>
                         </div>
-                        <ChevronDown size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
+                        <ChevronDown className="sidebar-group-chevron" size={14} style={{ transform: isExpanded ? 'rotate(180deg)' : 'none', transition: 'transform 0.3s' }} />
                       </button>
 
                       {isExpanded && (
-                        <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '28px', gap: 0 }}>
+                        <div className="sidebar-children" style={{ display: 'flex', flexDirection: 'column', paddingLeft: '28px', gap: 0 }}>
                           {item.children.map((child) => {
                             const isChildActive = pathname === child.href;
                             return (
@@ -674,7 +710,12 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                                 key={child.href}
                                 href={child.href}
                                 className="sidebar-link"
+                                aria-label={child.label}
+                                title={child.label}
                                 style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '8px',
                                   minHeight: '30px',
                                   padding: '5px 10px',
                                   fontSize: '0.76rem',
@@ -687,7 +728,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                                   transition: 'all 0.2s'
                                 }}
                               >
-                                {child.label}
+                                <span style={{ color: isChildActive ? '#1e293b' : '#94a3b8', display: 'inline-flex', flex: '0 0 auto' }}>
+                                  <DashboardIcon name={child.icon} />
+                                </span>
+                                <span className="sidebar-item-label">{child.label}</span>
                               </Link>
                             );
                           })}
@@ -703,6 +747,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                     key={item.href}
                     href={item.href}
                     className="sidebar-link"
+                    aria-label={item.label}
+                    title={item.label}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -719,8 +765,10 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                       transition: 'all 0.2s'
                     }}
                   >
-                    <ItemIcon size={18} color={isActive ? '#1e293b' : '#94a3b8'} strokeWidth={isActive ? 2.5 : 2} />
-                    <span>{item.label}</span>
+                    <span style={{ color: isActive ? '#1e293b' : '#94a3b8', display: 'inline-flex' }}>
+                      <DashboardIcon name={item.icon} />
+                    </span>
+                    <span className="sidebar-item-label">{item.label}</span>
                   </Link>
                 );
               })}
@@ -729,6 +777,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={handleSignOut}
                   className="sidebar-link"
+                  aria-label={getString(t.auth.signOut, 'Logout')}
+                  title={getString(t.auth.signOut, 'Logout')}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -746,8 +796,8 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
                     textAlign: 'left',
                   }}
                 >
-                  <LogOut size={18} strokeWidth={2} />
-                  <span>{getString(t.auth.signOut, 'Logout')}</span>
+                  <DashboardIcon name="logout" />
+                  <span className="sidebar-item-label">{getString(t.auth.signOut, 'Logout')}</span>
                 </button>
               )}
             </div>

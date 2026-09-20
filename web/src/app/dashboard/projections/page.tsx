@@ -769,29 +769,29 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   <div style={{ fontSize: '14px', color: '#334155', marginTop: '6px' }}>{financialDecisionReason}</div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '14px' }}>
-                  <div style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
-                    <div style={{ fontSize: '25px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
+                <div className={styles.outcomeGrid}>
+                  <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: 'var(--bg-mid)' }}>
+                    <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestTodayProfit || 'HARVEST-TODAY PROFIT'}</div>
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '7px' }}>{formatCurrency(financialComparison.result.today.operatingProfit)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.revenue || 'Revenue'}: {formatCurrency(financialComparison.result.today.revenue)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.today.totalCosts))}</div>
                   </div>
-                  <div style={{ padding: '18px', borderRadius: '16px', background: '#ECFDF5' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: '#047857' }}>
+                  <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: '#ECFDF5' }}>
+                    <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: '#047857' }}>
                       {financialComparison.result.bestScenario.kind === 'today'
                         ? (t.harvestProjectionScreen?.bestOption || 'BEST OPTION')
                         : `${t.harvestProjectionScreen?.targetSize || 'TARGET SIZE'} ${financialComparison.result.bestScenario.targetSizeCountPerKg}`}
                     </div>
-                    <div style={{ fontSize: '25px', fontWeight: 600, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
-                    <div style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(financialComparison.result.bestScenario.revenue)}</div>
-                    <div style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: '#059669', marginTop: '7px' }}>{formatCurrency(financialComparison.result.bestScenario.operatingProfit)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '6px' }}>{financialComparison.result.bestScenario.daysFromNow} {t.harvestProjectionScreen?.days || 'days'} · {t.harvestProjectionScreen?.revenue || 'Revenue'} {formatCurrency(financialComparison.result.bestScenario.revenue)}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: '#047857', marginTop: '2px' }}>{t.harvestProjectionScreen?.totalCosts || 'Total costs'}: {formatCurrency(totalScenarioCosts(financialComparison.result.bestScenario.totalCosts))}</div>
                   </div>
-                  <div style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
-                    <div style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
-                    <div style={{ fontSize: '25px', fontWeight: 600, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
+                  <div className={styles.outcomeCard} style={{ padding: '18px', borderRadius: '16px', background: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#EFF6FF' : '#FEF2F2' }}>
+                    <div className={styles.outcomeLabel} style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.profitDifference || 'PROFIT DIFFERENCE'}</div>
+                    <div className={styles.outcomeValue} style={{ fontSize: '25px', fontWeight: 600, color: financialComparison.result.bestScenario.incrementalProfitVsToday >= 0 ? '#2563EB' : '#DC2626', marginTop: '7px' }}>
                       {formatCurrency(financialComparison.result.bestScenario.incrementalProfitVsToday)}
                     </div>
-                    <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</div>
+                    <div className={styles.outcomeMeta} style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '6px' }}>{t.harvestProjectionScreen?.versusHarvestToday || 'versus harvesting today'}</div>
                   </div>
                 </div>
 
@@ -825,13 +825,13 @@ Respond in ${currentLanguage === 'id' ? 'Indonesian' : currentLanguage === 'th' 
                   </div>
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestDOC || 'HARVEST DOC'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{projection.futureDoc ?? '-'}</div></div>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projBiomass || 'PROJ. BIOMASS'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedBiomassKg.toFixed(0)} kg</div></div>
-                  <div style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projectedSurvival || 'PROJECTED SURVIVAL'}</div><div style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedSurvivalRatePercent.toFixed(1)}%</div></div>
+                <div className={styles.metricGrid}>
+                  <div className={styles.metricCard} style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div className={styles.metricLabel} style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.harvestDOC || 'HARVEST DOC'}</div><div className={styles.metricValue} style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{projection.futureDoc ?? '-'}</div></div>
+                  <div className={styles.metricCard} style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div className={styles.metricLabel} style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projBiomass || 'PROJ. BIOMASS'}</div><div className={styles.metricValue} style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedBiomassKg.toFixed(0)} kg</div></div>
+                  <div className={styles.metricCard} style={{ padding: '16px', borderRadius: '14px', background: 'var(--bg-mid)', textAlign: 'center' }}><div className={styles.metricLabel} style={{ fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)' }}>{t.harvestProjectionScreen?.projectedSurvival || 'PROJECTED SURVIVAL'}</div><div className={styles.metricValue} style={{ fontSize: '20px', fontWeight: 600, marginTop: '5px' }}>{financialComparison.result.bestScenario.projectedSurvivalRatePercent.toFixed(1)}%</div></div>
                 </div>
 
-                <div style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', fontSize: '12px', lineHeight: 1.8, color: 'var(--text-muted)' }}>
+                <div className={styles.costDetails} style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', fontSize: '12px', lineHeight: 1.8, color: 'var(--text-muted)' }}>
                   <strong style={{ color: 'var(--text-primary)' }}>{t.harvestProjectionScreen?.costsIncluded || 'Costs included to date'}</strong><br />
                   {t.inventory?.feeds || 'Feed'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.feed)} · {t.inventory?.additives || 'Additives'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.additives)}<br />
                   {t.harvestProjectionScreen?.generalExpenses || 'Allocated general expenses'}: {formatCurrency(financialComparison.costSnapshot.costsToDate.generalExpenses)}<br />

@@ -1489,18 +1489,18 @@ export default function PondDetailClient() {
       </div>
 
       {isEndCycleOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '520px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card responsive-modal feed-log-modal pond-detail-form-modal">
+            <div className="responsive-modal-header feed-log-header pond-detail-form-modal-header">
               <div>
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.endCycle}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.historyRemains.replace('{{pond}}', pond.pondName)}</p>
               </div>
-              <button onClick={() => setEndCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button onClick={() => setEndCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
                 <X size={20} />
               </button>
             </div>
-            <div style={{ padding: '28px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+            <div className="responsive-modal-body feed-log-form pond-detail-form-modal-form">
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.endDate}
                 <input type="date" value={endCycleForm.cycleEndedAt} onChange={e => setEndCycleForm(prev => ({ ...prev, cycleEndedAt: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1514,7 +1514,7 @@ export default function PondDetailClient() {
                   <option value="other">{copy.other}</option>
                 </select>
               </label>
-              <div style={{ display: 'flex', gap: '14px', marginTop: '8px' }}>
+              <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions">
                 <button type="button" onClick={() => setEndCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
                 <button type="button" onClick={handleEndCycle} className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.endCycle}</button>
               </div>
@@ -1524,18 +1524,18 @@ export default function PondDetailClient() {
       )}
 
       {isBaselineModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '620px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card responsive-modal feed-log-modal pond-detail-form-modal">
+            <div className="responsive-modal-header feed-log-header pond-detail-form-modal-header">
               <div>
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.editBaseline}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.baselineDescription}</p>
               </div>
-              <button onClick={() => setBaselineModalOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button onClick={() => setBaselineModalOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleUpdateBaseline} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <form onSubmit={handleUpdateBaseline} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid">
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.baselineDate}
                 <input required type="date" value={baselineForm.baselineDate} onChange={e => setBaselineForm(prev => ({ ...prev, baselineDate: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1556,7 +1556,7 @@ export default function PondDetailClient() {
                 {copy.feedUsedSoFar}
                 <input type="number" step="0.01" value={baselineForm.baselineCumulativeFeed} onChange={e => setBaselineForm(prev => ({ ...prev, baselineCumulativeFeed: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
+              <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions" style={{ gridColumn: '1 / -1' }}>
                 <button type="button" onClick={() => setBaselineModalOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
                 <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.saveBaseline}</button>
               </div>
@@ -1566,18 +1566,18 @@ export default function PondDetailClient() {
       )}
 
       {isStartCycleOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '640px', background: '#FFFFFF', padding: '0', overflow: 'hidden' }}>
-            <div style={{ padding: '28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(10px)' }}>
+          <div className="glass-card responsive-modal feed-log-modal pond-detail-form-modal">
+            <div className="responsive-modal-header feed-log-header pond-detail-form-modal-header">
               <div>
                 <h2 style={{ fontSize: '1.35rem', fontWeight: 600 }}>{copy.startNewCycle}</h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.startCycleDescription.replace('{{pond}}', pond.pondName).replace('{{area}}', String(pond.pondArea))}</p>
               </div>
-              <button onClick={() => setStartCycleOpen(false)} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+              <button onClick={() => setStartCycleOpen(false)} className="feed-modal-close" aria-label={copy.cancel}>
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleStartCycle} style={{ padding: '28px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <form onSubmit={handleStartCycle} className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid">
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {copy.density}
                 <input required type="number" value={startCycleForm.density} onChange={e => setStartCycleForm(prev => ({ ...prev, density: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
@@ -1594,7 +1594,7 @@ export default function PondDetailClient() {
                 {copy.plSupplier}
                 <input required value={startCycleForm.plSupplier} onChange={e => setStartCycleForm(prev => ({ ...prev, plSupplier: e.target.value }))} style={{ padding: '12px', borderRadius: '10px', border: '1px solid var(--border)', background: 'var(--bg-mid)' }} />
               </label>
-              <div style={{ gridColumn: 'span 2', display: 'flex', gap: '14px', marginTop: '8px' }}>
+              <div className="responsive-modal-footer feed-log-footer pond-detail-form-actions" style={{ gridColumn: '1 / -1' }}>
                 <button type="button" onClick={() => setStartCycleOpen(false)} style={{ flex: 1, padding: '14px', borderRadius: '12px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
                 <button type="submit" className="dashboard-action dashboard-action-primary" style={{ flex: 1, justifyContent: 'center' }}>{copy.startCycle}</button>
               </div>
@@ -1692,26 +1692,27 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
   if (!isOpen) return null;
 
   return (
-    <div style={{
+    <div className="responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay" style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px'
     }}>
-      <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="glass-card animate-fade-up responsive-modal feed-log-modal pond-detail-form-modal" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
+        <div className="responsive-modal-header feed-log-header pond-detail-form-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? copy.editSamplingTitle : copy.newSampling}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.samplingModalDescription}</p>
           </div>
           <button
             onClick={onClose}
-            style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}
+            className="feed-modal-close"
+            aria-label={copy.cancel}
           >
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.samplingDate}</label>
             <input
@@ -1726,7 +1727,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
             />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <div className="responsive-form-grid feed-log-grid pond-detail-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               <label style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{copy.mbwGrams}</label>
               <input
@@ -1772,7 +1773,7 @@ function SamplingModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting,
             />
           </div>
 
-          <div style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
+          <div className="feed-log-footer pond-detail-form-actions" style={{ marginTop: '12px', display: 'flex', gap: '16px' }}>
             <button type="button" onClick={onClose} style={{
               flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)',
               background: 'transparent', fontWeight: 600, cursor: 'pointer'
@@ -1804,23 +1805,23 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
   if (!isOpen) return null;
 
   return (
-    <div style={{
+    <div className="responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay" style={{
       position: 'fixed', inset: 0, zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'rgba(15, 23, 42, 0.4)', backdropFilter: 'blur(12px)', padding: '24px'
     }}>
-      <div className="glass-card animate-fade-up" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
-        <div style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="glass-card animate-fade-up responsive-modal feed-log-modal pond-detail-form-modal" style={{ width: '100%', maxWidth: '520px', background: '#FFF', overflow: 'hidden', boxShadow: '0 30px 60px rgba(0,0,0,0.2)' }}>
+        <div className="responsive-modal-header feed-log-header pond-detail-form-modal-header" style={{ padding: '32px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
             <h3 style={{ fontSize: '1.5rem', fontWeight: 600 }}>{isEditing ? copy.editMortalityTitle : copy.dailyMortality}</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '4px' }}>{copy.mortalityModalDescription}</p>
           </div>
-          <button onClick={onClose} style={{ background: 'var(--bg-mid)', border: 'none', borderRadius: '12px', padding: '10px', cursor: 'pointer' }}>
+          <button onClick={onClose} className="feed-modal-close" aria-label={copy.cancel}>
             <X size={24} />
           </button>
         </div>
 
-        <form onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form className="responsive-modal-body feed-log-form pond-detail-form-modal-form" onSubmit={onSubmit} style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {copy.recordType}
             <select value={form.observationType} onChange={(event) => setForm({ ...form, observationType: event.target.value as MortalityObservationType })} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }}>
@@ -1845,7 +1846,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
                 <option value="evening">{t.dailyOperationsReports.evening}</option>
               </select>
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div className="responsive-form-grid feed-log-grid pond-detail-form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {t.dailyOperationsReports.siphoned}
                 <input required type="number" min="0" step="1" value={form.siphonedCount} onChange={(event) => setForm({ ...form, siphonedCount: event.target.value })} placeholder="0" style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600 }} />
@@ -1867,7 +1868,7 @@ function MortalityModal({ isOpen, onClose, onSubmit, form, setForm, isSubmitting
             <textarea maxLength={500} rows={3} value={form.notes} onChange={(event) => setForm({ ...form, notes: event.target.value })} placeholder={copy.notesPlaceholder} style={{ padding: '14px 18px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-mid)', fontSize: '1rem', fontWeight: 600, resize: 'vertical' }} />
           </label>
 
-          <div style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
+          <div className="feed-log-footer pond-detail-form-actions" style={{ display: 'flex', gap: '16px', marginTop: '8px' }}>
             <button type="button" onClick={onClose} style={{ flex: 1, padding: '16px', borderRadius: '14px', border: '1px solid var(--border)', background: 'transparent', fontWeight: 600, cursor: 'pointer' }}>{copy.cancel}</button>
             <button type="submit" disabled={isSubmitting} className="btn-primary" style={{ flex: 1, padding: '16px', borderRadius: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {isSubmitting ? <Loader2 size={24} className="animate-spin" /> : isEditing ? copy.updateRecord : copy.saveMortality}

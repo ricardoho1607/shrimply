@@ -1,11 +1,44 @@
 .mainGrid,
 .mainGrid > *,
 .settingsColumn,
-.resultsColumn {
+.resultsColumn,
+.outcomeGrid,
+.outcomeCard,
+.metricGrid,
+.metricCard,
+.outcomeLabel,
+.outcomeValue,
+.outcomeMeta,
+.metricLabel,
+.metricValue,
+.costDetails {
   min-width: 0;
 }
 
-@media (max-width: 800px) {
+.outcomeGrid,
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.outcomeCard,
+.metricCard {
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.outcomeLabel,
+.outcomeValue,
+.outcomeMeta,
+.metricLabel,
+.metricValue,
+.costDetails {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 1120px) {
   .mainGrid {
     grid-template-columns: minmax(0, 1fr) !important;
     gap: 12px !important;
@@ -14,6 +47,12 @@
   .settingsColumn,
   .resultsColumn {
     gap: 12px !important;
+  }
+
+  .outcomeGrid,
+  .metricGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
   }
 
   .mainGrid :global(.glass-card) {

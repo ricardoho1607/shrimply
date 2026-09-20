@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title">
+  <title id="title">Company Details</title>
+  <path d="M4 19V9l8-4 8 4v10"/><path d="M8 19v-5h8v5"/><path d="M3 20h18"/><path d="M6.5 10.5c1 .7 2 .7 3 0s2-.7 3 0 2 .7 3 0 2-.7 3 0"/>
+</svg>

@@ -27,6 +27,20 @@ test('mobile record menu opens below its trigger inside the visible viewport', (
   assert.match(component, /width:\s*min\(238px, calc\(100vw - 24px\)\);/);
 });
 
+test('sampling and mortality forms use the compact Add Feed modal treatment on mobile', () => {
+  assert.match(component, /responsive-modal-overlay feed-log-overlay pond-detail-form-modal-overlay/);
+  assert.match(component, /responsive-modal feed-log-modal pond-detail-form-modal/);
+  assert.match(component, /responsive-modal-body feed-log-form pond-detail-form-modal-form/);
+  assert.match(stylesheet, /\.pond-detail-form-modal-form\s*{[\s\S]*?max-height:\s*calc\(100dvh - 102px\)/);
+  assert.match(stylesheet, /@media \(max-width: 640px\)[\s\S]*?\.pond-detail-form-modal-form\s*{[\s\S]*?max-height:\s*calc\(100dvh - 74px\)/);
+});
+
+test('pond detail cycle forms share the compact modal treatment', () => {
+  assert.equal((component.match(/pond-detail-form-modal-overlay/g) || []).length, 5);
+  assert.match(component, /className="responsive-modal-body feed-log-form pond-detail-form-modal-form pond-detail-form-grid"/);
+  assert.match(component, /className="responsive-modal-footer feed-log-footer pond-detail-form-actions"/);
+});
+
 test('detail removes duplicate mortality and end-cycle controls', () => {
   assert.doesNotMatch(component, /label:\s*'Dead Shrimp Counted Today'/);
   assert.doesNotMatch(component, /label:\s*'Observed\/Recovered Today'/);

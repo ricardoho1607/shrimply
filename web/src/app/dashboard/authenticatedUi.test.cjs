@@ -81,11 +81,11 @@ test('all enabled dashboard buttons receive a semantic hover highlight', () => {
 
 test('tablet navigation exposes an internal sidebar toggle', () => {
   assert.match(layout, /data-sidebar-toggle/);
-  assert.match(layout, /aria-label=\{copy\('Close dashboard navigation'\)\}/);
+  assert.match(layout, /aria-label=\{copy\(isSidebarOpen \? 'Close dashboard navigation' : 'Expand dashboard navigation'\)\}/);
   assert.match(layout, /onClick={toggleSidebar}/);
   assert.match(layout, /data-sidebar-toggle[\s\S]*?<PanelLeft size=\{18\} aria-hidden="true" \/>/);
   assert.doesNotMatch(layout, /PanelLeftClose/);
-  assert.match(layout, /@media \(min-width: 1024px\)[\s\S]*?#dashboard-navigation \.sidebar-toggle\s*{[\s\S]*?display:\s*none !important;/);
+  assert.match(layout, /@media \(min-width: 1024px\)[\s\S]*?#dashboard-navigation\.sidebar\s*{[\s\S]*?flex: 0 0 64px[\s\S]*?width: 64px !important;/);
   assert.match(layout, /const syncNavigationMode = \(\) => {[\s\S]*?if \(mediaQuery\.matches\)[\s\S]*?setSidebarOpen\(false\)/);
 });
 
@@ -95,6 +95,23 @@ test('tablet navigation docks beside the main content instead of covering it', (
   assert.match(layout, /\{isOverlayNavigation && \(/);
   assert.match(layout, /aria-hidden=\{isOverlayNavigation \|\| undefined\}/);
   assert.match(layout, /@media \(min-width: 768px\) and \(max-width: 1023px\)[\s\S]*?#dashboard-navigation\.sidebar\.mobile-open[\s\S]*?flex:\s*0 0 240px/);
+});
+
+test('tablet navigation preserves a compact icon rail when closed', () => {
+  assert.match(layout, /@media \(min-width: 768px\) and \(max-width: 1023px\)[\s\S]*?#dashboard-navigation\.sidebar\s*{[\s\S]*?flex:\s*0 0 64px[\s\S]*?width: 64px !important;/);
+  assert.match(layout, /#dashboard-navigation\.sidebar:not\(\.mobile-open\)[\s\S]*?\.sidebar-item-label,[\s\S]*?display: none !important;/);
+  assert.match(layout, /#dashboard-navigation\.sidebar:not\(\.mobile-open\) \.sidebar-company-row,[\s\S]*?#dashboard-navigation\.sidebar:not\(\.mobile-open\) \.sidebar-link,[\s\S]*?justify-content: center !important;/);
+});
+
+test('compact navigation uses the main hamburger instead of the rail toggle', () => {
+  assert.match(layout, /className={`dashboard-saas \$\{isSidebarOpen \? 'sidebar-expanded' : 'sidebar-collapsed'\}`}/);
+  assert.match(layout, /\.dashboard-saas\.sidebar-collapsed \.mobile-trigger\s*{[\s\S]*?display: inline-flex !important;/);
+  assert.match(layout, /#dashboard-navigation\.sidebar:not\(\.mobile-open\) \.sidebar-toggle\s*{[\s\S]*?display: none !important;/);
+});
+
+test('compact tablet header keeps the page title close to the hamburger', () => {
+  assert.match(layout, /@media \(max-width: 1023px\)[\s\S]*?\.dashboard-app-header\s*{[\s\S]*?padding: 12px 16px !important;/);
+  assert.match(layout, /@media \(max-width: 1023px\)[\s\S]*?\.dashboard-header-left\s*{[\s\S]*?gap: 12px !important;/);
 });
 
 test('mobile navigation backdrop stays full-screen and dismisses the sidebar', () => {

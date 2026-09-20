@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" role="img" aria-labelledby="title">
+  <title id="title">Treatment Mixes</title>
+  <path d="M9 3h6M10 3v6l-5 8a2.6 2.6 0 0 0 2.2 4h9.6A2.6 2.6 0 0 0 19 17l-5-8V3"/><path d="M7 16h10"/><path d="M9 16c1-2 2-2 3 0s2 2 3 0"/><circle cx="13" cy="12" r=".7" fill="currentColor" stroke="none"/>
+</svg>
