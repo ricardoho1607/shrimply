@@ -18,7 +18,6 @@ import {
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
-import type { PlanktonOverwatchSnapshot } from '../../shared/planktonOverwatch';
 
 export {
   getPondBaselineFeed,
@@ -183,7 +182,6 @@ export interface Pond {
       plankton?: LabReportStatus;
     };
   };
-  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
   cycleId?: string; cycleName?: string; pondCycleId?: string;
   cycleStatus?: PondCycleStatus; cycleStartedAt?: string; cycleEndedAt?: string; cycleEndedBy?: string; cycleEndReason?: PondCycleEndReason; previousCyclePondId?: string;
   cycleStartMode?: CycleStartMode;

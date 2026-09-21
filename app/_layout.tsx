@@ -148,12 +148,9 @@ function RootLayoutNav() {
       <Stack.Screen
         name="AIChat"
         options={{
-          presentation: 'modal',
+          presentation: 'card',
+          animation: 'slide_from_right',
           headerShown: false,
-          headerStyle: { backgroundColor: '#0d2137' },
-          headerTintColor: '#f4f8fc',
-          headerBackTitle: t.actions.back,
-          title: t.sidebar.aiAssistant
         }}
       />
       <Stack.Screen

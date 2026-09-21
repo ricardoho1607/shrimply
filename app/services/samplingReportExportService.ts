@@ -16,7 +16,6 @@ import {
   buildSamplingGrowthMovementRows,
   renderSamplingGrowthMovementChartSvg,
 } from '../../shared/samplingGrowthMovementChart';
-import type { PlanktonOverwatchSnapshot } from '../../shared/planktonOverwatch';
 
 const PDF_BACKGROUND_ASSET = require('../../assets/pdf/shrimply-pdf-background.png');
 const PDF_LOGO_ASSET = require('../../assets/pdf/shrimply-logo.png');
@@ -56,7 +55,6 @@ interface PondData {
     keyRisks?: string[];
     recommendations?: string[];
   };
-  latestPlanktonOverwatch?: PlanktonOverwatchSnapshot;
   isMidcycleBaseline?: boolean;
   baselineDate?: string;
   samplingHistory: SamplingData[];
@@ -181,10 +179,6 @@ const getReportAnalysis = (ponds: PondData[], language: PdfLanguage) => {
   const avgFCR = latestSamplings.reduce((sum, item) => sum + toFiniteNumber(item.sampling.fcr), 0) / latestSamplings.length;
   const totalFeed = latestSamplings.reduce((sum, item) => sum + toFiniteNumber(item.sampling.feedCumulative), 0);
   const midcyclePonds = ponds.filter((pond) => pond.isMidcycleBaseline);
-  const overwatchPonds = ponds.filter((pond) => pond.latestPlanktonOverwatch);
-  const elevatedOverwatchPonds = overwatchPonds.filter((pond) => (
-    pond.latestPlanktonOverwatch?.state === 'high' || pond.latestPlanktonOverwatch?.state === 'critical'
-  ));
   const incompleteFeedHistory = totalFeed > 0 && avgFCR < 0.5;
   const highRiskPonds = latestSamplings.filter(({ pond, sampling }) => {
     const totalMortality = pond.samplingHistory.reduce((sum, s) => sum + toFiniteNumber(s.mortality), 0);
@@ -232,9 +226,6 @@ const getReportAnalysis = (ponds: PondData[], language: PdfLanguage) => {
   }
 
   const riskAssessment = [
-    overwatchPonds.length > 0
-      ? `Plankton Overwatch: ${overwatchPonds.map((pond) => `${pond.pondNumber} ${(pond.latestPlanktonOverwatch?.state || 'insufficient').toUpperCase()}`).join('; ')}. ${elevatedOverwatchPonds.length > 0 ? 'Review the saved evidence and next action for elevated ponds before changing feed or water management.' : 'No high or critical plankton state is currently saved for the selected ponds.'}`
-      : 'No Plankton Overwatch result was available for the selected ponds. Missing observations were not treated as stable.',
     highRiskPonds.length > 0
       ? `${highRiskPonds.length} pond${highRiskPonds.length === 1 ? '' : 's'} show high-risk indicators such as low survival, elevated FCR, flat growth, or high mortality.`
       : 'No high-risk pond indicators were detected from the latest sampling records.',

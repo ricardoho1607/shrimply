@@ -110,7 +110,6 @@ export default function ShrimpReportsScreen() {
           pondNumber: pond.pondName, supplier: getPondPlSupplier(pond), stockingDate: pond.docStart, area: pond.pondArea, initialStock: pond.initialPopulation,
           density: pond.density,
           latestLabStatus: pond.latestLabStatus,
-          latestPlanktonOverwatch: pond.latestPlanktonOverwatch,
           isMidcycleBaseline: pond.cycleStartMode === 'midcycle',
           baselineDate: pond.baselineDate,
           samplingHistory: transformSamplingData(pond),

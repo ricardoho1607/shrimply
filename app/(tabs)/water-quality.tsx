@@ -13,7 +13,6 @@ import { getFarmDateKey } from '../../shared/farmDate';
 import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOwner } from '../../shared/enterpriseBlocks';
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
-import PlanktonOverwatchCard from '../components/PlanktonOverwatchCard';
 import { hasFarmPermission } from '../../shared/permissions';
 import {
   createOfflineOperationId,
@@ -347,11 +346,10 @@ export default function WaterQualityScreen() {
     const today = getFarmDateKey(new Date(), company?.timeZone);
     return activePonds.map((p) => {
       const todayWQRecord = p.samplings.find(s => s.date === today && hasWaterQualityData(s));
-      return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName, latestPlanktonOverwatch: p.latestPlanktonOverwatch } : {
+      return todayWQRecord ? { ...todayWQRecord, pondName: p.pondName } : {
         id: `temp-${p.id}`, date: today, mbw: 0, mortality: 0, feed: 0,
         phMorning: undefined, phEvening: undefined, doMorning: undefined, 
         doEvening: undefined, transparency: undefined, salinity: undefined, pondName: p.pondName,
-        latestPlanktonOverwatch: p.latestPlanktonOverwatch,
       };
     });
   }, [activePonds, company?.timeZone]);
@@ -882,7 +880,6 @@ export default function WaterQualityScreen() {
                     <Parameter icon="water-outline" label={t.waterQuality.salinity} value={`${rec.salinity || "N/A"} ppt`} color="#0d2137" />
                   </View>
                 </View>
-                <PlanktonOverwatchCard snapshot={rec.latestPlanktonOverwatch} compact />
               </TouchableOpacity>
           )}
         />
@@ -1001,7 +998,6 @@ export default function WaterQualityScreen() {
                       );
                     })}
                   </View>
-                  <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} compact />
                   <View style={styles.labCardFooter}>
                     <Text style={styles.labCardFooterText}>{t.waterQuality.tapToViewReportHistoryPdf}</Text>
                     <Ionicons name="document-text-outline" size={15} color="#315f57" />

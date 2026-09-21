@@ -20,9 +20,10 @@ test('web and mobile render Orson replies without duplicate reply bubbles', () =
   }
 });
 
-test('web streams Orson replies while React Native uses the compatible non-streaming callable', () => {
+test('web and React Native stream Orson replies with a progressive fallback', () => {
   assert.match(webHookSource, /consumeOrsonCallableStream\(/);
-  assert.doesNotMatch(mobileHookSource, /consumeOrsonCallableStream\(/);
+  assert.match(mobileHookSource, /consumeOrsonCallableStream\(/);
+  assert.match(mobileHookSource, /emitProgressiveText/);
   assert.match(mobileHookSource, /withOrsonTimeout\([\s\S]*generateOrsonResponse\(requestPayload\)/);
 });
 

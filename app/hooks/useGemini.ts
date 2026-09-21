@@ -26,6 +26,7 @@ import { normalizeOrsonCalibration } from '../../orson/learning';
 import { buildOrsonPredictionSnapshotRequest } from '../../orson/predictionSnapshot';
 import type { OrsonCalibrationProfile, OrsonConversationMessage, OrsonHarvestProjection, OrsonMortalityDiagnosticContext } from '../../orson/types';
 import { loadCachedOrsonCalibration } from '../../orson/calibrationCache';
+import { consumeOrsonCallableStream, type OrsonTextStreamChunk } from '../../orson/callableStream';
 
 // Types for the chat history
 interface Message {
@@ -50,6 +51,33 @@ type SendMessageOptions = {
 
 const CACHE_PREFIX = 'orson_cache_';
 const CACHE_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const PROGRESSIVE_TEXT_MAX_STEPS = 80;
+const PROGRESSIVE_TEXT_DELAY_MS = 24;
+
+const emitProgressiveText = async (
+  text: string,
+  onPartialResponse: ((text: string) => void) | undefined,
+  assertCurrent: () => void,
+) => {
+  if (!onPartialResponse) return;
+  const tokens = text.match(/\S+\s*/g) ?? [];
+  if (tokens.length === 0) {
+    assertCurrent();
+    onPartialResponse(text);
+    return;
+  }
+
+  const step = Math.max(1, Math.ceil(tokens.length / PROGRESSIVE_TEXT_MAX_STEPS));
+  let visibleText = '';
+  for (let index = 0; index < tokens.length; index += step) {
+    visibleText += tokens.slice(index, index + step).join('');
+    assertCurrent();
+    onPartialResponse(visibleText);
+    if (index + step < tokens.length) {
+      await new Promise<void>((resolve) => setTimeout(resolve, PROGRESSIVE_TEXT_DELAY_MS));
+    }
+  }
+};
 
 const getCachedResponse = async (cacheKey: string | null): Promise<string | null> => {
   if (!cacheKey) return null;
@@ -248,7 +276,7 @@ export const useGemini = () => {
 
       if (analysis.promptPackage.exactRecordAnswer) {
         const exactText = analysis.promptPackage.exactRecordAnswer;
-        options.onPartialResponse?.(exactText);
+        await emitProgressiveText(exactText, options.onPartialResponse, assertCurrent);
         setChatHistory((previous) => [
           ...previous,
           { role: 'user', parts: [{ text: userMessage }] },
@@ -261,7 +289,7 @@ export const useGemini = () => {
       const cachedText = await getCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null);
       assertCurrent();
       if (cachedText) {
-        options.onPartialResponse?.(cachedText);
+        await emitProgressiveText(cachedText, options.onPartialResponse, assertCurrent);
         setChatHistory((previous) => [
           ...previous,
           { role: 'user', parts: [{ text: userMessage }] },
@@ -288,7 +316,8 @@ export const useGemini = () => {
       assertCurrent();
       const generateOrsonResponse = httpsCallable<
         { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'pond_diagnostic' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
-        OrsonResponse
+        OrsonResponse,
+        OrsonTextStreamChunk
       >(functions, 'generateOrsonResponse', { timeout: ORSON_MODEL_TIMEOUT_MS });
 
       const requestPayload = {
@@ -302,15 +331,32 @@ export const useGemini = () => {
           mode: analysis.promptPackage.questionFocus.analysisMode,
           aiFunction: options.aiFunction ?? 'chat',
       };
-      const result = await withOrsonTimeout(
-        generateOrsonResponse(requestPayload),
-        ORSON_CLIENT_TIMEOUT_MS,
-        'Orson is taking too long to respond. Please try again.',
-      );
+      const callableSupportsStreaming = typeof (generateOrsonResponse as unknown as { stream?: unknown }).stream === 'function';
+      let resultData: OrsonResponse;
+      if (callableSupportsStreaming) {
+        resultData = await consumeOrsonCallableStream({
+          callable: generateOrsonResponse,
+          request: requestPayload,
+          timeoutMs: ORSON_CLIENT_TIMEOUT_MS,
+          signal: session.signal,
+          onPartialResponse: (partialText) => {
+            assertCurrent();
+            options.onPartialResponse?.(cleanOrsonResponse(partialText));
+          },
+        });
+      } else {
+        const result = await withOrsonTimeout(
+          generateOrsonResponse(requestPayload),
+          ORSON_CLIENT_TIMEOUT_MS,
+          'Orson is taking too long to respond. Please try again.',
+        );
+        resultData = result.data;
+        const fallbackText = cleanOrsonResponse(requireCompleteOrsonResponse(resultData));
+        await emitProgressiveText(fallbackText, options.onPartialResponse, assertCurrent);
+      }
       assertCurrent();
-      const text = cleanOrsonResponse(requireCompleteOrsonResponse(result.data));
-      options.onPartialResponse?.(text);
-      if (result.data.safeToCache === true) void saveCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
+      const text = cleanOrsonResponse(requireCompleteOrsonResponse(resultData));
+      if (resultData.safeToCache === true) void saveCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
       console.info('orson_client_latency', {
         route: analysis.promptPackage.questionFocus.route,
         promptChars: requestPayload.prompt.length,

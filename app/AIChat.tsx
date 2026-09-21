@@ -5,7 +5,6 @@ import {
   TextInput, 
   TouchableOpacity, 
   StyleSheet, 
-  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -18,7 +17,6 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useGemini } from './hooks/useGemini';
 import { isPondCycleActive, usePondStore } from './store/pondStore';
 import { useAuth } from '../context/AuthContext';
-import ShrimpIcon from './components/icons/ShrimpIcon';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../orson/session';
 import { cleanOrsonResponse } from '../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../orson/responseCompletion';
@@ -59,8 +57,8 @@ const detectLanguage = (text: string): string => {
 
 const getWelcomeMessage = (language: string) => {
   const messages: { [key: string]: string } = {
-    en: "Hello! I'm Orson, your AI aquaculture assistant. I'm currently monitoring your ponds. How can I help you today?",
-    id: "Halo! Saya Orson, asisten AI budidaya Anda. Saya sedang memantau tambak Anda. Ada yang bisa saya bantu?",
+    en: "Hello! I'm Orson, your AI aquaculture advisor. I've analyzed your farm data and I'm ready to help you optimize growth and prevent issues. What's on your mind today?",
+    id: "Halo! Saya Orson, penasihat AI budidaya Anda. Saya telah menganalisis data tambak dan siap membantu mengoptimalkan pertumbuhan serta mencegah masalah. Apa yang ingin Anda tanyakan hari ini?",
   };
   return messages[language] || messages.en;
 };
@@ -86,7 +84,6 @@ function AIChatSession() {
 
   useEffect(() => {
     if (!loading || streamingReplyId) {
-      setAnalyzingDots('.');
       return;
     }
     const interval = setInterval(() => {
@@ -103,6 +100,7 @@ function AIChatSession() {
   const insets = useSafeAreaInsets();
   const scrollViewRef = useRef<ScrollView>(null);
   const generation = useRef(0);
+  const aiMessageCount = useMemo(() => messages.filter((message) => message.type === 'ai').length, [messages]);
   useEffect(() => () => { generation.current += 1; }, []);
 
 
@@ -124,6 +122,7 @@ function AIChatSession() {
             generation.current += 1;
             clearChat();
             setStreamingReplyId(null);
+            setAnalyzingDots('.');
             setMessages([{
               id: Date.now().toString(),
               type: 'ai',
@@ -154,6 +153,7 @@ function AIChatSession() {
     };
     if (!retryId) setMessages(prev => [...prev, userMessage]);
     setInputText('');
+    setAnalyzingDots('.');
     const replyId = retryId || `orson-${Date.now()}`;
     const replyTimestamp = new Date();
     const upsertReply = (message: string, retryPrompt?: string) => {
@@ -189,100 +189,116 @@ function AIChatSession() {
   }, [inputText, loading, conversationLanguage, sendMessage, activePonds, company, messages]);
 
   if (!canUseOrson) return (
-    <SafeAreaView style={styles.fullContainer}><View style={[styles.flex, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}><Text>You do not have permission to use Orson AI.</Text></View></SafeAreaView>
+    <SafeAreaView style={styles.fullContainer}>
+      <View style={styles.permissionState}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityRole="button" accessibilityLabel="Go back">
+          <Ionicons name="arrow-back" size={24} color="#0F4C75" />
+        </TouchableOpacity>
+        <Text style={styles.permissionText}>You do not have permission to use Orson AI.</Text>
+      </View>
+    </SafeAreaView>
   );
 
   return (
     <View style={styles.fullContainer}>
-      <StatusBar barStyle="dark-content" backgroundColor="#dce8f2" />
-      
-      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
-        <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={styles.backButton}
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Ionicons name="arrow-back" size={24} color="#0d2137" />
-          </TouchableOpacity>
+      <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
 
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Orson AI</Text>
-            <Text style={styles.headerSubtitle}>{activePonds.length} Active Ponds Connected</Text>
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
+        <View style={styles.hero}>
+          <View style={styles.heroTop}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="arrow-back" size={24} color="#0F4C75" />
+            </TouchableOpacity>
+
+            <View style={styles.heroTitleBlock}>
+              <Text style={styles.eyebrow}>Orson AI</Text>
+              <Text style={styles.heroTitle}>Aquaculture assistant</Text>
+            </View>
           </View>
 
-          <TouchableOpacity onPress={confirmClearChat} style={styles.headerSide}>
-            <Ionicons name="trash-outline" size={20} color="#0d2137" />
-          </TouchableOpacity>
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>Synced ponds</Text>
+              <Text style={styles.statValue}>{activePonds.length}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Text style={styles.statLabel}>AI replies</Text>
+              <Text style={styles.statValue}>{aiMessageCount}</Text>
+            </View>
+            <TouchableOpacity onPress={confirmClearChat} style={styles.resetButton} accessibilityRole="button" accessibilityLabel="Reset conversation">
+              <Ionicons name="trash-outline" size={16} color="#cf3636" />
+              <Text style={styles.resetText}>Reset</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </SafeAreaView>
 
       <KeyboardAvoidingView
-        style={styles.flex}
+        style={styles.chatArea}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.messagesContainer}
-          contentContainerStyle={styles.messagesContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {messages.map((message) => (
-             <View key={message.id} style={[
-                styles.messageContainer,
-                message.type === 'user' ? styles.userMessage : styles.aiMessage
-              ]}>
-                <View style={[
-                  styles.messageBubble,
-                  message.type === 'user' ? styles.userBubble : styles.aiBubble
-                ]}>
-                  {message.type === 'ai' && (
-                    <View style={styles.aiIcon}>
-                      <ShrimpIcon size={14} color="#315f57" strokeWidth={2.2} />
-                    </View>
-                  )}
-                  <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
-                    {message.type === 'ai' ? cleanOrsonResponse(message.message) : message.message}
+        <View style={styles.chatCard}>
+          <ScrollView
+            ref={scrollViewRef}
+            style={styles.messagesContainer}
+            contentContainerStyle={styles.messagesContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {messages.map((message) => (
+              <View key={message.id} style={[styles.messageContainer, message.type === 'user' ? styles.userMessage : styles.aiMessage]}>
+                <View style={[styles.messageStack, message.type === 'user' && styles.userMessageStack]}>
+                  <View style={[styles.messageBubble, message.type === 'user' && styles.userBubble]}>
+                    <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
+                      {message.type === 'ai' ? cleanOrsonResponse(message.message) : message.message}
+                    </Text>
+                    {message.retryPrompt && (
+                      <TouchableOpacity disabled={loading} onPress={() => handleSend(message.retryPrompt, message.id)}>
+                        <Text style={styles.retryText}>Response interrupted. Retry</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  <Text style={styles.timestamp}>
+                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
-                  {message.retryPrompt && <TouchableOpacity disabled={loading} onPress={() => handleSend(message.retryPrompt, message.id)}><Text>Response interrupted. Retry</Text></TouchableOpacity>}
                 </View>
-                <Text style={styles.timestamp}>
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </Text>
               </View>
-          ))}
-          {loading && !streamingReplyId && (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="small" color="#315f57" />
-              <Text style={styles.loadingText}>Orson is checking water data{analyzingDots}</Text>
-            </View>
-          )}
-        </ScrollView>
+            ))}
+            {loading && !streamingReplyId && (
+              <View style={styles.messageContainer}>
+                <View style={styles.messageStack}>
+                  <Text style={styles.thinkingText}>Orson is analyzing farm metrics{analyzingDots}</Text>
+                </View>
+              </View>
+            )}
+          </ScrollView>
 
-        {/* Input Bar with fixed iOS Bottom Overlap */}
-        <View style={[
-          styles.inputContainer, 
-          { paddingBottom: Platform.OS === 'ios' ? (insets.bottom > 0 ? insets.bottom : 20) : 15 }
-        ]}>
-          <View style={styles.textInputContainer}>
-            <TextInput
-              style={styles.textInput}
-              value={inputText}
-              onChangeText={setInputText}
-              placeholder="Ask about your ponds..."
-              placeholderTextColor="#6b8aa0"
-              multiline
-              editable={!loading}
-            />
-            <TouchableOpacity 
-              style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
-              onPress={() => handleSend()}
-            >
-              <Ionicons name="send" size={20} color="#fff" />
-            </TouchableOpacity>
+          <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <View style={styles.textInputContainer}>
+              <TextInput
+                style={styles.textInput}
+                value={inputText}
+                onChangeText={setInputText}
+                placeholder="Type a question for Orson..."
+                placeholderTextColor="#7b8b99"
+                multiline
+                editable={!loading}
+              />
+              <TouchableOpacity
+                style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
+                onPress={() => handleSend()}
+                accessibilityRole="button"
+                accessibilityLabel="Send message"
+              >
+                <Ionicons name="send" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -291,62 +307,42 @@ function AIChatSession() {
 }
 
 const styles = StyleSheet.create({
-  fullContainer: { flex: 1, backgroundColor: '#dce8f2' },
-  topSafeArea: { backgroundColor: '#dce8f2' },
-  flex: { flex: 1, backgroundColor: '#f4f8fc' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingBottom: 12,
-    backgroundColor: '#dce8f2',
-  },
-  headerCenter: { flex: 1, alignItems: 'center' },
-  headerTitle: { color: '#0d2137', fontSize: 18, fontWeight: '700' },
-  headerSubtitle: { color: '#0d2137', fontSize: 11, opacity: 0.8 },
-  backButton: { width: 40 },
-  headerSide: { width: 40, alignItems: 'flex-end' },
+  fullContainer: { flex: 1, backgroundColor: '#f4f8fc' },
+  topSafeArea: { backgroundColor: '#f4f8fc' },
+  permissionState: { flex: 1, padding: 20 },
+  permissionText: { marginTop: 32, color: '#0F4C75', fontSize: 16, lineHeight: 24 },
+  chatArea: { flex: 1, paddingHorizontal: 12, paddingBottom: 12, backgroundColor: '#f4f8fc' },
+  hero: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 16 },
+  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
+  heroTitleBlock: { flex: 1 },
+  eyebrow: { color: '#0F4C75', fontSize: 11, fontWeight: '700', letterSpacing: 1.2, textTransform: 'uppercase' },
+  heroTitle: { marginTop: 4, color: '#17324D', fontSize: 23, lineHeight: 28, fontWeight: '700' },
+  statsRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  statCard: { flex: 1, minWidth: 0, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1, borderColor: '#d9e4ec', borderRadius: 8, backgroundColor: '#FFFFFF' },
+  statLabel: { color: '#7b8b99', fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 },
+  statValue: { marginTop: 3, color: '#17324D', fontSize: 17, lineHeight: 19, fontWeight: '700' },
+  resetButton: { minWidth: 72, paddingHorizontal: 10, borderWidth: 1, borderColor: '#f4c7c7', borderRadius: 8, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', gap: 4 },
+  resetText: { color: '#cf3636', fontSize: 12, fontWeight: '600' },
+  chatCard: { flex: 1, minHeight: 0, overflow: 'hidden', borderWidth: 1, borderColor: '#d9e4ec', borderRadius: 12, backgroundColor: '#FFFFFF', shadowColor: '#0F4C75', shadowOpacity: 0.08, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   messagesContainer: { flex: 1 },
-  messagesContent: { padding: 16, paddingTop: 10, paddingBottom: 20 },
-  messageContainer: { marginVertical: 6, maxWidth: '85%' },
+  messagesContent: { padding: 20, paddingBottom: 26, gap: 18 },
+  messageContainer: { maxWidth: '88%', alignSelf: 'flex-start' },
   userMessage: { alignSelf: 'flex-end' },
   aiMessage: { alignSelf: 'flex-start' },
-  messageBubble: { padding: 12, borderRadius: 18, flexDirection: 'row' },
-  userBubble: { backgroundColor: '#0d2137' },
-  aiBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0' },
-  aiIcon: { marginRight: 8, marginTop: 4 },
-  messageText: { fontSize: 15, lineHeight: 20, flexShrink: 1 },
+  messageStack: { alignItems: 'flex-start', gap: 6 },
+  userMessageStack: { alignItems: 'flex-end' },
+  messageBubble: { maxWidth: '100%', padding: 0, backgroundColor: 'transparent' },
+  userBubble: { paddingHorizontal: 16, paddingVertical: 14, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 4, backgroundColor: '#0F4C75', shadowColor: '#0F4C75', shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  messageText: { fontSize: 15, lineHeight: 24, flexShrink: 1 },
   userText: { color: '#FFFFFF' },
-  aiText: { color: '#0d2137' },
-  timestamp: { fontSize: 10, color: '#94A3B8', marginTop: 4, marginHorizontal: 8 },
-  loadingContainer: { flexDirection: 'row', alignItems: 'center', padding: 16 },
-  loadingText: { marginLeft: 8, color: '#64748B', fontSize: 13 },
-  inputContainer: { 
-    paddingTop: 12, 
-    paddingHorizontal: 12,
-    backgroundColor: '#FFFFFF', 
-    borderTopWidth: 1, 
-    borderColor: '#E2E8F0',
-  },
-  textInputContainer: { flexDirection: 'row', alignItems: 'flex-end' },
-  textInput: { 
-    flex: 1, 
-    backgroundColor: '#F1F5F9', 
-    borderRadius: 20, 
-    paddingHorizontal: 16, 
-    paddingVertical: 10,
-    fontSize: 15,
-    maxHeight: 100,
-    color: '#0d2137'
-  },
-  sendButton: { 
-    width: 44, 
-    height: 44, 
-    borderRadius: 22, 
-    backgroundColor: '#315f57', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    marginLeft: 8 
-  },
-  sendButtonDisabled: { backgroundColor: '#CBD5E1' },
+  aiText: { color: '#17324D' },
+  thinkingText: { color: '#7b8b99', fontSize: 15, lineHeight: 24, fontStyle: 'italic' },
+  retryText: { marginTop: 8, color: '#BBE1FA', fontSize: 13, fontWeight: '600' },
+  timestamp: { color: '#a0adb8', fontSize: 10, fontWeight: '400' },
+  inputContainer: { paddingHorizontal: 16, paddingTop: 16, borderTopWidth: 1, borderColor: '#d9e4ec', backgroundColor: '#f8fbfd' },
+  textInputContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  textInput: { flex: 1, minHeight: 50, maxHeight: 130, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: '#d9e4ec', borderRadius: 10, backgroundColor: '#FFFFFF', color: '#17324D', fontSize: 15, lineHeight: 20, shadowColor: '#0F4C75', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  sendButton: { width: 50, height: 50, borderRadius: 10, backgroundColor: '#0F4C75', justifyContent: 'center', alignItems: 'center', shadowColor: '#0F4C75', shadowOpacity: 0.2, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  sendButtonDisabled: { backgroundColor: '#0F4C75', opacity: 0.48, shadowOpacity: 0 },
 });

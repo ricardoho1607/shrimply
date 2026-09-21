@@ -24,7 +24,6 @@ import { FARM_OPERATIONAL_DAY_ROLLOVER_HOUR, getFarmDateKey } from '../shared/fa
 import { getAssignedEnterpriseBlockIds } from '../shared/enterpriseBlocks';
 import { useEnterpriseBlocks } from './hooks/useEnterpriseBlocks';
 import AppDatePicker from './components/forms/AppDatePicker';
-import PlanktonOverwatchCard from './components/PlanktonOverwatchCard';
 import { hasFarmPermission } from '../shared/permissions';
 import { useFarmDateKey } from './hooks/useFarmDateKey';
 
@@ -1038,8 +1037,6 @@ export default function PondDetails() {
               </View>
             </View>
           )}
-
-          <PlanktonOverwatchCard snapshot={pond.latestPlanktonOverwatch} />
 
           <View style={styles.labStatusCard}>
             <View style={styles.labStatusHeader}>
