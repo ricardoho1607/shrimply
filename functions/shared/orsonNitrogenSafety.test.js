@@ -85,6 +85,25 @@ test('educational distinctions, observed readings and explicitly rejected unsafe
   }
 });
 
+test('distinguishing NH3 from ammonium ion does not trigger hasAmmoniaIonError', async () => {
+  for (const text of [
+    'Unionized ammonia (NH3) is toxic, while ammonium is an ion.',
+    'NH3 (amonia tak terionisasi) adalah bentuk racun, sedangkan NH4+ adalah ion amonium.',
+    'Amonia tak terionisasi (NH3) sangat berbahaya bagi udang, sedangkan NH4+ adalah ion.',
+  ]) {
+    const result = await guardOrsonNitrogenAnswer({ answer: answer(text), question: 'Explain ammonia forms.', generate: async () => review({}) });
+    assert.equal(result.text, text);
+    assert.equal(result.nitrogenSafety, 'passed');
+  }
+});
+
+test('general capacity advice without unsafe targets passes without being withheld', async () => {
+  const safeAdvice = 'Secara umum, perhatikan tren DO pagi, respons pakan di anco, dan estimasi biomassa dari sampling sebelum memutuskan panen parsial.';
+  const result = await guardOrsonNitrogenAnswer({ answer: answer(safeAdvice), question: incident, generate: () => { throw new Error('not needed'); } });
+  assert.equal(result.text, safeAdvice);
+  assert.equal(result.nitrogenSafety, 'not_applicable');
+});
+
 test('ordinary answers do not add a nitrogen model call', async () => {
   const result = await guardOrsonNitrogenAnswer({ answer: answer('Your recorded feed was 20 kg.'), question: 'Feed history?', generate: () => { throw new Error('not needed'); } });
   assert.equal(result.nitrogenSafety, 'not_applicable');

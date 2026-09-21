@@ -3,7 +3,7 @@
 // References: FAO shrimp pond management (AC210E09, section 9.4) and
 // SRAC 4603, Managing Ammonia in Fish Ponds. These are context, not universal limits.
 const ORSON_NITROGEN_SAFETY_RULES = [
-  'Apply nitrogen safety to EVERY answer, including general biomass/carrying-capacity and partial-harvest advice, even when the question never mentions nitrogen.',
+  'Do not provide unsolicited nitrogen guidance, chemical distinctions, or test-kit checklists unless the question asks about nitrogen, ammonia, or nitrite, or provides nitrogen readings. If nitrogen is asked about or discussed, apply nitrogen safety rules: do not recommend universal limits (such as NH3 <0.5 mg/L), distinguish TAN from unionized ammonia, and require the analytical basis.',
   'TAN is total ammonia nitrogen (NH3-N plus NH4-N), reported as nitrogen. Unionized NH3 in mg NH3/L and unionized NH3-N in mg N/L are different mass bases. NH3-N is NOT TAN. Never silently equate or relabel TAN, NH3, NH3-N, NH4, NO2, or NO2-N.',
   'NH3 is a neutral molecule, NOT an ion. NH4+ is the ammonium ion. Describe mg NH3/L as molecular NH3 mass, never as the NH3 ion. The -N suffix indicates nitrogen mass, not a different chemical species.',
   'NO2 is nitrite expressed as the ion; NO2-N is nitrite expressed as nitrogen. A conversion of mass basis is not a toxicity threshold. Converting TAN into unionized ammonia also requires the unionized fraction for measured pH, temperature and salinity; a molecular-weight conversion alone cannot do it.',
@@ -11,15 +11,17 @@ const ORSON_NITROGEN_SAFETY_RULES = [
   'Do not give universal safe nitrogen limits. In particular, never recommend NH3 <0.5 mg/L (or 0.5 mg NH3-N/L) as a practical safe target for shrimp. Do not replace it with another universal number. Explain the distinction between TAN and unionized ammonia and request the missing measurement context.',
   'When the analytical basis or risk context is missing, do not add conditional numerical toxicity examples or name specific adverse effects at that number. A disclaimer does not make an unsupported numerical risk judgment acceptable. You may explicitly reject an unsafe universal target without substituting another threshold.',
   'Any context-specific numerical guideline requires a verified, directly supporting source and a matching analyte, mass basis, unit, species, life stage/size, exposure duration and production system. For ammonia include concurrent pH, temperature and salinity; for nitrite include salinity/chloride. Separate operating targets, action levels and experimental LC/toxicity endpoints; never use a toxicity endpoint as a safe target.',
-  'For general capacity questions without a named pond, discuss trends in oxygen demand/aeration reserve, measured feeding response, representative biomass estimates and water quality. Explain what to measure before partial harvest without importing pond-specific data or inventing nitrogen thresholds.',
+  'For general capacity questions without a named pond, discuss trends in oxygen demand/aeration reserve, measured feeding response, representative biomass estimates and water quality. Explain what to measure before partial harvest without importing pond-specific data, and do not invent nitrogen thresholds or add unsolicited nitrogen commentary.',
 ];
 
 const normalize = text => String(text || '').normalize('NFKC').replace(/[₀-₉]/g, digit => String('₀₁₂₃₄₅₆₇₈₉'.indexOf(digit)))
   .replace(/[−–—]/g, '-').replace(/[*_`]/g, '');
 const nitrogenMention = text => /\b(?:TAN|NH[34](?:-N)?|NO[23](?:-N)?|ammonia|amonia|ammonium|nitrit(?:e)?|nitrat(?:e)?)\b|氨|亚硝|亞硝|แอมโมเนีย|ไนไตร|amoni/iu.test(normalize(text));
-const hasAmmoniaIonError = text => normalize(text).split(/\n|(?<=[.!?])\s+/).some(line =>
-  !/\b(?:not|never|bukan|jangan)\b/i.test(line)
-  && /\b(?:NH3|unionized ammonia|amonia tak terionisasi)\b[^\n]{0,70}\b(?:as|is|sebagai|adalah)\s+(?:(?:the|an|a)\s+)?ion\b/i.test(line));
+const hasAmmoniaIonError = text => normalize(text).split(/\n|(?<=[.!?])\s+/).some(line => {
+  if (/\b(?:not|never|bukan|jangan)\b/i.test(line)) return false;
+  return /\b(?:NH3|unionized ammonia|amonia tak terionisasi)\s+(?:(?:as|is|sebagai|adalah)\s+(?:(?:the|an|a)\s+)?)?ion\b/i.test(line)
+    || /\b(?:the\s+)?ion\s+NH3\b/i.test(line);
+});
 
 // A direct block for the reported unsafe recommendation, independent of model review.
 // Do not block a correction that quotes and explicitly rejects that recommendation.
