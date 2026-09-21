@@ -358,7 +358,7 @@ export const RegularSidebar: React.FC = () => {
                 <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateAndClose('/marketplace')} />
                 <MenuButton icon="disease-report" text={t.diseaseReport?.title || "Disease Report"} onPress={() => navigateAndClose('/disease-report')} />
                 {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateAndClose('/AIChat')} />}
-                {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateAndClose('/harvest-projection')} color="#0F4C75" />}
+                {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateAndClose('/harvest-projection')} />}
                 <MenuButton icon="notifications" text={t.sidebar.notifications} onPress={() => navigateAndClose('/notifications')} />
 
                 {hasFinanceAccess && (
@@ -630,7 +630,7 @@ export const StaticSidebar: React.FC = () => {
           <MenuButton icon="home" text={t.nav.home} onPress={() => navigateTo('/')} active />
           <MenuButton icon="marketplace" text="Marketplace" onPress={() => navigateTo('/marketplace')} />
           {canUseOrson && <MenuButton icon="orson-ai" text="Orson AI" onPress={() => navigateTo('/AIChat')} />}
-          {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} color="#0F4C75" />}
+          {canUseOrson && hasFinanceAccess && <MenuButton icon="harvest-projections" text={t.financialReports?.harvestProjection || 'Harvest Projections'} onPress={() => navigateTo('/harvest-projection')} />}
           {hasFinanceAccess && (
             <>
               <View style={styles.separator} />

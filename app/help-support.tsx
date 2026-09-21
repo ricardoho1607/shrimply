@@ -1,461 +1,418 @@
-// app/help-support.tsx - Optimized with Compact Header
+import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Alert, Linking, View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import {
+  Alert,
+  Linking,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useAuth } from '../context/AuthContext';
+import { useLanguage } from '../context/LanguageContext';
 
-interface Feature {
+const COLORS = {
+  background: '#f4f8fc',
+  surface: '#FFFFFF',
+  navy: '#0F4C75',
+  dark: '#0d2137',
+  blue: '#3282B8',
+  paleBlue: '#EAF4FB',
+  border: '#dce8f2',
+  muted: '#486581',
+  faint: '#627d98',
+};
+
+const SUPPORT_EMAIL = 'shrimply.tech@gmail.com';
+
+type HelpTopic = {
   id: string;
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
-  color: string;
   description: string;
   details: string[];
-}
+};
 
-const FEATURES: Feature[] = [
+const HELP_TOPICS: HelpTopic[] = [
   {
-    id: 'dashboard',
-    icon: 'home',
-    title: 'Smart Dashboard',
-    color: '#0d2137',
-    description: 'Get a comprehensive overview of your farm operations at a glance',
+    id: 'getting-started',
+    icon: 'rocket-outline',
+    title: 'Getting started',
+    description: 'Set up your farm workspace and begin recording reliable data.',
     details: [
-      'View summarized data for all ponds on your home screen',
-      'Click on any pond to dive into detailed metrics',
-      'Real-time updates on pond status and performance',
-      'Quick access to critical information'
-    ]
+      'Complete your company profile and invite the people who work on the farm.',
+      'Create a pond and start its cycle before adding daily records.',
+      'Use the home dashboard to open a pond, add sampling, mortality, water quality, or feed records.',
+    ],
   },
   {
-    id: 'roles',
-    icon: 'people',
-    title: 'Role-Based Access Control',
-    color: '#315f57',
-    description: 'Ensure team accountability with customized access levels',
+    id: 'pond-operations',
+    icon: 'water-outline',
+    title: 'Pond operations',
+    description: 'Keep daily pond records in one place.',
     details: [
-      'Assign specific roles to team members (Owner, Manager, Admin, Technician)',
-      'Technicians: Focus on pond operations without finance access',
-      'Managers & Admins: View reports without editing pond data',
-      'Owners: Full system access and control',
-      'Maintain data integrity and operational security'
-    ]
+      'Record water quality, feeding, sampling, mortality, and siphon observations by pond.',
+      'Review pond history to understand changes across the current cycle.',
+      'Use Daily Operations and Cycle Reports when you need a wider farm view.',
+    ],
   },
   {
-    id: 'ai',
+    id: 'orson',
     icon: 'sparkles-outline',
-    title: 'Shrimply AI Assistant',
-    color: '#8E44AD',
-    description: 'Your intelligent aquaculture advisor available 24/7',
+    title: 'Orson AI',
+    description: 'Ask questions about your farm and receive context-aware guidance.',
     details: [
-      'Get instant answers to general aquaculture questions',
-      'Receive expert guidance on best practices',
-      'AI-powered recommendations for pond management',
-      'Learn from industry knowledge base'
-    ]
+      'Orson can use your recent pond, sampling, water-quality, and feed history to explain trends.',
+      'Ask focused questions such as what changed, what to check next, or how to prepare for harvest.',
+      'Use the AI screen from the quick actions below for a natural back-and-forth conversation.',
+    ],
   },
   {
-    id: 'bioshield',
-    icon: 'shield-checkmark',
-    title: 'BioShield Disease Tracking',
-    color: '#E74C3C',
-    description: 'Protect your farm with community-powered disease prevention',
+    id: 'water-sampling',
+    icon: 'flask-outline',
+    title: 'Water quality & sampling',
+    description: 'Build a clear picture of shrimp health and growth.',
     details: [
-      'Track disease outbreaks in your area',
-      'Report incidents to alert nearby farms',
-      'Receive real-time notifications about threats',
-      'Prevent contamination through early warning',
-      'Community collaboration for farm safety'
-    ]
-  },
-  {
-    id: 'finance',
-    icon: 'wallet-outline',
-    title: 'Finance Dashboard',
-    color: '#27AE60',
-    description: 'Comprehensive financial management in one place',
-    details: [
-      'Track all expenses and revenues centrally',
-      'Auto-sync revenue data from Harvest page',
-      'Auto-sync expenses from Inventory management',
-      'Easy-to-understand financial overview',
-      'Make informed business decisions'
-    ]
-  },
-  {
-    id: 'financial-reports',
-    icon: 'stats-chart-outline',
-    title: 'Financial Reports',
-    color: '#9B59B6',
-    description: 'Generate professional financial reports instantly',
-    details: [
-      'Create comprehensive financial reports',
-      'Export reports in PDF format',
-      'Share reports with stakeholders',
-      'Multiple report templates available',
-      'Professional presentation of financial data'
-    ]
-  },
-  {
-    id: 'shrimp-reports',
-    icon: 'bar-chart-outline',
-    title: 'Shrimp Sampling Reports',
-    color: '#9B59B6',
-    description: 'Detailed documentation of your shrimp production',
-    details: [
-      'Generate detailed sampling data reports',
-      'Track growth and health metrics over time',
-      'Export comprehensive reports in PDF',
-      'Share production data with buyers or partners',
-      'Maintain complete production records'
-    ]
+      'Save water-quality observations and sampling records from the pond workspace.',
+      'Review growth, MBW, ADG, survival, and feed trends over time.',
+      'Upload or confirm lab reports when available so pond alerts and Orson insights have stronger evidence.',
+    ],
   },
   {
     id: 'feed-inventory',
     icon: 'fish-outline',
-    title: 'Feed & Additives Inventory',
-    color: '#315f57',
-    description: 'Smart inventory management for your feed supplies',
+    title: 'Feed & inventory',
+    description: 'Track feed usage, stock, additives, and farm assets.',
     details: [
-      'Track stock levels, prices, and total values',
-      'Automatic restock alerts when supplies run low',
-      'Calculate monetary value of current inventory',
-      'Monitor usage patterns and optimize ordering',
-      'Prevent stockouts and reduce waste'
-    ]
+      'Add feed and additives to inventory before recording usage.',
+      'Daily feeding reduces the selected inventory stock once the record is saved.',
+      'Asset Management keeps equipment ownership, maintenance, photos, and QR history together.',
+    ],
   },
   {
-    id: 'asset-inventory',
-    icon: 'construct-outline',
-    title: 'Asset Management System',
-    color: '#315f57',
-    description: 'Complete tracking and management of farm equipment',
+    id: 'harvest-finance',
+    icon: 'stats-chart-outline',
+    title: 'Harvest, finance & reports',
+    description: 'Turn production records into decisions and shareable reports.',
     details: [
-      'Generate QR codes for each asset',
-      'Track maintenance history by scanning QR codes',
-      'Transfer assets between team members',
-      'View who last used each asset and return dates',
-      'Add photos for clear asset identification',
-      'Complete audit trail of asset usage'
-    ]
+      'Record partial or final harvests with biomass, size, and pricing details.',
+      'Finance brings expenses and revenue together, while projections help with planning.',
+      'Export professional pond, sampling, daily operations, cycle, and financial reports when you need them.',
+    ],
   },
   {
-    id: 'marketplace',
-    icon: 'storefront-outline',
-    title: 'Marketplace',
-    color: '#F39C12',
-    description: 'Connect with buyers and suppliers',
+    id: 'team-sync',
+    icon: 'people-outline',
+    title: 'Team access & data sync',
+    description: 'Keep everyone working from the same farm data.',
     details: [
-      'List your products for sale',
-      'Browse available supplies and equipment',
-      'Connect with verified buyers',
-      'Streamline your sales process',
-      'Expand your business network'
-    ]
+      'Role-based access keeps each team member focused on the work they are allowed to manage.',
+      'The app can keep changes on the device while offline and sync them when the connection returns.',
+      'Use Settings for language, backup, restore, and account controls.',
+    ],
   },
-  {
-    id: 'languages',
-    icon: 'language-outline',
-    title: 'Multi-Language Support',
-    color: '#16A085',
-    description: 'Use the app in your preferred language',
-    details: [
-      'Available in 5 languages',
-      'Switch languages instantly from settings',
-      'Full localization of all features',
-      'Accessible to diverse teams',
-      'No language barriers in farm management'
-    ]
-  }
 ];
 
+const QUICK_ACTIONS: {
+  id: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  subtitle: string;
+}[] = [
+  { id: 'orson', icon: 'sparkles-outline', title: 'Ask Orson', subtitle: 'Talk through a farm question' },
+  { id: 'settings', icon: 'settings-outline', title: 'Sync & settings', subtitle: 'Manage backup and app options' },
+  { id: 'email', icon: 'mail-outline', title: 'Email support', subtitle: 'Get help from the Shrimply team' },
+  { id: 'report', icon: 'bug-outline', title: 'Report a problem', subtitle: 'Send details so we can investigate' },
+];
+
+const formatRole = (role?: string) => {
+  if (!role) return 'Team member';
+  return role
+    .split('-')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+};
+
 export default function HelpSupportPage() {
-  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { company, user } = useAuth();
+  const { t } = useLanguage();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedTopic, setExpandedTopic] = useState<string | null>('getting-started');
 
-  const toggleSection = (id: string) => {
-    setExpandedSection(expandedSection === id ? null : id);
-  };
+  const version = Constants.expoConfig?.version || '3.2.0';
+  const companyName = company?.companyName?.trim() || 'Farm workspace';
+  const userName = user?.name?.trim() || user?.email?.split('@')[0] || 'Shrimply user';
 
-  const contactSupport = async () => {
-    const emailUrl = 'mailto:shrimply.tech@gmail.com?subject=Shrimply%20Support%20Request';
-    const canOpen = await Linking.canOpenURL(emailUrl);
+  const filteredTopics = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return HELP_TOPICS;
+    return HELP_TOPICS.filter((topic) => [topic.title, topic.description, ...topic.details].join(' ').toLowerCase().includes(query));
+  }, [searchQuery]);
 
-    if (canOpen) {
-      await Linking.openURL(emailUrl);
-      return;
+  const openSupportEmail = async (kind: 'support' | 'problem') => {
+    const subject = kind === 'problem' ? 'Shrimply problem report' : 'Shrimply support request';
+    const body = [
+      kind === 'problem' ? 'What happened?\n\n' : '',
+      'Please add any useful details below. Do not include passwords, one-time codes, or payment card details.\n\n',
+      `Account: ${user?.email || 'Not available'}\n`,
+      `Workspace: ${companyName}\n`,
+      `Role: ${formatRole(user?.role)}\n`,
+      `App version: ${version}\n`,
+    ].join('');
+    const emailUrl = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+    try {
+      if (await Linking.canOpenURL(emailUrl)) {
+        await Linking.openURL(emailUrl);
+        return;
+      }
+    } catch {
+      // Fall through to the visible support address when no mail app is available.
     }
 
-    Alert.alert('Contact Support', 'Email us at shrimply.tech@gmail.com');
+    Alert.alert('Contact support', `Email us at ${SUPPORT_EMAIL}`);
   };
 
-  const FeatureCard = ({ feature }: { feature: Feature }) => {
-    const isExpanded = expandedSection === feature.id;
-
-    return (
-      <TouchableOpacity style={styles.featureCard} onPress={() => toggleSection(feature.id)} activeOpacity={0.7}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.iconContainer, { backgroundColor: feature.color + '15' }]}>
-            <Ionicons name={feature.icon} size={Platform.OS === 'android' ? 24 : 26} color={feature.color} />
-          </View>
-          <View style={styles.cardTitleContainer}>
-            <Text style={styles.cardTitle}>{feature.title}</Text>
-            <Text style={styles.cardDescription} numberOfLines={1}>{feature.description}</Text>
-          </View>
-          <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color="#315f57" />
-        </View>
-
-        {isExpanded && (
-          <View style={styles.detailsContainer}>
-            {feature.details.map((detail, index) => (
-              <View key={index} style={styles.detailItem}>
-                <View style={[styles.bullet, { backgroundColor: feature.color }]} />
-                <Text style={styles.detailText}>{detail}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </TouchableOpacity>
-    );
+  const handleQuickAction = (id: string) => {
+    if (id === 'orson') {
+      router.push('/AIChat' as any);
+      return;
+    }
+    if (id === 'settings') {
+      router.push('/settings' as any);
+      return;
+    }
+    void openSupportEmail(id === 'report' ? 'problem' : 'support');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTopRow}>
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
+      <SafeAreaView style={styles.topSafeArea} edges={['top', 'left', 'right']}>
+        <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
-            style={styles.backButton}
+            style={styles.headerButton}
             accessibilityRole="button"
-            accessibilityLabel="Go back"
+            accessibilityLabel={t.actions?.back || 'Go back'}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="arrow-back" size={24} color="#0d2137" />
+            <Ionicons name="arrow-back" size={24} color={COLORS.dark} />
           </TouchableOpacity>
-          <Ionicons name="help-circle" size={24} color="#0d2137" style={styles.headerIcon} />
-          <Text style={styles.headerTitle}>Help & Support</Text>
+          <Text style={styles.headerTitle}>{t.sidebar?.helpSupport || 'Help & Support'}</Text>
+          <View style={styles.headerButton} />
         </View>
-        <Text style={styles.headerSubtitle}>
-          Discover all the powerful features of Shrimply
-        </Text>
-      </View>
+      </SafeAreaView>
 
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={styles.welcomeCard}>
-          <Ionicons name="information-circle" size={20} color="#0d2137" />
-          <Text style={styles.welcomeText}>
-            Tap on any feature below to learn more about how it can help you manage your aquaculture operations more efficiently.
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 40) }]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={20} color={COLORS.faint} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="Search help topics"
+            placeholderTextColor={COLORS.faint}
+            style={styles.searchInput}
+            accessibilityLabel="Search help topics"
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')} accessibilityRole="button" accessibilityLabel="Clear help search">
+              <Ionicons name="close-circle" size={20} color={COLORS.faint} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Quick actions</Text>
+          <Text style={styles.sectionCaption}>Go straight to the support path you need.</Text>
+        </View>
+        <View style={styles.quickGrid}>
+          {QUICK_ACTIONS.map((action) => (
+            <TouchableOpacity
+              key={action.id}
+              style={styles.quickAction}
+              onPress={() => handleQuickAction(action.id)}
+              activeOpacity={0.78}
+              accessibilityRole="button"
+              accessibilityLabel={action.title}
+            >
+              <View style={styles.quickIcon}>
+                <Ionicons name={action.icon} size={21} color={COLORS.navy} />
+              </View>
+              <Text style={styles.quickTitle}>{action.title}</Text>
+              <Text style={styles.quickSubtitle}>{action.subtitle}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeading}>
+          <Text style={styles.sectionTitle}>Learn the workflow</Text>
+          <Text style={styles.sectionCaption}>
+            {searchQuery ? `${filteredTopics.length} ${filteredTopics.length === 1 ? 'topic' : 'topics'} found` : 'Practical answers for the features you use every day.'}
           </Text>
         </View>
 
-        <Text style={styles.sectionTitle}>Features Overview</Text>
+        {filteredTopics.length > 0 ? filteredTopics.map((topic) => {
+          const isExpanded = expandedTopic === topic.id;
+          return (
+            <TouchableOpacity
+              key={topic.id}
+              style={[styles.topicCard, isExpanded && styles.topicCardExpanded]}
+              onPress={() => setExpandedTopic(isExpanded ? null : topic.id)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: isExpanded }}
+              accessibilityLabel={`${topic.title}. ${isExpanded ? 'Collapse' : 'Expand'}`}
+            >
+              <View style={styles.topicHeader}>
+                <View style={styles.topicIcon}>
+                  <Ionicons name={topic.icon} size={21} color={COLORS.navy} />
+                </View>
+                <View style={styles.topicCopy}>
+                  <Text style={styles.topicTitle}>{topic.title}</Text>
+                  <Text style={styles.topicDescription}>{topic.description}</Text>
+                </View>
+                <Ionicons name={isExpanded ? 'chevron-up' : 'chevron-down'} size={19} color={COLORS.faint} />
+              </View>
+              {isExpanded && (
+                <View style={styles.details}>
+                  {topic.details.map((detail) => (
+                    <View key={detail} style={styles.detailRow}>
+                      <Ionicons name="checkmark-circle" size={16} color={COLORS.blue} />
+                      <Text style={styles.detailText}>{detail}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        }) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="search-outline" size={26} color={COLORS.blue} />
+            <Text style={styles.emptyTitle}>No matching help topics</Text>
+            <Text style={styles.emptyText}>Try a broader search or email support with your question.</Text>
+            <TouchableOpacity style={styles.emptyAction} onPress={() => void openSupportEmail('support')}>
+              <Text style={styles.emptyActionText}>Email support</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
-        {FEATURES.map((feature) => (
-          <FeatureCard key={feature.id} feature={feature} />
-        ))}
+        <View style={styles.workspaceCard}>
+          <View style={styles.workspaceHeader}>
+            <View style={styles.workspaceIcon}>
+              <Ionicons name="business-outline" size={20} color={COLORS.navy} />
+            </View>
+            <View style={styles.workspaceHeaderCopy}>
+              <Text style={styles.workspaceEyebrow}>YOUR WORKSPACE</Text>
+              <Text style={styles.workspaceTitle}>{companyName}</Text>
+            </View>
+          </View>
+          <View style={styles.workspaceRows}>
+            <View style={styles.workspaceRow}>
+              <Text style={styles.workspaceLabel}>Signed in as</Text>
+              <Text style={styles.workspaceValue} numberOfLines={1}>{userName}</Text>
+            </View>
+            <View style={styles.workspaceRow}>
+              <Text style={styles.workspaceLabel}>Role</Text>
+              <Text style={styles.workspaceValue}>{formatRole(user?.role)}</Text>
+            </View>
+            <View style={styles.workspaceRow}>
+              <Text style={styles.workspaceLabel}>App version</Text>
+              <Text style={styles.workspaceValue}>{version}</Text>
+            </View>
+          </View>
+        </View>
 
         <View style={styles.supportCard}>
-          <Ionicons name="mail-outline" size={24} color="#0d2137" />
-          <Text style={styles.supportTitle}>Need More Help?</Text>
+          <View style={styles.supportIcon}>
+            <Ionicons name="chatbubbles-outline" size={24} color={COLORS.navy} />
+          </View>
+          <Text style={styles.supportTitle}>Still need a hand?</Text>
           <Text style={styles.supportText}>
-            Cannot find what you are looking for? Our support team is here to help you.
+            Send us a message and include what you were trying to do. Your workspace, role, and app version will be added automatically.
           </Text>
-          <TouchableOpacity
-            style={styles.contactButton}
-            onPress={contactSupport}
-            accessibilityRole="button"
-            accessibilityLabel="Contact support"
-          >
-            <Ionicons name="chatbubble-ellipses-outline" size={20} color="#FFFFFF" />
-            <Text style={styles.contactButtonText}>Contact Support</Text>
+          <TouchableOpacity style={styles.contactButton} onPress={() => void openSupportEmail('support')} accessibilityRole="button" accessibilityLabel="Contact Shrimply support">
+            <Ionicons name="mail-outline" size={18} color="#FFFFFF" />
+            <Text style={styles.contactButtonText}>Contact support</Text>
           </TouchableOpacity>
+          <Text style={styles.supportEmail}>{SUPPORT_EMAIL}</Text>
         </View>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Shrimply Aquaculture Management</Text>
-          <Text style={styles.versionText}>Version 1.0.0</Text>
+          <Text style={styles.footerTitle}>Shrimply</Text>
+          <Text style={styles.footerText}>Aquaculture management for better daily decisions.</Text>
+          <Text style={styles.versionText}>Version {version}</Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f8fc' },
-  header: { 
-    backgroundColor: '#f4f8fc', 
-    paddingHorizontal: 16, 
-    paddingTop: Platform.OS === 'android' ? 10 : 12,
-    paddingBottom: 12, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#dce8f2' 
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  backButton: {
-    padding: 4,
-    marginRight: 8,
-  },
-  headerIcon: {
-    marginRight: 8,
-  },
-  headerTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#0d2137', 
-    flex: 1,
-  },
-  headerSubtitle: { 
-    fontSize: 12, 
-    color: '#315f57', 
-    marginTop: 4,
-    marginLeft: 40, 
-  },
-  scrollView: { flex: 1 },
-  scrollContent: { 
-    padding: 16, 
-    paddingBottom: 32 
-  },
-  welcomeCard: {
-    flexDirection: 'row',
-    backgroundColor: '#E3F2FD',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#0d2137',
-    alignItems: 'center'
-  },
-  welcomeText: {
-    flex: 1,
-    marginLeft: 10,
-    fontSize: 13,
-    color: '#0d2137',
-    lineHeight: 18,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#0d2137',
-    marginBottom: 12,
-    paddingHorizontal: 4,
-  },
-  featureCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#e8f2f9',
-    shadowColor: '#315f57',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  cardHeader: { flexDirection: 'row', alignItems: 'center' },
-  iconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  cardTitleContainer: { flex: 1 },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#0d2137',
-  },
-  cardDescription: {
-    fontSize: 12,
-    color: '#315f57',
-  },
-  detailsContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#dce8f2',
-  },
-  detailItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  bullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    marginTop: 6,
-    marginRight: 10,
-  },
-  detailText: {
-    flex: 1,
-    fontSize: 13,
-    color: '#0d2137',
-    lineHeight: 18,
-  },
-  supportCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 20,
-    marginBottom: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#e8f2f9',
-    shadowColor: '#315f57',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  supportTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#0d2137',
-    marginTop: 10,
-    marginBottom: 8,
-  },
-  supportText: {
-    fontSize: 13,
-    color: '#315f57',
-    textAlign: 'center',
-    marginBottom: 16,
-    lineHeight: 18,
-  },
-  contactButton: {
-    flexDirection: 'row',
-    backgroundColor: '#0d2137',
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  contactButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  footer: {
-    alignItems: 'center',
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#dce8f2',
-  },
-  footerText: {
-    fontSize: 13,
-    color: '#315f57',
-    fontWeight: '600',
-  },
-  versionText: {
-    fontSize: 11,
-    color: '#dce8f2',
-    marginTop: 4,
-  },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  topSafeArea: { backgroundColor: COLORS.background },
+  header: { minHeight: 58, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerButton: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', color: COLORS.dark, fontSize: 19, fontWeight: '700' },
+  content: { padding: 18, gap: 16 },
+  searchBox: { minHeight: 52, paddingHorizontal: 15, flexDirection: 'row', alignItems: 'center', borderRadius: 13, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  searchInput: { flex: 1, color: COLORS.dark, fontSize: 15, paddingHorizontal: 10, paddingVertical: Platform.OS === 'android' ? 8 : 12 },
+  sectionHeading: { marginTop: 2 },
+  sectionTitle: { color: COLORS.dark, fontSize: 18, fontWeight: '800' },
+  sectionCaption: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  quickAction: { width: '48%', minHeight: 124, padding: 14, borderRadius: 15, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  quickIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paleBlue, marginBottom: 10 },
+  quickTitle: { color: COLORS.dark, fontSize: 14, fontWeight: '800' },
+  quickSubtitle: { color: COLORS.muted, fontSize: 11, lineHeight: 15, marginTop: 4 },
+  topicCard: { padding: 14, borderRadius: 15, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  topicCardExpanded: { borderColor: '#b7d4e7' },
+  topicHeader: { flexDirection: 'row', alignItems: 'center' },
+  topicIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paleBlue, marginRight: 12 },
+  topicCopy: { flex: 1, paddingRight: 10 },
+  topicTitle: { color: COLORS.dark, fontSize: 15, fontWeight: '800' },
+  topicDescription: { color: COLORS.muted, fontSize: 12, lineHeight: 17, marginTop: 3 },
+  details: { marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: COLORS.border, gap: 10 },
+  detailRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  detailText: { flex: 1, color: COLORS.dark, fontSize: 13, lineHeight: 19 },
+  emptyState: { padding: 24, alignItems: 'center', borderRadius: 15, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  emptyTitle: { color: COLORS.dark, fontSize: 15, fontWeight: '800', marginTop: 10 },
+  emptyText: { color: COLORS.muted, fontSize: 13, lineHeight: 18, textAlign: 'center', marginTop: 5 },
+  emptyAction: { marginTop: 14, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 9, backgroundColor: COLORS.paleBlue },
+  emptyActionText: { color: COLORS.navy, fontSize: 13, fontWeight: '800' },
+  workspaceCard: { padding: 16, borderRadius: 15, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.surface },
+  workspaceHeader: { flexDirection: 'row', alignItems: 'center', paddingBottom: 13, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  workspaceIcon: { width: 42, height: 42, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paleBlue, marginRight: 11 },
+  workspaceHeaderCopy: { flex: 1 },
+  workspaceEyebrow: { color: COLORS.blue, fontSize: 10, fontWeight: '800', letterSpacing: 1.1 },
+  workspaceTitle: { color: COLORS.dark, fontSize: 16, fontWeight: '800', marginTop: 3 },
+  workspaceRows: { paddingTop: 2 },
+  workspaceRow: { minHeight: 35, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  workspaceLabel: { color: COLORS.muted, fontSize: 12 },
+  workspaceValue: { flex: 1, color: COLORS.dark, fontSize: 12, fontWeight: '700', textAlign: 'right' },
+  supportCard: { padding: 20, alignItems: 'center', borderRadius: 18, backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border },
+  supportIcon: { width: 48, height: 48, borderRadius: 15, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.paleBlue },
+  supportTitle: { color: COLORS.dark, fontSize: 18, fontWeight: '800', marginTop: 12 },
+  supportText: { color: COLORS.muted, fontSize: 13, lineHeight: 19, textAlign: 'center', marginTop: 6, marginBottom: 16 },
+  contactButton: { minHeight: 46, paddingHorizontal: 20, borderRadius: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.navy },
+  contactButtonText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800', marginLeft: 8 },
+  supportEmail: { color: COLORS.blue, fontSize: 12, fontWeight: '700', marginTop: 11 },
+  footer: { alignItems: 'center', paddingTop: 4 },
+  footerTitle: { color: COLORS.dark, fontSize: 14, fontWeight: '800' },
+  footerText: { color: COLORS.muted, fontSize: 11, marginTop: 4 },
+  versionText: { color: COLORS.faint, fontSize: 10, marginTop: 5 },
 });

@@ -80,6 +80,7 @@ export default function AppDatePicker({
 
       {visible ? <View style={styles.pickerPanel}>
         <DateTimePicker
+          style={Platform.OS === 'ios' ? styles.datePicker : undefined}
           value={draftDate}
           mode="date"
           display={Platform.OS === 'ios' ? 'spinner' : 'default'}
@@ -116,6 +117,7 @@ const styles = StyleSheet.create({
   placeholder: { color: '#78909C', fontWeight: '600' },
   disabled: { opacity: 0.5 },
   pickerPanel: { borderWidth: 1, borderColor: '#D8E7F0', borderRadius: 11, backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  datePicker: { alignSelf: 'center', width: '100%', transform: [{ scaleX: 0.88 }] },
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingHorizontal: 10, paddingBottom: 10 },
   cancelButton: { minHeight: 36, borderRadius: 8, borderWidth: 1, borderColor: '#D8E7F0', paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
   cancelText: { color: '#5E7485', fontSize: 12, fontWeight: '700' },
