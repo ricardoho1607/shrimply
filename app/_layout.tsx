@@ -54,7 +54,7 @@ if (__DEV__) {
 }
 
 function RootLayoutNav() {
-  const { user, loading, isAuthenticated, needsRoleSelection, needsSetup, isBuyer } = useAuth();
+  const { user, loading, isAuthenticated, emailVerified, needsRoleSelection, needsSetup, isBuyer } = useAuth();
   const { t } = useLanguage();
   const segments = useSegments() as string[];
   const params = useGlobalSearchParams<{ edit?: string }>();
@@ -70,6 +70,7 @@ function RootLayoutNav() {
 
     const firstSegment = segments?.[0] ?? null;
     const isInAuth = firstSegment === 'auth' || segments?.includes('auth');
+    const isInEmailVerification = firstSegment === 'verify-email';
     const isInRoleSelection = segments?.includes('roleselection');
 
     const handleRedirect = (path: string) => {
@@ -81,6 +82,11 @@ function RootLayoutNav() {
       if (!isInAuth) {
         handleRedirect('/auth');
       }
+      return;
+    }
+
+    if (!emailVerified) {
+      if (!isInEmailVerification) handleRedirect('/verify-email');
       return;
     }
 
@@ -116,11 +122,11 @@ function RootLayoutNav() {
       return;
     }
 
-    if (isInAuth || isInRoleSelection || (isInSetup && !isEditingCompanySetup)) {
+    if (isInAuth || isInEmailVerification || isInRoleSelection || (isInSetup && !isEditingCompanySetup)) {
       handleRedirect(homePath);
       return;
     }
-  }, [isAuthenticated, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, homePath, params.edit]);
+  }, [isAuthenticated, emailVerified, needsRoleSelection, needsSetup, segments, loading, router, rootNavigationState?.key, user?.role, homePath, params.edit]);
 
   const { width } = useWindowDimensions();
   const isLargeScreen = Platform.OS === 'web' && width > 1024;
@@ -141,6 +147,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       {/* ... other screens ... */}
       <Stack.Screen name="auth" />
+      <Stack.Screen name="verify-email" />
       <Stack.Screen name="roleselection" />
       <Stack.Screen name="company-setup" />
       <Stack.Screen name="company-setup2" />

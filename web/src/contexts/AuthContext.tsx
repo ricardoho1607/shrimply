@@ -9,7 +9,6 @@ import {
   onAuthStateChanged,
   User as FirebaseUser,
   sendPasswordResetEmail,
-  sendEmailVerification,
   reload,
   GoogleAuthProvider,
   signInWithPopup,
@@ -20,6 +19,8 @@ import {
 } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { app, auth, db } from '@/lib/firebase';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { requestVerificationEmail } from '../../../shared/verificationEmailClient';
 import { syncPublicCompanyMemberCount, syncPublicCompanyProfile } from '@/lib/publicCompanyProfile';
 import { removeUndefinedFields } from '@/lib/firestoreData';
 import { getLocationTimeZone } from '@/lib/googlePlacesClient';
@@ -67,13 +68,13 @@ const waitForAuthNetworkRecovery = async () => {
   });
 };
 
-const ensureVerifiedEmail = async (message: string) => {
+const ensureVerifiedEmail = async (message: string, locale: string) => {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('You must be signed in.');
 
   await reload(currentUser);
   if (!currentUser.emailVerified) {
-    await sendEmailVerification(currentUser);
+    await requestVerificationEmail(firebaseFunctions, locale);
     throw new Error(message);
   }
 
@@ -203,6 +204,9 @@ interface AuthContextType {
   signInWithGoogle: (inviteToken?: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, inviteToken?: string) => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  emailVerified: boolean;
+  resendVerificationEmail: () => Promise<void>;
+  refreshEmailVerification: () => Promise<boolean>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: UserRole) => Promise<void>;
   resetRoleSelection: () => Promise<void>;
@@ -245,7 +249,9 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentLanguage } = useLanguage();
   const [user, setUser] = useState<User | null>(() => lastResolvedAuthState.user);
+  const [emailVerified, setEmailVerified] = useState(() => auth.currentUser?.emailVerified ?? false);
   const [company, setCompany] = useState<Company | null>(() => lastResolvedAuthState.company);
   const [companyResolved, setCompanyResolved] = useState(() => lastResolvedAuthState.companyResolved);
   const [loading, setLoading] = useState(false);
@@ -328,6 +334,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let currentCompanyCanSync = false;
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
+      setEmailVerified(Boolean(firebaseUser?.emailVerified));
       // Clean up previous listeners
       if (userUnsubscribe) userUnsubscribe();
       if (companyUnsubscribe) companyUnsubscribe();
@@ -404,7 +411,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser.emailVerified) {
       if (currentUser) {
         try {
-          await sendEmailVerification(currentUser);
+          await requestVerificationEmail(firebaseFunctions, currentLanguage);
         } finally {
           await firebaseSignOut(auth);
         }
@@ -453,7 +460,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (inviteToken) {
         await acceptInviteAfterAuth(inviteToken);
       } else {
-        await sendEmailVerification(userCredential.user);
+        await requestVerificationEmail(firebaseFunctions, currentLanguage);
       }
       if (inviteToken) {
         const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
@@ -496,8 +503,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await sendPasswordResetEmail(auth, email);
   };
 
+  const resendVerificationEmail = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Sign in to resend your verification email.');
+    await reload(currentUser);
+    if (currentUser.emailVerified) {
+      setEmailVerified(true);
+      throw new Error('Your email is already verified.');
+    }
+    await requestVerificationEmail(firebaseFunctions, currentLanguage);
+  };
+
+  const refreshEmailVerification = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
+    await reload(currentUser);
+    setEmailVerified(currentUser.emailVerified);
+    if (currentUser.emailVerified) await currentUser.getIdToken(true);
+    return currentUser.emailVerified;
+  };
+
   const signOut = async () => {
     await firebaseSignOut(auth);
+    setEmailVerified(false);
     lastResolvedAuthState = {
       initialized: true,
       user: null,
@@ -577,10 +605,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
     if (!user) throw new Error('User must be authenticated to request joining a company');
     if (user.companyId) throw new Error('You are already part of a company');
-    await ensureVerifiedEmail('Verification email sent. Verify your email before requesting company access.');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before requesting company access.', currentLanguage);
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'createCompanyJoinRequest', ...request });
-  }, [user]);
+  }, [user, currentLanguage]);
 
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -630,18 +658,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
-    await ensureVerifiedEmail('Verification email sent. Verify your email before approving team access.');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before approving team access.', currentLanguage);
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'approve' });
     await refreshCompanyData();
-  }, [company, refreshCompanyData, user]);
+  }, [company, refreshCompanyData, user, currentLanguage]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
-    await ensureVerifiedEmail('Verification email sent. Verify your email before managing team access.');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before managing team access.', currentLanguage);
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
-  }, [company, user]);
+  }, [company, user, currentLanguage]);
 
   const removeMember = useCallback(async (memberId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can remove members');
@@ -701,6 +729,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signInWithGoogle,
     signUp,
     resetPassword,
+    emailVerified,
+    resendVerificationEmail,
+    refreshEmailVerification,
     signOut,
     completeRoleSelection,
     resetRoleSelection,
@@ -723,7 +754,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       && !isUserOnboardingComplete(effectiveUser, company, companyResolved),
     isBuyer: effectiveRole === 'buyer',
   };
-  }, [user, company, companyResolved, loading, initializing, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion, refreshCompanyData]);
+  }, [user, company, companyResolved, loading, initializing, emailVerified, currentLanguage, requestToJoinCompany, searchCompanies, getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion, refreshCompanyData]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

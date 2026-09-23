@@ -14,7 +14,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   signInWithCredential,
-  sendEmailVerification,
   reload,
 } from 'firebase/auth';
 import {
@@ -24,6 +23,8 @@ import {
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Platform } from 'react-native';
 import firebaseApp, { auth, db } from '../config/firebase';
+import { useLanguage } from './LanguageContext';
+import { requestVerificationEmail } from '../shared/verificationEmailClient';
 import { googlePlacesService, LocationData } from '../app/services/googlePlacesService'
 import { useBuyerStore } from '../app/store/buyerStore';
 import { usePondStore } from '../app/store/pondStore';
@@ -107,13 +108,13 @@ const getEffectiveUserRole = (user: User | null, company: Company | null): User[
 const OWNER_ROLES: UserRole[] = ['owner', 'co-owner'];
 const STAFF_SETUP_ROLES: UserRole[] = ['co-owner', 'technician', 'manager', 'admin', 'mechanic'];
 
-const ensureVerifiedEmail = async (message: string) => {
+const ensureVerifiedEmail = async (message: string, locale: string) => {
   const currentUser = auth.currentUser;
   if (!currentUser) throw new Error('You must be signed in.');
 
   await reload(currentUser);
   if (!currentUser.emailVerified) {
-    await sendEmailVerification(currentUser);
+    await requestVerificationEmail(firebaseFunctions, locale);
     throw new Error(message);
   }
 
@@ -196,6 +197,9 @@ interface AuthContextType {
   loading: boolean;
   signIn: (email: string, password: string, inviteToken?: string, keepMeSignedIn?: boolean) => Promise<void>;
   signUp: (email: string, password: string, inviteToken?: string, keepMeSignedIn?: boolean) => Promise<void>;
+  emailVerified: boolean;
+  resendVerificationEmail: () => Promise<void>;
+  refreshEmailVerification: () => Promise<boolean>;
   signInWithGoogle: (inviteToken?: string, idToken?: string) => Promise<void>;
   signOut: () => Promise<void>;
   completeRoleSelection: (role: UserRole) => Promise<void>;
@@ -246,7 +250,9 @@ const convertStringToLocationData = (locationString: string): LocationData => ({
 });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentLanguage } = useLanguage();
   const [user, setUser] = useState<User | null>(null);
+  const [emailVerified, setEmailVerified] = useState(() => auth.currentUser?.emailVerified ?? false);
   const [company, setCompany] = useState<Company | null>(null);
   const [companyResolved, setCompanyResolved] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -387,6 +393,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
       if (!isMounted) return;
+      setEmailVerified(Boolean(firebaseUser?.emailVerified));
       const generation = ++authGenerationRef.current;
       if (userUnsubscribe) {
         userUnsubscribe();
@@ -652,7 +659,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (inviteToken) {
         await processInviteAfterAuth(userCredential.user.uid, inviteToken);
       } else {
-        await sendEmailVerification(userCredential.user);
+        await requestVerificationEmail(firebaseFunctions, currentLanguage);
       }
     } finally {
       setLoading(false);
@@ -665,7 +672,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await reload(auth.currentUser);
       if (!auth.currentUser.emailVerified) {
         try {
-          await sendEmailVerification(auth.currentUser);
+          await requestVerificationEmail(firebaseFunctions, currentLanguage);
         } finally {
           await firebaseSignOut(auth);
         }
@@ -725,6 +732,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await firebaseSignOut(auth);
     } finally {
+      setEmailVerified(false);
       clearPondData();
       clearBuyerData();
       setUser(null);
@@ -734,6 +742,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCompanyResolved(true);
     }
     // Redirection is handled automatically by RootLayoutNav based on auth state
+  };
+
+  const resendVerificationEmail = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Sign in to resend your verification email.');
+    await reload(currentUser);
+    if (currentUser.emailVerified) {
+      setEmailVerified(true);
+      throw new Error('Your email is already verified.');
+    }
+    await requestVerificationEmail(firebaseFunctions, currentLanguage);
+  };
+
+  const refreshEmailVerification = async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
+    await reload(currentUser);
+    setEmailVerified(currentUser.emailVerified);
+    if (currentUser.emailVerified) await currentUser.getIdToken(true);
+    return currentUser.emailVerified;
   };
 
   const completeRoleSelection = async (role: User['role']) => {
@@ -850,10 +878,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const requestToJoinCompany = useCallback(async (request: { companyId: string; requestedRole: StaffRole; message?: string }) => {
     if (!user) throw new Error('User must be authenticated to request joining a company');
     if (user.companyId) throw new Error('You are already part of a company');
-    await ensureVerifiedEmail('Verification email sent. Verify your email before requesting company access.');
+    await ensureVerifiedEmail('Verification email sent. Verify your email before requesting company access.', currentLanguage);
     const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await teamAccess({ operation: 'createCompanyJoinRequest', ...request });
-  }, [user]);
+  }, [user, currentLanguage]);
 
   const searchCompanies = useCallback(async (searchTerm: string): Promise<CompanySearchResult[]> => {
     if (!searchTerm.trim()) return [];
@@ -919,7 +947,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const approveJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can approve join requests');
     try {
-      await ensureVerifiedEmail('Verification email sent. Verify your email before approving team access.');
+      await ensureVerifiedEmail('Verification email sent. Verify your email before approving team access.', currentLanguage);
       const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
       await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'approve' });
       await refreshCompanyData();
@@ -927,19 +955,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.error('Error approving join request:', error);
       throw error;
     }
-  }, [user, company, refreshCompanyData]);
+  }, [user, company, refreshCompanyData, currentLanguage]);
 
   const rejectJoinRequest = useCallback(async (requestId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can reject join requests');
     try {
-      await ensureVerifiedEmail('Verification email sent. Verify your email before managing team access.');
+      await ensureVerifiedEmail('Verification email sent. Verify your email before managing team access.', currentLanguage);
       const teamAccess = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
       await teamAccess({ operation: 'processCompanyJoinRequest', requestId, decision: 'reject' });
     } catch (error) {
       console.error('Error rejecting join request:', error);
       throw error;
     }
-  }, [user, company]);
+  }, [user, company, currentLanguage]);
 
   const removeMember = useCallback(async (memberId: string) => {
     if (!user || !isOwnerRole(user.role) || !company) throw new Error('Only company owners and co-owners can remove members');
@@ -1010,7 +1038,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const inviteTeamMember = useCallback(async (inviteData: { email: string; role: StaffRole; message?: string }): Promise<CompanyInviteResult> => {
     if (!user || !company || !isOwnerRole(user.role)) throw new Error('Only company owners and co-owners can send invitations');
     if (!auth.currentUser?.emailVerified) {
-      if (auth.currentUser) await sendEmailVerification(auth.currentUser);
+      if (auth.currentUser) await requestVerificationEmail(firebaseFunctions, currentLanguage);
       throw new Error('Verification email sent. Verify your email before creating invitations.');
     }
     await auth.currentUser.getIdToken(true);
@@ -1020,7 +1048,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     >(firebaseFunctions, 'acceptCompanyInvite');
     const response = await createInvite({ operation: 'createCompanyInvite', companyId: company.id, ...inviteData });
     return response.data;
-  }, [user, company]);
+  }, [user, company, currentLanguage]);
 
   const getTeamMembers = useCallback(async (): Promise<TeamMember[]> => {
     if (!company) return [];
@@ -1136,9 +1164,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       user: effectiveUser,
       company,
-      loading: loading || initializing || (!!user?.companyId && !companyResolved && !cachedFarmAvailable),
+      loading: loading || initializing || (emailVerified && !!user?.companyId && !companyResolved && !cachedFarmAvailable),
       signIn,
       signUp,
+      emailVerified,
+      resendVerificationEmail,
+      refreshEmailVerification,
       signInWithGoogle,
       signOut,
       completeRoleSelection,
@@ -1168,7 +1199,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getCompanyLocationData,
       getCompanyLocationString,
     };
-  }, [user, company, companyResolved, cachedFarmAvailable, loading, initializing, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
+  }, [user, company, companyResolved, cachedFarmAvailable, loading, initializing, emailVerified, currentLanguage, updateUserProfile, inviteTeamMember, requestToJoinCompany, searchCompanies,
        getJoinRequests, approveJoinRequest, rejectJoinRequest, removeMember, requestCompanyDeletion, approveCompanyDeletion, cancelCompanyDeletion, getTeamMembers, acceptInvite,
        refreshUserData, refreshCompanyData, getCompanyLocationData, getCompanyLocationString]);
 

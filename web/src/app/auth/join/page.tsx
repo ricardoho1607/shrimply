@@ -16,7 +16,7 @@ export default function JoinPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { signUp, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
+  const { signUp, isAuthenticated, emailVerified, needsRoleSelection, needsSetup, user } = useAuth();
   const { t } = useLanguage();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,6 +24,11 @@ export default function JoinPage() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
+
+    if (!emailVerified) {
+      router.replace('/auth/verify');
+      return;
+    }
 
     if (needsRoleSelection) {
       router.replace(ROUTES.roleSelection);
@@ -36,7 +41,7 @@ export default function JoinPage() {
     }
 
     router.replace(ROUTES.dashboard);
-  }, [isAuthenticated, needsRoleSelection, needsSetup, router, user?.role]);
+  }, [emailVerified, isAuthenticated, needsRoleSelection, needsSetup, router, user?.role]);
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +56,7 @@ export default function JoinPage() {
     
     try {
       await signUp(email, password, name, inviteToken);
-      router.push(inviteToken ? ROUTES.dashboard : ROUTES.roleSelection);
+      router.push(inviteToken ? ROUTES.dashboard : '/auth/verify');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
