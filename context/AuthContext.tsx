@@ -656,11 +656,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-      if (inviteToken) {
-        await processInviteAfterAuth(userCredential.user.uid, inviteToken);
-      } else {
-        await requestVerificationEmail(firebaseFunctions, currentLanguage);
-      }
+      await requestVerificationEmail(firebaseFunctions, currentLanguage);
+      if (inviteToken) await processInviteAfterAuth(userCredential.user.uid, inviteToken);
     } finally {
       setLoading(false);
     }
@@ -670,14 +667,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (auth.currentUser?.uid !== userId) throw new Error('Authenticated user mismatch');
       await reload(auth.currentUser);
-      if (!auth.currentUser.emailVerified) {
-        try {
-          await requestVerificationEmail(firebaseFunctions, currentLanguage);
-        } finally {
-          await firebaseSignOut(auth);
-        }
-        throw new Error('Verification email sent. Verify your email, then reopen the invitation link to join the company.');
-      }
+      if (!auth.currentUser.emailVerified) return;
       await auth.currentUser.getIdToken(true);
       const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
       await acceptCompanyInvite({ inviteToken });

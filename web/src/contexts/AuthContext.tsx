@@ -408,16 +408,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('You must be signed in.');
     await reload(currentUser);
-    if (!currentUser.emailVerified) {
-      if (currentUser) {
-        try {
-          await requestVerificationEmail(firebaseFunctions, currentLanguage);
-        } finally {
-          await firebaseSignOut(auth);
-        }
-      }
-      throw new Error('Verification email sent. Verify your email, then reopen the invitation link to join the company.');
-    }
+    if (!currentUser.emailVerified) return;
     await currentUser.getIdToken(true);
     const acceptCompanyInvite = httpsCallable(firebaseFunctions, 'acceptCompanyInvite');
     await acceptCompanyInvite({ inviteToken });
@@ -457,11 +448,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       await setDoc(doc(db, 'users', userCredential.user.uid), newUser);
-      if (inviteToken) {
-        await acceptInviteAfterAuth(inviteToken);
-      } else {
-        await requestVerificationEmail(firebaseFunctions, currentLanguage);
-      }
+      await requestVerificationEmail(firebaseFunctions, currentLanguage);
+      if (inviteToken) await acceptInviteAfterAuth(inviteToken);
       if (inviteToken) {
         const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
         setUser(userDoc.exists() ? userDoc.data() as User : newUser);

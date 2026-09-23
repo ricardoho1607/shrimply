@@ -56,7 +56,7 @@ export default function JoinPage() {
     
     try {
       await signUp(email, password, name, inviteToken);
-      router.push(inviteToken ? ROUTES.dashboard : '/auth/verify');
+      router.push('/auth/verify');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create account');
     } finally {
