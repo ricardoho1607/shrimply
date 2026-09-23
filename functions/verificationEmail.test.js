@@ -60,6 +60,8 @@ test('all Shrimply languages include a support address and a verification link',
     assert.equal(email.language, locale);
     assert.match(email.text, /shrimply\.tech@gmail\.com/);
     assert.match(email.text, /https:\/\/example\.com\/verify/);
+    assert.equal((email.html.match(/href="https:\/\/example\.com\/verify"/g) || []).length, 1);
+    assert.doesNotMatch(email.html, />https:\/\/example\.com\/verify</);
   }
   assert.equal(normalizeLocale('unsupported'), 'en');
 });
