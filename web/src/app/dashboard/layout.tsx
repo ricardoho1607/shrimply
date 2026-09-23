@@ -98,7 +98,7 @@ const NAV_STRUCTURE = (t: DashboardTranslations, copy: (text: string) => string)
 function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   const { t } = useLanguage() as { t: DashboardTranslations };
   const copy = useDashboardCopy();
-  const { user, company, needsRoleSelection, needsSetup, isAuthenticated, loading, companyLoading } = useAuth();
+  const { user, company, needsRoleSelection, needsSetup, isAuthenticated, emailVerified, loading, companyLoading } = useAuth();
   useNotificationChecker(company?.id, user?.role);
   const pathname = usePathname();
   const router = useRouter();
@@ -214,12 +214,16 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (loading || companyLoading) return;
-    if (pathname?.startsWith('/dashboard/admin')) return;
+    if (loading) return;
     if (!isAuthenticated) {
       router.push('/auth');
       return;
     }
+    if (!emailVerified) {
+      router.push('/auth/verify');
+      return;
+    }
+    if (companyLoading || pathname?.startsWith('/dashboard/admin')) return;
     if (needsRoleSelection) {
       router.push('/roleselection');
       return;
@@ -228,7 +232,7 @@ function DashboardLayoutShell({ children }: { children: React.ReactNode }) {
       router.push(getRequiredSetupRoute(user?.role));
       return;
     }
-  }, [companyLoading, isAuthenticated, needsRoleSelection, needsSetup, loading, pathname, router, user?.role]);
+  }, [companyLoading, emailVerified, isAuthenticated, needsRoleSelection, needsSetup, loading, pathname, router, user?.role]);
 
   useEffect(() => {
     queueMicrotask(() => setSidebarOpen(false));

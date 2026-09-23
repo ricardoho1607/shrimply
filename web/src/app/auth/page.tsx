@@ -36,10 +36,15 @@ export default function AuthPage() {
   const searchParams = useSearchParams();
   const inviteToken = searchParams.get('token') || undefined;
 
-  const { signIn, signInWithGoogle, resetPassword, isAuthenticated, needsRoleSelection, needsSetup, user } = useAuth();
+  const { signIn, signInWithGoogle, resetPassword, isAuthenticated, emailVerified, needsRoleSelection, needsSetup, user } = useAuth();
 
   useEffect(() => {
     if (!loginRequested || !isAuthenticated) return;
+
+    if (!emailVerified) {
+      router.replace('/auth/verify');
+      return;
+    }
 
     if (needsRoleSelection) {
       router.replace(ROUTES.roleSelection);
@@ -52,7 +57,7 @@ export default function AuthPage() {
     }
 
     router.replace(ROUTES.dashboard);
-  }, [isAuthenticated, loginRequested, needsRoleSelection, needsSetup, router, user?.role]);
+  }, [emailVerified, isAuthenticated, loginRequested, needsRoleSelection, needsSetup, router, user?.role]);
   
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

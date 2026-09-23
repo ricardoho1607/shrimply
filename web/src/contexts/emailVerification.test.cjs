@@ -12,7 +12,7 @@ test('email signup sends verification before onboarding continues', () => {
     authContext.indexOf('const signInWithGoogle = async'),
   );
 
-  assert.match(signUpSource, /if \(inviteToken\)[\s\S]*?acceptInviteAfterAuth\(inviteToken\)[\s\S]*?else[\s\S]*?sendEmailVerification\(userCredential\.user\)/);
+  assert.match(signUpSource, /await requestVerificationEmail\(firebaseFunctions, currentLanguage\)[\s\S]*?if \(inviteToken\) await acceptInviteAfterAuth\(inviteToken\)/);
 });
 
 test('protected team actions refresh Firebase verification before checking it', () => {

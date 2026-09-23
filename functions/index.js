@@ -4,6 +4,7 @@ const { assertCompanyMemberForCallable } = require("./shared/companyAccess");
 admin.initializeApp();
 
 Object.assign(exports, require("./testerRequests"));
+Object.assign(exports, require("./verificationEmail"));
 Object.assign(exports, require("./teamAccess"));
 Object.assign(exports, require("./orson"));
 Object.assign(exports, require("./adminMetrics"));
