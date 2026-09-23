@@ -44,7 +44,10 @@ const sendEmail = async ({ to, subject, text, html }) => {
   }
 };
 
-exports.sendVerificationEmail = onCall({ secrets: [resendApiKeySecret] }, createVerificationEmailHandler({
+exports.sendVerificationEmail = onCall({
+  secrets: [resendApiKeySecret],
+  serviceAccount: "shrimply-verification@investashrimp-5d9e5.iam.gserviceaccount.com",
+}, createVerificationEmailHandler({
   getUser: (uid) => admin.auth().getUser(uid),
   generateLink: (email) => admin.auth().generateEmailVerificationLink(email),
   rateLimit,
