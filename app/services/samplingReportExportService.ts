@@ -412,7 +412,10 @@ const generateSamplingReportHTML = (
   });
   };
   const pondPages: PondData[][] = [];
-  for (let index = 0; index < ponds.length; index += 6) pondPages.push(ponds.slice(index, index + 6));
+  const pondsPerPage = 10;
+  for (let index = 0; index < ponds.length; index += pondsPerPage) {
+    pondPages.push(ponds.slice(index, index + pondsPerPage));
+  }
   if (!pondPages.length) pondPages.push([]);
   const labPonds = ponds.filter(pond => pond.latestLabStatus);
   const labPages: PondData[][] = [];
