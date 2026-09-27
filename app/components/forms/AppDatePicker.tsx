@@ -1,6 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useLanguage } from '../../../context/LanguageContext';
 
@@ -51,13 +51,15 @@ export default function AppDatePicker({
   const selectedDate = useMemo(() => normalizeDate(value), [value]);
   const [visible, setVisible] = useState(false);
   const [draftDate, setDraftDate] = useState(selectedDate);
+  const draftDateRef = useRef(selectedDate);
 
   const open = () => {
+    draftDateRef.current = selectedDate;
     setDraftDate(selectedDate);
     setVisible(true);
   };
 
-  const confirm = (date: Date) => {
+  const confirm = (date: Date = draftDateRef.current) => {
     onChange(date);
     setVisible(false);
   };
@@ -89,6 +91,7 @@ export default function AppDatePicker({
           themeVariant="light"
           onChange={(event, date) => {
             const nextDate = date || draftDate;
+            draftDateRef.current = nextDate;
             setDraftDate(nextDate);
             if (Platform.OS !== 'ios') {
               if (event.type !== 'dismissed') confirm(nextDate);
@@ -100,7 +103,7 @@ export default function AppDatePicker({
           <TouchableOpacity style={styles.cancelButton} onPress={() => setVisible(false)}>
             <Text style={styles.cancelText}>{resolvedCancelLabel}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.confirmButton} onPress={() => confirm(draftDate)}>
+          <TouchableOpacity style={styles.confirmButton} onPress={() => confirm()}>
             <Text style={styles.confirmText}>{resolvedConfirmLabel}</Text>
           </TouchableOpacity>
         </View> : null}
