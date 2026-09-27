@@ -10,9 +10,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getFarmDateKey } from '../../shared/farmDate';
 import {
   buildHarvestDateSampling,
+  clearUntouchedAutoFilledHarvestSize,
   getHarvestDateSampling,
   getSamplingSize,
   harvestSizeDiffersFromSampling,
+  refreshAutoFilledHarvestSize,
+  getInvalidHarvestDraftLine,
+  hasHarvestDraftData,
+  stripOrphanAutoFilledHarvestSize,
   type HarvestDayFeedStatus,
   type HarvestType,
 } from '../../shared/harvestCalculations';
@@ -162,6 +167,7 @@ export default function HarvestScreen() {
   const [secondaryPondIds, setSecondaryPondIds] = useState<string[]>([]);
   const [samplingMbwDrafts, setSamplingMbwDrafts] = useState<Record<string, string>>({});
   const [samplingFeedStatuses, setSamplingFeedStatuses] = useState<Record<string, HarvestDayFeedStatus>>({});
+  const [autoFilledSizes, setAutoFilledSizes] = useState<Record<string, { value: string; date: string }>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
 
@@ -193,10 +199,31 @@ export default function HarvestScreen() {
     setPondData(initializePondData());
     setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
     setSecondaryPondIds([]);
+    setAutoFilledSizes({});
   }
 
   const updatePondField = (pondId: string, field: string, value: string | HarvestType) => {
+    if (field === 'size') {
+      setAutoFilledSizes((current) => {
+        if (!current[pondId]) return current;
+        const next = { ...current };
+        delete next[pondId];
+        return next;
+      });
+    }
     setPondData(prev => prev.map(pond => pond.pondId === pondId ? { ...pond, [field]: value } : pond));
+  };
+
+  const changeHarvestDate = (nextDate: string) => {
+    if (nextDate === harvestDate) return;
+    const previousAutoFilledSizes = autoFilledSizes;
+    setAutoFilledSizes({});
+    setPondData((current) => current.map((entry) => {
+      const provenance = previousAutoFilledSizes[entry.pondId];
+      const size = clearUntouchedAutoFilledHarvestSize(entry.size, provenance);
+      return size === entry.size ? entry : { ...entry, size };
+    }));
+    setHarvestDate(nextDate);
   };
 
   const parsePositiveNumber = (value: string) => {
@@ -205,23 +232,11 @@ export default function HarvestScreen() {
   };
 
   const hasAnyHarvestData = (pond: typeof pondData[number]) =>
-    !!(pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
+    hasHarvestDraftData(pond, Boolean(autoFilledSizes[pond.pondId]));
 
   const isPondEntryComplete = (pond: typeof pondData[number]) => {
-    const hasMainHarvest = !!(pond.biomass || pond.size || pond.price);
-    const hasSubHarvest = !!(pond.subBiomass || pond.subSize || pond.subPrice);
-    const isMainComplete = !hasMainHarvest || !!(
-      parsePositiveNumber(pond.biomass) &&
-      parsePositiveNumber(pond.size) &&
-      parsePositiveNumber(pond.price)
-    );
-    const isSubComplete = !hasSubHarvest || !!(
-      parsePositiveNumber(pond.subBiomass) &&
-      parsePositiveNumber(pond.subSize) &&
-      parsePositiveNumber(pond.subPrice)
-    );
-
-    return (hasMainHarvest || hasSubHarvest) && isMainComplete && isSubComplete;
+    return hasAnyHarvestData(pond)
+      && getInvalidHarvestDraftLine(pond, Boolean(autoFilledSizes[pond.pondId])) === null;
   };
 
   const completedPondCount = pondData.filter((entry) => {
@@ -262,8 +277,25 @@ export default function HarvestScreen() {
       cycleName: pond.cycleName,
       pondCycleId: pond.pondCycleId || pond.id,
     }));
-    setPondData((current) => current.map((entry) => entry.pondId === pond.id && !entry.size
-      ? { ...entry, size: String(Math.round(1000 / mbw)) }
+    const suggestedSize = String(Math.round(1000 / mbw));
+    const currentSize = pondData.find((entry) => entry.pondId === pond.id)?.size || '';
+    const refreshedSize = refreshAutoFilledHarvestSize(
+      currentSize,
+      autoFilledSizes[pond.id],
+      suggestedSize,
+      harvestDate,
+    );
+    setAutoFilledSizes((current) => {
+      if (!refreshedSize.autoFilled) {
+        if (!current[pond.id]) return current;
+        const next = { ...current };
+        delete next[pond.id];
+        return next;
+      }
+      return { ...current, [pond.id]: refreshedSize.autoFilled };
+    });
+    setPondData((current) => current.map((entry) => entry.pondId === pond.id
+      ? { ...entry, size: refreshedSize.size }
       : entry));
     setSamplingMbwDrafts((current) => ({ ...current, [pond.id]: '' }));
   };
@@ -300,6 +332,7 @@ export default function HarvestScreen() {
     setSecondaryPondIds([]);
     setSamplingMbwDrafts({});
     setSamplingFeedStatuses({});
+    setAutoFilledSizes({});
   }, [initializePondData, selectedCyclePonds]);
 
   const saveHarvestRecords = useCallback((pondsWithData: typeof pondData) => {
@@ -310,15 +343,21 @@ export default function HarvestScreen() {
       cycleName: editingHarvest?.cycleName || formCycle?.cycleName,
       blockId: editingHarvest?.blockId || formCycle?.blockId || formPonds[0]?.blockId,
       blockName: editingHarvest?.blockName || formCycle?.blockName || formCycle?.blockNames?.[0] || formPonds[0]?.blockName,
-      ponds: pondsWithData.map((pond) => ({
-        ...pond,
-        biomass: pond.biomass.trim(),
-        size: pond.size.trim(),
-        price: pond.price.trim(),
-        subBiomass: pond.subBiomass.trim(),
-        subSize: pond.subSize.trim(),
-        subPrice: pond.subPrice.trim(),
-      })),
+      ponds: pondsWithData.map((pond) => {
+        const savedDraft = stripOrphanAutoFilledHarvestSize(
+          pond,
+          Boolean(autoFilledSizes[pond.pondId]),
+        );
+        return {
+          ...savedDraft,
+          biomass: savedDraft.biomass.trim(),
+          size: savedDraft.size.trim(),
+          price: savedDraft.price.trim(),
+          subBiomass: savedDraft.subBiomass.trim(),
+          subSize: savedDraft.subSize.trim(),
+          subPrice: savedDraft.subPrice.trim(),
+        };
+      }),
     };
 
     if (editingHarvest) updateHarvestRecord(editingHarvest.id, newHarvest);
@@ -326,7 +365,7 @@ export default function HarvestScreen() {
     resetForm();
     setEditingHarvest(null);
     setIsModalVisible(false);
-  }, [addHarvestRecord, editingHarvest, formCycle, formPonds, harvestDate, resetForm, updateHarvestRecord]);
+  }, [addHarvestRecord, autoFilledSizes, editingHarvest, formCycle, formPonds, harvestDate, resetForm, updateHarvestRecord]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -340,8 +379,7 @@ export default function HarvestScreen() {
       return;
     }
 
-    const pondsWithData = pondData.filter(pond =>
-      pond.biomass || pond.size || pond.price || pond.subBiomass || pond.subSize || pond.subPrice);
+    const pondsWithData = pondData.filter((pond) => hasAnyHarvestData(pond));
 
     const formCycleId = editingHarvest?.cycleId || formCycle?.id;
     if (!formCycleId || formPonds.length === 0) {
@@ -380,31 +418,20 @@ export default function HarvestScreen() {
       return;
     }
 
-    const invalidPond = pondsWithData.find((pond) => {
-      const hasMainHarvest = !!(pond.biomass || pond.size || pond.price);
-      const hasSubHarvest = !!(pond.subBiomass || pond.subSize || pond.subPrice);
-
-      if (hasMainHarvest) {
-        const biomass = parsePositiveNumber(pond.biomass);
-        const size = parsePositiveNumber(pond.size);
-        const price = parsePositiveNumber(pond.price);
-        if (!biomass || !size || !price) return true;
-      }
-
-      if (hasSubHarvest) {
-        const biomass = parsePositiveNumber(pond.subBiomass);
-        const size = parsePositiveNumber(pond.subSize);
-        const price = parsePositiveNumber(pond.subPrice);
-        if (!biomass || !size || !price) return true;
-      }
-
-      return false;
-    });
+    const invalidPond = pondsWithData.find((pond) => getInvalidHarvestDraftLine(
+      pond,
+      Boolean(autoFilledSizes[pond.pondId]),
+    ) !== null);
 
     if (invalidPond) {
+      const invalidLine = getInvalidHarvestDraftLine(invalidPond, Boolean(autoFilledSizes[invalidPond.pondId]));
+      setExpandedPondId(invalidPond.pondId);
+      if (invalidLine === 'secondary') {
+        setSecondaryPondIds((current) => current.includes(invalidPond.pondId) ? current : [...current, invalidPond.pondId]);
+      }
       Alert.alert(
         t.messages.error,
-        t.harvest.invalidHarvestLine.replace('{{pondName}}', invalidPond.pondName)
+        `${invalidPond.pondName} · ${invalidLine === 'secondary' ? t.harvest.subSize : t.harvest.size}: ${t.harvest.invalidHarvestLine.replace('{{pondName}}', invalidPond.pondName)}`
       );
       submitLockRef.current = false;
       setIsSubmitting(false);
@@ -496,6 +523,7 @@ export default function HarvestScreen() {
     setSecondaryPondIds(record.ponds
       .filter((pond) => Boolean(pond.subBiomass || pond.subSize || pond.subPrice))
       .map((pond) => pond.pondId));
+    setAutoFilledSizes({});
     submitLockRef.current = false;
     setIsSubmitting(false);
     setIsModalVisible(true);
@@ -729,6 +757,7 @@ export default function HarvestScreen() {
               setPondData(initializePondData());
               setExpandedPondId(selectedCyclePonds[0]?.id ?? null);
               setSecondaryPondIds([]);
+              setAutoFilledSizes({});
               setIsModalVisible(true);
             }}
           >
@@ -776,7 +805,7 @@ export default function HarvestScreen() {
                       label={t.harvestCycle.harvestDate}
                       value={harvestDate}
                       maximumDate={new Date()}
-                      onChange={(date) => setHarvestDate(getFarmDateKey(date, company?.timeZone))}
+                      onChange={(date) => changeHarvestDate(getFarmDateKey(date, company?.timeZone))}
                       cancelLabel={t.actions.cancel}
                       confirmLabel={t.actions.confirm}
                     />
@@ -1025,10 +1054,10 @@ export default function HarvestScreen() {
                 <TouchableOpacity
                   style={[
                     styles.addButton,
-                    (isSubmitting || completedPondCount === 0 || completedPondCount !== enteredPondCount) && styles.addButtonDisabled,
+                    (isSubmitting || enteredPondCount === 0) && styles.addButtonDisabled,
                   ]}
                   onPress={handleSave}
-                  disabled={isSubmitting || completedPondCount === 0 || completedPondCount !== enteredPondCount}
+                  disabled={isSubmitting || enteredPondCount === 0}
                 >
                   <Text style={styles.addButtonText}>
                     {t.harvest.saveHarvests.replace('{{count}}', String(completedPondCount))}

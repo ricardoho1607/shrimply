@@ -2,12 +2,17 @@ import {
   applyHarvestImpactToPond,
   buildHarvestDateSampling,
   calculateHarvestRemoval,
+  clearUntouchedAutoFilledHarvestSize,
   getHarvestDateSampling,
   getNextPartialHarvestNumber,
+  getInvalidHarvestDraftLine,
+  hasHarvestDraftData,
   getSamplingSize,
   harvestSizeDiffersFromSampling,
   hasFinalHarvestForPondCycle,
   reverseHarvestImpactOnPond,
+  refreshAutoFilledHarvestSize,
+  stripOrphanAutoFilledHarvestSize,
   withHarvestReference,
   type HarvestTrackingPond,
 } from './harvestCalculations';
@@ -23,6 +28,54 @@ import {
 const assertClose = (actual: number, expected: number, label: string) => {
   if (Math.abs(actual - expected) > 0.0001) throw new Error(`${label}: expected ${expected}, received ${actual}`);
 };
+
+{
+  const autoSizeOnly = { biomass: '', size: '100', price: '', subBiomass: '', subSize: '', subPrice: '' };
+  if (hasHarvestDraftData(autoSizeOnly, true)) throw new Error('sampling-only auto-filled size must not count as harvest data');
+  if (getInvalidHarvestDraftLine(autoSizeOnly, true) !== null) throw new Error('an auto-filled size alone must not create an invalid harvest line');
+
+  if (!hasHarvestDraftData(autoSizeOnly, false) || getInvalidHarvestDraftLine(autoSizeOnly, false) !== 'main') {
+    throw new Error('an explicitly entered size alone must start an invalid main harvest line');
+  }
+
+  const incompleteMain = { biomass: '10', size: '100', price: '', subBiomass: '', subSize: '', subPrice: '' };
+  if (getInvalidHarvestDraftLine(incompleteMain, true) !== 'main') throw new Error('started incomplete main line must block saving');
+  const incompleteSecondary = { biomass: '10', size: '100', price: '5', subBiomass: '2', subSize: '', subPrice: '' };
+  if (getInvalidHarvestDraftLine(incompleteSecondary) !== 'secondary') throw new Error('started incomplete secondary line must block saving');
+
+  const secondaryOnly = { biomass: '', size: '100', price: '', subBiomass: '2', subSize: '80', subPrice: '6' };
+  if (!hasHarvestDraftData(secondaryOnly, true) || getInvalidHarvestDraftLine(secondaryOnly, true) !== null) {
+    throw new Error('complete secondary-only line must be accepted despite auto-filled main size');
+  }
+  const savedSecondaryOnly = stripOrphanAutoFilledHarvestSize(secondaryOnly, true);
+  if (savedSecondaryOnly.size !== '') throw new Error('secondary-only save must not persist an orphan main size');
+  if (stripOrphanAutoFilledHarvestSize({ ...secondaryOnly, biomass: '1' }, true).size !== '100') {
+    throw new Error('auto-filled main size must be retained when main biomass is entered');
+  }
+
+  const a2Draft = autoSizeOnly;
+  const a3Draft = { biomass: '20', size: '110', price: '8', subBiomass: '', subSize: '', subPrice: '' };
+  const a2A3SaveSet = [a2Draft, a3Draft].filter((draft) => hasHarvestDraftData(draft, true));
+  if (a2A3SaveSet.length !== 1 || a2A3SaveSet[0] !== a3Draft) {
+    throw new Error('A2 auto-size-only draft must be excluded while complete A3 draft enters the save set');
+  }
+
+  const generatedSize = { value: '100', date: '2026-09-27' };
+  if (clearUntouchedAutoFilledHarvestSize('100', generatedSize) !== '') {
+    throw new Error('changing harvest date must clear an untouched sampling-derived size');
+  }
+  if (clearUntouchedAutoFilledHarvestSize('95', generatedSize) !== '95') {
+    throw new Error('changing harvest date must preserve an explicitly edited size');
+  }
+  const refreshedSuggestion = refreshAutoFilledHarvestSize('100', generatedSize, '80', '2026-10-02');
+  if (refreshedSuggestion.size !== '80' || refreshedSuggestion.autoFilled?.date !== '2026-10-02') {
+    throw new Error('saving a new-date sampling must replace the untouched stale size suggestion');
+  }
+  const preservedExplicitSize = refreshAutoFilledHarvestSize('95', generatedSize, '80', '2026-10-02');
+  if (preservedExplicitSize.size !== '95' || preservedExplicitSize.autoFilled) {
+    throw new Error('sampling save must preserve explicit size edits and clear stale provenance');
+  }
+}
 
 {
   const pendingFeed = buildHarvestDateSampling({

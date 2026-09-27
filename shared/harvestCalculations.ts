@@ -32,6 +32,80 @@ export interface HarvestLineInput {
   harvestReferenceMbw?: number | string | null;
 }
 
+export interface HarvestDraftLineInput {
+  biomass?: string | null;
+  size?: string | null;
+  price?: string | null;
+  subBiomass?: string | null;
+  subSize?: string | null;
+  subPrice?: string | null;
+}
+
+export interface AutoFilledHarvestSize {
+  value: string;
+  date: string;
+}
+
+export const clearUntouchedAutoFilledHarvestSize = (
+  currentSize: string,
+  autoFilled?: AutoFilledHarvestSize,
+): string => autoFilled && currentSize === autoFilled.value ? '' : currentSize;
+
+export const refreshAutoFilledHarvestSize = (
+  currentSize: string,
+  autoFilled: AutoFilledHarvestSize | undefined,
+  suggestedSize: string,
+  samplingDate: string,
+): { size: string; autoFilled?: AutoFilledHarvestSize } => {
+  const isUntouchedAutoFill = Boolean(autoFilled && currentSize === autoFilled.value);
+  if (!isUntouchedAutoFill && currentSize) return { size: currentSize };
+  return { size: suggestedSize, autoFilled: { value: suggestedSize, date: samplingDate } };
+};
+
+const hasDraftValue = (value: string | null | undefined): boolean => Boolean(value?.trim());
+
+export const hasHarvestDraftData = (
+  draft: HarvestDraftLineInput,
+  autoFilledMainSize = false,
+): boolean => (
+  hasDraftValue(draft.biomass)
+  || (!autoFilledMainSize && hasDraftValue(draft.size))
+  || hasDraftValue(draft.price)
+  || hasDraftValue(draft.subBiomass)
+  || hasDraftValue(draft.subSize)
+  || hasDraftValue(draft.subPrice)
+);
+
+export const getInvalidHarvestDraftLine = (
+  draft: HarvestDraftLineInput,
+  autoFilledMainSize = false,
+): 'main' | 'secondary' | null => {
+  const valid = (value: string | null | undefined) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0;
+  };
+  const mainStarted = hasDraftValue(draft.biomass)
+    || (!autoFilledMainSize && hasDraftValue(draft.size))
+    || hasDraftValue(draft.price);
+  const secondaryStarted = hasDraftValue(draft.subBiomass)
+    || hasDraftValue(draft.subSize)
+    || hasDraftValue(draft.subPrice);
+
+  if (mainStarted && !(valid(draft.biomass) && valid(draft.size) && valid(draft.price))) return 'main';
+  if (secondaryStarted && !(valid(draft.subBiomass) && valid(draft.subSize) && valid(draft.subPrice))) return 'secondary';
+  return null;
+};
+
+export const stripOrphanAutoFilledHarvestSize = <T extends HarvestDraftLineInput>(
+  draft: T,
+  autoFilledMainSize: boolean,
+): T => {
+  const mainHasExplicitData = hasDraftValue(draft.biomass) || hasDraftValue(draft.price);
+  return autoFilledMainSize && !mainHasExplicitData
+    ? { ...draft, size: '' }
+    : draft;
+};
+
 export interface HarvestTrackingPond extends SharedPond {
   partialHarvestCount?: number | string | null;
   postHarvestBaselineDate?: string | null;
