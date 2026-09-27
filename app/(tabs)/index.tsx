@@ -745,7 +745,7 @@ export default function PondManagementScreen() {
     Alert.alert(t.messages.success, t.farmCycle.cycleStartedSuccess.replace('{{pondName}}', sourcePond.pondName));
   }, [activeFarmCycle, activePhysicalPondNames, addFarmCycle, addPond, calculateDocFromDates, canManageFarmCycle, canManagePonds, closeModal, convertPlToGrams, cycles, formData, formatLocalDateKey, isEnterpriseFarm, openAccessibleFarmCycles.length, startablePondOptions, t, updateFarmCycle]);
 
-  const handleAddSamplingData = useCallback(() => {
+  const handleAddSamplingData = useCallback(async () => {
     if (submitLockRef.current) return;
     submitLockRef.current = true;
     setIsSubmitting(true);
@@ -773,17 +773,27 @@ export default function PondManagementScreen() {
       return;
     }
     
-    addSampling(selectedPondData.id, {
+    try {
+      const outcome = await addSampling(selectedPondData.id, {
       id: Date.now().toString(), 
       mbw: parseNumericInput(mbw),
       mortality: 0,
       feed: parseNumericInput(feed),
       date: formatLocalDateKey(samplingDate),
       // No feedData here - sampling doesn't deduct from inventory
-    });
-    
-    closeModal();
-    Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
+      });
+      if (!outcome.success || outcome.status === 'rejected') {
+        Alert.alert(t.messages.error, outcome.error || 'Could not save sampling locally.');
+        return;
+      }
+      closeModal();
+      Alert.alert(t.messages.success, t.home.samplingAddedSuccess);
+    } catch (error) {
+      Alert.alert(t.messages.error, error instanceof Error ? error.message : 'Could not save sampling locally.');
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
   }, [canRecordPondData, closeModal, formData, activePonds, addSampling, parseNumericInput, formatLocalDateKey, t]);
 
   const handleAddMortalityRecord = useCallback(() => {

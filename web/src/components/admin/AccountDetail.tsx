@@ -2,6 +2,7 @@
 
 import {
   CreditCard,
+  Copy,
   Database,
   Headphones,
   Info,
@@ -56,10 +57,13 @@ export function AccountDetail({
   updatingFarmMode,
   updatingPermissions,
   updatingRole,
+  passwordResetPending,
+  passwordResetResult,
   onRetry,
   onUpdateFarmMode,
   onUpdatePermissions,
   onUpdateRole,
+  onSendPasswordReset,
 }: {
   account: AccountIntelligence | null;
   loading: boolean;
@@ -67,10 +71,13 @@ export function AccountDetail({
   updatingFarmMode: boolean;
   updatingPermissions: boolean;
   updatingRole: boolean;
+  passwordResetPending: boolean;
+  passwordResetResult: { message: string; success: boolean } | null;
   onRetry: () => void;
   onUpdateFarmMode: (companyId: string, businessSize: FarmBusinessSize) => Promise<void>;
   onUpdatePermissions: (permissionOverrides: FarmPermissionOverrides) => Promise<void>;
   onUpdateRole: (role: FarmStaffRole) => Promise<void>;
+  onSendPasswordReset: (accountId: string, email: string) => Promise<void>;
 }) {
   const linkedFarm = account?.farms?.[0];
   const [farmMode, setFarmMode] = useState<FarmBusinessSize>(linkedFarm?.businessSize || 'medium');
@@ -127,6 +134,26 @@ export function AccountDetail({
     }
   };
 
+  const sendPasswordReset = async () => {
+    const email = account?.email.trim();
+    if (!account || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || passwordResetPending) return;
+    if (!window.confirm(`Send a password reset email to ${email}?`)) return;
+    await onSendPasswordReset(account.id, email);
+  };
+
+  const copyFarmId = async (farmId: string) => {
+    try {
+      await navigator.clipboard.writeText(farmId);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = farmId;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
+  };
+
   if (loading) return <section className={styles.account}><div className={styles.accountSkeleton}><i /><span /><span /><span /><span /></div></section>;
   if (error) return <section className={styles.account}><div className={styles.stateMessage}><strong>Couldn’t load account intelligence</strong><span>{error}</span><button type="button" onClick={onRetry}>Retry</button></div></section>;
   if (!account) return <section className={styles.account}><div className={styles.stateMessage}><strong>Select a user</strong><span>Choose an account to view its operational history.</span></div></section>;
@@ -156,6 +183,17 @@ export function AccountDetail({
         <div><span>Region</span><strong>{account.region || 'Unknown'}, {account.country || 'Unknown'}</strong></div>
         <div><span>Joined</span><strong>{formatDate(account.joinedAt)}</strong></div>
         <div><span>Last active</span><strong>{formatDate(account.lastActiveAt, true)}</strong></div>
+      </div>
+
+      <div className={styles.detailSection}>
+        <div className={styles.sectionHeading}><h3>Sign-in support</h3></div>
+        <p className={styles.permissionIntro}>Send a password reset link to this user’s email address.</p>
+        <div className={styles.permissionActions}>
+          <button type="button" className={styles.permissionSaveButton} disabled={!account.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(account.email.trim()) || passwordResetPending} onClick={() => void sendPasswordReset()}>
+            {passwordResetPending ? 'Sending…' : 'Send password reset email'}
+          </button>
+        </div>
+        {passwordResetResult ? <span className={passwordResetResult.success ? styles.permissionIntro : styles.farmModeError} role={passwordResetResult.success ? 'status' : 'alert'}>{passwordResetResult.message}</span> : null}
       </div>
 
       <div className={styles.detailSection}>
@@ -190,7 +228,7 @@ export function AccountDetail({
         <div className={styles.sectionHeading}><h3>Linked Farms & Ponds</h3><span>{farms.length} linked</span></div>
         {farms.length === 0 ? <p className={styles.inlineEmpty}>No linked farm was found.</p> : farms.map((farm) => (
           <div className={styles.farmRow} key={farm.id}>
-            <div><strong>{farm.name}</strong><span><MapPin size={11} />{farm.location}</span></div>
+            <div><strong>{farm.name}</strong><span><MapPin size={11} />{farm.location}</span><span>ID: <code style={{ overflowWrap: 'anywhere' }}>{farm.id}</code><button type="button" aria-label={`Copy company ID ${farm.id}`} title="Copy company ID" onClick={() => void copyFarmId(farm.id)} style={{ marginLeft: 5, padding: 0, border: 0, color: 'inherit', background: 'transparent', cursor: 'pointer', verticalAlign: 'middle' }}><Copy size={12} /></button></span></div>
             <span>{farm.pondCount} ponds</span><span>{farm.totalAreaHa === null ? 'Area unavailable' : `${farm.totalAreaHa.toFixed(1)} ha`}</span>
           </div>
         ))}

@@ -1,7 +1,26 @@
 import { reconcileDailyFeedStock, type DailyFeedIntent, type DailyFeedStock } from './dailyFeedTransaction';
 import { toCacheSafeValue } from './farmCache.ts';
+import { applyHarvestImpactToPond, reverseHarvestImpactOnPond } from './harvestCalculations.ts';
 
 export const OFFLINE_WORKSPACE_VERSION = 1;
+
+export const isSameOfflineFarmIdentity = (
+  current: { currentCompanyId?: string; farmCacheUserId?: string },
+  captured: { companyId?: string; userId?: string },
+): boolean => current.currentCompanyId === captured.companyId
+  && current.farmCacheUserId === captured.userId;
+
+export const isOfflineSyncIdentityCurrent = (
+  current: { currentCompanyId?: string; farmCacheUserId?: string },
+  captured: { companyId: string; userId: string; storageKey: string },
+  activeStorageKey?: string | null,
+): boolean => activeStorageKey === captured.storageKey
+  && isSameOfflineFarmIdentity(current, captured);
+
+export const removeAcknowledgedPendingChanges = <T extends { id: string }>(
+  current: T[],
+  acknowledgedIds: string[],
+): T[] => current.filter((change) => !acknowledgedIds.includes(change.id));
 
 const OFFLINE_COLLECTION_PREFIX = 'shrimply:offline-collection';
 const OFFLINE_MUTATION_PREFIX = 'shrimply:offline-mutations';
@@ -291,4 +310,638 @@ export const applyOfflineMutationToCollection = <T extends { id: string }>(
     : { ...mutation.data, id: documentId } as T;
   if (existingIndex < 0) return [...collection, nextItem];
   return collection.map((item, index) => index === existingIndex ? nextItem : item);
+};
+
+export interface PendingFarmChange {
+  id: string;
+  type: 'pond' | 'physicalPond' | 'sampling' | 'mortality' | 'harvest' | 'cycle';
+  action: 'create' | 'update' | 'delete';
+  data: any;
+  previousData?: any;
+  timestamp: number;
+  pondId?: string;
+  samplingId?: string;
+  recordId?: string;
+}
+
+const TYPE_PRIORITY: Record<PendingFarmChange['type'], number> = {
+  cycle: 1,
+  physicalPond: 2,
+  pond: 3,
+  mortality: 4,
+  sampling: 5,
+  harvest: 6,
+};
+
+export const createOfflineOperationId = (prefix: string): string =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+export const persistOfflineFarmChange = async (
+  persistQueue: () => Promise<void>,
+  persistCache: () => Promise<void>,
+  rollbackQueue?: () => Promise<void>,
+): Promise<{ durable: boolean; queueError?: unknown; rollbackError?: unknown; cacheError?: unknown }> => {
+  try {
+    await persistQueue();
+  } catch (queueError) {
+    try {
+      await rollbackQueue?.();
+      return { durable: false, queueError };
+    } catch (rollbackError) {
+      return { durable: false, queueError, rollbackError };
+    }
+  }
+  try {
+    await persistCache();
+    return { durable: true };
+  } catch (cacheError) {
+    return { durable: true, cacheError };
+  }
+};
+
+const HARVEST_OWNED_POND_FIELDS = [
+  'totalHarvestedBiomass', 'totalHarvestedPopulation', 'partialHarvestCount',
+  'postHarvestBaselineDate', 'postHarvestRemainingBiomass', 'postHarvestRemainingPopulation',
+  'postHarvestReferenceSamplingId', 'postHarvestReferenceSamplingDate', 'postHarvestReferenceMbw',
+  'appliedHarvestOperationId', 'appliedHarvestOperationIds', 'reversedHarvestOperationIds',
+  'lastAppliedHarvestId', 'appliedHarvestIds',
+] as const;
+
+const restoreHarvestOwnedFields = <T extends Record<string, any>>(current: T, previous: T): T => ({
+  ...current,
+  ...Object.fromEntries(HARVEST_OWNED_POND_FIELDS.map((field) => [field, previous[field]])),
+});
+
+const hasNoLaterHarvestReceipt = (current: any, previous: any, operationId: string): boolean => {
+  const priorReceipts = new Set([
+    ...(previous?.appliedHarvestOperationIds || []),
+    ...(previous?.reversedHarvestOperationIds || []),
+    ...(previous?.appliedHarvestOperationId ? [previous.appliedHarvestOperationId] : []),
+  ]);
+  const currentReceipts = [
+    ...(current.appliedHarvestOperationIds || []),
+    ...(current.reversedHarvestOperationIds || []),
+    ...(current.appliedHarvestOperationId ? [current.appliedHarvestOperationId] : []),
+  ];
+  return Boolean(previous) && currentReceipts.every((id: string) => id === operationId || priorReceipts.has(id));
+};
+
+const clearHarvestReceipt = (pond: any, operationId: string): any => ({
+  ...pond,
+  appliedHarvestOperationIds: (pond.appliedHarvestOperationIds || []).filter((id: string) => id !== operationId),
+  reversedHarvestOperationIds: (pond.reversedHarvestOperationIds || []).filter((id: string) => id !== operationId),
+  ...(pond.appliedHarvestOperationId === operationId ? { appliedHarvestOperationId: undefined } : {}),
+});
+
+export const rollbackPendingHarvestCreate = <T extends Record<string, any>>(
+  current: T,
+  previous: T | undefined,
+  line: any,
+  record: any,
+  operationId: string,
+): T => {
+  if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
+  const reversed = clearHarvestReceipt(reverseHarvestImpactOnPond(current, line), operationId);
+  return {
+    ...reversed,
+    appliedHarvestIds: (reversed.appliedHarvestIds || []).filter((id: string) => id !== record.id),
+    postHarvestBaselineDate: current.postHarvestBaselineDate,
+    postHarvestReferenceSamplingId: current.postHarvestReferenceSamplingId,
+    postHarvestReferenceSamplingDate: current.postHarvestReferenceSamplingDate,
+    postHarvestReferenceMbw: current.postHarvestReferenceMbw,
+    lastAppliedHarvestId: current.lastAppliedHarvestId,
+  };
+};
+
+export const rollbackPendingHarvestEdit = <T extends Record<string, any>>(
+  current: T,
+  previous: T | undefined,
+  previousLine: any,
+  nextLine: any,
+  record: any,
+  previousRecord: any,
+  replacementId: string,
+  operationId: string,
+): T => {
+  if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
+  const reverted = nextLine ? reverseHarvestImpactOnPond(current, nextLine) : current;
+  const restored = previousLine
+    ? applyHarvestImpactToPond(reverted, previousLine, previousRecord.date, previousLine.partialHarvestNumber)
+    : reverted;
+  const cleaned = clearHarvestReceipt(restored, operationId);
+  return {
+    ...cleaned,
+    appliedHarvestIds: [
+      ...(cleaned.appliedHarvestIds || []).filter((id: string) => id !== replacementId && id !== record.id),
+      ...(previousLine ? [previousRecord.id] : []),
+    ],
+    postHarvestBaselineDate: current.postHarvestBaselineDate,
+    postHarvestReferenceSamplingId: current.postHarvestReferenceSamplingId,
+    postHarvestReferenceSamplingDate: current.postHarvestReferenceSamplingDate,
+    postHarvestReferenceMbw: current.postHarvestReferenceMbw,
+    lastAppliedHarvestId: current.lastAppliedHarvestId,
+  };
+};
+
+export const rollbackPendingHarvestDelete = <T extends Record<string, any>>(
+  current: T,
+  previous: T | undefined,
+  line: any,
+  record: any,
+  operationId: string,
+): T => {
+  if (hasNoLaterHarvestReceipt(current, previous, operationId)) return restoreHarvestOwnedFields(current, previous!);
+  const restored = clearHarvestReceipt(
+    applyHarvestImpactToPond(current, line, record.date, line.partialHarvestNumber),
+    operationId,
+  );
+  return {
+    ...restored,
+    appliedHarvestIds: [...new Set([...(restored.appliedHarvestIds || []), record.id])],
+    postHarvestBaselineDate: current.postHarvestBaselineDate,
+    postHarvestReferenceSamplingId: current.postHarvestReferenceSamplingId,
+    postHarvestReferenceSamplingDate: current.postHarvestReferenceSamplingDate,
+    postHarvestReferenceMbw: current.postHarvestReferenceMbw,
+    lastAppliedHarvestId: current.lastAppliedHarvestId,
+  };
+};
+
+/** Adds local operation receipts to already committed legacy pond data without applying harvest math again. */
+export const backfillCommittedHarvestReceipts = <T extends Record<string, any>>(
+  ponds: T[],
+  change: PendingFarmChange,
+  committedRecord: any,
+  previousRecord?: any,
+): T[] => ponds.map((pond) => {
+  const nextLine = committedRecord?.ponds?.find((line: any) => line.pondId === pond.id);
+  const oldLine = previousRecord?.ponds?.find((line: any) => line.pondId === pond.id);
+  if (!nextLine && !oldLine) return pond;
+  const applied = change.action !== 'delete' && Boolean(nextLine);
+  const appliedIds: string[] = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+  const operationIds: string[] = Array.isArray(pond.appliedHarvestOperationIds) ? pond.appliedHarvestOperationIds : [];
+  const reversedIds: string[] = Array.isArray(pond.reversedHarvestOperationIds) ? pond.reversedHarvestOperationIds : [];
+  const affectedId = applied ? committedRecord.id : previousRecord?.id || committedRecord?.id;
+  const baseIds = change.action === 'update' && previousRecord?.id !== committedRecord?.id
+    ? appliedIds.filter((id) => id !== previousRecord?.id)
+    : appliedIds;
+  const ids = applied
+    ? (baseIds.includes(affectedId) ? baseIds : [...baseIds, affectedId])
+    : appliedIds.filter((id) => id !== affectedId);
+  return {
+    ...pond,
+    appliedHarvestOperationId: applied ? (pond.appliedHarvestOperationId || change.id) : pond.appliedHarvestOperationId,
+    appliedHarvestOperationIds: applied ? [...new Set([...operationIds, change.id])] : operationIds,
+    reversedHarvestOperationIds: applied ? reversedIds : [...new Set([...reversedIds, change.id])],
+    appliedHarvestIds: ids,
+    lastAppliedHarvestId: applied ? affectedId : (pond.lastAppliedHarvestId === affectedId ? (ids[ids.length - 1] || null) : pond.lastAppliedHarvestId),
+  };
+});
+
+export const reconcileCommittedHarvestPonds = <T extends Record<string, any>>(
+  ponds: T[],
+  committedPonds: Record<string, Record<string, any>>,
+): T[] => ponds.map((pond) => {
+  const committed = committedPonds[pond.id];
+  if (!committed) return pond;
+  const reconciled = { ...pond } as Record<string, any>;
+  HARVEST_OWNED_POND_FIELDS.forEach((field) => {
+    delete reconciled[field];
+    if (Object.prototype.hasOwnProperty.call(committed, field)) reconciled[field] = committed[field];
+  });
+  return reconciled as T;
+});
+
+export const comparePendingChanges = (a: PendingFarmChange, b: PendingFarmChange): number => {
+  if (a.timestamp !== b.timestamp) {
+    return a.timestamp - b.timestamp;
+  }
+  const typeDiff = (TYPE_PRIORITY[a.type] || 0) - (TYPE_PRIORITY[b.type] || 0);
+  if (typeDiff !== 0) return typeDiff;
+  return a.id.localeCompare(b.id);
+};
+
+export const sortPendingChanges = (changes: PendingFarmChange[]): PendingFarmChange[] => {
+  if (changes.length <= 1) return [...changes];
+
+  const adjusted = changes.map((change, index) => ({
+    change,
+    originalIndex: index,
+    effectiveTimestamp: change.timestamp,
+  }));
+
+  for (const item of adjusted) {
+    if (item.change.type === 'harvest') {
+      const harvestRecord = item.change.data;
+      const pondIds = new Set(
+        (harvestRecord?.ponds || []).map((p: any) => p.pondId).filter(Boolean)
+      );
+      if (item.change.pondId) pondIds.add(item.change.pondId);
+
+      for (const other of adjusted) {
+        if (other.change.type === 'sampling' && other.change.pondId && pondIds.has(other.change.pondId)) {
+          if (other.effectiveTimestamp >= item.effectiveTimestamp) {
+            item.effectiveTimestamp = other.effectiveTimestamp + 1;
+          }
+        }
+      }
+    }
+  }
+
+  return adjusted
+    .sort((a, b) => {
+      if (a.effectiveTimestamp !== b.effectiveTimestamp) {
+        return a.effectiveTimestamp - b.effectiveTimestamp;
+      }
+      const cmp = comparePendingChanges(a.change, b.change);
+      if (cmp !== 0) return cmp;
+      return a.originalIndex - b.originalIndex;
+    })
+    .map((item) => item.change);
+};
+
+export const isHarvestImpactAppliedToPond = (
+  pond: any,
+  change: PendingFarmChange,
+  record: any,
+): boolean => {
+  if (pond.appliedHarvestOperationId && pond.appliedHarvestOperationId === change.id) return true;
+  if (Array.isArray(pond.appliedHarvestOperationIds) && pond.appliedHarvestOperationIds.includes(change.id)) return true;
+  if (Array.isArray(pond.reversedHarvestOperationIds) && pond.reversedHarvestOperationIds.includes(change.id)) return true;
+  // A newer harvest may have replaced lastAppliedHarvestId; only explicit receipts are safe.
+  if (Array.isArray(pond.appliedHarvestIds) && pond.appliedHarvestIds.includes(record.id)) return true;
+  return false;
+};
+
+export const isHarvestImpactReversedOnPond = (
+  pond: any,
+  change: PendingFarmChange,
+  record: any,
+): boolean => {
+  if (pond.appliedHarvestOperationId && pond.appliedHarvestOperationId === change.id) return true;
+  if (Array.isArray(pond.appliedHarvestOperationIds) && pond.appliedHarvestOperationIds.includes(change.id)) return true;
+  if (Array.isArray(pond.reversedHarvestOperationIds) && pond.reversedHarvestOperationIds.includes(change.id)) return true;
+  if (Array.isArray(pond.reversedHarvestIds) && pond.reversedHarvestIds.includes(record.id)) return true;
+  return false;
+};
+
+export const applyPendingHarvestChanges = <T extends { id: string }>(
+  serverRecords: T[],
+  pendingChanges: PendingFarmChange[],
+): T[] => {
+  const merged = new Map(serverRecords.map((record) => [record.id, record]));
+  pendingChanges
+    .filter((change) => change.type === 'harvest')
+    .slice()
+    .sort(comparePendingChanges)
+    .forEach((change) => {
+      const record = change.data as T | undefined;
+      if (!record?.id) return;
+      if (change.action === 'delete') {
+        merged.delete(record.id);
+        return;
+      }
+      if (change.action === 'update' && change.previousData?.id) {
+        merged.delete(change.previousData.id);
+      }
+      merged.set(record.id, record);
+    });
+  return Array.from(merged.values());
+};
+
+export const applyPendingPondChanges = (
+  serverPonds: any[],
+  changes: PendingFarmChange[],
+): any[] => {
+  let ponds = [...serverPonds];
+  sortPendingChanges(changes).forEach((change) => {
+    if (change.type === 'pond') {
+      const pond = change.data;
+      if (!pond?.id) return;
+      if (change.action === 'delete') {
+        ponds = ponds.filter((item) => item.id !== pond.id);
+      } else {
+        const existingIndex = ponds.findIndex((item) => item.id === pond.id);
+        if (existingIndex >= 0) {
+          ponds[existingIndex] = { ...ponds[existingIndex], ...pond };
+        } else {
+          ponds.push(pond);
+        }
+      }
+      return;
+    }
+    if (change.type === 'sampling' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let samplings = [...(pond.samplings || [])];
+        if (change.action === 'delete') {
+          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
+        } else {
+          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
+          if (index >= 0) samplings[index] = change.data;
+          else samplings.push(change.data);
+        }
+        return { ...pond, samplings };
+      });
+      return;
+    }
+    if (change.type === 'mortality' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let records = [...(pond.mortalityRecords || [])];
+        if (change.action === 'delete') {
+          records = records.filter((record) => record.id !== change.recordId);
+        } else {
+          const index = records.findIndex((record) => record.id === change.recordId);
+          if (index >= 0) records[index] = change.data;
+          else records.push(change.data);
+        }
+        return { ...pond, mortalityRecords: records };
+      });
+      return;
+    }
+    if (change.type === 'harvest') {
+      const record = change.data;
+      if (!record?.id || !Array.isArray(record.ponds)) return;
+      if (change.action === 'create') {
+        ponds = ponds.map((pond) => {
+          const harvestPond = record.ponds.find((item: any) => item.pondId === pond.id);
+          if (!harvestPond) return pond;
+          if (isHarvestImpactAppliedToPond(pond, change, record)) return pond;
+          const updated = applyHarvestImpactToPond(pond, harvestPond, record.date, harvestPond.partialHarvestNumber);
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          return {
+            ...updated,
+            appliedHarvestOperationId: change.id,
+            appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+            lastAppliedHarvestId: record.id,
+            appliedHarvestIds: currentAppliedIds.includes(record.id) ? currentAppliedIds : [...currentAppliedIds, record.id],
+          };
+        });
+      } else if (change.action === 'delete') {
+        ponds = ponds.map((pond) => {
+          const harvestPond = record.ponds.find((item: any) => item.pondId === pond.id);
+          if (!harvestPond) return pond;
+          if (isHarvestImpactReversedOnPond(pond, change, record)) return pond;
+          const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== record.id);
+          return {
+            ...updated,
+            appliedHarvestOperationId: change.id,
+            reversedHarvestOperationIds: [...new Set([...(pond.reversedHarvestOperationIds || []), change.id])],
+            lastAppliedHarvestId: pond.lastAppliedHarvestId === record.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+            appliedHarvestIds: nextAppliedIds,
+          };
+        });
+      } else if (change.action === 'update') {
+        const previousRecord = change.previousData;
+        ponds = ponds.map((pond) => {
+          const previousHarvestPond = previousRecord?.ponds?.find((item: any) => item.pondId === pond.id);
+          const nextHarvestPond = record.ponds?.find((item: any) => item.pondId === pond.id);
+          if (!previousHarvestPond && !nextHarvestPond) return pond;
+          if (isHarvestImpactAppliedToPond(pond, change, record)) return pond;
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          if (previousHarvestPond && !nextHarvestPond) {
+            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+            const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id);
+            return {
+              ...updated,
+              appliedHarvestOperationId: change.id,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+              lastAppliedHarvestId: pond.lastAppliedHarvestId === previousRecord?.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          }
+          if (!previousHarvestPond && nextHarvestPond) {
+            const updated = applyHarvestImpactToPond(pond, nextHarvestPond, record.date, nextHarvestPond.partialHarvestNumber);
+            const nextAppliedIds = currentAppliedIds.includes(record.id) ? currentAppliedIds : [...currentAppliedIds, record.id];
+            return {
+              ...updated,
+              appliedHarvestOperationId: change.id,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+              lastAppliedHarvestId: record.id,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          }
+          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+          const updated = applyHarvestImpactToPond(revertedPond, nextHarvestPond!, record.date, nextHarvestPond!.partialHarvestNumber);
+          const nextAppliedIds = [
+            ...currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id),
+            record.id,
+          ];
+          return {
+            ...updated,
+            appliedHarvestOperationId: change.id,
+            appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+            lastAppliedHarvestId: record.id,
+            appliedHarvestIds: nextAppliedIds,
+          };
+        });
+      }
+    }
+  });
+  return ponds;
+};
+
+export const replayPendingFarmState = (
+  state: {
+    ponds: any[];
+    physicalPonds: any[];
+    cycles: any[];
+    harvestRecords: any[];
+  },
+  changes: PendingFarmChange[],
+): {
+  ponds: any[];
+  physicalPonds: any[];
+  cycles: any[];
+  harvestRecords: any[];
+} => {
+  let ponds = [...state.ponds];
+  let physicalPonds = [...state.physicalPonds];
+  let cycles = [...state.cycles];
+  let harvestRecords = [...state.harvestRecords];
+
+  sortPendingChanges(changes).forEach((change) => {
+    if (change.type === 'pond') {
+      const pond = change.data;
+      if (!pond?.id) return;
+      if (change.action === 'delete') {
+        ponds = ponds.filter((item) => item.id !== pond.id);
+      } else {
+        const existingIndex = ponds.findIndex((item) => item.id === pond.id);
+        if (existingIndex >= 0) ponds[existingIndex] = { ...ponds[existingIndex], ...pond };
+        else ponds.push(pond);
+      }
+      return;
+    }
+    if (change.type === 'physicalPond') {
+      const pond = change.data;
+      if (!pond?.id) return;
+      if (change.action === 'delete') {
+        physicalPonds = physicalPonds.filter((item) => item.id !== pond.id);
+      } else {
+        const existingIndex = physicalPonds.findIndex((item) => item.id === pond.id);
+        if (existingIndex >= 0) physicalPonds[existingIndex] = { ...physicalPonds[existingIndex], ...pond };
+        else physicalPonds.push(pond);
+      }
+      return;
+    }
+    if (change.type === 'cycle') {
+      const cycle = change.data;
+      if (!cycle?.id) return;
+      if (change.action === 'delete') {
+        cycles = cycles.filter((item) => item.id !== cycle.id);
+      } else {
+        const existingIndex = cycles.findIndex((item) => item.id === cycle.id);
+        if (existingIndex >= 0) cycles[existingIndex] = { ...cycles[existingIndex], ...cycle };
+        else cycles.push(cycle);
+      }
+      return;
+    }
+    if (change.type === 'sampling' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let samplings = [...(pond.samplings || [])];
+        if (change.action === 'delete') {
+          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
+        } else {
+          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
+          if (index >= 0) samplings[index] = change.data;
+          else samplings.push(change.data);
+        }
+        return { ...pond, samplings };
+      });
+      return;
+    }
+    if (change.type === 'mortality' && change.pondId) {
+      ponds = ponds.map((pond) => {
+        if (pond.id !== change.pondId) return pond;
+        let records = [...(pond.mortalityRecords || [])];
+        if (change.action === 'delete') {
+          records = records.filter((record) => record.id !== change.recordId);
+        } else {
+          const index = records.findIndex((record) => record.id === change.recordId);
+          if (index >= 0) records[index] = change.data;
+          else records.push(change.data);
+        }
+        return { ...pond, mortalityRecords: records };
+      });
+      return;
+    }
+    if (change.type === 'harvest') {
+      const record = change.data;
+      if (!record?.id || !Array.isArray(record.ponds)) return;
+      const existing = harvestRecords.find((item) => item.id === record.id);
+      if (change.action === 'create') {
+        const alreadyInHarvestRecords = Boolean(existing);
+        if (!existing) harvestRecords = [record, ...harvestRecords];
+        ponds = ponds.map((pond) => {
+          const harvestPond = record.ponds.find((item: any) => item.pondId === pond.id);
+          if (!harvestPond) return pond;
+          if (alreadyInHarvestRecords || isHarvestImpactAppliedToPond(pond, change, record)) {
+            const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+            return {
+              ...pond,
+              appliedHarvestOperationId: pond.appliedHarvestOperationId || change.id,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+              lastAppliedHarvestId: pond.lastAppliedHarvestId || record.id,
+              appliedHarvestIds: currentAppliedIds.includes(record.id) ? currentAppliedIds : [...currentAppliedIds, record.id],
+            };
+          }
+          const updated = applyHarvestImpactToPond(pond, harvestPond, record.date, harvestPond.partialHarvestNumber);
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          return {
+            ...updated,
+            appliedHarvestOperationId: change.id,
+            appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+            lastAppliedHarvestId: record.id,
+            appliedHarvestIds: currentAppliedIds.includes(record.id) ? currentAppliedIds : [...currentAppliedIds, record.id],
+          };
+        });
+      } else if (change.action === 'delete') {
+        if (existing) harvestRecords = harvestRecords.filter((item) => item.id !== record.id);
+        ponds = ponds.map((pond) => {
+          const harvestPond = (existing || record).ponds?.find((item: any) => item.pondId === pond.id);
+          if (!harvestPond) return pond;
+          // A cache without the record may already contain the optimistic reversal.
+          // Only reverse again when the cached record or an explicit apply receipt proves impact remains.
+          if (!existing
+            && pond.lastAppliedHarvestId !== record.id
+            && !(Array.isArray(pond.appliedHarvestIds) && pond.appliedHarvestIds.includes(record.id))) return pond;
+          if (isHarvestImpactReversedOnPond(pond, change, record)) {
+            const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+            const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== record.id);
+            return {
+              ...pond,
+              appliedHarvestOperationId: pond.appliedHarvestOperationId || change.id,
+              reversedHarvestOperationIds: [...new Set([...(pond.reversedHarvestOperationIds || []), change.id])],
+              lastAppliedHarvestId: pond.lastAppliedHarvestId === record.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          }
+          const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== record.id);
+          return {
+            ...updated,
+            appliedHarvestOperationId: change.id,
+            reversedHarvestOperationIds: [...new Set([...(pond.reversedHarvestOperationIds || []), change.id])],
+            lastAppliedHarvestId: pond.lastAppliedHarvestId === record.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+            appliedHarvestIds: nextAppliedIds,
+          };
+        });
+      } else if (change.action === 'update') {
+        const previousRecord = change.previousData || existing;
+        const alreadyUpdated = existing && JSON.stringify(existing) === JSON.stringify(record);
+        if (!alreadyUpdated) {
+          ponds = ponds.map((pond) => {
+            const previousHarvestPond = previousRecord?.ponds?.find((item: any) => item.pondId === pond.id);
+            const nextHarvestPond = record.ponds?.find((item: any) => item.pondId === pond.id);
+            if (!previousHarvestPond && !nextHarvestPond) return pond;
+            if (isHarvestImpactAppliedToPond(pond, change, record)) return pond;
+            const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+            if (previousHarvestPond && !nextHarvestPond) {
+              const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+              const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id);
+              return {
+                ...updated,
+                appliedHarvestOperationId: change.id,
+                appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+                lastAppliedHarvestId: pond.lastAppliedHarvestId === previousRecord?.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+                appliedHarvestIds: nextAppliedIds,
+              };
+            }
+            if (!previousHarvestPond && nextHarvestPond) {
+              const updated = applyHarvestImpactToPond(pond, nextHarvestPond, record.date, nextHarvestPond.partialHarvestNumber);
+              const nextAppliedIds = currentAppliedIds.includes(record.id) ? currentAppliedIds : [...currentAppliedIds, record.id];
+              return {
+                ...updated,
+                appliedHarvestOperationId: change.id,
+                appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+                lastAppliedHarvestId: record.id,
+                appliedHarvestIds: nextAppliedIds,
+              };
+            }
+            const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+            const updated = applyHarvestImpactToPond(revertedPond, nextHarvestPond!, record.date, nextHarvestPond!.partialHarvestNumber);
+            const nextAppliedIds = [
+              ...currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== record.id),
+              record.id,
+            ];
+            return {
+              ...updated,
+              appliedHarvestOperationId: change.id,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), change.id])],
+              lastAppliedHarvestId: record.id,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          });
+        }
+        harvestRecords = applyPendingHarvestChanges(harvestRecords, [change]);
+      }
+    }
+  });
+
+  return { ponds, physicalPonds, cycles, harvestRecords };
 };

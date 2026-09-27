@@ -137,6 +137,23 @@ test('includes a pond when the selected day has feed but no water-quality readin
   assert.equal(report.waterQualityRows[0].phMorning, 'N/A');
 });
 
+test('includes feed history when the selected day has no water-quality or feed record', () => {
+  const report = buildDailyOperationsReport({
+    companyName: 'Test Farm',
+    reportDate: '2026-09-02',
+    generatedBy: 'Operator',
+    ponds: [{
+      id: 'pond-1',
+      pondName: 'C1',
+      samplings: [{ date: '2026-09-01', feedData: { totalDailyFeed: '12' } }],
+    }],
+  });
+
+  assert.equal(report.waterQualityRows.length, 1);
+  assert.equal(report.waterQualityRows[0].dailyFeedKg, 'N/A');
+  assert.equal(report.waterQualityRows[0].cumulativeFeedKg, '12');
+});
+
 test('renders the exported report in the selected language', () => {
   const report = buildDailyOperationsReport({
     companyName: 'Tambak Uji',

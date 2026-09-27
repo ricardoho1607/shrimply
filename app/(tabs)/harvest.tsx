@@ -126,6 +126,7 @@ export default function HarvestScreen() {
 
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [editingHarvest, setEditingHarvest] = useState<HarvestRecord | null>(null);
+  const editReplacementIdRef = useRef<string | null>(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [harvestToDelete, setHarvestToDelete] = useState<string | null>(null);
 
@@ -261,14 +262,14 @@ export default function HarvestScreen() {
   const getHarvestBiomass = (pond: { biomass: string; subBiomass: string }) =>
     (parseFloat(pond.biomass) || 0) + (parseFloat(pond.subBiomass) || 0);
 
-  const saveRequiredSampling = (pond: typeof selectedCyclePonds[number]) => {
+  const saveRequiredSampling = async (pond: typeof selectedCyclePonds[number]) => {
     const mbw = parsePositiveNumber(samplingMbwDrafts[pond.id] || '');
     if (!mbw) {
       Alert.alert(t.messages.error, t.harvest.samplingMbwRequired);
       return;
     }
 
-    addSampling(pond.id, buildHarvestDateSampling({
+    const outcome = await addSampling(pond.id, buildHarvestDateSampling({
       id: createHarvestSamplingId(),
       date: harvestDate,
       mbw,
@@ -277,6 +278,12 @@ export default function HarvestScreen() {
       cycleName: pond.cycleName,
       pondCycleId: pond.pondCycleId || pond.id,
     }));
+
+    if (!outcome || outcome.success === false || outcome.status === 'rejected') {
+      Alert.alert(t.messages.error, outcome?.error || 'Failed to save sampling locally.');
+      return;
+    }
+
     const suggestedSize = String(Math.round(1000 / mbw));
     const currentSize = pondData.find((entry) => entry.pondId === pond.id)?.size || '';
     const refreshedSize = refreshAutoFilledHarvestSize(
@@ -335,9 +342,12 @@ export default function HarvestScreen() {
     setAutoFilledSizes({});
   }, [initializePondData, selectedCyclePonds]);
 
-  const saveHarvestRecords = useCallback((pondsWithData: typeof pondData) => {
+  const saveHarvestRecords = useCallback(async (pondsWithData: typeof pondData) => {
+    const harvestId = editingHarvest
+      ? (editReplacementIdRef.current ||= `harvest-${editingHarvest.id}-rev-${Date.now()}`)
+      : Date.now().toString();
     const newHarvest: HarvestRecord = {
-      id: Date.now().toString(),
+      id: harvestId,
       date: harvestDate,
       cycleId: editingHarvest?.cycleId || formCycle?.id,
       cycleName: editingHarvest?.cycleName || formCycle?.cycleName,
@@ -360,12 +370,29 @@ export default function HarvestScreen() {
       }),
     };
 
-    if (editingHarvest) updateHarvestRecord(editingHarvest.id, newHarvest);
-    else addHarvestRecord(newHarvest);
-    resetForm();
-    setEditingHarvest(null);
-    setIsModalVisible(false);
-  }, [addHarvestRecord, autoFilledSizes, editingHarvest, formCycle, formPonds, harvestDate, resetForm, updateHarvestRecord]);
+    try {
+      const outcome = editingHarvest
+        ? await updateHarvestRecord(editingHarvest.id, newHarvest)
+        : await addHarvestRecord(newHarvest);
+
+      if (!outcome || outcome.success === false || outcome.status === 'rejected') {
+        const message = outcome?.error || 'Failed to save harvest record.';
+        Alert.alert(t.messages.error, message);
+        return;
+      }
+
+      editReplacementIdRef.current = null;
+      resetForm();
+      setEditingHarvest(null);
+      setIsModalVisible(false);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to save harvest record.';
+      Alert.alert(t.messages.error, message);
+    } finally {
+      submitLockRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [addHarvestRecord, autoFilledSizes, editingHarvest, formCycle, formPonds, harvestDate, resetForm, t.messages.error, updateHarvestRecord]);
 
   const handleSave = () => {
     if (submitLockRef.current) return;
@@ -490,6 +517,7 @@ export default function HarvestScreen() {
   };
 
   const handleModalClose = () => {
+    editReplacementIdRef.current = null;
     resetForm();
     setEditingHarvest(null);
     submitLockRef.current = false;
@@ -502,6 +530,7 @@ export default function HarvestScreen() {
       Alert.alert(t.harvest.permissionDenied, t.harvest.permissionMessage);
       return;
     }
+    editReplacementIdRef.current = `harvest-${record.id}-rev-${Date.now()}`;
     setEditingHarvest(record);
     setHarvestDate(record.date);
     setPondData(record.ponds.map((pond) => ({
@@ -538,9 +567,13 @@ export default function HarvestScreen() {
     setDeleteModalVisible(true);
   };
 
-  const confirmDeleteHarvest = () => {
+  const confirmDeleteHarvest = async () => {
     if (harvestToDelete) {
-      removeHarvestRecord(harvestToDelete);
+      const outcome = await removeHarvestRecord(harvestToDelete);
+      if (!outcome || outcome.success === false || outcome.status === 'rejected') {
+        Alert.alert(t.messages.error, outcome?.error || 'Failed to void harvest record.');
+        return;
+      }
       setDeleteModalVisible(false);
       setHarvestToDelete(null);
     }

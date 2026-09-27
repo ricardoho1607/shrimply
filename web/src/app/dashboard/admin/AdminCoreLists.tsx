@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from 'react';
-import { Clock, Database } from 'lucide-react';
+import { Clock, Copy, Database } from 'lucide-react';
 import { CompanyTableControls } from './AdminUxSections';
 import { getCompanyHealth } from './AdminPremiumSections';
 
@@ -59,7 +59,7 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
         const health = getCompanyHealth(company);
         if (statusFilter !== 'all' && health.label !== statusFilter) return false;
         if (!normalizedSearch) return true;
-        return [company.companyName, company.ownerEmail, company.farmType, company.businessSize]
+        return [company.id, company.companyName, company.ownerEmail, company.farmType, company.businessSize]
           .join(' ')
           .toLowerCase()
           .includes(normalizedSearch);
@@ -75,6 +75,20 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
 
   const inspectCompany = (company: CompanyMetric) => {
     onSelectCompany(company);
+  };
+
+  const copyCompanyId = async (event: React.MouseEvent<HTMLButtonElement>, companyId: string) => {
+    event.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(companyId);
+    } catch {
+      const input = document.createElement('textarea');
+      input.value = companyId;
+      document.body.appendChild(input);
+      input.select();
+      document.execCommand('copy');
+      document.body.removeChild(input);
+    }
   };
 
   return (
@@ -100,10 +114,10 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
         <EmptyInline message="No companies match the current filters." />
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '900px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '1120px' }}>
             <thead>
               <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                {['Company', 'Owner', 'Status', 'Ponds', 'Active', 'Inactive', 'Team', 'Inventory', 'Created'].map((heading) => (
+                {['Company', 'Company ID', 'Owner', 'Status', 'Ponds', 'Active', 'Inactive', 'Team', 'Inventory', 'Created'].map((heading) => (
                   <th key={heading} style={{ padding: '12px 10px', fontSize: '0.68rem', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>{heading}</th>
                 ))}
               </tr>
@@ -118,6 +132,7 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
                     tabIndex={0}
                     onClick={() => inspectCompany(company)}
                     onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return;
                       if (event.key === 'Enter' || event.key === ' ') {
                         event.preventDefault();
                         inspectCompany(company);
@@ -128,6 +143,12 @@ export function AdminCompanyTable({ companies, onSelectCompany }: { companies: C
                     <td style={{ padding: '16px 10px' }}>
                       <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{company.companyName}</div>
                       <div style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{company.farmType || 'Farm type unavailable'} · {company.businessSize || 'Size unavailable'}</div>
+                    </td>
+                    <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontSize: '0.76rem', fontFamily: 'monospace', overflowWrap: 'anywhere' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span>{company.id}</span>
+                        <button type="button" aria-label={`Copy company ID ${company.id}`} title="Copy company ID" onClick={(event) => void copyCompanyId(event, company.id)} style={{ border: 0, background: 'transparent', color: 'var(--primary)', cursor: 'pointer', flexShrink: 0 }}><Copy size={14} /></button>
+                      </div>
                     </td>
                     <td style={{ padding: '16px 10px', color: 'var(--text-muted)', fontWeight: 600 }}>{company.ownerEmail || 'Unavailable'}</td>
                     <td style={{ padding: '16px 10px' }}>

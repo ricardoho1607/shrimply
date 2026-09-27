@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase';
 import { resolveCompanyCurrency } from '@/lib/companyCurrency';
 
 // Supported currencies
-export type Currency = 'USD' | 'IDR' | 'THB' | 'CNY' | 'VND';
+export type Currency = 'USD' | 'AUD' | 'IDR' | 'THB' | 'CNY' | 'VND';
 
 // Currency configuration
 export interface CurrencyConfig {
@@ -28,6 +28,15 @@ export const CURRENCIES: Record<Currency, CurrencyConfig> = {
     symbol: '$',
     name: 'US Dollar',
     flag: '🇺🇸',
+    decimalPlaces: 2,
+    thousandSeparator: ',',
+    decimalSeparator: '.',
+  },
+  AUD: {
+    code: 'AUD',
+    symbol: 'A$',
+    name: 'Australian Dollar',
+    flag: '🇦🇺',
     decimalPlaces: 2,
     thousandSeparator: ',',
     decimalSeparator: '.',

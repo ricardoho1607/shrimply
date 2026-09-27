@@ -5,6 +5,7 @@ import { ArrowLeft, Clock, LayoutGrid, Menu, RefreshCcw, Trash2, UserCheck, X } 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { auth } from '@/lib/firebase';
+import { useAuth } from '@/contexts/AuthContext';
 import { createAdminIntelligenceRepository } from '@/lib/admin/adminRepository';
 import type {
   AccountIntelligence,
@@ -39,6 +40,7 @@ type AccessState = 'checking' | 'allowed' | 'denied' | 'signed-out';
 type DetailTabMode = 'info' | 'timeline';
 
 export default function AdminCommandCenter() {
+  const { resetPassword } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const requestedUserId = searchParams.get('user');
@@ -67,6 +69,8 @@ export default function AdminCommandCenter() {
   const [farmModeUpdating, setFarmModeUpdating] = useState(false);
   const [permissionsUpdating, setPermissionsUpdating] = useState(false);
   const [roleUpdating, setRoleUpdating] = useState(false);
+  const [passwordResetPendingIds, setPasswordResetPendingIds] = useState<Set<string>>(() => new Set());
+  const [passwordResetResults, setPasswordResetResults] = useState<Record<string, { message: string; success: boolean }>>({});
 
   // Overview metrics
   const [overviewMetrics, setOverviewMetrics] = useState<PlatformOverviewMetrics | null>(null);
@@ -101,6 +105,7 @@ export default function AdminCommandCenter() {
   const repository = useMemo(() => createAdminIntelligenceRepository(), []);
 
   const accountRequestRef = useRef(0);
+  const passwordResetInFlightRef = useRef(new Set<string>());
   const overviewRequestRef = useRef(0);
   const healthRequestRef = useRef(0);
   const farmsRequestRef = useRef(0);
@@ -426,12 +431,17 @@ export default function AdminCommandCenter() {
 
   const handleSelectUser = useCallback(
     (userId: string) => {
+      if (userId !== selectedId) {
+        setAccount(null);
+        setAccountError(null);
+        setAccountLoading(true);
+      }
       setSelectedId(userId);
       setActiveView('user');
       setDetailTab('info');
       router.replace(`/admin?view=user&user=${encodeURIComponent(userId)}`, { scroll: false });
     },
-    [router]
+    [router, selectedId]
   );
 
   const handleBackToDirectory = useCallback(() => {
@@ -485,6 +495,8 @@ export default function AdminCommandCenter() {
     minute: '2-digit',
     timeZoneName: 'short',
   }).format(now);
+  const selectedAccount = selectedId && account?.id === selectedId ? account : null;
+  const selectedAccountLoading = Boolean(selectedId && (accountLoading || !selectedAccount));
 
   const deleteSelectedUser = async (input: { userId: string; reason: string; confirmation: string }) => {
     await repository.deleteUser(input);
@@ -533,13 +545,40 @@ export default function AdminCommandCenter() {
     }
   };
 
+  const sendUserPasswordReset = async (userId: string, email: string) => {
+    if (passwordResetInFlightRef.current.has(userId)) return;
+    passwordResetInFlightRef.current.add(userId);
+    setPasswordResetResults((current) => {
+      const next = { ...current };
+      delete next[userId];
+      return next;
+    });
+    setPasswordResetPendingIds((current) => new Set(current).add(userId));
+    try {
+      await resetPassword(email);
+      setPasswordResetResults((current) => ({ ...current, [userId]: { message: `Password reset email sent to ${email}.`, success: true } }));
+    } catch (error) {
+      setPasswordResetResults((current) => ({ ...current, [userId]: {
+        message: error instanceof Error ? error.message : `Could not send a password reset email to ${email}.`,
+        success: false,
+      } }));
+    } finally {
+      passwordResetInFlightRef.current.delete(userId);
+      setPasswordResetPendingIds((current) => {
+        const next = new Set(current);
+        next.delete(userId);
+        return next;
+      });
+    }
+  };
+
   const getPageTitle = () => {
     if (activeView === 'overview') return 'Platform Overview';
     if (activeView === 'farms') return 'Farms & Operations Fleet';
     if (activeView === 'support') return 'Support & Operational Triage';
     if (activeView === 'security') return 'Security Posture & Access Control';
     if (activeView === 'audit') return 'Platform Audit Log';
-    if (selectedId) return account?.name || 'User Profile';
+    if (selectedId) return selectedAccount?.name || 'User Profile';
     return 'User Database';
   };
 
@@ -658,7 +697,7 @@ export default function AdminCommandCenter() {
                 onClick={() => setDetailTab('timeline')}
               >
                 <Clock size={15} />
-                <span>Activity History & Timeline ({account?.timeline?.length || 0})</span>
+                <span>Activity History & Timeline ({selectedAccount?.timeline?.length || 0})</span>
               </button>
 
               <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -671,12 +710,12 @@ export default function AdminCommandCenter() {
                 >
                   <RefreshCcw size={15} />
                 </button>
-                {account && (
+                {selectedAccount && (
                   <button
                     type="button"
                     className={styles.triageInspectBtn}
                     style={{ color: '#b91c1c', borderColor: '#fca5a5', background: '#fef2f2' }}
-                    onClick={() => setDeleteTarget(account)}
+                    onClick={() => setDeleteTarget(selectedAccount)}
                     title="Delete this user account"
                   >
                     <Trash2 size={13} />
@@ -690,29 +729,32 @@ export default function AdminCommandCenter() {
             <div className={styles.detailTabContent}>
               {detailTab === 'info' ? (
                 <AccountDetail
-                  key={`${account?.id || 'empty'}-${account?.role || 'none'}-${account?.farms?.[0]?.businessSize || 'none'}-${JSON.stringify(account?.permissionOverrides || {})}`}
-                  account={account}
-                  loading={accountLoading}
+                  key={`${selectedAccount?.id || 'empty'}-${selectedAccount?.role || 'none'}-${selectedAccount?.farms?.[0]?.businessSize || 'none'}-${JSON.stringify(selectedAccount?.permissionOverrides || {})}`}
+                  account={selectedAccount}
+                  loading={selectedAccountLoading}
                   error={accountError}
                   updatingFarmMode={farmModeUpdating}
                   updatingPermissions={permissionsUpdating}
                   updatingRole={roleUpdating}
+                  passwordResetPending={Boolean(selectedAccount && passwordResetPendingIds.has(selectedAccount.id))}
+                  passwordResetResult={selectedAccount ? passwordResetResults[selectedAccount.id] || null : null}
                   onRetry={() => void loadAccount()}
                   onUpdateFarmMode={updateSelectedFarmMode}
                   onUpdatePermissions={updateSelectedUserPermissions}
                   onUpdateRole={updateSelectedUserRole}
+                  onSendPasswordReset={sendUserPasswordReset}
                 />
               ) : (
                 <AccountTimeline
-                  key={account?.id || 'empty'}
-                  events={account?.timeline || []}
+                  key={selectedAccount?.id || 'empty'}
+                  events={selectedAccount?.timeline || []}
                   onCloseMobile={() => undefined}
                 />
               )}
             </div>
 
             <AdminActions
-              account={account}
+              account={selectedAccount}
               onRefresh={() => void loadAccount()}
               onFeedback={setNotice}
               onRequestDelete={setDeleteTarget}

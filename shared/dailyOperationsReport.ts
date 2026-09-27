@@ -243,6 +243,19 @@ const buildWaterQualityRow = (
     return Boolean(recordDate) && recordDate <= reportDate;
   });
   const dailyRecords = recordsToDate.filter((record) => dateKey(record.date, timeZone) === reportDate);
+  const operationalFeedRecords = recordsToDate.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
+  const operationalFeed = operationalFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
+  const baselineFeedFromPond = !pond.baselineDate || pond.baselineDate <= reportDate
+    ? numberValue(pond.baselineCumulativeFeed)
+    : 0;
+  const baselineFeedFromRecords = recordsToDate
+    .filter(isBaselineRecord)
+    .reduce((maximum, record) => Math.max(
+      maximum,
+      numberValue(record.cumulativeFeedToDate) || numberValue(record.feed),
+    ), 0);
+  const baselineFeed = Math.max(baselineFeedFromPond, baselineFeedFromRecords);
+  const hasFeedHistory = baselineFeed > 0 || operationalFeedRecords.length > 0;
   const hasDailyReportData = dailyRecords.some((record) => [
       record.doMorning, record.doEvening, record.ammonia,
       record.phMorning,
@@ -267,7 +280,7 @@ const buildWaterQualityRow = (
       const text = String(value).trim();
       return Boolean(text && text !== '-' && text !== 'undefined' && text !== 'null' && text !== 'NaN');
     }));
-  if (!hasDailyReportData) return null;
+  if (!hasDailyReportData && !hasFeedHistory) return null;
 
   const latestValue = (key: keyof DailyOperationsWaterRecord): unknown => {
     for (let index = dailyRecords.length - 1; index >= 0; index -= 1) {
@@ -297,18 +310,6 @@ const buildWaterQualityRow = (
   const transpEvening = textValue(latestValue('transparencyEvening'));
   const dailyFeedRecords = dailyRecords.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
   const dailyFeed = dailyFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
-  const operationalFeedRecords = recordsToDate.filter((record) => !isBaselineRecord(record) && numberValue(record.feedData?.totalDailyFeed) > 0);
-  const operationalFeed = operationalFeedRecords.reduce((total, record) => total + numberValue(record.feedData?.totalDailyFeed), 0);
-  const baselineFeedFromPond = !pond.baselineDate || pond.baselineDate <= reportDate
-    ? numberValue(pond.baselineCumulativeFeed)
-    : 0;
-  const baselineFeedFromRecords = recordsToDate
-    .filter(isBaselineRecord)
-    .reduce((maximum, record) => Math.max(
-      maximum,
-      numberValue(record.cumulativeFeedToDate) || numberValue(record.feed),
-    ), 0);
-  const baselineFeed = Math.max(baselineFeedFromPond, baselineFeedFromRecords);
   const hasCumulativeFeed = baselineFeed > 0 || operationalFeedRecords.length > 0;
   const cumulativeFeed = baselineFeed + operationalFeed;
   const doc = getDoc(pond.docStart, reportDate, timeZone);

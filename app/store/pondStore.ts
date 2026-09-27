@@ -18,6 +18,13 @@ import {
   type HarvestType,
 } from '../../shared/harvestCalculations';
 import { harvestPondsBelongToCycle } from '../../shared/harvestCycleScope';
+import {
+  createOfflineOperationId,
+  isSameOfflineFarmIdentity,
+  rollbackPendingHarvestCreate,
+  rollbackPendingHarvestDelete,
+  rollbackPendingHarvestEdit,
+} from '../../shared/offlineWorkspace';
 
 export {
   getPondBaselineFeed,
@@ -176,6 +183,11 @@ export interface Pond {
   postHarvestReferenceSamplingId?: string | null;
   postHarvestReferenceSamplingDate?: string | null;
   postHarvestReferenceMbw?: number | null;
+  appliedHarvestOperationId?: string;
+  appliedHarvestOperationIds?: string[];
+  reversedHarvestOperationIds?: string[];
+  lastAppliedHarvestId?: string | null;
+  appliedHarvestIds?: string[];
   latestLabStatus?: LabReportStatus & {
     byType?: {
       water_quality?: LabReportStatus;
@@ -232,9 +244,17 @@ export const normalizePondLifecycle = (pond: Pond): Pond => ({
 
 export type FarmCacheStatus = 'idle' | 'hydrating' | 'ready' | 'miss';
 
+export type DurableOutcomeStatus = 'accepted' | 'rejected' | 'pending';
+
+export interface DurableOutcome {
+  success: boolean;
+  status?: DurableOutcomeStatus;
+  error?: string;
+}
+
 interface PondStore {
   ponds: Pond[]; physicalPonds: PhysicalPond[]; cycles: FarmCycle[]; harvestRecords: HarvestRecord[]; currentCompanyId?: string; currentTimeZone?: string; farmCacheUserId?: string; farmCacheStatus: FarmCacheStatus; lastFarmCacheUpdate?: number; isBackingUp: boolean; isRestoring: boolean; lastBackupTime?: number;
-  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord) => void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
+  firebaseSync?: { syncPond: (action: 'create' | 'update' | 'delete', pond: Pond) => void; syncPhysicalPond?: (action: 'create' | 'update' | 'delete', pond: PhysicalPond) => void; syncSampling: (action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => Promise<DurableOutcome> | void; syncMortality?: (action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => void; syncHarvestRecord: (action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string) => Promise<DurableOutcome> | void; syncCycle?: (action: 'create' | 'update' | 'delete', cycle: FarmCycle) => void; };
   
   addFarmCycle: (cycle?: Partial<FarmCycle>) => FarmCycle;
   updateFarmCycle: (cycleId: string, updates: Partial<FarmCycle>) => void;
@@ -242,8 +262,8 @@ interface PondStore {
   addPhysicalPond: (pond: PhysicalPond, options?: { sync?: boolean }) => void;
   updatePhysicalPond: (pondId: string, updates: Partial<PhysicalPond>) => void;
   deletePhysicalPond: (pondId: string) => void;
-  addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => void; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
-  addHarvestRecord: (record: HarvestRecord) => void; updateHarvestRecord: (harvestId: string, record: HarvestRecord) => void; removeHarvestRecord: (harvestId: string) => void; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
+  addPond: (pond: Pond) => boolean; updatePond: (pondId: string, updates: Partial<Pond>) => void; deletePond: (pondId: string) => void; endPondCycle: (pondId: string, endedAt: string, reason: PondCycleEndReason, endedBy?: string) => void; addSampling: (pondId: string, sampling: Sampling) => Promise<DurableOutcome>; updateSampling: (pondId: string, samplingId: string, updates: Partial<Sampling>) => void; deleteSampling: (pondId: string, samplingId: string) => void; addMortalityRecord: (pondId: string, record: MortalityRecord) => void; updateMortalityRecord: (pondId: string, recordId: string, updates: Partial<MortalityRecord>) => void; deleteMortalityRecord: (pondId: string, recordId: string) => void;
+  addHarvestRecord: (record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; updateHarvestRecord: (harvestId: string, record: HarvestRecord, operationId?: string) => Promise<DurableOutcome>; removeHarvestRecord: (harvestId: string, operationId?: string) => Promise<DurableOutcome>; processHarvestImpact: (record: HarvestRecord) => void; reverseHarvestImpact: (record: HarvestRecord) => void;
   
   addWaterQuality: (pondId: string, record: { phMorning: string; phEvening: string; doMorning: string; doEvening: string; transparency: string; salinity: string; temperature?: string; waterAppearance?: string; waterDepthCm?: string; alkalinity?: string; waterQualityRecordedByName?: string; ammonia?: string; operationalNotes?: string; weatherEvent?: Sampling['weatherEvent']; waterExchangePercent?: string; sludgeLoad?: Sampling['sludgeLoad']; surfaceScum?: boolean | null; shrimpBehaviour?: Sampling['shrimpBehaviour']; }) => void;
   addFeedData: (pondId: string, record: FeedData, date: string, localOnly?: boolean) => void;
@@ -559,15 +579,26 @@ export const usePondStore = create<PondStore>()(
         if (releasedPhysicalPond) state.firebaseSync?.syncPhysicalPond?.('update', releasedPhysicalPond);
       },
 
-      addHarvestRecord: (record) => {
-        const ponds = get().ponds;
+      addHarvestRecord: async (record, operationId?: string) => {
+        const operationState = get();
+        const operationScope = { companyId: operationState.currentCompanyId, userId: operationState.farmCacheUserId };
+        const ponds = operationState.ponds;
+        const cycles = operationState.cycles;
+        if (!record.ponds || record.ponds.length === 0) {
+          return { success: false, status: 'rejected', error: 'No ponds specified for harvest.' };
+        }
         const pondWithoutSampling = record.ponds.find((harvestPond) => {
           const pond = ponds.find((item) => item.id === harvestPond.pondId);
           return !pond || !getHarvestDateSampling(pond, record.date);
         });
         if (pondWithoutSampling) {
-          console.warn('Skipped harvest record: every pond requires a positive-MBW sampling on the harvest date.');
-          return;
+          const pond = ponds.find((item) => item.id === pondWithoutSampling.pondId);
+          const pondName = pond?.pondName || pondWithoutSampling.pondName || 'Pond';
+          return {
+            success: false,
+            status: 'rejected',
+            error: `${pondName} requires a positive-MBW sampling on ${record.date}.`,
+          };
         }
         const firstPond = ponds.find((pond) => record.ponds.some((item) => item.pondId === pond.id));
         const resolvedCycleId = record.cycleId || firstPond?.cycleId;
@@ -575,11 +606,40 @@ export const usePondStore = create<PondStore>()(
           cycleId: harvestPond.cycleId || ponds.find((pond) => pond.id === harvestPond.pondId)?.cycleId,
         }));
         if (resolvedCycleId && !harvestPondsBelongToCycle(resolvedHarvestPonds, resolvedCycleId)) {
-          console.warn('Skipped harvest record: all ponds must belong to the same production cycle.');
-          return;
+          return {
+            success: false,
+            status: 'rejected',
+            error: 'All ponds must belong to the same production cycle.',
+          };
         }
+        const endedPond = record.ponds.find((harvestPond) => {
+          const pond = ponds.find((item) => item.id === harvestPond.pondId);
+          return pond && pond.cycleStatus === 'ended';
+        });
+        if (endedPond) {
+          return {
+            success: false,
+            status: 'rejected',
+            error: `Pond ${endedPond.pondName} cycle has already ended.`,
+          };
+        }
+        if (resolvedCycleId) {
+          const cycle = cycles.find((c) => c.id === resolvedCycleId);
+          if (cycle && !isFarmCycleOpen(cycle)) {
+            return {
+              success: false,
+              status: 'rejected',
+              error: `Cycle ${cycle.cycleName} is closed.`,
+            };
+          }
+        }
+
+        const harvestRecordId = record.id || Date.now().toString();
+        const stableOperationId = operationId || createOfflineOperationId(`harvest-${harvestRecordId}-create`);
+
         const recordWithCycle: HarvestRecord = {
           ...record,
+          id: harvestRecordId,
           cycleId: resolvedCycleId,
           cycleName: record.cycleName || firstPond?.cycleName,
           blockId: record.blockId || firstPond?.blockId,
@@ -605,49 +665,167 @@ export const usePondStore = create<PondStore>()(
           ponds: state.ponds.map((pond) => {
             const harvestPond = recordWithCycle.ponds.find((item) => item.pondId === pond.id);
             if (!harvestPond) return pond;
-            return applyHarvestImpactToPond(
+            const updated = applyHarvestImpactToPond(
               pond,
               harvestPond,
               recordWithCycle.date,
               harvestPond.partialHarvestNumber,
             );
+            const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+            return {
+              ...updated,
+              appliedHarvestOperationId: stableOperationId,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), stableOperationId])],
+              lastAppliedHarvestId: recordWithCycle.id,
+              appliedHarvestIds: currentAppliedIds.includes(recordWithCycle.id) ? currentAppliedIds : [...currentAppliedIds, recordWithCycle.id],
+            };
           }),
         }));
-        get().firebaseSync?.syncHarvestRecord('create', recordWithCycle);
-      },
 
-      updateHarvestRecord: (harvestId, record) => {
-        const state = get();
-        const previousRecord = state.harvestRecords.find((item) => item.id === harvestId);
-        if (!previousRecord) return;
-        const resolvedCycleId = record.cycleId || previousRecord.cycleId;
-        if (resolvedCycleId && !harvestPondsBelongToCycle(record.ponds, resolvedCycleId)) {
-          console.warn('Skipped harvest update: all ponds must belong to the same production cycle.');
-          return;
+        if (!get().firebaseSync?.syncHarvestRecord || !get().currentCompanyId || !get().farmCacheUserId) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.filter((item) => item.id !== recordWithCycle.id),
+            ponds: state.ponds.map((pond) => {
+              const harvestPond = recordWithCycle.ponds.find((item) => item.pondId === pond.id);
+              if (!harvestPond) return pond;
+              const before = operationState.ponds.find((item) => item.id === pond.id);
+              return rollbackPendingHarvestCreate(pond, before, harvestPond, recordWithCycle, stableOperationId);
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: 'Sync provider, authentication, or scope is unavailable.',
+          };
         }
 
+        try {
+          const outcome = await get().firebaseSync!.syncHarvestRecord('create', recordWithCycle, undefined, stableOperationId);
+          if (outcome && !outcome.success) {
+            if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving harvest.' };
+            set((state) => ({
+              harvestRecords: state.harvestRecords.filter((item) => item.id !== recordWithCycle.id),
+              ponds: state.ponds.map((pond) => {
+                const harvestPond = recordWithCycle.ponds.find((item) => item.pondId === pond.id);
+                if (!harvestPond) return pond;
+                const before = operationState.ponds.find((item) => item.id === pond.id);
+                return rollbackPendingHarvestCreate(pond, before, harvestPond, recordWithCycle, stableOperationId);
+              }),
+            }));
+            return {
+              success: false,
+              status: 'rejected',
+              error: outcome.error || 'Failed to save harvest locally.',
+            };
+          }
+          return outcome || { success: true, status: 'pending' };
+        } catch (error) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.filter((item) => item.id !== recordWithCycle.id),
+              ponds: state.ponds.map((pond) => {
+                const harvestPond = recordWithCycle.ponds.find((item) => item.pondId === pond.id);
+                if (!harvestPond) return pond;
+                const before = operationState.ponds.find((item) => item.id === pond.id);
+                return rollbackPendingHarvestCreate(pond, before, harvestPond, recordWithCycle, stableOperationId);
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: error instanceof Error ? error.message : 'Failed to save harvest locally.',
+          };
+        }
+      },
+
+      updateHarvestRecord: async (harvestId, record, operationId?: string) => {
+        const state = get();
+        const previousPonds = state.ponds;
+        const operationScope = { companyId: state.currentCompanyId, userId: state.farmCacheUserId };
+        const previousRecord = state.harvestRecords.find((item) => item.id === harvestId);
+        if (!previousRecord) {
+          return { success: false, status: 'rejected', error: 'Harvest record not found' };
+        }
+        if (!record.ponds || record.ponds.length === 0) {
+          return { success: false, status: 'rejected', error: 'No ponds specified for harvest.' };
+        }
+        const resolvedCycleId = record.cycleId || previousRecord.cycleId;
+        if (resolvedCycleId && !harvestPondsBelongToCycle(record.ponds, resolvedCycleId)) {
+          return { success: false, status: 'rejected', error: 'All ponds must belong to the same production cycle.' };
+        }
+        const endedPond = record.ponds.find((harvestPond) => {
+          const pond = state.ponds.find((item) => item.id === harvestPond.pondId);
+          return pond && pond.cycleStatus === 'ended';
+        });
+        if (endedPond) {
+          return { success: false, status: 'rejected', error: `Pond ${endedPond.pondName} cycle has already ended.` };
+        }
+
+        const stableOperationId = operationId || createOfflineOperationId(`harvest-${harvestId}-update`);
         const affectedPondIds = new Set([
           ...previousRecord.ponds.map((pond) => pond.pondId),
           ...record.ponds.map((pond) => pond.pondId),
         ]);
+        const replacementId = record.id && record.id !== harvestId
+          ? record.id
+          : `harvest-${harvestId}-rev-${Date.now()}`;
+
         const nextPonds = state.ponds.map((pond) => {
           if (!affectedPondIds.has(pond.id)) return pond;
           const previousHarvestPond = previousRecord.ponds.find((item) => item.pondId === pond.id);
           const nextHarvestPond = record.ponds.find((item) => item.pondId === pond.id);
-          const revertedPond = previousHarvestPond
-            ? reverseHarvestImpactOnPond(pond, previousHarvestPond)
-            : pond;
-          return nextHarvestPond
-            ? applyHarvestImpactToPond(
-                revertedPond,
-                nextHarvestPond,
-                record.date,
-                nextHarvestPond.partialHarvestNumber,
-              )
-            : revertedPond;
+          const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+          if (previousHarvestPond && !nextHarvestPond) {
+            const updated = reverseHarvestImpactOnPond(pond, previousHarvestPond);
+            const nextAppliedIds = currentAppliedIds.filter((id) => id !== previousRecord.id && id !== replacementId);
+            return {
+              ...updated,
+              appliedHarvestOperationId: stableOperationId,
+              reversedHarvestOperationIds: [...new Set([...(pond.reversedHarvestOperationIds || []), stableOperationId])],
+              lastAppliedHarvestId: pond.lastAppliedHarvestId === previousRecord.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          }
+          if (!previousHarvestPond && nextHarvestPond) {
+            const updated = applyHarvestImpactToPond(
+              pond,
+              nextHarvestPond,
+              record.date,
+              nextHarvestPond.partialHarvestNumber,
+            );
+            const nextAppliedIds = currentAppliedIds.includes(replacementId) ? currentAppliedIds : [...currentAppliedIds, replacementId];
+            return {
+              ...updated,
+              appliedHarvestOperationId: stableOperationId,
+              appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), stableOperationId])],
+              lastAppliedHarvestId: replacementId,
+              appliedHarvestIds: nextAppliedIds,
+            };
+          }
+          const revertedPond = reverseHarvestImpactOnPond(pond, previousHarvestPond!);
+          const updated = applyHarvestImpactToPond(
+            revertedPond,
+            nextHarvestPond!,
+            record.date,
+            nextHarvestPond!.partialHarvestNumber,
+          );
+          const nextAppliedIds = [
+            ...currentAppliedIds.filter((id) => id !== previousRecord.id && id !== replacementId),
+            replacementId,
+          ];
+          return {
+            ...updated,
+            appliedHarvestOperationId: stableOperationId,
+            appliedHarvestOperationIds: [...new Set([...(pond.appliedHarvestOperationIds || []), stableOperationId])],
+            lastAppliedHarvestId: replacementId,
+            appliedHarvestIds: nextAppliedIds,
+          };
         });
+
         const replacementRecord: HarvestRecord = {
           ...record,
+          id: replacementId,
           cycleId: resolvedCycleId,
           ponds: record.ponds.map((harvestPond) => {
             const pond = nextPonds.find((item) => item.id === harvestPond.pondId);
@@ -661,28 +839,170 @@ export const usePondStore = create<PondStore>()(
           }),
         };
 
-        set({
-          harvestRecords: [replacementRecord, ...state.harvestRecords.filter((item) => item.id !== harvestId)],
+        set((state) => ({
+          harvestRecords: [
+            replacementRecord,
+            ...state.harvestRecords.filter((item) => item.id !== harvestId && item.id !== replacementRecord.id),
+          ],
           ponds: nextPonds,
-        });
-        state.firebaseSync?.syncHarvestRecord('update', replacementRecord, previousRecord);
+        }));
+
+        if (!get().firebaseSync?.syncHarvestRecord || !get().currentCompanyId || !get().farmCacheUserId) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while updating harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.map((item) => item.id === replacementRecord.id ? previousRecord : item),
+            ponds: state.ponds.map((pond) => {
+              if (!affectedPondIds.has(pond.id)) return pond;
+              const prevHp = previousRecord.ponds.find((item) => item.pondId === pond.id);
+              const nextHp = replacementRecord.ponds.find((item) => item.pondId === pond.id);
+              return rollbackPendingHarvestEdit(
+                pond, previousPonds.find((item) => item.id === pond.id), prevHp, nextHp,
+                replacementRecord, previousRecord, replacementRecord.id, stableOperationId,
+              );
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: 'Sync provider, authentication, or scope is unavailable.',
+          };
+        }
+
+        try {
+          const outcome = await get().firebaseSync!.syncHarvestRecord('update', replacementRecord, previousRecord, stableOperationId);
+          if (outcome && !outcome.success) {
+            if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while updating harvest.' };
+            set((state) => ({
+              harvestRecords: state.harvestRecords.map((item) => item.id === replacementRecord.id ? previousRecord : item),
+              ponds: state.ponds.map((pond) => {
+                if (!affectedPondIds.has(pond.id)) return pond;
+                const prevHp = previousRecord.ponds.find((item) => item.pondId === pond.id);
+                const nextHp = replacementRecord.ponds.find((item) => item.pondId === pond.id);
+                return rollbackPendingHarvestEdit(
+                  pond, previousPonds.find((item) => item.id === pond.id), prevHp, nextHp,
+                  replacementRecord, previousRecord, replacementRecord.id, stableOperationId,
+                );
+              }),
+            }));
+            return {
+              success: false,
+              status: 'rejected',
+              error: outcome.error || 'Failed to update harvest locally.',
+            };
+          }
+          return outcome || { success: true, status: 'pending' };
+        } catch (error) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while updating harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.map((item) => item.id === replacementRecord.id ? previousRecord : item),
+            ponds: state.ponds.map((pond) => {
+              if (!affectedPondIds.has(pond.id)) return pond;
+              const prevHp = previousRecord.ponds.find((item) => item.pondId === pond.id);
+              const nextHp = replacementRecord.ponds.find((item) => item.pondId === pond.id);
+              return rollbackPendingHarvestEdit(
+                pond, previousPonds.find((item) => item.id === pond.id), prevHp, nextHp,
+                replacementRecord, previousRecord, replacementRecord.id, stableOperationId,
+              );
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: error instanceof Error ? error.message : 'Failed to update harvest locally.',
+          };
+        }
       },
 
-      removeHarvestRecord: (harvestId) => {
+      removeHarvestRecord: async (harvestId, operationId?: string) => {
         const state = get();
+        const previousPonds = state.ponds;
+        const operationScope = { companyId: state.currentCompanyId, userId: state.farmCacheUserId };
         const harvestRecord = state.harvestRecords.find(r => r.id === harvestId);
-        if (harvestRecord) {
-          state.firebaseSync?.syncHarvestRecord('delete', harvestRecord);
-        }
+        if (!harvestRecord) return { success: false, status: 'rejected', error: 'Harvest record not found' };
+
+        const stableOperationId = operationId || createOfflineOperationId(`harvest-${harvestId}-delete`);
+
         set((state) => ({
           harvestRecords: state.harvestRecords.filter(r => r.id !== harvestId),
           ponds: harvestRecord
             ? state.ponds.map((pond) => {
                 const harvestPond = harvestRecord.ponds.find((item) => item.pondId === pond.id);
-                return harvestPond ? reverseHarvestImpactOnPond(pond, harvestPond) : pond;
+                if (!harvestPond) return pond;
+                const updated = reverseHarvestImpactOnPond(pond, harvestPond);
+                const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
+                const nextAppliedIds = currentAppliedIds.filter((id) => id !== harvestRecord.id);
+                return {
+                  ...updated,
+                  appliedHarvestOperationId: stableOperationId,
+                  reversedHarvestOperationIds: [...new Set([...(pond.reversedHarvestOperationIds || []), stableOperationId])],
+                  lastAppliedHarvestId: pond.lastAppliedHarvestId === harvestRecord.id ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null) : pond.lastAppliedHarvestId,
+                  appliedHarvestIds: nextAppliedIds,
+                };
               })
             : state.ponds,
         }));
+
+        if (!state.firebaseSync?.syncHarvestRecord || !get().currentCompanyId || !get().farmCacheUserId) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while deleting harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.some((item) => item.id === harvestRecord.id)
+              ? state.harvestRecords
+              : [harvestRecord, ...state.harvestRecords],
+            ponds: state.ponds.map((pond) => {
+              const harvestPond = harvestRecord.ponds.find((item) => item.pondId === pond.id);
+              return harvestPond ? rollbackPendingHarvestDelete(
+                pond, previousPonds.find((item) => item.id === pond.id), harvestPond, harvestRecord, stableOperationId,
+              ) : pond;
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: 'Sync provider, authentication, or scope is unavailable.',
+          };
+        }
+
+        try {
+          const outcome = await state.firebaseSync.syncHarvestRecord('delete', harvestRecord, undefined, stableOperationId);
+          if (outcome && !outcome.success) {
+            if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while deleting harvest.' };
+            set((state) => ({
+              harvestRecords: state.harvestRecords.some((item) => item.id === harvestRecord.id)
+                ? state.harvestRecords
+                : [harvestRecord, ...state.harvestRecords],
+              ponds: state.ponds.map((pond) => {
+                const harvestPond = harvestRecord.ponds.find((item) => item.pondId === pond.id);
+                return harvestPond ? rollbackPendingHarvestDelete(
+                  pond, previousPonds.find((item) => item.id === pond.id), harvestPond, harvestRecord, stableOperationId,
+                ) : pond;
+              }),
+            }));
+            return {
+              success: false,
+              status: 'rejected',
+              error: outcome.error || 'Failed to delete harvest locally.',
+            };
+          }
+          return outcome || { success: true, status: 'pending' };
+        } catch (error) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while deleting harvest.' };
+          set((state) => ({
+            harvestRecords: state.harvestRecords.some((item) => item.id === harvestRecord.id)
+              ? state.harvestRecords
+              : [harvestRecord, ...state.harvestRecords],
+            ponds: state.ponds.map((pond) => {
+              const harvestPond = harvestRecord.ponds.find((item) => item.pondId === pond.id);
+              return harvestPond ? rollbackPendingHarvestDelete(
+                pond, previousPonds.find((item) => item.id === pond.id), harvestPond, harvestRecord, stableOperationId,
+              ) : pond;
+            }),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: error instanceof Error ? error.message : 'Failed to delete harvest locally.',
+          };
+        }
       },
 
       processHarvestImpact: (record) => {
@@ -721,9 +1041,20 @@ export const usePondStore = create<PondStore>()(
       },
 
       calculatePondMetricsWithHarvest: (pond) => calculateSharedPondMetricsWithHarvest(pond, get().currentTimeZone),
-      addSampling: (pondId, sampling) => {
-        const pond = get().ponds.find((item) => item.id === pondId);
-        if (!pond) return;
+      addSampling: async (pondId, sampling) => {
+        const operationState = get();
+        const operationScope = { companyId: operationState.currentCompanyId, userId: operationState.farmCacheUserId };
+        const pond = operationState.ponds.find((item) => item.id === pondId);
+        if (!pond) return { success: false, status: 'rejected', error: 'Pond not found' };
+        if (pond.cycleStatus === 'ended') {
+          return { success: false, status: 'rejected', error: `Pond ${pond.pondName} cycle has ended.` };
+        }
+        if (!sampling.date) {
+          return { success: false, status: 'rejected', error: 'Sampling date is required.' };
+        }
+        if (typeof sampling.mbw === 'number' && sampling.mbw <= 0 && !hasWaterQualityData(sampling) && !sampling.feedData) {
+          return { success: false, status: 'rejected', error: 'Sampling MBW must be greater than 0.' };
+        }
 
         const samplingWithId = normalizeSamplingNumbers({
           ...sampling,
@@ -734,7 +1065,53 @@ export const usePondStore = create<PondStore>()(
         });
         const updatedPond = { ...pond, samplings: [...(pond.samplings || []), samplingWithId] };
         set((state) => ({ ponds: state.ponds.map((p) => p.id === pondId ? updatedPond : p) }));
-        get().firebaseSync?.syncSampling('create', pondId, samplingWithId);
+
+        if (!get().firebaseSync?.syncSampling || !get().currentCompanyId || !get().farmCacheUserId) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving sampling.' };
+          set((state) => ({
+            ponds: state.ponds.map((p) => p.id === pondId
+              ? { ...p, samplings: (p.samplings || []).filter((s) => s.id !== samplingWithId.id) }
+              : p
+            ),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: 'Sync provider, authentication, or scope is unavailable.',
+          };
+        }
+
+        try {
+          const outcome = await get().firebaseSync!.syncSampling('create', pondId, samplingWithId);
+          if (outcome && !outcome.success) {
+            if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving sampling.' };
+            set((state) => ({
+              ponds: state.ponds.map((p) => p.id === pondId
+                ? { ...p, samplings: (p.samplings || []).filter((s) => s.id !== samplingWithId.id) }
+                : p
+              ),
+            }));
+            return {
+              success: false,
+              status: 'rejected',
+              error: outcome.error || 'Failed to save sampling locally.',
+            };
+          }
+          return outcome || { success: true, status: 'pending' };
+        } catch (error) {
+          if (!isSameOfflineFarmIdentity(get(), operationScope)) return { success: false, status: 'rejected', error: 'Farm account changed while saving sampling.' };
+          set((state) => ({
+            ponds: state.ponds.map((p) => p.id === pondId
+              ? { ...p, samplings: (p.samplings || []).filter((s) => s.id !== samplingWithId.id) }
+              : p
+            ),
+          }));
+          return {
+            success: false,
+            status: 'rejected',
+            error: error instanceof Error ? error.message : 'Failed to save sampling locally.',
+          };
+        }
       },
 
       updateSampling: (pondId, samplingId, updates) => {

@@ -294,7 +294,7 @@ export default function AuthScreen() {
 
               {isLogin && (
                 <TouchableOpacity style={styles.forgotPasswordButton} onPress={handleForgotPassword} disabled={loading}>
-                  <Text style={styles.forgotPasswordText}>Forgot?</Text>
+                  <Text style={styles.forgotPasswordText}>Forgot password?</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -422,8 +422,9 @@ const styles = StyleSheet.create({
   },
   forgotPasswordText: {
     color: '#315f57',
-    fontSize: Platform.OS === 'android' ? 13 : 14,
-    fontWeight: '600'
+    fontSize: Platform.OS === 'android' ? 14 : 15,
+    fontWeight: '700',
+    textDecorationLine: 'underline'
   },
   optionsRow: {
     flexDirection: 'row',

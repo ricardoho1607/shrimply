@@ -39,6 +39,7 @@ Required Firestore imports when adding Firestore logic:
 - Feeding deducts Firestore inventory once, using `inventoryFeedId` and atomic `runTransaction` or `increment` writes. Relevant areas: `inventory/assetInventory` and the feeding section in `app/(tabs)/index.tsx`.
 - Sampling is a biological observation: its feed amount supports FCR/projections and must never trigger inventory deductions. Store `feed` and `mbw` as numbers.
 - Sampling UI: `app/(tabs)/index.tsx` and `web/src/app/dashboard/ponds/detail/PondDetailClient.tsx`.
+- Sampling lifecycle & persistence: First sampling begins around DOC 30 targeting ~3.0g MBW (and every 5 days thereafter). Always ensure sampling records are genuinely saved and committed via "Save Record", verifying modal detachment and Firestore persistence. Never bypass or mock a sampling save.
 
 ## 5. Biological Calculation Rules
 
@@ -179,6 +180,8 @@ Run checks relevant to the change and risk: affected tests, TypeScript/lint for 
 
 When the user says `SHIPALL` or `PUSHALL` (case-insensitive), treat it as explicit authorization to execute this production release workflow:
 
+Vercel release procedure: run from the repository root, ensure the checkout is linked to project `out` with `npx vercel@latest link --project out --yes`, then deploy with `npx vercel@latest --prod --yes`. Do not deploy the separate `web` Vercel project. If Vercel returns `Not authorized`, refresh the project link once and retry; if authentication is still unavailable or the build is not `READY`, stop and report the blocker. Never commit `.env.local` or Vercel credential files created during linking.
+
 1. **Commit to Git:** Run relevant checks, commit changes with a clear message, and push the branch to GitHub.
 2. **Deploy Production Vercel:** Deploy the web app through the Vercel project `out`, verify that `https://www.shrimplytech.com` points to the new production deployment, and confirm the live URL returns successfully. A preview URL or the separate `web` project does not complete `SHIPALL`/`PUSHALL`.
 3. **Deploy Changed Firebase Targets:** If the committed release changes Firebase runtime or configuration files, deploy only the affected targets and verify the deployment. This includes Firebase Functions, Firestore rules or indexes, Storage rules, Hosting, and relevant `firebase.json` configuration. Skip Firebase when the release has no Firebase-related changes.
@@ -192,6 +195,6 @@ Safety rules:
 
 ## 13. PUSHWEB Release Shortcut
 
-When the user says `PUSHWEB` (case-insensitive), treat it as explicit authorization to run relevant web checks, commit and push only the intended changes, deploy the web app through Vercel project `out` to production, and verify that `https://www.shrimplytech.com` points to the new successful deployment.
+When the user says `PUSHWEB` (case-insensitive), treat it as explicit authorization to run relevant web checks, commit and push only the intended changes, follow the Vercel release procedure above, deploy the web app through Vercel project `out` to production, and verify that `https://www.shrimplytech.com` points to the new successful deployment.
 
 Report the Git commit hash, branch, Vercel production deployment URL, and verified custom domain. `PUSHWEB` does not authorize Expo/EAS updates, Firebase deployment, Firestore rule changes, branch merges, native builds, or app-store submission.

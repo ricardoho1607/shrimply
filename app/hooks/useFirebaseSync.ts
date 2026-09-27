@@ -29,12 +29,26 @@ import { createFirebaseSyncListenerOwner } from './firebaseSyncListenerOwner';
 import { flushFarmCachePersist, scheduleFarmCachePersist } from '../services/farmCache';
 import { readProtectedItem, removeProtectedItem, writeProtectedItem } from '../services/protectedStorage';
 import { listOfflineMutations, requestOfflineMutationFlush } from '../services/offlineWorkspace';
+import {
+  applyPendingHarvestChanges,
+  backfillCommittedHarvestReceipts,
+  applyPendingPondChanges,
+  createOfflineOperationId,
+  isOfflineSyncIdentityCurrent,
+  persistOfflineFarmChange,
+  reconcileCommittedHarvestPonds,
+  removeAcknowledgedPendingChanges,
+  replayPendingFarmState,
+  sortPendingChanges,
+  type PendingFarmChange,
+} from '../../shared/offlineWorkspace';
 import { getPendingSyncKey } from '../../shared/farmCache';
 import {
   getOfflineRetryDelay,
   isUsableNetworkState,
   shouldApplyRemoteCollectionSnapshot,
 } from '../../shared/offlineSnapshotPolicy';
+import { type DurableOutcome } from '../store/pondStore';
 
 // NetInfo crashes on web (window is not defined during SSR/init).
 // Use a simple online-check mock for web instead.
@@ -68,17 +82,7 @@ export interface SyncStatus {
   error?: string;
 }
 
-interface PendingChange {
-  id: string;
-  type: 'pond' | 'physicalPond' | 'sampling' | 'mortality' | 'harvest' | 'cycle';
-  action: 'create' | 'update' | 'delete';
-  data: any;
-  previousData?: any;
-  timestamp: number;
-  pondId?: string;
-  samplingId?: string;
-  recordId?: string;
-}
+type PendingChange = PendingFarmChange;
 
 const removeUndefinedFields = (value: any): any => {
   if (Array.isArray(value)) return value.map(removeUndefinedFields);
@@ -92,27 +96,23 @@ const removeUndefinedFields = (value: any): any => {
   }, {} as Record<string, any>);
 };
 
-const applyPendingHarvestChanges = (
-  serverRecords: HarvestRecord[],
-  pendingChanges: PendingChange[],
-): HarvestRecord[] => {
-  const merged = new Map(serverRecords.map((record) => [record.id, record]));
-  pendingChanges
-    .filter((change) => change.type === 'harvest')
-    .sort((a, b) => a.timestamp - b.timestamp)
-    .forEach((change) => {
-      const record = change.data as HarvestRecord | undefined;
-      if (!record?.id) return;
-      if (change.action === 'delete') {
-        merged.delete(record.id);
-        return;
-      }
-      if (change.action === 'update' && change.previousData?.id) {
-        merged.delete(change.previousData.id);
-      }
-      merged.set(record.id, record);
-    });
-  return Array.from(merged.values());
+const isHarvestPayloadMatch = (existing: any, expected: any): boolean => {
+  if (!existing || !expected) return false;
+  const metadata = new Set(['createdAt', 'createdBy', 'updatedAt', 'updatedBy', 'financeEntry', 'operationReceiptId', 'operationPayload', 'correctedFromHarvestId', 'harvestReferenceSamplingId', 'harvestReferenceSamplingDate', 'harvestReferenceMbw']);
+  const matchesExpected = (actual: any, wanted: any): boolean => {
+    if (wanted instanceof Date) return new Date(actual).getTime() === wanted.getTime();
+    if (Array.isArray(wanted)) {
+      return Array.isArray(actual) && actual.length === wanted.length
+        && wanted.every((item, index) => matchesExpected(actual[index], item));
+    }
+    if (wanted && typeof wanted === 'object') {
+      if (!actual || typeof actual !== 'object') return false;
+      return Object.entries(wanted).filter(([key]) => !metadata.has(key))
+        .every(([key, value]) => matchesExpected(actual[key], value));
+    }
+    return actual === wanted;
+  };
+  return matchesExpected(existing, expected);
 };
 
 const applyPendingPhysicalPondChanges = (
@@ -166,49 +166,6 @@ const applyPendingEntityChanges = <T extends { id: string }>(
   return Array.from(merged.values());
 };
 
-const applyPendingPondChanges = (serverPonds: Pond[], changes: PendingChange[]): Pond[] => {
-  let ponds = [...serverPonds];
-  changes.slice().sort((a, b) => a.timestamp - b.timestamp).forEach((change) => {
-    if (change.type === 'pond') {
-      const pond = change.data as Pond;
-      if (!pond?.id) return;
-      ponds = change.action === 'delete'
-        ? ponds.filter((item) => item.id !== pond.id)
-        : applyPendingEntityChanges(ponds, [change], 'pond');
-      return;
-    }
-    if (change.type === 'sampling' && change.pondId) {
-      ponds = ponds.map((pond) => {
-        if (pond.id !== change.pondId) return pond;
-        let samplings = [...(pond.samplings || [])];
-        if (change.action === 'delete') {
-          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
-        } else {
-          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
-          if (index >= 0) samplings[index] = change.data as Sampling;
-          else samplings.push(change.data as Sampling);
-        }
-        return { ...pond, samplings };
-      });
-      return;
-    }
-    if (change.type === 'mortality' && change.pondId) {
-      ponds = ponds.map((pond) => {
-        if (pond.id !== change.pondId) return pond;
-        let records = [...(pond.mortalityRecords || [])];
-        if (change.action === 'delete') records = records.filter((record) => record.id !== change.recordId);
-        else {
-          const index = records.findIndex((record) => record.id === change.recordId);
-          if (index >= 0) records[index] = change.data as MortalityRecord;
-          else records.push(change.data as MortalityRecord);
-        }
-        return { ...pond, mortalityRecords: records };
-      });
-    }
-  });
-  return ponds;
-};
-
 const replayPendingFarmChanges = (
   userId: string,
   companyId: string,
@@ -217,98 +174,22 @@ const replayPendingFarmChanges = (
   const state = usePondStore.getState();
   if (state.currentCompanyId !== companyId || state.farmCacheUserId !== userId) return;
 
-  let ponds = [...state.ponds];
-  let physicalPonds = [...state.physicalPonds];
-  let cycles = [...state.cycles];
-  let harvestRecords = [...state.harvestRecords];
+  const replayed = replayPendingFarmState(
+    {
+      ponds: state.ponds,
+      physicalPonds: state.physicalPonds,
+      cycles: state.cycles,
+      harvestRecords: state.harvestRecords,
+    },
+    changes,
+  );
 
-  changes.slice().sort((a, b) => a.timestamp - b.timestamp).forEach((change) => {
-    if (change.type === 'pond') {
-      const pond = change.data as Pond;
-      if (!pond?.id) return;
-      ponds = change.action === 'delete'
-        ? ponds.filter((item) => item.id !== pond.id)
-        : applyPendingEntityChanges(ponds, [change], 'pond').map(normalizePondLifecycle);
-      return;
-    }
-    if (change.type === 'physicalPond') {
-      physicalPonds = applyPendingPhysicalPondChanges(physicalPonds, [change]);
-      return;
-    }
-    if (change.type === 'cycle') {
-      cycles = applyPendingEntityChanges(cycles, [change], 'cycle');
-      return;
-    }
-    if (change.type === 'sampling' && change.pondId) {
-      ponds = ponds.map((pond) => {
-        if (pond.id !== change.pondId) return pond;
-        let samplings = [...(pond.samplings || [])];
-        if (change.action === 'delete') {
-          samplings = samplings.filter((sampling) => sampling.id !== change.samplingId);
-        } else {
-          const index = samplings.findIndex((sampling) => sampling.id === change.samplingId);
-          if (index >= 0) samplings[index] = change.data as Sampling;
-          else samplings.push(change.data as Sampling);
-        }
-        return { ...pond, samplings };
-      });
-      return;
-    }
-    if (change.type === 'mortality' && change.pondId) {
-      ponds = ponds.map((pond) => {
-        if (pond.id !== change.pondId) return pond;
-        let records = [...(pond.mortalityRecords || [])];
-        if (change.action === 'delete') {
-          records = records.filter((record) => record.id !== change.recordId);
-        } else {
-          const index = records.findIndex((record) => record.id === change.recordId);
-          if (index >= 0) records[index] = change.data as MortalityRecord;
-          else records.push(change.data as MortalityRecord);
-        }
-        return { ...pond, mortalityRecords: records };
-      });
-      return;
-    }
-    if (change.type === 'harvest') {
-      const record = change.data as HarvestRecord;
-      const existing = harvestRecords.find((item) => item.id === record.id);
-      if (change.action === 'create' && !existing) {
-        harvestRecords = [record, ...harvestRecords];
-        ponds = ponds.map((pond) => {
-          const harvestPond = record.ponds.find((item) => item.pondId === pond.id);
-          return harvestPond
-            ? applyHarvestImpactToPond(pond, harvestPond, record.date, harvestPond.partialHarvestNumber)
-            : pond;
-        });
-      } else if (change.action === 'delete' && existing) {
-        harvestRecords = harvestRecords.filter((item) => item.id !== record.id);
-        ponds = ponds.map((pond) => {
-          const harvestPond = existing.ponds.find((item) => item.pondId === pond.id);
-          return harvestPond ? reverseHarvestImpactOnPond(pond, harvestPond) : pond;
-        });
-      } else if (change.action === 'update') {
-        const previousRecord = change.previousData as HarvestRecord | undefined;
-        const previousExists = previousRecord
-          ? harvestRecords.some((item) => item.id === previousRecord.id)
-          : false;
-        if (previousRecord && previousExists && !existing) {
-          ponds = ponds.map((pond) => {
-            const previousHarvestPond = previousRecord.ponds.find((item) => item.pondId === pond.id);
-            const nextHarvestPond = record.ponds.find((item) => item.pondId === pond.id);
-            const revertedPond = previousHarvestPond
-              ? reverseHarvestImpactOnPond(pond, previousHarvestPond)
-              : pond;
-            return nextHarvestPond
-              ? applyHarvestImpactToPond(revertedPond, nextHarvestPond, record.date, nextHarvestPond.partialHarvestNumber)
-              : revertedPond;
-          });
-        }
-        harvestRecords = applyPendingHarvestChanges(harvestRecords, [change]);
-      }
-    }
+  usePondStore.setState({
+    ponds: replayed.ponds.map(normalizePondLifecycle),
+    physicalPonds: replayed.physicalPonds,
+    cycles: replayed.cycles,
+    harvestRecords: replayed.harvestRecords,
   });
-
-  usePondStore.setState({ ponds, physicalPonds, cycles, harvestRecords });
   scheduleFarmCachePersist(userId, companyId, usePondStore.getState(), state.lastFarmCacheUpdate);
   void flushFarmCachePersist(userId, companyId).catch((error) => {
     console.error('[FarmCache] pending replay persistence failed:', error);
@@ -332,6 +213,7 @@ const useFirebaseSyncController = () => {
   const [pendingStorageReady, setPendingStorageReady] = useState(false);
   const [listenerOwner] = useState(createFirebaseSyncListenerOwner);
   const pendingChangesRef = useRef<PendingChange[]>([]);
+  const pendingIdentityRef = useRef<string | null>(null);
   const initialLoadComplete = useRef(false);
   const isOnlineRef = useRef(false);
   const syncInProgressRef = useRef(false);
@@ -339,9 +221,13 @@ const useFirebaseSyncController = () => {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const syncPendingChangesRef = useRef<() => void>(() => undefined);
   const pendingQueueWriteRef = useRef<Promise<void>>(Promise.resolve());
+  const pendingEnqueueRef = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingQueueWritesRef = useRef(0);
 
   const persistPendingQueue = useCallback((changes: PendingChange[]): Promise<void> => {
-    if (!activeUserId || !pendingStorageKey || !pendingStorageReady) return Promise.resolve();
+    if (!activeUserId || !pendingStorageKey || !pendingStorageReady || pendingIdentityRef.current !== pendingStorageKey) {
+      return Promise.reject(new Error('Pending queue identity is not ready.'));
+    }
     const write = pendingQueueWriteRef.current.catch(() => undefined).then(async () => {
       if (changes.length === 0) await removeProtectedItem(pendingStorageKey);
       else await writeProtectedItem(activeUserId, pendingStorageKey, JSON.stringify(changes));
@@ -354,10 +240,14 @@ const useFirebaseSyncController = () => {
 
   useEffect(() => {
     let cancelled = false;
+    pendingIdentityRef.current = null;
+    pendingChangesRef.current = [];
 
     const loadPendingChanges = async () => {
 
       if (!pendingStorageKey || !activeUserId) {
+        pendingIdentityRef.current = null;
+        setPendingChanges([]);
         setPendingStorageReady(true);
         return;
       }
@@ -365,6 +255,7 @@ const useFirebaseSyncController = () => {
       try {
         const raw = await readProtectedItem(activeUserId, pendingStorageKey);
         if (cancelled) return;
+        pendingIdentityRef.current = pendingStorageKey;
         const parsed = raw ? JSON.parse(raw) : [];
         const restoredChanges = Array.isArray(parsed) ? parsed : [];
         const mergedChanges = Array.from(new Map(
@@ -593,6 +484,11 @@ const useFirebaseSyncController = () => {
                 baselineSurvivalRate: data.baselineSurvivalRate,
                 baselineCumulativeFeed: data.baselineCumulativeFeed,
                 baselineSource: data.baselineSource,
+                appliedHarvestOperationId: data.appliedHarvestOperationId,
+                appliedHarvestOperationIds: data.appliedHarvestOperationIds,
+                reversedHarvestOperationIds: data.reversedHarvestOperationIds,
+                lastAppliedHarvestId: data.lastAppliedHarvestId,
+                appliedHarvestIds: data.appliedHarvestIds,
               }));
             });
 
@@ -600,7 +496,7 @@ const useFirebaseSyncController = () => {
             const mutations = await listOfflineMutations(userId, companyId);
             if (!isActiveFarmIdentity() || version !== pondSnapshotVersion) return;
             const intents = mutations.flatMap(mutation => mutation.dailyFeed ? [mutation.dailyFeed] : []);
-            const mergedPonds = overlayDailyFeedIntents(applyPendingPondChanges(serverPonds, pendingChangesRef.current), intents)
+            const mergedPonds = overlayDailyFeedIntents(applyPendingPondChanges(serverPonds, sortPendingChanges(pendingChangesRef.current)), intents)
               .map(normalizePondLifecycle);
             const currentPonds = usePondStore.getState().ponds;
             if (!shouldApplyRemoteCollectionSnapshot({
@@ -717,12 +613,13 @@ const useFirebaseSyncController = () => {
     };
   }, [activeCompanyId, listenerOwner, pendingStorageReady, setupRealtimeListeners, user?.uid]);
 
-  const commitChanges = useCallback(async (changes: PendingChange[]): Promise<string[]> => {
-    if (!activeCompanyId || !user || changes.length === 0) return [];
+  const commitChanges = useCallback(async (changes: PendingChange[]): Promise<{ processedIds: string[]; committedLegacyPonds: Record<string, Record<string, any>> }> => {
+    if (!activeCompanyId || !user || changes.length === 0) return { processedIds: [], committedLegacyPonds: {} };
 
     try {
       const batch = writeBatch(db);
       const processedChanges: string[] = [];
+      const committedLegacyPonds: Record<string, Record<string, any>> = {};
       let hasBatchWrites = false;
 
       for (const change of changes) {
@@ -815,6 +712,7 @@ const useFirebaseSyncController = () => {
             }
           }
           else if (change.type === 'harvest') {
+            const changeLegacyPonds: Record<string, Record<string, any>> = {};
             const harvestRef = change.data.id
               ? doc(db, 'companies', activeCompanyId, 'harvestRecords', change.data.id)
               : doc(collection(db, 'companies', activeCompanyId, 'harvestRecords'));
@@ -830,13 +728,99 @@ const useFirebaseSyncController = () => {
                   : transaction.get(previousHarvestRef),
               ]);
 
-              if (change.action === 'create' && harvestSnapshot.exists()) return;
-              if (change.action === 'delete' && (!harvestSnapshot.exists() || harvestSnapshot.data()?.voided)) return;
-              if (change.action === 'update' && (
-                harvestSnapshot.exists()
-                || !previousHarvestSnapshot.exists()
-                || previousHarvestSnapshot.data()?.voided
-              )) return;
+              const backfillLegacyPondReceipts = async (committedRecord: any, previousRecord?: any) => {
+                const pondIds = Array.from(new Set([
+                  ...(committedRecord?.ponds || []).map((line: any) => line.pondId),
+                  ...(previousRecord?.ponds || []).map((line: any) => line.pondId),
+                ]));
+                const snapshots = await Promise.all(pondIds.map((pondId) => transaction.get(
+                  doc(db, 'companies', activeCompanyId, 'ponds', pondId),
+                )));
+                snapshots.forEach((snapshot) => {
+                  if (!snapshot.exists()) return;
+                  changeLegacyPonds[snapshot.id] = snapshot.data() || {};
+                  const [receiptPond] = backfillCommittedHarvestReceipts<Record<string, any>>(
+                    [{ id: snapshot.id, ...snapshot.data() }], change, committedRecord, previousRecord,
+                  );
+                  transaction.update(snapshot.ref, removeUndefinedFields({
+                    appliedHarvestOperationId: receiptPond.appliedHarvestOperationId,
+                    appliedHarvestOperationIds: receiptPond.appliedHarvestOperationIds,
+                    reversedHarvestOperationIds: receiptPond.reversedHarvestOperationIds,
+                    appliedHarvestIds: receiptPond.appliedHarvestIds,
+                    lastAppliedHarvestId: receiptPond.lastAppliedHarvestId,
+                  }));
+                });
+              };
+
+              if (change.action === 'create' && harvestSnapshot.exists()) {
+                const existingData = harvestSnapshot.data() || {};
+                if ((!existingData.operationReceiptId || existingData.operationReceiptId === change.id)
+                  && isHarvestPayloadMatch(existingData.operationPayload || existingData, change.data)) {
+                  await backfillLegacyPondReceipts({ id: harvestSnapshot.id, ...existingData });
+                  if (!existingData.operationReceiptId) transaction.update(harvestRef, {
+                    operationReceiptId: change.id,
+                  });
+                  didProcess = true;
+                  return;
+                }
+                throw new Error(`Cannot create harvest: target record ${harvestRef.id} already exists with differing data`);
+              }
+              if (change.action === 'delete' && (!harvestSnapshot.exists() || harvestSnapshot.data()?.voided)) {
+                if (harvestSnapshot.exists() && harvestSnapshot.data()?.voidedByOperationId
+                  && harvestSnapshot.data()?.voidedByOperationId !== change.id) {
+                  throw new Error(`Cannot delete harvest ${harvestRef.id}: record was voided by another operation`);
+                }
+                if (harvestSnapshot.exists() && !harvestSnapshot.data()?.voidedByOperationId
+                  && !isHarvestPayloadMatch(harvestSnapshot.data()?.operationPayload || harvestSnapshot.data(), change.data)) {
+                  throw new Error(`Cannot delete harvest ${harvestRef.id}: voided record payload does not match queued operation`);
+                }
+                await backfillLegacyPondReceipts(
+                  harvestSnapshot.exists()
+                    ? { id: harvestSnapshot.id, ...harvestSnapshot.data() }
+                    : change.data,
+                );
+                if (harvestSnapshot.exists() && !harvestSnapshot.data()?.voidedByOperationId) {
+                  transaction.update(harvestRef, { voidedByOperationId: change.id });
+                }
+                didProcess = true;
+                return;
+              }
+              if (change.action === 'update') {
+                if (harvestRef.path === previousHarvestRef.path) {
+                  throw new Error(`Cannot update harvest ${previousHarvestRef.id}: queued replacement uses the original document ID`);
+                }
+                if (harvestSnapshot.exists()) {
+                  const currentReplacement = harvestSnapshot.data() || {};
+                  if ((!currentReplacement.operationReceiptId || currentReplacement.operationReceiptId === change.id)
+                    && currentReplacement.correctedFromHarvestId === previousHarvestSnapshot.id
+                    && isHarvestPayloadMatch(currentReplacement.operationPayload || currentReplacement, change.data)) {
+                    await backfillLegacyPondReceipts(
+                      { id: harvestSnapshot.id, ...currentReplacement },
+                      previousHarvestSnapshot.exists() ? { id: previousHarvestSnapshot.id, ...previousHarvestSnapshot.data() } : change.previousData,
+                    );
+                    if (!currentReplacement.operationReceiptId) {
+                      transaction.update(harvestRef, {
+                        operationReceiptId: change.id,
+                      });
+                    }
+                    if (previousHarvestSnapshot.exists() && previousHarvestSnapshot.data()?.voided
+                      && !previousHarvestSnapshot.data()?.voidedByOperationId) {
+                      transaction.update(previousHarvestRef, { voidedByOperationId: change.id });
+                    }
+                    didProcess = true;
+                    return;
+                  }
+                }
+                if (!previousHarvestSnapshot.exists() || previousHarvestSnapshot.data()?.voided) {
+                  throw new Error(`Cannot update harvest ${previousHarvestRef.id}: record not found or already voided`);
+                }
+                if (change.previousData && !isHarvestPayloadMatch(previousHarvestSnapshot.data(), change.previousData)) {
+                  throw new Error(`Cannot update harvest ${previousHarvestRef.id}: record was concurrently modified`);
+                }
+                if (harvestRef.path !== previousHarvestRef.path && harvestSnapshot.exists()) {
+                  throw new Error(`Cannot update harvest: target record ${harvestRef.id} already exists`);
+                }
+              }
 
               const previousRecord = change.action === 'create'
                 ? undefined
@@ -892,18 +876,48 @@ const useFirebaseSyncController = () => {
 
                 pondSnapshots.forEach((pondSnapshot) => {
                   const updatedPond = updatedPondsById.get(pondSnapshot.id)!;
+                  const pondSnapshotData = pondSnapshot.data() || {};
+                  const currentAppliedIds = Array.isArray(pondSnapshotData.appliedHarvestIds)
+                    ? pondSnapshotData.appliedHarvestIds
+                    : [];
+                  const currentAppliedOps = Array.isArray(pondSnapshotData.appliedHarvestOperationIds)
+                    ? pondSnapshotData.appliedHarvestOperationIds
+                    : [];
+                  const currentReversedOps = Array.isArray(pondSnapshotData.reversedHarvestOperationIds)
+                    ? pondSnapshotData.reversedHarvestOperationIds
+                    : [];
+                  const changedByNextHarvest = sourceRecord.ponds.some((item) => item.pondId === pondSnapshot.id);
+                  const nextAppliedIds = [
+                    ...currentAppliedIds.filter((id: string) => id !== previousRecord?.id && id !== harvestRef.id),
+                    ...(changedByNextHarvest ? [harvestRef.id] : []),
+                  ];
+                  const nextAppliedOps = currentAppliedOps.includes(change.id) ? currentAppliedOps : [...currentAppliedOps, change.id];
+                  const nextReversedOps = !changedByNextHarvest && previousRecord
+                    ? (currentReversedOps.includes(change.id) ? currentReversedOps : [...currentReversedOps, change.id])
+                    : currentReversedOps;
+                  const authoritativeHarvestFields = removeUndefinedFields({
+                    totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+                    totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+                    partialHarvestCount: updatedPond.partialHarvestCount,
+                    postHarvestBaselineDate: updatedPond.postHarvestBaselineDate,
+                    postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
+                    postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
+                    postHarvestReferenceSamplingId: updatedPond.postHarvestReferenceSamplingId,
+                    postHarvestReferenceSamplingDate: updatedPond.postHarvestReferenceSamplingDate,
+                    postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw,
+                    appliedHarvestOperationId: change.id,
+                    appliedHarvestOperationIds: nextAppliedOps,
+                    reversedHarvestOperationIds: nextReversedOps,
+                    lastAppliedHarvestId: changedByNextHarvest
+                      ? harvestRef.id
+                      : (pondSnapshotData.lastAppliedHarvestId === previousRecord?.id
+                        ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null)
+                        : pondSnapshotData.lastAppliedHarvestId ?? null),
+                    appliedHarvestIds: nextAppliedIds,
+                  });
+                  changeLegacyPonds[pondSnapshot.id] = authoritativeHarvestFields;
                   transaction.update(pondSnapshot.ref, {
-                    ...removeUndefinedFields({
-                      totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
-                      totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
-                      partialHarvestCount: updatedPond.partialHarvestCount,
-                      postHarvestBaselineDate: updatedPond.postHarvestBaselineDate,
-                      postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
-                      postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
-                      postHarvestReferenceSamplingId: updatedPond.postHarvestReferenceSamplingId,
-                      postHarvestReferenceSamplingDate: updatedPond.postHarvestReferenceSamplingDate,
-                      postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw,
-                    }),
+                    ...authoritativeHarvestFields,
                     updatedAt: serverTimestamp(),
                     updatedBy: user.uid,
                   });
@@ -915,6 +929,7 @@ const useFirebaseSyncController = () => {
                   financeEntry: { ...financeSourceEntry(revenue), id: revenueId },
                   ...removeUndefinedFields(sourceRecord),
                   id: harvestRef.id,
+                  operationReceiptId: change.id,
                   ponds: canonicalPonds.map(removeUndefinedFields),
                   ...(previousRecord ? { correctedFromHarvestId: previousRecord.id } : {}),
                   createdAt: serverTimestamp(),
@@ -931,6 +946,7 @@ const useFirebaseSyncController = () => {
                     voided: true,
                     voidedAt: serverTimestamp(),
                     voidedBy: user.uid,
+                    voidedByOperationId: change.id,
                     financeEntry: { ...financeSourceEntry(previousRevenue), id: previousRevenueId, voided: true },
                   });
                   transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', previousRevenueId), {
@@ -945,22 +961,45 @@ const useFirebaseSyncController = () => {
                 if (!pondSnapshot?.exists()) return;
                 const pondData = { id: pondSnapshot.id, ...pondSnapshot.data() } as Pond;
                 const updatedPond = reverseHarvestImpactOnPond(pondData, harvestPond);
+                const currentAppliedIds = Array.isArray(pondSnapshot.data()?.appliedHarvestIds)
+                  ? pondSnapshot.data().appliedHarvestIds
+                  : [];
+                const nextAppliedIds = currentAppliedIds.filter((id: string) => id !== previousRecord?.id);
+                const currentReversedOps = Array.isArray(pondSnapshot.data()?.reversedHarvestOperationIds)
+                  ? pondSnapshot.data().reversedHarvestOperationIds
+                  : [];
+                const nextReversedOps = currentReversedOps.includes(change.id) ? currentReversedOps : [...currentReversedOps, change.id];
+                const authoritativeHarvestFields = removeUndefinedFields({
+                  totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
+                  totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
+                  partialHarvestCount: updatedPond.partialHarvestCount,
+                  postHarvestBaselineDate: updatedPond.postHarvestBaselineDate,
+                  postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
+                  postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
+                  postHarvestReferenceSamplingId: updatedPond.postHarvestReferenceSamplingId,
+                  postHarvestReferenceSamplingDate: updatedPond.postHarvestReferenceSamplingDate,
+                  postHarvestReferenceMbw: updatedPond.postHarvestReferenceMbw,
+                  appliedHarvestOperationId: change.id,
+                  appliedHarvestOperationIds: pondSnapshot.data()?.appliedHarvestOperationIds || [],
+                  reversedHarvestOperationIds: nextReversedOps,
+                  lastAppliedHarvestId: pondSnapshot.data()?.lastAppliedHarvestId === previousRecord!.id
+                    ? (nextAppliedIds[nextAppliedIds.length - 1] ?? null)
+                    : pondSnapshot.data()?.lastAppliedHarvestId ?? null,
+                  appliedHarvestIds: nextAppliedIds,
+                });
+                changeLegacyPonds[pondSnapshot.id] = authoritativeHarvestFields;
                 transaction.update(pondSnapshot.ref, {
-                  ...removeUndefinedFields({
-                    totalHarvestedBiomass: updatedPond.totalHarvestedBiomass,
-                    totalHarvestedPopulation: updatedPond.totalHarvestedPopulation,
-                    postHarvestRemainingBiomass: updatedPond.postHarvestRemainingBiomass,
-                    postHarvestRemainingPopulation: updatedPond.postHarvestRemainingPopulation,
-                  }),
+                  ...authoritativeHarvestFields,
                   updatedAt: serverTimestamp(),
                   updatedBy: user.uid,
                 });
               });
               const revenue = buildHarvestRevenue(previousRecord!);
               const revenueId = financeSyncDocumentId(revenue.reference);
-              transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
+              transaction.update(harvestRef, { voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid, voidedByOperationId: change.id, financeEntry: { ...financeSourceEntry(revenue), id: revenueId, voided: true } });
               transaction.set(doc(db, 'companies', activeCompanyId, 'revenues', revenueId), { ...removeUndefinedFields(revenue), companyId: activeCompanyId, addedBy: user.uid, timestamp: Date.now(), voided: true, voidedAt: serverTimestamp(), voidedBy: user.uid }, { merge: true });
             });
+            Object.assign(committedLegacyPonds, changeLegacyPonds);
             didProcess = true;
           }
           else if (change.type === 'sampling' && change.pondId) {
@@ -1021,38 +1060,79 @@ const useFirebaseSyncController = () => {
       }
 
       if (hasBatchWrites) await batch.commit();
-      return processedChanges;
+      return { processedIds: processedChanges, committedLegacyPonds };
     } catch (error) {
       console.error('Error syncing changes:', error);
       throw error;
     }
   }, [activeCompanyId, user]);
 
-  // Add pending change to queue
-  const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>) => {
-    const pendingChange: PendingChange = {
-      ...change,
-      timestamp: Date.now()
-    };
+  // Queue acceptance is serialized so concurrent form submits cannot overwrite each other's disk queue.
+  const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>): Promise<DurableOutcome> => {
+    if (!activeUserId || !activeCompanyId) {
+      return Promise.resolve({ success: false, status: 'rejected', error: 'User or company is not authenticated.' });
+    }
+    if (!pendingStorageReady) {
+      return Promise.resolve({ success: false, status: 'rejected', error: 'Local storage is not ready.' });
+    }
+    if (pendingIdentityRef.current !== pendingStorageKey) {
+      return Promise.resolve({ success: false, status: 'rejected', error: 'Farm data is still loading for this account.' });
+    }
 
-    const nextChanges = [...pendingChangesRef.current, pendingChange];
-    pendingChangesRef.current = nextChanges;
-    setPendingChanges(nextChanges);
-    const queuePersist = persistPendingQueue(nextChanges);
-    const cachePersist = activeUserId && activeCompanyId
-      ? (() => {
-          scheduleFarmCachePersist(activeUserId, activeCompanyId, usePondStore.getState(), Date.now());
-          return flushFarmCachePersist(activeUserId, activeCompanyId);
-        })()
-      : Promise.resolve();
-
-    void Promise.all([queuePersist, cachePersist]).then(() => {
-      if (isOnlineRef.current) syncPendingChangesRef.current();
-    }).catch((error) => {
-      console.error('Unable to protect pending farm change:', error);
-      setSyncStatus(prev => ({ ...prev, error: 'Unable to save offline changes locally.' }));
+    pendingQueueWritesRef.current += 1;
+    const enqueue = pendingEnqueueRef.current.catch(() => undefined).then(async (): Promise<DurableOutcome> => {
+      const pendingChange: PendingChange = { ...change, timestamp: Date.now() };
+      const store = usePondStore.getState();
+      if (pendingIdentityRef.current !== pendingStorageKey
+        || store.currentCompanyId !== activeCompanyId || store.farmCacheUserId !== activeUserId) {
+        return { success: false, status: 'rejected', error: 'Farm account changed before the change could be saved.' };
+      }
+      const previous = pendingChangesRef.current;
+      const next = [...previous.filter((c) => c.id !== pendingChange.id), pendingChange];
+      pendingChangesRef.current = next;
+      setPendingChanges(next);
+      const persistence = await persistOfflineFarmChange(
+        // This is the acceptance boundary. Do not report success or permit flush until disk confirms it.
+        () => persistPendingQueue(next),
+        async () => {
+          if (pendingIdentityRef.current !== pendingStorageKey) return;
+          const currentState = usePondStore.getState();
+          if (currentState.currentCompanyId !== activeCompanyId || currentState.farmCacheUserId !== activeUserId) return;
+          scheduleFarmCachePersist(activeUserId, activeCompanyId, currentState, Date.now());
+          await flushFarmCachePersist(activeUserId, activeCompanyId);
+        },
+        () => persistPendingQueue(previous),
+      );
+      if (!persistence.durable) {
+        const error = persistence.queueError;
+        if (pendingIdentityRef.current !== pendingStorageKey) {
+          return { success: false, status: 'rejected', error: 'Farm account changed while saving locally.' };
+        }
+        pendingChangesRef.current = previous;
+        setPendingChanges(previous);
+        if (persistence.rollbackError) {
+          console.error('Queue write and rollback both failed; change rejected and memory restored:', persistence.rollbackError);
+        }
+        const errorMessage = error instanceof Error ? error.message : 'Unable to save offline changes locally.';
+        setSyncStatus(prev => ({ ...prev, error: errorMessage }));
+        return { success: false, status: 'rejected', error: errorMessage };
+      }
+      if (persistence.cacheError) {
+        console.error('Farm cache write failed; durable queued change will replay:', persistence.cacheError);
+        setSyncStatus(prev => ({ ...prev, error: 'Change is saved locally and will replay; farm cache refresh failed.' }));
+      }
+      if (pendingIdentityRef.current !== pendingStorageKey) {
+        return { success: true, status: 'pending', error: 'Saved to the previous account queue; sync will resume when that account is active.' };
+      }
+      return { success: true, status: 'pending' };
     });
-  }, [activeCompanyId, activeUserId, persistPendingQueue]);
+    pendingEnqueueRef.current = enqueue;
+    return enqueue.finally(() => {
+      pendingQueueWritesRef.current = Math.max(0, pendingQueueWritesRef.current - 1);
+      if (pendingQueueWritesRef.current === 0 && isOnlineRef.current
+        && pendingIdentityRef.current === pendingStorageKey) syncPendingChangesRef.current();
+    });
+  }, [activeCompanyId, activeUserId, pendingStorageKey, pendingStorageReady, persistPendingQueue]);
 
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
@@ -1077,11 +1157,18 @@ const useFirebaseSyncController = () => {
 
   // Sync pending changes to Firebase
   const syncPendingChanges = useCallback(async () => {
-    const changesToSync = [...pendingChangesRef.current].sort((a, b) => a.timestamp - b.timestamp);
+    const changesToSync = sortPendingChanges([...pendingChangesRef.current]);
+    if (!pendingStorageKey || pendingQueueWritesRef.current > 0 || pendingIdentityRef.current !== pendingStorageKey) return;
     if (!activeCompanyId || !user || changesToSync.length === 0 || !isOnlineRef.current || syncInProgressRef.current) return;
 
     clearRetryTimer();
     syncInProgressRef.current = true;
+    const syncIdentity = { companyId: activeCompanyId, userId: user.uid, storageKey: pendingStorageKey };
+    const stillOwnsSyncIdentity = () => isOfflineSyncIdentityCurrent(
+      usePondStore.getState(),
+      syncIdentity,
+      pendingIdentityRef.current,
+    );
     setSyncStatus(prev => ({ ...prev, isSyncing: true, error: undefined }));
 
     try {
@@ -1094,20 +1181,59 @@ const useFirebaseSyncController = () => {
         if (keys.some(key => blocked.has(key))) continue;
         try {
           const processed = await commitChanges([pendingChange]);
-          if (!processed.includes(pendingChange.id)) throw new Error('Change was not applied');
-          const remaining = pendingChangesRef.current.filter(change => !processed.includes(change.id));
-          // Acknowledge each success before advancing to another remote operation.
-          pendingChangesRef.current = remaining;
-          setPendingChanges(remaining);
-          try {
-            await persistPendingQueue(remaining);
-          } catch (error) {
-            // Keep changes enqueued during this write, and retain the acknowledged
-            // operation for safe retry if its local acknowledgement failed.
-            pendingChangesRef.current = [...pendingChangesRef.current, pendingChange];
-            setPendingChanges(pendingChangesRef.current);
-            throw error;
+          if (!stillOwnsSyncIdentity()) break;
+          if (!processed.processedIds.includes(pendingChange.id)) throw new Error('Change was not applied');
+          const pendingForOverlay = removeAcknowledgedPendingChanges(pendingChangesRef.current, processed.processedIds);
+          if (pendingChange.type === 'harvest') {
+            if (!stillOwnsSyncIdentity()) break;
+            usePondStore.setState((state) => {
+              const committedBaseline = backfillCommittedHarvestReceipts(
+                reconcileCommittedHarvestPonds(state.ponds, processed.committedLegacyPonds),
+                pendingChange,
+                pendingChange.data,
+                pendingChange.action === 'update' ? pendingChange.previousData : undefined,
+              );
+              return {
+                ponds: applyPendingPondChanges(
+                  committedBaseline,
+                  pendingForOverlay.filter(change => change.type === 'harvest'),
+                ),
+              };
+            });
+            if (!stillOwnsSyncIdentity()) break;
+            const reconciledState = usePondStore.getState();
+            scheduleFarmCachePersist(user.uid, activeCompanyId, reconciledState, Date.now());
+            await flushFarmCachePersist(user.uid, activeCompanyId);
+            if (!stillOwnsSyncIdentity()) break;
           }
+          if (!stillOwnsSyncIdentity()) break;
+          // Serialize acknowledgement with enqueues, then derive from the live queue
+          // after cache persistence so changes accepted while awaiting are retained.
+          const acknowledgement = pendingEnqueueRef.current.catch(() => undefined).then(async () => {
+            if (!stillOwnsSyncIdentity()) return;
+            const remaining = removeAcknowledgedPendingChanges(pendingChangesRef.current, processed.processedIds);
+            pendingChangesRef.current = remaining;
+            setPendingChanges(remaining);
+            try {
+              await persistPendingQueue(remaining);
+            } catch (error) {
+              if (!stillOwnsSyncIdentity()) return;
+              const restored = pendingChangesRef.current.some(change => processed.processedIds.includes(change.id))
+                ? pendingChangesRef.current
+                : [...pendingChangesRef.current, ...changesToSync.filter(change => processed.processedIds.includes(change.id))];
+              pendingChangesRef.current = restored;
+              setPendingChanges(restored);
+              try {
+                await persistPendingQueue(restored);
+              } catch (restoreError) {
+                console.error('Unable to persist retryable queue after acknowledgement failure:', restoreError);
+              }
+              throw error;
+            }
+          });
+          pendingEnqueueRef.current = acknowledgement;
+          await acknowledgement;
+          if (!stillOwnsSyncIdentity()) break;
           setSyncStatus(previous => ({ ...previous, pendingChanges: pendingChangesRef.current.length, lastSync: new Date() }));
         } catch (error) {
           keys.forEach(key => blocked.add(key));
@@ -1124,8 +1250,12 @@ const useFirebaseSyncController = () => {
     } finally {
       syncInProgressRef.current = false;
       setSyncStatus(prev => ({ ...prev, isSyncing: false }));
+      if (pendingChangesRef.current.length > 0 && !retryTimerRef.current
+        && isOnlineRef.current && stillOwnsSyncIdentity()) {
+        setTimeout(() => syncPendingChangesRef.current(), 0);
+      }
     }
-  }, [activeCompanyId, clearRetryTimer, commitChanges, persistPendingQueue, scheduleSyncRetry, user]);
+  }, [activeCompanyId, clearRetryTimer, commitChanges, pendingStorageKey, persistPendingQueue, scheduleSyncRetry, user]);
 
   useEffect(() => {
     syncPendingChangesRef.current = () => { void syncPendingChanges(); };
@@ -1163,27 +1293,27 @@ const useFirebaseSyncController = () => {
   }, [pendingStorageReady, pendingChanges.length, syncStatus.isOnline]);
 
   // Sync methods
-  const syncPond = useCallback((action: 'create' | 'update' | 'delete', pond: Pond) => {
+  const syncPond = useCallback((action: 'create' | 'update' | 'delete', pond: Pond, operationId?: string) => {
     addPendingChange({
-      id: `pond-${pond.id}-${Date.now()}`,
+      id: operationId || createOfflineOperationId(`pond-${pond.id}-${action}`),
       type: 'pond',
       action,
       data: pond
     });
   }, [addPendingChange]);
 
-  const syncPhysicalPond = useCallback((action: 'create' | 'update' | 'delete', pond: PhysicalPond) => {
+  const syncPhysicalPond = useCallback((action: 'create' | 'update' | 'delete', pond: PhysicalPond, operationId?: string) => {
     addPendingChange({
-      id: `physical-pond-${pond.id}-${Date.now()}`,
+      id: operationId || createOfflineOperationId(`physical-pond-${pond.id}-${action}`),
       type: 'physicalPond',
       action,
       data: pond
     });
   }, [addPendingChange]);
 
-  const syncSampling = useCallback((action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string) => {
-    addPendingChange({
-      id: `sampling-${sampling.id}-${Date.now()}`,
+  const syncSampling = useCallback((action: 'create' | 'update' | 'delete', pondId: string, sampling: Sampling, samplingId?: string, operationId?: string): Promise<DurableOutcome> => {
+    return addPendingChange({
+      id: operationId || createOfflineOperationId(`sampling-${sampling.id}-${action}`),
       type: 'sampling',
       action,
       data: sampling,
@@ -1192,9 +1322,9 @@ const useFirebaseSyncController = () => {
     });
   }, [addPendingChange]);
 
-  const syncHarvestRecord = useCallback((action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord) => {
-    addPendingChange({
-      id: `harvest-${harvestRecord.id}-${Date.now()}`,
+  const syncHarvestRecord = useCallback((action: 'create' | 'update' | 'delete', harvestRecord: HarvestRecord, previousRecord?: HarvestRecord, operationId?: string): Promise<DurableOutcome> => {
+    return addPendingChange({
+      id: operationId || createOfflineOperationId(`harvest-${harvestRecord.id}-${action}`),
       type: 'harvest',
       action,
       data: harvestRecord,
@@ -1202,9 +1332,9 @@ const useFirebaseSyncController = () => {
     });
   }, [addPendingChange]);
 
-  const syncMortality = useCallback((action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string) => {
+  const syncMortality = useCallback((action: 'create' | 'update' | 'delete', pondId: string, record: MortalityRecord, recordId?: string, operationId?: string) => {
     addPendingChange({
-      id: `mortality-${record.id}-${Date.now()}`,
+      id: operationId || createOfflineOperationId(`mortality-${record.id}-${action}`),
       type: 'mortality',
       action,
       data: record,
@@ -1213,9 +1343,9 @@ const useFirebaseSyncController = () => {
     });
   }, [addPendingChange]);
 
-  const syncCycle = useCallback((action: 'create' | 'update' | 'delete', cycle: FarmCycle) => {
+  const syncCycle = useCallback((action: 'create' | 'update' | 'delete', cycle: FarmCycle, operationId?: string) => {
     addPendingChange({
-      id: `cycle-${cycle.id}-${Date.now()}`,
+      id: operationId || createOfflineOperationId(`cycle-${cycle.id}-${action}`),
       type: 'cycle',
       action,
       data: cycle
@@ -1230,6 +1360,7 @@ const useFirebaseSyncController = () => {
 
   return {
     syncStatus: { ...syncStatus, pendingChanges: pendingChanges.length },
+    pendingChanges,
     syncPond,
     syncPhysicalPond,
     syncSampling,

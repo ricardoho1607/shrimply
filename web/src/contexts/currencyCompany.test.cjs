@@ -40,6 +40,7 @@ test('changing display currency does not rewrite monetary records', () => {
 test('company currency supports current, legacy, missing, and invalid records safely', () => {
   assert.equal(resolveCompanyCurrency({ currency: 'IDR' }), 'IDR');
   assert.equal(resolveCompanyCurrency({ currencyCode: 'THB' }), 'THB');
+  assert.equal(resolveCompanyCurrency({ currency: 'AUD' }), 'AUD');
   assert.equal(resolveCompanyCurrency({}), 'IDR');
   assert.equal(resolveCompanyCurrency({ currency: 'INVALID' }), 'IDR');
   assert.equal(resolveCompanyCurrency(null), 'IDR');

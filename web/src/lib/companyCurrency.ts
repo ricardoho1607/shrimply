@@ -1,6 +1,6 @@
-export type CompanyCurrency = 'USD' | 'IDR' | 'THB' | 'CNY' | 'VND';
+export type CompanyCurrency = 'USD' | 'AUD' | 'IDR' | 'THB' | 'CNY' | 'VND';
 
-const SUPPORTED_CURRENCIES = new Set<CompanyCurrency>(['USD', 'IDR', 'THB', 'CNY', 'VND']);
+const SUPPORTED_CURRENCIES = new Set<CompanyCurrency>(['USD', 'AUD', 'IDR', 'THB', 'CNY', 'VND']);
 
 export const resolveCompanyCurrency = (
   company: { currency?: unknown; currencyCode?: unknown } | null | undefined,

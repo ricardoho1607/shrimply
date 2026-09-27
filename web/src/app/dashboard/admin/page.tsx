@@ -1079,8 +1079,8 @@ function AdminInspectorPanel({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 18 }}>
         <div style={{ minWidth: 0 }}>
           <h2 style={{ color: 'var(--text-primary)', fontSize: '1.16rem', fontWeight: 600, margin: 0, lineHeight: 1.2 }}>{company.companyName}</h2>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: 8 }}>
-            Company ID: {company.id.slice(0, 12)}
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, marginTop: 8, overflowWrap: 'anywhere', fontFamily: 'monospace' }}>
+            Company ID: {company.id}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
@@ -1104,7 +1104,7 @@ function AdminInspectorPanel({
         </button>
         <button className="dashboard-action dashboard-action-secondary" type="button" onClick={() => copyText(company.id)}>
           <Copy size={14} />
-          <span>Copy company</span>
+          <span>Copy company ID</span>
         </button>
       </div>
 
@@ -1380,9 +1380,10 @@ export default function HiddenAdminPage() {
   const exportCompaniesCsv = () => {
     if (!metrics) return;
     const rows = [
-      ['Company', 'Owner', 'Status', 'Ponds', 'Active ponds', 'Inactive ponds', 'Team', 'Inventory items', 'Active cycles', 'AI requests', 'Created'],
+      ['Company', 'Company ID', 'Owner', 'Status', 'Ponds', 'Active ponds', 'Inactive ponds', 'Team', 'Inventory items', 'Active cycles', 'AI requests', 'Created'],
       ...metrics.companies.map((company) => [
         company.companyName,
+        company.id,
         company.ownerEmail || 'Unavailable',
         getCompanyHealth(company).label,
         String(company.pondCount),
