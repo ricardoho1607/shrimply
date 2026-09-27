@@ -1,3 +1,7 @@
+const { isExplicitFarmAction } = require('./shared/orsonDomain/orsonAgentContract');
+const { randomUUID: orsonRequestId } = require('node:crypto');
+const { createAgentTools, AGENT_INSTRUCTION, DELETE_AGENT_INSTRUCTION, EDIT_AGENT_INSTRUCTION } = require('./orsonAgentTools');
+const { authorizeAgent } = require('./shared/orsonActionAuth');
 const { createOrsonAppDataReader } = require('./shared/orsonAppData');
 const { fetchLabelPage } = require('./shared/orsonLabelEvidence');
 const { loadDosingContext } = require('./shared/orsonDosingContext');
@@ -622,6 +626,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
   const prompt = typeof request.data?.prompt === "string" ? request.data.prompt.trim() : "";
   const userMessage = typeof request.data?.userMessage === "string" ? request.data.userMessage.trim().slice(0, 8000) : "";
   let questionRoute = ORSON_QUESTION_ROUTES.has(request.data?.questionRoute) ? request.data.questionRoute : "farm_analysis";
+  if (request.data?.agentVersion === 1 && isExplicitFarmAction(userMessage)) questionRoute = "farm_analysis";
   const mode = request.data?.mode === "mortality_diagnostic"
     ? "mortality_diagnostic"
     : request.data?.mode === "pond_diagnostic" ? "pond_diagnostic" : "standard";
@@ -630,6 +635,17 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
   const db = admin.firestore();
   const company = await assertCompanyMemberForCallable(db, uid, companyId, "useOrson");
   const authorizationMs = Date.now() - requestStartedAt;
+  const activityRequestId = orsonRequestId();
+  let activitySequence = 0;
+  let currentActivityState = null;
+  const agentOperations = [];
+  const sendActivity = async (step, state = 'running') => {
+    currentActivityState = state;
+    if (request.acceptsStreaming && callableResponse) {
+      await callableResponse.sendChunk({ type: 'status_step', requestId: activityRequestId, sequence: ++activitySequence, step, state });
+    }
+  };
+
 
   // Keep the data-only path for already-installed clients. It does not invoke the
   // model and therefore does not consume server AI quota.
@@ -693,6 +709,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       if (remaining < 1000) throw new Error("dosing_safety_deadline");
       return generateMetaModelResponse({ apiKey, reasoningEffort: "low", ...options, timeoutMs: Math.min(15000, remaining) });
     };
+    await sendActivity('working');
     const classificationStartedAt = Date.now();
     const requestConstraints = getOrsonRequestConstraints(userMessage);
     const treatmentRequest = requestConstraints.suppressTreatmentAdvice
@@ -701,6 +718,7 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     const classificationMs = Date.now() - classificationStartedAt;
     if (treatmentRequest && questionRoute === "out_of_scope") questionRoute = "inventory_product";
     const productContextStartedAt = Date.now();
+    if (treatmentRequest || needsInventoryContext(questionRoute, userMessage)) await sendActivity('inventory_check');
     const productContext = treatmentRequest || needsInventoryContext(questionRoute, userMessage)
       ? await loadOrsonProductContext(db, companyId, userMessage)
       : null;
@@ -708,17 +726,40 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     const groundedPrompt = productContext
       ? `${prompt}\n\nORSON SAVED PRODUCT CONTEXT:\n${JSON.stringify(productContext)}`
       : prompt;
-    const verificationRequest = treatmentRequest;
+    const verificationRequest = treatmentRequest && !(request.data?.agentVersion === 1 && isExplicitFarmAction(userMessage));
     const useWebLookup = shouldUseOrsonWebLookup(questionRoute, userMessage);
     const systemInstruction = buildServerOrsonSystemInstruction(mode, aiFunction, questionRoute);
     const { maxOutputTokens, reasoningEffort, timeoutMs } = getOrsonGenerationSettings(mode);
     const userSnap = await db.collection("users").doc(uid).get();
     const appData = createOrsonAppDataReader({ db, company, user: userSnap.data(), uid, companyId });
+    const agent = request.data?.agentVersion === 1 ? createAgentTools({
+      db, auth: await authorizeAgent(db, uid, companyId), onActivity: sendActivity,
+      operationIds: request.data?.agentOperationIds,
+      userMessage,
+      onOperation: async operation => {
+        agentOperations.push(operation);
+        if (request.acceptsStreaming) await callableResponse.sendChunk({ type: 'agent_operation', operation });
+      },
+    }) : null;
+    const activeLookups = new Map();
+    const executeOrsonTool = async (name, args) => {
+      if (agent?.tools.some(tool => tool.name === name)) return agent.execute(name, args);
+      const lookupId = orsonRequestId();
+      const step = name === 'read_pond_timeline' ? 'sampling_lookup' : args?.dataset === 'ponds' ? 'pond_lookup' : ['feeds', 'additives'].includes(args?.dataset) ? 'inventory_check' : 'record_lookup';
+      activeLookups.set(lookupId, step);
+      await sendActivity(step);
+      try { return await appData.execute(name, args); }
+      finally {
+        activeLookups.delete(lookupId);
+        await sendActivity([...activeLookups.values()].at(-1) || 'answer');
+      }
+    };
     const modelStartedAt = Date.now();
     let firstChunkMs = null;
     let emittedText = false;
     const sendStreamChunk = request.acceptsStreaming ? async (delta) => {
       if (!delta) return;
+      if (currentActivityState === 'running') await sendActivity('answer', 'completed');
       emittedText = true;
       if (firstChunkMs === null) firstChunkMs = Date.now() - requestStartedAt;
       return callableResponse.sendChunk({ type: "text_delta", text: delta });
@@ -732,14 +773,14 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
       deadlineMs: requestStartedAt + 125000,
       generate: (overrides) => generateMetaModelResponse({
         apiKey,
-        systemInstruction: `${systemInstruction}\nWEB VERIFICATION: ${withWebLookup ? "Search enabled; cite actual supporting sources before dosing." : "Unavailable for this response. Withhold numeric application doses; do not claim internet verification."}`,
+        systemInstruction: `${systemInstruction}${agent ? `${AGENT_INSTRUCTION}${DELETE_AGENT_INSTRUCTION}${EDIT_AGENT_INSTRUCTION}\nCOMPANY MONETARY CURRENCY: ${company.currency || company.currencyCode || "unspecified"}. All stored monetary amounts use this company's numeric currency convention.` : ""}\nWEB VERIFICATION: ${withWebLookup ? "Search enabled; cite actual supporting sources before dosing." : "Unavailable for this response. Withhold numeric application doses; do not claim internet verification."}`,
         prompt: groundedPrompt,
         maxOutputTokens,
         reasoningEffort,
         timeoutMs,
         useWebLookup: withWebLookup,
         ...overrides,
-        ...(overrides?.systemInstruction ? {} : { tools: appData.tools, executeTool: appData.execute }),
+        ...(overrides?.systemInstruction ? {} : { tools: [...appData.tools, ...(agent?.tools || [])], executeTool: executeOrsonTool }),
       }),
     });
     let generated;
@@ -822,7 +863,8 @@ exports.generateOrsonResponse = onCall({ timeoutSeconds: 150, secrets: [metaMode
     } catch (costError) {
       console.warn("orson_cost_record_failed", { companyId, error: costError.message });
     }
-    return { text, finishReason: generated.finishReason, groundingStatus: generated.groundingStatus, safeToCache: !verificationRequest && !generated.toolEvidence && generated.doseSafety === "no_application_guidance" && generated.nitrogenSafety !== "withheld" };
+    await sendActivity(agentOperations.length ? "draft_ready" : "answer", agentOperations.length ? "awaiting_confirmation" : "completed");
+    return { text, operations: agentOperations, finishReason: generated.finishReason, groundingStatus: generated.groundingStatus, safeToCache: !agentOperations.length && !verificationRequest && !generated.toolEvidence && generated.doseSafety === "no_application_guidance" && generated.nitrogenSafety !== "withheld" };
   } catch (error) {
     console.error("Orson response generation failed:", { error, totalMs: Date.now() - requestStartedAt, route: questionRoute });
     throw new HttpsError("internal", "Orson could not generate a response right now.");

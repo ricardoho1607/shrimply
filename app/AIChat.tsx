@@ -1,3 +1,12 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import app, { auth } from '../config/firebase';
+import { useAgentOperations } from '../orson/useAgentOperations';
+import { linkOperationToReply, unlinkedDraftOperationIds, upsertReplyWithOperations } from '../orson/conversationOperations';
+import { agentActivityLabel } from '../shared/orsonAgentPresentation';
+import OrsonAgentCards from './components/OrsonAgentCards';
+import OrsonAgentInput from './components/OrsonAgentInput';
 import React, { useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { 
   View, 
@@ -29,6 +38,7 @@ interface ChatMessage {
   timestamp: Date;
   language?: string;
   retryPrompt?: string;
+  operationIds?: string[];
 }
 
 // --- HELPERS ---
@@ -83,7 +93,7 @@ function AIChatSession() {
   const { sendMessage, loading, clearChat } = useGemini();
 
   useEffect(() => {
-    if (!loading || streamingReplyId) {
+    if (!loading) {
       return;
     }
     const interval = setInterval(() => {
@@ -95,6 +105,13 @@ function AIChatSession() {
   const activePonds = useMemo(() => ponds.filter(isPondCycleActive), [ponds]);
   const { user, company } = useAuth();
   const canUseOrson = hasFarmPermission(user, 'useOrson', company?.ownerId);
+  const agentTransport = useCallback(async (name: string, data: Record<string, unknown>) => {
+    const connection = await NetInfo.fetch();
+    if (auth.currentUser?.uid !== user?.uid || connection.isConnected === false) throw new Error('Reconnect and sign in to use farm actions.');
+    return (await httpsCallable(getFunctions(app), name, { timeout: 150000 })(data)).data;
+  }, [user]);
+  const agent = useAgentOperations(company!.id, user!.uid, agentTransport, AsyncStorage, loading);
+
   
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -137,7 +154,7 @@ function AIChatSession() {
 
   const handleSend = useCallback(async (retryPrompt?: string, retryId?: string) => {
     const userText = (retryPrompt || inputText).trim();
-    if (!userText || loading) return;
+    if (!userText || loading || agent.busy) return;
     const currentGeneration = ++generation.current;
     const isCurrent = () => generation.current === currentGeneration;
     const detectedLang = detectLanguage(userText);
@@ -158,16 +175,22 @@ function AIChatSession() {
     const replyTimestamp = new Date();
     const upsertReply = (message: string, retryPrompt?: string) => {
       if (!isCurrent()) return;
-      setMessages((previous) => {
-        const existing = previous.findIndex((item) => item.id === replyId);
-        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}) };
-        if (existing < 0) return [...previous, reply];
-        return previous.map((item, index) => index === existing ? reply : item);
-      });
+      setMessages((previous) => upsertReplyWithOperations(previous, {
+        id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}),
+      }));
     };
     try {
       const aiResponse = await sendMessage(userText, activePonds, {
         companyId: company?.id,
+        onActivity: event => { if (isCurrent()) agent.onActivity(event); },
+        onOperation: operation => {
+          if (!isCurrent()) return;
+          agent.receive(operation);
+          setMessages(previous => linkOperationToReply(previous, {
+            id: replyId, type: 'ai', message: '', timestamp: replyTimestamp,
+          }, operation.id));
+        },
+        agentOperationIds: agent.operations.map(op => op.id),
         timeZone: company?.timeZone,
         conversationHistory: messages
           .filter(message => !message.retryPrompt && message.id !== retryId && message.id !== '1')
@@ -184,9 +207,9 @@ function AIChatSession() {
       if (!isCurrent() || error instanceof OrsonSessionChangedError) return;
       upsertReply(error instanceof OrsonIncompleteResponseError ? error.partialText : '', userText);
     } finally {
-      if (isCurrent()) setStreamingReplyId(null);
+      if (isCurrent()) { setStreamingReplyId(null); agent.clearActivity(); }
     }
-  }, [inputText, loading, conversationLanguage, sendMessage, activePonds, company, messages]);
+  }, [inputText, loading, conversationLanguage, sendMessage, activePonds, company, messages, agent]);
 
   if (!canUseOrson) return (
     <SafeAreaView style={styles.fullContainer}>
@@ -252,9 +275,9 @@ function AIChatSession() {
             keyboardShouldPersistTaps="handled"
           >
             {messages.map((message) => (
-              <View key={message.id} style={[styles.messageContainer, message.type === 'user' ? styles.userMessage : styles.aiMessage]}>
-                <View style={[styles.messageStack, message.type === 'user' && styles.userMessageStack]}>
-                  <View style={[styles.messageBubble, message.type === 'user' && styles.userBubble]}>
+              <View key={message.id} style={[styles.messageContainer, message.type === 'user' ? styles.userMessage : styles.aiMessage, !!message.operationIds?.length && styles.entryMessage]}>
+                <View style={[styles.messageStack, message.type === 'user' && styles.userMessageStack, !!message.operationIds?.length && styles.entryStack]}>
+                  {(message.message || message.retryPrompt) && <View style={[styles.messageBubble, message.type === 'user' && styles.userBubble]}>
                     <Text style={[styles.messageText, message.type === 'user' ? styles.userText : styles.aiText]}>
                       {message.type === 'ai' ? cleanOrsonResponse(message.message) : message.message}
                     </Text>
@@ -263,24 +286,27 @@ function AIChatSession() {
                         <Text style={styles.retryText}>Response interrupted. Retry</Text>
                       </TouchableOpacity>
                     )}
-                  </View>
+                  </View>}
+                  {message.type === 'ai' && !!message.operationIds?.length && <OrsonAgentCards agent={agent} operationIds={message.operationIds} showStatus={false} />}
                   <Text style={styles.timestamp}>
                     {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </Text>
                 </View>
               </View>
             ))}
-            {loading && !streamingReplyId && (
+            {loading && !agent.activityFinished && (!streamingReplyId || (agent.activity && agent.activity.step !== 'answer')) && (
               <View style={styles.messageContainer}>
                 <View style={styles.messageStack}>
-                  <Text style={styles.thinkingText}>Orson is analyzing farm metrics{analyzingDots}</Text>
+                  <Text style={styles.thinkingText}>{agentActivityLabel(agent.activity?.step || 'working', conversationLanguage)}{analyzingDots}{agent.elapsed >= 10 ? ` (${agent.elapsed}s)` : ''}</Text>
                 </View>
               </View>
             )}
+            <OrsonAgentCards agent={agent} operationIds={unlinkedDraftOperationIds(messages, agent.operations)} />
           </ScrollView>
 
           <View style={[styles.inputContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <View style={styles.textInputContainer}>
+              <OrsonAgentInput companyId={company!.id} uid={user!.uid} agent={agent} disabled={loading || agent.busy} language={conversationLanguage} onTranscript={text => setInputText(previous => `${previous}${previous ? " " : ""}${text}`)} />
               <TextInput
                 style={styles.textInput}
                 value={inputText}
@@ -288,15 +314,15 @@ function AIChatSession() {
                 placeholder="Type a question for Orson..."
                 placeholderTextColor="#7b8b99"
                 multiline
-                editable={!loading}
+                editable={!loading && !agent.busy}
               />
               <TouchableOpacity
-                style={[styles.sendButton, (!inputText.trim() || loading) && styles.sendButtonDisabled]}
+                style={[styles.sendButton, (!inputText.trim() || loading || agent.busy) && styles.sendButtonDisabled]}
                 onPress={() => handleSend()}
                 accessibilityRole="button"
                 accessibilityLabel="Send message"
               >
-                <Ionicons name="send" size={20} color="#fff" />
+                <Ionicons name="arrow-up" size={22} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>
@@ -328,9 +354,11 @@ const styles = StyleSheet.create({
   messagesContainer: { flex: 1 },
   messagesContent: { padding: 20, paddingBottom: 26, gap: 18 },
   messageContainer: { maxWidth: '88%', alignSelf: 'flex-start' },
+  entryMessage: { width: '100%', maxWidth: '100%' },
   userMessage: { alignSelf: 'flex-end' },
   aiMessage: { alignSelf: 'flex-start' },
   messageStack: { alignItems: 'flex-start', gap: 6 },
+  entryStack: { width: '100%' },
   userMessageStack: { alignItems: 'flex-end' },
   messageBubble: { maxWidth: '100%', padding: 0, backgroundColor: 'transparent' },
   userBubble: { paddingHorizontal: 16, paddingVertical: 14, borderTopLeftRadius: 16, borderTopRightRadius: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 4, backgroundColor: '#0F4C75', shadowColor: '#0F4C75', shadowOpacity: 0.18, shadowRadius: 7, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
@@ -341,8 +369,10 @@ const styles = StyleSheet.create({
   retryText: { marginTop: 8, color: '#BBE1FA', fontSize: 13, fontWeight: '600' },
   timestamp: { color: '#a0adb8', fontSize: 10, fontWeight: '400' },
   inputContainer: { paddingHorizontal: 16, paddingTop: 16, borderTopWidth: 1, borderColor: '#d9e4ec', backgroundColor: '#f8fbfd' },
-  textInputContainer: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  textInputContainer: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   textInput: { flex: 1, minHeight: 50, maxHeight: 130, paddingHorizontal: 16, paddingVertical: 14, borderWidth: 1, borderColor: '#d9e4ec', borderRadius: 10, backgroundColor: '#FFFFFF', color: '#17324D', fontSize: 15, lineHeight: 20, shadowColor: '#0F4C75', shadowOpacity: 0.04, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
   sendButton: { width: 50, height: 50, borderRadius: 10, backgroundColor: '#0F4C75', justifyContent: 'center', alignItems: 'center', shadowColor: '#0F4C75', shadowOpacity: 0.2, shadowRadius: 9, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   sendButtonDisabled: { backgroundColor: '#0F4C75', opacity: 0.48, shadowOpacity: 0 },
+  inputStatus: { position: 'absolute', left: 48, right: 58, bottom: -18, color: '#7b8b99', fontSize: 12 },
+  inputError: { position: 'absolute', left: 48, right: 0, bottom: -18, color: '#b3261e', fontSize: 12 },
 });

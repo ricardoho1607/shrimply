@@ -10,6 +10,8 @@ const privateField = /password|secret|token|credential|api.?key|email|phone|addr
 const financeField = /cost|price|profit|revenue|expense|payment|salary|wage|financial|billing|invoice|purchase|depreciation/i;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const MAX_ARRAY_PAGE_BYTES = 24000;
+const MAX_ARRAY_PAGE_ITEMS = 30;
 const validDateKey = value => {
   if (typeof value !== 'string' || !ISO_DATE.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00.000Z`);
@@ -157,6 +159,30 @@ const buildPondTimeline = (pondId, pond, args, timeZone) => {
 const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
   const allowed = permission => hasUserPermission({ company: { ...company, id: companyId }, user, uid, permission });
   const canViewFinance = allowed('viewFinance');
+  const enterpriseScoped = company.businessSize === 'enterprise' && user?.role === 'technician' && company.ownerId !== uid;
+  let scopePromise;
+  const scopedData = async (dataset, record) => {
+    if (!enterpriseScoped) return record;
+    scopePromise ||= (async () => {
+      const base = db.collection('companies').doc(companyId);
+      const blocks = await base.collection('blocks').where('assignedTechnicianId', '==', uid).get();
+      const blockIds = new Set(blocks.docs.map(doc => doc.id));
+      const ponds = await base.collection('ponds').get();
+      return { blockIds, pondIds: new Set(ponds.docs.filter(doc => blockIds.has(doc.data().blockId)).map(doc => doc.id)) };
+    })();
+    const { blockIds, pondIds } = await scopePromise;
+    if (['ponds', 'physicalPonds'].includes(dataset)) return blockIds.has(record.blockId) ? record : null;
+    if (dataset === 'blocks') return record.assignedTechnicianId === uid ? record : null;
+    if (dataset === 'cycles') return (record.blockIds || [record.blockId]).some(id => blockIds.has(id)) ? { ...record, blockIds: (record.blockIds || []).filter(id => blockIds.has(id)), plannedPondIds: undefined } : null;
+    if (['feeds', 'additives'].includes(dataset)) return { ...record, usageHistory: (record.usageHistory || []).filter(row => pondIds.has(row.pondId)) };
+    if (Array.isArray(record.ponds)) {
+      const ponds = record.ponds.filter(row => pondIds.has(row.pondId));
+      return ponds.length ? { ...record, ponds, financeEntry: undefined } : null;
+    }
+    if (record.pondId && pondIds.has(record.pondId)) return record;
+    return null;
+  };
+
   const execute = async (name, args) => {
     if (name === timelineTool.name) {
       if (!args || !allowed('viewFarm') || !validId(args.pondId)) throw new Error('Not permitted');
@@ -164,7 +190,9 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
       if (args.endDate !== undefined && !validDateKey(args.endDate)) throw new Error('Invalid date');
       const snap = await db.collection('companies').doc(companyId).collection('ponds').doc(args.pondId).get();
       if (!snap.exists) return { status: 'not_found' };
-      return buildPondTimeline(snap.id || args.pondId, cleanRecord(snap.data(), canViewFinance), args, company.timeZone);
+      const scoped = await scopedData('ponds', snap.data());
+      if (!scoped) throw new Error('Not permitted');
+      return buildPondTimeline(snap.id || args.pondId, cleanRecord(scoped, canViewFinance), args, company.timeZone);
     }
     if (name !== recordTool.name || !args || !Object.hasOwn(DATASETS, args.dataset) || !allowed(DATASETS[args.dataset])) throw new Error('Not permitted');
     if (args.documentId !== undefined && !validId(args.documentId)) throw new Error('Invalid document');
@@ -176,17 +204,29 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
       const snap = await ref.doc(args.documentId).get();
       if (!snap.exists) return { status: 'not_found' };
       if (args.dataset === 'assets' && snap.data().companyId !== companyId) throw new Error('Not permitted');
-      const data = cleanRecord(snap.data(), canViewFinance);
+      const scoped = await scopedData(args.dataset, snap.data());
+      if (!scoped) throw new Error('Not permitted');
+      const data = cleanRecord(scoped, canViewFinance);
       if (args.field && !Object.hasOwn(data, args.field)) return { status: 'field_unavailable', fields: Object.keys(data) };
       let value = args.field ? data[args.field] : data;
       let nextOffset = null;
       if (Array.isArray(value)) {
         const offset = args.offset || 0;
         const all = value;
-        value = all.slice(offset, offset + 30);
+        value = [];
+        for (let index = offset; index < all.length && value.length < MAX_ARRAY_PAGE_ITEMS; index += 1) {
+          const candidate = [...value, all[index]];
+          if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') > MAX_ARRAY_PAGE_BYTES) {
+            if (!value.length) {
+              return { status: 'array_item_too_large', dataset: args.dataset, id: snap.id, field: args.field || null, offset: index, fields: Object.keys(data), message: 'This array item is too large to return safely. Request a smaller field or inspect the document another way.' };
+            }
+            break;
+          }
+          value = candidate;
+        }
         nextOffset = offset + value.length < all.length ? offset + value.length : null;
       }
-      if (JSON.stringify(value).length > 24000) return { status: 'select_field', fields: Object.keys(data), message: 'Document is large. Request one field at a time; array fields support pagination.' };
+      if (Buffer.byteLength(JSON.stringify(value), 'utf8') > MAX_ARRAY_PAGE_BYTES) return { status: 'select_field', fields: Object.keys(data), message: 'Document is large. Request one field at a time; array fields support pagination.' };
       return { status: 'ok', dataset: args.dataset, id: snap.id, field: args.field || null, data: value, nextOffset, complete: nextOffset === null };
     }
     let query = args.dataset === 'assets' ? ref.where('companyId', '==', companyId) : ref;
@@ -194,10 +234,12 @@ const createOrsonAppDataReader = ({ db, company, user, uid, companyId }) => {
     if (args.after) query = query.startAfter(args.after);
     const snap = await query.limit(11).get();
     const docs = snap.docs.slice(0, 10);
-    const records = docs.map(doc => {
-      const data = cleanRecord(doc.data(), canViewFinance);
+    const records = (await Promise.all(docs.map(async doc => {
+      const scoped = await scopedData(args.dataset, doc.data());
+      if (!scoped) return null;
+      const data = cleanRecord(scoped, canViewFinance);
       return { id: doc.id, fields: Object.keys(data), data: Object.fromEntries(Object.entries(data).filter(([, v]) => v === null || typeof v !== 'object').map(([k, v]) => [k, typeof v === 'string' && v.length > 600 ? { preview: v.slice(0, 600), truncated: true } : v])) };
-    });
+    }))).filter(Boolean);
     return { status: 'ok', dataset: args.dataset, records, documentDetailsOmitted: true, nextCursor: snap.docs.length > 10 ? docs.at(-1).id : null, complete: snap.docs.length <= 10 };
   };
   const tools = [{ ...recordTool, parameters: { ...recordTool.parameters, properties: { ...recordTool.parameters.properties, dataset: { type: 'string', enum: Object.keys(DATASETS).filter(key => allowed(DATASETS[key])) } } } }];

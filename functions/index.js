@@ -17,3 +17,5 @@ Object.assign(exports, require("./operationalNotifications")({ admin, assertComp
 Object.assign(exports, require("./billing"));
 
 Object.assign(exports, require('./diseasePrivacy'));
+
+Object.assign(exports, require('./orsonAgent'));

@@ -1,0 +1,88 @@
+.card {
+  margin: 16px 0;
+  padding: 18px;
+  border: 1px solid #cbdce8;
+  border-radius: 12px;
+  background: #f8fbfd;
+  color: #17324d;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.card p {
+  margin: 8px 0;
+}
+.row {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid #d9e4ec;
+  border-radius: 8px;
+  min-width: 0;
+}
+.fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.fields input,
+.fields select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #cbdce8;
+  padding: 9px;
+  border-radius: 6px;
+  background: white;
+  color: #17324d;
+  font: inherit;
+}
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+.card button {
+  padding: 8px 12px;
+  border: 1px solid #0f4c75;
+  border-radius: 6px;
+  background: white;
+  color: #0f4c75;
+  cursor: pointer;
+  font: inherit;
+}
+.card button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.card a {
+  display: inline-block;
+  margin-left: 10px;
+  text-decoration: underline;
+}
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.error {
+  color: #b3261e;
+}
+.warning {
+  color: #805a00;
+}
+.receipt {
+  padding: 10px;
+  border-left: 3px solid #3282b8;
+  background: white;
+  margin: 8px 0;
+}
+
+.pulse { animation: agentPulse 1.5s ease-in-out infinite; }
+@keyframes agentPulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .pulse { animation: none; } }

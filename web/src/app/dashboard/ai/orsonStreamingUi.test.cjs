@@ -15,7 +15,7 @@ test('web and mobile render Orson replies without duplicate reply bubbles', () =
     assert.match(source, /onPartialResponse:\s*\(partialResponse\)/);
     assert.match(source, /upsertReply\(partialResponse\);/);
     assert.doesNotMatch(source, /upsertReply\(partialResponse,\s*[^)]/);
-    assert.match(source, /loading\s*&&\s*!streamingReplyId/);
+    assert.match(source, /loading\s*&&\s*!agent\.activityFinished\s*&&\s*\(!streamingReplyId\s*\|\|/);
     assert.match(source, /upsertReply\(aiResponse\)/);
   }
 });

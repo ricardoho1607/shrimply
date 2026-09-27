@@ -1,3 +1,4 @@
+import { isExplicitFarmAction, type OrsonActivity, type OrsonOperation } from '../../shared/orsonAgentContract';
 import { useState, useRef, useEffect } from 'react';
 import { getAuth } from 'firebase/auth';
 import { useAuth } from '../../context/AuthContext';
@@ -43,6 +44,9 @@ type SendMessageOptions = {
   calibration?: OrsonCalibrationProfile | null;
   conversationHistory?: OrsonConversationMessage[];
   onPartialResponse?: (text: string) => void;
+  onActivity?: (activity: OrsonActivity) => void;
+  onOperation?: (operation: OrsonOperation) => void;
+  agentOperationIds?: string[];
   projectionSnapshot?: {
     pond: Record<string, unknown>;
     projection: OrsonHarvestProjection;
@@ -201,6 +205,7 @@ export const useGemini = () => {
       if (getAuth(app).currentUser?.uid !== user?.uid || options.companyId !== company?.id) throw new OrsonSessionChangedError();
     };
     assertCurrent();
+    const explicitAction = Boolean(options.onOperation) && isExplicitFarmAction(userMessage);
     const requestStartedAt = Date.now();
     setLoading(true);
     setError(null);
@@ -211,7 +216,7 @@ export const useGemini = () => {
     }));
 
     try {
-      if ((!allPonds || allPonds.length === 0) && inferOrsonConversationRoute(userMessage, conversationHistory) === 'farm_analysis') {
+      if (!explicitAction && (!allPonds || allPonds.length === 0) && inferOrsonConversationRoute(userMessage, conversationHistory) === 'farm_analysis') {
         setLoading(false);
         return "I don't have pond records connected yet. Add pond, water-quality, feed, or sampling data so I can calculate a real Orson risk report.";
       }
@@ -235,14 +240,14 @@ export const useGemini = () => {
       const analysisStartedAt = Date.now();
       assertCurrent();
       analysis = buildOrsonAnalysis(allPonds, userMessage, new Date(), calibration, undefined, options.timeZone, conversationHistory);
-      if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
+      if (!explicitAction && analysis.diagnosticRequest.requested && analysis.diagnosticRequest.status !== 'selected') {
         setLoading(false);
         return analysis.diagnosticRequest.status === 'ambiguous'
           ? 'More than one pond has recent mortality. Name the pond so I can trace its previous 14 days without mixing pond histories.'
           : 'I could not find a recent mortality record to investigate. Name the pond and record the mortality observation first.';
       }
 
-      if (analysis.diagnosticRequest.requested && analysis.diagnosticRequest.pondId && options.companyId) {
+      if (!explicitAction && analysis.diagnosticRequest.requested && analysis.diagnosticRequest.pondId && options.companyId) {
         const diagnosticPondId = analysis.diagnosticRequest.pondId;
         try {
           const functions = getFunctions(app);
@@ -274,7 +279,7 @@ export const useGemini = () => {
       assertCurrent();
       const analysisMs = Date.now() - analysisStartedAt;
 
-      if (analysis.promptPackage.exactRecordAnswer) {
+      if (!explicitAction && analysis.promptPackage.exactRecordAnswer) {
         const exactText = analysis.promptPackage.exactRecordAnswer;
         await emitProgressiveText(exactText, options.onPartialResponse, assertCurrent);
         setChatHistory((previous) => [
@@ -288,7 +293,7 @@ export const useGemini = () => {
 
       const cachedText = await getCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null);
       assertCurrent();
-      if (cachedText) {
+      if (!explicitAction && cachedText) {
         await emitProgressiveText(cachedText, options.onPartialResponse, assertCurrent);
         setChatHistory((previous) => [
           ...previous,
@@ -315,13 +320,15 @@ export const useGemini = () => {
       }
       assertCurrent();
       const generateOrsonResponse = httpsCallable<
-        { companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'pond_diagnostic' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
+        { agentOperationIds?: string[]; agentVersion?: number; companyId?: string; systemInstruction: string; prompt: string; userMessage: string; questionRoute: string; mode: 'standard' | 'pond_diagnostic' | 'mortality_diagnostic'; aiFunction: OrsonAiFunction },
         OrsonResponse,
         OrsonTextStreamChunk
       >(functions, 'generateOrsonResponse', { timeout: ORSON_MODEL_TIMEOUT_MS });
 
       const requestPayload = {
           companyId: options.companyId,
+          agentVersion: options.onOperation ? 1 : undefined,
+          agentOperationIds: options.onOperation ? options.agentOperationIds?.slice(-10) : undefined,
           // Retained until older deployed Functions no longer require this field.
           // The hardened Function ignores it and builds its own server instruction.
           systemInstruction: analysis.promptPackage.systemInstruction,
@@ -339,6 +346,8 @@ export const useGemini = () => {
           request: requestPayload,
           timeoutMs: ORSON_CLIENT_TIMEOUT_MS,
           signal: session.signal,
+          onActivity: activity => { assertCurrent(); options.onActivity?.(activity); },
+          onOperation: operation => { assertCurrent(); options.onOperation?.(operation); },
           onPartialResponse: (partialText) => {
             assertCurrent();
             options.onPartialResponse?.(cleanOrsonResponse(partialText));
@@ -355,6 +364,7 @@ export const useGemini = () => {
         await emitProgressiveText(fallbackText, options.onPartialResponse, assertCurrent);
       }
       assertCurrent();
+      resultData.operations?.forEach(operation => options.onOperation?.(operation));
       const text = cleanOrsonResponse(requireCompleteOrsonResponse(resultData));
       if (resultData.safeToCache === true) void saveCachedResponse(analysis.promptPackage.cacheKey ? session.storageKey('cache', analysis.promptPackage.cacheKey) : null, text);
       console.info('orson_client_latency', {

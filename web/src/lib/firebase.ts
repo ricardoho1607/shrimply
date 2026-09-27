@@ -7,32 +7,42 @@ import {
 import {
   browserLocalPersistence,
   browserSessionPersistence,
+  connectAuthEmulator,
   indexedDBLocalPersistence,
   initializeAuth,
   type Auth,
 } from "firebase/auth";
 import {
+  connectFirestoreEmulator,
   getFirestore,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
   type Firestore,
 } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { connectStorageEmulator, getStorage } from "firebase/storage";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 
+const useLocalOrsonEmulators = process.env.NODE_ENV !== "production"
+  && process.env.NEXT_PUBLIC_ORSON_LOCAL_EMULATORS === "true";
 const firebaseConfig = {
-  apiKey: "AIzaSyCNo5RXCHLOIXJM_meJWXNPUV7gjxXhZkc",
-  authDomain: "investashrimp-5d9e5.firebaseapp.com",
-  projectId: "investashrimp-5d9e5",
-  storageBucket: "investashrimp-5d9e5.firebasestorage.app",
+  apiKey: useLocalOrsonEmulators ? "demo-api-key" : "AIzaSyCNo5RXCHLOIXJM_meJWXNPUV7gjxXhZkc",
+  authDomain: useLocalOrsonEmulators ? "demo-shrimply-agent.firebaseapp.com" : "investashrimp-5d9e5.firebaseapp.com",
+  projectId: useLocalOrsonEmulators ? "demo-shrimply-agent" : "investashrimp-5d9e5",
+  storageBucket: useLocalOrsonEmulators ? "demo-shrimply-agent.firebasestorage.app" : "investashrimp-5d9e5.firebasestorage.app",
   messagingSenderId: "496805431411",
   appId: "1:496805431411:web:9e497f6435a20466550206",
   measurementId: "G-TE86K5EKKB"
 };
 
 // Initialize Firebase for SSR compatibility
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-type FirebaseRuntime = typeof globalThis & { __shrimplyFirestore?: Firestore };
+const app = useLocalOrsonEmulators
+  ? getApps().find((existing) => existing.name === "orson-local") ?? initializeApp(firebaseConfig, "orson-local")
+  : getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+type FirebaseRuntime = typeof globalThis & {
+  __shrimplyFirestore?: Firestore;
+  __shrimplyOrsonLocalFirestore?: Firestore;
+};
 const firebaseRuntime = globalThis as FirebaseRuntime;
 
 type AuthWithNetworkConfig = Auth & {
@@ -54,7 +64,7 @@ const configureProductionAuthProxy = (firebaseAuth: Auth) => {
 };
 
 let appCheck: AppCheck | null = null;
-const appCheckEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED === "true";
+const appCheckEnabled = !useLocalOrsonEmulators && process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_ENABLED === "true";
 const appCheckSiteKey = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_RECAPTCHA_V3_SITE_KEY?.trim();
 const isProduction = process.env.NODE_ENV === "production";
 const appCheckDebugEnabled = process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_DEBUG_ENABLED === "true";
@@ -79,7 +89,10 @@ const auth = initializeAuth(app, {
   ],
 });
 configureProductionAuthProxy(auth);
-const db = firebaseRuntime.__shrimplyFirestore ?? (
+const existingFirestore = useLocalOrsonEmulators
+  ? firebaseRuntime.__shrimplyOrsonLocalFirestore
+  : firebaseRuntime.__shrimplyFirestore;
+const db = existingFirestore ?? (
   typeof window === "undefined"
     ? getFirestore(app)
     : initializeFirestore(app, {
@@ -88,7 +101,20 @@ const db = firebaseRuntime.__shrimplyFirestore ?? (
         }),
       })
 );
-firebaseRuntime.__shrimplyFirestore = db;
+if (useLocalOrsonEmulators) firebaseRuntime.__shrimplyOrsonLocalFirestore = db;
+else firebaseRuntime.__shrimplyFirestore = db;
 const storage = getStorage(app);
+
+type EmulatorRuntime = FirebaseRuntime & { __shrimplyOrsonEmulatorsConnected?: boolean };
+if (useLocalOrsonEmulators && typeof window !== "undefined") {
+  const emulatorRuntime = globalThis as EmulatorRuntime;
+  if (!emulatorRuntime.__shrimplyOrsonEmulatorsConnected) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+    connectFirestoreEmulator(db, "127.0.0.1", 8187);
+    connectFunctionsEmulator(getFunctions(app), "127.0.0.1", 5001);
+    connectStorageEmulator(storage, "127.0.0.1", 9297);
+    emulatorRuntime.__shrimplyOrsonEmulatorsConnected = true;
+  }
+}
 
 export { app, appCheck, auth, db, storage };

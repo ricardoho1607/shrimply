@@ -1,17 +1,24 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
-  Send,
+  ArrowUp,
   Trash2,
   AlertCircle
 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
-import { auth, db } from '@/lib/firebase';
+import { app, auth, db } from '@/lib/firebase';
+import { getFunctions, httpsCallable } from 'firebase/functions';
+import AgentCards from '@/components/orson/AgentCards';
+import AgentInputTools from '@/components/orson/AgentInputTools';
+import { useAgentOperations } from '../../../../../orson/useAgentOperations';
+import { linkOperationToReply, unlinkedDraftOperationIds, upsertReplyWithOperations } from '../../../../../orson/conversationOperations';
+import { agentActivityLabel } from '../../../../../shared/orsonAgentPresentation';
 import { orsonIdentityKey, OrsonSessionChangedError } from '../../../../../orson/session';
 import { cleanOrsonResponse } from '../../../../../orson/promptBuilder';
 import { OrsonIncompleteResponseError } from '../../../../../orson/responseCompletion';
 import { useGemini } from '@/hooks/useGemini';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { useDashboardCopy } from '@/hooks/useDashboardCopy';
 import { useAuth } from '@/contexts/AuthContext';
 import { useFarmPermissions } from '@/hooks/useFarmPermissions';
@@ -22,6 +29,7 @@ interface ChatMessage {
   message: string;
   timestamp: Date;
   retryPrompt?: string;
+  operationIds?: string[];
 }
 
 type PondContext = {
@@ -52,7 +60,13 @@ const parseStoredMessages = (value: string | null): ChatMessage[] | null => {
           typeof message.message === 'string' &&
           typeof message.id === 'string';
       })
-      .map((message) => ({ ...message, timestamp: new Date(message.timestamp) }));
+      .map((message) => ({
+        ...message,
+        operationIds: Array.isArray(message.operationIds)
+          ? message.operationIds.filter((id): id is string => typeof id === 'string').slice(-10)
+          : undefined,
+        timestamp: new Date(message.timestamp),
+      }));
   } catch {
     return null;
   }
@@ -68,6 +82,7 @@ export default function OrsonAIPage() {
 
 function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: string; uid: string }) {
   const copy = useDashboardCopy();
+  const { currentLanguage } = useLanguage();
   const { company } = useAuth();
   const hasPermission = useFarmPermissions();
   const canUseOrson = hasPermission('useOrson');
@@ -84,10 +99,16 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
   const [analyzingDots, setAnalyzingDots] = useState('.');
 
   const { sendMessage, loading, clearChat, error } = useGemini();
+  const agentTransport = useCallback(async (name: string, data: Record<string, unknown>) => {
+    if (auth.currentUser?.uid !== uid || !navigator.onLine) throw new Error('Reconnect and sign in to use farm actions.');
+    return (await httpsCallable(getFunctions(app), name, { timeout: 150000 })(data)).data;
+  }, [uid]);
+  const agent = useAgentOperations(companyId, uid, agentTransport, typeof window === 'undefined' ? undefined : window.localStorage, loading);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!loading || streamingReplyId) {
+    if (!loading) {
       return;
     }
     const interval = setInterval(() => {
@@ -121,7 +142,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
   const handleSend = async (textToSubmit?: string, retryId?: string) => {
     const text = textToSubmit || inputText;
-    if (!text.trim() || loading || !pondsReady || auth.currentUser?.uid !== uid) return;
+    if (!text.trim() || loading || agent.busy || !pondsReady || auth.currentUser?.uid !== uid) return;
     const currentGeneration = ++generation.current;
     const isCurrent = () => generation.current === currentGeneration && auth.currentUser?.uid === uid;
 
@@ -139,17 +160,23 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
     const replyId = retryId || `orson-${replyTimestamp.getTime()}-${currentGeneration}`;
     const upsertReply = (message: string, retryPrompt?: string) => {
       if (!isCurrent()) return;
-      setMessages((previous) => {
-        const existing = previous.findIndex((item) => item.id === replyId);
-        const reply: ChatMessage = { id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}) };
-        if (existing < 0) return [...previous, reply];
-        return previous.map((item, index) => index === existing ? reply : item);
-      });
+      setMessages((previous) => upsertReplyWithOperations(previous, {
+        id: replyId, type: 'ai', message, timestamp: replyTimestamp, ...(retryPrompt ? { retryPrompt } : {}),
+      }));
     };
 
     try {
       const aiResponse = await sendMessage(text.trim(), ponds, {
         companyId,
+        onActivity: event => { if (isCurrent()) agent.onActivity(event); },
+        onOperation: operation => {
+          if (!isCurrent()) return;
+          agent.receive(operation);
+          setMessages(previous => linkOperationToReply(previous, {
+            id: replyId, type: 'ai', message: '', timestamp: replyTimestamp,
+          }, operation.id));
+        },
+        agentOperationIds: agent.operations.map(op => op.id),
         timeZone: company?.timeZone,
         conversationHistory: messages
           .filter((message) => message.id !== 'welcome' && !message.retryPrompt && message.id !== retryId)
@@ -167,7 +194,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
       if (err instanceof OrsonIncompleteResponseError) upsertReply(err.partialText || copy('No answer received.'), text.trim());
       else upsertReply(copy('No answer received.'), text.trim());
     } finally {
-      if (isCurrent()) setStreamingReplyId(null);
+      if (isCurrent()) { setStreamingReplyId(null); agent.clearActivity(); }
     }
   };
 
@@ -219,12 +246,13 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
               {messages.map((storedMessage) => {
                 const msg = storedMessage.id === 'welcome' ? createWelcomeMessage(copy) : storedMessage;
                 return (
-                <div key={msg.id} className={`orson-message-row ${msg.type === 'user' ? 'is-user' : 'is-ai'}`}>
+                <div key={msg.id} className={`orson-message-row ${msg.type === 'user' ? 'is-user' : 'is-ai'} ${msg.operationIds?.length ? 'has-operation' : ''}`}>
                   <div className="orson-message-stack">
-                    <div className="orson-bubble">
+                    {(msg.message || msg.retryPrompt) && <div className="orson-bubble">
                       {msg.type === 'ai' ? cleanOrsonResponse(msg.message) : msg.message}
                       {msg.retryPrompt && <div role="status">{copy('Response interrupted.')} <button type="button" disabled={loading || !pondsReady} onClick={() => handleSend(msg.retryPrompt, msg.id)}>{copy('Retry')}</button></div>}
-                    </div>
+                    </div>}
+                    {msg.type === 'ai' && !!msg.operationIds?.length && <AgentCards agent={agent} operationIds={msg.operationIds} showStatus={false} />}
                     <span className="orson-time">
                       {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
@@ -233,16 +261,18 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                 );
               })}
 
-              {loading && !streamingReplyId && (
+              {loading && !agent.activityFinished && (!streamingReplyId || (agent.activity && agent.activity.step !== 'answer')) && (
                 <div className="orson-message-row is-ai">
                   <div className="orson-message-stack">
                     <div className="orson-bubble is-thinking">
-                      {copy('Orson is analyzing farm metrics...').replace(/\.{1,3}$/, '')}
+                      {agentActivityLabel(agent.activity?.step || 'working', currentLanguage)}{agent.elapsed >= 10 ? ` (${agent.elapsed}s)` : ''}
                       <span className="orson-loading-dots">{analyzingDots}</span>
                     </div>
                   </div>
                 </div>
               )}
+
+              <AgentCards agent={agent} operationIds={unlinkedDraftOperationIds(messages, agent.operations)} />
 
               {error && (
                 <div className="orson-error">
@@ -255,6 +285,7 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
 
             <div className="orson-composer">
               <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="orson-form">
+                <AgentInputTools language={currentLanguage} companyId={companyId} uid={uid} agent={agent} disabled={loading || agent.busy} onTranscript={text => setInputText(previous => `${previous}${previous ? " " : ""}${text}`)} />
                 <textarea
                   placeholder={copy('Type a question for Orson...')}
                   value={inputText}
@@ -269,11 +300,11 @@ function OrsonChat({ identity, companyId, uid }: { identity: string; companyId: 
                 />
                 <button
                   type="submit"
-                  disabled={!inputText.trim() || loading || !pondsReady}
+                  disabled={!inputText.trim() || loading || agent.busy || !pondsReady}
                   className="orson-send"
                   aria-label={copy('Send message')}
                 >
-                  <Send size={20} />
+                  <ArrowUp size={21} strokeWidth={2.4} />
                 </button>
               </form>
             </div>

@@ -36,7 +36,6 @@ export default {
       },
       permissions: ['ACCESS_COARSE_LOCATION', 'ACCESS_FINE_LOCATION', 'CAMERA'],
       blockedPermissions: [
-        'android.permission.RECORD_AUDIO',
         'android.permission.SYSTEM_ALERT_WINDOW',
         'android.permission.VIBRATE',
         'android.permission.WRITE_EXTERNAL_STORAGE',
@@ -62,6 +61,7 @@ export default {
           project: 'react-native',
         },
       ],
+      ['expo-speech-recognition', { microphonePermission: 'Allow Shrimply to transcribe farm entries you dictate.', speechRecognitionPermission: 'Allow Shrimply to convert your speech into an editable message.' }],
       'expo-router',
       'expo-asset',
       'expo-sharing',

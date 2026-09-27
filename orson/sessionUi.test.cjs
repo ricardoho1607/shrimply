@@ -27,6 +27,7 @@ const setup = () => {
       if (!(index in owner.hooks)) owner.hooks[index] = typeof initial === 'function' ? initial() : initial;
       return [owner.hooks[index], next => { owner.hooks[index] = typeof next === 'function' ? next(owner.hooks[index]) : next; }];
     },
+    useCallback: callback => callback,
     useRef: initial => { const owner = current, index = owner.cursor++; return owner.hooks[index] ||= { current: initial }; },
     useEffect: (effect, deps) => {
       const owner = current, index = owner.cursor++, previous = owner.hooks[index];
@@ -48,8 +49,11 @@ const setup = () => {
   } }).outputText;
   const mockedRequire = name => {
     if (name === 'react') return react;
+    if (name.startsWith('@/components/orson/')) return { __esModule: true, default: name };
+    if (name.endsWith('/orson/useAgentOperations')) return { useAgentOperations: () => ({ busy: false, operations: [], activity: null, elapsed: 0, onActivity() {}, receive() {}, clearActivity() {} }) };
     if (name === 'lucide-react') return new Proxy({}, { get: (_, key) => String(key) });
     if (name === '@/contexts/AuthContext') return { useAuth: () => authState };
+    if (name === '@/contexts/LanguageContext') return { useLanguage: () => ({ currentLanguage: 'en' }) };
     if (name === '@/hooks/useDashboardCopy') return { useDashboardCopy: () => value => value };
     if (name === '@/lib/firebase') return { auth, db: {} };
     if (name === 'firebase/auth') return { onAuthStateChanged: (_, callback) => { callback(auth.currentUser); return () => {}; } };
@@ -151,6 +155,31 @@ test('a successful delayed final chunk never shows an interruption state', async
   ui.render();
   assert.ok(ui.text().includes('Orson completed the answer.'));
   assert.ok(!ui.text().includes('Response interrupted.'));
+});
+
+test('farm cards stay beside their reply and a reset removes saved cards from the chat', async () => {
+  const ui = setup();
+  ui.signIn('A', 'company-A');
+  await ui.send('Correct the saved feed price');
+  const request = ui.requests[0];
+  request.options.onOperation({ id: 'op-1', state: 'completed' });
+  request.options.onPartialResponse('Correction ready');
+  request.resolve('Review the correction');
+  await Promise.resolve();
+  ui.render(); ui.flush(); ui.reload();
+  const cards = () => ui.elements().filter(node => node.type === '@/components/orson/AgentCards');
+  assert.deepEqual(cards()[0].props.operationIds, ['op-1']);
+  assert.deepEqual(cards().at(-1).props.operationIds, []);
+  await ui.send('What is the current stock?');
+  ui.requests[1].resolve('The stock is available.');
+  await Promise.resolve();
+  ui.render();
+  const nodes = ui.elements();
+  assert.ok(nodes.indexOf(cards()[0]) < nodes.findIndex(node => node.type === 'div' && node.props.className?.includes('is-user') && ui.text(node).includes('current stock')));
+  const reset = nodes.find(node => node.type === 'button' && ui.text(node).includes('Reset'));
+  reset.props.onClick();
+  ui.render();
+  assert.deepEqual(cards()[0].props.operationIds, []);
 });
 
 

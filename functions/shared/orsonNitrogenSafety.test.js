@@ -115,7 +115,7 @@ test('server applies shared policy and final nitrogen validation before streamin
   const source = fs.readFileSync(require.resolve('../orson'), 'utf8');
   const finalGuard = source.indexOf('generated = await guardOrsonNitrogenAnswer');
   assert.ok(finalGuard > source.indexOf('generated = verificationRequest ?'));
-  assert.ok(finalGuard < source.indexOf('await callableResponse.sendChunk'));
+  assert.ok(finalGuard < source.indexOf('await callableResponse.sendChunk({ type: "text_delta", text })'));
   assert.match(source, /generated\.nitrogenSafety !== "withheld"/);
   const client = fs.readFileSync(require.resolve('../../orson/promptBuilder.ts'), 'utf8');
   assert.match(client, /orson_general_v5_/); // Invalidate answers cached before nitrogen validation.

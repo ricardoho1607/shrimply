@@ -1,4 +1,5 @@
-export type OrsonResponse = { safeToCache?: boolean; text?: string; finishReason?: string | null };
+import type { OrsonOperation } from '../shared/orsonAgentContract';
+export type OrsonResponse = { operations?: OrsonOperation[]; safeToCache?: boolean; text?: string; finishReason?: string | null };
 
 export class OrsonIncompleteResponseError extends Error {
   readonly partialText: string;

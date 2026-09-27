@@ -1665,6 +1665,12 @@ nav.scrolled {
   align-self: flex-end;
 }
 
+.orson-message-row.has-operation,
+.orson-message-row.has-operation .orson-message-stack {
+  width: 100%;
+  max-width: min(780px, 100%);
+}
+
 .orson-loading-dots {
   display: inline-block;
   min-width: 18px;
@@ -1735,11 +1741,54 @@ nav.scrolled {
   background: #f8fbfd;
 }
 
+.orson-add-files {
+  width: 38px;
+  height: 38px;
+  min-height: 38px;
+  max-height: 38px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--primary);
+  cursor: pointer;
+  transition: color 140ms ease, transform 140ms ease;
+}
+
+.orson-add-files:hover:not(:disabled) {
+  color: var(--secondary);
+  background: #eaf4fa;
+  transform: translateY(-1px);
+}
+
+.orson-add-files:focus-visible {
+  outline: 3px solid rgba(15, 76, 117, 0.2);
+  outline-offset: 2px;
+}
+
+.orson-add-files:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
 .orson-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 50px;
+  grid-template-columns: 38px minmax(0, 1fr) 50px;
   align-items: stretch;
   gap: 10px;
+}
+
+.orson-form .orson-add-files {
+  align-self: end;
+  margin-bottom: 6px;
+}
+
+.orson-input-status {
+  grid-column: 1 / -1;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
 }
 
 .orson-input {
@@ -1841,7 +1890,7 @@ nav.scrolled {
   }
 
   .orson-form {
-    grid-template-columns: minmax(0, 1fr) 48px;
+    grid-template-columns: 38px minmax(0, 1fr) 48px;
   }
 
   .orson-input,

@@ -44,6 +44,29 @@ test('historical arrays are reachable beyond the initial page without turning nu
   assert.equal(next.complete, true);
   assert.deepEqual(next.data.at(-1), { mbw: null });
 });
+test('historical array pages shrink to the byte limit and offsets never skip records', async () => {
+  const records = Array.from({ length: 30 }, (_, i) => ({ id: `row-${i}`, note: 'x'.repeat(1800) }));
+  const reader = fixture('technician', { samplings: records });
+  const first = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-a', field: 'samplings' });
+  assert.ok(Buffer.byteLength(JSON.stringify(first.data), 'utf8') <= 24000);
+  assert.ok(first.data.length < 30);
+  assert.equal(first.nextOffset, first.data.length);
+  const received = [...first.data];
+  let offset = first.nextOffset;
+  while (offset !== null) {
+    const page = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-a', field: 'samplings', offset });
+    assert.ok(Buffer.byteLength(JSON.stringify(page.data), 'utf8') <= 24000);
+    received.push(...page.data);
+    offset = page.nextOffset;
+  }
+  assert.deepEqual(received, records);
+});
+test('oversized single array item is reported with its exact offset, never silently omitted', async () => {
+  const reader = fixture('technician', { samplings: [{ note: 'x'.repeat(25000) }] });
+  const result = await reader.execute('read_app_records', { dataset: 'ponds', documentId: 'pond-a', field: 'samplings' });
+  assert.equal(result.status, 'array_item_too_large');
+  assert.equal(result.offset, 0);
+});
 test('owners can read finance but private credentials and contact fields stay excluded', async () => {
   const reader = fixture('owner', { amount: 123, date: '2026-09-09', token: 'private', email: 'private' });
   const result = await reader.execute('read_app_records', { dataset: 'expenses', documentId: 'expense' });

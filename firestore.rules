@@ -1445,6 +1445,11 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Agent drafts and receipts are accessible only through authenticated callables.
+    match /companies/{companyId}/orsonOperations/{operationId} {
+      allow read, write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

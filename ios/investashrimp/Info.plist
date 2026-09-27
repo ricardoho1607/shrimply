@@ -53,7 +53,9 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Allow $(PRODUCT_NAME) to access your microphone</string>
+    <string>Allow Shrimply to transcribe farm entries you dictate.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>Allow Shrimply to convert your speech into an editable message.</string>
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your photos</string>
     <key>RCTNewArchEnabled</key>
