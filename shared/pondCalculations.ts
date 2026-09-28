@@ -3,6 +3,7 @@ import {
   getFarmDateKey,
   getFarmOperationalDateKey,
   normalizeFarmDateKey,
+  shiftDateKey,
 } from './farmDate.ts';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
@@ -81,6 +82,8 @@ export interface SharedPond {
     averageCycleDoc?: number | string | null;
     averageFinalMbwG?: number | string | null;
   } | null;
+  cycleId?: string | null;
+  pondCycleId?: string | null;
 }
 
 export interface PondBiomassEstimate {
@@ -123,9 +126,10 @@ export interface PondMetricsWithHarvest {
 }
 
 export interface PondCalculationOptions {
-  now?: Date;
+  now?: Date | string;
   currentDoc?: number;
   currentDateKey?: string;
+  skipFrOverride?: boolean;
 }
 
 export interface FeedBiomassMismatchRecord {
@@ -234,6 +238,19 @@ export const getSamplingMbw = (sampling?: Pick<SharedSampling, 'mbw' | 'abw'> | 
 export const isBaselineSampling = (sampling: Pick<SharedSampling, 'isBaselineEstimate' | 'source'>): boolean =>
   Boolean(sampling.isBaselineEstimate) || sampling.source === 'midcycle_onboarding';
 
+export const selectCanonicalFeedRecord = (
+  records: SharedSampling[],
+): SharedSampling | undefined => {
+  if (records.length === 0) return undefined;
+  if (records.length === 1) return records[0];
+  return [...records].sort((a, b) => {
+    const timeA = getValidTime(a.date) ?? Number.NEGATIVE_INFINITY;
+    const timeB = getValidTime(b.date) ?? Number.NEGATIVE_INFINITY;
+    if (timeB !== timeA) return timeB - timeA;
+    return (b.id ?? '').localeCompare(a.id ?? '');
+  })[0];
+};
+
 export const getLatestFeedResponseForDate = (
   samplings: SharedSampling[] | null | undefined,
   date: string,
@@ -313,6 +330,10 @@ export const getSamplingFeedAmount = (sampling: Pick<SharedSampling, 'feed' | 'f
   if (samplingFeed > 0) return samplingFeed;
   return toFiniteNumber(sampling.feedData?.totalDailyFeed);
 };
+
+const getFeedManagementAmount = (sampling: SharedSampling): number => sampling.feedData
+  ? Math.max(0, toFiniteNumber(sampling.feedData.totalDailyFeed))
+  : getSamplingFeedAmount(sampling);
 
 export const getFeedRateFromMbw = (mbwInput: number): number | null => {
   const mbw = toFiniteNumber(mbwInput);
@@ -407,14 +428,33 @@ export const getPondOperationalFeed = (
     const samplingDate = normalizeFarmDateKey(sampling.date);
     return samplingDate === null || samplingDate > baselineDate;
   });
-  const feedManagementFeed = operationalSamplings
+  const feedByDate = new Map<string, SharedSampling[]>();
+  const undatedFeedSamplings: SharedSampling[] = [];
+  operationalSamplings
     .filter((sampling) => sampling.feedData)
-    .reduce((total, sampling) => total + getSamplingFeedAmount(sampling), 0);
+    .forEach((sampling) => {
+      const dateKey = normalizeFarmDateKey(sampling.date);
+      if (dateKey) {
+        const list = feedByDate.get(dateKey) || [];
+        list.push(sampling);
+        feedByDate.set(dateKey, list);
+      } else {
+        undatedFeedSamplings.push(sampling);
+      }
+    });
+
+  let feedManagementFeed = undatedFeedSamplings.reduce((total, s) => total + getFeedManagementAmount(s), 0);
+  feedByDate.forEach((records) => {
+    const canonical = selectCanonicalFeedRecord(records);
+    if (canonical) {
+      feedManagementFeed += getFeedManagementAmount(canonical);
+    }
+  });
   const samplingFeed = operationalSamplings
     .filter((sampling) => getSamplingMbw(sampling) > 0 || toFiniteNumber(sampling.mortality) > 0 || toFiniteNumber(sampling.feed) > 0)
     .reduce((total, sampling) => total + toFiniteNumber(sampling.feed), 0);
 
-  return feedManagementFeed > 0 ? feedManagementFeed : samplingFeed;
+  return operationalSamplings.some((sampling) => Boolean(sampling.feedData)) ? feedManagementFeed : samplingFeed;
 };
 
 export const getPondTotalFeedConsumed = (
@@ -598,22 +638,29 @@ const getRecentFeedCrossCheck = (
   const dailyFeed = new Map<string, number>();
   let excludedAtypicalDays = 0;
 
+  const recordsByDate = new Map<string, SharedSampling[]>();
   (pond.samplings || []).forEach((sampling) => {
     if (isBaselineSampling(sampling) || !sampling.feedData) return;
     const dateKey = normalizeFarmDateKey(sampling.date, timeZone);
     if (!dateKey) return;
     const ageDays = differenceInFarmCalendarDays(currentDateKey, dateKey);
     if (ageDays < 0 || ageDays > 6) return;
+    const list = recordsByDate.get(dateKey) || [];
+    list.push(sampling);
+    recordsByDate.set(dateKey, list);
+  });
 
-    const response = sampling.feedData.feedingResponse;
+  recordsByDate.forEach((records, dateKey) => {
+    const canonical = selectCanonicalFeedRecord(records);
+    if (!canonical || !canonical.feedData) return;
+    const response = canonical.feedData.feedingResponse;
     if (response === 'weak' || response === 'strong') {
       excludedAtypicalDays += 1;
       return;
     }
-
-    const amount = getSamplingFeedAmount(sampling);
+    const amount = Math.max(0, toFiniteNumber(canonical.feedData?.totalDailyFeed));
     if (amount <= 0) return;
-    dailyFeed.set(dateKey, Math.max(dailyFeed.get(dateKey) || 0, amount));
+    dailyFeed.set(dateKey, amount);
   });
 
   const recentAmounts = [...dailyFeed.entries()]
@@ -638,13 +685,212 @@ const getRecentFeedCrossCheck = (
   };
 };
 
+export interface DailyFrEstimateResult {
+  dateKey: string;
+  frBiomassKg: number;
+  normalBiomassKg: number;
+  feedKg: number;
+  feedRatePercent: number;
+  mbw: number;
+}
+
+export interface ConsecutiveFrQualification {
+  acceptedBiomass: number;
+  dailyEstimates: DailyFrEstimateResult[];
+}
+
+export function evaluateDailyFeedRateBiomass(
+  pond: SharedPond,
+  dateKey: string,
+  timeZone?: string,
+): DailyFrEstimateResult | null {
+  const harvestDate = normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone);
+  const harvestDates = harvestDate && harvestDate <= dateKey ? [harvestDate] : [];
+
+  const hasHarvestAggregate = toFiniteNumber(pond.totalHarvestedPopulation) > 0 || toFiniteNumber(pond.totalHarvestedBiomass) > 0;
+  if (hasHarvestAggregate && harvestDates.length === 0) {
+    return null;
+  }
+
+  const baselineDate = normalizeFarmDateKey(pond.baselineDate, timeZone);
+  const knownDates = [...harvestDates, ...(baselineDate ? [baselineDate] : [])].sort();
+  const latestKnownHarvestOrBaselineDate = knownDates.length > 0 ? knownDates[knownDates.length - 1] : null;
+
+  if (latestKnownHarvestOrBaselineDate && dateKey <= latestKnownHarvestOrBaselineDate) {
+    return null;
+  }
+
+  const validSamplingsOnOrBefore = (pond.samplings || [])
+    .filter((s) => !isBaselineSampling(s) && getSamplingMbw(s) > 0)
+    .filter((s) => {
+      const sDate = normalizeFarmDateKey(s.date, timeZone);
+      return sDate !== null && sDate <= dateKey;
+    })
+    .sort((a, b) => {
+      const da = normalizeFarmDateKey(a.date, timeZone)!;
+      const db = normalizeFarmDateKey(b.date, timeZone)!;
+      return da.localeCompare(db) || (getValidTime(a.date) ?? 0) - (getValidTime(b.date) ?? 0);
+    });
+
+  if (validSamplingsOnOrBefore.length === 0) return null;
+
+  const latestSampling = validSamplingsOnOrBefore[validSamplingsOnOrBefore.length - 1];
+  const mbw = getSamplingMbw(latestSampling);
+  if (mbw <= 0) return null;
+
+  const feedRatePercent = getFeedRateFromMbw(mbw);
+  if (!feedRatePercent || feedRatePercent <= 0) return null;
+
+  const feedRecordsOnDate = (pond.samplings || []).filter((s) => {
+    if (isBaselineSampling(s)) return false;
+    const sDate = normalizeFarmDateKey(s.date, timeZone);
+    return sDate === dateKey && Boolean(s.feedData);
+  });
+
+  if (feedRecordsOnDate.length === 0) return null;
+
+  const uniqueFeedRecords: SharedSampling[] = [];
+  const seenIds = new Set<string>();
+  for (const s of feedRecordsOnDate) {
+    if (s.id) {
+      if (seenIds.has(s.id)) continue;
+      seenIds.add(s.id);
+    }
+    uniqueFeedRecords.push(s);
+  }
+
+  const activeCycleId = pond.cycleId;
+  const activePondCycleId = pond.pondCycleId;
+
+  for (const s of uniqueFeedRecords) {
+    const rCycleId = s.feedData?.cycleId || s.cycleId;
+    const rPondCycleId = s.feedData?.pondCycleId || s.pondCycleId;
+    if (activeCycleId && rCycleId && activeCycleId !== rCycleId) return null;
+    if (activePondCycleId && rPondCycleId && activePondCycleId !== rPondCycleId) return null;
+  }
+
+  const canonicalRecord = selectCanonicalFeedRecord(uniqueFeedRecords);
+  if (!canonicalRecord || !canonicalRecord.feedData) return null;
+
+  const resp = canonicalRecord.feedData.feedingResponse;
+  if (resp === 'weak' || resp === 'strong') {
+    return null;
+  }
+
+  const dailyFeedTotal = Math.max(0, toFiniteNumber(canonicalRecord.feedData.totalDailyFeed));
+  if (dailyFeedTotal <= 0) {
+    return null;
+  }
+
+  const frBiomassKg = dailyFeedTotal / (feedRatePercent / 100);
+
+  const samplingsToDate = (pond.samplings || []).filter((s) => {
+    const sDate = normalizeFarmDateKey(s.date, timeZone);
+    return sDate !== null && sDate <= dateKey;
+  });
+  const mortalityRecordsToDate = (pond.mortalityRecords || []).filter((m) => {
+    const mDate = normalizeFarmDateKey(m.date, timeZone);
+    return mDate !== null && mDate <= dateKey;
+  });
+  const postHarvestDate = normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone);
+  const hasFuturePostHarvest = postHarvestDate !== null && postHarvestDate > dateKey;
+
+  const pondAsOfDate: SharedPond = {
+    ...pond,
+    samplings: samplingsToDate,
+    mortalityRecords: mortalityRecordsToDate,
+    ...(hasFuturePostHarvest ? {
+      postHarvestBaselineDate: null,
+      postHarvestRemainingBiomass: null,
+      postHarvestRemainingPopulation: null,
+      postHarvestReferenceSamplingId: null,
+      postHarvestReferenceSamplingDate: null,
+      postHarvestReferenceMbw: null,
+      totalHarvestedPopulation: 0,
+      totalHarvestedBiomass: 0,
+    } : {}),
+  };
+
+  const normalMetrics = calculatePondMetricsWithHarvest(pondAsOfDate, timeZone, {
+    now: new Date(`${dateKey}T12:00:00Z`),
+    currentDateKey: dateKey,
+    skipFrOverride: true,
+  });
+
+  const normalBiomassKg = normalMetrics.currentBiomass;
+  if (normalBiomassKg <= 0) return null;
+
+  const diffRatio = Math.abs(frBiomassKg - normalBiomassKg) / normalBiomassKg;
+  if (diffRatio > 0.10 + 1e-9) {
+    return null;
+  }
+
+  return {
+    dateKey,
+    frBiomassKg,
+    normalBiomassKg,
+    feedKg: dailyFeedTotal,
+    feedRatePercent,
+    mbw,
+  };
+}
+
+export function getConsecutiveQualifyingFeedRateBiomass(
+  pond: SharedPond,
+  currentDateKey: string,
+  timeZone?: string,
+): ConsecutiveFrQualification | null {
+  const harvestDate = normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone);
+  const harvestDates = harvestDate && harvestDate <= currentDateKey ? [harvestDate] : [];
+
+  const hasHarvestAggregate = toFiniteNumber(pond.totalHarvestedPopulation) > 0 || toFiniteNumber(pond.totalHarvestedBiomass) > 0;
+  if (hasHarvestAggregate && harvestDates.length === 0) {
+    return null;
+  }
+
+  const baselineDate = normalizeFarmDateKey(pond.baselineDate, timeZone);
+  const knownDates = [...harvestDates, ...(baselineDate ? [baselineDate] : [])].sort();
+  const latestKnownHarvestOrBaselineDate = knownDates.length > 0 ? knownDates[knownDates.length - 1] : null;
+
+  const windowStartDateKey = shiftDateKey(currentDateKey, -4);
+  if (latestKnownHarvestOrBaselineDate && windowStartDateKey <= latestKnownHarvestOrBaselineDate) {
+    return null;
+  }
+
+  const dailyEstimates: DailyFrEstimateResult[] = [];
+
+  for (let offset = 4; offset >= 0; offset -= 1) {
+    const dateKey = shiftDateKey(currentDateKey, -offset);
+    const result = evaluateDailyFeedRateBiomass(pond, dateKey, timeZone);
+    if (!result) return null;
+    dailyEstimates.push(result);
+  }
+
+  const sumFrBiomass = dailyEstimates.reduce((sum, item) => sum + item.frBiomassKg, 0);
+  const acceptedBiomass = sumFrBiomass / dailyEstimates.length;
+
+  return { acceptedBiomass, dailyEstimates };
+}
+
 export const calculatePondMetricsWithHarvest = (
   pond: SharedPond,
   timeZone?: string,
   options: PondCalculationOptions = {},
 ): PondMetricsWithHarvest => {
-  const samplings = pond.samplings || [];
-  const mortalityRecords = pond.mortalityRecords || [];
+  const now = options.now || new Date();
+  const currentDateKey = normalizeFarmDateKey(options.currentDateKey, timeZone)
+    || (typeof now === 'string'
+      ? normalizeFarmDateKey(now, timeZone) || getFarmDateKey(new Date(), timeZone)
+      : getFarmDateKey(now, timeZone));
+  const samplings = (pond.samplings || []).filter((sampling) => {
+    const dateKey = normalizeFarmDateKey(sampling.date, timeZone);
+    return dateKey === null ? isBaselineSampling(sampling) : dateKey <= currentDateKey;
+  });
+  const mortalityRecords = (pond.mortalityRecords || []).filter((record) => {
+    const dateKey = normalizeFarmDateKey(record.date, timeZone);
+    return dateKey !== null && dateKey <= currentDateKey;
+  });
+  const effectivePond: SharedPond = { ...pond, samplings, mortalityRecords };
   const validSamplings = sortByDateAsc(
     samplings.filter(
       (sampling) =>
@@ -689,12 +935,41 @@ export const calculatePondMetricsWithHarvest = (
     getSamplingMbw(latestValidMbwSampling) ||
     toFiniteNumber(pond.baselineMbw) ||
     initialWeight;
-  const now = options.now || new Date();
-  const currentDateKey = normalizeFarmDateKey(options.currentDateKey, timeZone) || getFarmDateKey(now, timeZone);
   const currentDoc = options.currentDoc === undefined
     ? getPondCurrentDoc(pond, timeZone, now)
     : Math.max(0, Math.floor(toFiniteNumber(options.currentDoc)));
   const hasAgeAnchor = options.currentDoc !== undefined || Boolean(normalizeFarmDateKey(pond.docStart, timeZone));
+  const postHarvestDateKey = normalizeFarmDateKey(pond.postHarvestBaselineDate, timeZone);
+  const postHarvestPopulationValue = pond.postHarvestRemainingPopulation;
+  const hasPostHarvestPopulationAnchor = postHarvestDateKey !== null
+    && postHarvestDateKey <= currentDateKey
+    && postHarvestPopulationValue !== undefined
+    && postHarvestPopulationValue !== null;
+  const postHarvestPopulation = Math.max(0, toFiniteNumber(postHarvestPopulationValue));
+  const postHarvestDoc = hasPostHarvestPopulationAnchor
+    ? getPondCurrentDoc(pond, timeZone, postHarvestDateKey)
+    : 0;
+  const postHarvestSamplingMortality = hasPostHarvestPopulationAnchor
+    ? validSamplings
+        .filter((sampling) => {
+          if (isBaselineSampling(sampling)) return false;
+          const dateKey = normalizeFarmDateKey(sampling.date, timeZone);
+          return dateKey !== null && dateKey > postHarvestDateKey;
+        })
+        .reduce((sum, sampling) => sum + toFiniteNumber(sampling.mortality), 0)
+    : 0;
+  const postHarvestDailyMortality = hasPostHarvestPopulationAnchor
+    ? mortalityRecords
+        .filter((record) => {
+          const dateKey = normalizeFarmDateKey(record.date, timeZone);
+          return dateKey !== null && dateKey > postHarvestDateKey;
+        })
+        .reduce((sum, record) => sum + getMortalityPopulationDeduction(record), 0)
+    : 0;
+  const postHarvestRecordCeiling = hasPostHarvestPopulationAnchor
+    ? Math.min(recordBasedPopulation, Math.max(0, postHarvestPopulation - postHarvestSamplingMortality - postHarvestDailyMortality))
+    : recordBasedPopulation;
+  if (hasPostHarvestPopulationAnchor) recordBasedPopulation = postHarvestRecordCeiling;
   let modelDays = currentDoc;
   let modelPopulation = initialPopulation;
   let modelStartDoc = 0;
@@ -709,7 +984,13 @@ export const calculatePondMetricsWithHarvest = (
     modelDays = currentDoc - baselineDoc;
     modelStartDoc = baselineDoc;
   }
-  const mortalityModel = getMortalityModel(pond, currentDoc);
+  if (hasPostHarvestPopulationAnchor) {
+    modelPopulation = postHarvestPopulation;
+    modelDays = Math.max(0, currentDoc - postHarvestDoc);
+    modelStartDoc = postHarvestDoc;
+  }
+  const mortalityModel = getMortalityModel(effectivePond, currentDoc);
+  const harvestDeductionFromModel = hasPostHarvestPopulationAnchor ? 0 : totalHarvestedPopulation;
 
   let biologicalPopulation: number | null = null;
   let lowBiologicalPopulation = recordBasedPopulation;
@@ -721,27 +1002,27 @@ export const calculatePondMetricsWithHarvest = (
       modelDays,
       'expected',
     ))
-      - totalHarvestedPopulation;
+      - harvestDeductionFromModel;
     const populationAfterLowSurvival = (modelPopulation * calculateSurvivalRetention(
       mortalityModel,
       modelStartDoc,
       modelDays,
       'low_survival',
     ))
-      - totalHarvestedPopulation;
+      - harvestDeductionFromModel;
     const populationAfterHighSurvival = (modelPopulation * calculateSurvivalRetention(
       mortalityModel,
       modelStartDoc,
       modelDays,
       'high_survival',
     ))
-      - totalHarvestedPopulation;
+      - harvestDeductionFromModel;
     biologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterExpectedLoss));
     lowBiologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterLowSurvival));
     highBiologicalPopulation = Math.min(recordBasedPopulation, Math.max(0, populationAfterHighSurvival));
   }
 
-  const recentFeed = getRecentFeedCrossCheck(pond, latestMbw, currentDoc, currentDateKey, timeZone);
+  const recentFeed = getRecentFeedCrossCheck(effectivePond, latestMbw, currentDoc, currentDateKey, timeZone);
   const feedDifference = biologicalPopulation && recentFeed.population
     ? Math.abs(recentFeed.population - biologicalPopulation) / biologicalPopulation
     : Number.POSITIVE_INFINITY;
@@ -751,18 +1032,10 @@ export const calculatePondMetricsWithHarvest = (
   let highPopulation = biologicalPopulation === null ? recordBasedPopulation : highBiologicalPopulation;
   let method: PondBiomassEstimate['method'] = biologicalPopulation === null ? 'record_only' : 'biological';
 
-  if (feedAgrees && recentFeed.population !== null) {
-    currentPopulation = Math.min(recordBasedPopulation, (currentPopulation * 0.8) + (recentFeed.population * 0.2));
-    lowPopulation = Math.min(recordBasedPopulation, (lowPopulation * 0.8) + (recentFeed.population * 0.75 * 0.2));
-    highPopulation = Math.min(recordBasedPopulation, (highPopulation * 0.8) + (recentFeed.population * 1.25 * 0.2));
-    method = 'biological_feed';
-  }
-
   currentPopulation = Math.round(Math.max(0, currentPopulation));
   lowPopulation = Math.min(currentPopulation, Math.round(Math.max(0, lowPopulation)));
   highPopulation = Math.max(currentPopulation, Math.round(Math.max(0, highPopulation)));
   const postHarvestBiomass = pond.postHarvestRemainingBiomass;
-  const postHarvestPopulation = toFiniteNumber(pond.postHarvestRemainingPopulation);
   const referenceSamplingId = pond.postHarvestReferenceSamplingId || '';
   const referenceSamplingDate = pond.postHarvestReferenceSamplingDate || '';
   const referenceMbw = toFiniteNumber(pond.postHarvestReferenceMbw);
@@ -775,7 +1048,7 @@ export const calculatePondMetricsWithHarvest = (
   const referenceMbwUnchanged = referenceMbw <= 0 || Math.abs(latestMbw - referenceMbw) < 0.0001;
   const canUsePostHarvestBiomass = hasPostHarvestBiomass && sameReferenceSampling && referenceMbwUnchanged;
   const populationRemovedAfterBaseline = Math.max(0, postHarvestPopulation - currentPopulation);
-  const currentBiomass = canUsePostHarvestBiomass
+  let currentBiomass = canUsePostHarvestBiomass
     ? Math.max(0, toFiniteNumber(postHarvestBiomass) - ((populationRemovedAfterBaseline * latestMbw) / 1000))
     : Math.max(0, (currentPopulation * latestMbw) / 1000);
   if (canUsePostHarvestBiomass) {
@@ -783,20 +1056,55 @@ export const calculatePondMetricsWithHarvest = (
     lowPopulation = currentPopulation;
     highPopulation = currentPopulation;
   }
-  const lowEstimateKg = canUsePostHarvestBiomass
+  let lowEstimateKg = canUsePostHarvestBiomass
     ? currentBiomass
     : (lowPopulation * latestMbw) / 1000;
-  const highEstimateKg = canUsePostHarvestBiomass
+  let highEstimateKg = canUsePostHarvestBiomass
     ? currentBiomass
     : (highPopulation * latestMbw) / 1000;
+
+  let frQualification = !options.skipFrOverride
+    ? getConsecutiveQualifyingFeedRateBiomass(effectivePond, currentDateKey, timeZone)
+    : null;
+
+  if (frQualification) {
+    const acceptedBiomass = frQualification.acceptedBiomass;
+    const maxBiomassFromRecord = (recordBasedPopulation * latestMbw) / 1000;
+    if (acceptedBiomass > maxBiomassFromRecord + 1e-9) {
+      // Keep the record-derived cap authoritative instead of disguising a capped value as an FR average.
+      frQualification = null;
+    }
+  }
+
+  if (frQualification) {
+    const acceptedBiomass = frQualification.acceptedBiomass;
+    const normalPopulation = currentPopulation;
+    const normalLowPopulation = lowPopulation;
+    const normalHighPopulation = highPopulation;
+
+    const rawPopulation = latestMbw > 0 ? Math.round((acceptedBiomass * 1000) / latestMbw) : currentPopulation;
+    currentPopulation = clamp(rawPopulation, 0, recordBasedPopulation);
+
+    currentBiomass = acceptedBiomass;
+
+    const lowRatio = (currentPopulation > 0 && normalPopulation > 0) ? normalLowPopulation / normalPopulation : 0.9;
+    const highRatio = (currentPopulation > 0 && normalPopulation > 0) ? normalHighPopulation / normalPopulation : 1.1;
+    lowPopulation = clamp(Math.round(currentPopulation * Math.min(1, lowRatio)), 0, currentPopulation);
+    highPopulation = clamp(Math.round(currentPopulation * Math.max(1, highRatio)), currentPopulation, recordBasedPopulation);
+
+    lowEstimateKg = (lowPopulation * latestMbw) / 1000;
+    highEstimateKg = (highPopulation * latestMbw) / 1000;
+    method = 'biological_feed';
+  }
+
   const warnings: string[] = [];
   if (!hasAgeAnchor) warnings.push('age_missing_record_only');
   if (hasAgeAnchor && biologicalPopulation !== null) warnings.push('mortality_logs_are_minimum');
-  if (currentDoc >= 15 && recentFeed.days < 3) warnings.push('recent_feed_cross_check_unavailable');
-  if (recentFeed.population !== null && !feedAgrees) warnings.push('feed_biomass_disagreement');
+  if (!frQualification && currentDoc >= 15 && recentFeed.days < 3) warnings.push('recent_feed_cross_check_unavailable');
+  if (!frQualification && recentFeed.population !== null && !feedAgrees) warnings.push('feed_biomass_disagreement');
   if (recentFeed.excludedAtypicalDays > 0) warnings.push('atypical_feed_days_excluded');
-  const confidence: PondBiomassEstimate['confidence'] = method === 'post_harvest' ||
-    mortalityModel.calibrated || feedAgrees || baselinePopulation !== null
+  const confidence: PondBiomassEstimate['confidence'] = frQualification !== null || method === 'post_harvest' ||
+    mortalityModel.calibrated || baselinePopulation !== null
     ? 'medium'
     : 'low';
   const biomassEstimate: PondBiomassEstimate = {
@@ -808,9 +1116,9 @@ export const calculatePondMetricsWithHarvest = (
     highPopulation,
     recordBasedPopulation,
     biologicalPopulation: biologicalPopulation === null ? null : Math.round(biologicalPopulation),
-    feedBasedBiomassKg: recentFeed.biomassKg,
-    feedBasedPopulation: recentFeed.population === null ? null : Math.round(recentFeed.population),
-    recentFeedDays: recentFeed.days,
+    feedBasedBiomassKg: frQualification ? currentBiomass : recentFeed.biomassKg,
+    feedBasedPopulation: frQualification ? currentPopulation : (recentFeed.population === null ? null : Math.round(recentFeed.population)),
+    recentFeedDays: frQualification ? Math.max(5, recentFeed.days) : recentFeed.days,
     expectedSurvivalPercent: initialPopulation > 0 ? (currentPopulation / initialPopulation) * 100 : 0,
     lowSurvivalPercent: initialPopulation > 0 ? (lowPopulation / initialPopulation) * 100 : 0,
     highSurvivalPercent: initialPopulation > 0 ? (highPopulation / initialPopulation) * 100 : 0,
@@ -819,7 +1127,7 @@ export const calculatePondMetricsWithHarvest = (
     method,
     warnings,
   };
-  const totalFeedConsumed = Math.max(0, getPondTotalFeedConsumed(pond));
+  const totalFeedConsumed = Math.max(0, getPondTotalFeedConsumed(effectivePond));
   const adjustedSR = initialPopulation > 0 ? (currentPopulation / initialPopulation) * 100 : 0;
   const totalHarvestedBiomass = toFiniteNumber(pond.totalHarvestedBiomass);
   const producedBiomass = currentBiomass + totalHarvestedBiomass;
@@ -846,7 +1154,7 @@ export const calculatePondMetricsWithHarvest = (
     biomassGainFCR: Math.max(0, biomassGainFCR),
     latestMbw,
     size: latestMbw > 0 ? Math.round(1000 / latestMbw) : 0,
-    adg: calculateAdg(pond, timeZone),
+    adg: calculateAdg(effectivePond, timeZone),
     doc: currentDoc,
     totalMortality,
     totalMortalityWeight,
@@ -888,6 +1196,7 @@ export const detectFeedBiomassMismatchInsight = (
       }, undefined, {
         now: getValidTime(sampling.date) === null ? undefined : new Date(getValidTime(sampling.date)!),
         currentDateKey: sampling.date ? normalizeFarmDateKey(sampling.date) ?? undefined : undefined,
+        skipFrOverride: true,
       });
       const recordBiomassKg = metricsToDate.currentBiomass;
       if (recordBiomassKg <= 0) return null;

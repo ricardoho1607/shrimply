@@ -2347,7 +2347,6 @@ export default function PondManagementScreen() {
                   style={styles.menuOption} 
                   onPress={() => openModal('pond')}
                 >
-                  <Ionicons name="water-outline" size={24} color="#0d2137" />
                   <Text style={styles.menuOptionText}>{t.home.newPond}</Text>
                 </TouchableOpacity>
 
@@ -2355,7 +2354,6 @@ export default function PondManagementScreen() {
                   style={styles.menuOption}
                   onPress={() => openModal('cycle')}
                 >
-                  <Ionicons name="repeat-outline" size={24} color="#0d2137" />
                   <Text style={styles.menuOptionText}>{t.farmCycle.addCycle}</Text>
                 </TouchableOpacity>
 
@@ -2363,7 +2361,6 @@ export default function PondManagementScreen() {
                   style={styles.menuOption} 
                   onPress={() => openModal('sampling')}
                 >
-                  <Ionicons name="analytics-outline" size={24} color="#315f57" />
                   <Text style={styles.menuOptionText}>
                     {t.home.samplingData}
                   </Text>
@@ -2372,7 +2369,6 @@ export default function PondManagementScreen() {
                   style={styles.menuOption}
                   onPress={() => openModal('mortality')}
                 >
-                  <Ionicons name="pulse-outline" size={24} color="#315f57" />
                   <Text style={styles.menuOptionText}>{t.home.dailyMortality}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity 
@@ -2979,7 +2975,7 @@ const styles = StyleSheet.create({
     color: '#0d2137', 
     fontSize: Platform.OS === 'android' ? 15 : 16, 
     fontWeight: '600', 
-    marginLeft: 12 
+    marginLeft: 0
   },
   
   cancelMenuButton: { 

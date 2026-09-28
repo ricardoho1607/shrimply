@@ -1471,6 +1471,13 @@ companySetup: {
     
     // Search & Filter
     searchPlaceholder: '按项目或品牌搜索...',
+    inStock: '有库存',
+    outOfStock: '无库存',
+    showArchived: '显示已归档',
+    hideArchived: '隐藏已归档',
+    allCategories: '所有类别',
+showAllLowStock: '显示全部',
+    showLess: '收起',
     
     // Empty States
     noFeedItems: '无饲料项目',

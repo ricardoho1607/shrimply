@@ -14,6 +14,7 @@ import {
   refreshAutoFilledHarvestSize,
   stripOrphanAutoFilledHarvestSize,
   withHarvestReference,
+  type HarvestLineInput,
   type HarvestTrackingPond,
 } from './harvestCalculations';
 import {
@@ -146,7 +147,7 @@ export const runHarvestCalculationsSelfTest = () => {
   assertClose(afterHarvest.samplings[0].mbw, 10, 'harvest does not overwrite MBW');
   assertClose(Number(afterHarvest.partialHarvestCount), 1, 'first partial harvest number');
   assertClose(getNextPartialHarvestNumber(afterHarvest), 2, 'next partial harvest number');
-  assertClose(calculatePondMetricsWithHarvest(afterHarvest).currentBiomass, 900, 'exact biomass after harvest');
+  assertClose(calculatePondMetricsWithHarvest(afterHarvest).currentBiomass, 920, 'post-harvest biomass follows remaining heads and sampled MBW');
   assertClose(calculatePondMetricsWithHarvest(afterHarvest).currentPopulation, 92_000, 'population after harvest');
 
   const afterNewSampling = {
@@ -158,6 +159,30 @@ export const runHarvestCalculationsSelfTest = () => {
   const restored = reverseHarvestImpactOnPond(afterHarvest, harvest);
   assertClose(calculatePondMetricsWithHarvest(restored).currentBiomass, 1_000, 'reversed biomass');
   assertClose(calculatePondMetricsWithHarvest(restored).currentPopulation, 100_000, 'reversed population');
+
+  const pondWithFutureSampling = {
+    ...pond,
+    samplings: [
+      ...pond.samplings,
+      { id: 'sampling-future', date: '2026-07-15', mbw: 15, mortality: 0 },
+      { id: 'feed-future', date: '2026-07-15', feedData: { totalDailyFeed: 40, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const asOfHarvest = calculatePondMetricsWithHarvest(pondWithFutureSampling, undefined, {
+    now: '2026-07-12',
+    currentDateKey: '2026-07-12',
+  });
+  assertClose(asOfHarvest.latestMbw, 10, 'harvest-date snapshot excludes a later MBW sample');
+  assertClose(asOfHarvest.totalFeedConsumed, 0, 'harvest-date snapshot excludes later feed');
+  const dateBoundHarvest = withHarvestReference<HarvestLineInput>(
+    pondWithFutureSampling,
+    { biomass: 100, size: 80, harvestType: 'partial' as const },
+    '2026-07-12',
+  );
+  assertClose(Number(dateBoundHarvest.harvestReferenceMbw), 10, 'harvest reference excludes future sampling');
+  const dateBoundAfterHarvest = applyHarvestImpactToPond(pondWithFutureSampling, dateBoundHarvest, '2026-07-12', 1);
+  assertClose(Number(dateBoundAfterHarvest.postHarvestRemainingPopulation), 92_000, 'date-bound harvest removes heads from harvest-date SR');
+  assertClose(Number(dateBoundAfterHarvest.postHarvestRemainingBiomass), 920, 'saved harvest biomass matches remaining heads and reference MBW');
 
   const withDailyMortality = {
     ...pond,
@@ -288,4 +313,463 @@ export const runHarvestCalculationsSelfTest = () => {
   if (taperedMbw <= 8 || taperedMbw >= 12.2) {
     throw new Error(`growth taper must grow more slowly than a straight line: ${taperedMbw}`);
   }
+
+  runFeedRateBiomassSelfTest();
+};
+
+export const runFeedRateBiomassSelfTest = () => {
+  const timeZone = 'Australia/Melbourne';
+  const basePond = {
+    docStart: '2026-05-24',
+    initialPopulation: 100_000,
+    initialWeight: 0.5,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+    ],
+  };
+
+  const getNormalBiomass = (pond: any, dateKey: string) => {
+    return calculatePondMetricsWithHarvest(pond, timeZone, {
+      currentDateKey: dateKey,
+      now: new Date(`${dateKey}T12:00:00+10:00`),
+      skipFrOverride: true,
+    }).currentBiomass;
+  };
+
+  // 1. Pre-sample behavior: feed dates prior to the first valid sampling
+  const preSamplePond = {
+    ...basePond,
+    samplings: [
+      { id: 'feed-pre-1', date: '2026-08-14', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' as const } },
+      { id: 'feed-pre-2', date: '2026-08-15', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' as const } },
+      { id: 'feed-pre-3', date: '2026-08-16', feedData: { totalDailyFeed: 33, feedingResponse: 'normal' as const } },
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+    ],
+  };
+  const preSampleMetrics = calculatePondMetricsWithHarvest(preSamplePond, timeZone, {
+    currentDateKey: '2026-08-16',
+    now: new Date('2026-08-16T12:00:00+10:00'),
+  });
+  if (preSampleMetrics.biomassEstimate.method === 'biological_feed') {
+    throw new Error('pre-sample feed must retain normal biomass and not activate FR override');
+  }
+
+  // Pre-threshold behavior: fewer than 5 consecutive calendar feed dates (4 days)
+  const norm1 = getNormalBiomass(basePond, '2026-08-18');
+  const norm2 = getNormalBiomass(basePond, '2026-08-19');
+  const norm3 = getNormalBiomass(basePond, '2026-08-20');
+  const norm4 = getNormalBiomass(basePond, '2026-08-21');
+  const norm5 = getNormalBiomass(basePond, '2026-08-22');
+
+  const frPercent14 = 3.3; // getFeedRateFromMbw(14)
+  const feed1 = norm1 * (frPercent14 / 100);
+  const feed2 = norm2 * (frPercent14 / 100);
+  const feed3 = norm3 * (frPercent14 / 100);
+  const feed4 = norm4 * (frPercent14 / 100);
+  const feed5 = norm5 * (frPercent14 / 100);
+
+  const preThresholdPond = {
+    ...basePond,
+    samplings: [
+      ...basePond.samplings,
+      { id: 'f-1', date: '2026-08-18', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      { id: 'f-3', date: '2026-08-20', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      { id: 'f-4', date: '2026-08-21', feedData: { totalDailyFeed: feed4, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const preThresholdMetrics = calculatePondMetricsWithHarvest(preThresholdPond, timeZone, {
+    currentDateKey: '2026-08-21',
+    now: new Date('2026-08-21T12:00:00+10:00'),
+  });
+  assertClose(preThresholdMetrics.currentBiomass, norm4, 'pre-threshold 4 days retains normal biomass');
+  if (preThresholdMetrics.biomassEstimate.method === 'biological_feed') {
+    throw new Error('4 feed days must not activate feed-rate override');
+  }
+
+  // 2. Activation on Day 5: 5 consecutive qualifying days
+  const fiveDayPond = {
+    ...basePond,
+    samplings: [
+      ...preThresholdPond.samplings,
+      { id: 'f-5', date: '2026-08-22', feedData: { totalDailyFeed: feed5, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const activatedMetrics = calculatePondMetricsWithHarvest(fiveDayPond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  const expectedMean5 = (norm1 + norm2 + norm3 + norm4 + norm5) / 5;
+  assertClose(activatedMetrics.currentBiomass, expectedMean5, 'day 5 activates with arithmetic mean of 5 daily estimates');
+  if (activatedMetrics.biomassEstimate.method !== 'biological_feed') {
+    throw new Error('day 5 activation must set method to biological_feed');
+  }
+  if (activatedMetrics.biomassEstimate.confidence !== 'medium') {
+    throw new Error('day 5 activation must have medium confidence');
+  }
+  const expectedPopulation5 = Math.round((expectedMean5 * 1000) / 14);
+  assertClose(activatedMetrics.currentPopulation, expectedPopulation5, 'population consistent with accepted biomass');
+  assertClose(activatedMetrics.adjustedSR, (expectedPopulation5 / 100_000) * 100, 'SR consistent with accepted biomass');
+  if (
+    activatedMetrics.currentBiomass < activatedMetrics.biomassEstimate.lowEstimateKg ||
+    activatedMetrics.currentBiomass > activatedMetrics.biomassEstimate.highEstimateKg
+  ) {
+    throw new Error('activated biomass must remain within confidence bounds');
+  }
+  const produced5 = activatedMetrics.currentBiomass;
+  assertClose(activatedMetrics.adjustedFCR, activatedMetrics.totalFeedConsumed / produced5, 'FCR consistent with accepted biomass');
+
+  const qualifiedHarvestLine: HarvestLineInput = { biomass: 20, size: 70, harvestType: 'partial' };
+  const qualifiedHarvestRemoval = calculateHarvestRemoval(qualifiedHarvestLine);
+  const afterQualifiedHarvest: HarvestTrackingPond = applyHarvestImpactToPond(
+    fiveDayPond,
+    qualifiedHarvestLine,
+    '2026-08-22',
+    1,
+    timeZone,
+  );
+  assertClose(
+    Number(afterQualifiedHarvest.postHarvestRemainingPopulation),
+    activatedMetrics.currentPopulation - qualifiedHarvestRemoval.population,
+    'partial harvest starts from the qualified five-day FR/SR population',
+  );
+  assertClose(
+    Number(afterQualifiedHarvest.postHarvestRemainingBiomass),
+    (Number(afterQualifiedHarvest.postHarvestRemainingPopulation) * 14) / 1000,
+    'partial harvest biomass is consistent with remaining heads and harvest-date MBW',
+  );
+
+  const postHarvestFeedDates = [
+    '2026-08-23', '2026-08-24', '2026-08-25', '2026-08-26', '2026-08-27',
+  ];
+  let postHarvestFeedPond = { ...afterQualifiedHarvest, samplings: [...(afterQualifiedHarvest.samplings || [])] };
+  postHarvestFeedDates.forEach((dateKey, index) => {
+    const normalBiomass = getNormalBiomass(postHarvestFeedPond, dateKey);
+    postHarvestFeedPond = {
+      ...postHarvestFeedPond,
+      samplings: [
+        ...postHarvestFeedPond.samplings,
+        { id: `post-harvest-feed-${index + 1}`, date: dateKey, feedData: { totalDailyFeed: normalBiomass * (frPercent14 / 100), feedingResponse: 'normal' as const } },
+      ],
+    };
+  });
+  const postHarvestFrMetrics = calculatePondMetricsWithHarvest(postHarvestFeedPond, timeZone, {
+    currentDateKey: '2026-08-27',
+    now: new Date('2026-08-27T12:00:00+10:00'),
+  });
+  if (postHarvestFrMetrics.biomassEstimate.method !== 'biological_feed') {
+    throw new Error('five qualifying post-harvest feed days must reactivate the FR estimate');
+  }
+  if (postHarvestFrMetrics.currentPopulation > Number(afterQualifiedHarvest.postHarvestRemainingPopulation)) {
+    throw new Error('post-harvest FR cannot increase heads above the saved harvest anchor');
+  }
+  const withLaterMbw = {
+    ...postHarvestFeedPond,
+    samplings: [...postHarvestFeedPond.samplings, { id: 'growth-after-harvest', date: '2026-08-28', mbw: 16, mortality: 0 }],
+  };
+  const laterMbwMetrics = calculatePondMetricsWithHarvest(withLaterMbw, timeZone, {
+    currentDateKey: '2026-08-28',
+    now: new Date('2026-08-28T12:00:00+10:00'),
+  });
+  if (laterMbwMetrics.currentPopulation > Number(afterQualifiedHarvest.postHarvestRemainingPopulation)) {
+    throw new Error('later MBW sampling cannot increase population beyond the post-harvest anchor');
+  }
+
+  // 3. 10% Boundary: inclusive ±10% qualifies, outside ±10% fails
+  // +10% exactly qualifies
+  const boundaryPlus10Pond = {
+    ...basePond,
+    samplings: [
+      ...preThresholdPond.samplings,
+      { id: 'f-5-plus10', date: '2026-08-22', feedData: { totalDailyFeed: feed5 * 1.10, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsPlus10 = calculatePondMetricsWithHarvest(boundaryPlus10Pond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  const expectedMeanPlus10 = (norm1 + norm2 + norm3 + norm4 + (norm5 * 1.10)) / 5;
+  assertClose(metricsPlus10.currentBiomass, expectedMeanPlus10, '+10% inclusive boundary qualifies');
+
+  // -10% exactly qualifies
+  const boundaryMinus10Pond = {
+    ...basePond,
+    samplings: [
+      ...preThresholdPond.samplings,
+      { id: 'f-5-minus10', date: '2026-08-22', feedData: { totalDailyFeed: feed5 * 0.90, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsMinus10 = calculatePondMetricsWithHarvest(boundaryMinus10Pond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  const expectedMeanMinus10 = (norm1 + norm2 + norm3 + norm4 + (norm5 * 0.90)) / 5;
+  assertClose(metricsMinus10.currentBiomass, expectedMeanMinus10, '-10% inclusive boundary qualifies');
+
+  // +11% fails (mismatch reset)
+  const beyondPlus10Pond = {
+    ...basePond,
+    samplings: [
+      ...preThresholdPond.samplings,
+      { id: 'f-5-plus11', date: '2026-08-22', feedData: { totalDailyFeed: feed5 * 1.11, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsPlus11 = calculatePondMetricsWithHarvest(beyondPlus10Pond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(metricsPlus11.currentBiomass, norm5, '+11% mismatch retains normal biomass');
+
+  // -11% fails (mismatch reset)
+  const beyondMinus10Pond = {
+    ...basePond,
+    samplings: [
+      ...preThresholdPond.samplings,
+      { id: 'f-5-minus11', date: '2026-08-22', feedData: { totalDailyFeed: feed5 * 0.89, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsMinus11 = calculatePondMetricsWithHarvest(beyondMinus10Pond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(metricsMinus11.currentBiomass, norm5, '-11% mismatch retains normal biomass');
+
+  // 4. Day 6 and Day 7 rolling average
+  const norm6 = getNormalBiomass(basePond, '2026-08-23');
+  const feed6 = norm6 * (frPercent14 / 100) * 1.04; // +4%
+  const frBiomass6 = feed6 / (frPercent14 / 100);
+
+  const sixDayPond = {
+    ...basePond,
+    samplings: [
+      ...fiveDayPond.samplings,
+      { id: 'f-6', date: '2026-08-23', feedData: { totalDailyFeed: feed6, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsDay6 = calculatePondMetricsWithHarvest(sixDayPond, timeZone, {
+    currentDateKey: '2026-08-23',
+    now: new Date('2026-08-23T12:00:00+10:00'),
+  });
+  const expectedMean6 = (norm2 + norm3 + norm4 + norm5 + frBiomass6) / 5;
+  assertClose(metricsDay6.currentBiomass, expectedMean6, 'day 6 rolling average uses window [2..6]');
+
+  const norm7 = getNormalBiomass(basePond, '2026-08-24');
+  const feed7 = norm7 * (frPercent14 / 100) * 0.96; // -4%
+  const frBiomass7 = feed7 / (frPercent14 / 100);
+
+  const sevenDayPond = {
+    ...basePond,
+    samplings: [
+      ...sixDayPond.samplings,
+      { id: 'f-7', date: '2026-08-24', feedData: { totalDailyFeed: feed7, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const metricsDay7 = calculatePondMetricsWithHarvest(sevenDayPond, timeZone, {
+    currentDateKey: '2026-08-24',
+    now: new Date('2026-08-24T12:00:00+10:00'),
+  });
+  const expectedMean7 = (norm3 + norm4 + norm5 + frBiomass6 + frBiomass7) / 5;
+  assertClose(metricsDay7.currentBiomass, expectedMean7, 'day 7 rolling average uses window [3..7]');
+
+  // 5. Gap reset: missing calendar date (Aug 21 missing, feed on Aug 18, 19, 20, 22, 23)
+  const gapPond = {
+    ...basePond,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'f-1', date: '2026-08-18', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      { id: 'f-3', date: '2026-08-20', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      // 2026-08-21 is MISSING
+      { id: 'f-5', date: '2026-08-22', feedData: { totalDailyFeed: feed5, feedingResponse: 'normal' as const } },
+      { id: 'f-6', date: '2026-08-23', feedData: { totalDailyFeed: feed6, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const gapMetrics = calculatePondMetricsWithHarvest(gapPond, timeZone, {
+    currentDateKey: '2026-08-23',
+    now: new Date('2026-08-23T12:00:00+10:00'),
+  });
+  assertClose(gapMetrics.currentBiomass, norm6, 'calendar gap resets streak and retains normal biomass');
+
+  // 6. Duplicate dates: split feedings on the same date count as one calendar day
+  const duplicateDatePond = {
+    ...basePond,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'f-1', date: '2026-08-18', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      // Duplicate snapshots are full-day totals, so the latest record wins.
+      { id: 'f-3a', date: '2026-08-20T08:00:00+10:00', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      { id: 'f-3b', date: '2026-08-20T12:00:00+10:00', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      { id: 'f-4', date: '2026-08-21', feedData: { totalDailyFeed: feed4, feedingResponse: 'normal' as const } },
+      { id: 'f-5', date: '2026-08-22', feedData: { totalDailyFeed: feed5, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const duplicateMetrics = calculatePondMetricsWithHarvest(duplicateDatePond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(duplicateMetrics.currentBiomass, expectedMean5, 'duplicate full-day totals are not added together');
+
+  const samplingFeedDoesNotReplaceDailyTotal = {
+    ...fiveDayPond,
+    samplings: fiveDayPond.samplings.map((record: any) => record.id === 'f-3'
+      ? { ...record, feed: feed3 * 100, feedData: { ...record.feedData, totalDailyFeed: feed3 } }
+      : record),
+  };
+  const samplingFeedMetrics = calculatePondMetricsWithHarvest(samplingFeedDoesNotReplaceDailyTotal, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(samplingFeedMetrics.currentBiomass, expectedMean5, 'FR uses feedData total, not a sampling record feed value');
+  assertClose(samplingFeedMetrics.totalFeedConsumed, feed1 + feed2 + feed3 + feed4 + feed5, 'feed consumption uses daily feed totals on merged sampling records');
+  assertClose(
+    samplingFeedMetrics.adjustedFCR,
+    samplingFeedMetrics.totalFeedConsumed / samplingFeedMetrics.currentBiomass,
+    'FCR uses the same daily feed totals as biomass estimation',
+  );
+
+  // 7. Atypical responses: weak or strong feeding response resets streak
+  const weakResponsePond = {
+    ...basePond,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'f-1', date: '2026-08-18', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      { id: 'f-3', date: '2026-08-20', feedData: { totalDailyFeed: feed3, feedingResponse: 'weak' as const } },
+      { id: 'f-4', date: '2026-08-21', feedData: { totalDailyFeed: feed4, feedingResponse: 'normal' as const } },
+      { id: 'f-5', date: '2026-08-22', feedData: { totalDailyFeed: feed5, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const weakMetrics = calculatePondMetricsWithHarvest(weakResponsePond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(weakMetrics.currentBiomass, norm5, 'atypical weak response resets streak and retains normal biomass');
+
+  // 8. MBW updates: updated MBW on Day 4 (2026-08-21) uses new MBW for Day 4/5, never future data for Days 1..3
+  const frPercent17_5 = 3.1; // getFeedRateFromMbw(17.5)
+  const updatedSamplingPond = {
+    ...basePond,
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'f-1', date: '2026-08-18', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      { id: 'f-3', date: '2026-08-20', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      { id: 'growth-2', date: '2026-08-21', mbw: 17.5, mortality: 0 },
+    ],
+  };
+  const norm4New = getNormalBiomass(updatedSamplingPond, '2026-08-21');
+  const norm5New = getNormalBiomass(updatedSamplingPond, '2026-08-22');
+  const feed4New = norm4New * (frPercent17_5 / 100);
+  const feed5New = norm5New * (frPercent17_5 / 100);
+
+  const mbwUpdatePond = {
+    ...updatedSamplingPond,
+    samplings: [
+      ...updatedSamplingPond.samplings,
+      { id: 'f-4', date: '2026-08-21', feedData: { totalDailyFeed: feed4New, feedingResponse: 'normal' as const } },
+      { id: 'f-5', date: '2026-08-22', feedData: { totalDailyFeed: feed5New, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const mbwUpdateMetrics = calculatePondMetricsWithHarvest(mbwUpdatePond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  const expectedMbwMean = (norm1 + norm2 + norm3 + norm4New + norm5New) / 5;
+  assertClose(mbwUpdateMetrics.currentBiomass, expectedMbwMean, 'MBW update applies to subsequent dates without leaking to earlier dates');
+
+  // 9. Cycle boundaries: record with different cycleId does not count toward current cycle
+  const cycleBoundaryPond = {
+    ...basePond,
+    cycleId: 'cycle-current',
+    samplings: [
+      { id: 'growth-1', date: '2026-08-17', mbw: 14, mortality: 0 },
+      { id: 'f-1', date: '2026-08-18', cycleId: 'cycle-old', feedData: { totalDailyFeed: feed1, feedingResponse: 'normal' as const } },
+      { id: 'f-2', date: '2026-08-19', cycleId: 'cycle-current', feedData: { totalDailyFeed: feed2, feedingResponse: 'normal' as const } },
+      { id: 'f-3', date: '2026-08-20', cycleId: 'cycle-current', feedData: { totalDailyFeed: feed3, feedingResponse: 'normal' as const } },
+      { id: 'f-4', date: '2026-08-21', cycleId: 'cycle-current', feedData: { totalDailyFeed: feed4, feedingResponse: 'normal' as const } },
+      { id: 'f-5', date: '2026-08-22', cycleId: 'cycle-current', feedData: { totalDailyFeed: feed5, feedingResponse: 'normal' as const } },
+    ],
+  };
+  const cycleMetrics = calculatePondMetricsWithHarvest(cycleBoundaryPond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(cycleMetrics.currentBiomass, norm5, 'cycle mismatch on day 1 resets streak, retaining normal biomass');
+
+  // 10. Harvest precedence and no future harvest leakage
+  // Post-harvest precedence: post-harvest biomass takes precedence over 5-day qualifying FR override
+  const postHarvestPrecedencePond = {
+    ...fiveDayPond,
+    postHarvestBaselineDate: '2026-08-17',
+    postHarvestRemainingBiomass: 750,
+    postHarvestRemainingPopulation: 53_571,
+    postHarvestReferenceSamplingId: 'growth-1',
+    postHarvestReferenceSamplingDate: '2026-08-17',
+    postHarvestReferenceMbw: 14,
+  };
+  const postHarvestMetrics = calculatePondMetricsWithHarvest(postHarvestPrecedencePond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(postHarvestMetrics.currentBiomass, 750, 'post-harvest biomass takes precedence over qualifying FR override');
+  if (postHarvestMetrics.biomassEstimate.method !== 'post_harvest') {
+    throw new Error('post-harvest precedence must preserve method post_harvest');
+  }
+
+  const harvestReferenceDateOnly = {
+    ...fiveDayPond,
+    postHarvestBaselineDate: null,
+    postHarvestReferenceSamplingDate: '2026-08-17',
+    totalHarvestedPopulation: 10_000,
+  };
+  const referenceOnlyMetrics = calculatePondMetricsWithHarvest(harvestReferenceDateOnly, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  if (referenceOnlyMetrics.biomassEstimate.method === 'biological_feed') {
+    throw new Error('a reference sampling date is not sufficient to date aggregate harvests');
+  }
+
+  const mortalityCapPond = {
+    ...basePond,
+    mortalityRecords: [{ id: 'mortality-current', date: '2026-08-22', observationType: 'estimated_total' as const, count: 20_000 }],
+  };
+  const capNorms = [norm1, norm2, norm3, norm4,
+    getNormalBiomass(mortalityCapPond, '2026-08-22')];
+  const overCapPond = {
+    ...mortalityCapPond,
+    samplings: [
+      ...basePond.samplings,
+      ...capNorms.map((biomass, index) => ({
+        id: `cap-feed-${index + 1}`,
+        date: `2026-08-${18 + index}`,
+        feedData: { totalDailyFeed: biomass * (frPercent14 / 100), feedingResponse: 'normal' as const },
+      })),
+    ],
+  };
+  const overCapMetrics = calculatePondMetricsWithHarvest(overCapPond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  const expectedCapFallback = getNormalBiomass(mortalityCapPond, '2026-08-22');
+  assertClose(overCapMetrics.currentBiomass, expectedCapFallback, 'FR average above the recorded population cap falls back to normal biomass');
+  if (overCapMetrics.biomassEstimate.method === 'biological_feed') {
+    throw new Error('over-cap FR biomass must not be reported as an accepted feed estimate');
+  }
+
+  // Future harvest on Day 7 (2026-08-24) does not leak into Day 5 (2026-08-22) calculation
+  const futureHarvestPond = {
+    ...fiveDayPond,
+    postHarvestBaselineDate: '2026-08-24',
+    postHarvestRemainingBiomass: 500,
+    postHarvestRemainingPopulation: 35_000,
+    totalHarvestedPopulation: 30_000,
+    totalHarvestedBiomass: 420,
+  };
+  const futureHarvestMetrics = calculatePondMetricsWithHarvest(futureHarvestPond, timeZone, {
+    currentDateKey: '2026-08-22',
+    now: new Date('2026-08-22T12:00:00+10:00'),
+  });
+  assertClose(futureHarvestMetrics.currentBiomass, expectedMean5, 'future harvest does not leak into Day 5 calculation');
 };

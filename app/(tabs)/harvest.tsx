@@ -32,6 +32,7 @@ import {
   isHistoricalHarvestRecord,
 } from '../../shared/harvestCycleScope';
 import { hasFarmPermission } from '../../shared/permissions';
+import DashboardIcon from '../components/icons/DashboardIcon';
 
 const Input = React.memo(function Input({ label, value, onChangeText, placeholder }: any) {
   return (
@@ -631,7 +632,7 @@ export default function HarvestScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#0d2137" />
       <View style={styles.container}>
         <View style={styles.header}>
-          <Ionicons name="cash-outline" size={28} color="#315f57" />
+          <DashboardIcon name="harvest" size={28} color="#315f57" />
           <Text style={styles.headerTitle}>{t.harvest.title}</Text>
         </View>
 

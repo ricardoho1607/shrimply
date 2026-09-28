@@ -1465,6 +1465,13 @@ inventory: {
   
   // Search & Filter
   searchPlaceholder: 'Search by item or brand...',
+  inStock: 'In Stock',
+  outOfStock: 'Out of Stock',
+  showArchived: 'Show archived',
+  hideArchived: 'Hide archived',
+  allCategories: 'All Categories',
+showAllLowStock: 'Show all',
+  showLess: 'Show less',
   
   // Empty States
   noFeedItems: 'No Feed Items',

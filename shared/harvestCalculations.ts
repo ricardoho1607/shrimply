@@ -205,8 +205,16 @@ export const hasFinalHarvestForPondCycle = (
   })
 );
 
-export const withHarvestReference = <T extends HarvestLineInput>(pond: HarvestTrackingPond, harvest: T): T => {
-  const referenceSampling = calculatePondMetricsWithHarvest(pond).latestValidMbwSampling;
+export const withHarvestReference = <T extends HarvestLineInput>(
+  pond: HarvestTrackingPond,
+  harvest: T,
+  harvestDate?: string,
+  timeZone?: string,
+): T => {
+  const referenceSampling = calculatePondMetricsWithHarvest(pond, timeZone, harvestDate ? {
+    now: harvestDate,
+    currentDateKey: harvestDate,
+  } : {}).latestValidMbwSampling;
   return {
     ...harvest,
     harvestReferenceSamplingId: referenceSampling?.id || null,
@@ -220,10 +228,16 @@ export const applyHarvestImpactToPond = <T extends HarvestTrackingPond>(
   harvest: HarvestLineInput,
   harvestDate: string,
   assignedPartialNumber?: number,
+  timeZone?: string,
 ): T => {
   const removal = calculateHarvestRemoval(harvest);
-  const metrics = calculatePondMetricsWithHarvest(pond);
+  const metrics = calculatePondMetricsWithHarvest(pond, timeZone, {
+    now: harvestDate,
+    currentDateKey: harvestDate,
+  });
   const referenceSampling = metrics.latestValidMbwSampling;
+  const referenceMbw = getSamplingMbw(referenceSampling) || metrics.latestMbw;
+  const remainingPopulation = Math.max(0, metrics.currentPopulation - removal.population);
   const isPartial = harvest.harvestType === 'partial';
   const partialHarvestCount = isPartial
     ? Math.max(
@@ -238,11 +252,11 @@ export const applyHarvestImpactToPond = <T extends HarvestTrackingPond>(
     totalHarvestedPopulation: toFiniteNumber(pond.totalHarvestedPopulation) + removal.population,
     partialHarvestCount,
     postHarvestBaselineDate: harvestDate,
-    postHarvestRemainingBiomass: Math.max(0, metrics.currentBiomass - removal.biomass),
-    postHarvestRemainingPopulation: Math.max(0, metrics.currentPopulation - removal.population),
+    postHarvestRemainingBiomass: (remainingPopulation * referenceMbw) / 1000,
+    postHarvestRemainingPopulation: remainingPopulation,
     postHarvestReferenceSamplingId: referenceSampling?.id || null,
     postHarvestReferenceSamplingDate: referenceSampling?.date || null,
-    postHarvestReferenceMbw: getSamplingMbw(referenceSampling),
+    postHarvestReferenceMbw: referenceMbw,
   } as T;
 };
 
@@ -253,14 +267,10 @@ export const reverseHarvestImpactOnPond = <T extends HarvestTrackingPond>(
   const removal = calculateHarvestRemoval(harvest);
   const hasBiomassBaseline = pond.postHarvestRemainingBiomass !== undefined && pond.postHarvestRemainingBiomass !== null;
   const hasPopulationBaseline = pond.postHarvestRemainingPopulation !== undefined && pond.postHarvestRemainingPopulation !== null;
-  const sameReferenceSampling = harvest.harvestReferenceSamplingId
-    ? harvest.harvestReferenceSamplingId === pond.postHarvestReferenceSamplingId
-    : harvest.harvestReferenceSamplingDate
-      ? harvest.harvestReferenceSamplingDate === pond.postHarvestReferenceSamplingDate
-      : true;
-  const biomassToRestore = sameReferenceSampling
-    ? removal.biomass
-    : (removal.population * toFiniteNumber(pond.postHarvestReferenceMbw)) / 1000;
+  const referenceMbw = toFiniteNumber(pond.postHarvestReferenceMbw);
+  const biomassToRestore = referenceMbw > 0
+    ? (removal.population * referenceMbw) / 1000
+    : removal.biomass;
 
   return {
     ...pond,

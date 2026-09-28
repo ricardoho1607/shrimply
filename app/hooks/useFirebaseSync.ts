@@ -863,12 +863,13 @@ const useFirebaseSyncController = () => {
                       || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
                       || getNextPartialHarvestNumber(pondData)
                     : undefined;
-                  const canonicalHarvestPond = withHarvestReference(pondData, { ...harvestPond, partialHarvestNumber });
+                  const canonicalHarvestPond = withHarvestReference(pondData, { ...harvestPond, partialHarvestNumber }, sourceRecord.date, company?.timeZone);
                   const updatedPond = applyHarvestImpactToPond(
                     pondData,
                     canonicalHarvestPond,
                     sourceRecord.date,
                     partialHarvestNumber,
+                    company?.timeZone,
                   );
                   updatedPondsById.set(harvestPond.pondId, updatedPond);
                   return canonicalHarvestPond;
@@ -1065,7 +1066,7 @@ const useFirebaseSyncController = () => {
       console.error('Error syncing changes:', error);
       throw error;
     }
-  }, [activeCompanyId, user]);
+  }, [activeCompanyId, company?.timeZone, user]);
 
   // Queue acceptance is serialized so concurrent form submits cannot overwrite each other's disk queue.
   const addPendingChange = useCallback((change: Omit<PendingChange, 'timestamp'>): Promise<DurableOutcome> => {

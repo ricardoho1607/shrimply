@@ -14,6 +14,7 @@ import { filterEnterpriseRecordsForUser, getEnterprisePondStatus, isEnterpriseOw
 import EnterprisePondGrid from '../components/enterprise/EnterprisePondGrid';
 import { useEnterpriseBlocks } from '../hooks/useEnterpriseBlocks';
 import { hasFarmPermission } from '../../shared/permissions';
+import DashboardIcon from '../components/icons/DashboardIcon';
 import {
   createOfflineOperationId,
   loadOfflineCollectionWithMutations,
@@ -805,7 +806,7 @@ export default function WaterQualityScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#f4f8fc" />
       <View style={styles.container}>
         <View style={styles.header}>
-          <Ionicons name="water-outline" size={28} color="#315f57" />
+          <DashboardIcon name="water-quality" size={28} color="#315f57" />
           <Text style={styles.headerTitle}>{t.waterQuality.title}</Text>
         </View>
 

@@ -492,8 +492,8 @@ export default function HarvestPage() {
               || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
               || getNextPartialHarvestNumber(serverPond)
             : undefined;
-          const canonicalHarvestPond = withHarvestReference(serverPond, { ...harvestPond, partialHarvestNumber });
-          const updatedPond = applyHarvestImpactToPond(serverPond, canonicalHarvestPond, newRecord.date, partialHarvestNumber);
+          const canonicalHarvestPond = withHarvestReference(serverPond, { ...harvestPond, partialHarvestNumber }, newRecord.date, company?.timeZone);
+          const updatedPond = applyHarvestImpactToPond(serverPond, canonicalHarvestPond, newRecord.date, partialHarvestNumber, company?.timeZone);
           updatedPondsById.set(harvestPond.pondId, updatedPond);
           return canonicalHarvestPond;
         });

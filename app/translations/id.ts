@@ -1453,6 +1453,13 @@ companySetup: {
     
     // Search & Filter
     searchPlaceholder: 'Cari berdasarkan item atau merek...',
+    inStock: 'Ada Stok',
+    outOfStock: 'Stok Habis',
+    showArchived: 'Tampilkan arsip',
+    hideArchived: 'Sembunyikan arsip',
+    allCategories: 'Semua Kategori',
+showAllLowStock: 'Tampilkan semua',
+    showLess: 'Tampilkan lebih sedikit',
     
     // Empty States
     noFeedItems: 'Tidak Ada Item Pakan',

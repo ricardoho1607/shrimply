@@ -65,10 +65,13 @@ export default function FeedAdditivesScreen() {
   const [activeTab, setActiveTab] = useState<'dashboard' | ItemType | 'mix'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
   const [menuModalVisible, setMenuModalVisible] = useState(false);
+  const [lowStockExpanded, setLowStockExpanded] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
   const [modalType, setModalType] = useState<ModalType>('add');
   const [itemType, setItemType] = useState<ItemType>('feed');
   const [selectedItem, setSelectedItem] = useState<Feed | Additive | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [stockStatusFilter, setStockStatusFilter] = useState<'all' | 'inStock' | 'outOfStock'>('inStock');
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [recentActivityFilter, setRecentActivityFilter] = useState<'all' | 'stockIn' | 'usage'>('all');
@@ -114,14 +117,21 @@ export default function FeedAdditivesScreen() {
       const name = 'feedName' in item ? item.feedName : item.additiveName;
       const brand = 'brand' in item ? item.brand || '' : '';
       const searchMatch = !q || name.toLowerCase().includes(q) || brand.toLowerCase().includes(q);
-      return categoryMatch && searchMatch && (showArchived || !item.archived);
+      const stock = Number(item.totalStock ?? 0);
+      const stockMatch =
+        stockStatusFilter === 'all'
+          ? true
+          : stockStatusFilter === 'inStock'
+            ? stock > 0
+            : stock <= 0;
+      return categoryMatch && searchMatch && stockMatch && (showArchived || !item.archived);
     });
-  }, [searchQuery, categoryFilter, showArchived]);
+  }, [searchQuery, categoryFilter, stockStatusFilter, showArchived]);
 
-  const filteredFeeds = useMemo(() => filterItems(store.feeds, 'feedType'), [store.feeds, searchQuery, categoryFilter, showArchived]);
+  const filteredFeeds = useMemo(() => filterItems(store.feeds, 'feedType'), [store.feeds, filterItems]);
   const filteredAdditives = useMemo(
     () => filterItems(store.additives.filter(item => item.inventoryKind !== 'treatmentMix'), 'category'),
-    [store.additives, searchQuery, categoryFilter, showArchived],
+    [store.additives, filterItems],
   );
 
   const pondUsageSummary = useMemo(() => {
@@ -301,13 +311,10 @@ export default function FeedAdditivesScreen() {
       <View style={[styles.card, isLow && { borderLeftWidth: 6, borderLeftColor: '#e74c3c' }]}>
         <TouchableOpacity onPress={() => openModal('history', item as any, type)} style={styles.cardHeader}>
           <View style={styles.cardTitle}>
-            <View style={[styles.iconBox, { backgroundColor: type === 'feed' ? '#E8F4F8' : '#FFF4E6' }]}>
-              <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#315f57' : '#f39c12'} />
-            </View>
             <View style={styles.cardInfo}>
               <Text style={styles.cardName}>{name}</Text>
               <Text style={styles.cardMeta}>{getCategoryLabel(type === 'feed' ? (item as Feed).feedType : (item as Additive).category)}</Text>
-              <Text style={{ fontSize: 12, color: '#6b7280' }}>{getUnitLabel(item.unit || 'kg')} • {t.inventory.reorder}: {(item.reorderLevel || 0)}</Text>
+              <Text style={styles.cardSubMeta}>{getUnitLabel(item.unit || 'kg')} · {t.inventory.reorder}: {(item.reorderLevel || 0)}</Text>
             </View>
           </View>
           <TouchableOpacity onPress={() => handleDelete(item.id, type)} style={styles.deleteBtn}>
@@ -333,33 +340,23 @@ export default function FeedAdditivesScreen() {
         </View>
 
         <View style={styles.flowStats}>
-          <View style={styles.flowItem}>
-            <Ionicons name="arrow-down-circle" size={16} color="#27ae60" />
-            <Text style={styles.flowText}>{t.inventory.in}: {totalStockInQty.toFixed(1)}</Text>
-          </View>
-          <View style={styles.flowItem}>
-            <Ionicons name="arrow-up-circle" size={16} color="#e74c3c" />
-            <Text style={styles.flowText}>{t.inventory.out}: {totalOut.toFixed(1)}</Text>
-          </View>
-          <View style={styles.flowItem}>
-            <Ionicons name="pricetag" size={16} color="#315f57" />
-            <Text style={styles.flowText}>{t.inventory.cost}: {formatCurrency((item.totalCost || 0))}</Text>
-          </View>
+          <Text style={styles.flowText}>{t.inventory.in}: {totalStockInQty.toFixed(1)}</Text>
+          <Text style={styles.flowSeparator}>·</Text>
+          <Text style={styles.flowText}>{t.inventory.out}: {totalOut.toFixed(1)}</Text>
+          <Text style={styles.flowSeparator}>·</Text>
+          <Text style={styles.flowText}>{t.inventory.cost}: {formatCurrency((item.totalCost || 0))}</Text>
         </View>
 
         <View style={styles.actions}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => openModal('stockIn', item as any, type)}>
-            <Ionicons name="add-circle" size={18} color="#fff" />
             <Text style={styles.actionText}>{t.inventory.stockIn}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSec]} onPress={() => openModal('usage', item as any, type)}>
-            <Ionicons name="remove-circle" size={18} color="#315f57" />
             <Text style={[styles.actionText, styles.actionTextSec]}>{t.inventory.use}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fff', borderWidth: 1, borderColor: '#E8F4F8' }]} onPress={() => { 
             openModal('editReorder', item as any, type);
           }}>
-            <Ionicons name="alert-circle" size={18} color="#f39c12" />
             <Text style={[styles.actionTextSec, { color: '#f39c12', fontWeight: '700' }]}>{type === 'additive' ? 'Product' : t.inventory.reorder}</Text>
           </TouchableOpacity>
         </View>
@@ -498,7 +495,14 @@ export default function FeedAdditivesScreen() {
       <View style={styles.container}>
         <View style={styles.tabs}>
           {(['dashboard', 'feed', 'additive', 'mix'] as const).map((tab) => (
-            <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
+            <TouchableOpacity
+              key={tab}
+              style={[styles.tab, activeTab === tab && styles.tabActive]}
+              onPress={() => {
+                setActiveTab(tab);
+                setCategoryFilter(null);
+              }}
+            >
               <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>
                 {tab === 'dashboard' ? t.inventory.dashboard : tab === 'feed' ? t.inventory.feeds : tab === 'additive' ? t.inventory.additives : t.inventory.treatmentMix.tabLabel}
               </Text>
@@ -516,18 +520,42 @@ export default function FeedAdditivesScreen() {
                 onChangeText={setSearchQuery}
                 style={[styles.textInput, styles.searchInput, { flex: 1 }]}
               />
-              <TouchableOpacity onPress={() => setShowArchived(value => !value)} style={{ padding: 10 }}><Text>{showArchived ? 'Hide archived' : 'Show archived'}</Text></TouchableOpacity>
-              <TouchableOpacity onPress={() => { setCategoryFilter(null); setSearchQuery(''); }} style={{ padding: 12 }}>
-                <Ionicons name="close-circle" size={20} color="#6B7F91" />
+              <TouchableOpacity
+                style={styles.categorySelector}
+                onPress={() => setCategoryModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Select category"
+              >
+                <Text style={styles.categorySelectorText} numberOfLines={1}>
+                  {categoryFilter ? getCategoryLabel(categoryFilter) : t.inventory.allCategories}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#0d2137" />
               </TouchableOpacity>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-              {(activeTab === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map((cat) => (
-                <TouchableOpacity key={cat} style={[styles.chip, categoryFilter === cat && styles.chipActive, { marginRight: 8 }]} onPress={() => setCategoryFilter(prev => prev === cat ? null : cat)}>
-                  <Text style={[styles.chipText, categoryFilter === cat && styles.chipTextActive]}>{getCategoryLabel(cat)}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+
+            <View style={styles.statusRow}>
+              <View style={styles.statusControls}>
+                {(['all', 'inStock', 'outOfStock'] as const).map((status) => (
+                  <TouchableOpacity
+                    key={status}
+                    style={[styles.statusBtn, stockStatusFilter === status && styles.statusBtnActive]}
+                    onPress={() => setStockStatusFilter(status)}
+                  >
+                    <Text style={[styles.statusBtnText, stockStatusFilter === status && styles.statusBtnTextActive]}>
+                      {status === 'all' ? t.inventory.all : status === 'inStock' ? t.inventory.inStock : t.inventory.outOfStock}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={[styles.archiveBtn, showArchived && styles.archiveBtnActive]}
+                onPress={() => setShowArchived((v) => !v)}
+              >
+                <Text style={[styles.archiveBtnText, showArchived && styles.archiveBtnTextActive]}>
+                  {showArchived ? t.inventory.hideArchived : t.inventory.showArchived}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -539,15 +567,12 @@ export default function FeedAdditivesScreen() {
             <>
               <View style={styles.metricsGrid}>
                 {[
-                  { icon: 'nutrition', label: t.inventory.feedStock, value: `${formatNumber(Math.round(metrics.totalFeedStock))} kg`, color: '#315f57' },
-                  { icon: 'flask', label: t.inventory.additiveValue, value: formatCurrency(Math.round(metrics.totalAdditiveValue)), color: '#f39c12' },
-                  { icon: 'cash', label: t.inventory.feedCost, value: formatCurrency(Math.round(metrics.totalFeedCost)), color: '#27ae60' },
-                  { icon: 'wallet', label: t.inventory.feedStockValue, value: formatCurrency(Math.round(metrics.feedStockValue)), color: '#0d2137' },
+                  { label: t.inventory.feedStock, value: `${formatNumber(Math.round(metrics.totalFeedStock))} kg` },
+                  { label: t.inventory.additiveValue, value: formatCurrency(Math.round(metrics.totalAdditiveValue)) },
+                  { label: t.inventory.feedCost, value: formatCurrency(Math.round(metrics.totalFeedCost)) },
+                  { label: t.inventory.feedStockValue, value: formatCurrency(Math.round(metrics.feedStockValue)) },
                 ].map((m, i) => (
                   <View key={i} style={styles.metricCard}>
-                    <View style={[styles.metricIcon, { backgroundColor: m.color + '20' }]}>
-                      <Ionicons name={m.icon as any} size={24} color={m.color} />
-                    </View>
                     <Text style={styles.metricLabel}>{m.label}</Text>
                     <Text style={styles.metricValue} numberOfLines={1}>{m.value}</Text>
                   </View>
@@ -557,24 +582,33 @@ export default function FeedAdditivesScreen() {
               {lowStockItems.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Ionicons name="alert-circle" size={20} color="#e74c3c" />
                     <Text style={styles.sectionTitle}>{t.inventory.lowStockAlert} ({lowStockItems.length})</Text>
                   </View>
-                  {lowStockItems.map((item) => (
+                  {lowStockItems.slice(0, lowStockExpanded ? lowStockItems.length : 2).map((item) => (
                     <View key={item.id} style={styles.alertCard}>
-                      <Ionicons name="warning" size={20} color="#e74c3c" />
                       <View style={styles.alertContent}>
                         <Text style={styles.alertText}>{item.name}</Text>
                         <Text style={styles.alertSub}>{item.stock.toFixed(1)} {getUnitLabel(item.unit || 'kg')} {t.inventory.remaining}</Text>
                       </View>
                     </View>
                   ))}
+                  {lowStockItems.length > 2 && (
+                    <TouchableOpacity
+                      style={styles.lowStockToggle}
+                      onPress={() => setLowStockExpanded((expanded) => !expanded)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.lowStockToggleText}>
+                        {lowStockExpanded ? t.inventory.showLess : t.inventory.showAllLowStock}
+                      </Text>
+                      <Ionicons name={lowStockExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0F4C75" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="time" size={20} color="#0d2137" />
                   <Text style={styles.sectionTitle}>{t.inventory.recentActivity}</Text>
                   <View style={styles.activityToggle}>
                     {(['all', 'stockIn', 'usage'] as const).map(filter => (
@@ -592,9 +626,6 @@ export default function FeedAdditivesScreen() {
                   scrollEnabled={false}
                   renderItem={({ item: tx }) => (
                     <View style={styles.txCard}>
-                      <View style={[styles.txIcon, { backgroundColor: tx.type === 'Stock In' ? '#27ae60' : '#e74c3c' }]}>
-                        <Ionicons name={tx.type === 'Stock In' ? 'arrow-down' : 'arrow-up'} size={16} color="#fff" />
-                      </View>
                       <View style={styles.txContent}>
                         <Text style={styles.txName}>{tx.item}</Text>
                         <Text style={styles.txMeta}>{tx.type} • {formatDate(tx.date)}</Text>
@@ -607,7 +638,6 @@ export default function FeedAdditivesScreen() {
 
               <View style={styles.section}>
                 <View style={styles.sectionHeader}>
-                  <Ionicons name="water" size={20} color="#0d2137" />
                   <Text style={styles.sectionTitle}>{t.inventory.pondUsageSummary}</Text>
                 </View>
                 {Object.keys(pondUsageSummary).length === 0 ? (
@@ -615,9 +645,6 @@ export default function FeedAdditivesScreen() {
                 ) : (
                   Object.entries(pondUsageSummary).map(([pondId, qty]) => (
                     <View key={pondId} style={styles.txCard}>
-                      <View style={[styles.txIcon, { backgroundColor: '#0d2137' }]}>
-                        <Ionicons name="water" size={16} color="#fff" />
-                      </View>
                       <View style={styles.txContent}>
                         <Text style={styles.txName}>{pondId}</Text>
                         <Text style={styles.txMeta}>{t.inventory.totalUsed}</Text>
@@ -673,15 +700,46 @@ export default function FeedAdditivesScreen() {
             <Text style={styles.menuTitle}>{t.inventory.addInventory}</Text>
             {(['feed', 'additive'] as const).map((type) => (
               <TouchableOpacity key={type} style={styles.menuOption} onPress={() => { setItemType(type); openModal('add'); }}>
-                <View style={[styles.menuIcon, { backgroundColor: type === 'feed' ? '#E8F4F8' : '#FFF4E6' }]}>
-                  <Ionicons name={type === 'feed' ? 'nutrition' : 'flask'} size={24} color={type === 'feed' ? '#315f57' : '#f39c12'} />
-                </View>
                 <Text style={styles.menuText}>{type === 'feed' ? t.inventory.addFeed : t.inventory.addAdditive}</Text>
-                <Ionicons name="chevron-forward" size={20} color="#dce8f2" />
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.menuCancel} onPress={() => setMenuModalVisible(false)}>
-              <Text style={styles.menuCancelText}>Cancel</Text>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={categoryModalVisible} animationType="fade" transparent>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setCategoryModalVisible(false)}>
+          <View style={styles.menuModal}>
+            <Text style={styles.menuTitle}>{t.inventory.category}</Text>
+            <TouchableOpacity
+              style={[styles.categoryOption, categoryFilter === null && styles.categoryOptionActive]}
+              onPress={() => {
+                setCategoryFilter(null);
+                setCategoryModalVisible(false);
+              }}
+            >
+              <Text style={[styles.categoryOptionText, categoryFilter === null && styles.categoryOptionTextActive]}>
+                {t.inventory.allCategories}
+              </Text>
+              {categoryFilter === null && <Ionicons name="checkmark" size={18} color="#315f57" />}
+            </TouchableOpacity>
+            {(activeTab === 'feed' ? FEED_CATEGORIES : ADDITIVE_CATEGORIES).map((cat) => (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.categoryOption, categoryFilter === cat && styles.categoryOptionActive]}
+                onPress={() => {
+                  setCategoryFilter(cat);
+                  setCategoryModalVisible(false);
+                }}
+              >
+                <Text style={[styles.categoryOptionText, categoryFilter === cat && styles.categoryOptionTextActive]}>
+                  {getCategoryLabel(cat)}
+                </Text>
+                {categoryFilter === cat && <Ionicons name="checkmark" size={18} color="#315f57" />}
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity style={styles.menuCancel} onPress={() => setCategoryModalVisible(false)}>
+              <Text style={styles.menuCancelText}>{t.actions.cancel}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -852,14 +910,108 @@ const styles = StyleSheet.create({
   backButton: { padding: 8, marginLeft: -4 },
   headerTitle: { fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', color: '#0d2137' },
   addButton: { padding: 8, marginRight: -4 },
-  tabs: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8F4F8' },
+  tabs: { flexDirection: 'row', backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E8F0F5' },
   tab: { flex: 1, paddingVertical: Platform.OS === 'android' ? 12 : 14, alignItems: 'center', borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabActive: { borderBottomColor: '#315f57' },
-  tabText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#dce8f2' },
-  tabTextActive: { color: '#315f57' },
+  tabActive: { borderBottomColor: '#0F4C75' },
+  tabText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#60798A' },
+  tabTextActive: { color: '#0F4C75' },
   searchContainer: { padding: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#FFF', borderBottomColor: '#E8F4F8', borderBottomWidth: 1 },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   searchInput: { backgroundColor: '#F4F8FC', borderColor: '#B8CBD9' },
+  categorySelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F4F8FC',
+    borderWidth: 1,
+    borderColor: '#B8CBD9',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'android' ? 10 : 12,
+    gap: 6,
+    maxWidth: 150,
+  },
+  categorySelectorText: {
+    fontSize: Platform.OS === 'android' ? 13 : 14,
+    color: '#0d2137',
+    fontWeight: '500',
+    flexShrink: 1,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  statusControls: {
+    flexDirection: 'row',
+    backgroundColor: '#F4F8FC',
+    borderRadius: 8,
+    padding: 3,
+    gap: 2,
+  },
+  statusBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  statusBtnActive: {
+    backgroundColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  statusBtnText: {
+    fontSize: 12,
+    color: '#6B7F91',
+    fontWeight: '500',
+  },
+  statusBtnTextActive: {
+    color: '#0d2137',
+    fontWeight: '600',
+  },
+  archiveBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F4F8FC',
+  },
+  archiveBtnActive: {
+    backgroundColor: '#E8F4F8',
+  },
+  archiveBtnText: {
+    fontSize: 12,
+    color: '#6B7F91',
+    fontWeight: '500',
+  },
+  archiveBtnTextActive: {
+    color: '#315f57',
+    fontWeight: '600',
+  },
+  categoryOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: '#f4f8fc',
+    marginBottom: 8,
+  },
+  categoryOptionActive: {
+    backgroundColor: '#E8F4F8',
+  },
+  categoryOptionText: {
+    fontSize: 15,
+    color: '#0d2137',
+    fontWeight: '500',
+  },
+  categoryOptionTextActive: {
+    color: '#315f57',
+    fontWeight: '700',
+  },
   scroll: { padding: Platform.OS === 'android' ? 14 : 16, paddingBottom: 140 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
   metricCard: { 
@@ -868,18 +1020,14 @@ const styles = StyleSheet.create({
     borderRadius: 12, 
     flex: 1, 
     minWidth: '47%', 
-    shadowColor: '#315f57', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.08, 
-    shadowRadius: 8, 
-    elevation: 3 
+    borderWidth: 1,
+    borderColor: '#E8F4F8',
   },
-  metricIcon: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  metricLabel: { fontSize: 12, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
-  metricValue: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: 'bold', color: '#0d2137' },
+  metricLabel: { fontSize: 12, color: '#6B7F91', marginBottom: 4, fontWeight: '500' },
+  metricValue: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: 'bold', color: '#0d2137' },
   section: { marginBottom: Platform.OS === 'android' ? 20 : 24 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginLeft: 8, flex: 1 },
+  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', flex: 1 },
   alertCard: { 
     flexDirection: 'row', 
     alignItems: 'center', 
@@ -887,98 +1035,88 @@ const styles = StyleSheet.create({
     padding: Platform.OS === 'android' ? 12 : 14, 
     borderRadius: 12, 
     marginBottom: 8, 
-    borderLeftWidth: 4, 
-    borderLeftColor: '#e74c3c', 
-    shadowColor: '#e74c3c', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 4, 
-    elevation: 2 
+    borderWidth: 1,
+    borderColor: '#E8F4F8',
   },
-  alertContent: { marginLeft: 12, flex: 1 },
+  alertContent: { flex: 1 },
   alertText: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137' },
-  alertSub: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#e74c3c' },
+  alertSub: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#6B7F91', marginTop: 2 },
+  lowStockToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
+  lowStockToggleText: { color: '#0F4C75', fontSize: 13, fontWeight: '600' },
   txCard: { 
     flexDirection: 'row', 
     alignItems: 'center', 
+    justifyContent: 'space-between',
     backgroundColor: '#FFF', 
     padding: Platform.OS === 'android' ? 12 : 14, 
     borderRadius: 12, 
     marginBottom: 8, 
-    shadowColor: '#315f57', 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowOpacity: 0.05, 
-    shadowRadius: 4, 
-    elevation: 2 
+    borderWidth: 1,
+    borderColor: '#E8F4F8',
   },
-  txIcon: { width: Platform.OS === 'android' ? 32 : 36, height: Platform.OS === 'android' ? 32 : 36, borderRadius: Platform.OS === 'android' ? 16 : 18, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
-  txContent: { flex: 1 },
+  txContent: { flex: 1, marginRight: 12 },
   txName: { fontSize: Platform.OS === 'android' ? 14 : 15, fontWeight: '600', color: '#0d2137' },
-  txMeta: { fontSize: 12, color: '#315f57', marginTop: 2 },
+  txMeta: { fontSize: 12, color: '#6B7F91', marginTop: 2 },
   txQty: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0d2137' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 70 : 80 },
   emptyTitle: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 19 : 20, fontWeight: 'bold', marginTop: Platform.OS === 'android' ? 14 : 16, marginBottom: 8 },
   emptySub: { color: '#315f57', fontSize: Platform.OS === 'android' ? 13 : 14 },
   card: { 
     backgroundColor: '#FFF', 
-    borderRadius: 16, 
-    marginBottom: Platform.OS === 'android' ? 14 : 16, 
-    shadowColor: '#315f57', 
-    shadowOffset: { width: 0, height: 2 }, 
-    shadowOpacity: 0.08, 
-    shadowRadius: 8, 
-    elevation: 3, 
-    overflow: 'hidden' 
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#D8E7F0',
+    marginBottom: Platform.OS === 'android' ? 10 : 12,
+    overflow: 'hidden',
   },
   cardHeader: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     alignItems: 'center', 
-    padding: Platform.OS === 'android' ? 14 : 16, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f4f8fc' 
+    padding: Platform.OS === 'android' ? 14 : 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EDF3F7',
   },
   cardTitle: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  iconBox: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
   cardInfo: { flex: 1 },
-  cardName: { fontSize: Platform.OS === 'android' ? 16 : 17, fontWeight: 'bold', color: '#0d2137', marginBottom: 2 },
-  cardMeta: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#315f57' },
+  cardName: { fontSize: Platform.OS === 'android' ? 16 : 17, fontWeight: '700', color: '#102F46', marginBottom: 2 },
+  cardMeta: { fontSize: 12, color: '#0F4C75', fontWeight: '600' },
+  cardSubMeta: { fontSize: 11, color: '#718797', marginTop: 3 },
   deleteBtn: { padding: 8, borderRadius: 8 },
   statsGrid: { 
     flexDirection: 'row', 
-    paddingVertical: Platform.OS === 'android' ? 14 : 16, 
-    paddingHorizontal: Platform.OS === 'android' ? 10 : 12, 
-    backgroundColor: '#f4f8fc' 
+    paddingVertical: Platform.OS === 'android' ? 12 : 14,
+    paddingHorizontal: Platform.OS === 'android' ? 12 : 14,
+    backgroundColor: '#FFFFFF',
   },
-  stat: { flex: 1, alignItems: 'center' },
-  statDivider: { width: 1, backgroundColor: '#E8F4F8', marginHorizontal: 8 },
-  statLabel: { fontSize: 12, color: '#0d2137', marginBottom: 4, fontWeight: '500' },
-  statValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: 'bold', color: '#0d2137' },
+  stat: { flex: 1, alignItems: 'flex-start', minWidth: 0 },
+  statDivider: { width: 1, backgroundColor: '#E8F0F5', marginHorizontal: 8 },
+  statLabel: { fontSize: 10, color: '#718797', marginBottom: 4, fontWeight: '600' },
+  statValue: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '700', color: '#102F46' },
   flowStats: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-around', 
-    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    paddingHorizontal: Platform.OS === 'android' ? 14 : 16, 
-    backgroundColor: '#FFF', 
-    borderTopWidth: 1, 
-    borderTopColor: '#f4f8fc' 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    backgroundColor: '#F6F9FB',
   },
-  flowItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  flowText: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137', fontWeight: '500' },
+  flowText: { flexShrink: 1, fontSize: 10, color: '#60798A', fontWeight: '500', textAlign: 'center' },
+  flowSeparator: { color: '#A4B5C1', fontSize: 12, marginHorizontal: 6 },
   actions: { flexDirection: 'row', padding: Platform.OS === 'android' ? 10 : 12, gap: 8 },
   actionBtn: { 
     flex: 1, 
     flexDirection: 'row', 
     alignItems: 'center', 
     justifyContent: 'center', 
-    backgroundColor: '#315f57', 
-    paddingVertical: Platform.OS === 'android' ? 10 : 12, 
-    borderRadius: 10, 
+    backgroundColor: '#0F4C75',
+    paddingVertical: Platform.OS === 'android' ? 9 : 10,
+    borderRadius: 9,
     gap: 6 
   },
-  actionBtnSec: { backgroundColor: '#FFF', borderWidth: 2, borderColor: '#315f57' },
-  actionText: { color: '#FFF', fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600' },
-  actionTextSec: { color: '#315f57' },
+  actionBtnSec: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8E7F0' },
+  actionText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  actionTextSec: { color: '#0F4C75' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'center', alignItems: 'center', padding: 20 },
   menuModal: { 
     backgroundColor: '#FFF', 
@@ -992,17 +1130,18 @@ const styles = StyleSheet.create({
     shadowRadius: 12, 
     elevation: 8 
   },
-  menuTitle: { fontSize: Platform.OS === 'android' ? 20 : 22, fontWeight: 'bold', color: '#0d2137', textAlign: 'center', marginBottom: Platform.OS === 'android' ? 18 : 20 },
+  menuTitle: { fontSize: 16, fontWeight: '700', color: '#60798A', marginBottom: 12 },
   menuOption: { 
     flexDirection: 'row', 
     alignItems: 'center', 
     padding: Platform.OS === 'android' ? 14 : 16, 
-    backgroundColor: '#f4f8fc', 
-    borderRadius: 12, 
-    marginBottom: Platform.OS === 'android' ? 10 : 12 
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E8F0F5',
+    borderRadius: 10,
+    marginBottom: 8,
   },
-  menuIcon: { width: Platform.OS === 'android' ? 40 : 44, height: Platform.OS === 'android' ? 40 : 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: Platform.OS === 'android' ? 10 : 12 },
-  menuText: { color: '#0d2137', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600', flex: 1 },
+  menuText: { color: '#0d2137', fontSize: 15, fontWeight: '600', flex: 1 },
   menuCancel: { padding: Platform.OS === 'android' ? 14 : 16, alignItems: 'center', marginTop: 8 },
   menuCancelText: { color: '#315f57', fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: '600' },
   modalContainer: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'flex-end' },

@@ -40,6 +40,8 @@ export default function AssetInventoryScreen() {
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'all'>('dashboard');
   const [modalVisible, setModalVisible] = useState(false);
+  const [categoryModalVisible, setCategoryModalVisible] = useState(false);
+  const [maintenanceListExpanded, setMaintenanceListExpanded] = useState(false);
   const [modalType, setModalType] = useState<ModalType>('add');
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -297,28 +299,17 @@ export default function AssetInventoryScreen() {
     const isOverdue = asset.transferHistory.some(t => 
       t.expectedReturn && !t.returned && new Date(t.expectedReturn) < new Date()
     );
-    const needsMaint = asset.condition === 'Needs Repair' || 
-      (asset.nextMaintenanceDue && new Date(asset.nextMaintenanceDue) <= new Date());
     const utilization = store.getAssetUtilization(asset.id);
 
     return (
-      <View style={[styles.card, needsMaint && { borderLeftWidth: 6, borderLeftColor: '#e74c3c' }]}>
+      <View style={styles.card}>
         <TouchableOpacity onPress={() => openModal('history', asset)} style={styles.cardHeader}>
           <View style={styles.cardTitle}>
-            {asset.photos[0] ? (
-              <Image source={{ uri: asset.photos[0] }} style={styles.assetImage} />
-            ) : (
-              <View style={[styles.iconBox, { backgroundColor: '#E8F4F8' }]}>
-                <Ionicons name="cube" size={24} color="#315f57" />
-              </View>
-            )}
+            {asset.photos[0] && <Image source={{ uri: asset.photos[0] }} style={styles.assetImage} />}
             <View style={styles.cardInfo}>
               <Text style={styles.cardName}>{asset.name}</Text>
               <Text style={styles.cardMeta}>{asset.category} {asset.serialNumber && `• SN: ${asset.serialNumber}`}</Text>
-              <Text style={[styles.conditionText, { 
-                color: asset.condition === 'Needs Repair' ? '#e74c3c' : 
-                       asset.condition === 'Excellent' ? '#27ae60' : '#f39c12' 
-              }]}>{asset.condition}</Text>
+              <Text style={styles.conditionText}>{asset.condition}</Text>
               {asset.totalMaintenanceCost > 0 && (
                 <Text style={styles.costText}>{t.asset?.maintCost || 'Maint. Cost'}: ${asset.totalMaintenanceCost.toFixed(2)}</Text>
               )}
@@ -337,8 +328,6 @@ export default function AssetInventoryScreen() {
         </TouchableOpacity>
 
         <View style={styles.holderSection}>
-          <Ionicons name={asset.currentHolder ? "person" : "home"} size={16} 
-            color={asset.currentHolder ? "#315f57" : "#6b7280"} />
           <Text style={styles.holderText}>{asset.currentHolder || t.asset?.inStorage || 'In Storage'}</Text>
           {isOverdue && <View style={styles.overdueTag}><Text style={styles.overdueText}>{t.asset?.overdue || 'OVERDUE'}</Text></View>}
           {utilization > 0 && (
@@ -351,20 +340,17 @@ export default function AssetInventoryScreen() {
         <View style={styles.actions}>
           {canManageAssets && (
             <TouchableOpacity style={styles.actionBtn} onPress={() => openModal('transfer', asset)}>
-              <Ionicons name="swap-horizontal" size={16} color="#fff" />
               <Text style={styles.actionText}>{t.asset?.transfer || 'Transfer'}</Text>
             </TouchableOpacity>
           )}
           {canManageAssets && asset.currentHolder && (
-            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#27ae60' }]} 
+            <TouchableOpacity style={styles.actionBtn}
               onPress={() => { setSelectedAsset(asset); openModal('return'); }}>
-              <Ionicons name="return-down-back" size={16} color="#fff" />
               <Text style={styles.actionText}>{t.asset?.return || 'Return'}</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={[styles.actionBtn, styles.actionBtnSec]} onPress={() => openModal('maintenance', asset)}>
-            <Ionicons name="construct" size={16} color="#f39c12" />
-            <Text style={[styles.actionText, { color: '#f39c12' }]}>{t.asset?.log || 'Log'}</Text>
+            <Text style={[styles.actionText, styles.actionTextSec]}>{t.asset?.log || 'Log'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -617,17 +603,22 @@ export default function AssetInventoryScreen() {
 
         {activeTab === 'all' && (
           <View style={styles.searchContainer}>
-            <TextInput placeholder={t.asset?.searchPlaceholder || "Search assets or serial numbers..."} 
-              value={searchQuery} onChangeText={setSearchQuery} style={styles.textInput}
-              placeholderTextColor={PLACEHOLDER_TEXT_COLOR} />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-              {CATEGORIES.map(cat => (
-                <TouchableOpacity key={cat} style={[styles.chip, categoryFilter === cat && styles.chipActive]} 
-                  onPress={() => setCategoryFilter(prev => prev === cat ? null : cat)}>
-                  <Text style={[styles.chipText, categoryFilter === cat && styles.chipTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <View style={styles.searchRow}>
+              <TextInput placeholder={t.asset?.searchPlaceholder || "Search assets or serial numbers..."}
+                value={searchQuery} onChangeText={setSearchQuery} style={[styles.textInput, { flex: 1 }]}
+                placeholderTextColor={PLACEHOLDER_TEXT_COLOR} />
+              <TouchableOpacity
+                style={styles.categorySelector}
+                onPress={() => setCategoryModalVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel={t.asset?.category || 'Select category'}
+              >
+                <Text style={styles.categorySelectorText} numberOfLines={1}>
+                  {categoryFilter || t.inventory.allCategories}
+                </Text>
+                <Ionicons name="chevron-down" size={14} color="#0d2137" />
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -636,15 +627,12 @@ export default function AssetInventoryScreen() {
             <>
               <View style={styles.metricsGrid}>
                 {[
-                  { icon: 'cube', label: t.asset?.totalAssets || 'Total Assets', value: store.assets.length, color: '#315f57' },
-                  { icon: 'alert-circle', label: t.asset?.needsMaintenance || 'Needs Maintenance', value: needsMaintenance.length, color: '#e74c3c' },
-                  { icon: 'person', label: t.asset?.checkedOut || 'Checked Out', value: checkedOut.length, color: '#f39c12' },
-                  { icon: 'cash', label: t.asset?.totalMaintenanceCost || 'Total Maint. Cost', value: `${store.getTotalMaintenanceCost().toFixed(0)}`, color: '#27ae60' },
+                  { label: t.asset?.totalAssets || 'Total Assets', value: store.assets.length },
+                  { label: t.asset?.needsMaintenance || 'Needs Maintenance', value: needsMaintenance.length },
+                  { label: t.asset?.checkedOut || 'Checked Out', value: checkedOut.length },
+                  { label: t.asset?.totalMaintenanceCost || 'Total Maint. Cost', value: `${store.getTotalMaintenanceCost().toFixed(0)}` },
                 ].map((m, i) => (
                   <View key={i} style={styles.metricCard}>
-                    <View style={[styles.metricIcon, { backgroundColor: m.color + '20' }]}>
-                      <Ionicons name={m.icon as any} size={24} color={m.color} />
-                    </View>
                     <Text style={styles.metricLabel}>{m.label}</Text>
                     <Text style={styles.metricValue}>{m.value}</Text>
                   </View>
@@ -654,22 +642,32 @@ export default function AssetInventoryScreen() {
               {needsMaintenance.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Ionicons name="alert-circle" size={20} color="#e74c3c" />
                     <Text style={styles.sectionTitle}>{t.asset?.needsAttention || 'Needs Attention'} ({needsMaintenance.length})</Text>
                   </View>
                   <FlatList
-                    data={needsMaintenance}
+                    data={needsMaintenance.slice(0, maintenanceListExpanded ? needsMaintenance.length : 2)}
                     keyExtractor={(item) => item.id}
                     scrollEnabled={false}
                     renderItem={({ item }) => <AssetCard asset={item} />}
                   />
+                  {needsMaintenance.length > 2 && (
+                    <TouchableOpacity
+                      style={styles.maintenanceListToggle}
+                      onPress={() => setMaintenanceListExpanded((expanded) => !expanded)}
+                      accessibilityRole="button"
+                    >
+                      <Text style={styles.maintenanceListToggleText}>
+                        {maintenanceListExpanded ? t.inventory.showLess : t.inventory.showAllLowStock}
+                      </Text>
+                      <Ionicons name={maintenanceListExpanded ? 'chevron-up' : 'chevron-down'} size={16} color="#0F4C75" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
               {checkedOut.length > 0 && (
                 <View style={styles.section}>
                   <View style={styles.sectionHeader}>
-                    <Ionicons name="person" size={20} color="#f39c12" />
                     <Text style={styles.sectionTitle}>{t.asset?.currentlyCheckedOut || 'Currently Checked Out'} ({checkedOut.length})</Text>
                   </View>
                   <FlatList
@@ -704,6 +702,37 @@ export default function AssetInventoryScreen() {
         </ScrollView>
       </View>
 
+      <Modal visible={categoryModalVisible} animationType="fade" transparent>
+        <TouchableOpacity style={styles.categoryOverlay} activeOpacity={1} onPress={() => setCategoryModalVisible(false)}>
+          <View style={styles.categoryModal}>
+            <Text style={styles.categoryModalTitle}>{t.asset?.category || 'Category'}</Text>
+            <TouchableOpacity
+              style={[styles.categoryOption, categoryFilter === null && styles.categoryOptionActive]}
+              onPress={() => {
+                setCategoryFilter(null);
+                setCategoryModalVisible(false);
+              }}
+            >
+              <Text style={[styles.categoryOptionText, categoryFilter === null && styles.categoryOptionTextActive]}>{t.inventory.allCategories}</Text>
+              {categoryFilter === null && <Ionicons name="checkmark" size={18} color="#0F4C75" />}
+            </TouchableOpacity>
+            {CATEGORIES.map((category) => (
+              <TouchableOpacity
+                key={category}
+                style={[styles.categoryOption, categoryFilter === category && styles.categoryOptionActive]}
+                onPress={() => {
+                  setCategoryFilter(category);
+                  setCategoryModalVisible(false);
+                }}
+              >
+                <Text style={[styles.categoryOptionText, categoryFilter === category && styles.categoryOptionTextActive]}>{category}</Text>
+                {categoryFilter === category && <Ionicons name="checkmark" size={18} color="#0F4C75" />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
       <Modal visible={modalVisible && modalType !== 'qr-scan'} animationType="slide" transparent>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
@@ -722,20 +751,28 @@ export default function AssetInventoryScreen() {
                       formData.name, v => setFormData(p => ({ ...p, name: v })))}
                     {renderFormField(t.asset?.description || 'Description', t.asset?.descriptionPlaceholder || "Details about the asset", 
                       formData.description, v => setFormData(p => ({ ...p, description: v })), { multiline: true, numberOfLines: 3 })}
+                    <Text style={styles.helperNote}>Asset costs stay in the asset register. Record the matching Equipment or Repairs transaction in Finance once; costs are not posted automatically.</Text>
                     <View style={styles.row}>
-                      {renderFormField(t.asset?.serialNumber || 'Serial Number', "SN123456", 
-                        formData.serialNumber, v => setFormData(p => ({ ...p, serialNumber: v })))}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.serialNumber || 'Serial Number', "SN123456",
+                          formData.serialNumber, v => setFormData(p => ({ ...p, serialNumber: v })))}
+                      </View>
                       <View style={{ width: 8 }} />
-                      <Text style={{ color: '#0F4C75', marginBottom: 12 }}>Asset costs stay in the asset register. Record the matching Equipment or Repairs transaction in Finance once; costs are not posted automatically.</Text>
-                      {renderFormField(t.asset?.purchaseCost || 'Purchase Cost' + ' ($)', "5000", 
-                        formData.purchaseCost, v => setFormData(p => ({ ...p, purchaseCost: v })), { keyboardType: 'numeric' })}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.purchaseCost || 'Purchase Cost' + ' ($)', "5000",
+                          formData.purchaseCost, v => setFormData(p => ({ ...p, purchaseCost: v })), { keyboardType: 'numeric' })}
+                      </View>
                     </View>
                     <View style={styles.row}>
-                      {renderFormField(t.asset?.manufacturer || 'Manufacturer', t.asset?.manufacturerPlaceholder || "Brand name", 
-                        formData.manufacturer, v => setFormData(p => ({ ...p, manufacturer: v })))}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.manufacturer || 'Manufacturer', t.asset?.manufacturerPlaceholder || "Brand name",
+                          formData.manufacturer, v => setFormData(p => ({ ...p, manufacturer: v })))}
+                      </View>
                       <View style={{ width: 8 }} />
-                      {renderFormField(t.asset?.model || 'Model', t.asset?.modelPlaceholder || "Model #", 
-                        formData.model, v => setFormData(p => ({ ...p, model: v })))}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.model || 'Model', t.asset?.modelPlaceholder || "Model #",
+                          formData.model, v => setFormData(p => ({ ...p, model: v })))}
+                      </View>
                     </View>
                     <View style={styles.input}>
                       <Text style={styles.label}>{t.asset?.category || 'Category'} *</Text>
@@ -810,13 +847,17 @@ export default function AssetInventoryScreen() {
                     </View>
                     {renderFormField(t.asset?.description || 'Description' + ' *', t.asset?.maintenanceDescriptionPlaceholder || "What maintenance was performed?", 
                       formData.description2, v => setFormData(p => ({ ...p, description2: v })), { multiline: true, numberOfLines: 3 })}
+                    <Text style={styles.helperNote}>Record this maintenance cost once in Finance under Repairs. Saving here updates the asset record only.</Text>
                     <View style={styles.row}>
-                      <Text style={{ color: '#0F4C75', marginBottom: 12 }}>Record this maintenance cost once in Finance under Repairs. Saving here updates the asset record only.</Text>
-                      {renderFormField(t.asset?.cost || 'Cost' + ' ($)', "150.00", 
-                        formData.cost, v => setFormData(p => ({ ...p, cost: v })), { keyboardType: 'numeric' })}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.cost || 'Cost' + ' ($)', "150.00",
+                          formData.cost, v => setFormData(p => ({ ...p, cost: v })), { keyboardType: 'numeric' })}
+                      </View>
                       <View style={{ width: 8 }} />
-                      {renderFormField(t.asset?.laborHours || 'Labor Hours', "2.5", 
-                        formData.laborHours, v => setFormData(p => ({ ...p, laborHours: v })), { keyboardType: 'numeric' })}
+                      <View style={styles.rowField}>
+                        {renderFormField(t.asset?.laborHours || 'Labor Hours', "2.5",
+                          formData.laborHours, v => setFormData(p => ({ ...p, laborHours: v })), { keyboardType: 'numeric' })}
+                      </View>
                     </View>
                     {renderFormField(t.asset?.partsUsed || 'Parts Used' + ' (comma separated)', "Filter, Oil, Gasket", 
                       formData.partsUsed, v => setFormData(p => ({ ...p, partsUsed: v })))}
@@ -930,6 +971,9 @@ const styles = StyleSheet.create({
   tabText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137' },
   tabTextActive: { color: '#FFF' },
   searchContainer: { padding: Platform.OS === 'android' ? 14 : 16 },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  categorySelector: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 150, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#D8E7F0', borderRadius: 10, paddingHorizontal: 10, paddingVertical: Platform.OS === 'android' ? 11 : 13 },
+  categorySelectorText: { flexShrink: 1, fontSize: 13, fontWeight: '500', color: '#102F46' },
   textInput: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 12 : 14, color: '#0d2137', fontSize: Platform.OS === 'android' ? 14 : 15, borderWidth: 1, borderColor: '#E8F4F8' },
   chip: { paddingHorizontal: Platform.OS === 'android' ? 14 : 16, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderRadius: Platform.OS === 'android' ? 18 : 20, backgroundColor: '#f4f8fc', marginRight: Platform.OS === 'android' ? 7 : 8, borderWidth: 1, borderColor: '#E8F4F8' },
   chipActive: { backgroundColor: '#315f57', borderColor: '#315f57' },
@@ -939,39 +983,47 @@ const styles = StyleSheet.create({
   chipTextSmall: { fontSize: Platform.OS === 'android' ? 10 : 11, fontWeight: '600', color: '#0d2137' },
   scroll: { padding: Platform.OS === 'android' ? 14 : 16 },
   metricsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Platform.OS === 'android' ? 10 : 12, marginBottom: Platform.OS === 'android' ? 18 : 20 },
-  metricCard: { flex: 1, minWidth: '47%', backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 14 : 16, alignItems: 'center', shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
-  metricIcon: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: Platform.OS === 'android' ? 7 : 8 },
-  metricLabel: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0d2137', marginBottom: 4, textAlign: 'center', fontWeight: '500' },
-  metricValue: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137' },
+  metricCard: { flex: 1, minWidth: '47%', backgroundColor: '#FFF', borderRadius: 12, padding: Platform.OS === 'android' ? 14 : 16, borderWidth: 1, borderColor: '#E8F0F5' },
+  metricLabel: { fontSize: 12, color: '#6B7F91', marginBottom: 4, fontWeight: '500' },
+  metricValue: { fontSize: Platform.OS === 'android' ? 16 : 18, fontWeight: '700', color: '#102F46' },
   section: { marginBottom: Platform.OS === 'android' ? 18 : 20 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8, marginBottom: Platform.OS === 'android' ? 10 : 12 },
-  sectionTitle: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137' },
-  card: { backgroundColor: '#FFF', borderRadius: Platform.OS === 'android' ? 14 : 16, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, shadowColor: '#315f57', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8, elevation: 3 },
+  sectionTitle: { flex: 1, fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137' },
+  maintenanceListToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10 },
+  maintenanceListToggleText: { color: '#0F4C75', fontSize: 13, fontWeight: '600' },
+  card: { backgroundColor: '#FFF', borderRadius: 12, padding: Platform.OS === 'android' ? 14 : 16, marginBottom: Platform.OS === 'android' ? 10 : 12, borderWidth: 1, borderColor: '#D8E7F0' },
   cardHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: Platform.OS === 'android' ? 10 : 12 },
   cardTitle: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: Platform.OS === 'android' ? 10 : 12 },
-  iconBox: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: Platform.OS === 'android' ? 10 : 12, alignItems: 'center', justifyContent: 'center' },
   assetImage: { width: Platform.OS === 'android' ? 44 : 48, height: Platform.OS === 'android' ? 44 : 48, borderRadius: Platform.OS === 'android' ? 10 : 12 },
   cardInfo: { flex: 1 },
   cardName: { fontSize: Platform.OS === 'android' ? 15 : 16, fontWeight: 'bold', color: '#0d2137', marginBottom: 4 },
-  cardMeta: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#315f57', marginBottom: 4 },
-  conditionText: { fontSize: Platform.OS === 'android' ? 11 : 12, fontWeight: '600', marginBottom: 2 },
+  cardMeta: { fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0F4C75', fontWeight: '600', marginBottom: 4 },
+  conditionText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#6B7F91', fontWeight: '600', marginBottom: 2 },
   costText: { fontSize: Platform.OS === 'android' ? 11 : 12, color: '#0d2137' },
   cardActions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 7 : 8 },
   qrBtn: { padding: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 7 : 8 },
   deleteBtn: { padding: Platform.OS === 'android' ? 7 : 8, backgroundColor: '#f4f8fc', borderRadius: Platform.OS === 'android' ? 7 : 8 },
-  holderSection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 7 : 8, borderTopWidth: 1, borderTopColor: '#f4f8fc', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  holderSection: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 9 : 10, borderTopWidth: 1, borderTopColor: '#EDF3F7', marginBottom: Platform.OS === 'android' ? 7 : 8 },
   holderText: { flex: 1, minWidth: 0, fontSize: Platform.OS === 'android' ? 12 : 13, color: '#0d2137' },
-  overdueTag: { backgroundColor: '#e74c3c', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
+  overdueTag: { backgroundColor: '#60798A', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
   overdueText: { fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFF' },
-  utilizationTag: { flexShrink: 0, backgroundColor: '#315f57', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
+  utilizationTag: { flexShrink: 0, backgroundColor: '#0F4C75', paddingHorizontal: Platform.OS === 'android' ? 7 : 8, paddingVertical: 4, borderRadius: Platform.OS === 'android' ? 7 : 8 },
   utilizationText: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 9 : 10, fontWeight: '700', color: '#FFF' },
   actions: { flexDirection: 'row', gap: Platform.OS === 'android' ? 7 : 8 },
-  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Platform.OS === 'android' ? 5 : 6, paddingVertical: Platform.OS === 'android' ? 9 : 10, borderRadius: Platform.OS === 'android' ? 9 : 10, backgroundColor: '#315f57' },
-  actionBtnSec: { backgroundColor: 'transparent', borderWidth: 2, borderColor: '#f39c12' },
-  actionText: { fontSize: Platform.OS === 'android' ? 12 : 13, fontWeight: '600', color: '#FFF' },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 9 : 10, borderRadius: 9, backgroundColor: '#0F4C75' },
+  actionBtnSec: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#D8E7F0' },
+  actionText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  actionTextSec: { color: '#0F4C75' },
   empty: { alignItems: 'center', justifyContent: 'center', paddingVertical: Platform.OS === 'android' ? 50 : 60 },
   emptyTitle: { fontSize: Platform.OS === 'android' ? 18 : 20, fontWeight: 'bold', color: '#0d2137', marginTop: Platform.OS === 'android' ? 14 : 16 },
   emptySub: { fontSize: Platform.OS === 'android' ? 13 : 14, color: '#315f57', marginTop: Platform.OS === 'android' ? 7 : 8, textAlign: 'center', paddingHorizontal: Platform.OS === 'android' ? 28 : 32 },
+  categoryOverlay: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.55)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  categoryModal: { width: '90%', maxWidth: 400, backgroundColor: '#FFF', borderRadius: 16, padding: 18 },
+  categoryModalTitle: { fontSize: 16, fontWeight: '700', color: '#60798A', marginBottom: 12 },
+  categoryOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 13, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#E8F0F5', marginBottom: 8 },
+  categoryOptionActive: { backgroundColor: '#F4F8FC', borderColor: '#B8CBD9' },
+  categoryOptionText: { fontSize: 14, color: '#102F46', fontWeight: '500' },
+  categoryOptionTextActive: { color: '#0F4C75', fontWeight: '700' },
   modalContainer: { flex: 1, backgroundColor: 'rgba(27, 38, 44, 0.7)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: '#FFF', borderTopLeftRadius: Platform.OS === 'android' ? 20 : 24, borderTopRightRadius: Platform.OS === 'android' ? 20 : 24, maxHeight: '90%', shadowColor: '#dce8f2', shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
   modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 18 : 20, borderBottomWidth: 1, borderBottomColor: '#f4f8fc' },
@@ -979,9 +1031,11 @@ const styles = StyleSheet.create({
   form: { maxHeight: Platform.OS === 'android' ? 450 : 500 },
   formContent: { padding: Platform.OS === 'android' ? 18 : 20 },
   input: { marginBottom: Platform.OS === 'android' ? 14 : 16 },
-  label: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 7 : 8 },
+  label: { flexShrink: 1, fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#0d2137', marginBottom: Platform.OS === 'android' ? 7 : 8 },
   textArea: { height: Platform.OS === 'android' ? 72 : 80, textAlignVertical: 'top' },
-  row: { flexDirection: 'row' },
+  row: { flexDirection: 'row', width: '100%' },
+  rowField: { flex: 1, minWidth: 0 },
+  helperNote: { color: '#526B7D', fontSize: 12, lineHeight: 17, marginBottom: 12, flexShrink: 1 },
   photoBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Platform.OS === 'android' ? 7 : 8, paddingVertical: Platform.OS === 'android' ? 10 : 12, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#f4f8fc', borderWidth: 1, borderColor: '#315f57', borderStyle: 'dashed' },
   photoBtnText: { fontSize: Platform.OS === 'android' ? 13 : 14, fontWeight: '600', color: '#315f57' },
   banner: { flexDirection: 'row', alignItems: 'center', gap: Platform.OS === 'android' ? 10 : 12, padding: Platform.OS === 'android' ? 14 : 16, borderRadius: Platform.OS === 'android' ? 10 : 12, backgroundColor: '#E8F4F8', marginBottom: Platform.OS === 'android' ? 14 : 16 },

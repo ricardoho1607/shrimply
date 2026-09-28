@@ -90,10 +90,10 @@ export default function AppDatePicker({
           maximumDate={maximumDate}
           themeVariant="light"
           onChange={(event, date) => {
-            const nextDate = date || draftDate;
+            const nextDate = date || draftDateRef.current;
             draftDateRef.current = nextDate;
-            setDraftDate(nextDate);
             if (Platform.OS !== 'ios') {
+              setDraftDate(nextDate);
               if (event.type !== 'dismissed') confirm(nextDate);
               else setVisible(false);
             }

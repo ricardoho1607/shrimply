@@ -657,7 +657,7 @@ export const usePondStore = create<PondStore>()(
               pondCycleId: harvestPond.pondCycleId || pond?.pondCycleId || pond?.id,
               blockId: harvestPond.blockId || pond?.blockId,
               blockName: harvestPond.blockName || pond?.blockName,
-            });
+            }, record.date, get().currentTimeZone);
           }),
         };
         set((state) => ({
@@ -670,6 +670,7 @@ export const usePondStore = create<PondStore>()(
               harvestPond,
               recordWithCycle.date,
               harvestPond.partialHarvestNumber,
+              get().currentTimeZone,
             );
             const currentAppliedIds = Array.isArray(pond.appliedHarvestIds) ? pond.appliedHarvestIds : [];
             return {
@@ -793,6 +794,7 @@ export const usePondStore = create<PondStore>()(
               nextHarvestPond,
               record.date,
               nextHarvestPond.partialHarvestNumber,
+              get().currentTimeZone,
             );
             const nextAppliedIds = currentAppliedIds.includes(replacementId) ? currentAppliedIds : [...currentAppliedIds, replacementId];
             return {
@@ -809,6 +811,7 @@ export const usePondStore = create<PondStore>()(
             nextHarvestPond!,
             record.date,
             nextHarvestPond!.partialHarvestNumber,
+            get().currentTimeZone,
           );
           const nextAppliedIds = [
             ...currentAppliedIds.filter((id) => id !== previousRecord.id && id !== replacementId),
@@ -835,7 +838,7 @@ export const usePondStore = create<PondStore>()(
                 || (previousHarvestPond?.harvestType === 'partial' ? previousHarvestPond.partialHarvestNumber : undefined)
                 || (pond ? getNextPartialHarvestNumber(pond) : 1)
               : undefined;
-            return withHarvestReference(pond || {}, { ...harvestPond, partialHarvestNumber });
+            return withHarvestReference(pond || {}, { ...harvestPond, partialHarvestNumber }, record.date, get().currentTimeZone);
           }),
         };
 
@@ -1017,6 +1020,7 @@ export const usePondStore = create<PondStore>()(
               harvestForPond,
               record.date,
               harvestForPond.partialHarvestNumber,
+              get().currentTimeZone,
             );
             updatedPonds.push(updatedPond);
             return updatedPond;
