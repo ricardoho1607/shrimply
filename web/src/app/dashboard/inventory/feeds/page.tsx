@@ -26,8 +26,8 @@ import {
 } from 'firebase/firestore';
 import { app, auth, db } from '@/lib/firebase';
 import { getFunctions, httpsCallable } from 'firebase/functions';
-import AgentCards from '@/components/orson/AgentCards';
 import { useAgentOperations } from '../../../../../../orson/useAgentOperations';
+import { mergeOrsonOperation, validId, type OrsonCommand, type OrsonOperation } from '../../../../../../shared/orsonAgentContract';
 import { useAuth } from '@/contexts/AuthContext';
 import { storedDate } from '@/lib/storedDate';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -86,6 +86,48 @@ interface InventoryItem {
   totalCost: number;
   lastUpdated: unknown;
   createdAt: unknown;
+}
+
+type AcceptedVoid = {
+  command: OrsonCommand;
+  operation: OrsonOperation;
+  companyId: string;
+  uid: string;
+  retryVerified: boolean;
+};
+
+// The hook receives wire results without checking their identity. Check every boundary here.
+function matchesVoidOperation(
+  operation: OrsonOperation | null | undefined,
+  command: OrsonCommand,
+  operationId?: string,
+): operation is OrsonOperation {
+  if (!operation || !validId(operation.id) || (operationId && operation.id !== operationId) ||
+    !Number.isInteger(operation.revision) || operation.revision < 1 ||
+    !['draft', 'completed', 'partial', 'discarded'].includes(operation.state) ||
+    !Array.isArray(operation.rows) || operation.rows.length !== 1 ||
+    !Array.isArray(operation.receipts)) return false;
+  const row = operation.rows[0];
+  const target = row?.command;
+  return !!target && target.id === command.id && target.type === 'void_inventory_purchase' &&
+    target.itemType === 'additive' && target.itemId === command.itemId &&
+    target.recordId === command.recordId && target.date === command.date &&
+    !!target.values && typeof target.values === 'object' && !Array.isArray(target.values) &&
+    Object.keys(target.values).length === 0 &&
+    typeof row.valid === 'boolean' &&
+    operation.receipts.every(receipt => receipt &&
+      ['saved', 'failed'].includes(receipt.status) && typeof receipt.message === 'string' &&
+      Array.isArray(receipt.rowIds) && receipt.rowIds.length === 1 && receipt.rowIds[0] === command.id);
+}
+
+function isVoidSaved(operation: OrsonOperation) {
+  return operation.state === 'completed' && operation.receipts.some(receipt => receipt.status === 'saved');
+}
+
+function isVoidRetryable(operation: OrsonOperation) {
+  return (operation.state === 'draft' || operation.state === 'partial') &&
+    operation.rows[0]?.valid === true && !operation.rows[0].error &&
+    !operation.receipts.some(receipt => receipt.status === 'saved');
 }
 
 const UNITS = ['kg', 'L', 'pack', 'sack'];
@@ -170,16 +212,43 @@ export default function InventoryFeedsPage() {
   const [modalType, setModalType] = useState<'add' | 'stockIn' | 'usage' | 'history' | 'editReorder'>('add');
   const [itemType, setItemType] = useState<'feed' | 'additive'>('feed');
   const [selectedItem, setSelectedItem] = useState<InventoryItem | null>(null);
-  const [pendingVoidOperationId, setPendingVoidOperationId] = useState<string | null>(null);
+  const [acceptedVoid, setAcceptedVoid] = useState<AcceptedVoid | null>(null);
+  const acceptedVoidRef = useRef<AcceptedVoid | null>(null);
+  const voidActionLock = useRef(false);
+  const voidStatusPanelRef = useRef<HTMLElement | null>(null);
   const [preparingVoidRecordId, setPreparingVoidRecordId] = useState<string | null>(null);
+  const [checkingVoidStatus, setCheckingVoidStatus] = useState(false);
   const [voidPreparationError, setVoidPreparationError] = useState('');
-  const pendingVoidOperation = agent.operations.find((operation) => operation.id === pendingVoidOperationId);
-  const hasOpenVoidOperation = pendingVoidOperation?.state === 'draft' || pendingVoidOperation?.state === 'partial';
+  const [voidStatusUncertain, setVoidStatusUncertain] = useState(false);
+  const acceptedInScope = acceptedVoid !== null && acceptedVoid.companyId === companyId && acceptedVoid.uid === userUid;
+  const acceptedVoidItemName = acceptedInScope
+    ? additives.find(item => item.id === acceptedVoid.command.itemId)?.itemName
+    : undefined;
+  const storedVoidOperation = acceptedInScope
+    ? agent.operations.find(operation => operation.id === acceptedVoid.operation.id)
+    : undefined;
+  const pendingVoidOperation = acceptedInScope
+    ? (matchesVoidOperation(storedVoidOperation, acceptedVoid.command, acceptedVoid.operation.id)
+      ? mergeOrsonOperation(acceptedVoid.operation, storedVoidOperation) : acceptedVoid.operation)
+    : null;
+  const hasOpenVoidOperation = !!pendingVoidOperation &&
+    (voidStatusUncertain || (!isVoidSaved(pendingVoidOperation) && pendingVoidOperation.state !== 'discarded'));
+  const canRetryVoid = acceptedInScope && acceptedVoid.retryVerified && !voidStatusUncertain &&
+    !!pendingVoidOperation && matchesVoidOperation(pendingVoidOperation, acceptedVoid.command, acceptedVoid.operation.id) &&
+    isVoidRetryable(pendingVoidOperation);
+  const voidActionBusy = preparingVoidRecordId !== null || checkingVoidStatus;
   const historyItem = useMemo(() => {
     if (!selectedItem) return null;
     const currentItems = itemType === 'feed' ? feeds : additives;
     return currentItems.find((item) => item.id === selectedItem.id) || selectedItem;
   }, [selectedItem, itemType, feeds, additives]);
+
+  useEffect(() => {
+    if (isModalOpen && modalType === 'history') {
+      voidStatusPanelRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [isModalOpen, modalType, preparingVoidRecordId, checkingVoidStatus,
+    acceptedVoid, pendingVoidOperation, voidPreparationError, agent.error]);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -301,9 +370,8 @@ export default function InventoryFeedsPage() {
 
   const handleOpenModal = (type: typeof modalType, item?: InventoryItem, iType?: typeof itemType) => {
     if (!canEditInventory && type !== 'history') return;
-    setPendingVoidOperationId(null);
-    setPreparingVoidRecordId(null);
-    setVoidPreparationError('');
+    if (voidActionLock.current || agent.busy) return;
+    if (!acceptedVoidRef.current) setVoidPreparationError('');
     const effectiveItemType = iType || itemType;
     setModalType(type);
     setItemType(effectiveItemType);
@@ -350,26 +418,53 @@ export default function InventoryFeedsPage() {
   };
 
   const closeInventoryModal = () => {
-    if (agent.busy) return;
-    const pendingOperation = agent.operations.find((operation) => operation.id === pendingVoidOperationId);
-    if (pendingOperation && (pendingOperation.state === 'draft' || pendingOperation.state === 'partial')) {
-      void agent.discard(pendingOperation);
-    }
-    setPendingVoidOperationId(null);
+    if (voidActionLock.current || agent.busy) return;
     setModalOpen(false);
   };
 
+  const saveAcceptedVoid = (accepted: AcceptedVoid) => {
+    const previous = acceptedVoidRef.current;
+    const next = previous && previous.companyId === accepted.companyId && previous.uid === accepted.uid &&
+      matchesVoidOperation(previous.operation, accepted.command, accepted.operation.id)
+      ? { ...accepted, operation: mergeOrsonOperation(previous.operation, accepted.operation) }
+      : accepted;
+    acceptedVoidRef.current = next;
+    setAcceptedVoid(next);
+    return next;
+  };
+  const uncertainVoidMessage = copy('Could not verify the removal. Check save status before retrying.');
+
+  const acceptVoidResult = (accepted: AcceptedVoid, result: OrsonOperation | null | undefined) => {
+    if (matchesVoidOperation(result, accepted.command, accepted.operation.id)) {
+      const next = saveAcceptedVoid({ ...accepted, operation: result, retryVerified: isVoidRetryable(result) });
+      if ((isVoidSaved(result) && isVoidSaved(next.operation)) ||
+        (isVoidRetryable(result) && isVoidRetryable(next.operation))) {
+        setVoidStatusUncertain(false);
+        setVoidPreparationError('');
+        return;
+      }
+    }
+    saveAcceptedVoid({ ...(acceptedVoidRef.current ?? accepted), retryVerified: false });
+    setVoidStatusUncertain(true);
+    setVoidPreparationError(uncertainVoidMessage);
+  };
+
   const prepareVoidStockIn = async (record: StockHistory) => {
+    const previous = acceptedVoidRef.current;
     if (
-      !companyId || !selectedItem || itemType !== 'additive' ||
-      !canEditInventory || !canUseOrson || !record.id || !record.date || agent.busy
+      voidActionLock.current || !companyId || !selectedItem || itemType !== 'additive' ||
+      !canEditInventory || !canUseOrson || !record.id || !record.date || agent.busy ||
+      hasOpenVoidOperation || (previous?.companyId === companyId && previous.uid === userUid &&
+        !isVoidSaved(previous.operation) && previous.operation.state !== 'discarded')
     ) return;
 
+    voidActionLock.current = true;
     setPreparingVoidRecordId(record.id);
-    setPendingVoidOperationId(null);
     setVoidPreparationError('');
+    setVoidStatusUncertain(false);
+    let accepted: AcceptedVoid | null = null;
     try {
-      const operation = await agent.prepare([{
+      const command: OrsonCommand = {
         id: crypto.randomUUID(),
         type: 'void_inventory_purchase',
         date: record.date,
@@ -377,12 +472,70 @@ export default function InventoryFeedsPage() {
         itemId: selectedItem.id,
         recordId: record.id,
         values: {},
-      }]);
-      if (operation) setPendingVoidOperationId(operation.id);
-      else setVoidPreparationError(copy('Could not prepare the removal. Check your connection and try again.'));
+      };
+      const operation = await agent.prepare([command]);
+      if (!matchesVoidOperation(operation, command) || operation.state !== 'draft' ||
+        operation.rows[0].valid !== true || operation.rows[0].error || operation.receipts.length !== 0 ||
+        !Number.isFinite(operation.expiresAt) || operation.expiresAt <= 0) {
+        const rowErrors = Array.isArray(operation?.rows)
+          ? operation.rows.map(row => row?.error).filter(error => typeof error === 'string' && error).join(' ') : '';
+        setVoidPreparationError(rowErrors || copy('Could not verify the removal draft. Check your connection and try again.'));
+        return;
+      }
+      accepted = { command, operation, companyId, uid: userUid, retryVerified: false };
+      saveAcceptedVoid(accepted);
+      const result = await agent.confirm(operation, [command.id]);
+      acceptVoidResult(accepted, result);
     } catch {
-      setVoidPreparationError(copy('Could not prepare the removal. Check your connection and try again.'));
+      setVoidStatusUncertain(!!accepted);
+      setVoidPreparationError(accepted ? uncertainVoidMessage :
+        copy('Could not verify the removal draft. Check your connection and try again.'));
     } finally {
+      voidActionLock.current = false;
+      setPreparingVoidRecordId(null);
+    }
+  };
+
+  const recoverVoidStockIn = async () => {
+    const accepted = acceptedVoidRef.current;
+    if (voidActionLock.current || agent.busy || !accepted ||
+      accepted.companyId !== companyId || accepted.uid !== userUid ||
+      !matchesVoidOperation(accepted.operation, accepted.command, accepted.operation.id)) return;
+    voidActionLock.current = true;
+    setCheckingVoidStatus(true);
+    setVoidPreparationError('');
+    saveAcceptedVoid({ ...accepted, retryVerified: false });
+    try {
+      const result = await agent.recover(accepted.operation);
+      acceptVoidResult(accepted, result);
+    } catch {
+      setVoidStatusUncertain(true);
+      setVoidPreparationError(uncertainVoidMessage);
+    } finally {
+      voidActionLock.current = false;
+      setCheckingVoidStatus(false);
+    }
+  };
+
+  const retryVoidStockIn = async () => {
+    const accepted = acceptedVoidRef.current;
+    if (voidActionLock.current || agent.busy || !accepted || !canRetryVoid ||
+      !canEditInventory || !canUseOrson || voidStatusUncertain || !accepted.retryVerified ||
+      accepted.companyId !== companyId || accepted.uid !== userUid ||
+      !matchesVoidOperation(accepted.operation, accepted.command, accepted.operation.id) ||
+      !isVoidRetryable(accepted.operation)) return;
+    voidActionLock.current = true;
+    setPreparingVoidRecordId(accepted.command.recordId ?? null);
+    setVoidPreparationError('');
+    saveAcceptedVoid({ ...accepted, retryVerified: false });
+    try {
+      const result = await agent.confirm(accepted.operation, [accepted.command.id]);
+      acceptVoidResult(accepted, result);
+    } catch {
+      setVoidStatusUncertain(true);
+      setVoidPreparationError(uncertainVoidMessage);
+    } finally {
+      voidActionLock.current = false;
       setPreparingVoidRecordId(null);
     }
   };
@@ -1090,7 +1243,7 @@ export default function InventoryFeedsPage() {
               </div>
               <button
                 onClick={closeInventoryModal}
-                disabled={agent.busy}
+                disabled={agent.busy || voidActionBusy}
                 aria-label={copy('Close inventory dialog')}
                 style={{
                   width: '36px', height: '36px', background: 'var(--bg-mid)', border: '1px solid transparent', borderRadius: '10px',
@@ -1104,6 +1257,40 @@ export default function InventoryFeedsPage() {
             <div className="responsive-modal-body inventory-modal-body" style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
               {modalType === 'history' && historyItem ? (
                 <div className={styles.historySections}>
+                  {(voidActionBusy || voidPreparationError || agent.error || acceptedInScope) && (
+                    <section ref={voidStatusPanelRef} className={styles.historySection} aria-live="polite" aria-busy={voidActionBusy}>
+                      <h3>{copy('Removal status')}</h3>
+                      {voidActionBusy && (
+                        <p role="status" className={styles.historyNote} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <Loader2 size={14} className="animate-spin" />
+                          {copy(checkingVoidStatus ? 'Working...' :
+                            acceptedVoid?.command.recordId === preparingVoidRecordId ? 'Saving removal...' : 'Preparing removal...')}
+                        </p>
+                      )}
+                      {voidPreparationError && <p role="alert" style={{ color: '#b42318', fontSize: '13px', margin: 0 }}>{voidPreparationError}</p>}
+                      {agent.error && <p role="alert" style={{ color: '#b42318', fontSize: '13px', margin: 0 }}>{agent.error}</p>}
+                      {acceptedInScope && pendingVoidOperation && acceptedVoid && (
+                        <>
+                          <p role="status" className={styles.historyNote}>
+                            {acceptedVoidItemName && <>{acceptedVoidItemName} · </>}
+                            {formatDate(acceptedVoid.command.date)} · {copy(voidActionBusy ? 'Working...' :
+                              voidStatusUncertain ? 'Save status unverified' :
+                              isVoidSaved(pendingVoidOperation) ? 'Purchase removed; audit history retained.' :
+                              pendingVoidOperation.state === 'discarded' ? 'Removal draft discarded' :
+                              pendingVoidOperation.state === 'draft' ? 'Removal draft awaiting save' : 'Removal not confirmed')}
+                          </p>
+                          {pendingVoidOperation.rows[0].error && <p role="alert">{pendingVoidOperation.rows[0].error}</p>}
+                          {pendingVoidOperation.receipts.map((receipt, index) => (
+                            <p key={index} className={styles.historyNote}>{copy(receipt.status)}: {receipt.message}</p>
+                          ))}
+                          <button type="button" onClick={() => void (canRetryVoid ? retryVoidStockIn() : recoverVoidStockIn())}
+                            disabled={agent.busy || voidActionBusy || (canRetryVoid && (!canEditInventory || !canUseOrson))}>
+                            {copy(canRetryVoid ? 'Retry removal' : 'Check save status')}
+                          </button>
+                        </>
+                      )}
+                    </section>
+                  )}
                   {(() => {
                     const activeStockIn = (historyItem.stockInHistory || []).filter(h => !h.voided);
                     const voidedStockIn = (historyItem.stockInHistory || []).filter(h => h.voided);
@@ -1127,8 +1314,8 @@ export default function InventoryFeedsPage() {
                                     <button
                                       type="button"
                                       onClick={() => void prepareVoidStockIn(h)}
-                                      disabled={agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation}
-                                      aria-label={`${copy('Remove purchase')} ${formatDate(h.date)}`}
+                                      disabled={agent.busy || voidActionBusy || hasOpenVoidOperation}
+                                      aria-label={`${t.companyDetails.remove} ${formatDate(h.date)}`}
                                       title={copy('Remove this stock-in purchase from active inventory and finance')}
                                       style={{
                                         display: 'inline-flex',
@@ -1142,12 +1329,12 @@ export default function InventoryFeedsPage() {
                                         padding: '7px 9px',
                                         fontSize: '12px',
                                         fontWeight: 600,
-                                        cursor: agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation ? 'not-allowed' : 'pointer',
-                                        opacity: agent.busy || preparingVoidRecordId !== null || hasOpenVoidOperation ? 0.55 : 1,
+                                        cursor: agent.busy || voidActionBusy || hasOpenVoidOperation ? 'not-allowed' : 'pointer',
+                                        opacity: agent.busy || voidActionBusy || hasOpenVoidOperation ? 0.55 : 1,
                                       }}
                                     >
                                       {preparingVoidRecordId === h.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                      {copy('Remove purchase')}
+                                      {t.companyDetails.remove}
                                     </button>
                                   )}
                                 </div>
@@ -1210,8 +1397,7 @@ export default function InventoryFeedsPage() {
                       </div>
                     ))}
                   </section>
-                  {voidPreparationError && <p role="alert" style={{ color: '#b42318', fontSize: '13px', margin: 0 }}>{voidPreparationError}</p>}
-                  {pendingVoidOperationId && <AgentCards agent={agent} operationIds={[pendingVoidOperationId]} showStatus />}
+
                 </div>
               ) : (
                 <form id="inventoryForm" className="inventory-form" onSubmit={handleAction} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1361,7 +1547,8 @@ export default function InventoryFeedsPage() {
                 <button
                   type="button"
                   className="btn-secondary"
-                  onClick={() => setModalOpen(false)}
+                  onClick={closeInventoryModal}
+                  disabled={agent.busy || voidActionBusy}
                 >{copy('Cancel')}</button>
                 <button
                   form="inventoryForm"
